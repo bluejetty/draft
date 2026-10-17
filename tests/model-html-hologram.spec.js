@@ -153,6 +153,102 @@ test('REFRESH swaps in the newer file and keeps where it sits', async ({ page })
   expect((await saved(page)).holograms[0].source.walls).toHaveLength(3);
 });
 
+// ONE SUITE FILE, FOUR SUITES (Movie, 17 Oct): "position multiples all within
+// the EXTERIOR of the building" and "change as a block". COPY puts another
+// of the same file in hand; REFRESH on any copy refreshes every copy of
+// that file, one UNDO for the lot.
+test('COPY puts another of the same file in hand, and REFRESH takes every copy to the newer file', async ({ page }) => {
+  const placed = JSON.parse(HOUSE.toString('utf8'));
+  placed.walls = placed.walls.slice(0, 3);
+  await open(page, { ...BLANK, holograms: [{ id: 'hologram-1', name: 'suite', x: 4, z: -2,
+    angleDeg: 90, pivotX: 0, pivotZ: 0, source: placed }] });
+  await chip(page).click();
+  await page.locator('[data-hologram-copy]').click();
+  // In hand: the drag places it; Esc leaves it on its original.
+  await expect(page.locator('#strip-message')).toContainText('copy of suite');
+  const box = await page.locator('#plan').boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 80, cy, { steps: 4 });
+  await page.mouse.up();
+  let d = await saved(page);
+  expect(d.holograms).toHaveLength(2);
+  const [first, copy] = d.holograms;
+  expect(copy.id).not.toBe(first.id);
+  expect(copy.name).toBe('suite');
+  expect(copy.x).toBeGreaterThan(first.x + 0.5);
+  expect([copy.z, copy.angleDeg]).toEqual([first.z, first.angleDeg]);
+  expect(copy.source.walls).toHaveLength(3);
+  // REFRESH on the first: both copies take the newer file, both stay put.
+  await chip(page).click();
+  await chip(page).click();
+  await page.locator('[data-hologram-refresh]').first().click();
+  await page.locator('[data-hologram-file]').setInputFiles(
+    { name: 'existing-house.draft', mimeType: 'application/json', buffer: HOUSE });
+  await expect.poll(async () => (await saved(page)).holograms.map(h => h.name).join()).toBe('existing-house,existing-house');
+  d = await saved(page);
+  d.holograms.forEach(holo => expect(holo.source.walls.length).toBeGreaterThan(3));
+  expect([d.holograms[0].x, d.holograms[0].z, d.holograms[0].angleDeg]).toEqual([4, -2, 90]);
+  expect(d.holograms[1].x).toBeCloseTo(copy.x, 5);
+  // One UNDO takes the refresh off both; the next takes the copy's move.
+  await undo(page);
+  d = await saved(page);
+  expect(d.holograms.map(h => h.source.walls.length)).toEqual([3, 3]);
+  expect(d.holograms.map(h => h.name)).toEqual(['suite', 'suite']);
+});
+
+// MIRROR (Movie, 17 Oct): a handed suite is the same file turned over, not a
+// second file. The card's MIRROR, or F while it is in hand; the blue crosses
+// the hologram's own axis, and nothing else about it moves.
+test('MIRROR turns it over across its own axis, F in hand does too, and the blue follows', async ({ page }) => {
+  await open(page);
+  await bringIn(page);
+  // The blue's own halves: the pivot is the centre of the walls' box, so a
+  // mirror keeps the box and swaps what is in its left and right halves.
+  const halves = async () => page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const xs = [];
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 2] > 150 && data[i + 2] - data[i] > 50) xs.push((i / 4) % c.width);
+    }
+    const lo = Math.min(...xs), hi = Math.max(...xs), mid = (lo + hi) / 2;
+    return { lo, hi, left: xs.filter(x => x < mid).length, right: xs.filter(x => x > mid).length };
+  });
+  const before = await halves();
+  // The garage puts the house's blue off its own axis: the heavier half is
+  // the one it stands in. (The halves do not swap to the pixel -- the
+  // stair's lettering keeps its own way round -- so the test is the SIDE.)
+  expect(before.right - before.left).toBeGreaterThan(before.left * 0.1);
+  await chip(page).click();
+  await chip(page).click();
+  await page.locator('[data-hologram-mirror]').click();
+  await closeCard(page);
+  let holo = (await saved(page)).holograms[0];
+  expect(holo.flip).toBe(true);
+  expect([holo.x, holo.z, holo.angleDeg]).toEqual([0, 0, 0]);
+  const after = await halves();
+  // Turned over about its own axis: the same box on the screen, the heavy
+  // half now the other one.
+  expect(Math.abs(after.lo - before.lo)).toBeLessThan(3);
+  expect(Math.abs(after.hi - before.hi)).toBeLessThan(3);
+  expect(after.left - after.right).toBeGreaterThan(after.right * 0.1);
+  // F while it is in hand turns it back.
+  await chip(page).click();
+  await chip(page).click();
+  await page.locator('[data-hologram-move]').click();
+  await page.keyboard.press('KeyF');
+  await page.keyboard.press('Escape');
+  holo = (await saved(page)).holograms[0];
+  expect(holo.flip).toBe(false);
+  const back = await halves();
+  expect(back.right - back.left).toBeGreaterThan(back.left * 0.1);
+  // And UNDO is one step per turn-over.
+  await undo(page);
+  expect((await saved(page)).holograms[0].flip).toBe(true);
+});
+
 test('DELETE takes it off, UNDO brings it back, and its own holograms never come in', async ({ page }) => {
   const nested = { ...JSON.parse(HOUSE.toString('utf8')),
     holograms: [{ id: 'hologram-1', source: JSON.parse(HOUSE.toString('utf8')) }] };

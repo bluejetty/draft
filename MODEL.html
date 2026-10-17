@@ -22799,6 +22799,12 @@
     const angleDeg = ((((Number(holo.angleDeg) || 0) + degrees) % 360) + 360) % 360;
     hologramEdit(holo, { angleDeg }, `${hologramNoun(holo)} turned to ${Math.round(angleDeg)}\u00b0.`);
   };
+  const mirrorHologram = holo => {
+    const flip = holo.flip !== true;
+    hologramEdit(holo, { flip }, flip
+      ? `${hologramNoun(holo)} is mirrored \u2014 MIRROR again, or UNDO, turns it back.`
+      : `${hologramNoun(holo)} is the right way round again.`);
+  };
   function renderHologramList() {
     const all = holograms();
     traceAsk.querySelector('[data-hologram-count]').textContent = all.length
@@ -22861,14 +22867,36 @@
           sayOnStrip(`Click one end, then the other, of the piece of ${hologramNoun(holo)}'s wall coming out \u2014 click inside a piece to keep it, Esc when done.`);
           paint();
         }),
-        button('MOVE', 'hologramMove', 'Drag it; [ and ] turn it, Esc leaves it', () => {
+        button('MOVE', 'hologramMove', 'Drag it; [ and ] turn it, F mirrors it, Esc leaves it', () => {
           traceAsk.hidden = true;
           traceMoving = { underlay: holo, from: null, before: null, hologram: true };
-          sayOnStrip(`Drag ${hologramNoun(holo)} to where it belongs \u2014 [ and ] turn it, Esc to leave it.`);
+          sayOnStrip(traceMoveWord(traceMoving));
         }),
         button('\u27f2', 'hologramLeft', 'Turn a quarter to the left', () => { turnHologram(holo, -90); renderHologramList(); }),
         button('\u27f3', 'hologramRight', 'Turn a quarter to the right', () => { turnHologram(holo, 90); renderHologramList(); }),
-        button('REFRESH', 'hologramRefresh', 'Pick the newer copy of its .draft', () => {
+        // MIRROR (Movie, 17 Oct, placing his suites): the same file turned
+        // over across its own axis, so a handed suite is one file, not two.
+        button('MIRROR', 'hologramMirror', 'Turn it over across its own axis (F while it is in hand)', () => {
+          mirrorHologram(holo);
+          renderHologramList();
+        }),
+        // COPY: another of the same file, in hand to place, the way BRING IN
+        // arrives. One suite file, four suites. The copy shares the file's
+        // text, so a REFRESH of either refreshes both.
+        button('COPY', 'hologramCopy', 'Another of the same file, in hand to place', () => {
+          const { demo, ...rest } = holo;
+          // An id no hologram on this drawing has: a file brought in from
+          // elsewhere may carry ids the counter here has never seen.
+          let id = newDrawingItemId('hologram');
+          while (holograms().some(h => h.id === id)) id = newDrawingItemId('hologram');
+          const copy = { ...rest, id };
+          addItem(drawing.holograms, copy);
+          traceAsk.hidden = true;
+          traceMoving = { underlay: copy, from: null, before: null, hologram: true };
+          sayOnStrip(`A copy of ${hologramNoun(holo)} is in \u2014 ${traceMoveWord(traceMoving)}`);
+          paint();
+        }),
+        button('REFRESH', 'hologramRefresh', 'Pick the newer copy of its .draft; every copy of the same file takes it', () => {
           hologramRefreshing = holo;
           hologramFile.click();
         }),
@@ -22916,8 +22944,22 @@
     if (refreshing) {
       const [fresh] = F.holograms([{ ...refreshing, source: parsed }]);
       if (!fresh) return;
-      hologramEdit(refreshing, { source: fresh.source, name },
-        `${name} is refreshed \u2014 it stays where it sat.`);
+      // EVERY COPY OF THE SAME FILE TAKES THE NEWER ONE (Movie, 17 Oct:
+      // "change as a block"): the copies are named for the file they came
+      // from, so the name is what says they are one block. Each keeps where
+      // it sits and what it has marked DEMO; one UNDO takes them all back.
+      const copies = holograms().filter(h => h.name === refreshing.name);
+      const edits = copies.map(h => {
+        const before = { ...h };
+        Object.assign(h, { source: fresh.source, name });
+        return { item: h, before };
+      });
+      undoStack.push({ kind: 'props', edits });
+      markDirty();
+      paint();
+      sayOnStrip(copies.length > 1
+        ? `${name} is refreshed on all ${copies.length} copies \u2014 each stays where it sat.`
+        : `${name} is refreshed \u2014 it stays where it sat.`);
       return;
     }
     const pivot = hologramPivot(parsed);
@@ -23101,13 +23143,17 @@
     paint();
   }, true);
 
-  // TURNING WHILE IT IS IN HAND: [ and ] like the neighborhood program.
+  // TURNING WHILE IT IS IN HAND: [ and ] like the neighborhood program, and
+  // F turns it over, the way F mirrors a washroom in hand.
   window.addEventListener('keydown', event => {
     // By CODE, not key: Shift turns [ into { on the keyboards this is used on.
     const turn = { BracketLeft: -1, BracketRight: 1 }[event.code];
-    if (!traceMoving?.hologram || !turn) return;
+    const mirror = event.code === 'KeyF';
+    if (!traceMoving?.hologram || (!turn && !mirror)) return;
+    if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
     event.stopImmediatePropagation();
     event.preventDefault();
+    if (mirror) { mirrorHologram(traceMoving.underlay); return; }
     const step = (event.shiftKey ? 1 : 15) * turn;
     turnHologram(traceMoving.underlay, step);
   }, true);
@@ -23129,7 +23175,7 @@
   // the mode is armed and again whenever a click leaves it armed -- a mode a
   // drafter cannot see is a mode they will assume is over.
   const traceMoveWord = m => (m?.hologram
-    ? `Drag ${hologramNoun(m.underlay)} to where it belongs \u2014 [ and ] turn it, Esc to leave it.`
+    ? `Drag ${hologramNoun(m.underlay)} to where it belongs \u2014 [ and ] turn it, F mirrors it, Esc to leave it.`
     : 'Drag the picture to where it belongs \u2014 Esc to leave it.');
   const tracePoint = event => {
     const r = canvas.getBoundingClientRect();

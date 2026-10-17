@@ -596,6 +596,41 @@ function run(label) {
   check('hologramLocal undoes hologramPoint', same(F.hologramLocal(placed, there), { x: 12.5, z: -6 }),
     JSON.stringify(F.hologramLocal(placed, there)));
 
+  // MIRROR (Movie, 17 Oct, placing his suites): the same file turned over
+  // across its own axis through the pivot, before the turn.
+  check('a mirror is kept, and only a true one',
+    F.holograms([{ id: 'h', source: SAVED, flip: true }])[0].flip === true
+    && F.holograms([{ id: 'h', source: SAVED, flip: 'yes' }])[0].flip === false
+    && F.holograms([{ id: 'h', source: SAVED }])[0].flip === false);
+  const over = { x: 0, z: 0, angleDeg: 0, pivotX: 10, pivotZ: 0, flip: true };
+  check('mirrored, a point crosses the pivot\'s axis', same(at(over, { x: 12, z: 3 }), { x: 8, z: 3 }),
+    JSON.stringify(at(over, { x: 12, z: 3 })));
+  check('and the turn comes after the mirror', same(at({ ...over, angleDeg: 90 }, { x: 12, z: 3 }), { x: 7, z: -2 }),
+    JSON.stringify(at({ ...over, angleDeg: 90 }, { x: 12, z: 3 })));
+  const overThere = at({ ...over, angleDeg: 37, x: 4, z: -1 }, { x: 12.5, z: -6 });
+  check('hologramLocal undoes the mirror too',
+    same(F.hologramLocal({ ...over, angleDeg: 37, x: 4, z: -1 }, overThere), { x: 12.5, z: -6 }));
+  if (HG) {
+    // The records turn over with the points: a wall's face line, a fixture's
+    // side and a door's swing are all named by the left of the wall's line,
+    // and the mirror makes that its right.
+    const wallL = { id: 'm', levelId: 1, view: 'plan', start: { x: 0, y: 0, z: 0 }, end: { x: 10, y: 0, z: 0 },
+      wallType: 'stud_2x6', refLine: 'left' };
+    const flipped = HG.placed({ x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0, flip: true },
+      { walls: [wallL, { ...wallL, id: 'c', refLine: 'center' }],
+        fixtures: [{ id: 'f', wallId: 'm', side: 1, offset: 2, width: 2, depth: 2 }],
+        fenestrations: [{ id: 'd', wallId: 'm', offset: 4, width: 3, swingFlip: false }, { id: 'e', wallId: 'm', offset: 7, width: 3 }] });
+    check('a mirrored wall stands across the pivot', flipped.walls[0].end.x === -10 && flipped.walls[0].start.x === 0,
+      JSON.stringify(flipped.walls[0]));
+    check('and keeps its face line on the same side of the ground',
+      flipped.walls[0].refLine === 'right' && flipped.walls[1].refLine === 'center');
+    check('a mirrored fixture faces the same way on the ground', flipped.fixtures[0].side === -1);
+    check('a mirrored door swings the same way on the ground',
+      flipped.fenestrations[0].swingFlip === true && flipped.fenestrations[1].swingFlip === true);
+    const plain = HG.placed({ x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0 }, { walls: [wallL] });
+    check('unmirrored, nothing turns over', plain.walls[0].refLine === 'left');
+  }
+
   // ── A FLOOR LAYOUT SHOWS WHAT HOLDS IT UP (Movie, 12 Oct) ─────────────
   //
   // The main floor's sheet draws FOUNDATION's beam and posts (not the piles)
@@ -1064,8 +1099,21 @@ const MUTATIONS = [
   ['an empty DEMO is kept',
     'drawing-format.js', c => c.replace('...(Object.keys(demo).length ? { demo } : {}),', 'demo,')],
   ['hologramLocal turns the wrong way back',
-    'drawing-format.js', c => c.replace('return { x: pivot.x + dx * cos + dz * sin, z: pivot.z - dx * sin + dz * cos };',
-      'return { x: pivot.x + dx * cos - dz * sin, z: pivot.z + dx * sin + dz * cos };')],
+    'drawing-format.js', c => c.replace('return { x: pivot.x + mirror(holo) * (dx * cos + dz * sin), z: pivot.z - dx * sin + dz * cos };',
+      'return { x: pivot.x + mirror(holo) * (dx * cos - dz * sin), z: pivot.z + dx * sin + dz * cos };')],
+  ['a mirrored hologram is drawn the right way round',
+    'drawing-format.js', c => c.replace('const dx = (pt.x - px) * mirror(holo), dz = pt.z - pz;', 'const dx = pt.x - px, dz = pt.z - pz;')],
+  ['hologramLocal forgets the mirror',
+    'drawing-format.js', c => c.replace('return { x: pivot.x + mirror(holo) * (dx * cos + dz * sin), z: pivot.z - dx * sin + dz * cos };',
+      'return { x: pivot.x + (dx * cos + dz * sin), z: pivot.z - dx * sin + dz * cos };')],
+  ['a mirror is never read back',
+    'drawing-format.js', c => c.replace('flip: holo?.flip === true,', 'flip: false,')],
+  ['a mirrored wall keeps its face line',
+    'hologram.js', c => c.replace("moved.walls = moved.walls.map(w => (w && other[w.refLine] ? { ...w, refLine: other[w.refLine] } : w));", '')],
+  ['a mirrored fixture faces the wrong way',
+    'hologram.js', c => c.replace("moved.fixtures = moved.fixtures.map(f => (f && Number.isFinite(f.side) ? { ...f, side: -f.side } : f));", '')],
+  ['a mirrored door swings the wrong way',
+    'hologram.js', c => c.replace("moved.fenestrations = moved.fenestrations.map(o => (o ? { ...o, swingFlip: o.swingFlip !== true } : o));", '')],
   ['a piece keeps its ends as clicked',
     'drawing-format.js', c => c.replace('const from = Math.max(0, Math.min(a, b)), to = Math.max(a, b);', 'const from = a, to = b;')],
   ['an empty piece is kept',
