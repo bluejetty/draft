@@ -198,6 +198,21 @@ if (!window.DraftLayoutPlan) {
     // from the one below has to carry it here or the ghost is drawn outside
     // the frame and clipped — which on screen is a pan and on paper is gone.
     if (withBelow) ghostLoops(saved, levelId).forEach(points => points.forEach(eat));
+    // AND WHAT HANGS OVER THE WALLS PLAN -- the cantilever above and the
+    // roof overhang (overhead-lines.js) -- which by definition lie outside
+    // the walls and would otherwise be clipped at the frame.
+    if (window.DraftOverheadLines && window.DraftLevelAssembly && window.DraftLayerViews) {
+      const LA = window.DraftLevelAssembly;
+      const lines = window.DraftOverheadLines.overheadLines({
+        levelId,
+        ladder: window.DraftLayerViews.floorLevels(Array.isArray(saved?.levels) ? saved.levels : [])
+          .map(level => Number(level.id))
+          .filter(id => !LA.STOREY_NUMBER || !(id in LA.STOREY_NUMBER) || Number.isInteger(Number(LA.STOREY_NUMBER[id]))),
+        outlines: Array.isArray(saved?.outlines) ? saved.outlines : [],
+        roofs: Array.isArray(saved?.roofs) ? saved.roofs : [],
+      });
+      [...lines.cantilevers, ...lines.overhangs].forEach(seg => { eat(seg.start); eat(seg.end); });
+    }
     // THE SITE SHEET FRAMES WHAT THE SITE SHEET DRAWS. Its own level carries
     // the lot and nothing else, so sizing it level-by-level like a storey
     // would cut the building off the page -- and a building that does not fit
@@ -1382,6 +1397,27 @@ if (!window.DraftLayoutPlan) {
       // 'floor'), re-filed onto the plan so the composer's filter keeps them
       // and painted dash-dot and lighter as `above`. The same rows planPosts
       // already borrows the posts from -- "columns already shown".
+      // THE CANTILEVER OF THE FLOOR ABOVE AND THE ROOF OVERHANG (same note),
+      // dashed and lighter: overhead-lines.js clips the storey above's
+      // outline and this storey's roofs to what lies outside this level's
+      // own outlines, on the full-storey ladder (a bilevel's half levels
+      // left out). A listing keeps them -- geometry, which is what that
+      // plan is for -- a shell, a hologram and the half-level pass do not.
+      overheadLines: view === 'plan' && !halfLevel && !shell && !hologram && window.DraftOverheadLines
+        ? (() => {
+          const LA = window.DraftLevelAssembly;
+          const lines = window.DraftOverheadLines.overheadLines({
+            levelId,
+            ladder: VIEWS.floorLevels(of('levels')).map(level => Number(level.id))
+              .filter(id => !LA || !LA.STOREY_NUMBER || !(id in LA.STOREY_NUMBER)
+                || Number.isInteger(Number(LA.STOREY_NUMBER[id]))),
+            outlines: of('outlines'),
+            roofs: of('roofs'),
+          });
+          return [...lines.cantilevers, ...lines.overhangs];
+        })()
+        : [],
+      overheadEnv: { ink: GHOST_BELOW_INK },
       beamsAbove: view === 'plan' && !halfLevel && !listing && !shell && !hologram
         ? of('beams').filter(beam => beam?.levelId === levelId
           && beam.view === (levelId === BASEMENT_LEVEL_ID ? 'foundation' : 'floor'))

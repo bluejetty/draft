@@ -363,6 +363,10 @@ test.describe('MODEL.html tier 1', () => {
       // branch that loads it -- an undeclared dependency is undeclared no
       // matter whose commit brought it.
       './building-bodies.js',
+      // overhead-lines.js clips the storey above's outline and the roof to
+      // what hangs past this level's walls (the overhead convention, Movie
+      // 16 Oct); MODEL's walls plan and LAYOUT's plan sheet both draw it.
+      './overhead-lines.js',
       // build-house.js arrived with the BONE that builds the drafter's own
       // outline, and it is the DELETES-A-DUPLICATE kind this list should grow
       // by. Walking a loop into wall runs is a few lines and reading its

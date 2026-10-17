@@ -2128,6 +2128,7 @@
      detached garage. The bone reads it to know whether there is anything
      left to offer. -->
 <script src="./building-bodies.js"></script>
+<script src="./overhead-lines.js"></script>
 <!-- BUILD HOUSE's derivations, pure: an outline in, wall runs and the
      interior reference side out. The old page builds from the same module, so
      a house raised here and a house raised there cannot disagree about which
@@ -3702,6 +3703,32 @@
       && !String(column.footing || '').startsWith('pile'))
       .forEach(column => R.drawColumn2D(ctx, toS, column,
         { footing: B ? B.footingFor(column.footing) : null }, env));
+  };
+
+  // THE CANTILEVER OF THE FLOOR ABOVE AND THE ROOF OVERHANG, dashed and
+  // lighter on the walls plan (Movie, 16 Oct: "a floor shows only what sits
+  // DIRECTLY over it ... nothing two storeys up"). overhead-lines.js clips
+  // the storey above's outline and this storey's roofs to what lies outside
+  // this level's own outlines; the ladder it reads is the full storeys low
+  // to high, a bilevel's half levels left out so ENTRY is not told MAIN
+  // hangs over it.
+  const paintOverheadLines = () => {
+    const R = window.DraftRender2D;
+    const O = window.DraftOverheadLines;
+    const LA = window.DraftLevelAssembly;
+    const onWallsPlan = activeViewId() === 'plan';
+    const lines = onWallsPlan && O && R.drawOverheadLines2D ? O.overheadLines({
+      levelId: activeLevelId(),
+      ladder: window.DraftLayerViews.floorLevels(drawing?.levels || []).map(level => Number(level.id))
+        .filter(id => !LA || !LA.STOREY_NUMBER || !(id in LA.STOREY_NUMBER)
+          || Number.isInteger(Number(LA.STOREY_NUMBER[id]))),
+      outlines: drawing?.outlines || [],
+      roofs: drawing?.roofs || [],
+    }) : { cantilevers: [], overhangs: [] };
+    const segments = [...lines.cantilevers, ...lines.overhangs];
+    canvas.setAttribute('data-overhead-lines', String(segments.length));
+    if (!segments.length) return;
+    R.drawOverheadLines2D(ctx, toS, segments, { ink: skin['draw-wall-edge'] || skin['draw-line'] });
   };
 
   const paintBeamsBelow = () => {
@@ -6103,6 +6130,7 @@
         // convention), in the same slot: structure first, then what is read
         // against it.
         paintBeamsAbove();
+        paintOverheadLines();
         // AFTER THE STRUCTURE IT SITS OVER, before the walls. An opening above
         // is context for what this level carries, so it reads over the pads
         // and the beam -- which is the order a drafter looks in: the hole is

@@ -72,6 +72,7 @@ function loadDraftModules() {
     // the wall with. A module no loader can bend is a module no row can
     // aim at.
     'building-bodies.js',
+    'overhead-lines.js',
     // AND THE SHOELACE. areas.js reads window.DraftGeometry2D, but only at
     // call time, so it loads cleanly after it and adds one global. It was
     // missing here for the same reason and with the same cost: the two

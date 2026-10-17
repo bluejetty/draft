@@ -36,7 +36,7 @@ const BASE = ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-forma
   'fixture-kinds.js', 'fixture-geometry.js', 'render-2d.js', 'plan-composition.js'];
 const OPTIONAL = ['layer-views.js', 'cut-view.js', 'build-house.js', 'roof-types.js',
   'profile-manager.js', 'finish-patterns.js', 'roof-patterns.js', 'cut-marks.js',
-  'fen-labels.js', 'electric-symbols.js', 'hologram.js'];
+  'fen-labels.js', 'electric-symbols.js', 'hologram.js', 'overhead-lines.js'];
 
 function loadWith(omit = [], source = {}) {
   const warnings = [];
@@ -681,6 +681,25 @@ function run(label) {
       const out = draw(full.win, 3, { saved: data, env: { view: 'plan', ...extra } });
       return out.ok ? out.strokes.filter(a => Math.abs(a - 0.5) < 0.01).length : out.why;
     };
+    // THE CANTILEVER ABOVE AND THE ROOF OVERHANG (same note), through
+    // overhead-lines.js: a 2nd floor pushed 2' past the front wall hangs its
+    // front edge and two ends over the walls plan, dashed and lighter --
+    // one stroke for the lot (render-2d drawOverheadLines2D) -- and the
+    // frame grows to take it in. Not on the floor layout, not on a shell.
+    const house = (levelId, z0) => ({ id: `o${levelId}`, levelId, points: [{ x: 0, z: z0 }, { x: 40, z: z0 }, { x: 40, z: 30 }, { x: 0, z: 30 }] });
+    const hung = { ...walled, beams: [], columns: [], fixtures: [], outlines: [house(3, 0), house(5, -2)] };
+    const overhead = (data, extra = {}) => {
+      const out = draw(full.win, 3, { saved: data, env: { view: 'plan', ...extra } });
+      return out.ok ? out.strokes.filter(a => Math.abs(a - 0.5) < 0.01).length : out.why;
+    };
+    check('a 2nd floor pushed past the front hangs over the walls plan, one lighter dashed stroke', overhead(hung) === 1, overhead(hung));
+    check('a 2nd floor flush with the walls hangs nothing', overhead({ ...hung, outlines: [house(3, 0), house(5, 0)] }) === 0,
+      overhead({ ...hung, outlines: [house(3, 0), house(5, 0)] }));
+    check('the floor layout draws no overhead lines', overhead(hung, { view: 'floor' }) === 0, overhead(hung, { view: 'floor' }));
+    check('nor the shell', overhead(hung, { shell: true }) === 0, overhead(hung, { shell: true }));
+    const grown = LP.planBounds(hung, 3), flush = LP.planBounds({ ...hung, outlines: [house(3, 0), house(5, 0)] }, 3);
+    check('the frame grows to take the cantilever in', grown && flush && grown.minZ <= -1.99 && flush.minZ > -1.99,
+      JSON.stringify([grown, flush]));
     check('a cabinet on the walls plan hangs its uppers, one lighter dashed box', lighter(kitchen('cabinet')) === 1,
       lighter(kitchen('cabinet')));
     check('an island hangs none', lighter(kitchen('island')) === 0, lighter(kitchen('island')));
@@ -838,6 +857,14 @@ const MUTATIONS = [
     'plan-composition.js', c => c.replace("      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id) }, env.structureEnv); });\n", '')],
   ['the composition paints the beam above as one on this plan',
     'plan-composition.js', c => c.replace('{ above: true, tag: overTags.get(beam.id) }', '{ tag: overTags.get(beam.id) }')],
+  ['the sheet hands the composition no overhead lines',
+    'layout-plan.js', c => c.replace("      overheadLines: view === 'plan' && !halfLevel && !shell && !hologram && window.DraftOverheadLines", '      overheadLines: false')],
+  ['the sheet hangs the overhead lines on the floor layout too',
+    'layout-plan.js', c => c.replace("      overheadLines: view === 'plan' && !halfLevel && !shell && !hologram && window.DraftOverheadLines", "      overheadLines: !halfLevel && !shell && !hologram && window.DraftOverheadLines")],
+  ['the frame leaves the cantilever outside',
+    'layout-plan.js', c => c.replace('      [...lines.cantilevers, ...lines.overhangs].forEach(seg => { eat(seg.start); eat(seg.end); });\n', '')],
+  ['the composition is handed the overhead lines and paints none',
+    'plan-composition.js', c => c.replace('      render.drawOverheadLines2D(ctx, toS, env.overheadLines, env.overheadEnv || {});\n', '')],
   ['the sheet says no piece carries uppers',
     'layout-plan.js', c => c.replace('hasUppers: fixture => !listing && !!(window.DraftFixtureKinds && window.DraftFixtureKinds.hasUppers(fixture)),', 'hasUppers: () => false,')],
   ['a listing hangs the uppers too',
