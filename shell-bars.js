@@ -64,10 +64,6 @@ if (!window.DraftShellBars) {
       href: './PROJECT.html', extra: ' data-project-corner-bl',
       title: 'The project: every drawing in this job',
       here: 'The project \u2014 you are here' }),
-    Object.freeze({ id: 'model', row: 'page', label: 'MODEL',
-      href: './MODEL.html',
-      title: 'The model: where the house is drawn',
-      here: 'The model \u2014 you are here' }),
     // BUILT, 27 Sep, so the chip is a door rather than a grey seat. It was
     // DOWN from the day this table was written -- the row's oldest rule is
     // that it is the map of the job and a map with two towns missing teaches
@@ -101,6 +97,17 @@ if (!window.DraftShellBars) {
       href: './EXTFINISH.html',
       title: 'EXT. FINISH \u2014 the elevations, and the finishes on them',
       here: 'The exterior finishes \u2014 you are here' }),
+    // MODEL LAST IN ITS ROW (Movie, 17 Oct): "on the bottom left area where
+    // it says PROJECT MODEL WIREFRAME EXT FINISH can you put MODEL at the
+    // right of that EXT FINISH like this PROJECT WIREFRAME EXT FINISH
+    // MODEL". The notes above that place the boneyard and the finishes
+    // "between MODEL and ..." describe the row as it was when each arrived;
+    // the order now is his, with the door he uses most at the row's end,
+    // nearest the middle of the bar.
+    Object.freeze({ id: 'model', row: 'page', label: 'MODEL',
+      href: './MODEL.html',
+      title: 'The model: where the house is drawn',
+      here: 'The model \u2014 you are here' }),
     // AND IT MOVED TO THE RIGHT ROW (Movie, 1 Oct): "the REAL ESTATE LAYOUT
     // tab is on the right side at bottom (to the left of CONSTRUCTION
     // LAYOUT)" -- beside the other sheet that prints, as the split above

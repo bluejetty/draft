@@ -245,13 +245,15 @@ test('an empty boneyard opened on its own stays, and offers the drive-thru', asy
   await expect(page.locator('#drivethru')).not.toHaveAttribute('data-shut', '', { timeout: 10000 });
 });
 
-test('the tab sits between MODEL and EXT. FINISH, named for the skin', async ({ page }) => {
+test('the tab sits between PROJECT and EXT. FINISH, named for the skin', async ({ page }) => {
   await seed(page, empty());
   await page.goto('/MODEL.html');
   const row = page.locator('#page-row [data-page]');
   await expect(row).toHaveCount(4);
   expect(await row.evaluateAll(els => els.map(e => e.dataset.page)))
-    .toEqual(['project', 'model', 'boneyard', 'ext-finish']);
+    // MODEL moved to the row's end on 17 Oct (Movie: "PROJECT WIREFRAME EXT
+    // FINISH MODEL"); the tab keeps its place between PROJECT and EXT. FINISH.
+    .toEqual(['project', 'boneyard', 'ext-finish', 'model']);
   await expect(page.locator('[data-page="boneyard"]')).toHaveText('BONEYARD', { useInnerText: true });
   await page.goto('/MODEL.html?theme=rough');
   await expect(page.locator('[data-page="boneyard"]')).toHaveText('WIREFRAME', { useInnerText: true });
