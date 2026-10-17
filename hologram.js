@@ -279,6 +279,12 @@
   // MOVED: every point of the copy (anything carrying an x and a z) through
   // its placement. Lengths along a wall -- an opening's offset, a piece's
   // run -- do not move, and a turn does not change them.
+  //
+  // A MIRRORED HOLOGRAM TURNS ITS RECORDS OVER TOO (17 Oct). Its points go
+  // through the mirror like any other, but a wall keeps start and end, so
+  // the left of its line is now its right: a face line, a fixture's side and
+  // a door's swing are all named by that left, and each is flipped so the
+  // cut painter stands them where the plan shows them.
   const placed = (holo, value) => {
     const F = window.DraftDrawingFormat;
     const walk = v => {
@@ -292,7 +298,19 @@
       }
       return out;
     };
-    return walk(value);
+    const moved = walk(value);
+    if (holo?.flip !== true || !moved || typeof moved !== 'object' || Array.isArray(moved)) return moved;
+    const other = { left: 'right', right: 'left' };
+    if (Array.isArray(moved.walls)) {
+      moved.walls = moved.walls.map(w => (w && other[w.refLine] ? { ...w, refLine: other[w.refLine] } : w));
+    }
+    if (Array.isArray(moved.fixtures)) {
+      moved.fixtures = moved.fixtures.map(f => (f && Number.isFinite(f.side) ? { ...f, side: -f.side } : f));
+    }
+    if (Array.isArray(moved.fenestrations)) {
+      moved.fenestrations = moved.fenestrations.map(o => (o ? { ...o, swingFlip: o.swingFlip !== true } : o));
+    }
+    return moved;
   };
   // A raster dash: a fine checker knocked out of a pass breaks every line in
   // it, whatever its slope -- the cut painter strokes solid, and DEMO reads

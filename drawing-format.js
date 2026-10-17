@@ -1522,6 +1522,12 @@ if (!window.DraftDrawingFormat) {
   // the source's own centre (`pivotX`, `pivotZ`), then slid by `x`, `z`.
   // All four zero is the house exactly where its own file has it.
   //
+  // AND MIRRORED, when `flip` (Movie, 17 Oct, placing his suites: a handed
+  // suite is the same file turned over, not a second file). The mirror is
+  // across the source's own axis through the pivot, BEFORE the turn, so a
+  // turned mirrored suite is the mirrored suite turned -- the order a
+  // drafter sees on the card, MIRROR then the arrows.
+  //
   // ONE DEEP. A hologram's own holograms are dropped: the existing house is
   // the existing house, not the existing house and whatever it referenced.
   const holograms = raw => (Array.isArray(raw) ? raw : [])
@@ -1560,6 +1566,7 @@ if (!window.DraftDrawingFormat) {
         pivotX: num(holo?.pivotX) ?? 0,
         pivotZ: num(holo?.pivotZ) ?? 0,
         hidden: holo?.hidden === true,
+        flip: holo?.flip === true,
         ...(Object.keys(demo).length ? { demo } : {}),
         source: flat,
         layer: 'HOLOGRAM',
@@ -1570,12 +1577,14 @@ if (!window.DraftDrawingFormat) {
   // and fixtures.
   const HOLOGRAM_DEMO_KINDS = Object.freeze(['walls', 'fenestrations', 'fixtures']);
 
-  // Where a hologram's point lands on the drawing it is placed in.
+  // Where a hologram's point lands on the drawing it is placed in. The
+  // mirror is a sign on the source's own x about the pivot, applied first.
+  const mirror = holo => (holo?.flip === true ? -1 : 1);
   const hologramPoint = (holo, pt) => {
     const rad = (Number(holo?.angleDeg) || 0) * Math.PI / 180;
     const cos = Math.cos(rad), sin = Math.sin(rad);
     const px = Number(holo?.pivotX) || 0, pz = Number(holo?.pivotZ) || 0;
-    const dx = pt.x - px, dz = pt.z - pz;
+    const dx = (pt.x - px) * mirror(holo), dz = pt.z - pz;
     return {
       x: px + (Number(holo?.x) || 0) + dx * cos - dz * sin,
       z: pz + (Number(holo?.z) || 0) + dx * sin + dz * cos,
@@ -1588,7 +1597,7 @@ if (!window.DraftDrawingFormat) {
     const cos = Math.cos(rad), sin = Math.sin(rad);
     const pivot = { x: Number(holo?.pivotX) || 0, z: Number(holo?.pivotZ) || 0 };
     const dx = pt.x - pivot.x - (Number(holo?.x) || 0), dz = pt.z - pivot.z - (Number(holo?.z) || 0);
-    return { x: pivot.x + dx * cos + dz * sin, z: pivot.z - dx * sin + dz * cos };
+    return { x: pivot.x + mirror(holo) * (dx * cos + dz * sin), z: pivot.z - dx * sin + dz * cos };
   };
 
   // Project information typed on the PROJECT tab: plain descriptive strings
