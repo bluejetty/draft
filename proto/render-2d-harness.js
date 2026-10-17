@@ -728,6 +728,45 @@ suite('drawBeam2D', 'the label sits BESIDE the beam, not on it', R => {
   expect('and clear of the line it names', y < 0, true);
 });
 
+// ── THE JOIST CALLOUT, ONE PER BAY (Movie, 16 Oct) ──
+// An arrowed span line perpendicular to the beam in every bay of the deck,
+// the short form beside it. The bays are build-house joistBays' answer; the
+// painter draws a line, two arrowheads and the label per bay.
+const CALLOUT = { axis: 'z', label: 'ENGINEERED OWJ 19-1/4"',
+  bays: [{ at: 8, from: 0, to: 22 }, { at: 16, from: 22, to: 30 }] };
+suite('drawJoistSpans2D', 'every bay gets a line, two arrowheads and the label', R => {
+  const ctx = recordingCtx();
+  R.drawJoistSpans2D(ctx, toS, CALLOUT, {}, structEnv());
+  expect('one line per bay', count(ctx, 'stroke'), 2);
+  expect('an arrowhead at each end of each', count(ctx, 'fill'), 4);
+  expect('the label beside each', calls(ctx, 'fillText').map(c => c[0]).join('|'),
+    'ENGINEERED OWJ 19-1/4"|ENGINEERED OWJ 19-1/4"');
+  expect('in the structure ink', sets(ctx, 'strokeStyle').pop(), SENTINEL_COLUMN);
+});
+suite('drawJoistSpans2D', 'the arrow runs the joists\' way, from bearing to bearing', R => {
+  const ctx = recordingCtx();
+  R.drawJoistSpans2D(ctx, toS, CALLOUT, {}, structEnv());
+  const [from] = calls(ctx, 'moveTo');
+  const [to] = calls(ctx, 'lineTo');
+  expect('an upright bay is drawn upright', from[0], to[0]);
+  expect('from the wall', from[1], toS({ x: 8, z: 0 }).y);
+  expect('to the beam', to[1], toS({ x: 8, z: 22 }).y);
+  const level = recordingCtx();
+  R.drawJoistSpans2D(level, toS, { ...CALLOUT, axis: 'x', bays: [{ at: 5, from: 0, to: 24 }] }, {}, structEnv());
+  expect('a level bay is drawn level', calls(level, 'moveTo')[0][1], calls(level, 'lineTo')[0][1]);
+});
+suite('drawJoistSpans2D', 'a printing pass keeps the arrows and drops the label, as the beam tag does', R => {
+  const ctx = recordingCtx();
+  R.drawJoistSpans2D(ctx, toS, CALLOUT, {}, structEnv({ isPrinting: true }));
+  expect('the lines print', count(ctx, 'stroke'), 2);
+  expect('and no label', count(ctx, 'fillText'), 0);
+});
+suite('drawJoistSpans2D', 'nothing to call out draws nothing', R => {
+  const ctx = recordingCtx();
+  R.drawJoistSpans2D(ctx, toS, { axis: 'z', label: 'X', bays: [] }, {}, structEnv());
+  R.drawJoistSpans2D(ctx, toS, null, {}, structEnv());
+  expect('no stroke', count(ctx, 'stroke'), 0);
+});
 // ── THE TAG OPPOSITE THE STRING (Movie, 16 Oct, on the 2ND FL FLOOR LAYOUT) ──
 // The FLUSH/DROPPED BEAM note and the beam's column string on OPPOSITE sides
 // of the beam, and one note for a beam laid in pieces. beamTagSides reads the
@@ -3549,6 +3588,17 @@ function coverage() {
         '    ctx.beginPath();\n    ctx.moveTo(a.x, a.y);')],
     ['drawBeam2D does not say a beam below is below',
       src => src.replace(" + (below ? ' BELOW' : '')", '')],
+    // THE JOIST CALLOUT (Movie, 16 Oct).
+    ['drawJoistSpans2D draws the span with no arrowheads',
+      src => src.replace('      arrow(a, angle + Math.PI);\n      arrow(b, angle);\n', '')],
+    ['drawJoistSpans2D prints the label',
+      src => src.replace('      if (callout.label && !env.isPrinting) {', '      if (callout.label) {')],
+    ['drawJoistSpans2D draws an upright bay level',
+      src => src.replace("      const p1 = callout.axis === 'x' ? { x: bay.from, z: bay.at } : { x: bay.at, z: bay.from };",
+        "      const p1 = callout.axis === 'x' ? { x: bay.at, z: bay.from } : { x: bay.from, z: bay.at };")],
+    ['drawJoistSpans2D labels one bay only',
+      src => src.replace('        labelAlongLine2D(ctx, a, b, callout.label, { font: env.labelFont, color: colour, offset: 5 });',
+        '        if (bay === callout.bays[0]) labelAlongLine2D(ctx, a, b, callout.label, { font: env.labelFont, color: colour, offset: 5 });')],
     // THE TAG OPPOSITE THE STRING (Movie, 16 Oct).
     ['beamTagSides never moves the tag off its old side',
       src => src.replace('const side = stringSide === 0 ? -1 : (stringSide > 0 ? -1 : 1);', 'const side = -1;')],

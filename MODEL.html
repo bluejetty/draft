@@ -3631,18 +3631,62 @@
   // CONTEXT, NOT CONTENT: it is not in `beams()`, so nothing here can be
   // picked, selected, moved or counted on this sheet -- the same rule the
   // openings above follow, and for the same reason.
+  // THE JOIST CALLOUT IN EVERY BAY OF THIS FLOOR'S DECK (Movie, 16 Oct):
+  // the bays between the beams that hold it up (paintBeamsBelow's, the
+  // storey under's), the arrow standing clear of the stairwell, the short
+  // form off this storey's schedule (level-assembly: PROJECT's own row, and
+  // the depth AUTO BEAM wrote there for a room over a garage). A bare deck
+  // over a garage runs with the door wall (build-house deckJoistAxis).
+  const paintJoistCallouts = (belowBeams, env) => {
+    const R = window.DraftRender2D;
+    const B = window.DraftBuildHouse;
+    const LA = window.DraftLevelAssembly;
+    if (!B || !R.drawJoistSpans2D || !LA) return;
+    const levelId = Number(activeLevelId());
+    const holes = (drawing?.surfaceOpenings || []).filter(opening =>
+      Number(opening.levelId) === levelId && opening.hostType === 'floor'
+      && (opening.points || []).length >= 3);
+    const ladder = window.DraftLayerViews.floorLevels(drawing?.levels || []).map(level => Number(level.id));
+    const at = ladder.indexOf(levelId);
+    const under = new Set(at < 0 ? [] : ladder.slice(0, at));
+    const garages = (drawing?.outlines || []).filter(outline => outline.garage === true
+      && under.has(Number(outline.levelId)) && (outline.points || []).length >= 3);
+    const wallById = new Map((drawing?.walls || []).map(wall => [String(wall.id), wall]));
+    const doorPoints = (drawing?.fenestrations || []).filter(fen => fen.garage === true)
+      .map(fen => wallById.get(String(fen.wallId))).filter(Boolean)
+      .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
+    const label = B.joistCallout(LA.levelAssemblyFor(drawing?.levelAssemblies, levelId));
+    // THE BODIES AUTO BEAM FRAMES: this level's outlines, the garage's own
+    // aside (layout-plan joistCalloutsFor reads the same), the floors only
+    // where a level has no outline.
+    const bodies = (drawing?.outlines || []).filter(outline => Number(outline.levelId) === levelId
+      && outline.garage !== true && outline.site !== true && (outline.points || []).length >= 3);
+    const decks = bodies.length ? bodies
+      : floors().filter(floor => floor.garage !== true && (floor.points || []).length >= 3);
+    decks.forEach(floor => {
+      const points = floor.points.map(pt => ({ x: pt.x, z: pt.z }));
+      const bays = B.joistBays(points, {
+        beams: belowBeams, holes,
+        axis: B.deckJoistAxis(points, { garages, doorPoints }),
+      });
+      if (bays) R.drawJoistSpans2D(ctx, toS, { ...bays, label }, {}, env);
+    });
+  };
+
   const paintBeamsBelow = () => {
     const R = window.DraftRender2D;
     const B = window.DraftBuildHouse;
     if (activeViewId() !== 'floor') return;
     const from = framesFrom(activeLevelId());
-    if (from == null || Number(from) === Number(activeLevelId())) return;
+    const framed = from != null && Number(from) !== Number(activeLevelId());
     const view = Number(from) === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
     const env = paintEnv();
-    const mine = item => Number(item.levelId) === Number(from) && item.view === view;
+    const mine = item => framed && Number(item.levelId) === Number(from) && item.view === view;
     const belowBeams = (drawing?.beams || []).filter(mine);
     const tags = R.beamTagSides(belowBeams, (drawing?.dimensions || []).filter(mine));
     belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true, tag: tags.get(beam.id) }, env));
+    paintJoistCallouts(belowBeams, env);
+    if (!framed) return;
     // The posts with it, and NOT the piles: a pile is concrete in the ground
     // under a garage slab, which is not what this floor stands on.
     (drawing?.columns || []).filter(column => mine(column)
@@ -18116,14 +18160,14 @@
       // would have written "21.25"" on a plan the moment a wider deck picked
       // the next row up (Movie, 14 Oct, naming the family: 15.25, 17.25,
       // 19.25, 21.25, 23.25).
-      const owjWhole = Math.floor(owj.depthIn);
-      const owjFrac = { 0.25: '-1/4', 0.5: '-1/2', 0.75: '-3/4' }[Number((owj.depthIn - owjWhole).toFixed(2))];
-      const depth = owjFrac ? `${owjWhole}${owjFrac}"` : `${owj.depthIn}"`;
-      addNote({ x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 }, storeyId, 'floor', [
-        `ENGINEERED OWJ ${depth} @ ${owj.ocIn}" O.C.`,
-        `${between} -- ${fmtFt(span)} SPAN`,
-        owj.fits ? 'TO BE CONFIRMED BY JOIST ENGINEER' : 'SPAN EXCEEDS OWJ TABLE -- CONFIRM WITH SUPPLIER',
-      ].join('\n'));
+      // THE THREE-LINE NOTE IS GONE (Movie, 16 Oct, struck out on the 2ND FL
+      // FLOOR LAYOUT): the deck is called out on the sheet instead, an
+      // arrowed span line in every bay with the short form beside it
+      // ("ENGINEERED OWJ 19-1/4"", render-2d drawJoistSpans2D off the
+      // schedule below). `between` is the decision this press made and is
+      // kept in the name for the reader of this code; the sheet shows it as
+      // the arrow's two ends.
+      void between;
       // ── AND THE SCHEDULE SAYS THE SAME DEPTH ──────────────────────────
       //
       // The note on the plan and PROJECT's row for this deck have agreed
@@ -18149,6 +18193,9 @@
         drawing.levelAssemblies[storeyId] = {
           ...(drawing.levelAssemblies[storeyId] || {}),
           joistDepthIn: owj.depthIn,
+          // AND WHAT KIND, so the callout reads "ENGINEERED OWJ" and not the
+          // storey's stock TJI at a depth the TJI table does not make.
+          joistType: 'owj',
         };
       }
       return owj;

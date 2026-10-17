@@ -1160,7 +1160,131 @@ if (!window.DraftBuildHouse) {
     return { start: at(u, a0), end: at(u, a1) };
   };
 
+  // ── THE JOIST CALLOUT, ONE PER BAY (Movie, 16 Oct) ──────────────────────
+  //
+  // Marked up in GIMP on the 2ND FL FLOOR LAYOUT: the three-line note
+  // ("ENGINEERED OWJ 19-1/4" @ 16" O.C. / WALL TO BEAM -- 18'-0" SPAN / TO
+  // BE CONFIRMED BY JOIST ENGINEER") struck out, and in its place an ARROWED
+  // span line perpendicular to the beam in every bay, each with the short
+  // form beside it -- "ENGINEERED OWJ 19-1/4"" and nothing else.
+  //
+  // A BAY is the run the joists make between two bearings: wall to beam, beam
+  // to beam, beam to wall -- or wall to wall on a deck with no beam. The
+  // beams decide which way the joists run (across them); a bare deck takes
+  // `axis` from its caller (a room over a garage runs with the door wall, see
+  // garageJoistAxis) and otherwise the shorter way.
+  //
+  // WHERE THE ARROW STANDS along the beam: a third of the way along, then two
+  // thirds, then the middle -- the first that is clear of a hole (the
+  // stairwell) by JOIST_ARROW_CLEAR_FT, IN EVERY BAY: the well's own strings
+  // run wall to wall past it (auto-dims, a foot and a quarter off its sides),
+  // so an arrow lined up with the well in the bay next door lands on a
+  // figure. Three feet clears the string and its label. Pure: points in plan
+  // feet, answers { axis, spanFt, bays: [{ at, from, to, spanFt }] } with
+  // `at` on the beam axis and from/to on the joist axis, or null for a body
+  // too small to frame.
+  const JOIST_ARROW_CLEAR_FT = 3;
+  const joistBays = (points, { beams = [], holes = [], axis = null } = {}) => {
+    if (!Array.isArray(points) || points.length < 3) return null;
+    const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
+    const box = { x: [Math.min(...xs), Math.max(...xs)], z: [Math.min(...zs), Math.max(...zs)] };
+    if (box.x[1] - box.x[0] < 0.5 || box.z[1] - box.z[0] < 0.5) return null;
+    const boxOf = pts => {
+      const px = pts.map(pt => pt.x), pz = pts.map(pt => pt.z);
+      return { x: [Math.min(...px), Math.max(...px)], z: [Math.min(...pz), Math.max(...pz)] };
+    };
+    const holeBoxes = holes.map(hole => (Array.isArray(hole?.points) ? hole.points : hole))
+      .filter(pts => Array.isArray(pts) && pts.length >= 3).map(boxOf);
+    // THE BEAMS THAT CROSS THIS BODY, by the axis they run on.
+    const crossing = beams.filter(beam => beam?.start && beam?.end).map(beam => {
+      const along = Math.abs(beam.end.x - beam.start.x) >= Math.abs(beam.end.z - beam.start.z) ? 'x' : 'z';
+      const across = along === 'x' ? 'z' : 'x';
+      const fixed = (beam.start[across] + beam.end[across]) / 2;
+      const lo = Math.min(beam.start[along], beam.end[along]);
+      const hi = Math.max(beam.start[along], beam.end[along]);
+      return { along, across, fixed, lo, hi };
+    }).filter(beam => beam.fixed > box[beam.across][0] + 0.01 && beam.fixed < box[beam.across][1] - 0.01
+      && Math.min(beam.hi, box[beam.along][1]) - Math.max(beam.lo, box[beam.along][0]) > 0.01);
+    // THE JOIST AXIS: across the beams when there are any (the most of them,
+    // where two directions cross), else the caller's, else the short way.
+    let joist;
+    if (crossing.length) {
+      const onX = crossing.filter(beam => beam.along === 'x').length;
+      joist = onX >= crossing.length - onX ? 'z' : 'x';
+    } else if (axis === 'x' || axis === 'z') {
+      joist = axis;
+    } else {
+      joist = box.x[1] - box.x[0] <= box.z[1] - box.z[0] ? 'x' : 'z';
+    }
+    const beamAxis = joist === 'x' ? 'z' : 'x';
+    const cuts = [...new Set(crossing.filter(beam => beam.along === beamAxis)
+      .map(beam => Math.round(beam.fixed * 1000) / 1000))].sort((a, b) => a - b);
+    const stops = [box[joist][0], ...cuts, box[joist][1]];
+    const runLo = box[beamAxis][0], runHi = box[beamAxis][1], run = runHi - runLo;
+    const bays = [];
+    for (let i = 0; i < stops.length - 1; i++) {
+      const from = stops[i], to = stops[i + 1];
+      if (to - from < 0.5) continue;
+      const clear = at => !holeBoxes.some(hole =>
+        at > hole[beamAxis][0] - JOIST_ARROW_CLEAR_FT && at < hole[beamAxis][1] + JOIST_ARROW_CLEAR_FT);
+      const candidates = [runLo + run / 3, runLo + run * 2 / 3, runLo + run / 2];
+      const at = candidates.find(clear) ?? candidates[0];
+      bays.push({ at, from, to, spanFt: to - from });
+    }
+    if (!bays.length) return null;
+    return { axis: joist, spanFt: Math.max(...bays.map(bay => bay.spanFt)), bays };
+  };
+
+  // THE WAY A DECK'S JOISTS RUN WHEN NO BEAM SAYS: over a garage, with the
+  // door wall (garageJoistAxis, the doors read as points on their wall);
+  // anywhere else null, which joistBays reads as the shorter way. `garages`
+  // are the garage outlines UNDER the deck (the caller's level filter);
+  // `doorPoints` any points on the garage doors' walls.
+  const deckJoistAxis = (points, { garages = [], doorPoints = [] } = {}) => {
+    if (!Array.isArray(points) || points.length < 3) return null;
+    const c = points.reduce((m, p) => ({ x: m.x + p.x / points.length, z: m.z + p.z / points.length }), { x: 0, z: 0 });
+    const inLoop = (loop, p) => {
+      let hit = false;
+      for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+        const a = loop[i], b = loop[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const garage = garages.find(g => Array.isArray(g?.points) && g.points.length >= 3 && inLoop(g.points, c));
+    if (!garage) return null;
+    const gx = garage.points.map(p => p.x), gz = garage.points.map(p => p.z);
+    const box = { x0: Math.min(...gx), x1: Math.max(...gx), z0: Math.min(...gz), z1: Math.max(...gz) };
+    const near = doorPoints.filter(p => p && p.x >= box.x0 - 1 && p.x <= box.x1 + 1 && p.z >= box.z0 - 1 && p.z <= box.z1 + 1);
+    return garageJoistAxis(box, near);
+  };
+
+  // THE SHORT FORM, off the level's schedule (level-assembly's assembly for
+  // the storey): "ENGINEERED OWJ 19-1/4"", "TJI 11-7/8"", "2x10 JOISTS". One
+  // home for the depth -- PROJECT's row and this label read the same field.
+  const inchesLabel = depthIn => {
+    const whole = Math.floor(depthIn + 1e-9);
+    const eighths = Math.round((depthIn - whole) * 8);
+    if (eighths === 0) return `${whole}"`;
+    if (eighths === 8) return `${whole + 1}"`;
+    const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+    const g = gcd(eighths, 8);
+    return `${whole}-${eighths / g}/${8 / g}"`;
+  };
+  const joistCallout = assembly => {
+    const type = String(assembly?.joistType || 'owj');
+    const depthIn = Number(assembly?.joistDepthIn);
+    if (/^conv_/.test(type)) return `${type.replace(/^conv_/, '')} JOISTS`;
+    const name = type === 'tji' ? 'TJI' : 'ENGINEERED OWJ';
+    return Number.isFinite(depthIn) && depthIn > 0 ? `${name} ${inchesLabel(depthIn)}` : name;
+  };
+
   window.DraftBuildHouse = Object.freeze({
+    joistBays,
+    deckJoistAxis,
+    joistCallout,
+    inchesLabel,
+    JOIST_ARROW_CLEAR_FT,
     OWJ_OC_IN,
     OWJ_SPANS,
     owjFor,

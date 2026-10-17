@@ -483,9 +483,10 @@ const upperOf = saved => ({
   floors: (saved.floors || []).filter(floor => Number(floor.levelId) === ROOM),
   cell: saved.sectionTable?.rows?.detachedGarage?.overGarage || null,
 });
-const owjNoteOf = saved => (saved.notes || [])
-  .map(note => String(note.body || ''))
-  .find(body => /^ENGINEERED OWJ/.test(body)) || null;
+// THE DECK'S CALLOUT (Movie, 16 Oct): the short form the sheet paints beside
+// the arrowed span in every bay, off whichever storey the room is filed on.
+const deckOf = saved => [5, 4].flatMap(levelId => h.deckCallouts(saved, levelId))[0] || null;
+const owjNoteOf = saved => (deckOf(saved) || {}).label || null;
 
 test('a frost wall carries a room over the garage', async ({ page }) => {
   const saved = await orderGarage(page, 'detached-frostwall');
@@ -635,8 +636,8 @@ test('past the bare span it frames the floor itself, and the bones still grow',
     const posts = (saved.columns || [])
       .filter(column => !String(column.footing || '').startsWith('pile'));
     expect(posts.length, 'standing on columns').toBeGreaterThan(0);
-    expect(owjNoteOf(saved), 'and the joists are now wall to beam')
-      .toMatch(/WALL TO BEAM|@/);
+    expect(owjNoteOf(saved), 'and the joists are named').toMatch(/^ENGINEERED OWJ/);
+    expect(deckOf(saved).bays.length, 'and now span wall to beam').toBeGreaterThanOrEqual(2);
   });
 
 test('and a way up into the room, landing on the garage slab',

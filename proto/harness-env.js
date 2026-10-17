@@ -78,7 +78,13 @@ function loadDraftModules() {
     // harnesses that read it require()d it themselves and so could not be
     // mutated.
     'areas.js',
-    'room-standards.js', 'level-assembly.js', 'build-house.js', 'finish-patterns.js',
+    'room-standards.js', 'level-assembly.js',
+    // AND THE STOREY LADDER, which layout-plan reads to find the floor
+    // below a plan and the beams under a deck (joistCalloutsFor). Without
+    // it here the sheet's joist callouts were unreachable from node, and a
+    // spec could only ask the page.
+    'layer-views.js',
+    'build-house.js', 'finish-patterns.js',
     // THE ROOF'S TWO, beside the wall's one. cut-view reaches for both off
     // `window` when finishes are asked for, and without them here every roof
     // in every offline check draws plain -- which is the shape of the bug that

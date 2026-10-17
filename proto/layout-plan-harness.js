@@ -689,6 +689,60 @@ function run(label) {
       screen.ok ? `inks: ${[...new Set(screen.inks)].join(', ')}` : screen.why);
   }
 
+  // ── THE BUILDING'S FOOTPRINT ON EVERY PLAN PAGE (Movie, 16 Oct) ─────────
+  //
+  // A faded house-and-garage line on every PLAN-view page, the same scale page
+  // to page. The footprint is the lowest full storey's outlines; a page ghosts
+  // it once, with the storey below (12 Oct), and never under its own outline.
+  {
+    const full = loadWith();
+    const LP = full.win.DraftLayoutPlan;
+    const key = pts => JSON.stringify(pts.map(p => [p.x, p.z]));
+    const onLevel = id => (SAVED.outlines || []).filter(o => o.levelId === id).map(o => o.points);
+    check('the footprint is MAIN FL\'s outlines -- the house and its garage',
+      LP.footprintLoops(SAVED).map(key).sort().join('|') === onLevel(3).map(key).sort().join('|'),
+      `${LP.footprintLoops(SAVED).length} loops against ${onLevel(3).length} on MAIN FL`);
+    check('the FOUNDATION page ghosts the footprint', LP.ghostLoops(SAVED, 1).length === onLevel(3).length,
+      String(LP.ghostLoops(SAVED, 1).length));
+    check('MAIN FL does not ghost its own outline', LP.ghostLoops(SAVED, 3).length === 0,
+      String(LP.ghostLoops(SAVED, 3).length));
+    const g5 = LP.ghostLoops(SAVED, 5).map(key);
+    check('2ND FL ghosts the storey below and the footprint as ONE set of lines',
+      new Set(g5).size === g5.length && g5.length > 0, g5.length + ' loops');
+    check('and none of them is 2ND FL\'s own outline', !g5.some(k => onLevel(5).map(key).includes(k)));
+    // A HALF STOREY IS NOT THE FOOTPRINT: an ENTRY landing on level 2 does not
+    // become the building.
+    const withEntry = { ...SAVED, outlines: [...SAVED.outlines,
+      { id: 9002, levelId: 2, points: [{ x: 0, z: 0 }, { x: 6, z: 0 }, { x: 6, z: 6 }, { x: 0, z: 6 }] }] };
+    check('a bilevel\'s ENTRY landing is not the footprint',
+      LP.footprintLoops(withEntry).map(key).sort().join('|') === onLevel(3).map(key).sort().join('|'));
+    // THE FRAME TAKES THE FOOTPRINT IN, so the ghost is not clipped. The
+    // fixture's foundation already reaches its garage (the frost wall is on
+    // level 1), so a second garage is put on MAIN FL where nothing on the
+    // foundation can reach it: the FOUNDATION frame has to grow to it.
+    const wider = { ...SAVED, outlines: [...SAVED.outlines, { id: 9003, levelId: 3, garage: true,
+      points: [{ x: 60, z: 0 }, { x: 70, z: 0 }, { x: 70, z: 10 }, { x: 60, z: 10 }] }] };
+    check('nothing on the fixture\'s foundation reaches x 60', LP.planBounds(SAVED, 1).maxX < 60,
+      String(LP.planBounds(SAVED, 1).maxX));
+    check('the FOUNDATION frame grew to take the footprint in', LP.planBounds(wider, 1).maxX >= 70 - 0.01,
+      `reaches x ${LP.planBounds(wider, 1).maxX}`);
+    // DRAWN FAINT: the ghost is the only thing on a foundation page at the
+    // ghost's alpha.
+    const drawn = draw(full.win, 1, { env: { view: 'foundation' } });
+    check('the FOUNDATION page draws the footprint faded', drawn.ok && drawn.strokes.some(a => Math.abs(a - 0.3) < 0.01),
+      drawn.ok ? [...new Set(drawn.strokes)].join(',') : drawn.why);
+    const none = loadWith(['level-assembly.js']);
+    check('without the storey ladder there is no footprint', none.win.DraftLayoutPlan.footprintLoops(SAVED).length === 0);
+    // THE JOIST CALLOUTS REACH THE SHEET (Movie, 16 Oct): the floor layout's
+    // env carries one per deck and the composer paints its label per bay.
+    const floorSheet = draw(full.win, 5, { env: { view: 'floor' } });
+    const labels = floorSheet.ok ? floorSheet.texts.filter(t => /^(ENGINEERED OWJ|TJI|\dx\d+ JOISTS)/.test(t)) : [];
+    const expected = LP.joistCalloutsFor(SAVED, 5, { levelId: 3, view: 'floor' }).reduce((n, c) => n + c.bays.length, 0);
+    check('the 2ND FLOOR sheet labels every bay of its decks', expected > 0 && labels.length === expected,
+      `${labels.length} labels for ${expected} bays`);
+    check('and the walls plan carries none', !draw(full.win, 5, { env: { view: 'plan' } }).texts.some(t => /^TJI|^ENGINEERED OWJ/.test(t)));
+  }
+
   if (label) console.log(label);
 }
 
@@ -703,6 +757,24 @@ if (!MUTATE) {
 // Each edits layout-plan.js (or a module it reads) in memory and asserts the
 // checks above go red. A check that survives its own mutation is not a check.
 const MUTATIONS = [
+  // THE FOOTPRINT AND THE JOIST CALLOUTS (Movie, 16 Oct).
+  ['the footprint is not ghosted',
+    'layout-plan.js', c => c.replace('return [...floorBelowLoops(saved, levelId), ...footprintLoops(saved)].filter(points => {',
+      'return [...floorBelowLoops(saved, levelId)].filter(points => {')],
+  ['a level ghosts its own outline',
+    'layout-plan.js', c => c.replace('      if (own.has(k) || seen.has(k)) return false;', '      if (seen.has(k)) return false;')],
+  ['the same loop is ghosted twice',
+    'layout-plan.js', c => c.replace('      if (own.has(k) || seen.has(k)) return false;', '      if (own.has(k)) return false;')],
+  ['the frame ignores the footprint',
+    'layout-plan.js', c => c.replace('    if (withBelow) ghostLoops(saved, levelId).forEach(points => points.forEach(eat));',
+      '    if (withBelow) floorBelowLoops(saved, levelId).forEach(points => points.forEach(eat));')],
+  ['a half storey can be the footprint',
+    'layout-plan.js', c => c.replace('      .filter(id => Number.isInteger(Number(assembly.STOREY_NUMBER[id])))\n', '')],
+  ['the joist callouts never reach the sheet',
+    'layout-plan.js', c => c.replace('        ? joistCalloutsFor(saved, levelId, under) : []),', '        ? [] : []),')],
+  ['the joist callouts are painted on the walls plan too',
+    'layout-plan.js', c => c.replace("      joistCallouts: unless(view === 'floor' && !halfLevel && hasFloorLayout(saved, levelId)",
+      "      joistCallouts: unless(!halfLevel && hasFloorLayout(saved, levelId)")],
   ['stair stage runs without VIEWS',
     'layout-plan.js', c => c.replace('stairs && LEVELS && VIEWS ? {', 'stairs && LEVELS ? {')],
   ['layer-views warning deleted',
@@ -759,7 +831,7 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace('ctx.globalAlpha *= GHOST_BELOW_ALPHA;', '')],
   ['the frame leaves the storey below out, so the ghost is clipped off the paper',
     'layout-plan.js', c => c.replace(
-      'floorBelowLoops(saved, levelId).forEach(points => points.forEach(eat));', '')],
+      '    if (withBelow) ghostLoops(saved, levelId).forEach(points => points.forEach(eat));\n', '')],
   ['every level is a storey, so the roof ghosts the floor under it',
     'layout-plan.js', c => c.replace(
       "const ladder = Object.keys(assembly.STOREY_NUMBER)",
@@ -788,8 +860,8 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace("      && env.shell !== true && env.hologram !== true) {",
       "      && env.shell !== true && env.hologram !== true && env.listing !== true) {")],
   ['planBounds ignores a caller that declines the ghost',
-    'layout-plan.js', c => c.replace('if (withBelow) floorBelowLoops(saved, levelId)',
-      'if (true) floorBelowLoops(saved, levelId)')],
+    'layout-plan.js', c => c.replace('if (withBelow) ghostLoops(saved, levelId)',
+      'if (true) ghostLoops(saved, levelId)')],
   ['the basement plan never shows its foundation',
     'layout-plan.js', c => c.replace("if (levelId === BASEMENT_LEVEL_ID && view === 'plan'", 'if (false')],
   ['the basement\'s foundation draws at full strength',

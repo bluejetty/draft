@@ -881,6 +881,51 @@ if (!window.DraftRender2D) {
   // IT STILL PRINTS. The sheet that goes out showing the beam under the floor
   // is the whole request, so this is alpha and not a no-print rule; the label
   // is the only part printing drops, as it is for every beam.
+  // THE JOIST CALLOUT, ONE PER BAY (Movie, 16 Oct, on the 2ND FL FLOOR
+  // LAYOUT): an arrowed span line perpendicular to the beam in every bay,
+  // with the short form beside it ("ENGINEERED OWJ 19-1/4""). `callout` is
+  // build-house joistBays' answer plus its `label`: { axis, label, bays:
+  // [{ at, from, to }] }, `at` on the beam axis and from/to on the joist
+  // axis. The ink is the structure's own (env.joistColor, else the column
+  // ink); the label drops on a printing pass the way the beam tag does.
+  function drawJoistSpans2D(ctx, toS, callout, options = {}, env) {
+    if (!callout || !Array.isArray(callout.bays) || !callout.bays.length) return;
+    const { below = false } = options;
+    const colour = env.joistColor || env.columnColor;
+    ctx.save();
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    if (below) ctx.globalAlpha = 0.45;
+    const size = 5;
+    const arrow = (point, angle) => {
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(point.x + size * Math.cos(angle + 2.65), point.y + size * Math.sin(angle + 2.65));
+      ctx.lineTo(point.x + size * Math.cos(angle - 2.65), point.y + size * Math.sin(angle - 2.65));
+      ctx.closePath();
+      ctx.fill();
+    };
+    callout.bays.forEach(bay => {
+      const p1 = callout.axis === 'x' ? { x: bay.from, z: bay.at } : { x: bay.at, z: bay.from };
+      const p2 = callout.axis === 'x' ? { x: bay.to, z: bay.at } : { x: bay.at, z: bay.to };
+      const a = toS({ ...p1, y: 0 }), b = toS({ ...p2, y: 0 });
+      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      // THE ARROWHEADS POINT OUT, at the bearings the joists land on.
+      arrow(a, angle + Math.PI);
+      arrow(b, angle);
+      if (callout.label && !env.isPrinting) {
+        labelAlongLine2D(ctx, a, b, callout.label, { font: env.labelFont, color: colour, offset: 5 });
+      }
+    });
+    ctx.restore();
+  }
+
   // WHICH SIDE OF EACH BEAM ITS TAG GOES, AND WHETHER IT GETS ONE (Movie, 16
   // Oct, on the 2ND FL FLOOR LAYOUT: the FLUSH/DROPPED BEAM note and the
   // beam's string on OPPOSITE sides of the beam, and one note for a beam laid
@@ -3036,6 +3081,7 @@ if (!window.DraftRender2D) {
     drawCutMarks2D,
     drawCutPreview2D,
     drawBeam2D,
+    drawJoistSpans2D,
     beamTagSides,
     drawColumn2D,
     drawPadGroup2D,

@@ -197,7 +197,7 @@ if (!window.DraftLayoutPlan) {
     // viewport's scale is picked from this box, so an upper floor set back
     // from the one below has to carry it here or the ghost is drawn outside
     // the frame and clipped — which on screen is a pan and on paper is gone.
-    if (withBelow) floorBelowLoops(saved, levelId).forEach(points => points.forEach(eat));
+    if (withBelow) ghostLoops(saved, levelId).forEach(points => points.forEach(eat));
     // THE SITE SHEET FRAMES WHAT THE SITE SHEET DRAWS. Its own level carries
     // the lot and nothing else, so sizing it level-by-level like a storey
     // would cut the building off the page -- and a building that does not fit
@@ -496,8 +496,48 @@ if (!window.DraftLayoutPlan) {
     return below == null ? [] : outlineLoopsOn(saved, below);
   }
 
+  // THE BUILDING'S FOOTPRINT -- the house and its garage, as the lowest
+  // storey that has outlines draws them (Movie, 16 Oct: a faded footprint
+  // line on every PLAN-view page, the same scale page to page, so the pages
+  // read as one building). Not the lot line, which is the SITE's.
+  //
+  // THE GROUND STOREY IS READ OFF THE SAME LADDER floorBelow reads
+  // (level-assembly's STOREY_NUMBER), and it is the lowest FULL storey that
+  // has outlines: a bilevel's ENTRY landing is half a storey and not the
+  // building's footprint. Without the ladder there is no footprint, for the
+  // reason floorBelow gives: a ghost of a guessed level is worse than none.
+  function footprintLoops(saved) {
+    const assembly = window.DraftLevelAssembly;
+    if (!assembly || !assembly.STOREY_NUMBER) return [];
+    const storeys = Object.keys(assembly.STOREY_NUMBER)
+      .filter(id => Number.isInteger(Number(assembly.STOREY_NUMBER[id])))
+      .map(Number).filter(Number.isFinite).sort((lo, hi) => lo - hi);
+    const ground = storeys.find(id => outlineLoopsOn(saved, id).length);
+    if (ground == null) return [];
+    return (Array.isArray(saved?.outlines) ? saved.outlines : [])
+      .filter(outline => outline?.levelId === ground && outline.site !== true
+        && Array.isArray(outline.points) && outline.points.length >= 3)
+      .map(outline => outline.points);
+  }
+
+  // WHAT A PLAN PAGE GHOSTS UNDER ITSELF: the storey below (12 Oct) and the
+  // building's footprint (16 Oct), each loop once, and none this level
+  // already draws as its own outline -- a ghost under the same line is ink
+  // for nothing.
+  function ghostLoops(saved, levelId) {
+    const key = points => JSON.stringify(points.map(pt => [Math.round(num(pt?.x) * 100) / 100, Math.round(num(pt?.z) * 100) / 100]));
+    const own = new Set(outlineLoopsOn(saved, levelId).map(key));
+    const seen = new Set();
+    return [...floorBelowLoops(saved, levelId), ...footprintLoops(saved)].filter(points => {
+      const k = key(points);
+      if (own.has(k) || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+
   function drawFloorBelowGhost(ctx, toS, saved, levelId) {
-    const loops = floorBelowLoops(saved, levelId);
+    const loops = ghostLoops(saved, levelId);
     if (!loops.length) return;
     ctx.save();
     ctx.globalAlpha *= GHOST_BELOW_ALPHA;
@@ -525,6 +565,47 @@ if (!window.DraftLayoutPlan) {
   function basementGhostKeeps(saved, wallId) {
     const wall = (Array.isArray(saved?.walls) ? saved.walls : []).find(item => item?.id === wallId);
     return !!wall && wall.body !== 'garage';
+  }
+
+  // THE JOIST CALLOUTS OF A LEVEL'S DECK, for the composer to paint
+  // (render-2d drawJoistSpans2D): build-house joistBays per floor body, with
+  // the beams filed on the level under (`under`, structureUnder's answer),
+  // the holes in this deck, and the label off the schedule.
+  function joistCalloutsFor(saved, levelId, under) {
+    const B = window.DraftBuildHouse;
+    const LA = window.DraftLevelAssembly;
+    const VIEWS = window.DraftLayerViews;
+    if (!B || typeof B.joistBays !== 'function' || !LA || !VIEWS) return [];
+    const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
+    const beams = under ? of('beams').filter(beam => beam?.levelId === under.levelId && beam.view === under.view) : [];
+    const holes = of('surfaceOpenings').filter(opening => opening?.levelId === levelId
+      && opening.hostType === 'floor' && Array.isArray(opening.points) && opening.points.length >= 3);
+    const ladder = VIEWS.floorLevels(of('levels')).map(level => Number(level.id));
+    const at = ladder.indexOf(Number(levelId));
+    const below = new Set(at < 0 ? [] : ladder.slice(0, at));
+    const garages = of('outlines').filter(outline => outline?.garage === true
+      && below.has(Number(outline.levelId)) && Array.isArray(outline.points) && outline.points.length >= 3);
+    const wallById = new Map(of('walls').map(wall => [String(wall.id), wall]));
+    const doorPoints = of('fenestrations').filter(fen => fen?.garage === true)
+      .map(fen => wallById.get(String(fen.wallId))).filter(wall => wall?.start && wall?.end)
+      .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
+    const label = B.joistCallout(LA.levelAssemblyFor(saved?.levelAssemblies, levelId));
+    // THE BODIES AUTO BEAM FRAMES -- the level's outlines, the garage's own
+    // aside -- so the callout and the beam plan read one deck. A floor
+    // record can carry a stair landing's tab past the room, and its box is
+    // then wider than any joist spans; the floors stand in only where a
+    // level has no outline.
+    const bodies = of('outlines').filter(outline => outline?.levelId === levelId && outline.garage !== true
+      && outline.site !== true && Array.isArray(outline.points) && outline.points.length >= 3);
+    const decks = bodies.length ? bodies : of('floors').filter(floor => floor?.levelId === levelId
+      && (floor.view || 'floor') === 'floor' && floor.garage !== true
+      && Array.isArray(floor.points) && floor.points.length >= 3);
+    return decks
+      .map(floor => {
+        const points = floor.points.map(pt => ({ x: num(pt.x), z: num(pt.z) }));
+        const bays = B.joistBays(points, { beams, holes, axis: B.deckJoistAxis(points, { garages, doorPoints }) });
+        return bays ? { ...bays, label } : null;
+      }).filter(Boolean);
   }
 
   // A level's FLOOR LAYOUT: the floors filed on its 'floor' view.
@@ -1277,6 +1358,12 @@ if (!window.DraftLayoutPlan) {
         labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
       }),
       beams: under ? borrowed('beams', () => true) : only(of('beams')),
+      // THE JOIST CALLOUT IN EVERY BAY OF THIS DECK (Movie, 16 Oct): the
+      // bays between the storey under's beams, the arrow clear of the
+      // stairwell, the short form off this storey's schedule. A bare deck
+      // over a garage runs with the door wall.
+      joistCallouts: unless(view === 'floor' && !halfLevel && hasFloorLayout(saved, levelId)
+        ? joistCalloutsFor(saved, levelId, under) : []),
       columns: foundationGhost
         ? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))
         : under ? borrowed('columns', notPile)
@@ -1350,6 +1437,9 @@ if (!window.DraftLayoutPlan) {
     planBounds,
     floorBelow,
     floorBelowLoops,
+    footprintLoops,
+    ghostLoops,
+    joistCalloutsFor,
     ridesOnFullFloor,
     halfLevelUnder,
     fullFloorOver,
