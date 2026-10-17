@@ -10,12 +10,13 @@
 //
 // The engine's own rows are proto/roof-wings-harness.js (--mutate) and the
 // dotted line's are proto/render-2d-harness.js's. The rows below are the
-// PAGE's: the split asked for, each body handed the top of its walls, the
-// stub raised against the rest, the cut keeping what the uncut edges
-// already had, and the ends decided at all. (A row that blanked the roof's
-// OWN plate was withdrawn: on his house no roof that is read as wings has
-// an end over a lower body, so nothing it drew could differ -- that guard
-// is proto/roof-wings-harness.js's, "told nothing about heights".)
+// PAGE's: the split asked for, the stub raised against the rest, the cut
+// keeping what the uncut edges already had, and the ends decided at all.
+// (Two rows that blanked the roof's OWN plate and the bodies' tops were
+// withdrawn: the room's hood is one designed roof and is not read as
+// wings, and no other roof on his house has an end over a lower body, so
+// nothing either row drew could differ -- that guard is
+// proto/roof-wings-harness.js's, "told nothing about heights".)
 //
 // Run: node proto/roof-wings-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -39,11 +40,6 @@ const MUTANTS = [
     name: 'the ends are never decided: the ring keeps the kinds the cut gave it',
     find: '      edges: G.roofWingKinds(cut.points, cut.edges, bodies, {',
     with: '      edges: cut.edges, unused: G.roofWingKinds(cut.points, cut.edges, bodies, {',
-    test: 'his house: the main block hips at the back and gables at the stub; the stub is its own roof under the rake' },
-  { file: 'MODEL.html',
-    name: "a body's walls have no height: the room gables where the lower house and garage stand",
-    find: '      .map(outline => ({ points: outline.points, top: topOf(outline.levelId) }))',
-    with: '      .map(outline => ({ points: outline.points, top: null }))',
     test: 'his house: the main block hips at the back and gables at the stub; the stub is its own roof under the rake' },
   { file: 'MODEL.html',
     name: 'the cut reads every uncut edge as a full eave again: two feet of overhang on a flush edge',
