@@ -1449,6 +1449,14 @@ const roofWingsOf = (points, { edgeOverhang = null, overhangFt = 0 } = {}) => {
   for (let i = 0; i < n; i++) {
     const a = pts[i], b = pts[(i + 1) % n];
     if (Math.abs(a.x - b.x) > eps && Math.abs(a.z - b.z) > eps) return null;
+    // A SPIKE IS NOT A WING. Two adjacent edges running back along each
+    // other enclose nothing; a ring carrying one is a traced loop nobody
+    // has cleaned (loopWithoutSpikes), and reading it as wings would quietly
+    // rebuild it clean -- hiding the clean it should have had.
+    const c = pts[(i + 2) % n];
+    const ux = b.x - a.x, uz = b.z - a.z, vx = c.x - b.x, vz = c.z - b.z;
+    const ul = Math.hypot(ux, uz), vl = Math.hypot(vx, vz);
+    if (ul > eps && vl > eps && Math.abs(ux * vz - uz * vx) < eps && (ux * vx + uz * vz) < 0) return null;
   }
   const uniq = list => [...new Set(list.map(v => Math.round(v * 1e6) / 1e6))].sort((a, b) => a - b);
   const xs = uniq(pts.map(p => p.x)), zs = uniq(pts.map(p => p.z));

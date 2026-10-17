@@ -127,6 +127,10 @@ check('a named gable is never flipped back to an eave', G => {
   const k = G.roofWingKinds(ring([[-2, -2], [34, -2], [34, 42], [-2, 42]]), ['gable', 'eave', 'eave', 'eave'], [], { overhangFt: 2 });
   return [k[0], 'gable'];
 });
+check('a ring with a spike (a wall walked twice) is not read as wings: nothing is split off it', G => {
+  const spiked = ring([[0, 0], [0, -18], [-6, -18], [0, -18], [-12, -18], [-12, -22], [-36, -22], [-36, 0]]);
+  return [[G.roofWingsOf(spiked), G.roofEndAttachment(spiked)], [null, null]];
+});
 check('a ring with a diagonal edge is handed back untouched', G => {
   const tri = ring([[0, 0], [10, 0], [10, 10], [0, 20]]);
   const k = G.roofWingKinds(tri, ['gable', 'eave', 'eave', 'eave'], BODIES, { overhangFt: 2, top: MAIN_TOP });
@@ -223,6 +227,8 @@ function run() {
 }
 
 const MUTATIONS = [
+  ['a spike is read as wings, and the ring quietly rebuilt clean',
+    s => s.replace('    if (ul > eps && vl > eps && Math.abs(ux * vz - uz * vx) < eps && (ux * vx + uz * vz) < 0) return null;', '')],
   ['the biggest rectangle is the main wing, not the widest span',
     s => s.replace("if (!best || span > best.span + eps || (Math.abs(span - best.span) <= eps && area > best.area + eps)) {",
       'if (!best || area > best.area + eps) {')],
