@@ -572,6 +572,15 @@
   #lay-rail { width:172px; flex-shrink:0; overflow-y:auto; padding:8px;
     box-sizing:border-box; border-left:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
+  /* THE RAIL'S HEAD holds NORTH (17 Oct), dressed as the bar dressed it:
+     the same chip height, edge and hover as a #sheet-row button, which the
+     bar's own rules do not reach up here. */
+  #lay-rail-head { display:flex; justify-content:flex-start; align-items:center; margin-bottom:6px; }
+  #lay-rail-head .bar-tool { display:inline-flex; align-items:center; justify-content:center;
+    height:24px; min-width:28px; padding:0 6px; border-radius:4px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary); cursor:pointer; }
+  #lay-rail-head .bar-tool:hover { border-color: var(--accent); color: var(--accent); }
   #lay-rail-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
   .lay-thumb { display:flex; flex-direction:column; align-items:center; gap:2px;
     min-width:0; padding:3px; cursor:pointer; border:1px solid transparent;
@@ -932,8 +941,18 @@
   </div>
 
   <nav id="lay-rail" data-sheet-rail aria-label="Sheets">
+    <!-- NORTH, UP HERE (Movie, 17 Oct, drawn in GIMP: an arrow from the
+         bottom bar's NORTH button up to the top of the sheet rail): "on
+         construction layout move the North arrow up here". The same button
+         the bar seated since 1 Oct -- shell-bars.js still owns its markup,
+         _openNorth its popup, the layout record its answer -- at the head of
+         the rail, left of the first sheet. -->
+    <div id="lay-rail-head" data-sheet-rail-head></div>
     <div id="lay-rail-grid" data-sheet-rail-grid></div>
   </nav>
+  <script>
+    document.querySelector('[data-sheet-rail-head]').innerHTML = window.DraftShellBars.toolMarkup('north');
+  </script>
 
 </div>
 
@@ -1000,7 +1019,9 @@
        arrived would have made importing a profile impossible everywhere in
        the app that is not the old DC page. Movie, asked, kept it. -->
 </div>
-<script>window.DraftShellBars.bottomBar({ page: 'construction', tools: ['north'] });</script>
+<!-- NO TOOLS IN THE BAR: NORTH sits at the head of the sheet rail now
+     (Movie, 17 Oct), seated by the script under the rail's markup. -->
+<script>window.DraftShellBars.bottomBar({ page: 'construction' });</script>
 
 <script>
 // ── THE PAGE, OFF THE DC RUNTIME ────────────────────────────────────────
@@ -3597,7 +3618,11 @@ class Component extends PageLogic {
     const pad = 8, gap = 6, labelH = 16;
     const rows = Math.max(1, Math.ceil(count / 2));
     const colW = (rail.clientWidth - pad * 2 - gap) / 2 - 8;
-    const rowH = (rail.clientHeight - pad * 2 - gap * (rows - 1)) / rows - labelH - 8;
+    // The head (NORTH) takes its row off the top before the sheets share
+    // what is left, or the last row would hang below the rail.
+    const head = rail.querySelector('[data-sheet-rail-head]');
+    const headH = head ? head.offsetHeight + gap : 0;
+    const rowH = (rail.clientHeight - headH - pad * 2 - gap * (rows - 1)) / rows - labelH - 8;
     const w = Math.max(40, Math.min(colW, rowH * pw / ph));
     grid.style.setProperty('--thumb-w', `${Math.floor(w)}px`);
     grid.style.setProperty('--thumb-h', `${Math.floor(w * ph / pw)}px`);
