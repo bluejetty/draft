@@ -61,6 +61,13 @@ const MUTATIONS = [
   ['the arrow stands in the stairwell',
     'build-house.js',
     c => c.replace('      const at = candidates.find(clear) ?? candidates[0];', '      const at = candidates[0];')],
+  ['the arrow dodges the well only in the well-s own bay',
+    'build-house.js',
+    c => c.replace('      const clear = at => !holeBoxes.some(hole =>\n        at > hole[beamAxis][0]',
+      '      const clear = at => !holeBoxes.some(hole =>\n        Math.min(hole[joist][1], to) - Math.max(hole[joist][0], from) > 0.01 && at > hole[beamAxis][0]')],
+  ['the arrow clears the well by a foot, onto its string',
+    'build-house.js',
+    c => c.replace('  const JOIST_ARROW_CLEAR_FT = 3;', '  const JOIST_ARROW_CLEAR_FT = 1;')],
   ['the bays ignore the beams',
     'build-house.js',
     c => c.replace("    const cuts = [...new Set(crossing.filter(beam => beam.along === beamAxis)", "    const cuts = [...new Set([].filter(beam => beam.along === beamAxis)")],
@@ -748,12 +755,18 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   checkEq('the joists run across the beam', bays.axis, 'z');
   checkList('wall to beam, beam to wall', bays.bays.map(b => [b.from, b.to]), [[0, 22], [22, 30]]);
   checkEq('the deck-s span is its widest bay', bays.spanFt, 22);
-  checkEq('the first bay-s arrow stands a third of the way along', Math.round(bays.bays[0].at * 100) / 100, 8);
-  // THE ARROW IS CLEAR OF THE STAIRWELL: the second bay holds the well at
-  // x 8..11, so a third of the way (x 8) is in it and the arrow moves on.
+  // THE ARROW IS CLEAR OF THE STAIRWELL: the well is at x 8..11, so a third
+  // of the way (x 8) is in it and the arrow moves on to two thirds -- in the
+  // well's own bay AND in the bay next door, whose arrow would otherwise
+  // stand on the well's wall-to-wall string.
   checkEq('the arrow in the well-s bay stands clear of the well', Math.round(bays.bays[1].at * 100) / 100, 16);
-  checkEq('and it would have stood in the well with no well there',
-    Math.round(joistBays(HOUSE, { beams: [BEAM] }).bays[1].at * 100) / 100, 8);
+  checkEq('and so does the arrow in the bay the well is not in', Math.round(bays.bays[0].at * 100) / 100, 16);
+  checkEq('with no well there, a third of the way along',
+    Math.round(joistBays(HOUSE, { beams: [BEAM] }).bays[0].at * 100) / 100, 8);
+  checkEq('a well 3 ft off the third mark still moves it (the string and its label need the room)',
+    Math.round(joistBays(HOUSE, { beams: [BEAM], holes: [{ points: rect(10.5, 24, 13, 28) }] }).bays[1].at * 100) / 100, 16);
+  checkEq('and 3 ft and a hair off does not',
+    Math.round(joistBays(HOUSE, { beams: [BEAM], holes: [{ points: rect(11.1, 24, 13, 28) }] }).bays[1].at * 100) / 100, 8);
   checkEq('two beams make three bays',
     joistBays(HOUSE, { beams: [BEAM, { start: { x: 0, z: 10 }, end: { x: 24, z: 10 } }] }).bays.length, 3);
   checkEq('a beam that does not cross the deck cuts no bay',

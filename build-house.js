@@ -1176,10 +1176,14 @@ if (!window.DraftBuildHouse) {
   //
   // WHERE THE ARROW STANDS along the beam: a third of the way along, then two
   // thirds, then the middle -- the first that is clear of a hole (the
-  // stairwell) by a foot. Pure: points in plan feet, answers { axis, spanFt,
-  // bays: [{ at, from, to, spanFt }] } with `at` on the beam axis and from/to
-  // on the joist axis, or null for a body too small to frame.
-  const JOIST_ARROW_CLEAR_FT = 1;
+  // stairwell) by JOIST_ARROW_CLEAR_FT, IN EVERY BAY: the well's own strings
+  // run wall to wall past it (auto-dims, a foot and a quarter off its sides),
+  // so an arrow lined up with the well in the bay next door lands on a
+  // figure. Three feet clears the string and its label. Pure: points in plan
+  // feet, answers { axis, spanFt, bays: [{ at, from, to, spanFt }] } with
+  // `at` on the beam axis and from/to on the joist axis, or null for a body
+  // too small to frame.
+  const JOIST_ARROW_CLEAR_FT = 3;
   const joistBays = (points, { beams = [], holes = [], axis = null } = {}) => {
     if (!Array.isArray(points) || points.length < 3) return null;
     const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
@@ -1222,8 +1226,7 @@ if (!window.DraftBuildHouse) {
       const from = stops[i], to = stops[i + 1];
       if (to - from < 0.5) continue;
       const clear = at => !holeBoxes.some(hole =>
-        Math.min(hole[joist][1], to) - Math.max(hole[joist][0], from) > 0.01
-        && at > hole[beamAxis][0] - JOIST_ARROW_CLEAR_FT && at < hole[beamAxis][1] + JOIST_ARROW_CLEAR_FT);
+        at > hole[beamAxis][0] - JOIST_ARROW_CLEAR_FT && at < hole[beamAxis][1] + JOIST_ARROW_CLEAR_FT);
       const candidates = [runLo + run / 3, runLo + run * 2 / 3, runLo + run / 2];
       const at = candidates.find(clear) ?? candidates[0];
       bays.push({ at, from, to, spanFt: to - from });
