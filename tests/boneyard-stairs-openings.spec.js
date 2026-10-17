@@ -94,10 +94,14 @@ test('the stairs stand on the wireframe\'s plan, on the level they are on', asyn
   const sx = frame.ox + p.x * frame.s, sy = frame.oy + p.z * frame.s;
   expect(await inkAround(page, sx, sy, Math.max(6, Math.round(stair.widthFt / 2 * frame.s))),
     'tread lines under the probe').toBeGreaterThan(8);
-  // AND NOT ON A LEVEL WITH NO STAIR OF ITS OWN: the ROOF.
-  await page.locator('[data-bone-level="ROOF"]').click();
+  // AND NOT ON A FLOOR WITH NO STAIR OF ITS OWN: each level draws only
+  // what stands on it.
+  const floors = (d.levels || []).filter(l => [1, 3, 5].includes(Number(l.id)));
+  const spare = floors.find(l => !(d.stairs || []).some(s => Number(s.levelId) === Number(l.id)));
+  expect(spare, 'a floor with no stair of its own').toBeTruthy();
+  await page.locator(`[data-bone-level="${spare.name}"]`).click();
   await page.waitForTimeout(300);
-  expect(Number(await page.locator('#bones2d').getAttribute('data-stairs'))).toBe(0);
+  expect(Number(await page.locator('#bones2d').getAttribute('data-stairs')), `${spare.name} draws none`).toBe(0);
 });
 
 test('a door dot slides along its wall by whole feet, and the house follows', async ({ page }) => {
