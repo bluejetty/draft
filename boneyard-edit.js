@@ -1029,6 +1029,63 @@ if (!window.DraftBoneyardEdit) {
     return { ok: true, drawing: d, at: pointAt(edge.axis, edge.c, u) };
   };
 
+  // ── AN OPENING SLIDES ALONG ITS WALL ─────────────────────────────────
+  //
+  // Movie, 16 Oct: "on the wireframe i'd like to be able to select the
+  // windows and doors and then move them along the wall surface". The
+  // opening is a fenestration with a wall and an offset from the wall's
+  // start; sliding it is a new offset, nothing else. The drag is read along
+  // the BONE's edge (`along`, a unit vector in plan), and the wall under it
+  // may run the other way, so the delta takes the wall's sign. It stops at
+  // the wall's ends with the opening's own half width to spare, and refuses
+  // to land on another opening in the same wall.
+  const slideOpening = (drawing, req) => {
+    const d = clone(drawing);
+    const f = (d.fenestrations || []).find(o => String(o.id) === String(req.id));
+    if (!f) return { ok: false, reason: 'NO_OPENING' };
+    const wall = (d.walls || []).find(w => String(w.id) === String(f.wallId));
+    if (!wall || !wall.start || !wall.end) return { ok: false, reason: 'NO_WALL' };
+    const wx = wall.end.x - wall.start.x, wz = wall.end.z - wall.start.z;
+    const len = Math.hypot(wx, wz);
+    if (!(len > 0)) return { ok: false, reason: 'NO_WALL' };
+    const ux = wx / len, uz = wz / len;
+    const along = req.along && Number.isFinite(Number(req.along.x)) && Number.isFinite(Number(req.along.z))
+      ? req.along : { x: ux, z: uz };
+    const sign = (along.x * ux + along.z * uz) < 0 ? -1 : 1;
+    const half = Math.max(0, Number(f.width) || 0) / 2;
+    const was = Number(f.offset) || 0;
+    const lo = half, hi = len - half;
+    if (hi < lo - TOL) return { ok: false, reason: 'NO_ROOM' };
+    const want = was + sign * (Number(req.deltaFt) || 0);
+    const to = Math.min(hi, Math.max(lo, want));
+    if (Math.abs(to - was) < 1e-9) return { ok: false, reason: 'NO_MOVE' };
+    const crowded = (d.fenestrations || []).some(o => o !== f && String(o.wallId) === String(f.wallId)
+      && Math.abs((Number(o.offset) || 0) - to) < half + Math.max(0, Number(o.width) || 0) / 2 - TOL);
+    if (crowded) return { ok: false, reason: 'CROWDED' };
+    f.offset = to;
+    return { ok: true, drawing: d, report: { opening: {
+      id: f.id, type: f.type === 'door' ? 'door' : 'window', wallId: wall.id,
+      fromFt: was, toFt: to, slidFt: (to - was) * sign } } };
+  };
+
+  // The opening of a loop nearest a world point, within `tolFt`: the dot
+  // at its centre, as boneyard-loops' openingsOn places it on the edge.
+  const openingNear = (loops, pt, tolFt) => {
+    let best = null;
+    (loops || []).forEach((loop, li) => (loop.openings || []).forEach(o => {
+      const a = loop.points[o.edge], b = loop.points[(o.edge + 1) % loop.points.length];
+      if (!a || !b) return;
+      const ex = b.x - a.x, ez = b.z - a.z, len = Math.hypot(ex, ez);
+      if (!(len > 0)) return;
+      const c = { x: a.x + ex * o.at / len, z: a.z + ez * o.at / len };
+      const dist = Math.hypot(pt.x - c.x, pt.z - c.z);
+      if (dist <= tolFt && (!best || dist < best.dist)) {
+        best = { loopIndex: li, opening: o, centre: c, along: { x: ex / len, z: ez / len }, dist };
+      }
+    }));
+    return best;
+  };
+
   // The edge of a loop nearest a world point, within `tolFt`.
   const edgeNear = (loops, pt, tolFt) => {
     let best = null;
@@ -1045,6 +1102,7 @@ if (!window.DraftBoneyardEdit) {
     CANTILEVER_FT, FIRST_PILE_FT, PILE_SPACING_FT, PILE_FOOTING, PILE_MARK,
     edgeOf, edgesOf, chainLoop, pushPolygon, pushSegments, snapOverhang,
     pushEdge, breakEdge, edgeNear, roofHood,
+    slideOpening, openingNear,
   });
 })();
 }

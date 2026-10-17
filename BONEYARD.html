@@ -38,6 +38,9 @@
 <script src="./tour.js"></script>
 <script src="./boneyard-edit.js"></script>
 <script src="./boneyard-loops.js"></script>
+<script src="./layer-views.js"></script>
+<script src="./stair-geometry.js"></script>
+<script src="./render-2d.js"></script>
 <script src="./orientation-guard.js"></script>
 <script>
   // THE SKIN IS ONE CHOICE ACROSS THE APP: the same `draft-skin` key MODEL
@@ -396,6 +399,34 @@
               [Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]) } : {}) };
         })));
       // FOR THE SPECS: every opening drawn, by level, with its dot.
+      // The stairs standing on a bone level: a floor's, by level id, in
+      // whatever view they were drawn in (this page has no layer views).
+      const stairsOn = (level, d) => (level && level.kind === 'floor'
+        ? ((d && d.stairs) || []).filter(stair => Number(stair.levelId) === Number(level.levelId)
+          && stair.start && stair.widthFt > 0)
+        : []);
+      const stairEnvFor = (d, stairs, level) => {
+        const LEVELS = window.DraftLevelAssembly, VIEWS = window.DraftLayerViews;
+        const SG = window.DraftStairGeometry, F = window.DraftFormatters;
+        const stairLevels = {
+          floors: VIEWS.floorLevels(d.levels),
+          assemblyFor: id => LEVELS.levelAssemblyFor(d.levelAssemblies, id),
+          floorFtFor: id => LEVELS.levelFloorFt(LEVELS.levelAssemblyFor(d.levelAssemblies, id)),
+          wallTopFtFor: (id, forView) => LEVELS.levelWallTopFt(d.walls, id, forView),
+        };
+        return {
+          layer: { visible: true, printable: true },
+          isPrinting: false,
+          elev: 0,
+          stairs,
+          stairColor: skin['draw-stair'] || level.color,
+          treadRunIn: SG.STAIR_TREAD_RUN_IN,
+          layoutFor: stair => SG.stairCurrentLayout(stair, stairLevels),
+          partsFor: (stair, layout) => SG.stairPlanParts(stair, layout),
+          formatInchesOnly: F.formatInchesOnly,
+        };
+      };
+
       const openingsAttr = lvls => JSON.stringify(lvls.flatMap(l => (l.cut || []).flatMap(c => c.dots
         .map(d => ({ level: l.name, type: d.type, at: [Number(d.x.toFixed(1)), Number(d.y.toFixed(1))] })))));
 
@@ -615,6 +646,18 @@
         c2.setAttribute('data-thin', thinAttr(thinDrawn));
         strokeCut(ctx, cut, level.color, 3);
         c2.setAttribute('data-openings', openingsAttr([{ name: level.name, cut }]));
+        // ── THE STAIRS ON THIS LEVEL ──────────────────────────────────────
+        //
+        // Movie, 16 Oct: "can you add the stairs to the wireframe so i can
+        // adjust the openings around the stairs". The painter is render-2d's
+        // drawStairs2D and the arithmetic stair-geometry's, handed over the
+        // way LAYOUT hands them (layout-plan.js stairEnv); this page adds
+        // only which stairs -- the picked level's -- and the pen.
+        const stairsHere = stairsOn(level, preview ? preview.drawing : raw);
+        if (stairsHere.length) {
+          window.DraftRender2D.drawStairs2D(ctx, p => toScreen(p), stairEnvFor(preview ? preview.drawing : raw, stairsHere, level));
+        }
+        c2.setAttribute('data-stairs', String(stairsHere.length));
         // Every corner, so a BREAK can be seen.
         ctx.fillStyle = level.color;
         level.loops.forEach(l => l.points.forEach(pt => {
@@ -786,6 +829,10 @@
       });
       const WORDS = {
         NOT_SQUARE: 'that edge is not square, so it cannot be pushed here',
+        NO_OPENING: 'that opening is not in the drawing any more',
+        NO_ROOM: 'that wall is too short for the opening to move along it',
+        NO_MOVE: 'that is the end of the wall for this opening',
+        CROWDED: 'another opening is in the way on that wall',
         SHARED: 'the garage and the house meet along that edge — BREAK it where they part and push the free part',
         NO_RUNG: 'that overhang is already as far as the ladder allows that way',
         NO_ROOF: 'there is no roof edge over that line to move',
@@ -919,9 +966,44 @@
         if (!level || !frame) return null;
         return BE.edgeNear(level.loops, toWorld(x, y), 10 / frame.s);
       };
+      // ── A PRESS ON A DOT PICKS THE OPENING, AND A DRAG SLIDES IT ────────
+      //
+      // Movie, 16 Oct: "i'd like to be able to select the windows and doors
+      // and then move them along the wall surface". The dot is the opening's
+      // centre on the bone; it is found before the edge under it, since the
+      // dot sits ON the edge, and the drag is read along that edge in whole
+      // feet. boneyard-edit's slideOpening moves the fenestration.
+      const dotUnder = (x, y) => {
+        const level = picked;
+        if (!level || !frame) return null;
+        return BE.openingNear(level.loops, toWorld(x, y), 8 / frame.s);
+      };
+      let dotDrag = null;
+      const slideWords = report => `${report.opening.type} slid ${ft(Math.abs(report.opening.slidFt))} along its wall`;
+      const slide = queued(async (id, along, deltaFt) => {
+        if (!picked) return;
+        if (readOnly()) { say(leaseWords()); return; }
+        const result = BE.slideOpening(raw, { id, along, deltaFt });
+        if (!result.ok) { say(why(result.reason)); return; }
+        await commit(result);
+        paint2d();
+        say(slideWords(result.report));
+      });
       c2.addEventListener('pointerdown', e => {
         const box = c2.getBoundingClientRect();
         const x = e.clientX - box.left, y = e.clientY - box.top;
+        const dot = !breaking ? dotUnder(x, y) : null;
+        if (dot) {
+          selected = null;
+          const a = toScreen({ x: 0, z: 0 }), b = toScreen(dot.along);
+          const ux = b.x - a.x, uy = b.y - a.y, ul = Math.hypot(ux, uy) || 1;
+          dotDrag = { x, y, id: dot.opening.id, along: dot.along, screen: { x: ux / ul, y: uy / ul }, feet: 0 };
+          c2.setPointerCapture(e.pointerId);
+          c2.setAttribute('data-opening-picked', String(dot.opening.id));
+          paint2d();
+          say(`${picked.name}: ${dot.opening.type} picked — drag it along the wall, a foot at a time.`);
+          return;
+        }
         const hit = edgeUnder(x, y);
         if (!hit) { selected = null; paint2d(); return; }
         if (breaking) { doBreak(hit, toWorld(x, y)); return; }
@@ -934,6 +1016,19 @@
         say(`${picked.name}: ${len} edge picked — drag it, or use the arrow keys, a foot at a time.`);
       });
       c2.addEventListener('pointermove', e => {
+        if (dotDrag) {
+          const box = c2.getBoundingClientRect();
+          const dx = e.clientX - box.left - dotDrag.x, dy = e.clientY - box.top - dotDrag.y;
+          const feet = Math.round((dx * dotDrag.screen.x + dy * dotDrag.screen.y) / frame.s);
+          if (feet === dotDrag.feet) return;
+          dotDrag.feet = feet;
+          const result = feet ? BE.slideOpening(raw, { id: dotDrag.id, along: dotDrag.along, deltaFt: feet }) : null;
+          preview = result && result.ok
+            ? { drawing: result.drawing, levels: BL.boneLevels(result.drawing, stack) } : null;
+          say(result ? (result.ok ? slideWords(result.report) : why(result.reason)) : '');
+          paintAll();
+          return;
+        }
         if (!drag) return;
         const box = c2.getBoundingClientRect();
         const dx = e.clientX - box.left - drag.x, dy = e.clientY - box.top - drag.y;
@@ -948,6 +1043,15 @@
         paintAll();
       });
       c2.addEventListener('pointerup', async () => {
+        if (dotDrag) {
+          const dot = dotDrag;
+          dotDrag = null;
+          preview = null;
+          c2.removeAttribute('data-opening-picked');
+          if (!dot.feet) { paintAll(); return; }
+          await slide(dot.id, dot.along, dot.feet);
+          return;
+        }
         const was = drag;
         drag = null;
         preview = null;
