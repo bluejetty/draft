@@ -99,7 +99,7 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the promotion says nothing, so the mode flips under a drafter who '
       + 'is watching his wall and not the corner',
-    find: '    sayOnStrip(`${said} is finer than TOY draws — DRAFTING now`);',
+    find: '    sayOnStrip(promotionWord(said));',
     with: '',
     test: 'the strip says so' },
   { file: 'MODEL.html',

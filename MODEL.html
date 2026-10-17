@@ -23721,16 +23721,18 @@
   // old card existed to avoid, and the lamp alone is too quiet for the moment
   // it happens -- a drafter watching his wall is not watching the corner. So
   // the strip says it once, in the same breath as the number that did it.
+  const promotionWord = said => `${said} is finer than TOY draws — DRAFTING now`;
   const promoteForNumber = (toyCouldHoldIt, said) => {
     if (board !== 'toy' || toyCouldHoldIt) return false;
     setBoard('drafting');
-    sayOnStrip(`${said} is finer than TOY draws — DRAFTING now`);
+    sayOnStrip(promotionWord(said));
     return true;
   };
 
-  // THE OUTLINE'S TYPED EDGE: whole feet only, square only, along the way
-  // the cursor is pointing (or the typed bearing). No TOY question -- the
-  // outline is always on the foot and on the square, which is TOY's own law.
+  // THE OUTLINE'S TYPED EDGE: square only, along the way the cursor is
+  // pointing (or the typed bearing). Whole feet are TOY's law and the
+  // light's, not the outline's: a number typed in inches moves the board,
+  // as it does for a wall (typedOutlineFeet).
   const typedOutlineEdge = ({ feet = null, deg = null }) => {
     const from = outlineTail();
     if (!from || !cursorWorld) return;
@@ -23755,15 +23757,28 @@
     const parsed = F.parseArchitecturalLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return undefined; }
     const feet = parsed.inches / 12;
-    if (!(feet > 0)) return undefined;
-    if (!toyCouldMakeLength(feet)) { stripMessage.textContent = 'the outline goes in whole feet'; return undefined; }
-    return feet;
+    return feet > 0 ? feet : undefined;
   };
 
   const commitTypedLength = () => {
     if (activeTool === 'outline') {
       const feet = typedOutlineFeet();
-      if (feet !== undefined) typedOutlineEdge({ feet });
+      if (feet !== undefined) {
+        // AND THE NUMBER MOVES THE BOARD, as a typed wall length does. This
+        // box used to answer "the outline goes in whole feet" on every board,
+        // and on TOY there was nothing else to press: the board is a lamp,
+        // and a drafter tracing a real building (Movie, 17 Oct, 5-2 in hand:
+        // "no way to turn it off but to enter precise numbers") was refused
+        // by the one thing that could have turned it off. The outline he
+        // typed is the outline he gets, and the lamp changes behind it --
+        // BEFORE the corner goes down, so it goes down on the board it
+        // belongs to, and said again AFTER, because the corner's own "next
+        // corner" would otherwise talk over the board's word.
+        const said = String(lengthBox.value).trim();
+        const promoted = promoteForNumber(toyCouldMakeLength(feet), said);
+        typedOutlineEdge({ feet });
+        if (promoted) sayOnStrip(promotionWord(said));
+      }
       lengthBox.blur();
       return;
     }
