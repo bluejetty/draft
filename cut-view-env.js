@@ -75,6 +75,15 @@ if (!window.DraftCutViewEnv) {
         ...(wall?.finishColor ? { finishColor: wall.finishColor } : {}),
         ...(Array.isArray(wall?.finishBands) && wall.finishBands.length
           ? { finishBands: wall.finishBands } : {}),
+        // WHICH FACE THE LINE IS. cut-view.js's section stands a wall's band
+        // half its thickness inside its reference line, so an exterior wall
+        // keeps the outline on its exterior face and lines up with the
+        // concrete under it. Dropped here, every wall on a LAYOUT section
+        // was centred on its line instead -- the framed storey a thickness
+        // and a quarter off the foundation it stands on (Movie, 17 Oct: "it
+        // should be the EXT of the EXT wall and line up with the GRADE BEAM
+        // edge below - all in line with the OUTLINE line").
+        ...(wall?.refLine ? { refLine: wall.refLine } : {}),
       };
     }).filter(Boolean);
     const floors = (Array.isArray(saved.floors) ? saved.floors : []).map(floor => {

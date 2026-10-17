@@ -727,9 +727,22 @@ function run(win) {
             `slab ends ${ftIn(Math.abs(backEnd - backU0))} inside the beam's line,`
             + ` half of it is ${ftIn(backC.width / 2)}`);
         }
+        // AT THE DOOR LINE ITSELF, not at the beam's centre. Since the section
+        // stands a wall's band on its reference line (17 Oct), the door
+        // beam's centre is half a wall inside the door line -- on the slope
+        // -- and read there, a floor whose corner at the door was dropped
+        // (the chord from the buck's end straight to the flat) came out a
+        // quarter inch off, inside the old tolerance of a quarter inch. Depth
+        // is affine along the cut, so the station at depth 0 is one
+        // interpolation between two it already reads, and at that station the
+        // answer is exact: the drop, to the sixteenth.
+        const depthAt = u => CV.garageDepthFt(base, attached, ptOnCut(cut, u, axis));
+        const dDoor = depthAt(doorU), dBack = depthAt(backU);
+        const doorLineU = Math.abs(dBack - dDoor) < 1e-9 ? doorU
+          : doorU + (backU - doorU) * ((0 - dDoor) / (dBack - dDoor));
         check('fall: the floor at the overhead door is GARAGE_SLAB_AT_DOOR_IN below the pour',
-          near(cTop - topAt(doorU), S.GARAGE_SLAB_AT_DOOR_IN / 12, 0.02),
-          `${ftIn(cTop - topAt(doorU))} below top of concrete`);
+          near(cTop - topAt(doorLineU), S.GARAGE_SLAB_AT_DOOR_IN / 12, 0.005),
+          `${ftIn(cTop - topAt(doorLineU))} below top of concrete at the door line`);
         // NOT LEVEL, and by the rate rather than merely "different": the two
         // stations are a known distance apart, so the rise between them is the
         // slope the standard names and nothing else can satisfy it.
@@ -3408,9 +3421,15 @@ const MUTATIONS = [
   ['the slab-s underside runs straight past a door, leaving the void empty',
     s => s.replace('        const buck = buckAt((a + b) / 2);',
       '        const buck = null;')],
-  ['the floor-s corner at the door is dropped, so the fall runs out through it',
-    s => s.replace('      [0, GARAGE_SLAB_FLAT_AT_FT].forEach(d => {',
-      '      [].forEach(d => {')],
+  // RETIRED 17 Oct: 'the floor-s corner at the door is dropped, so the fall
+  // runs out through it'. It bent floorTopPts' two corner stations away. The
+  // corner at the door line held the floor level over the half of the beam's
+  // band that stood OUTSIDE the line -- and since the section stands a band
+  // on its reference line, a bone-built beam's band sits inside the line and
+  // the slab's span ends AT it, so the corner has nothing outside it to hold
+  // and the chord without it moves the floor by under a pixel at this scale.
+  // The corner at GARAGE_SLAB_FLAT_AT_FT needs a garage over 32 ft deep,
+  // which no fixture here is. A row no fixture can see proves nothing.
   ['a door in section stands on its sill plate again, clear of the floor',
     s => s.replace("    const stands = opening.type === 'door' && crossing.garage && fdn",
       "    const stands = false && opening.type === 'door' && crossing.garage && fdn")],
