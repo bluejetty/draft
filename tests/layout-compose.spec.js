@@ -11,7 +11,10 @@ const BUCKET = 'model-drawing';
 const PW = 17;
 const PH = 11;
 const FIT_MARGIN = 60;
-const SCALE_LADDER = [1 / 16, 1 / 8, 3 / 16, 1 / 4, 3 / 8, 1 / 2, 3 / 4, 1];
+// The architect's rungs, and the engineer's the SITE PLAN walks instead
+// (Movie, 16 Oct: "when the lots are larger i may have problems").
+const SCALE_LADDER = [1 / 16, 3 / 32, 1 / 8, 3 / 16, 1 / 4, 3 / 8, 1 / 2, 3 / 4, 1,
+  1 / 10, 1 / 20, 1 / 30, 1 / 40, 1 / 50, 1 / 60, 1 / 80, 1 / 100, 1 / 200, 1 / 300, 1 / 400, 1 / 500];
 
 const point = (x, z) => ({ x, y: 0, z });
 
@@ -906,8 +909,13 @@ test('elevations and sections are dealt in windows that fill the sheet, drawing 
   const e1 = cuts.find(v => v.elevId === 'E1');
   const e2 = cuts.find(v => v.elevId === 'E2');
   expect(e1.pif).toBe(e2.pif);
-  // Plans keep their natural frames.
-  layout.viewports.filter(v => v.kind === 'plan').forEach(v => expect(v.crop).toBeUndefined());
+  // Plans take the whole sheet as their window (Movie, 16 Oct: "the
+  // viewport frame takes the largest area inside the border lines"): the
+  // crop only ever GROWS the natural frame, never cuts into the drawing.
+  layout.viewports.filter(v => v.kind === 'plan').forEach(v => {
+    expect(v.crop).toBeTruthy();
+    ['l', 'r', 't', 'b'].forEach(side => expect(v.crop[side]).toBeLessThanOrEqual(1e-9));
+  });
 });
 
 test('a window gives up at most 3/4 of an elevation\'s buried foundation, and none of a section\'s', async ({ page }) => {
