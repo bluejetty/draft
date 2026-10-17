@@ -5483,10 +5483,20 @@
     // Built ONCE per paint, not per stair: every stair on the level asks the
     // same four questions and wallTopFtFor scans the whole wall array.
     const levels = stairLevels();
+    // WHICH STAIRS THIS FLOOR SHOWS, AND HOW (Movie, 16 Oct; stair-geometry
+    // stairsShownOn): its own going DN, the ones landing on it going UP,
+    // the ones entirely under it lighter. Only the stairs on this view --
+    // a stair lives on the plan, and the floor layout shows its well.
+    const { levelId: hereId, viewId } = onActiveLevel();
+    const views = window.DraftLayerViews.layerViewsForLevelId(hereId);
+    const onView = stair => !views.length || stair.view === viewId;
+    const shown = SG.stairsShownOn(hereId, (drawing?.stairs || []).filter(onView), levels.floors);
+    const roles = new Map(shown.map(entry => [entry.stair, entry.role]));
     R.drawStairs2D(ctx, toS, {
       layer: STAIR_LAYER_STANDARD,
       isPrinting: false,
-      stairs: stairs(),
+      stairs: shown.map(entry => entry.stair),
+      roleFor: stair => roles.get(stair) || 'own',
       // Inert here for the same reason as the origin marker: toS is a plan
       // projection reading x and z only. Supplied because the painter reads
       // `env.elev || 0` and a caller answers the whole interface.

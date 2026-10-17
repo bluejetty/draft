@@ -1949,6 +1949,10 @@ if (!window.DraftRender2D) {
   // env.layoutFor gives the riser/tread layout and env.partsFor turns that
   // into runs, rails, landing, gap and walk line. This paints those parts; it
   // does not work out where they go.
+  // A stair under the floor being drawn, at the weight the storey below's
+  // ghost takes (layout-plan GHOST_BELOW_ALPHA is 0.3; a stair is finer).
+  const STAIR_BELOW_ALPHA = 0.45;
+
   function drawStairs2D(ctx, toS, env) {
     const std = env.layer;
     if (!std.visible || (env.isPrinting && !std.printable)) return;
@@ -1965,7 +1969,13 @@ if (!window.DraftRender2D) {
       const y = stair.start.y || 0;
       const pt = p => toS({ x: p.x, y, z: p.z });
       const half = Math.max(2, (stair.widthFt / 2) * pxPerFt);
+      // HOW THIS FLOOR SHOWS THE STAIR (Movie, 16 Oct; stair-geometry
+      // stairRoleOn): 'own' goes DN from here, 'lands' comes UP to here,
+      // 'below' is a stair entirely under this floor -- drawn lighter, with
+      // no walk line and no tag, which belong to the floors it serves.
+      const role = typeof env.roleFor === 'function' ? (env.roleFor(stair) || 'own') : 'own';
       ctx.save();
+      if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;
       ctx.strokeStyle = env.stairColor;
       ctx.fillStyle = env.stairColor;
       parts.runs.forEach(run => {
@@ -2025,13 +2035,19 @@ if (!window.DraftRender2D) {
         ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
-      // Downhill walk-line arrow with the DN label and riser count
+      // A STAIR UNDER THIS FLOOR CARRIES NO WALK LINE AND NO TAG.
+      if (role === 'below') { ctx.restore(); return; }
+      // Walk-line arrow with the DN label and riser count -- downhill on the
+      // floor the stair leaves, and UP, the arrow turned round, on the floor
+      // it lands on.
       const walk = parts.walk.map(pt);
       ctx.lineWidth = 1;
       ctx.beginPath();
       walk.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
       ctx.stroke();
-      const wa = walk[walk.length - 2], wb = walk[walk.length - 1];
+      const up = role === 'lands';
+      const wa = up ? walk[1] : walk[walk.length - 2];
+      const wb = up ? walk[0] : walk[walk.length - 1];
       const wd = Math.hypot(wb.x - wa.x, wb.y - wa.y) || 1;
       const wux = (wb.x - wa.x) / wd, wuy = (wb.y - wa.y) / wd;
       const wpx = -wuy, wpy = wux;
@@ -2040,10 +2056,14 @@ if (!window.DraftRender2D) {
       ctx.lineTo(wb.x - wux * 8 + wpx * 4, wb.y - wuy * 8 + wpy * 4);
       ctx.stroke();
       if (!env.isPrinting || std.printable) {
-        // The walk line is a line with a label on it, same as a beam.
+        // The walk line is a line with a label on it, same as a beam. THE UP
+        // TAG TAKES THE OTHER SIDE OF THE LINE: a storey's stair down and the
+        // next storey's stair up share one well (they stack), so on the
+        // floor between them both tags ride one walk line -- DN on the side
+        // it always had, UP hung from the line's other side.
         labelAlongLine2D(ctx, walk[0], walk[1],
-          `DN — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`,
-          { font, offset: 3 });
+          `${up ? 'UP' : 'DN'} — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`,
+          up ? { font, offset: -3, baseline: 'top' } : { font, offset: 3 });
       }
       ctx.restore();
     });
