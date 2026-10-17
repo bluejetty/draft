@@ -2,11 +2,13 @@
 // THE DEFAULT WASHROOMS ARE MOVIE'S BATHS, WHEREVER THEY ARE DROPPED.
 //
 // washroom-presets.js lays out BATH A (5'-7" x 8'-7") and BATH B (5'-1" x
-// 8'-1") from 1._Story.DXF, turns and mirrors them into the world, and slides
-// the tub end flush with an exterior wall it is dropped against. These checks
-// hold it to the drawing: the inside sizes, which walls it draws, that every
-// fixture and the door land INSIDE the room through fixture-geometry.js (the
-// same module the plan draws them with), that the door swings in and hangs
+// 8'-1") from 1._Story.DXF, and WC BF1 (9'-11" x 10'-5 1/2", barrier free)
+// from the North Point studio suite, turns and mirrors them into the world,
+// and slides the end that joins the house flush with an exterior wall it is
+// dropped against. These checks hold it to the drawings: the inside sizes,
+// which walls it draws, that every fixture and the door land INSIDE the room
+// through fixture-geometry.js (the same module the plan draws them with),
+// that the door swings in -- or OUT, for the barrier-free room -- and hangs
 // where Movie hung it, and when the snap does and does not happen.
 //
 // Run: node proto/washroom-presets-harness.js
@@ -24,8 +26,18 @@ const MUTATIONS = [
   ['every fixture faces out of the room', 'washroom-presets.js',
     c => c.replace("return dot({ x: -d.z, z: d.x }, sub(centre, wall.start)) >= 0 ? 1 : -1;",
       "return dot({ x: -d.z, z: d.x }, sub(centre, wall.start)) >= 0 ? -1 : 1;")],
-  ['the door swings out of the room', 'washroom-presets.js',
-    c => c.replace('      swingFlip: roomSide(doorHost) !== 1,', '      swingFlip: roomSide(doorHost) === 1,')],
+  ['every door swings the other way', 'washroom-presets.js',
+    c => c.replace("      swingFlip: lay.door.swing === 'out' ? roomSide(doorHost) === 1 : roomSide(doorHost) !== 1,",
+      "      swingFlip: lay.door.swing === 'out' ? roomSide(doorHost) !== 1 : roomSide(doorHost) === 1,")],
+  ['the barrier-free door swings in like the others', 'washroom-presets.js',
+    c => c.replace("      swingFlip: lay.door.swing === 'out' ? roomSide(doorHost) === 1 : roomSide(doorHost) !== 1,",
+      "      swingFlip: roomSide(doorHost) !== 1,")],
+  ['what stands on the end wall is lost when the house supplies it', 'washroom-presets.js',
+    c => c.replace("    const endKey = key => (key === 'tub' && !lay.walls.some(w => w.key === 'tub') ? 'ext' : key);",
+      "    const endKey = key => key;")],
+  ['the roll-in shower is a 36" square', 'washroom-presets.js',
+    c => c.replace("{ kind: 'shower', host: 'far', at: [36 * IN, 125.5 * IN], width: 6, depth: 3 }",
+      "{ kind: 'shower', host: 'far', at: [36 * IN, 125.5 * IN], width: 3, depth: 3 }")],
   ['the door is hung on its other jamb', 'washroom-presets.js',
     c => c.replace('      hingeFlip: hingeAt > strikeAt,', '      hingeFlip: hingeAt < strikeAt,')],
   ['the tub runs away from its faucet wall', 'washroom-presets.js',
@@ -110,10 +122,17 @@ const span = (poly, axis) => Math.max(...poly.map(p => p[axis])) - Math.min(...p
   check('the V36 in A, the V30 in B',
     `${A.fixtures.find(f => f.kind === 'vanity').width * 12} ${B.fixtures.find(f => f.kind === 'vanity').width * 12}`, '36 30');
   check('a 32" door in each', `${inches(A.door.width)} ${inches(B.door.width)}`, '32 32');
+  const BF = WP.place('BF1', { at: { x: 0, z: 0 } });
+  check('WC BF1 is 9\'-11" x 10\'-5 1/2" inside', `${inches(span(BF.inside, 'x'))} x ${inches(span(BF.inside, 'z'))}`, '119 x 125.5');
+  check('with left, right, far and its own end wall, no tub and no 6" wall', BF.walls.map(w => w.key).join(' '), 'left right far tub');
+  check('a 36 x 72 roll-in shower, a toilet and a V42, no tub',
+    BF.fixtures.map(f => `${f.kind}:${f.host}:${inches(f.width)}x${inches(f.depth)}`).sort().join(' '),
+    'shower:far:72x36 toilet:left:20x28 vanity:tub:42x24');
+  check('and a 32" door that swings out', `${inches(BF.door.width)} ${BF.door.swing}`, '32 out');
 }
 
 // ── EVERY PIECE INSIDE THE ROOM, HOWEVER IT IS TURNED ──────────────────────
-for (const id of ['A', 'B']) {
+for (const id of ['A', 'B', 'BF1']) {
   for (const angleDeg of [0, 90, 180, 270]) {
     for (const flip of [false, true]) {
       const room = WP.place(id, { at: { x: 7, z: -4 }, angleDeg, flip });
@@ -123,6 +142,17 @@ for (const id of ['A', 'B']) {
         return !g || !inside(g.center, room.inside);
       }).map(f => f.kind);
       check(`${id} at ${angleDeg}${flip ? ' mirrored' : ''}: every fixture inside`, outside.join(',') || 'none', 'none');
+      if (id === 'BF1') {
+        // The shower lies across the far end from the left wall: 72" along
+        // it, its near edge on that wall's inside face.
+        const shower = R.geo(R.fixtures.find(f => f.kind === 'shower'));
+        const farWall = R.walls.find(w => w.id === 'far');
+        const fromLeft = Math.min(...[shower.corners[0], shower.corners[1]].map(c =>
+          Math.min(...room.inside.map(p => Math.hypot(p.x - c.x, p.z - c.z)))));
+        check(`${id} at ${angleDeg}${flip ? ' mirrored' : ''}: the shower runs 72" along the far wall from a corner`,
+          `${inches(shower.width)} ${r2(fromLeft)} ${shower.wall === farWall}`, '72 0 true');
+        continue;
+      }
       const tub = R.geo(R.fixtures.find(f => f.kind === 'tub'));
       check(`${id} at ${angleDeg}${flip ? ' mirrored' : ''}: the tub fills its alcove`,
         tub ? inches(tub.tubLen) : 'none', id === 'A' ? 61.5 : 61);
@@ -156,6 +186,18 @@ for (const id of ['A', 'B']) {
       const along = ((hinge.x - from.x) * (to.x - from.x) + (hinge.z - from.z) * (to.z - from.z)) / len;
       check(`${id}${flip ? ' mirrored' : ''}: hinged where Movie hung it`, inches(along), want);
     }
+  }
+  // THE BARRIER-FREE DOOR SWINGS OUT, so nobody on the floor inside can
+  // block it: on the right wall, hinged 30" from the end wall (past the
+  // V42's 24" depth), the leaf's tip outside the room.
+  for (const flip of [false, true]) {
+    const room = WP.place('BF1', { at: { x: 0, z: 0 }, angleDeg: 90, flip });
+    const { hinge, tip } = leafTip(room, realise(room));
+    check(`BF1${flip ? ' mirrored' : ''}: the door swings OUT of the room`, inside(tip, room.inside), false);
+    const [from, to] = [room.inside[1], room.inside[2]];
+    const len = Math.hypot(to.x - from.x, to.z - from.z);
+    const along = ((hinge.x - from.x) * (to.x - from.x) + (hinge.z - from.z) * (to.z - from.z)) / len;
+    check(`BF1${flip ? ' mirrored' : ''}: hinged 30" from the end wall`, inches(along), 30);
   }
 }
 
@@ -202,6 +244,19 @@ for (const id of ['A', 'B']) {
   check('the tub sits on the exterior wall', tubRec.wallId, 'ext');
   const tub = R.geo(tubRec);
   check('inside the room, filling its alcove', tub && inside(tub.center, room.inside) ? inches(tub.tubLen) : 'none', 61.5);
+
+  // AND THE WC'S VANITY END THE SAME WAY: dropped by the exterior wall, the
+  // room draws no end wall and the V42 stands on the house's.
+  const LB = WP.PRESETS.BF1.L;
+  const bfNear = WP.snapToExterior('BF1', { at: { x: 0, z: face + LB / 2 + 0.8 } }, [EXT], faces);
+  check('WC BF1 dropped 10" off the wall snaps too', Boolean(bfNear), true);
+  const bf = WP.place('BF1', { at: bfNear.at, ext: bfNear.ext });
+  check('snapped, it draws no end wall of its own', bf.walls.map(w => w.key).join(' '), 'left right far');
+  const RB = realise(bf, EXT);
+  const vanity = RB.fixtures.find(f => f.kind === 'vanity');
+  check('the vanity sits on the exterior wall', vanity ? vanity.wallId : 'none', 'ext');
+  const vg = vanity && RB.geo(vanity);
+  check('inside the room, in its corner', vg && inside(vg.center, bf.inside) ? inches(vg.width) : 'none', 42);
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

@@ -321,6 +321,9 @@ test.describe('MODEL.html tier 1', () => {
       // Movie's two default washrooms (9 Oct), dropped whole by the FIXTURE
       // tool; pure layout, read at the press.
       './washroom-presets.js',
+      // And his corner kitchen (17 Oct), the same kind of entry: pure layout
+      // on two walls already drawn, read at the press.
+      './kitchen-presets.js',
       './cut-marks.js',
       // THE TWO NORTHS (1 Oct): the NORTH button's popup and the arrows on the
       // plan. Plain data and canvas, no framework; LAYOUT loads the same file.

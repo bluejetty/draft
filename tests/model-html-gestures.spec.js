@@ -426,6 +426,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                             // tool's own press -- so it is named, not let
                             // through as 'button'.
                             : el.dataset.washroom !== undefined ? 'washroom'
+                            // AND THE DEFAULT KITCHEN (Movie, 17 Oct): KITCHEN
+                            // L1 beside the KITCHEN title, the same kind of
+                            // pick -- six fixtures through the FIXTURE tool's
+                            // own press into a corner -- and named for the
+                            // same reason.
+                            : el.dataset.kitchen !== undefined ? 'kitchen'
                               // THE PROPERTIES FOLD, named rather than let
                               // through. It moved INSIDE #tool-slot on 29 Sep
                               // when the rail became tabbed -- the box sits in
@@ -995,6 +1001,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           toolKinds: ['assembly-fixed', 'assembly-loose', 'assembly-name',
             'assembly-start', 'assembly-ungroup',
             'fixture-kind',
+            // KITCHEN L1, one control kind (see toolKind).
+            'kitchen',
             'level-lock', 'level-lock-break',
             // THE FOLD CROSSED OVER on 29 Sep: the PROPERTIES box moved into
             // the slot with the tabs, so it leaves `buttons` above and

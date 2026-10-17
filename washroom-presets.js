@@ -1,9 +1,19 @@
-// THE DEFAULT WASHROOMS -- Movie's two main baths, picked and dropped whole.
+// THE DEFAULT WASHROOMS -- Movie's two main baths and his barrier-free WC,
+// picked and dropped whole.
 //
 // Movie, 9 Oct: "make some 'default' washrooms i can select and add to the
 // plan", drawn in 1._Story.DXF: bath A, 5'-7" x 8'-7" inside, and bath B,
 // 5'-1" x 8'-1". Everything below is measured off that file; nothing is a
 // round number chosen here.
+//
+// WC BF1 (Movie, 17 Oct, NORTH_POINT_S_SUITE.pdf: "can you make a WC and
+// KITCHENS that are like on this plan ... call it WC BF1 ... (BF = Barrier
+// Free)"): the studio suite's WC, 9'-11" x 10'-5 1/2" inside, a 36 x 72
+// roll-in shower across the far end, the toilet on the left wall, a V42 on
+// the end wall and a D32 that swings OUT -- a barrier-free door clears the
+// room rather than blocking someone on the floor inside it. Measured off
+// the sheet at 1/8" = 1'-0" printed twice up; the 9'-11" and 10'-5 1/2" are
+// its own dimension strings.
 //
 // THE ROOM'S OWN FRAME, in feet, the INSIDE faces: `u` across the width
 // (0 .. W), `v` along the length (0 .. L). The tub runs across the v = 0 end
@@ -25,6 +35,11 @@
 // Anywhere else it is a 3 1/2" interior wall ("when it is in interior that
 // magenta wall should become a int wall").
 //
+// THE KEY STAYS 'tub' FOR EVERY ROOM, the BF1 included: it names the v = 0
+// end, the end that joins the house, and the baths that gave it the name
+// put a tub there. BF1 puts its vanity there and its shower at the far end;
+// what joins the house is still the v = 0 wall.
+//
 // PURE: points in, points out. The page decides where the cursor is, what
 // counts as the exterior, and how a record is filed.
 if (!window.DraftWashroomPresets) {
@@ -37,12 +52,17 @@ if (!window.DraftWashroomPresets) {
   // What Movie drew. Toilet and vanity centres are along the right wall from
   // the tub end; the door is given by its hinge jamb and the jamb it closes
   // on, both on the inside face, as the DXF's swing arc puts them.
+  const TOILET = Object.freeze({ width: 5 / 3, depth: 7 / 3 });
   const PRESETS = Object.freeze({
     A: Object.freeze({
       id: 'A', name: 'BATH A', label: "BATH A 5'-7\" x 8'-7\"",
       W: 67 * IN, L: 103 * IN,
-      vanity: { width: 3, depth: 2, v: 84.5 * IN },     // V36
-      toilet: { width: 5 / 3, depth: 7 / 3, v: 51.2 * IN },
+      // Toilet and vanity centres along the right wall from the tub end.
+      fixtures: [
+        { kind: 'vanity', host: 'right', at: [67 * IN, 84.5 * IN], width: 3, depth: 2 },   // V36
+        { kind: 'toilet', host: 'right', at: [67 * IN, 51.2 * IN], ...TOILET },
+        { kind: 'tub' },
+      ],
       // The 6" wall at the tub's foot, as long as the tub is deep: a 2x6
       // standing against the right wall.
       chase: { lengthFt: 30 * IN },
@@ -51,12 +71,32 @@ if (!window.DraftWashroomPresets) {
     B: Object.freeze({
       id: 'B', name: 'BATH B', label: "BATH B 5'-1\" x 8'-1\"",
       W: 61 * IN, L: 97 * IN,
-      vanity: { width: 2.5, depth: 2, v: 81.5 * IN },   // V30
-      toilet: { width: 5 / 3, depth: 7 / 3, v: 51.2 * IN },
+      fixtures: [
+        { kind: 'vanity', host: 'right', at: [61 * IN, 81.5 * IN], width: 2.5, depth: 2 }, // V30
+        { kind: 'toilet', host: 'right', at: [61 * IN, 51.2 * IN], ...TOILET },
+        { kind: 'tub' },
+      ],
       chase: null,
       // On the long wall opposite the toilet and vanity (Movie: "the entry
       // door will be on the wall opposite the toilet and sink").
       door: { wall: 'left', hinge: [0, 92 * IN], strike: [0, 60 * IN], width: 32 * IN },
+    }),
+    // THE BARRIER-FREE WC, off the studio suite. The end wall (v = 0) is the
+    // suite's exterior wall with the V42 in its corner; the 36 x 72 roll-in
+    // shower lies across the far end from the left wall; the toilet is on
+    // the left wall 4'-11" in; the D32 is on the right wall past the vanity
+    // and swings out. No tub, so no 6" wall.
+    BF1: Object.freeze({
+      id: 'BF1', name: 'WC BF1', label: "WC BF1 9'-11\" x 10'-5 1/2\" barrier free",
+      W: 119 * IN, L: 125.5 * IN,
+      fixtures: [
+        { kind: 'vanity', host: 'tub', at: [98 * IN, 0], width: 3.5, depth: 2 },           // V42
+        { kind: 'toilet', host: 'left', at: [0, 59 * IN], ...TOILET },
+        { kind: 'shower', host: 'far', at: [36 * IN, 125.5 * IN], width: 6, depth: 3 },   // 36 x 72
+      ],
+      chase: null,
+      door: { wall: 'right', hinge: [119 * IN, 30 * IN], strike: [119 * IN, 62 * IN], width: 32 * IN,
+        swing: 'out' },
     }),
   });
   const TUB = Object.freeze({ width: 5, depth: 2.5 });
@@ -83,15 +123,13 @@ if (!window.DraftWashroomPresets) {
     return {
       preset: p,
       walls,
-      fixtures: [
-        { kind: 'vanity', host: 'right', at: [W, p.vanity.v], width: p.vanity.width, depth: p.vanity.depth },
-        { kind: 'toilet', host: 'right', at: [W, p.toilet.v], width: p.toilet.width, depth: p.toilet.depth },
+      fixtures: p.fixtures.map(f => (f.kind !== 'tub' ? f
         // The tub's faucet end is the end its drain is at -- the chase in A,
         // the right wall in B -- and it fills the alcove to the left wall.
-        { kind: 'tub', host: own ? 'tub' : 'ext', endWall: p.chase ? 'chase' : 'right',
-          width: TUB.width, depth: TUB.depth, faucet: [W, 0], far: [0, 0] },
-      ],
-      door: { host: p.door.wall, hinge: p.door.hinge, strike: p.door.strike, width: p.door.width },
+        : { kind: 'tub', host: 'tub', endWall: p.chase ? 'chase' : 'right',
+          width: TUB.width, depth: TUB.depth, faucet: [W, 0], far: [0, 0] })),
+      door: { host: p.door.wall, hinge: p.door.hinge, strike: p.door.strike, width: p.door.width,
+        swing: p.door.swing || 'in' },
       inside: [[0, 0], [W, 0], [W, L], [0, L]],
     };
   }
@@ -134,15 +172,18 @@ if (!window.DraftWashroomPresets) {
       const d = unit(wall.start, wall.end);
       return dot({ x: -d.z, z: d.x }, sub(centre, wall.start)) >= 0 ? 1 : -1;
     };
+    // WHAT STANDS ON THE END WALL STANDS ON THE HOUSE'S when the room joins
+    // it: the tub in A and B, the vanity in BF1.
+    const endKey = key => (key === 'tub' && !lay.walls.some(w => w.key === 'tub') ? 'ext' : key);
     const fixtures = lay.fixtures.map(f => {
-      const host = hostOf(f.host);
+      const host = hostOf(endKey(f.host));
       if (!host) return null;
       if (f.kind === 'tub') {
         const toFar = along(host, P(f.far)) - along(host, P(f.faucet));
-        return { kind: 'tub', host: f.host, endWall: f.endWall, offset: 0,
+        return { kind: 'tub', host: endKey(f.host), endWall: f.endWall, offset: 0,
           width: f.width, depth: f.depth, side: roomSide(host), dir: toFar >= 0 ? 1 : -1 };
       }
-      return { kind: f.kind, host: f.host, offset: along(host, P(f.at)),
+      return { kind: f.kind, host: endKey(f.host), offset: along(host, P(f.at)),
         width: f.width, depth: f.depth, side: roomSide(host) };
     }).filter(Boolean);
     const doorHost = hostOf(lay.door.host);
@@ -152,11 +193,14 @@ if (!window.DraftWashroomPresets) {
       host: lay.door.host,
       offset: (hingeAt + strikeAt) / 2,
       width: lay.door.width,
+      swing: lay.door.swing,
       // fixture-geometry's conventions for a door: unflipped, the hinge is
       // at the jamb nearer the wall's start and the leaf swings to the left
-      // normal. Into the room, hinged where Movie hung it.
+      // normal. Into the room, hinged where Movie hung it -- or OUT of it
+      // where the preset says so: BF1's door swings out, so a fall inside a
+      // barrier-free WC can never block its own door.
       hingeFlip: hingeAt > strikeAt,
-      swingFlip: roomSide(doorHost) !== 1,
+      swingFlip: lay.door.swing === 'out' ? roomSide(doorHost) === 1 : roomSide(doorHost) !== 1,
     };
     return {
       id, name: lay.preset.name, walls, fixtures, door, centre,
