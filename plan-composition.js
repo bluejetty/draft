@@ -289,7 +289,11 @@ if (!window.DraftPlanComposition) {
     // THE FOOTING IS THE CALLER'S ANSWER, not the painter's -- only a pile
     // changes the drawn shape, a telepost being the default square.
     if (env.structureEnv) {
-      pick(env.beams).forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv); });
+      // THE TAG OPPOSITE THE BEAM'S STRING, one per line (render-2d
+      // beamTagSides), read off the dimensions this same pass draws.
+      const beamsHere = pick(env.beams);
+      const tags = typeof render.beamTagSides === 'function' ? render.beamTagSides(beamsHere, dimensions) : new Map();
+      beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env.structureEnv); });
       pick(env.columns).forEach(column => {
         onLayer(ctx, column.layer || 'S-COL-FOOTING');
         render.drawColumn2D(ctx, toS, column, {

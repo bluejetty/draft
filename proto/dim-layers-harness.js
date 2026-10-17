@@ -608,8 +608,11 @@ function run() {
   // tag under its post, so the string stands further out on a tagged side.
   {
     const zOf = list => uniqOf(colsOnly(list).filter(s => Math.abs(s.start.z - s.end.z) < 0.01).map(s => s.start.z));
-    ok('forced onto the beam tag\'s side, the string stands clear of the tag',
-      zOf(colStrings({ floorOpenings: holeAt(34) })).join(',') === String(33 - AD.TAG_CLEAR_FT),
+    // RE-AIMED (16 Oct): the beam's own tag follows the string to the OTHER
+    // side now (render-2d beamTagSides), so a string forced onto the old tag
+    // side keeps its foot -- it is not standing clear of text that moved.
+    ok('forced onto the beam tag\'s old side, the string keeps its foot (the tag moves)',
+      zOf(colStrings({ floorOpenings: holeAt(34) })).join(',') === '32',
       zOf(colStrings({ floorOpenings: holeAt(34) })).join(','));
     const piled = POSTS.map(post => ({ ...post, footing: 'pile12' }));
     ok('posts on piles push the string past their footing tags',
@@ -640,6 +643,58 @@ function run() {
       outlines: [{ points: HOUSE, garage: false }], walls: wallsAround(HOUSE), floorOpenings: hole });
     ok('an opening on a floor with no beams is still dimensioned (the 2ND FLOOR)',
       noBeam.length === 6, `${noBeam.length} segments`);
+  }
+
+  // ── OUTSIDE THE PLAN WHEN THE OPENING HUGS THE WALL (Movie, 16 Oct) ──────
+  // "the stair opening's dims OUTSIDE the plan when the opening is within 3
+  // ft of the exterior wall's outside perimeter line, INSIDE when farther."
+  // A 36 x 66 house, the hole 10..20 across and 2 ft short of the far wall
+  // (z 56..64): its across string cannot fit between hole and wall, so it
+  // goes out past the perimeter stack on that side. Its along string (the
+  // z run) is 10 ft from either side wall and stays inside.
+  {
+    const hugging = holeAt(56);
+    const stack = [
+      { start: { x: 0, z: 67.5 }, end: { x: 36, z: 67.5 }, layer: 'A-DIMS-OVR' },
+      { start: { x: 0, z: 69 }, end: { x: 36, z: 69 }, layer: 'A-DIMS-COLS' },
+      { start: { x: -1.5, z: 0 }, end: { x: -1.5, z: 66 }, layer: 'A-DIMS-OVR' }];
+    const out = AD.computeColumnDimStrings({ beams: [], columns: [],
+      outlines: [{ points: HOUSE, garage: false }], walls: wallsAround(HOUSE),
+      floorOpenings: hugging, perimeter: stack, firstOffsetFt: 1.5, stringSpacingFt: 1.5 });
+    const xRun = out.filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+    const zRun = out.filter(s => Math.abs(s.start.x - s.end.x) < 0.01);
+    ok('an opening 2 ft from the wall is strung OUTSIDE the plan, past that wall',
+      xRun.length === 3 && xRun.every(s => s.start.z > 66), uniqOf(xRun.map(s => s.start.z)).join(','));
+    ok('one row past the stack already outside on that side (69 + 1.5)',
+      xRun.every(s => Math.abs(s.start.z - 70.5) < 1e-6), uniqOf(xRun.map(s => s.start.z)).join(','));
+    ok('and it still reads wall, opening, opening, wall',
+      uniqOf(xRun.flatMap(s => [s.start.x, s.end.x])).join(',') === '0,10,20,36',
+      uniqOf(xRun.flatMap(s => [s.start.x, s.end.x])).join(','));
+    ok('its stand-off points away from the house',
+      xRun.every(s => s.start.x < s.end.x), xRun.map(s => `${s.start.x}>${s.end.x}`).join(' '));
+    ok('the run that is 10 ft from its walls stays inside',
+      zRun.length === 3 && zRun.every(s => s.start.x > 0 && s.start.x < 36),
+      uniqOf(zRun.map(s => s.start.x)).join(','));
+    const bare = AD.computeColumnDimStrings({ beams: [], columns: [],
+      outlines: [{ points: HOUSE, garage: false }], walls: wallsAround(HOUSE),
+      floorOpenings: hugging, firstOffsetFt: 1.5 });
+    const bareX = bare.filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+    ok('with no stack outside, the first offset off the wall',
+      bareX.every(s => Math.abs(s.start.z - 67.5) < 1e-6), uniqOf(bareX.map(s => s.start.z)).join(','));
+    // EXACTLY 3 FT IS STILL HUGGING; 3 ft and an inch is inside (Movie's own
+    // number, read as the boundary it is).
+    const atThree = AD.computeColumnDimStrings({ beams: [], columns: [],
+      outlines: [{ points: HOUSE, garage: false }], walls: wallsAround(HOUSE),
+      floorOpenings: holeAt(55), firstOffsetFt: 1.5 })
+      .filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+    ok('an opening exactly 3 ft from the wall goes outside',
+      atThree.every(s => s.start.z > 66), uniqOf(atThree.map(s => s.start.z)).join(','));
+    const farther = AD.computeColumnDimStrings({ beams: [], columns: [],
+      outlines: [{ points: HOUSE, garage: false }], walls: wallsAround(HOUSE),
+      floorOpenings: holeAt(54.9), firstOffsetFt: 1.5 })
+      .filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+    ok('an opening farther than 3 ft from the wall stays inside',
+      farther.every(s => s.start.z < 66), uniqOf(farther.map(s => s.start.z)).join(','));
   }
 
   // ── THE FORMAT KEEPS IT ───────────────────────────────────────────────────
@@ -944,6 +999,22 @@ const MUTATIONS = [
     'auto-dims.js', c => c.replace(
       'if (line) { line.lo = Math.min(line.lo, lo); line.hi = Math.max(line.hi, hi); }\n      else lines.push',
       'lines.push')],
+  // OUTSIDE THE PLAN (Movie, 16 Oct).
+  ['an opening hugging the wall is strung inside anyway',
+    'auto-dims.js', c => c.replace(
+      'const hug = order.find(index => hugs[index]);', 'const hug = undefined;')],
+  ['the outside string lands on the perimeter stack instead of past it',
+    'auto-dims.js', c => c.replace(
+      'const off = beyond.length ? Math.max(...beyond) + stringSpacingFt : firstOffsetFt;',
+      'const off = firstOffsetFt;')],
+  ['the hugging reach widens from 3 ft to 30',
+    'auto-dims.js', c => c.replace('const OPENING_OUTSIDE_FT = 3;', 'const OPENING_OUTSIDE_FT = 30;')],
+  ['the hugging reach narrows to 2 ft',
+    'auto-dims.js', c => c.replace('const OPENING_OUTSIDE_FT = 3;', 'const OPENING_OUTSIDE_FT = 2.5;')],
+  ['the beam tag counts as text in the way again, pushing the string off',
+    'auto-dims.js', c => c.replace(
+      "const tagged = direction => direction > 0 && along === 'x' && hasPile;",
+      "const tagged = direction => direction < 0 || (direction > 0 && along === 'x' && hasPile);")],
   ['the opening string ignores the beam beside it',
     'auto-dims.js', c => c.replace(
       'const order = beamNear(0) && !beamNear(1) ? [1, 0] : [0, 1];', 'const order = [0, 1];')],

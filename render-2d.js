@@ -926,9 +926,69 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // WHICH SIDE OF EACH BEAM ITS TAG GOES, AND WHETHER IT GETS ONE (Movie, 16
+  // Oct, on the 2ND FL FLOOR LAYOUT: the FLUSH/DROPPED BEAM note and the
+  // beam's string on OPPOSITE sides of the beam, and one note for a beam laid
+  // in pieces). Answers a Map of beam id -> +1 / -1 (the side across the
+  // beam, in plan units: +z under a level beam, +x right of an upright one)
+  // or 0 for a piece that says nothing because another piece on its line
+  // already does.
+  //
+  // THE STRING IS READ FROM THE DIMENSIONS, not re-derived: a column row
+  // (`layer`, A-DIMS-COLS by default) running parallel to the beam, overlapping
+  // it along, within `nearFt` across. Its side is the string's side; the tag
+  // takes the other. With no string the tag keeps its old side, -across.
+  //
+  // ONE TAG PER LINE: pieces that share a line (within ON_LINE_FT across,
+  // the same axis) tag the longest piece only. The string spans the whole
+  // line, so the longest piece's middle is where a reader looks.
+  function beamTagSides(beams, dimensions, options = {}) {
+    const { layer = 'A-DIMS-COLS', nearFt = 4 } = options;
+    const ON_LINE_FT = 0.5;
+    const sides = new Map();
+    const list = (Array.isArray(beams) ? beams : []).filter(beam => beam?.start && beam?.end);
+    const rows = (Array.isArray(dimensions) ? dimensions : [])
+      .filter(dim => dim?.start && dim?.end && (dim.layer || null) === layer);
+    const axisOf = item => (Math.abs(item.end.x - item.start.x) >= Math.abs(item.end.z - item.start.z)
+      ? { along: 'x', across: 'z' } : { along: 'z', across: 'x' });
+    const lines = [];
+    list.forEach(beam => {
+      const { along, across } = axisOf(beam);
+      const fixed = (beam.start[across] + beam.end[across]) / 2;
+      const lo = Math.min(beam.start[along], beam.end[along]);
+      const hi = Math.max(beam.start[along], beam.end[along]);
+      let line = lines.find(other => other.along === along && Math.abs(other.fixed - fixed) <= ON_LINE_FT);
+      if (!line) { line = { along, across, fixed, lo, hi, pieces: [] }; lines.push(line); }
+      line.lo = Math.min(line.lo, lo); line.hi = Math.max(line.hi, hi);
+      line.pieces.push({ beam, length: hi - lo });
+    });
+    lines.forEach(line => {
+      const { along, across } = line;
+      // THE STRING'S SIDE, if a column row rides this line.
+      let stringSide = 0;
+      rows.forEach(dim => {
+        const axis = axisOf(dim);
+        if (axis.along !== along) return;
+        const at = (dim.start[across] + dim.end[across]) / 2;
+        const dLo = Math.min(dim.start[along], dim.end[along]);
+        const dHi = Math.max(dim.start[along], dim.end[along]);
+        if (Math.min(dHi, line.hi) - Math.max(dLo, line.lo) <= 0) return;
+        const off = at - line.fixed;
+        if (Math.abs(off) <= ON_LINE_FT || Math.abs(off) > nearFt) return;
+        if (stringSide === 0 || Math.abs(off) < Math.abs(stringSide)) stringSide = off;
+      });
+      const side = stringSide === 0 ? -1 : (stringSide > 0 ? -1 : 1);
+      const longest = line.pieces.reduce((best, piece) => (piece.length > best.length ? piece : best));
+      line.pieces.forEach(piece => sides.set(piece.beam.id, piece === longest ? side : 0));
+    });
+    return sides;
+  }
+
   function drawBeam2D(ctx, toS, beam, options = {}, env) {
     if (!beam?.start || !beam?.end) return;
-    const { preview = false, below = false } = options;
+    // `tag`: undefined keeps the old label, -across on every beam; 0 or
+    // false draws none; +1 / -1 puts it on that side (beamTagSides).
+    const { preview = false, below = false, tag } = options;
     const a = toS(beam.start);
     const b = toS(beam.end);
     ctx.save();
@@ -942,11 +1002,19 @@ if (!window.DraftRender2D) {
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (!preview && !env.isPrinting) {
-      // ALONG the beam, not across it. See labelAlongLine2D.
+    const silent = tag === 0 || tag === false || tag === null;
+    if (!preview && !env.isPrinting && !silent) {
+      // ALONG the beam, not across it. See labelAlongLine2D. THE SIDE: the
+      // helper writes at -offset, which is the -across side of the beam in
+      // plan units (above a level beam, left of an upright one -- the label
+      // is turned to read from the bottom or the right). A +across tag is
+      // the same text at +offset, hung from its top so it still clears the
+      // line.
+      const flip = tag === 1 || tag === '+';
       labelAlongLine2D(ctx, a, b,
         (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM') + (below ? ' BELOW' : ''),
-        { font: env.labelFont, color: env.beamColor, offset: 5 });
+        { font: env.labelFont, color: env.beamColor, offset: flip ? -5 : 5,
+          baseline: flip ? 'top' : 'bottom' });
     }
     ctx.restore();
   }
@@ -3014,6 +3082,7 @@ if (!window.DraftRender2D) {
     drawCutPreview2D,
     drawBeam2D,
     drawJoistSpans2D,
+    beamTagSides,
     drawColumn2D,
     drawPadGroup2D,
     drawOpeningAbove2D,

@@ -3536,7 +3536,10 @@
     const env = paintEnv();
     const B = window.DraftBuildHouse;
     const F = window.DraftFormatters;
-    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam, {}, env));
+    // THE TAG OPPOSITE THE STRING, one per beam line (render-2d
+    // beamTagSides): read off this level and view's own column rows.
+    const tags = R.beamTagSides(beams(), dimensions());
+    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env));
     // ── THE PADS GO DOWN FIRST, UNDER EVERYTHING THEY CARRY ─────────────────
     //
     // Movie, 25 Sep: "we have beam and columns, but no footing, we will need
@@ -3680,7 +3683,8 @@
     const env = paintEnv();
     const mine = item => framed && Number(item.levelId) === Number(from) && item.view === view;
     const belowBeams = (drawing?.beams || []).filter(mine);
-    belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true }, env));
+    const tags = R.beamTagSides(belowBeams, (drawing?.dimensions || []).filter(mine));
+    belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true, tag: tags.get(beam.id) }, env));
     paintJoistCallouts(belowBeams, env);
     if (!framed) return;
     // The posts with it, and NOT the piles: a pile is concrete in the ground
@@ -17489,8 +17493,14 @@
         wall: wallById.get(String(entry.opening.wallId)),
       }))
       .filter(entry => entry.center && entry.wall);
+    // A FLOOR LAYOUT DIMENSIONS THE FLOOR (Movie, 16 Oct: the floor layouts
+    // dimension the floor only, not out to the garage). The garage has no
+    // floor framing on this sheet -- its slab is the foundation's -- so its
+    // outline leaves the perimeter stack here and the strings stop at the
+    // house. Every other view keeps the building whole.
+    const strung = view === 'floor' ? outlines.filter(outline => !outline.garage) : outlines;
     const segments = AD.computeAutoDimStrings({
-      walls, outlines, roofs, openings,
+      walls, outlines: strung, roofs, openings,
       offsetOutline: (pts, dist) => G.offsetOutline(pts, dist),
       firstOffset: autoDimFirstOffsetFt(),
       jogMergeFt: AD.JOG_MERGE_FT,
@@ -17533,6 +17543,11 @@
       floorOpenings: (drawing.surfaceOpenings || []).filter(opening =>
         Number(opening.levelId) === levelId && opening.hostType === 'floor'
         && (opening.points || []).length >= 3),
+      // THE STACK ALREADY OUTSIDE, so an opening string sent out past the
+      // wall (within 3 ft of it) lands one row beyond the perimeter rows.
+      perimeter: segments || [],
+      firstOffsetFt: autoDimFirstOffsetFt(),
+      stringSpacingFt: AD.STRING_SPACING_FT,
     }) : [];
     // THE EARLY RETURN IS UNCHANGED FOR THE CASE IT WAS WRITTEN FOR. It fires
     // when computeAutoDimStrings finds nothing big enough to string, and that
