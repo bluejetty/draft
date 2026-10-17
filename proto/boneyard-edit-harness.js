@@ -118,6 +118,17 @@ const MUTATIONS = [
     c => c.replace('t = Math.max(t, g.to);', '')],
   ['the gap is centred on the wall start, not the opening', 'boneyard-loops.js',
     c => c.replace('const off = Number(f.offset) || 0;', 'const off = 0;')],
+  // ── AN OPENING SLIDES ALONG ITS WALL (Movie, 16 Oct) ──────────────────
+  ['a slide ignores which way the wall runs under the bone', 'boneyard-edit.js',
+    c => c.replace("    const sign = (along.x * ux + along.z * uz) < 0 ? -1 : 1;", '    const sign = 1;')],
+  ['a slide runs the opening off the end of its wall', 'boneyard-edit.js',
+    c => c.replace('    const to = Math.min(hi, Math.max(lo, want));', '    const to = want;')],
+  ['a slide lands one opening on another', 'boneyard-edit.js',
+    c => c.replace("    if (crowded) return { ok: false, reason: 'CROWDED' };\n", '')],
+  ['a slide that goes nowhere is still an edit', 'boneyard-edit.js',
+    c => c.replace("    if (Math.abs(to - was) < 1e-9) return { ok: false, reason: 'NO_MOVE' };\n", '')],
+  ['the dot nearest the press is any dot, however far', 'boneyard-edit.js',
+    c => c.replace('      if (dist <= tolFt && (!best || dist < best.dist)) {', '      if (!best || dist < best.dist) {')],
 ];
 
 if (MUTATE) {
@@ -645,6 +656,51 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
     [[[7, -2], [7, 4]], [[7, -2], [19, -2]], [[19, -16], [19, -2]], [[7, 4], [20, 4]]].map(x => x.sort().join(' ')).sort());
   check('pushed back, the cut follows and is not doubled',
     r2 && r2.ok && (mainOf(r2.drawing).cuts || []).map(rect), [[7, 20, -2, 4]]);
+}
+
+// ── AN OPENING SLIDES ALONG ITS WALL (Movie, 16 Oct) ───────────────────────
+//
+// "on the wireframe i'd like to be able to select the windows and doors and
+// then move them along the wall surface". The fenestration keeps its wall and
+// takes a new offset; the drag is read along the bone's edge, which may run
+// the other way from the wall.
+{
+  const house = {
+    walls: [
+      { id: 'w1', levelId: 3, start: { x: 0, z: 0 }, end: { x: 20, z: 0 } },     // runs +x
+      { id: 'w2', levelId: 3, start: { x: 20, z: 10 }, end: { x: 0, z: 10 } },   // runs -x
+    ],
+    fenestrations: [
+      { id: 'f1', wallId: 'w1', type: 'door', offset: 5, width: 3 },
+      { id: 'f2', wallId: 'w1', type: 'window', offset: 12, width: 4 },
+      { id: 'f3', wallId: 'w2', type: 'window', offset: 6, width: 4 },
+    ],
+  };
+  const slid = (id, deltaFt, along) => E.slideOpening(house, { id, deltaFt, along });
+  check('a door slides 3 ft along its wall', slid('f1', 3, { x: 1, z: 0 }).drawing.fenestrations[0].offset, 8);
+  check('and the house handed in is not the one changed', house.fenestrations[0].offset, 5);
+  check('the report says what slid and how far', slid('f1', 3, { x: 1, z: 0 }).report.opening,
+    { id: 'f1', type: 'door', wallId: 'w1', fromFt: 5, toFt: 8, slidFt: 3 });
+  check('dragged the other way along the bone, it goes the other way', slid('f1', -2, { x: 1, z: 0 }).drawing.fenestrations[0].offset, 3);
+  check('a wall running the other way under the bone takes the sign: +x on the bone is -offset on w2',
+    slid('f3', 2, { x: 1, z: 0 }).drawing.fenestrations[2].offset, 4);
+  check('with no bone direction given, the wall\'s own way is the drag\'s', slid('f3', 2).drawing.fenestrations[2].offset, 8);
+  check('it stops at the end of the wall with its half width to spare', slid('f1', 40, { x: 1, z: 0 }).drawing.fenestrations[0].offset, 18.5);
+  check('and at the start', slid('f1', -40, { x: 1, z: 0 }).drawing.fenestrations[0].offset, 1.5);
+  check('already at the end, a push further is no move', slid('f1', 40, { x: 1, z: 0 }).ok && slid('f2', 40, { x: 1, z: 0 }).drawing.fenestrations[1].offset, 18);
+  check('a push against the end from the end is refused as no move', E.slideOpening(
+    { ...house, fenestrations: [{ id: 'f1', wallId: 'w1', type: 'door', offset: 18.5, width: 3 }] },
+    { id: 'f1', deltaFt: 1, along: { x: 1, z: 0 } }).reason, 'NO_MOVE');
+  check('it will not land on the window beside it', slid('f1', 5, { x: 1, z: 0 }).reason, 'CROWDED');
+  check('an opening that is not there', slid('nope', 1).reason, 'NO_OPENING');
+  check('an opening on a wall that is not there', E.slideOpening({ walls: [], fenestrations: [{ id: 'f1', wallId: 'gone', offset: 1, width: 3 }] }, { id: 'f1', deltaFt: 1 }).reason, 'NO_WALL');
+  // THE DOT UNDER THE PRESS, as boneyard-loops places it on the bone's edge.
+  const loops = [{ points: [{ x: 0, z: 0 }, { x: 20, z: 0 }, { x: 20, z: 10 }, { x: 0, z: 10 }],
+    openings: [{ id: 'f1', edge: 0, type: 'door', at: 5, from: 3.5, to: 6.5 }, { id: 'f3', edge: 2, type: 'window', at: 14, from: 12, to: 16 }] }];
+  check('the door\'s dot is under a press at its centre', E.openingNear(loops, { x: 5.2, z: 0.3 }, 1).opening.id, 'f1');
+  check('and the press knows which way the edge runs', E.openingNear(loops, { x: 5.2, z: 0.3 }, 1).along, { x: 1, z: 0 });
+  check('the window on the far wall, whose edge runs back the other way', E.openingNear(loops, { x: 6, z: 10 }, 1).along, { x: -1, z: 0 });
+  check('a press a yard off finds nothing', E.openingNear(loops, { x: 5, z: 3 }, 1), null);
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED, ${passed} passed` : `\nall ${passed} boneyard-edit checks passed`);
