@@ -3700,9 +3700,8 @@
     const B = window.DraftBuildHouse;
     (drawing?.columns || []).filter(column => mine(column)
       && !String(column.footing || '').startsWith('pile'))
-      .forEach(column => R.drawColumn2D(ctx, toS, column, {
-        footing: B ? B.footingFor(column.footing) : null,
-      }, env));
+      .forEach(column => R.drawColumn2D(ctx, toS, column,
+        { footing: B ? B.footingFor(column.footing) : null }, env));
   };
 
   const paintBeamsBelow = () => {

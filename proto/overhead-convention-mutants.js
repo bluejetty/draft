@@ -16,50 +16,47 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/overhead-convention.spec.js';
-const MODEL_TEST = 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither';
-const LAYOUT_TEST = 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither';
-
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'MODEL never draws the beam above',
     find: '        paintBeamsAbove();\n',
     with: '',
-    test: MODEL_TEST },
+    test: 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither' },
   { file: 'MODEL.html',
     name: 'MODEL draws the beam above on the floor layout too',
     find: "    const onPlanView = activeViewId() === 'plan';",
     with: '    const onPlanView = true;',
-    test: MODEL_TEST },
+    test: 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither' },
   { file: 'MODEL.html',
     name: 'MODEL hangs no uppers',
     find: '      if (K && K.hasUppers(fixture) && R.drawUpperCabinets2D) R.drawUpperCabinets2D(ctx, toS, fixture, wall, env);\n',
     with: '',
-    test: MODEL_TEST },
+    test: 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither' },
   { file: 'fixture-kinds.js',
     name: 'the catalogue says no piece carries uppers',
     find: "kind.uppers === true",
     with: "kind.uppers === 'never'",
-    test: MODEL_TEST },
+    test: 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither' },
   { file: 'render-2d.js',
     name: 'the beam above is drawn solid',
     find: 'ctx.setLineDash(above ? [...OVERHEAD_DASH_DOT] : ',
     with: 'ctx.setLineDash(false ? [...OVERHEAD_DASH_DOT] : ',
-    test: MODEL_TEST },
+    test: 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither' },
   { file: 'layout-plan.js',
     name: 'the sheet borrows no beam above',
     find: "      beamsAbove: view === 'plan' && !halfLevel && !listing && !shell && !hologram",
     with: '      beamsAbove: false',
-    test: LAYOUT_TEST },
+    test: 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither' },
   { file: 'plan-composition.js',
     name: 'the composition is handed the beams above and paints none',
     find: "      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id) }, env.structureEnv); });\n",
     with: '',
-    test: LAYOUT_TEST },
+    test: 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither' },
   { file: 'plan-composition.js',
     name: 'the composition hangs no uppers',
     find: '            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId), env.fixtureEnv);\n',
     with: '',
-    test: LAYOUT_TEST },
+    test: 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither' },
 ];
 
 const run = name => {
