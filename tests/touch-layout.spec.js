@@ -35,6 +35,15 @@ function houseDrawing() {
     levels: [{ id: 0, name: 'FOUNDATION', elev: -8 }, { id: 1, name: 'MAIN FL', elev: 0 }],
     walls: [wall(1, 0, 0, 24, 0), wall(2, 24, 0, 24, 16), wall(3, 24, 16, 0, 16), wall(4, 0, 16, 0, 0)],
     fenestrations: [],
+    // ONE VIEWPORT ALREADY ON SHEET 2, SO SHEET 1 STAYS BLANK FOR THE PRESS
+    // BELOW. Since 17 Oct a layout with nothing on it over a house is dealt
+    // on entry (Movie: "if its blank and there is a house in the model space,
+    // make a DEAL" -- layout-deal-on-entry.spec.js); a sheet with a hand on it
+    // is left as saved, which is the ground these mechanics stand on.
+    layout: {
+      auto: false, nextViewportId: 2, sheets: [{ title: '' }, { title: '' }],
+      viewports: [{ id: 1, kind: 'plan', levelId: 1, pif: 0.25, xIn: 8, yIn: 5, sheet: 2 }],
+    },
   };
 }
 
@@ -89,9 +98,9 @@ test('a finger places a viewport on the sheet and drags it', async ({ page }) =>
   await withLayoutSave(page, () => page.touchscreen.tap(spot.x, spot.y));
 
   let saved = await savedDrawing(page);
-  expect(saved.layout.viewports, 'a tap placed the viewport').toHaveLength(1);
-  expect(saved.layout.viewports[0].xIn).toBeCloseTo(8, 1);
-  expect(saved.layout.viewports[0].yIn).toBeCloseTo(5, 1);
+  expect(saved.layout.viewports, 'a tap placed the viewport').toHaveLength(2);
+  expect(saved.layout.viewports.at(-1).xIn).toBeCloseTo(8, 1);
+  expect(saved.layout.viewports.at(-1).yIn).toBeCloseTo(5, 1);
 
   // Now drag it with a finger — the half that needs the captured pointer.
   const to = await sheetToClient(page, 11, 6.5);
@@ -112,9 +121,9 @@ test('a finger places a viewport on the sheet and drags it', async ({ page }) =>
   await client.detach();
 
   saved = await savedDrawing(page);
-  expect(saved.layout.viewports).toHaveLength(1);
-  expect(saved.layout.viewports[0].xIn, 'the finger moved it').toBeCloseTo(11, 1);
-  expect(saved.layout.viewports[0].yIn).toBeCloseTo(6.5, 1);
+  expect(saved.layout.viewports).toHaveLength(2);
+  expect(saved.layout.viewports.at(-1).xIn, 'the finger moved it').toBeCloseTo(11, 1);
+  expect(saved.layout.viewports.at(-1).yIn).toBeCloseTo(6.5, 1);
 });
 
 // AUDIT M8. Delete and Backspace were the only way to take a viewport off a
@@ -132,6 +141,7 @@ test('a finger takes a viewport off the sheet with DELETE', async ({ page }) => 
   await expect(del).toBeVisible();
 
   await withLayoutSave(page, () => del.tap());
-  expect((await savedDrawing(page)).layout.viewports, 'the viewport is gone').toHaveLength(0);
+  // The seeded one on sheet 2 is all that is left.
+  expect((await savedDrawing(page)).layout.viewports, 'the viewport is gone').toHaveLength(1);
   await expect(del).toBeHidden();
 });

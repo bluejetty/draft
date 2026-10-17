@@ -56,6 +56,15 @@ function washroomDrawing({ fixtures = true } = {}) {
       // every supply in the room lands in the one 2x6.
       { id: 'f3', wallId: 'w2', levelId: 1, view: 'plan', kind: 'tub', layer: 'A-FIXT', offset: 0.5, width: 5, depth: 2.5, side: 1, endWallId: 'w1', dir: 1 },
     ] : [],
+    // ONE VIEWPORT ALREADY ON SHEET 2, SO SHEET 1 STAYS BLANK FOR THE PRESS
+    // BELOW. Since 17 Oct a layout with nothing on it over a house is dealt
+    // on entry (Movie: "if its blank and there is a house in the model space,
+    // make a DEAL" -- layout-deal-on-entry.spec.js); a sheet with a hand on it
+    // is left as saved, which is the ground these mechanics stand on.
+    layout: {
+      auto: false, nextViewportId: 2, sheets: [{ title: '' }, { title: '' }],
+      viewports: [{ id: 1, kind: 'plan', levelId: 1, pif: 0.25, xIn: 8, yIn: 5, sheet: 2 }],
+    },
   };
 }
 
@@ -209,6 +218,15 @@ function closetDrawing({ closet = true } = {}) {
       // depth for a closet rather than a number chosen here.
       depth: 2 + 1 / 12 + 3.5 / 12, side: 1,
     }] : [],
+    // ONE VIEWPORT ALREADY ON SHEET 2, SO SHEET 1 STAYS BLANK FOR THE PRESS
+    // BELOW, as above. Since 17 Oct a layout with nothing on it over a house is dealt
+    // on entry (Movie: "if its blank and there is a house in the model space,
+    // make a DEAL" -- layout-deal-on-entry.spec.js); a sheet with a hand on it
+    // is left as saved, which is the ground these mechanics stand on.
+    layout: {
+      auto: false, nextViewportId: 2, sheets: [{ title: '' }, { title: '' }],
+      viewports: [{ id: 1, kind: 'plan', levelId: 1, pif: 0.25, xIn: 8, yIn: 5, sheet: 2 }],
+    },
   };
 }
 

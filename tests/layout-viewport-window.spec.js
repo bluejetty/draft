@@ -45,6 +45,15 @@ function houseDrawing() {
     fenestrations: [
       { id: 1, levelId: 1, wallId: 1, type: 'door', offset: 6, width: 3 },
     ],
+    // ONE VIEWPORT ALREADY ON SHEET 2, SO SHEET 1 STAYS BLANK FOR THE PRESS
+    // BELOW. Since 17 Oct a layout with nothing on it over a house is dealt
+    // on entry (Movie: "if its blank and there is a house in the model space,
+    // make a DEAL" -- layout-deal-on-entry.spec.js); a sheet with a hand on it
+    // is left as saved, which is the ground these mechanics stand on.
+    layout: {
+      auto: false, nextViewportId: 2, sheets: [{ title: '' }, { title: '' }],
+      viewports: [{ id: 1, kind: 'plan', levelId: 1, pif: 0.25, xIn: 8, yIn: 5, sheet: 2 }],
+    },
   };
 }
 
@@ -133,9 +142,10 @@ async function placeViewport(page, xIn, yIn) {
 }
 
 // The page's own answer for where a viewport's window is, in sheet inches.
-const windowOf = (page, i = 0) => page.evaluate(n => {
+// The LAST viewport by default: the one the test placed, after the seeded one.
+const windowOf = (page, i = -1) => page.evaluate(n => {
   const app = globalThis.eval('page');
-  return app._viewportRectIn(app.state.viewports[n]);
+  return app._viewportRectIn(app.state.viewports.at(n));
 }, i);
 
 async function dragSheet(page, from, to) {
@@ -161,7 +171,7 @@ test('the east grip crops the window; the drawing and its scale stay put', async
   const before = await placedAndSelected(page);
   const east = { xIn: before.xIn + before.wIn, yIn: before.yIn + before.hIn / 2 };
   await dragSheet(page, east, { xIn: east.xIn - 1, yIn: east.yIn });
-  const [vp] = (await savedDrawing(page)).layout.viewports;
+  const vp = (await savedDrawing(page)).layout.viewports.at(-1);
   expect(vp.crop.r).toBeCloseTo(1, 1);
   expect(vp.crop.l).toBe(0);
   expect(vp.xIn, 'the drawing did not move').toBeCloseTo(8, 3);
@@ -178,7 +188,7 @@ test('a corner grip dragged outward grows the window past its drawing', async ({
   const before = await placedAndSelected(page);
   const nw = { xIn: before.xIn, yIn: before.yIn };
   await dragSheet(page, nw, { xIn: nw.xIn - 0.75, yIn: nw.yIn - 0.5 });
-  const [vp] = (await savedDrawing(page)).layout.viewports;
+  const vp = (await savedDrawing(page)).layout.viewports.at(-1);
   expect(vp.crop.l).toBeCloseTo(-0.75, 1);
   expect(vp.crop.t).toBeCloseTo(-0.5, 1);
   const after = await windowOf(page);
@@ -203,7 +213,7 @@ test('the crop survives a reload, moves with the viewport, and FIT WINDOW takes 
 
   await expect(page.locator('[data-fit-window]')).toBeVisible();
   await withLayoutSave(page, () => page.locator('[data-fit-window]').click());
-  const [vp] = (await savedDrawing(page)).layout.viewports;
+  const vp = (await savedDrawing(page)).layout.viewports.at(-1);
   expect('crop' in vp, 'FIT WINDOW took the crop off').toBe(false);
   expect((await windowOf(page)).hIn).toBeCloseTo(before.hIn, 3);
   await expect(page.locator('[data-fit-window]')).toBeHidden();

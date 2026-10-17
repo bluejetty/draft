@@ -44,6 +44,15 @@ function houseDrawing() {
     fenestrations: [
       { id: 1, levelId: 1, wallId: 1, type: 'door', offset: 6, width: 3 },
     ],
+    // ONE VIEWPORT ALREADY ON SHEET 2, SO SHEET 1 STAYS BLANK FOR THE PRESS
+    // BELOW. Since 17 Oct a layout with nothing on it over a house is dealt
+    // on entry (Movie: "if its blank and there is a house in the model space,
+    // make a DEAL" -- layout-deal-on-entry.spec.js); a sheet with a hand on it
+    // is left as saved, which is the ground these mechanics stand on.
+    layout: {
+      auto: false, nextViewportId: 2, sheets: [{ title: '' }, { title: '' }],
+      viewports: [{ id: 1, kind: 'plan', levelId: 1, pif: 0.25, xIn: 8, yIn: 5, sheet: 2 }],
+    },
   };
 }
 
@@ -149,14 +158,15 @@ test('a click places a plan viewport at the sheet point, at the active scale', a
   await expect(page.locator('[data-layout-level="1"]')).toBeVisible();
   await placeViewport(page, 8, 5);
   const saved = await savedDrawing(page);
-  expect(saved.layout.viewports).toHaveLength(1);
-  const viewport = saved.layout.viewports[0];
+  // The seeded one on sheet 2 and the one just placed.
+  expect(saved.layout.viewports).toHaveLength(2);
+  const viewport = saved.layout.viewports.at(-1);
   expect(viewport.kind).toBe('plan');
   expect(viewport.levelId).toBe(1);
   expect(viewport.pif).toBeCloseTo(1 / 4, 5); // the working plan scale is the default
   expect(viewport.xIn).toBeCloseTo(8, 1);
   expect(viewport.yIn).toBeCloseTo(5, 1);
-  expect(saved.layout.nextViewportId).toBe(2);
+  expect(saved.layout.nextViewportId).toBe(3);
   expect(saved.layout.paperKey).toBe('11x17');
   expect(saved.layout.orientation).toBe('landscape');
   // The plan itself is ink on the sheet, not just a frame.
@@ -168,7 +178,7 @@ test('the engaged scale writes its pif onto the new viewport', async ({ page }) 
   await page.getByRole('button', { name: '1/8" = 1\'-0"' }).click();
   await placeViewport(page, 6, 4);
   const saved = await savedDrawing(page);
-  expect(saved.layout.viewports[0].pif).toBeCloseTo(1 / 8, 5);
+  expect(saved.layout.viewports.at(-1).pif).toBeCloseTo(1 / 8, 5);
 });
 
 test('dragging a viewport moves it in paper inches and persists the spot', async ({ page }) => {
@@ -183,8 +193,8 @@ test('dragging a viewport moves it in paper inches and persists the spot', async
     await page.mouse.up();
   });
   const saved = await savedDrawing(page);
-  expect(saved.layout.viewports[0].xIn).toBeCloseTo(11, 1);
-  expect(saved.layout.viewports[0].yIn).toBeCloseTo(6.5, 1);
+  expect(saved.layout.viewports.at(-1).xIn).toBeCloseTo(11, 1);
+  expect(saved.layout.viewports.at(-1).yIn).toBeCloseTo(6.5, 1);
 });
 
 test('Escape stands placement down; Delete removes the selected viewport', async ({ page }) => {
@@ -194,12 +204,13 @@ test('Escape stands placement down; Delete removes the selected viewport', async
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-layout-add-viewport]')).toContainText('Add Viewport');
   await clickSheet(page, 4, 3);
-  expect((await savedDrawing(page)).layout).toBeUndefined();
+  // Nothing written: the layout is still the seeded one, one viewport on sheet 2.
+  expect((await savedDrawing(page)).layout.viewports).toHaveLength(1);
   // Place one, click it to select, Delete clears it from the sheet and the file.
   await placeViewport(page, 8, 5);
   await clickSheet(page, 8, 5);
   await withLayoutSave(page, () => page.keyboard.press('Delete'));
-  expect((await savedDrawing(page)).layout.viewports).toHaveLength(0);
+  expect((await savedDrawing(page)).layout.viewports).toHaveLength(1);
 });
 
 test('layout rides the drawing additively and survives a reload', async ({ page }) => {
@@ -218,7 +229,7 @@ test('layout rides the drawing additively and survives a reload', async ({ page 
   // And it is still the same live object: select + Delete works on the reload.
   await clickSheet(page, 8, 5);
   await withLayoutSave(page, () => page.keyboard.press('Delete'));
-  expect((await savedDrawing(page)).layout.viewports).toHaveLength(0);
+  expect((await savedDrawing(page)).layout.viewports).toHaveLength(1);
 });
 
 test('paper size and orientation persist onto the drawing', async ({ page }) => {
