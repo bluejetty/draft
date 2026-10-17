@@ -3673,6 +3673,38 @@
     });
   };
 
+  // THE BEAM IN THE FLOOR SYSTEM OVER THIS PLAN (Movie, 16 Oct, MAIN FL PLAN
+  // sheet 7): "anything above the cut is drawn lighter weight with a dash-dot
+  // line -- the beam in the floor system above (or dropped) on the floor it
+  // is over (columns already shown)". The beams this level carries are filed
+  // on it under its floor view (placeAutoBeam: FOUNDATION's on 'foundation',
+  // a storey's on 'floor'), so the plan view borrows that view's rows and
+  // hands them to the painter as `above` -- dash-dot, lighter, tagged ABOVE.
+  // A floor shows only what sits DIRECTLY over it, which these are: the
+  // level above's deck is what this level's beam holds up.
+  const paintBeamsAbove = () => {
+    const R = window.DraftRender2D;
+    const onPlanView = activeViewId() === 'plan';
+    const levelId = Number(activeLevelId());
+    const floorView = levelId === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
+    const mine = item => Number(item.levelId) === levelId && item.view === floorView;
+    const aboveBeams = onPlanView ? (drawing?.beams || []).filter(mine) : [];
+    canvas.setAttribute('data-beams-above', String(aboveBeams.length));
+    if (!aboveBeams.length) return;
+    const env = paintEnv();
+    const tags = R.beamTagSides(aboveBeams, (drawing?.dimensions || []).filter(mine));
+    aboveBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { above: true, tag: tags.get(beam.id) }, env));
+    // AND THE POSTS UNDER IT, at full weight: they stand on this floor and
+    // are cut by the plan, the same rows the LAYOUT walls plan borrows
+    // (layout-plan planPosts). Not the piles, which are the garage's.
+    const B = window.DraftBuildHouse;
+    (drawing?.columns || []).filter(column => mine(column)
+      && !String(column.footing || '').startsWith('pile'))
+      .forEach(column => R.drawColumn2D(ctx, toS, column, {
+        footing: B ? B.footingFor(column.footing) : null,
+      }, env));
+  };
+
   const paintBeamsBelow = () => {
     const R = window.DraftRender2D;
     const B = window.DraftBuildHouse;
@@ -4595,8 +4627,14 @@
     };
     // options is {} for the same reason it is on notes: preview and selected
     // are states of the fixture TOOL, and this page has no tools.
-    fixtures().forEach(fixture => R.drawFixture2D(ctx, toS, fixture, {},
-      all.find(w => w.id === fixture.wallId), env));
+    const K = window.DraftFixtureKinds;
+    fixtures().forEach(fixture => {
+      const wall = all.find(w => w.id === fixture.wallId);
+      R.drawFixture2D(ctx, toS, fixture, {}, wall, env);
+      // THE UPPERS OVER IT, dashed and lighter (the overhead convention,
+      // Movie 16 Oct): which kinds carry them is the catalogue's answer.
+      if (K && K.hasUppers(fixture) && R.drawUpperCabinets2D) R.drawUpperCabinets2D(ctx, toS, fixture, wall, env);
+    });
   };
 
   // THE WC FLOOR -- 1'-0" tile in a room with a toilet, tub or shower in it
@@ -6062,6 +6100,10 @@
         // THE BEAM UNDER THIS FLOOR, after the structure ON it and before the
         // openings above, which is the order they stack in the building.
         paintBeamsBelow();
+        // AND THE BEAM OVER THIS PLAN, dash-dot and lighter (the overhead
+        // convention), in the same slot: structure first, then what is read
+        // against it.
+        paintBeamsAbove();
         // AFTER THE STRUCTURE IT SITS OVER, before the walls. An opening above
         // is context for what this level carries, so it reads over the pads
         // and the beam -- which is the order a drafter looks in: the hole is

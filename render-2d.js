@@ -984,19 +984,34 @@ if (!window.DraftRender2D) {
     return sides;
   }
 
+  // THE OVERHEAD CONVENTION (Movie, 16 Oct, MAIN FL PLAN sheet 7): "anything
+  // above the cut is drawn lighter weight with a dash-dot line -- the beam in
+  // the floor system above (or dropped) on the floor it is over (columns
+  // already shown); upper kitchen cabinets; ... Beams dash-dot; cantilevers,
+  // overhangs and uppers dashed." One alpha for everything over the cut, two
+  // dash patterns: dash-dot for a beam, dashed for the rest.
+  const OVERHEAD_ALPHA = 0.5;
+  const OVERHEAD_DASH_DOT = Object.freeze([10, 4, 2, 4]);
+  const OVERHEAD_DASH = Object.freeze([6, 4]);
+
   function drawBeam2D(ctx, toS, beam, options = {}, env) {
     if (!beam?.start || !beam?.end) return;
     // `tag`: undefined keeps the old label, -across on every beam; 0 or
     // false draws none; +1 / -1 puts it on that side (beamTagSides).
-    const { preview = false, below = false, tag } = options;
+    // `below`: the beam under this floor, drawn on the floor layout it holds
+    // up. `above`: the beam in the floor system OVER this plan, dash-dot and
+    // lighter whatever its mode -- it is above the cut, which is what the
+    // dash-dot says; FLUSH or DROPPED is the label's to tell.
+    const { preview = false, below = false, above = false, tag } = options;
     const a = toS(beam.start);
     const b = toS(beam.end);
     ctx.save();
     ctx.strokeStyle = env.beamColor;
-    ctx.lineWidth = 3;
-    ctx.setLineDash(beam.mode === 'dropped' ? [8, 5] : []);
+    ctx.lineWidth = above ? 1.5 : 3;
+    ctx.setLineDash(above ? [...OVERHEAD_DASH_DOT] : (beam.mode === 'dropped' ? [8, 5] : []));
     if (preview) ctx.globalAlpha = 0.72;
     if (below) ctx.globalAlpha = 0.45;
+    if (above) ctx.globalAlpha = OVERHEAD_ALPHA;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -1012,10 +1027,39 @@ if (!window.DraftRender2D) {
       // line.
       const flip = tag === 1 || tag === '+';
       labelAlongLine2D(ctx, a, b,
-        (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM') + (below ? ' BELOW' : ''),
+        (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM') + (below ? ' BELOW' : above ? ' ABOVE' : ''),
         { font: env.labelFont, color: env.beamColor, offset: flip ? -5 : 5,
           baseline: flip ? 'top' : 'bottom' });
     }
+    ctx.restore();
+  }
+
+  // THE UPPER CABINETS OVER A KITCHEN PIECE, dashed and lighter (the overhead
+  // convention above): a 12" deep box off the wall face, the full width of
+  // the piece under it. Which kinds carry uppers is fixture-kinds.js's
+  // answer (`uppers`), asked by the caller; this paints the one it is handed
+  // through the same fixtureGeometry the piece itself was drawn by, so the
+  // uppers sit exactly over it on either face of the wall.
+  const UPPER_CABINET_DEPTH_FT = 1;
+  function drawUpperCabinets2D(ctx, toS, fixture, wall, env) {
+    const geo = env.fixtureGeometry(fixture, wall);
+    if (!geo || geo.tub) return;
+    const dirC = geo.frontOff >= geo.backOff ? 1 : -1;
+    const depth = Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
+    const front = geo.backOff + dirC * depth;
+    const P = (along, across) => toS(geo.frame.at(along, across));
+    const c = [P(geo.alongStart, geo.backOff), P(geo.alongEnd, geo.backOff),
+      P(geo.alongEnd, front), P(geo.alongStart, front)];
+    ctx.save();
+    ctx.strokeStyle = env.FIXTURE_COLOR;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha *= OVERHEAD_ALPHA;
+    ctx.setLineDash([...OVERHEAD_DASH]);
+    ctx.beginPath();
+    c.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.restore();
   }
 
@@ -3101,6 +3145,7 @@ if (!window.DraftRender2D) {
     drawCutMarks2D,
     drawCutPreview2D,
     drawBeam2D,
+    drawUpperCabinets2D,
     drawJoistSpans2D,
     beamTagSides,
     drawColumn2D,

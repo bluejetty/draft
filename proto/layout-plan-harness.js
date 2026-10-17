@@ -33,7 +33,7 @@ const MUTATE = require('./harness-args.js').mutationMode();
 // are named separately so a case can drop one by name.
 const BASE = ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
   'room-standards.js', 'level-assembly.js', 'stair-geometry.js', 'closets.js',
-  'fixture-geometry.js', 'render-2d.js', 'plan-composition.js'];
+  'fixture-kinds.js', 'fixture-geometry.js', 'render-2d.js', 'plan-composition.js'];
 const OPTIONAL = ['layer-views.js', 'cut-view.js', 'build-house.js', 'roof-types.js',
   'profile-manager.js', 'finish-patterns.js', 'roof-patterns.js', 'cut-marks.js',
   'fen-labels.js', 'electric-symbols.js', 'hologram.js'];
@@ -625,8 +625,11 @@ function run(label) {
     const R0 = full.win.DraftRender2D;
     const sheet = (levelId, view = 'floor', extra = {}, data = framed) => {
       const seen = [];
+      // A BEAM HANDED IN AS `above` (the overhead convention, Movie 16 Oct)
+      // reads with a caret: b3^ is the main floor's beam seen from the plan
+      // under it, b3 the same beam on the floor layout it belongs to.
       full.win.DraftRender2D = { ...R0,
-        drawBeam2D: (c, t, item) => seen.push(item.id),
+        drawBeam2D: (c, t, item, options) => seen.push(item.id + (options && options.above ? '^' : '')),
         drawColumn2D: (c, t, item) => seen.push(item.id),
         drawDimension2D: (c, t, item) => seen.push(item.id) };
       try { LP.drawPlan(recorder(), toS, data, levelId, { view, ...extra }); }
@@ -649,10 +652,40 @@ function run(label) {
     // "show columns on main that will support 2nd floor"), and a listing none.
     const walled = { ...framed, walls: [...framed.walls, { id: 'w3', levelId: 3, view: 'plan',
       wallType: 'stud_2x6', refLine: 'center', start: { x: 0, y: 0, z: 0 }, end: { x: 40, y: 0, z: 0 } }] };
-    check('the main floor plan shows the posts holding up the 2nd floor', sheet(3, 'plan', {}, walled) === 'c3',
-      sheet(3, 'plan', {}, walled));
-    check('a listing plan shows no posts', sheet(3, 'plan', { listing: true }, walled) === '',
+    // AND THE BEAM THOSE POSTS HOLD UP, as `above` (Movie, 16 Oct: "the beam
+    // in the floor system above (or dropped) on the floor it is over
+    // (columns already shown)").
+    check('the main floor plan shows the posts holding up the 2nd floor, and the beam over it dash-dot',
+      sheet(3, 'plan', {}, walled) === 'b3^,c3', sheet(3, 'plan', {}, walled));
+    check('a listing plan shows no posts and no beam above', sheet(3, 'plan', { listing: true }, walled) === '',
       sheet(3, 'plan', { listing: true }, walled));
+    check('the shell shows no beam above either', sheet(3, 'plan', { shell: true }, walled) === '',
+      sheet(3, 'plan', { shell: true }, walled));
+    // THE BASEMENT PLAN'S beam above is FOUNDATION's -- the main floor's
+    // beam, filed on level 1 under 'foundation' -- over the posts the
+    // foundation ghost already draws.
+    const basementWalled = { ...framed, walls: [...framed.walls, { id: 'w1p', levelId: 1, view: 'plan',
+      wallType: 'stud_2x6', refLine: 'center', start: { x: 0, y: 0, z: 0 }, end: { x: 40, y: 0, z: 0 } }] };
+    check('the basement plan shows the foundation beam over it dash-dot',
+      sheet(1, 'plan', {}, basementWalled).split(',').includes('b1^'), sheet(1, 'plan', {}, basementWalled));
+    check('and the 2nd floor plan, under a roof, shows no beam above',
+      !sheet(5, 'plan', {}, walled).includes('^'), sheet(5, 'plan', {}, walled));
+    // THE UPPERS OVER A KITCHEN PIECE, dashed and lighter (same note): one
+    // lighter stroke for a cabinet's uppers, none for an island, none on a
+    // listing. The beams stay off this one so the lighter stroke is the
+    // uppers' alone.
+    const kitchen = kind => ({ ...walled, beams: [], columns: [],
+      fixtures: [{ id: 'fx1', wallId: 'w3', levelId: 3, view: 'plan', kind, layer: 'A-FIXT',
+        offset: 10, width: 3, depth: 2, side: 1 }] });
+    const lighter = (data, extra = {}) => {
+      const out = draw(full.win, 3, { saved: data, env: { view: 'plan', ...extra } });
+      return out.ok ? out.strokes.filter(a => Math.abs(a - 0.5) < 0.01).length : out.why;
+    };
+    check('a cabinet on the walls plan hangs its uppers, one lighter dashed box', lighter(kitchen('cabinet')) === 1,
+      lighter(kitchen('cabinet')));
+    check('an island hangs none', lighter(kitchen('island')) === 0, lighter(kitchen('island')));
+    check('a listing hangs none', lighter(kitchen('cabinet'), { listing: true }) === 0,
+      lighter(kitchen('cabinet'), { listing: true }));
     const tall = LP.planBounds({ ...framed, dimensions: [dim('far', 1, 'foundation', 'A-DIMS-COLS', 90)] }, 3);
     check('the frame takes in a beam row borrowed from below', tall && tall.maxZ >= 90, JSON.stringify(tall));
   }
@@ -795,6 +828,22 @@ if (!MUTATE) {
 // Each edits layout-plan.js (or a module it reads) in memory and asserts the
 // checks above go red. A check that survives its own mutation is not a check.
 const MUTATIONS = [
+  // THE OVERHEAD CONVENTION (Movie, 16 Oct): the beam over a plan and the
+  // uppers over a kitchen piece.
+  ['the plan sheet borrows no beam above',
+    'layout-plan.js', c => c.replace("beamsAbove: view === 'plan' && !halfLevel && !listing && !shell && !hologram", 'beamsAbove: false')],
+  ['the basement plan looks for its beam above on the floor view',
+    'layout-plan.js', c => c.replace("beam.view === (levelId === BASEMENT_LEVEL_ID ? 'foundation' : 'floor'))", "beam.view === 'floor')")],
+  ['the composition is handed the beams above and paints none',
+    'plan-composition.js', c => c.replace("      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id) }, env.structureEnv); });\n", '')],
+  ['the composition paints the beam above as one on this plan',
+    'plan-composition.js', c => c.replace('{ above: true, tag: overTags.get(beam.id) }', '{ tag: overTags.get(beam.id) }')],
+  ['the sheet says no piece carries uppers',
+    'layout-plan.js', c => c.replace('hasUppers: fixture => !listing && !!(window.DraftFixtureKinds && window.DraftFixtureKinds.hasUppers(fixture)),', 'hasUppers: () => false,')],
+  ['a listing hangs the uppers too',
+    'layout-plan.js', c => c.replace('hasUppers: fixture => !listing && !!(', 'hasUppers: fixture => !!(')],
+  ['the composition paints no uppers',
+    'plan-composition.js', c => c.replace('            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId), env.fixtureEnv);\n', '')],
   // WHICH STAIRS A PLAN SHOWS (Movie, 16 Oct).
   ['a plan shows its own stairs only',
     'layout-plan.js', c => c.replace('        ? [...stairRoles.keys()] : null,', '        ? null : null,')],
@@ -994,7 +1043,7 @@ const MUTATIONS = [
   ['the walls plan shows no posts',
     'layout-plan.js', c => c.replace(": planPosts ? only(of('columns')).concat(planPosts) : only(of('columns')),", ": only(of('columns')),")],
   ['a listing shows the posts',
-    'layout-plan.js', c => c.replace("view === 'plan' && !halfLevel && !listing && !shell", "view === 'plan' && !halfLevel && !shell")],
+    'layout-plan.js', c => c.replace("const planPosts = view === 'plan' && !halfLevel && !listing && !shell", "const planPosts = view === 'plan' && !halfLevel && !shell")],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
