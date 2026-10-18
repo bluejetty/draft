@@ -331,6 +331,9 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'A-DIMS-INT', name: 'A-DIMS-INT', use: 'Interior — wall faces and items inside the footprint (stair hole, partitions near an exterior wall).', printable: true, visibility: true }),
         Object.freeze({ id: 'A-DIMS-FENS', name: 'A-DIMS-FENS', use: 'The exterior string locating window and door centres from the building corners. NOT their sizes — those are A-DIMS-WIN and A-DIMS-DOOR, so a drafter can drop the corner string and keep the sizes.', printable: true, visibility: true }),
         Object.freeze({ id: 'A-DIMS-COLS', name: 'A-DIMS-COLS', use: 'Column and beam locations, measured in both directions on FLOOR and FOUNDATION.', printable: true, visibility: true }),
+        // THE HAND STRINGS (18 Oct): drawn with the DIMENSION tool, kept apart
+        // from the auto strings so either can be switched off alone.
+        Object.freeze({ id: 'A-DIMS-HAND', name: 'A-DIMS-HAND', use: 'Dimensions drawn by hand with the DIMENSION tool — HORIZ, VERT or DIAG strings. AUTO DIMS never writes or sweeps them.', printable: true, visibility: true }),
         // ── THE SIZE TAGS, WHICH ARE NOT LOCATIONS ──────────────────────────
         //
         // Movie, 30 Sep: *"i think i put them on layer A-DIMS-FENS but if i

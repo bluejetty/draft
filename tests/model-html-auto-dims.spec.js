@@ -327,11 +327,10 @@ test('arming DIMENSION offers AUTO DIMS, and putting it down takes it away',
 
     await armDimension(page);
     await expect(page.locator('[data-auto-dims]')).toBeVisible();
-    // AND IT SAYS WHICH HALF OF THE TOOL IS HERE. Arming DIMENSION draws
-    // nothing on this page -- the gesture is not built -- and a panel offering
-    // only AUTO DIMS with no word about the rest leaves a drafter pressing the
-    // canvas and concluding the page is broken.
-    await expect(page.locator('[data-dimension-note]')).toContainText('NOT BUILT YET');
+    // AND IT SAYS HOW THE HAND HALF GOES (18 Oct: the gesture is built --
+    // tests/dimension-hand.spec.js), with HORIZ / VERT / DIAG beside it.
+    await expect(page.locator('[data-dimension-note]')).toContainText('ENTER OR DOUBLE-CLICK ENDS THE STRING');
+    await expect(page.locator('[data-dim-modes] [data-dim-mode]')).toHaveText(['HORIZ', 'VERT', 'DIAG']);
 
     // WALL IS A BUILD KEY and this file works from DRAFTING for DIMENSION.
     await h.showLeftPane(page, 'build');

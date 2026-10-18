@@ -228,8 +228,11 @@ if (!window.DraftDrawingFormat) {
   // visibility to read and would always draw -- unswitchable, which is the
   // bug this whole layer set was added to fix. The auto-dims harness holds
   // the two lists against each other so a rename in one fails a check.
+  // AND A-DIMS-HAND (18 Oct): the strings a drafter draws by hand with the
+  // DIMENSION tool, on their own layer so AUTO and HAND switch apart (Movie:
+  // "add a layer for AUTO-dims and then a second for HAND-dims").
   const DIMENSION_LAYERS = Object.freeze([
-    'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
+    'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND',
   ]);
 
   const dimensions = (rawDimensions, levelIds, env = {}) => {

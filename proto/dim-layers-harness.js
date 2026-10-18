@@ -706,12 +706,18 @@ function run() {
     }], new Set([3]), {});
     return out.length ? out[0] : null;
   };
-  const ALL_FIVE = ['A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS'];
+  // THE FIVE AUTO-DIMS EMITS, AND A-DIMS-HAND (18 Oct), the DIMENSION tool's
+  // own strings -- no auto-dims kind, but a record may claim it and STANDARDS
+  // must switch it like the rest.
+  const ALL_FIVE = ['A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND'];
   ALL_FIVE.forEach(layer => {
     const back = through(layer);
     ok(`${layer} survives a round trip through the format`,
       back && back.layer === layer, back ? String(back.layer) : 'dropped');
   });
+  ok('a hand string stays a hand string: auto is false through the format',
+    DF.dimensions([{ id: 2, start: { x: 0, y: 0, z: 0 }, end: { x: 9, y: 0, z: 0 }, levelId: 3,
+      view: 'plan', layer: 'A-DIMS-HAND', auto: false }], new Set([3]), {})[0]?.auto === false);
   // THE KEY'S ABSENCE, NOT ITS VALUE, and that distinction cost a red shard.
   // These read `=== null` until write-tier.spec.js caught what that meant on
   // the way OUT: a null is still a key, the old page writes no such key, and

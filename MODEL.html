@@ -105,6 +105,15 @@
     font: 13px/1.45 var(--font-body);
     color: var(--ink-primary); }
   #plan { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
+  /* THE DIMENSION POP-UP: HORIZ / VERT / DIAG over the sheet while the tool
+     is up (Movie, 17 Oct: "it should be in PROPERTIES area but should also
+     pop up somewhere when the dimensions are in use"). */
+  /* AT THE FOOT OF THE SHEET, not its head: a string is most often stood off
+     above a house, and a pop-up there took the press that placed it. */
+  #dim-pop { position:fixed; bottom:72px; left:50%; transform:translateX(-50%); z-index:30;
+    display:flex; gap:4px; padding:4px 6px; border-radius:6px;
+    background: var(--surface-panel); border:1px solid var(--edge-panel); }
+  #dim-pop[hidden] { display:none; }
   /* THE LENGTH BOX, LIVE: a line in hand (Movie, 12 Oct: "brighten up the
      LENGTH BOX ... make it orange ... around the outside, but leave the inner
      part darker"). The shared sheet draws the glow; the page names its colour,
@@ -6457,6 +6466,8 @@
         // bands, its fixtures and door in the preview's faint ink, the tile
         // floor showing it is the room it will be.
         if (activeTool === 'fixture' && washroomPreset && cursorWorld) paintWashroomPreview();
+        // THE DIMENSION STRING IN HAND.
+        if (activeTool === 'dimension') paintDimPreview();
         // THE KITCHEN IN HAND, in the corner within reach of the cursor.
         if (activeTool === 'fixture' && kitchenPreset && cursorWorld) paintKitchenPreview();
         // WHAT THE PRESS WOULD DO, under the cursor: the piece TRIM takes away
@@ -22938,7 +22949,8 @@
     // The house's rays light under the cursor before the garage's first corner.
     || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
     || (rulerOn && !!rulerFrom)
-    || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset));
+    || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset))
+    || (activeTool === 'dimension' && dimPoints.length > 0);
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
@@ -24804,6 +24816,7 @@
     if (!cursorWorld) return false;
     if (activeTool === 'outline' && outlineCorners.length) { outlinePress(cursorWorld); return true; }
     if (drawsRun() && drawStart) { drawPress(cursorWorld); return true; }
+    if (activeTool === 'dimension' && dimPoints.length) return endDimString();
     return false;
   };
   window.addEventListener('keydown', e => {
@@ -27332,12 +27345,186 @@
     const note = document.createElement('div');
     note.className = 'props-title';
     note.dataset.dimensionNote = '';
-    note.textContent = 'STRINGS THE ACTIVE LEVEL. DRAWING ONE BY HAND IS NOT '
-      + 'BUILT YET.';
+    note.textContent = 'AUTO DIMS STRINGS THE ACTIVE LEVEL. BY HAND: CLICK POINTS, '
+      + 'ENTER OR DOUBLE-CLICK ENDS THE STRING, THEN CLICK WHERE IT GOES.';
 
-    box.append(row, note);
+    // HORIZ / VERT / DIAG (Movie, 17 Oct: "D command ... VERT or HORIZ ...
+    // DIAG"), the same three on the pop-up beside the sheet.
+    const modes = document.createElement('div');
+    modes.className = 'chip-row';
+    modes.dataset.dimModes = '';
+    DIM_MODES.forEach(([id, label]) => modes.append(dimModeButton(id, label)));
+
+    box.append(modes, row, note);
     P.set('DIMENSION', box);
     dimensionPanelUp = true;
+    syncDimModes();
+  };
+
+  // ── DIMENSIONS BY HAND (Movie, 17-18 Oct) ──────────────────────────────
+  //
+  // "i need to make the NORMAL style dimension ... D command ... VERT or
+  // HORIZ ... DIAG" -- "aloow the user to make a line of dimensions and then
+  // press enter or double click to end the string and the next click will
+  // position the dimensions". Points are pressed one after another, snapped
+  // the way a wall's are (a node, the cross lines, a corner); ENTER or a
+  // double-click ends the string; the next press says how far off the points
+  // the string stands. HORIZ measures across, VERT up and down, DIAG along
+  // the first point to the last -- or along the locked ANGLE.
+  //
+  // THEY LOOK LIKE THE AUTO DIMS ("same as the autodims look"): the same
+  // records, the same painter, on their own layer, A-DIMS-HAND, auto false --
+  // so AUTO DIMS never sweeps them and the two switch apart.
+  const DIM_MODES = [['h', 'HORIZ'], ['v', 'VERT'], ['d', 'DIAG']];
+  const DIM_HAND_LAYER = 'A-DIMS-HAND';
+  let dimMode = 'h';
+  let dimPoints = [];
+  let dimPlacing = false;
+  const dimModeButton = (id, label) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sel-chip';
+    btn.dataset.dimMode = id;
+    btn.textContent = label;
+    btn.addEventListener('click', () => { dimMode = id; syncDimModes(); paint(); });
+    return btn;
+  };
+  const syncDimModes = () => {
+    document.querySelectorAll('[data-dim-mode]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.dimMode === dimMode));
+      btn.classList.toggle('lit', btn.dataset.dimMode === dimMode);
+    });
+  };
+  // THE POP-UP: the three modes over the sheet while the tool is up, so the
+  // drafter need not go back to PROPERTIES between strings.
+  let dimPop = null;
+  const syncDimPop = () => {
+    const up = activeTool === 'dimension' && !activeCut();
+    if (up && !dimPop) {
+      dimPop = document.createElement('div');
+      dimPop.id = 'dim-pop';
+      dimPop.dataset.dimPop = '';
+      DIM_MODES.forEach(([id, label]) => dimPop.append(dimModeButton(id, label)));
+      canvas.parentElement.append(dimPop);
+    }
+    if (dimPop) dimPop.hidden = !up;
+    if (up) syncDimModes();
+  };
+  // A point as the string takes it: on a node, on a cross line, on a corner,
+  // or where it was pressed. TOY has no SNAP or TRACK; its corners still take.
+  const dimPoint = at => {
+    const snap = board !== 'toy' ? drawSnap(at) : {};
+    const p = snap.pt || cornerSnap(at, []) || at;
+    return { x: p.x, z: p.z };
+  };
+  const dimDirection = points => {
+    if (dimMode === 'h') return { x: 1, z: 0 };
+    if (dimMode === 'v') return { x: 0, z: 1 };
+    const lock = angleLockDeg();
+    if (lock != null) return { x: Math.cos(lock * Math.PI / 180), z: -Math.sin(lock * Math.PI / 180) };
+    const a = points[0], b = points[points.length - 1];
+    const len = a && b ? Math.hypot(b.x - a.x, b.z - a.z) : 0;
+    return len > 1e-6 ? { x: (b.x - a.x) / len, z: (b.z - a.z) / len } : null;
+  };
+  // THE STRING, STANDING THROUGH `at`: every point carried square on to the
+  // line through `at` along the string's direction, and a dimension between
+  // each pair. drawDimension2D stands its line off to the LEFT of start ->
+  // end, so each piece is turned to put that side away from what it
+  // measures, where the ink belongs.
+  const dimString = (points, at) => {
+    const u = points.length >= 2 ? dimDirection(points) : null;
+    if (!u || !at) return [];
+    const n = { x: -u.z, z: u.x };
+    const o = points[0];
+    const off = (at.x - o.x) * n.x + (at.z - o.z) * n.z;
+    const q = points.map(p => {
+      const along = (p.x - o.x) * u.x + (p.z - o.z) * u.z;
+      return { x: o.x + u.x * along + n.x * off, z: o.z + u.z * along + n.z * off, from: p };
+    });
+    const out = [];
+    for (let i = 0; i + 1 < q.length; i += 1) {
+      const a = q[i], b = q[i + 1];
+      if (Math.hypot(b.x - a.x, b.z - a.z) < 0.01) continue;
+      const left = { x: -(b.z - a.z), z: b.x - a.x };
+      const away = (a.x - a.from.x + b.x - b.from.x) * left.x + (a.z - a.from.z + b.z - b.from.z) * left.z;
+      const [s0, s1] = away < 0 ? [b, a] : [a, b];
+      out.push({ start: { x: s0.x, y: 0, z: s0.z }, end: { x: s1.x, y: 0, z: s1.z } });
+    }
+    return out;
+  };
+  const endDimString = () => {
+    if (dimPlacing) return false;
+    if (dimPoints.length < 2) {
+      sayOnStrip('DIMENSION — press two points at least, then ENTER or double-click.');
+      return false;
+    }
+    dimPlacing = true;
+    sayOnStrip(`DIMENSION — ${dimPoints.length - 1} to place: click where the string goes.`);
+    return true;
+  };
+  const dimPress = at => {
+    if (dimPlacing) {
+      const pieces = dimString(dimPoints, at);
+      if (!pieces.length) { sayOnStrip('DIMENSION — those points measure nothing that way.'); return; }
+      const { levelId } = onActiveLevel();
+      const view = activeViewId() || 'plan';
+      if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
+      const made = pieces.map(piece => {
+        const record = { id: newDimensionId(), start: piece.start, end: piece.end, levelId, view,
+          layer: DIM_HAND_LAYER, auto: false };
+        drawing.dimensions.push(record);
+        return record;
+      });
+      undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
+        items: made.map(item => ({ list: drawing.dimensions, item })) });
+      dimPoints = [];
+      dimPlacing = false;
+      sayOnStrip(`DIMENSION — ${made.length} placed. Press the next string's first point.`);
+      markDirty();
+      paint();
+      return;
+    }
+    const p = dimPoint(at);
+    const last = dimPoints[dimPoints.length - 1];
+    // The second press of a double-click lands where the first did: it is
+    // the end of the string, not another point.
+    if (last && Math.hypot(p.x - last.x, p.z - last.z) < 1e-6) return;
+    dimPoints.push(p);
+    sayOnStrip(dimPoints.length === 1 ? 'DIMENSION — the next point'
+      : `DIMENSION — ${dimPoints.length} points: the next, or ENTER / double-click to end the string`);
+    paint();
+  };
+  // A DOUBLE-CLICK ENDS THE STRING, as ENTER does. Its two presses landed on
+  // one point, which dimPress took once.
+  canvas.addEventListener('dblclick', e => {
+    if (activeTool !== 'dimension' || dimPlacing || !dimPoints.length) return;
+    e.preventDefault();
+    if (endDimString()) paint();
+  });
+  // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
+  // through the register's listeners, because setTool runs at load, before
+  // this block has declared anything.
+  toolListeners.push(next => {
+    if (next !== 'dimension') { dimPoints = []; dimPlacing = false; }
+    syncDimPop();
+  });
+  // THE STRING IN HAND, in the preview's ink: along the points while they
+  // are being pressed (the cursor the next one), off them where the cursor
+  // is once the string is ended.
+  const paintDimPreview = () => {
+    const R = window.DraftRender2D;
+    if (!R || !cursorWorld || activeTool !== 'dimension') return;
+    const pieces = dimPlacing ? dimString(dimPoints, cursorWorld)
+      : dimPoints.length ? dimString(dimPoints.concat([dimPoint(cursorWorld)]), dimPoints[0]) : [];
+    const env = dimensionEnv();
+    pieces.forEach(piece => R.drawDimension2D(ctx, toS, piece, { preview: true }, env));
+    ctx.save();
+    ctx.fillStyle = skin['draw-dim'];
+    dimPoints.forEach(p => {
+      const s = toS(p);
+      ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
   };
 
   // ── THE ANNOTATION PANEL ─────────────────────────────────────────────────
@@ -28008,8 +28195,10 @@
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || elevLineStart
-      || outlineCorners.length || floorCorners.length || shapeCorners.length);
+      || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length);
     drawStart = null;
+    dimPoints = [];
+    dimPlacing = false;
     rulerFrom = null;
     beamStart = null;
     cutStart = null;
@@ -28311,6 +28500,7 @@
       return;
     }
     if (activeTool === 'cut') { cutPress(at); return; }
+    if (activeTool === 'dimension') { dimPress(at); return; }
     if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
     if (drawsRun()) {
       // §1: "either drag, or press again and drag -- both must work". The lift

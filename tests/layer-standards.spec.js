@@ -18,6 +18,8 @@ const ALL_LAYER_IDS = [
   // -- which is what a REAL ESTATE PLAN needs and a CONSTRUCTION LAYOUT does
   // not.
   'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
+  // AND THE HAND STRINGS (18 Oct), drawn with the DIMENSION tool.
+  'A-DIMS-HAND',
   // THE SIZE TAGS, split off A-DIMS-FENS on 30 Sep so the corner string and
   // the 36X36 can be switched apart. A-DIMS-DOOR and A-DIMS-EQUIP carry
   // nothing yet -- only windows are tagged -- and they are listed here
@@ -34,7 +36,7 @@ const ALL_LAYER_IDS = [
 // gets no switch and nothing says so.
 const SWITCHABLE_LAYER_IDS = [
   'draft', 'no-draft',
-  'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
+  'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND',
   'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-DIMS-EQUIP',
 ];
 
