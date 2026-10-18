@@ -2133,6 +2133,9 @@
 <!-- THE DOOR BUCKS on a garage's foundation plan: the doors on its walls plan,
      projected onto the concrete under them (Movie, 16 Oct). -->
 <script src="./door-bucks.js"></script>
+<!-- TRIM AND EXTEND, the AutoCAD way: where the cutting edges cross a wall,
+     which piece a press takes away, where an end runs on to (Movie, 17 Oct). -->
+<script src="./trim-extend.js"></script>
 <!-- BUILD HOUSE's derivations, pure: an outline in, wall runs and the
      interior reference side out. The old page builds from the same module, so
      a house raised here and a house raised there cannot disagree about which
@@ -6374,19 +6377,24 @@
         if (activeTool === 'fixture' && washroomPreset && cursorWorld) paintWashroomPreview();
         // THE KITCHEN IN HAND, in the corner within reach of the cursor.
         if (activeTool === 'fixture' && kitchenPreset && cursorWorld) paintKitchenPreview();
-        // THE WALL PICKED FOR TRIM, and the end that will move.
-        if (activeTool === 'trim' && trimPick) {
-          const w = trimPick.wall;
-          const A = toS(w.start), B = toS(w.end), E = toS(w[trimPick.end]);
-          ctx.save();
-          ctx.strokeStyle = skin['draw-selected'];
-          ctx.fillStyle = skin['draw-selected'];
-          ctx.lineWidth = 4;
-          ctx.globalAlpha = 0.6;
-          ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
-          ctx.globalAlpha = 1;
-          ctx.beginPath(); ctx.arc(E.x, E.y, 6, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
+        // WHAT THE PRESS WOULD DO, under the cursor: the piece TRIM takes away
+        // in red, the run EXTEND adds dashed in the selection ink.
+        if ((activeTool === 'trim' || activeTool === 'extend') && cursorWorld) {
+          const mode = (activeTool === 'extend') !== trimShift ? 'extend' : 'trim';
+          const plan = trimPlan(cursorWorld, mode);
+          if (plan && !plan.why) {
+            const seg = plan.seg;
+            const a = mode === 'trim' ? trimPointAt(seg, plan.from) : seg[plan.end];
+            const b = mode === 'trim' ? trimPointAt(seg, plan.to) : trimPointAt(seg, plan.t);
+            const A = toS(a), B = toS(b);
+            ctx.save();
+            ctx.strokeStyle = mode === 'trim' ? skin['draw-cut'] : skin['draw-selected'];
+            ctx.lineWidth = 4;
+            ctx.globalAlpha = 0.75;
+            if (mode === 'extend') ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+            ctx.restore();
+          }
         }
         if (activeTool === 'cut' && cutStart) {
           const G = window.DraftGeometry2D;
@@ -11894,7 +11902,10 @@
   const retirePoolCorners = corners => {
     const retired = [];
     corners.forEach(corner => {
-      const held = drawing.walls.some(w => w.start === corner || w.end === corner);
+      // LINES HOLD POOLED CORNERS TOO (commitDrawn pools a line's ends), so a
+      // corner only a line still stands on is not free to go.
+      const held = drawing.walls.some(w => w.start === corner || w.end === corner)
+        || (drawing.lines || []).some(l => l.start === corner || l.end === corner);
       if (held) return;
       const at = vertexPool.indexOf(corner);
       if (at >= 0) { vertexPool.splice(at, 1); retired.push(corner); }
@@ -21698,126 +21709,288 @@
     }
   });
 
-  // ── TRIM: run one wall's end on to another wall, and meld the two ──────
+  // ── TRIM AND EXTEND, THE AUTOCAD WAY ────────────────────────────────────
   //
-  // Movie, 5 Oct: "i'd especially like to TRIM interior walls against other
-  // INTERIOR and EXTERIOR walls, and when the trim happens i'd like the walls
-  // to 'meld' together" -- and, asked whether this was it, "seems right ...
-  // yes please 2 interior wall that cross or meet at corner should meld".
+  // Movie, 17 Oct, after the two-press TRIM would not take his exterior wall:
+  // "id like to be able to select both items and them seltec the TRIM or
+  // press the TRIM command and then select the part i want to cut (i'd select
+  // the int wall on the side i want to cut off) or if i had selected 2 lines
+  // it would use all suraces for cutting except the one i select the part i
+  // select gets the cut ... is gone" -- "cuts on either side if there is
+  // another selected line crossing over". And EXTEND, which had a key and no
+  // gesture: "extend the end to another selected lin" -- "if the int wall is
+  // 2 ft from the ext wall i select both that int wall an that ext wall and
+  // then click the int wall at the end closest to the ext wall and it will
+  // extend to attach to the wall".
   //
-  // TWO PRESSES. The first picks the wall and the END that moves (the half it
-  // was pressed on); the second picks the wall it runs into. That end goes to
-  // where the two centrelines meet -- shortened or lengthened, the same press
-  // -- and lands ON the other wall's centreline, which is what the plan reads
-  // as a tee and melds (geometry-2d's meldPieces; render-2d breaks the face).
-  // Where the meeting point is past the other wall's end, or within a wall's
-  // thickness of it, that end comes to the point too: a corner, which mitres.
+  // THE CUTTING EDGES ARE THE SELECTION, every wall and line in it but the
+  // one pressed; with nothing selected, every wall and line on the level.
+  // ONE PRESS: TRIM takes away the piece under it, between the nearest
+  // crossing on each side (or to the segment's end); EXTEND runs the nearer
+  // end on to the nearest edge ahead of it. SHIFT swaps the two for that
+  // press -- "could trim and extend operate at the same time" -- because one
+  // tool guessing which was meant would sometimes delete a wall the drafter
+  // wanted. Both stay armed; each press is one UNDO; Escape puts them down.
   //
-  // The moving end gets a corner OF ITS OWN from the pool rather than having
-  // its old one dragged, because that old one may be shared with another
-  // wall that is not being trimmed.
-  let trimPick = null;
+  // A CUT STOPS AT A WALL'S FACE, not its stored line (trim-extend.js says
+  // why): an exterior wall's line is its outside face, and the old TRIM ran a
+  // partition through the wall to it. Near the other wall's own end the two
+  // still make a CORNER, both ends on one pooled point where their stored
+  // lines meet, which mitres -- the old TRIM's rule, kept.
+  //
+  // A DOOR OR WINDOW ON A PIECE TAKEN AWAY slides on to what is left if it
+  // fits, and is deleted if it does not (Movie: "move the doors and windows
+  // in on the wall if they fit, if there comes too many doors and windows
+  // widthwise, delete them"). The strip names what went.
   const TRIM_CORNER_FT = 1.5;
-  toolListeners.push(next => {
-    trimPick = null;
-    if (next === 'trim') sayOnStrip('TRIM — press the wall to trim, on the half whose end should move.');
+  // SHIFT, HELD, for the preview: the press reads its own event.
+  let trimShift = false;
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Shift' && !trimShift) { trimShift = true; if (activeTool === 'trim' || activeTool === 'extend') paint(); }
   });
-  const trimPress = at => {
+  window.addEventListener('keyup', e => {
+    if (e.key === 'Shift' && trimShift) { trimShift = false; if (activeTool === 'trim' || activeTool === 'extend') paint(); }
+  });
+  toolListeners.push(next => {
+    if (next !== 'trim' && next !== 'extend') return;
+    const edges = trimCuttersPicked().length;
+    const from = edges ? `the ${edges} selected` : 'every wall and line';
+    sayOnStrip(next === 'trim'
+      ? `TRIM — press the piece to take away; it cuts at ${from}. Shift+press extends.`
+      : `EXTEND — press near the end to run on; it runs to ${from}. Shift+press trims.`);
+  });
+  const trimLines = () => new Set(lines());
+  // THE SELECTED WALLS AND LINES ON THIS LEVEL -- the cutting edges, when
+  // there are any.
+  const trimCuttersPicked = () => {
+    const here = new Set([...walls(), ...lines()]);
+    return selection.filter(e => (e.type === 'wall' || e.type === 'line') && here.has(e.item)).map(e => e.item);
+  };
+  const trimThickness = () => {
+    const isLine = trimLines();
+    const wallFt = openingThicknessFt();
+    return seg => (isLine.has(seg) ? 0 : wallFt(seg));
+  };
+  // THE SEGMENT UNDER THE PRESS, BY ITS BODY. wallAt measures to the stored
+  // line, and an exterior wall's line is its outside face -- so a press in
+  // the middle of a thick wall, zoomed in, missed it. A press anywhere on a
+  // wall's body takes the wall; a line still takes the grab band either side.
+  const trimSegAt = at => {
+    const TE = window.DraftTrimExtend;
+    const thick = trimThickness();
+    const grab = SELECT_GRAB_PX / view.scale;
+    let best = null;
+    [...walls(), ...lines()].forEach(seg => {
+      if (!seg.start || !seg.end) return;
+      const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-6) return;
+      const t = ((at.x - seg.start.x) * dx + (at.z - seg.start.z) * dz) / (len * len);
+      if (t * len < -grab || (t - 1) * len > grab) return;
+      const across = ((at.x - seg.start.x) * -dz + (at.z - seg.start.z) * dx) / len;
+      const [lo, hi] = TE.faceOffsets(seg, thick(seg));
+      const off = across < lo ? lo - across : across > hi ? across - hi : 0;
+      if (off > grab || (best && off >= best.off)) return;
+      best = { seg, off, t: Math.max(0, Math.min(1, t)) };
+    });
+    return best;
+  };
+  const trimPointAt = (seg, t) => ({
+    x: seg.start.x + (seg.end.x - seg.start.x) * t,
+    z: seg.start.z + (seg.end.z - seg.start.z) * t,
+  });
+  // WHAT A PRESS HERE WOULD DO, asked by the press and by the preview alike so
+  // the two cannot disagree. null, or { seg, mode, ... } with a `why` when
+  // there is nothing to do.
+  const trimPlan = (at, mode) => {
+    const TE = window.DraftTrimExtend;
+    const hit = trimSegAt(at);
+    if (!hit) return null;
+    const seg = hit.seg;
+    const thick = trimThickness();
+    const picked = trimCuttersPicked().filter(c => c !== seg);
+    const cutters = picked.length ? picked : [...walls(), ...lines()].filter(c => c !== seg);
+    // EXTEND REACHES A LITTLE FURTHER: to an edge whose own end stops short
+    // of the line by up to TRIM_CORNER_FT, the two meeting in a corner there
+    // -- the L that does not quite close, which is what extending is for.
+    const reachFt = mode === 'extend' ? TRIM_CORNER_FT : thick(seg) / 2 + 1e-3;
+    const spans = TE.spans(seg, cutters, { thicknessFt: thick, reachFt });
+    if (mode === 'trim') {
+      const piece = TE.trimPiece(spans, hit.t);
+      return piece ? { seg, mode, ...piece } : { seg, mode, why: 'nothing crosses it there' };
+    }
+    const end = hit.t < 0.5 ? 'start' : 'end';
+    const to = TE.extendTo(spans, end);
+    return to ? { seg, mode, end, t: to.t, cutter: to.cutter } : { seg, mode, end, why: 'nothing ahead of that end' };
+  };
+  // A CORNER, NOT A TEE, where the meeting point is within TRIM_CORNER_FT of
+  // the other segment's own end (or past it): both ends go to where the two
+  // stored lines meet, one pooled point, and the join mitres. Same kind only
+  // -- a wall does not corner with a line.
+  const trimCornerWith = (seg, cutter) => {
+    if (!cutter || trimLines().has(seg) !== trimLines().has(cutter)) return null;
+    const r = { x: seg.end.x - seg.start.x, z: seg.end.z - seg.start.z };
+    const q = { x: cutter.end.x - cutter.start.x, z: cutter.end.z - cutter.start.z };
+    const den = r.x * q.z - r.z * q.x;
+    if (Math.abs(den) < 1e-9) return null;
+    const w = { x: cutter.start.x - seg.start.x, z: cutter.start.z - seg.start.z };
+    const u = (w.x * r.z - w.z * r.x) / den;
+    const lenQ = Math.hypot(q.x, q.z);
+    const toEnd = Math.min(Math.abs(u), Math.abs(1 - u)) * lenQ;
+    if (!(u <= 0 || u >= 1 || toEnd <= TRIM_CORNER_FT)) return null;
+    const t = (w.x * q.z - w.z * q.x) / den;
+    return { at: trimPointAt(seg, t), cutterEnd: u < 0.5 ? 'start' : 'end' };
+  };
+  // One end of a wall or line on to a point: a corner of its own from the
+  // pool (the old one may be shared), and the openings measured from a start
+  // that moved take the move with them.
+  const trimMoveEnd = (seg, end, to, changes) => {
     const G = window.DraftGeometry2D;
-    // ── THE SECOND PRESS CANNOT BE THE WALL ALREADY IN HAND ───────────────
-    //
-    // Movie: TRIM refuses the second wall -- "Press a DIFFERENT wall". It did,
-    // and right where the tool is used. wallAt answers with the NEAREST wall,
-    // and the two walls of a trim are at their closest AT THE JUNCTION, which
-    // is where a drafter aims when he is saying "run it into that one". Press
-    // the target a few inches off the crossing, on the picked wall's side, and
-    // the picked wall is nearer: the page reads a second press on the same
-    // wall and refuses the gesture. Measured on two interior walls that cross
-    // at (8,7): the first press on one, the second at (8.1, 7.3) aiming at the
-    // other, and the refusal comes back. The band is SELECT_GRAB_PX wide, so
-    // it is a few pixels zoomed in and more than a foot zoomed out.
-    //
-    // THE SECOND PRESS MEANS "the wall it runs into", and the one in hand
-    // cannot be it -- so it is not a candidate. That also makes the refusal
-    // below say something true when it does appear: there is no OTHER wall
-    // under the press, rather than "you pressed the same one".
-    //
-    // WHAT IT COSTS: pressing the picked wall again used to be a no-op with a
-    // sentence, and now takes the nearest other wall if one is in reach. The
-    // tool's own instruction is what settles it -- the second press was never
-    // a way to re-pick, and Escape and the tool buttons both stand it down.
-    const hit = wallAt(at, trimPick ? trimPick.wall : null);
-    if (!hit) {
-      sayOnStrip(trimPick
-        ? 'Press a DIFFERENT wall for it to run into.'
-        : 'TRIM — press on a wall.');
-      return;
+    const was = seg[end];
+    if (Math.abs(was.x - to.x) < 1e-9 && Math.abs(was.z - to.z) < 1e-9) return;
+    const v = G.mergeVertex(vertexPool, { x: to.x, y: was.y, z: to.z },
+      was._draftLevelId, was._draftViewId, was._draftBody || 'house');
+    const shifts = [];
+    if (end === 'start') {
+      const dirx = seg.end.x - was.x, dirz = seg.end.z - was.z;
+      const dl = Math.hypot(dirx, dirz) || 1;
+      const moved = ((v.x - was.x) * dirx + (v.z - was.z) * dirz) / dl;
+      (drawing.fenestrations || []).forEach(o => {
+        if (!o || o.wallId !== seg.id) return;
+        shifts.push({ opening: o, was: o.offset });
+        o.offset = (Number(o.offset) || 0) - moved;
+      });
     }
-    if (!trimPick) {
-      const { t } = G.pointToSegment(at, hit);
-      trimPick = { wall: hit, end: t < 0.5 ? 'start' : 'end' };
-      sayOnStrip('Now press the wall it should run into.');
-      paint();
-      return;
-    }
-    const a = trimPick.wall, endA = trimPick.end, b = hit;
-    const r = { x: a.end.x - a.start.x, z: a.end.z - a.start.z };
-    const sv = { x: b.end.x - b.start.x, z: b.end.z - b.start.z };
-    const den = r.x * sv.z - r.z * sv.x;
-    if (Math.abs(den) < 1e-9) {
-      trimPick = null;
-      sayOnStrip('Those two walls are parallel — they never meet. Press the wall to trim again.');
-      paint();
-      return;
-    }
-    const q = { x: b.start.x - a.start.x, z: b.start.z - a.start.z };
-    const t = (q.x * sv.z - q.z * sv.x) / den;
-    const u = (q.x * r.z - q.z * r.x) / den;
-    const P = { x: a.start.x + r.x * t, z: a.start.z + r.z * t };
-    const kept = endA === 'start' ? a.end : a.start;
-    if (Math.hypot(P.x - kept.x, P.z - kept.z) < 0.25
-      || (endA === 'start' ? t >= 1 : t <= 0)) {
-      trimPick = null;
-      sayOnStrip('That would turn the wall inside out — press the wall to trim again.');
-      paint();
-      return;
-    }
-    const lenB = Math.hypot(sv.x, sv.z);
-    const nearB = u < 0.5 ? 'start' : 'end';
-    const toNearB = (u < 0.5 ? u : 1 - u) * lenB;
-    const corner = u <= 0 || u >= 1 || toNearB <= TRIM_CORNER_FT;
-    const changes = [];
-    const moveEnd = (wall, end, to) => {
-      const was = wall[end];
-      if (Math.abs(was.x - to.x) < 1e-9 && Math.abs(was.z - to.z) < 1e-9) return;
-      const ref = was;
-      const v = G.mergeVertex(vertexPool, { x: to.x, y: ref.y, z: to.z },
-        ref._draftLevelId, ref._draftViewId, ref._draftBody || 'house');
-      // Openings are measured from the START, so a start that moves takes
-      // them along by the same distance.
-      const shifts = [];
-      if (end === 'start') {
-        const dirx = wall.end.x - was.x, dirz = wall.end.z - was.z;
-        const dl = Math.hypot(dirx, dirz) || 1;
-        const moved = ((v.x - was.x) * dirx + (v.z - was.z) * dirz) / dl;
-        (drawing.fenestrations || []).forEach(o => {
-          if (!o || o.wallId !== wall.id) return;
-          shifts.push({ opening: o, was: o.offset });
-          o.offset = (Number(o.offset) || 0) - moved;
-        });
+    seg[end] = v;
+    changes.push({ wall: seg, end, was, shifts });
+  };
+  // THE OPENINGS ON A WALL THAT CHANGED LENGTH, put back where they fit. The
+  // ones that sat clear of the cut go first and keep their places; the ones
+  // the cut took the wall from under follow, nearest the kept wall first, each
+  // brought in by the bearing rule (clampOpeningToWall) and kept only if it
+  // then overlaps nothing already placed.
+  const trimRefitOpenings = (wall, movedIds, edits, removed) => {
+    const G = window.DraftGeometry2D;
+    const on = (drawing.fenestrations || []).filter(o => o && o.wallId === wall.id);
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    const mid = len / 2;
+    on.sort((a, b) => (movedIds.has(a) - movedIds.has(b))
+      || (movedIds.has(a) ? Math.abs(a.offset - mid) - Math.abs(b.offset - mid) : 0));
+    const placed = [];
+    const gone = [];
+    on.forEach(o => {
+      const w = Number(o.width) || 0;
+      const fit = G.clampOpeningToWall(wall, Number(o.offset) || 0, w,
+        { walls: walls(), thicknessFt: openingThicknessFt() });
+      const lo = fit && fit.offset - w / 2, hi = fit && fit.offset + w / 2;
+      if (!fit || placed.some(p => lo < p.hi - 1e-6 && p.lo < hi - 1e-6)) {
+        gone.push(o);
+        return;
       }
-      wall[end] = v;
-      changes.push({ wall, end, was, shifts });
-    };
-    moveEnd(a, endA, P);
-    if (corner) moveEnd(b, nearB, P);
+      placed.push({ lo, hi });
+      if (Math.abs(fit.offset - o.offset) > 1e-9) {
+        if (!edits.has(o)) edits.set(o, { opening: o, offset: o.offset, wallId: o.wallId });
+        o.offset = fit.offset;
+      }
+    });
+    gone.forEach(o => {
+      const at = drawing.fenestrations.indexOf(o);
+      if (at >= 0) drawing.fenestrations.splice(at, 1);
+      removed.push({ list: drawing.fenestrations, item: o });
+    });
+    return gone;
+  };
+  const trimPress = (at, e, tool) => {
+    const mode = (tool === 'extend') !== !!(e && e.shiftKey) ? 'extend' : 'trim';
+    const plan = trimPlan(at, mode);
+    if (!plan) {
+      sayOnStrip(mode === 'trim' ? 'TRIM — press on the piece of a wall or line to take away.'
+        : 'EXTEND — press near the end of a wall or line.');
+      return;
+    }
+    if (plan.why) {
+      sayOnStrip(mode === 'trim'
+        ? 'Nothing crosses it there — press a piece between two edges, or select the edges to cut at.'
+        : 'Nothing ahead of that end to run on to — select the wall it should reach.');
+      return;
+    }
+    const seg = plan.seg;
+    const isLine = trimLines().has(seg);
+    const changes = [], added = [], removed = [];
+    const edits = new Map();
+    // Snapshot every opening on the wall before anything moves, so UNDO puts
+    // each back on the wall and at the offset it had.
+    (drawing.fenestrations || []).forEach(o => {
+      if (o && o.wallId === seg.id) edits.set(o, { opening: o, offset: o.offset, wallId: o.wallId });
+    });
+    const len = Math.hypot(seg.end.x - seg.start.x, seg.end.z - seg.start.z);
+    const moved = new Set();
+    let said;
+    if (mode === 'extend') {
+      const corner = trimCornerWith(seg, plan.cutter);
+      if (corner) {
+        trimMoveEnd(seg, plan.end, corner.at, changes);
+        trimMoveEnd(plan.cutter, corner.cutterEnd, seg[plan.end], changes);
+      } else {
+        trimMoveEnd(seg, plan.end, trimPointAt(seg, plan.t), changes);
+      }
+      said = corner ? 'Extended to a corner.' : 'Extended.';
+    } else if (plan.kind === 'middle') {
+      // THE MIDDLE GOES, AND THE WALL IS TWO. The far piece is a new record,
+      // the same wall in every property, holding the old end's corner; the
+      // near piece keeps the record and its id.
+      const G = window.DraftGeometry2D;
+      const cut2 = trimPointAt(seg, plan.to);
+      const list = isLine ? drawing.lines : drawing.walls;
+      const ref = seg.end;
+      const tail = { ...seg, id: newDrawingItemId(isLine ? 'line' : 'wall'),
+        start: G.mergeVertex(vertexPool, { x: cut2.x, y: ref.y, z: cut2.z },
+          ref._draftLevelId, ref._draftViewId, ref._draftBody || 'house'),
+        end: seg.end };
+      list.push(tail);
+      added.push({ list, item: tail });
+      const fromFt = plan.from * len, toFt = plan.to * len;
+      (drawing.fenestrations || []).forEach(o => {
+        if (!o || o.wallId !== seg.id) return;
+        const c = Number(o.offset) || 0;
+        const toTail = c >= toFt || (c > fromFt && c - fromFt >= toFt - c);
+        if (c > fromFt && c < toFt) moved.add(o);
+        if (toTail) { o.wallId = tail.id; o.offset = c - toFt; }
+      });
+      trimMoveEnd(seg, 'end', trimPointAt(seg, plan.from), changes);
+      said = 'Trimmed out — two pieces left.';
+    } else {
+      const end = plan.kind === 'start' ? 'start' : 'end';
+      const tKeep = plan.kind === 'start' ? plan.to : plan.from;
+      const cutter = plan.kind === 'start' ? plan.ahead : plan.behind;
+      const fromFt = plan.from * len, toFt = plan.to * len;
+      (drawing.fenestrations || []).forEach(o => {
+        const c = o && o.wallId === seg.id ? Number(o.offset) || 0 : NaN;
+        if (c > fromFt - 1e-9 && c < toFt + 1e-9) moved.add(o);
+      });
+      const corner = trimCornerWith(seg, cutter);
+      if (corner) {
+        trimMoveEnd(seg, end, corner.at, changes);
+        trimMoveEnd(cutter, corner.cutterEnd, seg[end], changes);
+      } else {
+        trimMoveEnd(seg, end, trimPointAt(seg, tKeep), changes);
+      }
+      said = corner ? 'Trimmed to a corner.' : 'Trimmed.';
+    }
+    const gone = isLine ? [] : [
+      ...trimRefitOpenings(seg, moved, edits, removed),
+      ...added.filter(a => a.list === drawing.walls).flatMap(a => trimRefitOpenings(a.item, moved, edits, removed)),
+    ];
     const retired = retirePoolCorners(changes.map(c => c.was));
-    trimPick = null;
-    if (!changes.length) { sayOnStrip('Already there — nothing to trim.'); paint(); return; }
-    undoStack.push({ kind: 'trim', changes, retired });
+    if (!changes.length && !added.length) { sayOnStrip('Already there — nothing to change.'); paint(); return; }
+    undoStack.push({ kind: 'trim', changes, retired, added, removed,
+      openings: [...edits.values()] });
     markDirty();
-    sayOnStrip(corner ? 'Trimmed to a corner. Press the next wall to trim.'
-      : 'Trimmed and melded. Press the next wall to trim.');
+    const names = gone.map(o => `the ${window.DraftFormatters.formatArchitecturalInches((Number(o.width) || 0) * 12)} `
+      + (o.type === 'door' ? 'door' : 'window'));
+    sayOnStrip(gone.length
+      ? `${said} ${names.join(' and ')} did not fit and ${gone.length > 1 ? 'were' : 'was'} removed.`
+      : `${said} Press the next one.`);
     paint();
   };
 
@@ -26911,7 +27084,7 @@
       return;
     }
     if (activeTool === 'cut') { cutPress(at); return; }
-    if (activeTool === 'trim') { trimPress(at); return; }
+    if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
     if (drawsRun()) {
       // §1: "either drag, or press again and drag -- both must work". The lift
       // needs two facts this press knows and pointerup does not: where the
@@ -27986,6 +28159,16 @@
       (step.retired || []).forEach(corner => {
         if (!vertexPool.includes(corner)) vertexPool.push(corner);
       });
+      // AND WHAT THE AUTOCAD TRIM ADDS: the far piece of a wall cut in two
+      // goes, the openings it deleted come back, and every opening on the
+      // wall returns to the wall and the offset it had.
+      (step.added || []).forEach(a => {
+        const at = a.list.indexOf(a.item);
+        if (at >= 0) a.list.splice(at, 1);
+      });
+      if ((step.added || []).length) retirePoolCorners(step.added.map(a => a.item.start));
+      (step.removed || []).forEach(r => { if (!r.list.includes(r.item)) r.list.push(r.item); });
+      (step.openings || []).forEach(o => { o.opening.offset = o.offset; o.opening.wallId = o.wallId; });
     } else if (step.kind === 'move-opening') {
       undoRedim(step);
       // The record is mutated in place, so undo puts the one number back
