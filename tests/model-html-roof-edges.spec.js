@@ -122,3 +122,56 @@ test('PITCH on the selected roof', async ({ page }) => {
   await page.locator('[data-roof-field="pitch"]').press('Enter');
   expect((await saved(page)).pitch).toBe(3);
 });
+
+// GABLE END (Movie, 18 Oct: "change bother hips to GABLE on the left end of
+// the plan i made"). His left end is the end wall AND the 45° chamfer at its
+// corner; the roof PDF runs the gable square across all of it.
+const CHAMFER_WALL = [[0, 0], [60, 0], [60, 30], [40, 30], [40, 36], [20, 36], [20, 30], [10, 30], [0, 20]];
+const CHAMFER_EAVE = [[-8, -8], [68, -8], [68, 38], [48, 38], [48, 44], [12, 44], [12, 38],
+  [6.6863, 38], [-8, 23.3137]];
+async function openChamfer(page) {
+  await h.openModel(page, { webgl: false });
+  const f = drawing();
+  f.roofs[0] = { ...f.roofs[0], points: CHAMFER_EAVE.map(([x, z]) => ({ x, y: 0, z })),
+    edges: CHAMFER_EAVE.map(() => 'eave'), edgeOverhang: CHAMFER_EAVE.map(() => 8) };
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  return h.planFrame(page);
+}
+
+test('GABLE END squares the chamfered end across and makes it one gable; the ridge runs out to it', async ({ page }) => {
+  const { at } = await openChamfer(page);
+  await click(page, at, 30, 15);
+  // The end edge, x = -8, a hair inside.
+  await click(page, at, -7.8, 5);
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText('EDGE 9 OF 9');
+  await page.locator('[data-roof-gable-end]').click();
+  let roof = await saved(page);
+  const gables = roof.edges.map((k, i) => (k === 'gable' ? i : -1)).filter(i => i >= 0);
+  expect(gables.length, 'one gable').toBe(1);
+  const g = gables[0];
+  const a = roof.points[g], b = roof.points[(g + 1) % roof.points.length];
+  expect([a, b].map(p => [Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100]).sort((p, q) => p[1] - q[1]),
+    'square across the end, eave to eave').toEqual([[-8, -8], [-8, 38]]);
+  expect(roof.points.length, 'the chamfer is gone: 9 corners less one').toBe(8);
+  expect(roof.footprint.map(p => [p.x, p.z]).filter(([x]) => x === 0).length,
+    'the wall line under it is square too').toBe(2);
+  // NO HIPS AT THAT END: the ridge runs all the way out to the gable.
+  const westmost = await page.evaluate(r => Math.min(...window.DraftGeometry2D.roofSkeleton(r)
+    .flatMap(s => [s.a.x, s.b.x])), roof);
+  expect(westmost).toBeCloseTo(-8, 6);
+  // Flush, as on North Point's left end.
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText(`EDGE ${g + 1} OF 8`);
+  await type(page, 'overhang, this edge', '0');
+  roof = await saved(page);
+  expect(roof.points.filter(p => Math.abs(p.x) < 1e-6).length).toBe(2);
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  expect(ring(await saved(page)), 'two UNDOs and the hipped, chamfered end is back').toEqual(CHAMFER_EAVE.map(([x, z]) => [Math.round(x * 100) / 100, Math.round(z * 100) / 100]));
+});

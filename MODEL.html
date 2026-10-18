@@ -26449,6 +26449,83 @@
     paint();
     return null;
   };
+  // ── GABLE END: THE END SQUARED ACROSS AND MADE A GABLE ────────────────
+  //
+  // Movie, 18 Oct: "change bother hips to GABLE on the left end of the plan".
+  // His left end is not one edge: the end wall, the 45° chamfer at its corner
+  // and the hips over both. The roof PDF runs the gable square across that
+  // whole end, so this does too: from the picked edge it walks each way to
+  // the first edge running ACROSS it -- the two long eaves -- and puts one
+  // straight GABLE between them where the end reaches furthest out. Whatever
+  // stood between (the chamfer, a short return) is swallowed by the roof.
+  //
+  // DONE ON THE WALL LINE, then hung again by the overhangs, so the gable's
+  // own overhang is the picked edge's and every eave keeps its own.
+  const squareEnd = (ring, index) => {
+    const n = ring.length;
+    const dir = k => {
+      const a = ring[k % n], b = ring[(k + 1) % n];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      return len < 1e-9 ? null : { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+    };
+    const d = dir(index);
+    if (!d) return null;
+    const across = k => { const e = dir(k); return e && Math.abs(e.x * d.x + e.z * d.z) < Math.sin(5 * Math.PI / 180); };
+    let l = null, r = null;
+    for (let step = 1; step < n; step += 1) {
+      if (l == null && across((index - step + n) % n)) l = (index - step + n) % n;
+      if (r == null && across((index + step) % n)) r = (index + step) % n;
+    }
+    if (l == null || r == null || l === r) return null;
+    // Rotated so the eave BEFORE the end is edge 0 and the one after is `rr`.
+    const rot = ring.map((_, k) => ring[(k + l) % n]);
+    const rr = (r - l + n) % n;
+    if (rr < 2) return null;
+    // OUTWARD, across the picked edge: the normal that points away from the
+    // middle of the ring.
+    const mid = ring.reduce((m, pt) => ({ x: m.x + pt.x / n, z: m.z + pt.z / n }), { x: 0, z: 0 });
+    const a0 = ring[index];
+    let out = { x: d.z, z: -d.x };
+    if ((a0.x - mid.x) * out.x + (a0.z - mid.z) * out.z < 0) out = { x: -out.x, z: -out.z };
+    const reach = Math.max(...rot.slice(1, rr + 1).map(pt => pt.x * out.x + pt.z * out.z));
+    const onEnd = (a, b) => {
+      // Where the line a->b meets the end line {p : p.out = reach}.
+      const da = a.x * out.x + a.z * out.z, db = b.x * out.x + b.z * out.z;
+      if (Math.abs(db - da) < 1e-12) return null;
+      const t = (reach - da) / (db - da);
+      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+    };
+    const A = onEnd(rot[0], rot[1]);
+    const B = onEnd(rot[rr], rot[(rr + 1) % n]);
+    if (!A || !B) return null;
+    return { rot: l, rr, ring: [rot[0], A, B, ...rot.slice(rr + 1)] };
+  };
+  const gableEnd = (roof, index) => {
+    const G = window.DraftGeometry2D;
+    const n = roof.points.length;
+    const footprint = roofFootprint(roof);
+    if (!footprint) return 'This roof has an edge of no length, so the wall line under it cannot be found.';
+    const done = squareEnd(footprint, index);
+    if (!done) return 'GABLE END needs an eave running across each side of the end.';
+    const keep = arr => { const rot = arr.map((_, k) => arr[(k + done.rot) % n]); return [rot[0], null, ...rot.slice(done.rr)]; };
+    const overs = roofOverhangs(roof);
+    const kinds = roof.points.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
+    const nextOvers = keep(overs); nextOvers[1] = overs[index];
+    const nextKinds = keep(kinds); nextKinds[1] = 'gable';
+    const eave = G.offsetOutlineVariable(done.ring, nextOvers);
+    if (eave.some(pt => !Number.isFinite(pt.x) || !Number.isFinite(pt.z))
+      || Math.sign(ringArea(eave)) !== Math.sign(ringArea(done.ring))) {
+      return 'That end folds the roof over itself.';
+    }
+    const y = roof.points[0]?.y ?? 0;
+    roof.footprint = done.ring.map(pt => ({ x: pt.x, y: 0, z: pt.z }));
+    roof.points = eave.map(pt => ({ x: pt.x, y, z: pt.z }));
+    roof.edges = nextKinds;
+    roof.edgeOverhang = nextOvers;
+    roof.follows = 'none';
+    roofEdgeIdx = 1;
+    return null;
+  };
   const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE']];
   const roofPropsNode = items => {
     const box = document.createElement('div');
@@ -26511,6 +26588,18 @@
         box.append(propField('OVERHANG, THIS EDGE', roofOverhangs(lone)[index],
           ft => editRoofs([lone], roof => setRoofOverhangs(roof,
             roofOverhangs(roof).map((v, i) => (i === index ? ft : v)))), again));
+        const end = document.createElement('button');
+        end.type = 'button';
+        end.className = 'sel-chip';
+        end.dataset.roofGableEnd = '';
+        end.textContent = 'GABLE END';
+        end.title = 'Square this end of the roof across and make it a gable';
+        end.addEventListener('click', () => {
+          const refusal = editRoofs([lone], roof => gableEnd(roof, index));
+          if (refusal) sayOnStrip(refusal);
+          again();
+        });
+        box.append(end);
       }
     }
     return box;
