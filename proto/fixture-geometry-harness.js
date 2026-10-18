@@ -264,6 +264,16 @@ check('nor does one on another sheet',
            W('other', 8, -6, 8, 6, { view: 'elevation' }), farWall(20)], tub()).alcove;
          return [round(a), round(b)]; });
 
+// A WALL DRAWN ON ITS FACE stops the tub at that face, not half its
+// thickness either side of the line (WC BF2 dropped against the house: the
+// exterior wall is drawn on its outside face, and its tub ran 2 3/4" into it).
+check('a far wall drawn on its face stops the alcove at the face looking at the tub',
+  G => { const g = G.fixtureGeometry([backWall, faucet, W('t3', 8, -6, 8, 6, { refLine: 'left' })], tub());
+         return [round(g.alcove), round(8 - 5.5 / 12 - 1 - 2.75 / 12)]; });
+check('and a faucet wall drawn on its face starts the alcove at its face on the tub side',
+  G => { const g = G.fixtureGeometry([backWall, W('t2', 1, 6, 1, -6, { refLine: 'left' }), farWall(8)], tub());
+         return [round(g.alcove), round(8 - 2.75 / 12 - 1 - 5.5 / 12)]; });
+
 check('a tub whose faucet wall is gone has no geometry',
   G => [G.fixtureGeometry([backWall, faucet], tub({ endWallId: 'vanished' })), null]);
 
@@ -377,6 +387,14 @@ const MUTATIONS = [
     s => s.replace("if (fixture.kind === 'tub' && fixture.endWallId)", "if (fixture.kind === 'tub')")],
   ['the counter overhang is halved',
     s => s.replace('const COUNTER_OVERHANG_FT = 1 / 12;', 'const COUNTER_OVERHANG_FT = 1 / 24;')],
+  ['a crossing wall is taken as centred on its line again',
+    s => s.replace('return [along + of.startOff / k, along + of.endOff / k];', 'return [along - of.totalFt / 2, along + of.totalFt / 2];')],
+  ['the far wall\'s face away from the tub bounds the alcove',
+    s => s.replace('const otherFace = dir > 0 ? Math.min(...otherFaces) : Math.max(...otherFaces);',
+      'const otherFace = dir > 0 ? Math.max(...otherFaces) : Math.min(...otherFaces);')],
+  ['the faucet wall\'s face away from the tub starts the alcove',
+    s => s.replace('const face = dir > 0 ? Math.max(...endFaces) : Math.min(...endFaces);',
+      'const face = dir > 0 ? Math.min(...endFaces) : Math.max(...endFaces);')],
   ['a fixture whose wall is gone is drawn anyway',
     s => s.replace('if (!wall) return null;', 'if (!wall) wall = { start:{x:0,y:0,z:0}, end:{x:9,y:0,z:0} };')],
 ];

@@ -2,12 +2,14 @@
 // THE DEFAULT KITCHEN IS MOVIE'S CORNER L, IN WHICHEVER CORNER IT IS PRESSED.
 //
 // kitchen-presets.js finds the corner two walls make under a press, decides
-// which leg takes the sink, and lays six fixtures from the INSIDE corner --
+// which leg is which, and lays the fixtures from the INSIDE corner --
 // where the two wall faces meet, not where their lines cross. These checks
 // hold it to the studio suite's sheet (NORTH_POINT_S_SUITE.pdf, 17 Oct):
 // the 8'-6" legs, the pieces and their order, that every piece lands inside
 // the room through fixture-geometry.js (the same module the plan draws them
-// with), that F swaps the legs, and when a corner is refused.
+// with), that F swaps the legs, and when a corner is refused. And the
+// suites' KITCHEN U1, L2 and L3 (17-18 Oct): their legs, and the island or
+// peninsula floated off a leg's wall, inside the room however it is turned.
 //
 // Run: node proto/kitchen-presets-harness.js
 //      node proto/kitchen-presets-harness.js --mutate
@@ -18,15 +20,18 @@ const ROOT = path.join(__dirname, '..');
 
 const MUTATIONS = [
   ['the kitchen\'s own walls do not share a corner', 'kitchen-presets.js',
-    c => c.replace("        { key: 'side', start: corner, end: P(h, len), wallType: 'stud_2x4', refLine: 'center' },",
-      "        { key: 'side', start: P(h, -h), end: P(h, len), wallType: 'stud_2x4', refLine: 'center' },")],
+    c => c.replace("        { key: 'side', start: corner, end: P(h, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'center' },",
+      "        { key: 'side', start: P(h, -h), end: P(h, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'center' },")],
+  ['F does not swap the kitchen\'s own walls\' lengths', 'kitchen-presets.js',
+    c => c.replace("end: P(-needFt(p, flip ? 'first' : 'second'), -h)", "end: P(-needFt(p, 'second'), -h)")
+      .replace("end: P(h, needFt(p, flip ? 'second' : 'first'))", "end: P(h, needFt(p, 'first'))")],
   ['[ ] does not turn the kitchen\'s own walls', 'kitchen-presets.js',
     c => c.replace('    const t = (angleDeg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);',
       '    const t = 0, c = Math.cos(t), s = Math.sin(t);')],
   ['the sink and stove legs trade places', 'kitchen-presets.js',
     c => c.replace('cross < 0 ? [B, A] : [A, B];', 'cross < 0 ? [A, B] : [B, A];')],
   ['F swaps nothing', 'kitchen-presets.js',
-    c => c.replace('    if (flip) [sinkLeg, stoveLeg] = [stoveLeg, sinkLeg];\n', '')],
+    c => c.replace('    if (flip) [firstLeg, secondLeg] = [secondLeg, firstLeg];\n', '')],
   ['the corner is measured where the lines cross, not where the faces meet', 'kitchen-presets.js',
     c => c.replace('      const inside = cornerAlong + push;', '      const inside = cornerAlong;')],
   ['a short leg is laid anyway', 'kitchen-presets.js',
@@ -43,6 +48,15 @@ const MUTATIONS = [
     c => c.replace("        if (Math.abs(dot({ x: A.frame.ux, z: A.frame.uz }, { x: B.frame.ux, z: B.frame.uz })) > 0.05) continue;\n", '')],
   ['a cabinet run is as wide as one piece', 'kitchen-presets.js',
     c => c.replace('        width: runs ? piece.to - piece.from : piece.width,', '        width: piece.width || 2,')],
+  ['an island sits against its wall', 'kitchen-presets.js',
+    c => c.replace('        ...(piece.standoff ? { standoff: piece.standoff } : {}),\n', '')],
+  ['a leg needs only as far as its pieces\' middles', 'kitchen-presets.js',
+    c => c.replace("piece.centre + piece.width / 2);", "piece.centre);")],
+  ['the sheet\'s bay is ignored', 'kitchen-presets.js',
+    c => c.replace('Math.max(p[`${leg}Ft`] || 0, ', 'Math.max(0, ')],
+  ['the U1 peninsula sits at the island\'s 42"', 'kitchen-presets.js',
+    c => c.replace("{ kind: 'island', centre: 48 * IN, width: 8, depth: 3, standoff: 92.5 * IN }",
+      "{ kind: 'island', centre: 48 * IN, width: 8, depth: 3, standoff: 66 * IN }")],
   ['the stove leg starts in the corner, through the other counter', 'kitchen-presets.js',
     c => c.replace("        { kind: 'cabinet', from: 2, to: 5.5 },", "        { kind: 'cabinet', from: 0, to: 5.5 },")],
 ];
@@ -91,8 +105,8 @@ const BALCONY = wall('balcony', 10, 0, 10, 18);
 const WALLS = [END, BALCONY];
 const PRESS = { x: 8.5, z: 1.5 };
 const HALF_6 = 2.75 / 12;
-const geoOf = f => FG.fixtureGeometry(WALLS, { kind: f.kind, wallId: f.wall.id, offset: f.offset,
-  width: f.width, depth: f.depth, side: f.side });
+const geoOf = (f, walls = WALLS) => FG.fixtureGeometry(walls, { kind: f.kind, wallId: f.wall.id, offset: f.offset,
+  width: f.width, depth: f.depth, side: f.side, ...(f.standoff ? { standoff: f.standoff } : {}) });
 
 // ── THE CORNER UNDER THE PRESS ──────────────────────────────────────────
 {
@@ -116,7 +130,7 @@ const geoOf = f => FG.fixtureGeometry(WALLS, { kind: f.kind, wallId: f.wall.id, 
   const kit = KP.place('L1', corner, { depthOf });
   check('six pieces', kit.fixtures.length, 6);
   check('the sink leg is the balcony wall, the stove leg the end wall',
-    `${kit.sinkLeg.wall.id} ${kit.stoveLeg.wall.id}`, 'balcony end');
+    `${kit.firstLeg.wall.id} ${kit.secondLeg.wall.id}`, 'balcony end');
   const on = (id, kind) => kit.fixtures.find(f => f.wall.id === id && f.kind === kind);
   check('sink and DW on the balcony wall, range and fridge on the end wall',
     [on('balcony', 'sink'), on('balcony', 'dish'), on('end', 'stove'), on('end', 'fridge')].every(Boolean), true);
@@ -147,7 +161,7 @@ const geoOf = f => FG.fixtureGeometry(WALLS, { kind: f.kind, wallId: f.wall.id, 
 {
   const corner = KP.findCorner(WALLS, PRESS, FG);
   const kit = KP.place('L1', corner, { depthOf, flip: true });
-  check('mirrored, the sink leg is the end wall', `${kit.sinkLeg.wall.id} ${kit.stoveLeg.wall.id}`, 'end balcony');
+  check('mirrored, the sink leg is the end wall', `${kit.firstLeg.wall.id} ${kit.secondLeg.wall.id}`, 'end balcony');
   const sink = kit.fixtures.find(f => f.kind === 'sink');
   check('and the sink is 4\'-5" west of the corner', inches((30 - HALF_6) - sink.offset), 53);
 }
@@ -160,7 +174,7 @@ const geoOf = f => FG.fixtureGeometry(WALLS, { kind: f.kind, wallId: f.wall.id, 
   const SIDE = wall('side', -20, 0, -20, 18);
   const corner = KP.findCorner([END, SIDE], { x: -18.5, z: 1.5 }, FG);
   const kit = KP.place('L1', corner, { depthOf });
-  check('in the mirror-image corner the sink leg is the end wall', `${kit.sinkLeg.wall.id} ${kit.stoveLeg.wall.id}`, 'end side');
+  check('in the mirror-image corner the sink leg is the end wall', `${kit.firstLeg.wall.id} ${kit.secondLeg.wall.id}`, 'end side');
 }
 
 // ── A WALL DRAWN ON ITS FACE ─────────────────────────────────────────────
@@ -197,13 +211,81 @@ const geoOf = f => FG.fixtureGeometry(WALLS, { kind: f.kind, wallId: f.wall.id, 
   check('their inside corner is the press', corner && `${r2(corner.legs[0].wall.start.x - 1.75 / 12)},${r2(corner.legs[0].wall.start.z + 1.75 / 12)}`, '3,-2');
   const kit = KP.place('L1', corner, { depthOf });
   check('and the kitchen fits them, 8\'-6" each way', Boolean(kit && !kit.refused), true);
-  check('unturned, the sink leg runs down the right wall, as the suite', kit.sinkLeg.wall.key, 'side');
+  check('unturned, the sink leg runs down the right wall, as the suite', kit.firstLeg.wall.key, 'side');
   const turned = KP.ownWalls('L1', at, 90);
   const d = turned.walls[0];
   // A quarter turn clockwise on the plan (x right, z down the screen): the
   // wall that ran west now runs north.
   check('[ ] turns them about the press: the top wall now runs north',
     `${r2(d.end.x - d.start.x)},${r2(d.end.z - d.start.z)}`, `0,${r2(-(8.5 + 1.75 / 12))}`);
+}
+
+// ── THE SUITES' KITCHENS ─────────────────────────────────────────────────
+// In the studio corner (both walls long enough for every leg): the pieces on
+// their legs, every one -- the island too -- inside the room, the island's
+// sink and dishwasher on the island, and the aisle to the counter.
+const SUITES = {
+  U1: { first: 'cabinet dish fridge island sink', second: 'cabinet stove', need: '102.5 116', aisle: 68.5 },
+  L2: { first: 'cabinet cabinet fridge', second: 'cabinet dish island sink stove', need: '105 174', aisle: 57 },
+  L3: { first: 'cabinet fridge', second: 'cabinet dish island sink stove', need: '99 175.5', aisle: 60 },
+};
+// Past both inside faces: the room's side of each leg's wall.
+const inRoom = (pt, corner) => corner.legs.every(leg => {
+  const f = leg.frame;
+  const across = (pt.x - leg.wall.start.x) * f.nx + (pt.z - leg.wall.start.z) * f.nz;
+  return leg.side * across >= (leg.side === 1 ? f.endOff : -f.startOff) - 1e-6;
+});
+const within = (g, box) => g.corners.every(c => box.some(() => true) && (() => {
+  // A point inside a convex quadrilateral: on the same side of every edge.
+  const s = box.map((a, i) => {
+    const b = box[(i + 1) % box.length];
+    return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+  });
+  return s.every(v => v >= -1e-6) || s.every(v => v <= 1e-6);
+})());
+for (const [id, want] of Object.entries(SUITES)) {
+  const corner = KP.findCorner(WALLS, PRESS, FG);
+  const kit = KP.place(id, corner, { depthOf });
+  check(`${id}: placed in the studio corner`, Boolean(kit && !kit.refused), true);
+  check(`${id} is named KITCHEN ${id}`, kit.name, `KITCHEN ${id}`);
+  const legOf = leg => kit.fixtures.filter(f => f.leg === leg).map(f => f.kind).sort().join(' ');
+  check(`${id}: its first leg`, legOf('first'), want.first);
+  check(`${id}: its second leg`, legOf('second'), want.second);
+  check(`${id}: each leg needs as far as its furthest piece`,
+    `${inches(KP.needFt(id, 'first'))} ${inches(KP.needFt(id, 'second'))}`, want.need);
+  const outside = kit.fixtures.filter(f => !geoOf(f).corners.every(c => inRoom(c, corner))).map(f => f.kind);
+  check(`${id}: every piece inside the room`, outside.join(',') || 'none', 'none');
+  const island = kit.fixtures.find(f => f.kind === 'island');
+  const ig = geoOf(island);
+  const onIt = kit.fixtures.filter(f => f.standoff && f.kind !== 'island');
+  check(`${id}: the sink and the dishwasher stand on the island`,
+    onIt.map(f => `${f.kind}:${within(geoOf(f), ig.corners)}`).sort().join(' '), 'dish:true sink:true');
+  // The aisle: the island's near face less the counter depth in front of
+  // the wall it rides.
+  check(`${id}: the aisle between the counter and the island`, inches(island.standoff - depthOf('cabinet')), want.aisle);
+}
+check('KITCHEN U1 refused in a corner with a 7\' leg, and says which',
+  KP.place('U1', KP.findCorner([END, wall('balcony', 10, 0, 10, 7)], PRESS, FG), { depthOf }).refused || 'laid',
+  'KITCHEN U1 needs 8\'-7" along the fridge leg and 9\'-8" along the stove leg from the corner — the fridge leg has 6\'-9".');
+// IN OPEN FLOOR, TURNED AND MIRRORED: its own walls as long as its legs
+// need, every piece at its full width (none clamped short by a short wall)
+// and inside the room.
+for (const id of ['U1', 'L2', 'L3']) {
+  for (const angleDeg of [0, 90, 180, 270]) {
+    for (const flip of [false, true]) {
+      const own = KP.ownWalls(id, { x: 3, z: -2 }, angleDeg, flip);
+      own.walls.forEach(w => { w.id = w.key; w.levelId = 3; w.view = 'plan'; });
+      const corner = KP.findCorner(own.walls, own.inside, FG);
+      const kit = KP.place(id, corner, { depthOf, flip });
+      const tag = `${id} at ${angleDeg}${flip ? ' mirrored' : ''}`;
+      if (!kit || kit.refused) { check(`${tag}: laid on its own walls`, kit && kit.refused, 'laid'); continue; }
+      const bad = kit.fixtures.filter(f => {
+        const g = geoOf(f, own.walls);
+        return Math.abs(g.width - f.width) > 1e-6 || !g.corners.every(c => inRoom(c, corner));
+      }).map(f => f.kind);
+      check(`${tag}: every piece full width, inside the room`, bad.join(',') || 'none', 'none');
+    }
+  }
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

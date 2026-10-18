@@ -1,4 +1,5 @@
-// THE DEFAULT WASHROOMS: BATH A and BATH B, picked under the FIXTURE tool and
+// THE DEFAULT WASHROOMS: WC 1 and WC 2 (once BATH A and BATH B -- Movie, 17
+// Oct: "lets call them WC1 WC2"), picked under the FIXTURE tool and
 // dropped whole (Movie, 9 Oct: "make some 'default' washrooms i can select
 // and add to the plan"). The room's geometry is washroom-presets.js's and its
 // harness proves it; what only the page can show is the GESTURE -- the chip,
@@ -46,7 +47,7 @@ async function arm(page, id) {
   await expect(chip).toHaveAttribute('aria-pressed', 'true');
 }
 
-test('BATH A dropped by the exterior wall joins it: no tub wall of its own, the tub on the house wall', async ({ page }) => {
+test('WC 1 dropped by the exterior wall joins it: no tub wall of its own, the tub on the house wall', async ({ page }) => {
   await houseOnLivePage(page);
   const before = await house(page);
   const ext = before.plan.find(w => Math.abs(w.start.z - before.z0) < 0.01 && Math.abs(w.end.z - before.z0) < 0.01);
@@ -77,7 +78,7 @@ test('BATH A dropped by the exterior wall joins it: no tub wall of its own, the 
   const door = after.fenestrations.filter(f => f.type === 'door' && added.some(w => w.id === f.wallId));
   expect(door).toHaveLength(1);
   expect(Math.round(door[0].width * 12)).toBe(32);
-  const group = (after.groups || []).find(g => g.name === 'BATH A');
+  const group = (after.groups || []).find(g => g.name === 'WC 1');
   expect(group.members.map(m => m.id).sort()).toEqual(added.map(w => w.id).sort());
 
   // ONE UNDO TAKES THE ROOM.
@@ -86,10 +87,10 @@ test('BATH A dropped by the exterior wall joins it: no tub wall of its own, the 
   const undone = await h.savedDrawing(page);
   expect(undone.walls).toHaveLength(before.drawing.walls.length);
   expect(undone.fixtures || []).toHaveLength(0);
-  expect((undone.groups || []).some(g => g.name === 'BATH A')).toBe(false);
+  expect((undone.groups || []).some(g => g.name === 'WC 1')).toBe(false);
 });
 
-test('BATH B in the middle of the house draws its own tub wall, and F mirrors it', async ({ page }) => {
+test('WC 2 in the middle of the house draws its own tub wall, and F mirrors it', async ({ page }) => {
   await houseOnLivePage(page);
   const before = await house(page);
   await arm(page, 'B');
@@ -116,5 +117,5 @@ test('BATH B in the middle of the house draws its own tub wall, and F mirrors it
   // the right wall is at +x).
   const toiletWall = added.find(w => w.id === after.fixtures.find(f => f.kind === 'toilet').wallId);
   expect(toiletWall.start.x).toBeLessThan(mid.x);
-  expect((after.groups || []).some(g => g.name === 'BATH B')).toBe(true);
+  expect((after.groups || []).some(g => g.name === 'WC 2')).toBe(true);
 });

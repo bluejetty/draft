@@ -1,5 +1,6 @@
-// THE DEFAULT KITCHENS -- Movie's corner L, picked and dropped whole into a
-// corner two walls already make.
+// THE DEFAULT KITCHENS -- Movie's corner L and the North Point suites' L, U
+// and island kitchens, picked and dropped whole into a corner two walls
+// already make.
 //
 // Movie, 17 Oct, NORTH_POINT_S_SUITE.pdf: "can you make a WC and KITCHENS
 // that are like on this plan ... call it ... KITCHEN L1". The studio suite's
@@ -28,10 +29,20 @@
 //                                            | DW
 //                                            |  sink leg (corner -> open end)
 //
-// WHICH LEG IS WHICH: unflipped, the sink leg is the one that is CLOCKWISE
-// from the stove leg on the plan (x right, z down the screen), which is the
-// suite as drawn -- corner at the top right, sink down the right wall, range
-// along the top. F swaps them, the way it mirrors a washroom.
+// WHICH LEG IS WHICH: unflipped, the FIRST leg (L1's sink leg) is the one
+// whose direction turned a quarter clockwise on the plan (x right, z down the
+// screen) is the SECOND's -- the suite as drawn: corner at the top right,
+// sink down the right wall, range along the top. F swaps them, the way it
+// mirrors a washroom.
+//
+// THE SUITES' KITCHENS (Movie, 17-18 Oct: "KITCHEN U1" off the 1B, "KITCHEN
+// L2" off the 1BD, "KITCHEN L3" off the 2BD -- "its very similar to the last
+// one we may need to combine these later but keep seperate for now"): the
+// same two legs, and an ISLAND or PENINSULA that is no wall's. It rides a
+// leg's wall all the same, floated off it by a `standoff` -- the island
+// fixture's own convention -- with its sink and dishwasher at the same
+// standoff, so the whole kitchen moves, turns and mirrors with its walls.
+// Each leg needs as much wall as its furthest piece reaches.
 //
 // PURE: walls and a point in, records out. The page files the records, draws
 // the preview, and says what was refused.
@@ -46,10 +57,9 @@ if (!window.DraftKitchenPresets) {
   const PRESETS = Object.freeze({
     L1: Object.freeze({
       id: 'L1', name: 'KITCHEN L1', label: "KITCHEN L1 8'-6\" x 8'-6\" corner L",
-      legFt: 8.5,
       // The counter runs from the corner to the open end; the corner 24" is
       // the other leg's counter turning in, so the sink leg owns the corner.
-      sink: [
+      first: [
         { kind: 'cabinet', from: 0, to: 8.5 },
         { kind: 'sink', centre: 53 * IN, width: 2.5 },
         { kind: 'dish', centre: 86.5 * IN, width: 2 },
@@ -59,13 +69,78 @@ if (!window.DraftKitchenPresets) {
       // 3'-5" from the corner to its centre (Movie, 17 Oct: "can you check
       // the predrawn kitchens KITCHEN L1 which should look like the Suite S"
       // -- measured again off the sheet at 300 dpi; it had been drawn 30").
-      stove: [
+      second: [
         { kind: 'cabinet', from: 2, to: 5.5 },
         { kind: 'stove', centre: 41 * IN, width: 2 },
         { kind: 'fridge', centre: 84 * IN, width: 3 },
       ],
     }),
+    // THE 1BD SUITE'S "KITCHEN 18X9": the counter along the demising wall
+    // with the fridge and a cabinet past it, the long leg down the den wall
+    // with the range, and a 7' x 3' island 5' clear of both counters, the
+    // double sink and the dishwasher on it and the bar on its far side.
+    L2: Object.freeze({
+      id: 'L2', name: 'KITCHEN L2', label: "KITCHEN L2 8'-9\" x 13'-4\" L + island",
+      first: [
+        { kind: 'cabinet', from: 0, to: 47 * IN },
+        { kind: 'fridge', centre: 64.5 * IN, width: 3 },
+        { kind: 'cabinet', from: 82.5 * IN, to: 105 * IN },
+      ],
+      second: [
+        { kind: 'cabinet', from: 0, to: 160 * IN },
+        { kind: 'stove', centre: 106 * IN, width: 2 },
+        { kind: 'island', centre: 132 * IN, width: 7, depth: 3, standoff: 81 * IN },
+        { kind: 'sink', centre: 119 * IN, width: 2.5, standoff: 81 * IN },
+        { kind: 'dish', centre: 161 * IN, width: 2, standoff: 81 * IN },
+      ],
+    }),
+    // THE 2BD SUITE'S "KITCHEN 9X14": the fridge at the open end of the
+    // exterior wall's leg, the long counter along the far wall to the pantry
+    // with the range on it, and the 7' x 3' island 5' off that counter.
+    L3: Object.freeze({
+      id: 'L3', name: 'KITCHEN L3', label: "KITCHEN L3 8'-3\" x 13'-4\" L + island",
+      first: [
+        { kind: 'cabinet', from: 0, to: 63 * IN },
+        { kind: 'fridge', centre: 81 * IN, width: 3 },
+      ],
+      second: [
+        { kind: 'cabinet', from: 0, to: 160 * IN },
+        { kind: 'stove', centre: 106.5 * IN, width: 2 },
+        { kind: 'island', centre: 133.5 * IN, width: 7, depth: 3, standoff: 84 * IN },
+        { kind: 'sink', centre: 124.5 * IN, width: 2.5, standoff: 84 * IN },
+        { kind: 'dish', centre: 163.5 * IN, width: 2, standoff: 84 * IN },
+      ],
+    }),
+    // THE 1B SUITE'S U, "KITCHEN/DINING 15X9-8": the counter along the top
+    // wall to the fridge, the 9'-8" leg down the exterior wall with the
+    // range, and the PENINSULA closing the U off the exterior wall -- 8'
+    // long, the dishwasher and the double sink on it and the bar outside.
+    // It rides the top wall at its standoff; the exterior leg's counter
+    // stops where the peninsula's turns in.
+    U1: Object.freeze({
+      id: 'U1', name: 'KITCHEN U1', label: "KITCHEN U1 8'-7\" x 9'-8\" U with peninsula",
+      first: [
+        { kind: 'cabinet', from: 0, to: 66.5 * IN },
+        { kind: 'fridge', centre: 84.5 * IN, width: 3 },
+        { kind: 'island', centre: 48 * IN, width: 8, depth: 3, standoff: 92.5 * IN },
+        { kind: 'dish', centre: 36 * IN, width: 2, standoff: 92.5 * IN },
+        { kind: 'sink', centre: 80 * IN, width: 2.5, standoff: 92.5 * IN },
+      ],
+      second: [
+        { kind: 'cabinet', from: 0, to: 92.5 * IN },
+        { kind: 'stove', centre: 51 * IN, width: 2 },
+      ],
+      // The exterior wall runs on past the peninsula: the bay is 9'-8".
+      secondFt: 116 * IN,
+    }),
   });
+
+  // HOW MUCH WALL A LEG NEEDS: as far as its furthest piece reaches, or the
+  // bay the sheet gives, whichever is more.
+  const reach = piece => (piece.kind === 'cabinet' ? piece.to : piece.centre + piece.width / 2);
+  const needFt = (p, leg) => Math.max(p[`${leg}Ft`] || 0, ...p[leg].map(reach));
+  // A leg's name in a sentence: its first piece that is not a cabinet run.
+  const legName = (p, leg) => `${(p[leg].find(piece => piece.kind !== 'cabinet') || { kind: leg }).kind} leg`;
 
   const sub = (a, b) => ({ x: a.x - b.x, z: a.z - b.z });
   const dot = (a, b) => a.x * b.x + a.z * b.z;
@@ -138,12 +213,16 @@ if (!window.DraftKitchenPresets) {
     const dirOf = leg => ({ x: leg.frame.ux * leg.dir, z: leg.frame.uz * leg.dir });
     const dA = dirOf(A), dB = dirOf(B);
     const cross = dA.x * dB.z - dA.z * dB.x;
-    let [sinkLeg, stoveLeg] = cross < 0 ? [B, A] : [A, B];
-    if (flip) [sinkLeg, stoveLeg] = [stoveLeg, sinkLeg];
-    const short = [['sink', sinkLeg], ['stove', stoveLeg]].find(([, leg]) => leg.clearFt < p.legFt - 0.01);
+    let [firstLeg, secondLeg] = cross < 0 ? [B, A] : [A, B];
+    if (flip) [firstLeg, secondLeg] = [secondLeg, firstLeg];
+    const short = [['first', firstLeg], ['second', secondLeg]].find(([name, leg]) => leg.clearFt < needFt(p, name) - 0.01);
     if (short) {
-      return { refused: `${p.name} needs ${fmtFt(p.legFt)} clear along both walls from the corner — `
-        + `the ${short[0]} leg has ${fmtFt(short[1].clearFt)}.` };
+      // Each leg by the piece that names it -- L1's sink leg and stove leg.
+      const [a, b] = [needFt(p, 'first'), needFt(p, 'second')];
+      const needs = Math.abs(a - b) < 0.01 ? `${fmtFt(a)} clear along both walls`
+        : `${fmtFt(a)} along the ${legName(p, 'first')} and ${fmtFt(b)} along the ${legName(p, 'second')}`;
+      return { refused: `${p.name} needs ${needs} from the corner — `
+        + `the ${legName(p, short[0])} has ${fmtFt(short[1].clearFt)}.` };
     }
     const depth = kind => (depthOf ? depthOf(kind) : 2);
     const lay = (leg, pieces, legName) => pieces.map(piece => {
@@ -153,14 +232,15 @@ if (!window.DraftKitchenPresets) {
         kind: piece.kind, leg: legName, wall: leg.wall,
         offset: leg.cornerAlong + leg.dir * centre,
         width: runs ? piece.to - piece.from : piece.width,
-        depth: depth(piece.kind),
+        depth: piece.depth || depth(piece.kind),
         side: leg.side,
+        ...(piece.standoff ? { standoff: piece.standoff } : {}),
       };
     });
     return {
       id, name: p.name,
-      sinkLeg, stoveLeg,
-      fixtures: lay(sinkLeg, p.sink, 'sink').concat(lay(stoveLeg, p.stove, 'stove')),
+      firstLeg, secondLeg,
+      fixtures: lay(firstLeg, p.first, 'first').concat(lay(secondLeg, p.second, 'second')),
     };
   }
 
@@ -179,18 +259,21 @@ if (!window.DraftKitchenPresets) {
   // the corner at the top right, one wall running west along the top, the
   // other south down the right -- and `angleDeg` turns them about `at`.
   // `inside` is a point in the L, for findCorner to read the faces from.
+  // The side wall carries the first leg and the top wall the second, each
+  // as long as its leg needs -- swapped when F swaps the legs, or a mirrored
+  // U1 would put its 9'-8" leg on the 8'-7" wall and be refused.
   const STUD_4 = 3.5 * IN;
-  function ownWalls(id, at, angleDeg = 0) {
+  function ownWalls(id, at, angleDeg = 0, flip = false) {
     const p = PRESETS[id];
     if (!p || !at) return null;
-    const h = STUD_4 / 2, len = p.legFt;
+    const h = STUD_4 / 2;
     const t = (angleDeg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
     const P = (x, z) => ({ x: at.x + c * x - s * z, y: 0, z: at.z + s * x + c * z });
     const corner = P(h, -h);
     return {
       walls: [
-        { key: 'top', start: corner, end: P(-len, -h), wallType: 'stud_2x4', refLine: 'center' },
-        { key: 'side', start: corner, end: P(h, len), wallType: 'stud_2x4', refLine: 'center' },
+        { key: 'top', start: corner, end: P(-needFt(p, flip ? 'first' : 'second'), -h), wallType: 'stud_2x4', refLine: 'center' },
+        { key: 'side', start: corner, end: P(h, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'center' },
       ],
       inside: P(-1, 1),
     };
@@ -200,6 +283,7 @@ if (!window.DraftKitchenPresets) {
     PRESETS,
     IDS: Object.freeze(Object.keys(PRESETS)),
     REACH_FT,
+    needFt: (id, leg) => (PRESETS[id] ? needFt(PRESETS[id], leg) : null),
     findCorner,
     place,
     ownWalls,

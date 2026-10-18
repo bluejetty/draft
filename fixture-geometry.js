@@ -86,13 +86,30 @@ if (!window.DraftFixtureGeometry) {
     };
   };
 
+  // WHERE A CROSSING WALL'S TWO FACES MEET THIS WALL'S LINE, along it. Its
+  // faces sit at startOff / endOff across ITS drawn line, which is a face
+  // for an exterior wall (refLine 'left'), not its middle -- so half its
+  // thickness either side of the crossing put a tub 2 3/4" into a 2x6 it
+  // ran into (WC BF2 dropped against the house). An offset across the other
+  // wall moves its crossing along this one by offset / (its normal . this
+  // direction).
+  const facesAlong = (frame, other, along) => {
+    const of = wallFrame(other);
+    const k = of ? of.nx * frame.ux + of.nz * frame.uz : 0;
+    if (Math.abs(k) < 1e-6) return [along, along];
+    return [along + of.startOff / k, along + of.endOff / k];
+  };
+
   const tubGeometry = (walls, fixture, wall, frame) => {
     const endWall = walls.find(w => w.id === fixture.endWallId);
     if (!endWall) return null;
     const cross = wallCross(wall, frame, endWall);
     if (!cross || cross.s < -0.2 || cross.s > 1.2) return null;
     const dir = fixture.dir === -1 ? -1 : 1;
-    const face = cross.along + dir * ((wallFrame(endWall)?.totalFt || 0) / 2);
+    // The end wall's face on the tub's side, and each crossing wall's face
+    // that looks back at the tub.
+    const endFaces = facesAlong(frame, endWall, cross.along);
+    const face = dir > 0 ? Math.max(...endFaces) : Math.min(...endFaces);
     // The alcove's far bound: the nearest crossing wall past the faucet wall,
     // or the end of the back wall itself.
     let farFace = dir > 0 ? frame.len : 0;
@@ -101,7 +118,8 @@ if (!window.DraftFixtureGeometry) {
       if (other.levelId !== wall.levelId || (other.view || 'plan') !== (wall.view || 'plan')) return;
       const hit = wallCross(wall, frame, other);
       if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
-      const otherFace = hit.along - dir * ((wallFrame(other)?.totalFt || 0) / 2);
+      const otherFaces = facesAlong(frame, other, hit.along);
+      const otherFace = dir > 0 ? Math.min(...otherFaces) : Math.max(...otherFaces);
       if (dir * (otherFace - face) > 0.5 && dir * (otherFace - face) < dir * (farFace - face)) farFace = otherFace;
     });
     const alcove = dir * (farFace - face);
