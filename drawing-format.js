@@ -1619,6 +1619,21 @@ if (!window.DraftDrawingFormat) {
         // and its exterior walls' windows cut into the shell's where the two
         // walls' faces line up. Absent is the blue existing-house hologram.
         ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),
+        // WHICH FLOOR OF THIS DRAWING each of its levels stands on (18 Oct:
+        // "the same suite on different floors"): { its id: this drawing's
+        // id, or null for not shown }. Absent is every level as itself.
+        ...(() => {
+          const raw = holo?.levelMap;
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+          const map = {};
+          Object.keys(raw).forEach(key => {
+            const from = Number(key), to = raw[key];
+            if (!Number.isInteger(from)) return;
+            if (to === null) map[from] = null;
+            else if (Number.isInteger(Number(to))) map[from] = Number(to);
+          });
+          return Object.keys(map).length ? { levelMap: map } : {};
+        })(),
         ...(Object.keys(demo).length ? { demo } : {}),
         source: flat,
         layer: 'HOLOGRAM',

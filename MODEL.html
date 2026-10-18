@@ -24620,6 +24620,75 @@
     const angleDeg = ((((Number(holo.angleDeg) || 0) + degrees) % 360) + 360) % 360;
     hologramEdit(holo, { angleDeg }, `${hologramNoun(holo)} turned to ${Math.round(angleDeg)}\u00b0.`);
   };
+  // ── A SUITE FLOOR TO FLOOR (Movie, 18 Oct: "we might want the same suite
+  // on different floors" -- "make the ability to copy the suite floor to
+  // floor easily and match up") ─────────────────────────────────────────
+  //
+  // THE FLOORS ARE THE WHOLE STOREYS, lowest first: not the SITE, the ROOF
+  // or the FOUNDATION, and not a half level. A suite's own floors land on
+  // the shell's in order from the one it is put on, so a two-storey suite
+  // put on 2ND FL takes 2ND and 3RD. Where it stands on the plan does not
+  // change -- lined up on one floor is lined up on the next.
+  const SUITE_NOT_FLOORS = new Set([1, 2, 4, 7, 8]);
+  const floorsOf = levels => (Array.isArray(levels) ? levels : [])
+    .filter(l => l && !SUITE_NOT_FLOORS.has(Number(l.id)))
+    .slice().sort((a, b) => (Number(a.elev) || 0) - (Number(b.elev) || 0));
+  // THE SUITE'S FLOORS ARE THE ONES WITH WALLS: a suite file started from
+  // the usual template carries an empty 2ND FL, and counting it would make
+  // every one-floor suite a two-storey one with no room at the top.
+  const suiteFloors = holo => floorsOf(holo.source?.levels).filter(l =>
+    (holo.source?.walls || []).some(w => Number(w?.levelId) === Number(l.id)));
+  // Which of the shell's floors the suite's lowest floor is on, by index.
+  const suiteFloorAt = holo => {
+    const own = suiteFloors(holo);
+    const shell = floorsOf(drawing?.levels);
+    if (!own.length) return -1;
+    const first = Number(own[0].id);
+    const on = holo.levelMap && Object.prototype.hasOwnProperty.call(holo.levelMap, String(first))
+      ? holo.levelMap[String(first)] : first;
+    return shell.findIndex(l => Number(l.id) === Number(on));
+  };
+  // The map that puts the suite's lowest floor on the shell's floor `at`;
+  // null when a floor of it would land past the top (or under the bottom).
+  const suiteMapFor = (holo, at) => {
+    const own = suiteFloors(holo);
+    const shell = floorsOf(drawing?.levels);
+    if (!own.length || at < 0 || at + own.length > shell.length) return null;
+    const map = {};
+    own.forEach((l, i) => { map[Number(l.id)] = Number(shell[at + i].id); });
+    return map;
+  };
+  const sameMap = (holo, map) => Object.keys(map).every(k => Number(k) === map[k]);
+  const suiteFloorName = holo => {
+    const at = suiteFloorAt(holo);
+    const l = floorsOf(drawing?.levels)[at];
+    return l ? levelLabel(l.id, l.name) : 'no floor here';
+  };
+  // FLOOR ▲▼: this one to the next floor up or down.
+  const moveSuiteFloor = (holo, step) => {
+    const at = suiteFloorAt(holo);
+    const map = suiteMapFor(holo, (at < 0 ? 0 : at) + step);
+    if (!map) { sayOnStrip(`${hologramNoun(holo)} has no floor ${step > 0 ? 'above' : 'below'} to go to in this drawing.`); return; }
+    const before = { ...holo };
+    if (sameMap(holo, map)) delete holo.levelMap; else holo.levelMap = map;
+    undoStack.push({ kind: 'props', edits: [{ item: holo, before }] });
+    markDirty();
+    paint();
+    sayOnStrip(`${hologramNoun(holo)} is on ${suiteFloorName(holo)} \u2014 where it stands on the plan is unchanged.`);
+  };
+  // COPY ▲▼: another of it on the floor above or below, right over it.
+  const copySuiteFloor = (holo, step) => {
+    const at = suiteFloorAt(holo);
+    const map = suiteMapFor(holo, (at < 0 ? 0 : at) + step);
+    if (!map) { sayOnStrip(`There is no floor ${step > 0 ? 'above' : 'below'} ${hologramNoun(holo)} in this drawing to copy it to.`); return; }
+    const { demo, levelMap, ...rest } = holo;
+    let id = newDrawingItemId('hologram');
+    while (holograms().some(h => h.id === id)) id = newDrawingItemId('hologram');
+    const copy = { ...rest, id, ...(sameMap(holo, map) ? {} : { levelMap: map }) };
+    addItem(drawing.holograms, copy);
+    paint();
+    sayOnStrip(`A copy of ${hologramNoun(holo)} is on ${suiteFloorName(copy)}, right over this one \u2014 UNDO takes it off.`);
+  };
   const mirrorHologram = holo => {
     const flip = holo.flip !== true;
     hologramEdit(holo, { flip }, flip
@@ -24730,6 +24799,17 @@
           traceMoving = { underlay: holo, from: null, before: null, hologram: true };
           sayOnStrip(traceMoveWord(traceMoving));
         }),
+        // FLOOR and COPY floor to floor, on a SUITE.
+        ...(suite ? (() => {
+          const floor = document.createElement('span');
+          floor.dataset.hologramFloor = holo.id;
+          floor.textContent = suiteFloorName(holo);
+          return [floor,
+            button('FLOOR \u25b2', 'hologramFloorUp', 'Move it to the floor above, where it stands', () => { moveSuiteFloor(holo, 1); renderHologramList(); }),
+            button('FLOOR \u25bc', 'hologramFloorDown', 'Move it to the floor below, where it stands', () => { moveSuiteFloor(holo, -1); renderHologramList(); }),
+            button('COPY \u25b2', 'hologramCopyUp', 'Another of it on the floor above, lined up over this one', () => { copySuiteFloor(holo, 1); renderHologramList(); }),
+            button('COPY \u25bc', 'hologramCopyDown', 'Another of it on the floor below, lined up under this one', () => { copySuiteFloor(holo, -1); renderHologramList(); })];
+        })() : []),
         button('\u27f2', 'hologramLeft', 'Turn a quarter to the left', () => { turnHologram(holo, -90); renderHologramList(); }),
         button('\u27f3', 'hologramRight', 'Turn a quarter to the right', () => { turnHologram(holo, 90); renderHologramList(); }),
         // MIRROR (Movie, 17 Oct, placing his suites): the same file turned

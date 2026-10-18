@@ -58,6 +58,27 @@ const MUTANTS = [
     find: "      ...(hologram?.hostOpenings ? hologram.hostOpenings(saved) : [])], levelIds);",
     with: "      ], levelIds);",
     test: "the elevations and sheets read the suite windows on the shell" },
+  // ── FLOOR TO FLOOR ("we might want the same suite on different floors")
+  { file: 'drawing-format.js', name: "the format drops the floor map",
+    find: "          return Object.keys(map).length ? { levelMap: map } : {};",
+    with: "          return {};",
+    test: "COPY up puts the suite on the next floor, lined up, its windows in that floor's shell wall" },
+  { file: 'hologram.js', name: "the painters ignore the floor map",
+    find: "    if (!map || typeof map !== 'object' || !Object.keys(map).length) return source;",
+    with: "    return source;",
+    test: "FLOOR up and down move a suite where it stands; past the top it stays" },
+  { file: 'MODEL.html', name: "the template's empty floors count as the suite's",
+    find: "  const suiteFloors = holo => floorsOf(holo.source?.levels).filter(l =>\n    (holo.source?.walls || []).some(w => Number(w?.levelId) === Number(l.id)));",
+    with: "  const suiteFloors = holo => floorsOf(holo.source?.levels);",
+    test: "FLOOR up and down move a suite where it stands; past the top it stays" },
+  { file: 'MODEL.html', name: "a two-storey suite's upper floor is left behind",
+    find: "    own.forEach((l, i) => { map[Number(l.id)] = Number(shell[at + i].id); });",
+    with: "    map[Number(own[0].id)] = Number(shell[at].id);",
+    test: "a two-storey suite moves as one: its upper floor takes the next floor of the shell" },
+  { file: 'MODEL.html', name: "COPY up copies onto the same floor",
+    find: "    const copy = { ...rest, id, ...(sameMap(holo, map) ? {} : { levelMap: map }) };",
+    with: "    const copy = { ...rest, id, ...(levelMap ? { levelMap } : {}) };",
+    test: "COPY up puts the suite on the next floor, lined up, its windows in that floor's shell wall" },
 ];
 
 const run = name => {

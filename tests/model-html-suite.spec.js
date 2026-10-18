@@ -177,3 +177,77 @@ test('the elevations and sheets read the suite windows on the shell', async ({ p
     window.DraftDrawingFormat.levels(d.levels)).fenestrations().map(o => o.id).sort(), d);
   expect(fens).toEqual(['h1:w1', 'pub']);
 });
+
+// ── FLOOR TO FLOOR (Movie, 18 Oct: "we might want the same suite on different
+// floors" -- "make the ability to copy the suite floor to floor easily and
+// match up") ─────────────────────────────────────────────────────────────
+const LEVELS3 = [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 27 },
+  { id: 9, name: '3RD FL', elev: 18 }, { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 },
+  { id: 1, name: 'FOUNDATION', elev: -8 }];
+const ring = (levelId, tag) => [W(`a${tag}`, [0, 0], [60, 0], { levelId }), W(`b${tag}`, [60, 0], [60, 30], { levelId }),
+  W(`c${tag}`, [60, 30], [0, 30], { levelId }), W(`d${tag}`, [0, 30], [0, 0], { levelId })];
+const shell3 = (source = SUITE) => ({ version: 1, board: 'drafting', planTurn: 0, levels: LEVELS3, activeLevelIdx: 4,
+  ...EMPTY, walls: [...ring(3, ''), ...ring(5, '2'), ...ring(9, '3')], fenestrations: [],
+  // The suite file is the usual template: an empty 2ND FL rides along.
+  holograms: [{ id: 'h1', name: 'suite-a', mode: 'suite', x: 0, z: 0, angleDeg: 0, pivotX: 10, pivotZ: 7.5,
+    source: { ...source, levels: SUITE_LEVELS } }] });
+const SUITE_LEVELS = [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 18 },
+  { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 }, { id: 1, name: 'FOUNDATION', elev: -8 }];
+const row = (page, id) => page.locator(`#hologram-ask [data-hologram-row="${id}"]`);
+
+test('COPY up puts the suite on the next floor, lined up, its windows in that floor\'s shell wall', async ({ page }) => {
+  await open(page, shell3());
+  await page.locator('[data-mode-hologram]').click();
+  await expect(row(page, 'h1').locator('[data-hologram-floor]')).toContainText('MAIN FL');
+  await row(page, 'h1').locator('[data-hologram-copy-up]').click();
+  await row(page, 'h1').locator('[data-hologram-copy-up]').click();
+  await page.locator('[data-hologram-close]').click();
+  const d = await saved(page);
+  expect(d.holograms.map(h => [h.levelMap || null, h.x, h.z, h.mode])).toEqual([
+    [null, 0, 0, 'suite'], [{ 3: 5 }, 0, 0, 'suite'], [{ 3: 5 }, 0, 0, 'suite']]);
+  // One window on each copy's floor: the 2ND FL's wall gets two (two copies
+  // pressed from the MAIN FL one land on the same floor -- and clash).
+  const got = (await hostOpenings(page, d)).map(([wall, at]) => [wall, at]);
+  expect(got).toEqual([['a', 8], ['a2', 8], ['a2', 8]]);
+});
+
+test('FLOOR up and down move a suite where it stands; past the top it stays', async ({ page }) => {
+  await open(page, shell3());
+  await page.locator('[data-mode-hologram]').click();
+  const up = row(page, 'h1').locator('[data-hologram-floor-up]');
+  await up.click();
+  await expect(row(page, 'h1').locator('[data-hologram-floor]')).toContainText('2ND FL');
+  await up.click();
+  await expect(row(page, 'h1').locator('[data-hologram-floor]')).toContainText('3RD FL');
+  await up.click();
+  await expect(row(page, 'h1').locator('[data-hologram-floor]')).toContainText('3RD FL');
+  await expect(page.locator('#strip-message')).toContainText('no floor above');
+  await page.locator('[data-hologram-close]').click();
+  let d = await saved(page);
+  expect(d.holograms[0].levelMap).toEqual({ 3: 9 });
+  expect((await hostOpenings(page, d)).map(([wall]) => wall)).toEqual(['a3']);
+  // And the elevation stands it on the 3RD FL's opening list.
+  const lv = await page.evaluate(d => window.DraftCutViewEnv.buildCutViewEnv(d,
+    window.DraftDrawingFormat.levels(d.levels)).fenestrations().map(o => o.levelId), d);
+  expect(lv).toEqual([9]);
+  // Down twice is back where it was drawn: no map at all.
+  await page.locator('[data-mode-hologram]').click();
+  await row(page, 'h1').locator('[data-hologram-floor-down]').click();
+  await row(page, 'h1').locator('[data-hologram-floor-down]').click();
+  await page.locator('[data-hologram-close]').click();
+  d = await saved(page);
+  expect(d.holograms[0].levelMap).toBeUndefined();
+});
+
+test('a two-storey suite moves as one: its upper floor takes the next floor of the shell', async ({ page }) => {
+  const TWO = { ...SUITE, walls: [...SUITE.walls, W('u1', [0, 0], [20, 0], { levelId: 5 }), W('u2', [20, 0], [20, 15], { levelId: 5 })],
+    fenestrations: [...SUITE.fenestrations, { ...WIN('wu', 'u1', 2), levelId: 5 }] };
+  await open(page, shell3(TWO));
+  await page.locator('[data-mode-hologram]').click();
+  await row(page, 'h1').locator('[data-hologram-floor-up]').click();
+  await row(page, 'h1').locator('[data-hologram-floor-up]').click();   // no room for its upper floor
+  await page.locator('[data-hologram-close]').click();
+  const d = await saved(page);
+  expect(d.holograms[0].levelMap).toEqual({ 3: 5, 5: 9 });
+  expect((await hostOpenings(page, d)).map(([wall, at]) => [wall, at]).sort()).toEqual([['a2', 8], ['a3', 2]]);
+});

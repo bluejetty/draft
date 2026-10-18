@@ -51,8 +51,37 @@
     y: wall.start.y || 0,
     z: wall.start.z + (wall.end.z - wall.start.z) * d / len,
   });
+  // ── WHICH FLOOR OF THE SHELL (Movie, 18 Oct: "we might want the same suite
+  // on different floors" -- "make the ability to copy the suite floor to
+  // floor easily and match up") ─────────────────────────────────────────
+  //
+  // `levelMap` is the suite's own levels to this drawing's: { 3: 5 } puts a
+  // suite drawn on MAIN FL onto 2ND FL, and a two-storey suite's both floors
+  // go up together ({ 3: 5, 5: 9 }). Absent, every level is its own id, as a
+  // hologram has always been. A level mapped to nothing is not shown. What
+  // every painter reads, so plan, elevation, the shell's windows and the
+  // snap all move with it.
+  const levelsMoved = holo => {
+    const source = holo?.source || {};
+    const map = holo?.levelMap;
+    if (!map || typeof map !== 'object' || !Object.keys(map).length) return source;
+    const to = id => (Object.prototype.hasOwnProperty.call(map, String(id)) ? map[String(id)] : id);
+    const out = { ...source };
+    Object.keys(source).forEach(key => {
+      const list = source[key];
+      if (key === 'levels' || !Array.isArray(list)) return;
+      if (!list.some(item => item && typeof item === 'object' && 'levelId' in item)) return;
+      out[key] = list.map(item => {
+        if (!item || typeof item !== 'object' || !('levelId' in item)) return item;
+        const levelId = to(item.levelId);
+        return levelId == null ? null : { ...item, levelId };
+      }).filter(Boolean);
+    });
+    return out;
+  };
+
   const parts = holo => {
-    const source = holo.source || {};
+    const source = levelsMoved(holo);
     const marked = kind => new Set(holo.demo?.[kind] || []);
     const walls = marked('walls');
     const fens = marked('fenestrations');
@@ -269,7 +298,7 @@
   const shapes = (holo, items, levelId, view) => {
     const G = window.DraftGeometry2D;
     const FX = window.DraftFixtureGeometry;
-    const sourceWalls = (holo.source?.walls || []).filter(wall => wall.levelId === levelId);
+    const sourceWalls = (levelsMoved(holo).walls || []).filter(wall => wall.levelId === levelId);
     const onView = item => item.levelId === levelId && (item.view || 'plan') === view;
     const out = [];
     items.walls.filter(onView).forEach(wall => {
@@ -460,7 +489,7 @@
   // the drawing -- every level, or one.
   const framePoints = (saved, levelId = null) => {
     const F = window.DraftDrawingFormat;
-    return shown(saved).flatMap(holo => (Array.isArray(holo.source?.walls) ? holo.source.walls : [])
+    return shown(saved).flatMap(holo => (Array.isArray(levelsMoved(holo).walls) ? levelsMoved(holo).walls : [])
       .filter(wall => levelId == null || wall?.levelId === levelId)
       .flatMap(wall => [wall?.start, wall?.end])
       .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z))
@@ -556,8 +585,13 @@
     if (show.existing) {
       list.filter(isSuite).forEach(holo => {
         try {
+          // THE SHELL'S HEIGHTS: a suite stands on the shell's floor, at the
+          // shell's elevation -- its own file's levels fill in only what the
+          // shell has none of.
           const source = holo.source || {};
-          const levels = F.levels ? F.levels(source.levels) : (source.levels || []);
+          const own = F.levels ? F.levels(source.levels) : (source.levels || []);
+          const host = F.levels ? F.levels(saved.levels) : (saved.levels || []);
+          const levels = [...host, ...own.filter(l => !host.some(hl => hl.id === l.id))];
           const cutEnv = CE.buildCutViewEnv(placed(holo, suiteExisting(holo, parts(holo).existing, info)), levels);
           if (cutEnv) { CV.drawCutView(cutEnv, ctx, w, h, cut, pass); suiteDrew = true; }
         } catch (error) {
@@ -636,6 +670,6 @@
 
   window.DraftHologram = Object.freeze({
     BLUE, PALE, ALPHA, VIEWS, planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
-    placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap,
+    placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved,
   });
 })();
