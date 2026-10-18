@@ -183,7 +183,9 @@ test('GABLE END squares the chamfered end across and makes it one gable; the rid
 test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge and valleys in plan, its faces standing on the roof', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 30, 15);
-  await click(page, at, 30, 43.8);
+  // A little off the middle of the jog's front, so the gable has to go
+  // where it was clicked and not simply at the middle.
+  await click(page, at, 29, 43.8);
   await expect(page.locator('[data-roof-edge-label]')).toHaveText(`EDGE ${JOG_FRONT + 1} OF 8`);
   // 40' is the default, and the jog's wall is only 20' long.
   await page.locator('[data-roof-cross-gable]').click();
@@ -193,7 +195,7 @@ test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge 
   await page.locator('[data-roof-field="cross gable pitch"]').press('Enter');
   await page.locator('[data-roof-cross-gable]').click();
   let roof = await saved(page);
-  expect(roof.crossGables).toEqual([{ at: { x: 30, z: 36 }, widthFt: 16, pitch: 6 }]);
+  expect(roof.crossGables).toEqual([{ at: { x: 29, z: 36 }, widthFt: 16, pitch: 6 }]);
   const shape = await page.evaluate(r => {
     const G = window.DraftGeometry2D;
     const [g] = G.crossGableShapes(r);
@@ -203,7 +205,7 @@ test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge 
       ridge: G.roofFaceRise(own[0], g.M, r.pitch), meet: G.roofFaceRise(own[0], g.P, r.pitch) };
   }, roof);
   // 8' half-width x 6/4 = 12' in from the wall line at z = 36.
-  expect(shape.P).toEqual([30, 24]);
+  expect(shape.P).toEqual([29, 24]);
   expect(shape.lines, 'front wall, ridge and two valleys').toBe(4);
   expect(shape.own, 'two faces of its own').toBe(2);
   // Its ridge stands level from the wall to where it meets the main roof:

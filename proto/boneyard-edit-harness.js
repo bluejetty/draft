@@ -68,7 +68,9 @@ const MUTATIONS = [
   ['the old cut is left when the roof moves again', 'boneyard-edit.js',
     c => c.replace('      r.cuts = r.cuts.filter(cut => cut.hoodOf !== String(roof.id));\n', '')],
   ['a cut roof keeps all its paper', 'geometry-2d.js',
-    c => c.replace('  return cutRoofFaces(faces, roof);\n};', '  return faces;\n};')],
+    // RE-AIMED (18 Oct): the plain roof's return now sits behind the cross
+    // gables' early-out.
+    c => c.replace('  if (!gables.length) return cutRoofFaces(faces, roof);\n', '  if (!gables.length) return faces;\n')],
   ['a face split by a cut keeps its seams as edges', 'geometry-2d.js',
     c => c.replace('    return t < -1e-9 || t > 1 + 1e-9;', '    return false;')],
   ['a ridge guide runs straight through a cut', 'geometry-2d.js',
