@@ -105,6 +105,20 @@
     font: 13px/1.45 var(--font-body);
     color: var(--ink-primary); }
   #plan { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
+  /* THE DIMENSION POP-UP: HORIZ / VERT / DIAG over the sheet while the tool
+     is up (Movie, 17 Oct: "it should be in PROPERTIES area but should also
+     pop up somewhere when the dimensions are in use"). */
+  /* AT THE FOOT OF THE SHEET, not its head: a string is most often stood off
+     above a house, and a pop-up there took the press that placed it. */
+  #dim-pop { position:fixed; bottom:72px; left:50%; transform:translateX(-50%); z-index:30;
+    display:flex; gap:4px; padding:4px 6px; border-radius:6px;
+    background: var(--surface-panel); border:1px solid var(--edge-panel); }
+  #dim-pop[hidden] { display:none; }
+  /* AUTO DIMS / HAND DIMS ON THE SHEET: two chips beside the north arrow
+     that show or hide each kind (Movie, 18 Oct). */
+  #dims-show { position:absolute; display:flex; gap:4px; pointer-events:auto; }
+  #dims-show[hidden] { display:none; }
+  #dims-show .sel-chip { flex:none; white-space:nowrap; padding:5px 7px; }
   /* THE LENGTH BOX, LIVE: a line in hand (Movie, 12 Oct: "brighten up the
      LENGTH BOX ... make it orange ... around the outside, but leave the inner
      part darker"). The shared sheet draws the glow; the page names its colour,
@@ -2813,6 +2827,22 @@
   const dimensions = () => (drawing?.dimensions || [])
     .filter(d => { const f = onActiveLevel(); return f.byLevel(d)
       && (f.viewId == null || d.view === f.viewId); });
+  // AUTO DIMS / HAND DIMS ON THE SHEET (Movie, 18 Oct): each kind can be put
+  // out of sight and back with a chip beside the north arrow. A string is
+  // AUTO when AUTO DIMS laid it and HAND otherwise. It is how the screen
+  // looks, not what the drawing holds -- the sheets in LAYOUT print every
+  // string their layers allow -- so it lives in this browser, not the .draft.
+  // `var` and a hoisted function because paint() reaches here before the
+  // page's consts are made.
+  var dimsHidden = readDimsHidden();
+  function readDimsHidden() {
+    try {
+      const v = JSON.parse(localStorage.getItem('model.dimsHidden') || '{}');
+      return { auto: v.auto === true, hand: v.hand === true };
+    } catch (e) { return { auto: false, hand: false }; }
+  }
+  function dimKind(d) { return d.auto === true ? 'auto' : 'hand'; }
+  const shownDimensions = () => dimensions().filter(d => !dimsHidden[dimKind(d)]);
   // NOTES TAKE THE DIMENSION RULE -- level, plus view where the level has views
   // -- and then one exclusion the bone applies on top of it. MODEL.dc.html:7025
   // filters `note.view !== 'stair'` AFTER _activeNotes(), which reads redundant
@@ -4653,7 +4683,7 @@
     }
     const env = dimensionEnv();
     const lit = new Set(selection.filter(entry => entry.type === 'dimension').map(entry => entry.item));
-    dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
+    shownDimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
       lit.has(dimension) ? { selected: true } : {}, env));
   };
 
@@ -5807,8 +5837,48 @@
         left: `${tx - 20}px`, top: `${(top + bottom) / 2 - 20}px`,
       });
     }
+    seatDimsShow(northDock, c, (top + bottom) / 2);
     syncNorthHands();
   };
+  // THE TWO CHIPS STAND LEFT OF THE ARROW, on its line, and only where there
+  // is something for them to do: a level with strings on it, or the
+  // DIMENSION tool up.
+  var dimsShowBox = null;
+  function seatDimsShow(dock, c, midY) {
+    if (!dimsShowBox) {
+      dimsShowBox = document.createElement('div');
+      dimsShowBox.id = 'dims-show';
+      dimsShowBox.dataset.dimsShow = '';
+      [['auto', 'AUTO DIMS'], ['hand', 'HAND DIMS']].forEach(([kind, label]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sel-chip';
+        btn.dataset.dimsShow = kind;
+        btn.textContent = label;
+        btn.title = `${label} -- show or hide them on the sheet`;
+        btn.addEventListener('click', () => {
+          dimsHidden = { ...dimsHidden, [kind]: !dimsHidden[kind] };
+          try { localStorage.setItem('model.dimsHidden', JSON.stringify(dimsHidden)); } catch (e) {}
+          // A string out of sight is out of hand too.
+          if (dimsHidden[kind] && selection.some(en => en.type === 'dimension' && dimKind(en.item) === kind)) {
+            setSelection(selection.filter(en => !(en.type === 'dimension' && dimKind(en.item) === kind)));
+          }
+          paint();
+        });
+        dimsShowBox.append(btn);
+      });
+      dock.append(dimsShowBox);
+    }
+    const any = dimensions().length > 0 || activeTool === 'dimension';
+    dimsShowBox.hidden = !any;
+    if (!any) return;
+    dimsShowBox.querySelectorAll('[data-dims-show]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(!dimsHidden[btn.dataset.dimsShow]));
+    });
+    const w = dimsShowBox.offsetWidth, hgt = dimsShowBox.offsetHeight;
+    dimsShowBox.style.left = `${c.x - NORTH_R - 16 - w}px`;
+    dimsShowBox.style.top = `${midY - hgt / 2}px`;
+  }
   // THE ARROW LIGHTS UNDER THE HAND, and it has to be wired rather than
   // styled: the needles are painted on the CANVAS, so no :hover rule can
   // reach them. The invisible hand over them is what the pointer actually
@@ -6457,6 +6527,8 @@
         // bands, its fixtures and door in the preview's faint ink, the tile
         // floor showing it is the room it will be.
         if (activeTool === 'fixture' && washroomPreset && cursorWorld) paintWashroomPreview();
+        // THE DIMENSION STRING IN HAND.
+        if (activeTool === 'dimension') paintDimPreview();
         // THE KITCHEN IN HAND, in the corner within reach of the cursor.
         if (activeTool === 'fixture' && kitchenPreset && cursorWorld) paintKitchenPreview();
         // WHAT THE PRESS WOULD DO, under the cursor: the piece TRIM takes away
@@ -10388,7 +10460,7 @@
     if (all) return out;
     if (filterAllows('outline')) outlines().forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
     if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
-    if (filterAllows('roof')) roofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
+    if (filterAllows('roof')) pickRoofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
     if (filterAllows('fenestration')) {
       openingsOn(walls()).forEach(({ opening, geometry }) =>
         out.push({ type: 'fenestration', item: opening, parts: [geometry.corners] }));
@@ -10507,7 +10579,7 @@
     sweep('stair', stairs());
     sweep('shape', shapes());
     sweep('roomtag', roomTags());
-    sweep('roof', roofs());
+    sweep('roof', pickRoofs());
     return out;
   };
 
@@ -10750,7 +10822,14 @@
   // not offered -- this file's rule everywhere. LAST in the chain, as on the
   // old page (_findRoofAt after the floor), so the walls and floors drawn
   // inside a footprint keep their clicks.
-  const roofAt = worldPt => roofs().slice().reverse()
+  // AND ON SITE, THE ROOF'S (Movie, 18 Oct: "i'd like to be able to select
+  // the roof and on this page and change the properties of the eave i
+  // clicked on"). The site plan paints the ROOF level's roofs over the
+  // footprint, so a roof painted there is a roof that can be picked there --
+  // the rule above, kept, for the one level that draws another's roofs.
+  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID
+    ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());
+  const roofAt = worldPt => pickRoofs().slice().reverse()
     .find(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)) || null;
 
   // Returns { type, item } or null, in the old page's precedence.
@@ -10770,7 +10849,7 @@
   const dimensionAt = worldPt => {
     const s = toS(worldPt);
     let best = null, bestD = SELECT_GRAB_PX;
-    dimensions().forEach(d => {
+    shownDimensions().forEach(d => {
       const line = dimDrawnLine(d);
       if (!line) return;
       const [p, q] = line;
@@ -10793,7 +10872,7 @@
     const n = dimNormal(grabbed);
     const at = p => p.x * n.x + p.z * n.z;
     const line = at(grabbed.start);
-    return dimensions().filter(d => {
+    return shownDimensions().filter(d => {
       const m = dimNormal(d);
       const parallel = Math.abs(m.x * n.z - m.z * n.x) < 1e-6;
       return parallel && Math.abs(at(d.start) - line) < 0.01 && Math.abs(at(d.end) - line) < 0.01;
@@ -10913,8 +10992,8 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
-      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes(),
-      dimension: dimensions(), note: notes() };
+      fixture: fixtures(), stair: stairs(), roof: pickRoofs(), roomtag: roomTags(), shape: shapes(),
+      dimension: shownDimensions(), note: notes() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -13505,6 +13584,13 @@
     const able = !activeCut() && !modalUp() && (breakRoofHeld() || selectedGroups().length > 0);
     if (!able) { breakState.roof = null; breakState.first = null; }
     breakButton.hidden = !able || !!rotateState?.open;
+    // A ROOF IS BROKEN, AN ASSEMBLY IS BUST (Movie, 18 Oct: "ASSEMBLY BREAK
+    // is different from ROOF EDGE BREAK" -- "lets go ASSEMBLY GROUP /
+    // ASSEMBLY BUST"). One button, the word for what it will do.
+    const roof = !!breakRoofHeld();
+    breakButton.textContent = roof ? 'BREAK' : 'BUST';
+    breakButton.title = roof ? 'BREAK — cut the roof in two, edge to edge'
+      : 'ASSEMBLY BUST — break the assembly into its pieces';
     breakButton.setAttribute('aria-pressed', String(!!breakState.roof));
   }
   const breakAt = (roof, world) => {
@@ -13586,7 +13672,7 @@
     const n = selectedGroups().length;
     if (!n) return;
     ungroupSelected();
-    sayOnStrip(`Broken into pieces: ${n === 1 ? 'the assembly is' : `${n} assemblies are`} gone and the pieces stay selected.`);
+    sayOnStrip(`ASSEMBLY BUST: broken into pieces, ${n === 1 ? 'the assembly is' : `${n} assemblies are`} gone and the pieces stay selected.`);
     paint();
   };
   if (breakButton) breakButton.addEventListener('click', pressBreak);
@@ -16947,7 +17033,7 @@
         .concat([{ list: drawing.groups, item: group }]),
     });
     sayOnStrip(`${room.name} placed${room.ext ? ' against the exterior wall' : ''} — `
-      + 'one assembly: UNGROUP to break it into pieces.');
+      + 'one assembly: ASSEMBLY BUST to break it into pieces.');
     markDirty();
     paint();
     return { walls: made, fixtures, doors, door: doors[0], group, levelId, viewId };
@@ -17051,7 +17137,7 @@
         .concat([{ list: drawing.groups, item: group }]),
     });
     sayOnStrip(`${kitchen.name} placed ${ownWalls.length ? 'with its own two walls' : 'in the corner'} \u2014 `
-      + 'one assembly: UNGROUP to break it into pieces. One UNDO takes it all.');
+      + 'one assembly: ASSEMBLY BUST to break it into pieces. One UNDO takes it all.');
     markDirty();
     paint();
     return { fixtures: made, walls: ownWalls, group };
@@ -22938,7 +23024,8 @@
     // The house's rays light under the cursor before the garage's first corner.
     || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
     || (rulerOn && !!rulerFrom)
-    || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset));
+    || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset))
+    || (activeTool === 'dimension' && dimPoints.length > 0);
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
@@ -23655,7 +23742,7 @@
     const notesSaid = lettered.length
       ? ` and ${lettered.length.toLocaleString()} note${lettered.length === 1 ? '' : 's'}` : '';
     sayOnStrip(`${made.length.toLocaleString()} line${made.length === 1 ? '' : 's'}${notesSaid} from ${scan.file.name} on `
-      + `${traceLevelName()}${group ? ', as one group \u2014 drag it into place, UNGROUP to edit single pieces' : ''}.`);
+      + `${traceLevelName()}${group ? ', as one group \u2014 drag it into place, ASSEMBLY BUST to edit single pieces' : ''}.`);
   };
 
   // THE DXF IS KEPT AS THE FILE, and drawn from it: its lines are never
@@ -24804,6 +24891,7 @@
     if (!cursorWorld) return false;
     if (activeTool === 'outline' && outlineCorners.length) { outlinePress(cursorWorld); return true; }
     if (drawsRun() && drawStart) { drawPress(cursorWorld); return true; }
+    if (activeTool === 'dimension' && dimPoints.length) return endDimString();
     return false;
   };
   window.addEventListener('keydown', e => {
@@ -25587,7 +25675,7 @@
     if (n) {
       createAssembly(true);
       const group = selectedGroups()[0];
-      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. UNGROUP breaks it.`);
+      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. ASSEMBLY BUST breaks it.`);
     } else {
       sayOnStrip('Nothing picked, so no assembly was made.');
     }
@@ -25939,9 +26027,11 @@
       // still find ASSEMBLY down, or the rule holds only while nothing is
       // picked, which is the half nobody would test.
       const on = window.DraftToolRoster?.panelOn('assembly', board) !== false;
-      asmBtn.textContent = gKey ? `ASSEMBLY  [${gKey}]` : 'ASSEMBLY';
+      asmBtn.textContent = gKey ? `ASSEMBLY GROUP  [${gKey}]` : 'ASSEMBLY GROUP';
       asmBtn.disabled = !on || n === 0;
-      unBtn.textContent = 'UNGROUP';
+      // ASSEMBLY GROUP / ASSEMBLY BUST (Movie, 18 Oct): BREAK is the roof's
+      // cut along its edges, so the assembly's own undoing has its own word.
+      unBtn.textContent = 'ASSEMBLY BUST';
       unBtn.disabled = !on || held.length === 0;
       unBtn.hidden = held.length === 0;
       // THE LOCK VERBS ARE SYNCED HERE, in the same pass that owns these
@@ -27332,12 +27422,187 @@
     const note = document.createElement('div');
     note.className = 'props-title';
     note.dataset.dimensionNote = '';
-    note.textContent = 'STRINGS THE ACTIVE LEVEL. DRAWING ONE BY HAND IS NOT '
-      + 'BUILT YET.';
+    note.textContent = 'AUTO DIMS STRINGS THE ACTIVE LEVEL. BY HAND: CLICK POINTS, '
+      + 'ENTER OR DOUBLE-CLICK ENDS THE STRING, THEN CLICK WHERE IT GOES.';
 
-    box.append(row, note);
+    // HORIZ / VERT / DIAG (Movie, 17 Oct: "D command ... VERT or HORIZ ...
+    // DIAG"), the same three on the pop-up beside the sheet.
+    const modes = document.createElement('div');
+    modes.className = 'chip-row';
+    modes.dataset.dimModes = '';
+    DIM_MODES.forEach(([id, label]) => modes.append(dimModeButton(id, label)));
+
+    box.append(modes, row, note);
     P.set('DIMENSION', box);
     dimensionPanelUp = true;
+    syncDimModes();
+  };
+
+  // ── DIMENSIONS BY HAND (Movie, 17-18 Oct) ──────────────────────────────
+  //
+  // "i need to make the NORMAL style dimension ... D command ... VERT or
+  // HORIZ ... DIAG" -- "aloow the user to make a line of dimensions and then
+  // press enter or double click to end the string and the next click will
+  // position the dimensions". Points are pressed one after another, snapped
+  // the way a wall's are (a node, the cross lines, a corner); ENTER or a
+  // double-click ends the string; the next press says how far off the points
+  // the string stands. HORIZ measures across, VERT up and down, DIAG along
+  // the first point to the last -- or along the locked ANGLE.
+  //
+  // THEY LOOK LIKE THE AUTO DIMS ("same as the autodims look"): the same
+  // records, the same painter, on their own layer, A-DIMS-HAND, auto false --
+  // so AUTO DIMS never sweeps them and the two switch apart.
+  const DIM_MODES = [['h', 'HORIZ'], ['v', 'VERT'], ['d', 'DIAG']];
+  const DIM_HAND_LAYER = 'A-DIMS-HAND';
+  let dimMode = 'h';
+  let dimPoints = [];
+  let dimPlacing = false;
+  const dimModeButton = (id, label) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sel-chip';
+    btn.dataset.dimMode = id;
+    btn.textContent = label;
+    btn.addEventListener('click', () => { dimMode = id; syncDimModes(); paint(); });
+    return btn;
+  };
+  const syncDimModes = () => {
+    document.querySelectorAll('[data-dim-mode]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.dimMode === dimMode));
+      btn.classList.toggle('lit', btn.dataset.dimMode === dimMode);
+    });
+  };
+  // THE POP-UP: the three modes over the sheet while the tool is up, so the
+  // drafter need not go back to PROPERTIES between strings.
+  let dimPop = null;
+  const syncDimPop = () => {
+    const up = activeTool === 'dimension' && !activeCut();
+    if (up && !dimPop) {
+      dimPop = document.createElement('div');
+      dimPop.id = 'dim-pop';
+      dimPop.dataset.dimPop = '';
+      DIM_MODES.forEach(([id, label]) => dimPop.append(dimModeButton(id, label)));
+      canvas.parentElement.append(dimPop);
+    }
+    if (dimPop) dimPop.hidden = !up;
+    if (up) syncDimModes();
+  };
+  // A point as the string takes it: on a node, on a cross line, on a corner,
+  // or where it was pressed. TOY has no SNAP or TRACK; its corners still take.
+  const dimPoint = at => {
+    const snap = board !== 'toy' ? drawSnap(at) : {};
+    const p = snap.pt || cornerSnap(at, []) || at;
+    return { x: p.x, z: p.z };
+  };
+  const dimDirection = points => {
+    if (dimMode === 'h') return { x: 1, z: 0 };
+    if (dimMode === 'v') return { x: 0, z: 1 };
+    const lock = angleLockDeg();
+    if (lock != null) return { x: Math.cos(lock * Math.PI / 180), z: -Math.sin(lock * Math.PI / 180) };
+    const a = points[0], b = points[points.length - 1];
+    const len = a && b ? Math.hypot(b.x - a.x, b.z - a.z) : 0;
+    return len > 1e-6 ? { x: (b.x - a.x) / len, z: (b.z - a.z) / len } : null;
+  };
+  // THE STRING, STANDING THROUGH `at`: every point carried square on to the
+  // line through `at` along the string's direction, and a dimension between
+  // each pair. drawDimension2D stands its line off to the LEFT of start ->
+  // end, so each piece is turned to put that side away from what it
+  // measures, where the ink belongs.
+  const dimString = (points, at) => {
+    const u = points.length >= 2 ? dimDirection(points) : null;
+    if (!u || !at) return [];
+    const n = { x: -u.z, z: u.x };
+    const o = points[0];
+    const off = (at.x - o.x) * n.x + (at.z - o.z) * n.z;
+    const q = points.map(p => {
+      const along = (p.x - o.x) * u.x + (p.z - o.z) * u.z;
+      return { x: o.x + u.x * along + n.x * off, z: o.z + u.z * along + n.z * off, from: p };
+    });
+    const out = [];
+    for (let i = 0; i + 1 < q.length; i += 1) {
+      const a = q[i], b = q[i + 1];
+      if (Math.hypot(b.x - a.x, b.z - a.z) < 0.01) continue;
+      const left = { x: -(b.z - a.z), z: b.x - a.x };
+      const away = (a.x - a.from.x + b.x - b.from.x) * left.x + (a.z - a.from.z + b.z - b.from.z) * left.z;
+      const [s0, s1] = away < 0 ? [b, a] : [a, b];
+      out.push({ start: { x: s0.x, y: 0, z: s0.z }, end: { x: s1.x, y: 0, z: s1.z } });
+    }
+    return out;
+  };
+  const endDimString = () => {
+    if (dimPlacing) return false;
+    if (dimPoints.length < 2) {
+      sayOnStrip('DIMENSION — press two points at least, then ENTER or double-click.');
+      return false;
+    }
+    dimPlacing = true;
+    sayOnStrip(`DIMENSION — ${dimPoints.length - 1} to place: click where the string goes.`);
+    return true;
+  };
+  const dimPress = at => {
+    if (dimPlacing) {
+      const pieces = dimString(dimPoints, at);
+      if (!pieces.length) { sayOnStrip('DIMENSION — those points measure nothing that way.'); return; }
+      const { levelId } = onActiveLevel();
+      const view = activeViewId() || 'plan';
+      if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
+      const made = pieces.map(piece => {
+        const record = { id: newDimensionId(), start: piece.start, end: piece.end, levelId, view,
+          layer: DIM_HAND_LAYER, auto: false };
+        drawing.dimensions.push(record);
+        return record;
+      });
+      undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
+        items: made.map(item => ({ list: drawing.dimensions, item })) });
+      dimPoints = [];
+      dimPlacing = false;
+      sayOnStrip(`DIMENSION — ${made.length} placed. Press the next string's first point.`);
+      markDirty();
+      paint();
+      return;
+    }
+    const p = dimPoint(at);
+    const last = dimPoints[dimPoints.length - 1];
+    // The second press of a double-click lands where the first did: it is
+    // the end of the string, not another point.
+    if (last && Math.hypot(p.x - last.x, p.z - last.z) < 1e-6) return;
+    dimPoints.push(p);
+    sayOnStrip(dimPoints.length === 1 ? 'DIMENSION — the next point'
+      : `DIMENSION — ${dimPoints.length} points: the next, or ENTER / double-click to end the string`);
+    paint();
+  };
+  // A DOUBLE-CLICK ENDS THE STRING, as ENTER does. Its two presses landed on
+  // one point, which dimPress took once.
+  canvas.addEventListener('dblclick', e => {
+    if (activeTool !== 'dimension' || dimPlacing || !dimPoints.length) return;
+    e.preventDefault();
+    if (endDimString()) paint();
+  });
+  // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
+  // through the register's listeners, because setTool runs at load, before
+  // this block has declared anything.
+  toolListeners.push(next => {
+    if (next !== 'dimension') { dimPoints = []; dimPlacing = false; }
+    syncDimPop();
+    seatNorthDock();
+  });
+  // THE STRING IN HAND, in the preview's ink: along the points while they
+  // are being pressed (the cursor the next one), off them where the cursor
+  // is once the string is ended.
+  const paintDimPreview = () => {
+    const R = window.DraftRender2D;
+    if (!R || !cursorWorld || activeTool !== 'dimension') return;
+    const pieces = dimPlacing ? dimString(dimPoints, cursorWorld)
+      : dimPoints.length ? dimString(dimPoints.concat([dimPoint(cursorWorld)]), dimPoints[0]) : [];
+    const env = dimensionEnv();
+    pieces.forEach(piece => R.drawDimension2D(ctx, toS, piece, { preview: true }, env));
+    ctx.save();
+    ctx.fillStyle = skin['draw-dim'];
+    dimPoints.forEach(p => {
+      const s = toS(p);
+      ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
   };
 
   // ── THE ANNOTATION PANEL ─────────────────────────────────────────────────
@@ -28008,8 +28273,10 @@
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || elevLineStart
-      || outlineCorners.length || floorCorners.length || shapeCorners.length);
+      || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length);
     drawStart = null;
+    dimPoints = [];
+    dimPlacing = false;
     rulerFrom = null;
     beamStart = null;
     cutStart = null;
@@ -28311,6 +28578,7 @@
       return;
     }
     if (activeTool === 'cut') { cutPress(at); return; }
+    if (activeTool === 'dimension') { dimPress(at); return; }
     if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
     if (drawsRun()) {
       // §1: "either drag, or press again and drag -- both must work". The lift

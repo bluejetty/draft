@@ -69,8 +69,11 @@ const MUTANTS = [
     find: "        roofScopeOne ? 'one' : 'assembly', id => { roofScopeOne = id === 'one'; again(); }));\n",
     with: "        roofScopeOne ? 'one' : 'assembly', id => { again(); }));\n",
     test: 'a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS ROOF alone' },
+  { file: 'MODEL.html', name: 'the SITE plan offers no roof to pick',
+    find: "    ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());\n",
+    with: "    ? [] : roofs());\n",
+    test: 'on SITE the roof picks, and the edge clicked takes its overhang' },
 ];
-
 const run = name => {
   try {
     execSync(`npx playwright test ${SPEC} --workers=1 --reporter=line`

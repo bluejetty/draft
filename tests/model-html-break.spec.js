@@ -54,6 +54,7 @@ test('a roof selected: BREAK in the foot; two clicks edge to edge cut it in two 
   const { at } = await open(page);
   await click(page, at, 30, 15);
   await expect(page.locator('#model-break')).toBeVisible();
+  await expect(page.locator('#model-break')).toHaveText('BREAK');
   await page.locator('#model-break').click();
   await expect(page.locator('#model-break')).toHaveAttribute('aria-pressed', 'true');
   await click(page, at, 10, -7.9);
@@ -108,12 +109,16 @@ test('Esc puts a roof BREAK down with nothing cut', async ({ page }) => {
   expect((await saved(page)).roofs).toHaveLength(1);
 });
 
-test('an assembly selected: BREAK breaks it into its pieces', async ({ page }) => {
+// ASSEMBLY GROUP / ASSEMBLY BUST (Movie, 18 Oct): "ASSEMBLY BREAK is
+// different from ROOF EDGE BREAK" -- the same button says BUST for one.
+test('an assembly selected: the foot button says BUST and busts it into its pieces; a roof\'s says BREAK', async ({ page }) => {
   const { at } = await open(page, 3);
   await click(page, at, 3, 0);
   await expect(page.locator('#model-break')).toBeVisible();
+  await expect(page.locator('#model-break')).toHaveText('BUST');
+  await expect(page.locator('[data-assembly-ungroup]')).toHaveText('ASSEMBLY BUST');
   await page.locator('#model-break').click();
-  await expect(page.locator('#strip-message')).toContainText('Broken into pieces');
+  await expect(page.locator('#strip-message')).toContainText('ASSEMBLY BUST: broken into pieces');
   const d = await saved(page);
   expect(d.groups || []).toHaveLength(0);
   expect(d.walls.map(w => w.id).sort()).toEqual(['a', 'b']);
