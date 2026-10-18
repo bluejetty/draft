@@ -26,7 +26,7 @@ const MUTANTS = [
     find: '      rotateSelection(deg);\n      box.value = \'\';\n',
     with: "      box.value = '';\n", test: 'a typed angle, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'UNDO forgets the turn',
-    find: "    undoStack.push({ kind: 'rotate', before, detached });\n",
+    find: "    undoStack.push({ kind: 'rotate', before, detached, wells });\n",
     with: '', test: 'a typed angle, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'one wall of a WC turns alone',
     find: '      if (!owner || owner.fixed !== true) return;\n      itemsOfGroup(owner)',
