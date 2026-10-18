@@ -13923,7 +13923,7 @@
   const roofGainsNode = (roof, at) => {
     const i = at.index, n = roof.points.length;
     const y = roof.points[0]?.y ?? 0;
-    const kinds = roof.points.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
+    const kinds = roof.points.map((_, k) => roofEdgeKind(roof.edges?.[k]));
     const overs = roofOverhangs(roof);
     const foot = roofFootprint(roof);
     roof.points = [...roof.points.slice(0, i + 1), { x: at.p.x, y, z: at.p.z }, ...roof.points.slice(i + 1)];
@@ -14147,7 +14147,7 @@
     ...(roof.footprint ? { footprint: roof.footprint.map(p => ({ ...p })) } : {}),
     ...(roof.crossGables ? { crossGables: roof.crossGables.map(g => ({ ...g, at: { ...g.at } })) } : {}) });
   const normaliseForMove = roof => {
-    roof.edges = roof.points.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
+    roof.edges = roof.points.map((_, k) => roofEdgeKind(roof.edges?.[k]));
     roof.edgeOverhang = roofOverhangs(roof).slice();
     const { foot } = roofRings(roof);
     if (foot) roof.footprint = foot.map(p => ({ x: p.x, y: roof.points[0]?.y ?? 0, z: p.z }));
@@ -14173,6 +14173,14 @@
     if (!roof || roof.points.length <= 3) { sayOnStrip('A roof needs three corners at least.'); return; }
     const before = roofBefore(roof);
     normaliseForMove(roof);
+    // A CORNER TAKEN OUT LEAVES A SLOPED EDGE (Movie, 18 Oct: "that corner
+    // node i would delete to cut off the corner and match the 45 (it would be
+    // a sloped eave)"): the planes stay, cut along the new edge. A node on a
+    // straight run just goes.
+    const n0 = roof.points.length;
+    const p0 = roof.points[(i - 1 + n0) % n0], c0 = roof.points[i], q0 = roof.points[(i + 1) % n0];
+    const turn = Math.abs((c0.x - p0.x) * (q0.z - c0.z) - (c0.z - p0.z) * (q0.x - c0.x));
+    if (turn > 1e-6) roof.edges[(i - 1 + n0) % n0] = 'sloped';
     roof.points.splice(i, 1);
     roof.edges.splice(i, 1);
     roof.edgeOverhang.splice(i, 1);
@@ -14181,7 +14189,7 @@
     moveState.node = null;
     markDirty();
     setSelection([...selection]);
-    sayOnStrip('Node taken out; its two edges join. UNDO puts it back.');
+    sayOnStrip('Node taken out: the new edge is SLOPED -- the roof planes kept, cut along it. UNDO puts it back.');
     paint();
   };
   if (moveButton) moveButton.addEventListener('click', pressMove);
@@ -27748,7 +27756,10 @@
     roof.follows = 'none';
     return null;
   };
-  const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE']];
+  // SLOPED (Movie, 18 Oct): the planes either side kept, cut off along this
+  // edge (geometry-2d slopedVirtual) -- what a corner node DELETEd leaves.
+  const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE'], ['sloped', 'SLOPED']];
+  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' ? k : 'eave');
   // A ROOF IN AN ASSEMBLY WITH OTHER ROOFS (Movie, 18 Oct): "ASSEMBLY roof
   // peices that are similar so i can adjust the EAVE and PITCH for the
   // grouped roofs seperately but be able to edit the properties of all as one
@@ -27811,12 +27822,12 @@
       box.append(head);
       if (roofEdgeIdx != null) {
         const index = roofEdgeIdx;
-        const kind = lone.edges?.[index] === 'gable' ? 'gable' : 'eave';
+        const kind = roofEdgeKind(lone.edges?.[index]);
         box.append(propRow('EDGE', ROOF_EDGE_KINDS, kind, id => {
           if (id === kind) return;
           editRoofs([lone], roof => {
             roof.edges = roof.points.map((_, i) => (i === index ? id
-              : (roof.edges?.[i] === 'gable' ? 'gable' : 'eave')));
+              : roofEdgeKind(roof.edges?.[i])));
             roof.follows = 'none';
             return null;
           });

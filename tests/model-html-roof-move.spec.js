@@ -104,6 +104,58 @@ test('a node dragged moves alone; a node clicked is picked and DELETE takes it o
   expect(ring(roof.points)).not.toContainEqual([12, 44]);
   expect(roof.edges).toHaveLength(7);
   expect(roof.footprint).toHaveLength(7);
+  // A CORNER TAKEN OUT LEAVES A SLOPED EDGE, from (48, 44) to (12, 38).
+  const k = ring(roof.points).findIndex(p => p[0] === 48 && p[1] === 44);
+  expect(roof.edges[k]).toBe('sloped');
+});
+
+// THE CORNER CUT AT 45, THE PLANES KEPT (Movie, 18 Oct: "that corner node i
+// would delete to cut off the corner and match the 45 (it would be a sloped
+// eave)" -- "keep the PLANE / SLOPE of roof FIXED").
+test('a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  const R = [[0, 0], [60, 0], [60, 30], [0, 30]];
+  const f = drawing();
+  f.roofs[0] = { ...f.roofs[0], points: R.map(([x, z]) => ({ x, y: 0, z })),
+    edges: R.map(() => 'eave'), edgeOverhang: R.map(() => 8) };
+  delete f.roofs[0].footprint;
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  await click(page, at, 30, 15);
+  // BREAK puts a node 10' along each side of the corner (0, 30), then the
+  // corner is DELETEd: the 45 between them.
+  await page.locator('#model-break').click();
+  await click(page, at, 10, 29.9);
+  await click(page, at, 0.1, 20);
+  await page.keyboard.press('Enter');
+  await page.locator('#model-move').click();
+  await click(page, at, 0, 30);
+  await page.keyboard.press('Delete');
+  const roof = await saved(page);
+  expect(ring(roof.points)).toEqual([[0, 0], [60, 0], [60, 30], [10, 30], [0, 20]]);
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'sloped', 'eave']);
+  // THE PLANES ARE THE CORNER'S: the hip from the old corner reaches the
+  // sloped edge at its middle, 5' in from each eave -- 5' x 4/12 up.
+  const rise = await page.evaluate(r => {
+    const Gm = window.DraftGeometry2D;
+    const faces = Gm.roofFaces(r, Gm.roofSkeleton(r));
+    const mid = { x: 5, z: 25 };
+    // One pitch all round: the roof over a point is the lowest of its planes.
+    return Math.min(...faces.map(fc => Gm.roofFaceRise(fc, mid, r.pitch)));
+  }, roof);
+  expect(rise).toBeCloseTo(5 * 4 / 12, 6);
+  // The edge panel says SLOPED for it.
+  await page.keyboard.press('Escape');
+  await click(page, at, 30, 15);
+  await click(page, at, 5, 25);
+  await expect(page.locator('[data-prop-row="edge"] [data-prop-value="sloped"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('a drag inside the roof moves the whole roof', async ({ page }) => {
