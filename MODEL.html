@@ -4777,7 +4777,9 @@
     const R = window.DraftRender2D;
     const kitchen = kitchenPlacement(cursorWorld);
     if (!R || !kitchen || kitchen.refused) return;
-    const all = walls();
+    // ITS OWN WALLS, when it brings them, as the rubber band draws a wall.
+    (kitchen.own || []).forEach(w => R.drawWallSeg2D(ctx, toS, w, true, null, 'both', wallEnv()));
+    const all = walls().concat(kitchen.own || []);
     const env = presetPreviewEnv(all);
     kitchen.fixtures.forEach(f => {
       const record = { kind: f.kind, wallId: f.wall.id, offset: f.offset, width: f.width,
@@ -14282,9 +14284,39 @@
     // The lock and the hand both turn in the outline's own step: a quarter
     // turn on TOY, an eighth on DRAFTING.
     const step = outlineStep();
-    const square = lockedPoint(from, at, { step }) || outlineHand(from, at, step);
+    const locked = lockedPoint(from, at, { step });
+    // ── ON DRAFTING THE OUTLINE OBEYS THE INSTRUMENTS, AS A WALL DOES ──────
+    // Movie, 17 Oct, tracing the North Point building to the inch: "i have
+    // the T and PROTRACTOR both turned OFF and angle i deleted to make sure
+    // but it doesn't allow the line to move freely and i can't finish this
+    // PRECISE outline". With the T-square lit it turns square; with an angle
+    // locked it holds it; with neither the hand is FREE, and a pressed corner
+    // is not rounded to the foot unless the 1' light is on -- it lands where
+    // it is pressed, or on a corner, or on the first corner's line square to
+    // it (the orange ray), so the loop can always be brought home. TOY keeps
+    // its law: square, on the foot.
+    if (board !== 'toy' && !locked) {
+      const hand = tsquareOn ? outlineHand(from, at, 90) : outlineAligned(at);
+      const pt = onTheFoot_if() ? onTheFoot(from, hand) : hand;
+      return { x: pt.x, z: pt.z };
+    }
+    const square = locked || outlineHand(from, at, step);
     const footed = onTheFoot(from, square);
     return { x: footed.x, z: footed.z };
+  };
+  // A FREE PRESS, SNAPPED: onto a corner if one is in reach, else onto the
+  // first corner's own lines (the orange rays, square to it) if the press is
+  // within a few pixels of one, else exactly where it was pressed.
+  const outlineAligned = at => {
+    const corner = cornerSnap(at, []);
+    const first = outlineCorners[0];
+    if (first && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
+    if (corner) return { x: corner.x, z: corner.z };
+    const reach = (CORNER_SNAP_PX * 2) / view.scale;
+    const out = { x: at.x, z: at.z };
+    if (first && Math.abs(at.x - first.x) <= reach) out.x = first.x;
+    if (first && Math.abs(at.z - first.z) <= reach) out.z = first.z;
+    return out;
   };
   // THE HAND'S BEARING, ROUNDED TO THE STEP, and the point on it nearest the
   // hand. A quarter turn is the square it always was, written as it was --
@@ -14326,6 +14358,9 @@
   const OUTLINE_HOME_FT = 1 / 96;
   const homeTail = () => {
     const first = outlineCorners[0], last = outlineTail();
+    // FREE, THE EDGE HOME IS WHATEVER IT IS: on DRAFTING with no instrument
+    // lit the outline turns at any angle, so its last edge may too.
+    if (board !== 'toy' && !tsquareOn && angleLockDeg() == null) return last;
     const prev = outlineCorners[outlineCorners.length - 2];
     const dx = first.x - last.x, dz = first.z - last.z;
     const r = Math.SQRT1_2;
@@ -14351,7 +14386,8 @@
   // gives both, so he can check one against the other.
   const sayDiagonal = (a, b) => {
     const dx = Math.abs(b.x - a.x), dz = Math.abs(b.z - a.z);
-    if (dx < 1e-6 || dz < 1e-6) return;
+    // A TRUE 45 ONLY: a free edge at any other angle has no legs to quote.
+    if (dx < 1e-6 || dz < 1e-6 || Math.abs(dx - dz) > 1e-6) return;
     const say = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
     sayOnStrip(`45° edge ${say(Math.hypot(dx, dz))} — ${say(dx)} each way`);
   };
@@ -16296,32 +16332,50 @@
   // afterwards, which is what Movie asked of the old page's L PRESET too.
   let kitchenPreset = null;            // 'L1' | null
   let kitchenFlip = false;
+  let kitchenTurn = 0;                 // degrees, quarter turns -- open floor only
 
+  // WHERE THE KITCHEN IN HAND WOULD GO. A corner of two walls within reach
+  // takes it, as before; anywhere else it brings its own two walls (Movie,
+  // 17 Oct: "not working yet like the WCs which work good"), turned by [ and
+  // ], so the ghost is always under the cursor and a press always drops it.
+  // `own` carries those walls when it brings them.
   const kitchenPlacement = at => {
     const KP = window.DraftKitchenPresets;
     const FG = window.DraftFixtureGeometry;
     const K = window.DraftFixtureKinds;
     if (!KP || !FG || !K || !kitchenPreset || !at) return null;
+    const depthOf = kind => K.kindFor(kind).depthFt;
     const corner = KP.findCorner(walls(), at, FG);
-    if (!corner) return null;
-    return KP.place(kitchenPreset, corner, { flip: kitchenFlip, depthOf: kind => K.kindFor(kind).depthFt });
+    if (corner) return KP.place(kitchenPreset, corner, { flip: kitchenFlip, depthOf });
+    const { levelId, viewId } = onActiveLevel();
+    const own = KP.ownWalls(kitchenPreset, at, kitchenTurn);
+    own.walls.forEach(w => { w.levelId = levelId; w.view = wallHomeView(viewId); w.id = `kitchen-${w.key}`; });
+    const theirs = KP.findCorner(own.walls, own.inside, FG);
+    const kitchen = theirs && KP.place(kitchenPreset, theirs, { flip: kitchenFlip, depthOf });
+    return kitchen && !kitchen.refused ? { ...kitchen, own: own.walls } : null;
   };
 
   const dropKitchen = at => {
-    const KP = window.DraftKitchenPresets;
     const kitchen = kitchenPlacement(at);
-    if (!kitchen) {
-      sayOnStrip(`Press inside a corner two walls make \u2014 within ${KP ? KP.REACH_FT : 4}' of it.`);
-      return null;
-    }
+    if (!kitchen) { sayOnStrip('That kitchen does not fit there.'); return null; }
     if (kitchen.refused) { sayOnStrip(kitchen.refused); return null; }
     if (!Array.isArray(drawing.fixtures)) drawing.fixtures = [];
+    // ITS OWN WALLS FIRST, when it brought them: filed as ordinary 2x4s
+    // through commitWall, the shared corner pooled into one point so it
+    // mitres, and the pieces re-hosted from the stand-ins to the real walls.
+    const mark = undoStack.length;
+    const builtWalls = (kitchen.own || []).map(w => ({
+      stand: w, wall: commitWall(w.start, w.end, { bone: false, refLine: 'center', wallType: w.wallType }),
+    }));
+    undoStack.length = mark;
+    const hostOf = wall => (builtWalls.find(b => b.stand === wall) || { wall }).wall;
     const made = kitchen.fixtures.map(f => {
+      const host = hostOf(f.wall);
       const record = {
         id: newDrawingItemId('fixture'),
-        wallId: f.wall.id,
-        levelId: f.wall.levelId,
-        view: f.wall.view || 'plan',
+        wallId: host.id,
+        levelId: host.levelId,
+        view: host.view || 'plan',
         kind: f.kind,
         layer: FIXTURE_LAYER,
         offset: f.offset,
@@ -16332,16 +16386,37 @@
       drawing.fixtures.push(record);
       return record;
     });
-    // ONE STEP BACK TAKES THE KITCHEN: the same 'built' step a washroom
-    // files, with no walls of its own in it.
+    // ONE ASSEMBLY (Movie, 17 Oct: "each of the preselected items should be
+    // all ASSEMBLY (Grouped as one item) but that can be broken apart into
+    // smaller item ASSEMBLIES like Cabinet / Toilet / Stove"): its pieces,
+    // and its own walls when it brought them -- then rigid, so a wall of it
+    // dragged takes the whole kitchen, as a washroom's does. UNGROUP leaves
+    // the pieces.
+    const ownWalls = builtWalls.map(b => b.wall);
+    const n = nextGroupNumber();
+    const group = {
+      id: `group-${n}`,
+      name: kitchen.name,
+      fixed: ownWalls.length > 0,
+      stretchBehavior: ownWalls.length ? 'rigid' : 'item-geometry',
+      preset: { kind: 'kitchen', id: kitchen.id, flip: kitchenFlip, angleDeg: kitchenTurn },
+      members: ownWalls.map(wall => ({ type: 'wall', id: wall.id }))
+        .concat(made.map(item => ({ type: 'fixture', id: item.id }))),
+    };
+    drawing.groups = groups();
+    drawing.groups.push(group);
+    drawing.nextGroupId = 1 + n;
+    // ONE STEP BACK TAKES THE KITCHEN, its walls and its assembly with it.
     undoStack.push({
-      kind: 'built', walls: [], outlines: [], list: null,
-      items: made.map(item => ({ list: drawing.fixtures, item })),
+      kind: 'built', walls: ownWalls, outlines: [], list: null,
+      items: made.map(item => ({ list: drawing.fixtures, item }))
+        .concat([{ list: drawing.groups, item: group }]),
     });
-    sayOnStrip(`${kitchen.name} placed \u2014 ${made.length} pieces on two walls, each movable; one UNDO takes them all.`);
+    sayOnStrip(`${kitchen.name} placed ${ownWalls.length ? 'with its own two walls' : 'in the corner'} \u2014 `
+      + 'one assembly: UNGROUP to break it into pieces. One UNDO takes it all.');
     markDirty();
     paint();
-    return { fixtures: made };
+    return { fixtures: made, walls: ownWalls, group };
   };
 
   // WHAT THIS DOES NOT DO YET, said rather than left to be discovered: the TUB
@@ -23395,6 +23470,7 @@
     if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
     const turn = { BracketLeft: -90, BracketRight: 90 }[event.code];
     if (turn && washroomPreset) washroomTurn = ((washroomTurn + turn) % 360 + 360) % 360;
+    else if (turn && kitchenPreset) kitchenTurn = ((kitchenTurn + turn) % 360 + 360) % 360;
     else if (event.code === 'KeyF' && washroomPreset) washroomFlip = !washroomFlip;
     else if (event.code === 'KeyF') kitchenFlip = !kitchenFlip;
     else if (event.key === 'Escape') { washroomPreset = null; kitchenPreset = null; syncFixturePanel(); }
@@ -24822,7 +24898,11 @@
       headRow.className = 'sel-row';
       headRow.dataset.assembledRow = group.toLowerCase();
       head.append(title, headRow);
-      K.kindsInGroup(group).forEach(kind => {
+      // THE OLD PAGE'S L PRESET IS NOT OFFERED HERE (Movie, 17 Oct: "i just
+      // need the KITCHEN L1 don't worry about the othe L PReset one"). It
+      // stays in the shared catalogue, where MODEL.dc.html still builds it;
+      // this page only ever answered it with "not on this page yet".
+      K.kindsInGroup(group).filter(kind => kind.preset !== true).forEach(kind => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `sel-chip${kind.preset ? ' assembled' : ''}`;
@@ -24884,7 +24964,7 @@
         btn.className = 'sel-chip assembled';
         btn.dataset.kitchen = id;
         btn.textContent = preset.name;
-        btn.title = `${preset.label} — press inside a corner two walls make; F swaps the legs, Esc puts it down.`;
+        btn.title = `${preset.label} — press to drop it: into a corner two walls make, or with its own two walls anywhere else; [ ] turn it, F swaps the legs, Esc puts it down.`;
         btn.addEventListener('click', () => {
           kitchenPreset = id;
           washroomPreset = null;
@@ -24921,7 +25001,7 @@
       help.textContent = activeTool === 'fixture' && washroomPreset
         ? `${window.DraftWashroomPresets.PRESETS[washroomPreset].label}: press to drop it — [ ] turn, F mirror, Esc to put it down.`
         : activeTool === 'fixture' && kitchenPreset
-        ? `${window.DraftKitchenPresets.PRESETS[kitchenPreset].label}: press inside a corner two walls make — F swaps the legs, Esc to put it down.`
+        ? `${window.DraftKitchenPresets.PRESETS[kitchenPreset].label}: press to drop it — into a corner two walls make, or with its own two walls anywhere else. [ ] turn, F swaps the legs, Esc to put it down.`
         : activeTool === 'fixture'
         ? (fixtureRunStart
           ? `Press the other end of the ${kind.label.toLowerCase()} run.`

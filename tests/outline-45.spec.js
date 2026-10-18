@@ -56,17 +56,24 @@ test('on DRAFTING a typed 45 lays the chamfer, says its legs, and the typed edge
   await open(page, 'drafting');
   const { at } = await h.planFrame(page);
   await h.selectTool(page, 'outline');
+  // SQUARE LEGS UNDER THE T-SQUARE: on DRAFTING the outline obeys the
+  // instruments, and with none lit the hand is free.
+  await page.locator('[data-mode-tsquare]').click();
   await page.mouse.click(...at(0, 0));
   await typeEdge(page, at, [40, 0], '30');
   await typeEdge(page, at, [30, 30], '20');
   await typeEdge(page, at, [5, 20], '20');
-  // The chamfer, aimed on the diagonal: 10' each way is a diagonal of
-  // 14.1421', and the nearest sixteenth is 14'-1 11/16" -- just short.
+  // The chamfer, on an angle locked to 135 (north-west): 10' each way is a
+  // diagonal of 14.1421', and the nearest sixteenth is 14'-1 11/16" -- just short.
+  await page.locator('#frozen-angle').fill('135');
+  await page.locator('#frozen-angle').press('Enter');
+  await page.locator('[data-mode-protractor]').click();
   await typeEdge(page, at, [0, 10], '14-1 11/16');
   await expect(page.locator('#strip-message')).toContainText('45° edge 14\'-1 11/16"');
   await expect(page.locator('#strip-message')).toContainText('10\'-0" each way');
-  // Home by a typed 10: it lands a sixty-fourth of an inch off the first
-  // corner, and closes.
+  // Home by a typed 10, square again: it lands a sixty-fourth of an inch off
+  // the first corner, and closes.
+  await page.locator('[data-mode-tsquare]').click();
   await typeEdge(page, at, [0, -5], '10');
   const loop = await savedLoop(page);
   expect(loop).not.toBeNull();
@@ -90,4 +97,30 @@ test('TOY still turns square: a press aimed near the diagonal lands on the axis'
   await page.mouse.click(...at(0, 0));
   const loop = await savedLoop(page);
   expect(rounded(loop)).toEqual([[0, 0], [10, 0], [10, 10], [0, 10]]);
+});
+
+// FREE, WITH NO INSTRUMENT LIT (Movie, 17 Oct: "i have the T and PROTRACTOR
+// both turned OFF and angle i deleted to make sure but it doesn't allow the
+// line to move freely and i can't finish this PRECISE outline").
+test('on DRAFTING with no instrument lit the outline turns at any angle, unrounded, and closes on the first corner', async ({ page }) => {
+  await open(page, 'drafting');
+  const { at } = await h.planFrame(page);
+  await h.selectTool(page, 'outline');
+  // The second press a hair below the first corner's line: it lands ON it.
+  for (const pt of [[0, 0], [10.4, 0.06], [4.37, 6.81]]) {
+    await page.mouse.move(...at(...pt));
+    await page.waitForTimeout(60);
+    await page.mouse.click(...at(...pt));
+  }
+  await page.mouse.move(...at(0.05, 0.05));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(0.05, 0.05));
+  const loop = await savedLoop(page);
+  expect(loop, 'the loop closed').not.toBeNull();
+  expect(loop).toHaveLength(3);
+  // Where it was pressed, give or take a pixel -- not squared, not on the foot.
+  expect(Math.abs(loop[2][0] - 4.37)).toBeLessThan(0.1);
+  expect(Math.abs(loop[2][1] - 6.81)).toBeLessThan(0.1);
+  // The second press landed on the first corner's own line, square to it.
+  expect(Math.abs(loop[1][1])).toBeLessThan(1e-9);
 });
