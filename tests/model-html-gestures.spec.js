@@ -764,6 +764,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // notepad is words for the drafter, never geometry, so no absence
             // row moves.
             'notes-tab',
+            // ROTATE (Movie, 18 Oct: "i also need a ROTATE command"): it turns
+            // what is already drawn about its own middle and makes nothing,
+            // so no absence row moves -- the same verdict COPY and DELETE got.
+            'rotate',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts
@@ -781,6 +785,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Break here', 'Move this wall',
             'CLEAR',   // the NOTES pad's, beside 'notes-tab' above
+            // ROTATE's own row: two quarter turns, a half, and DONE.
+            '\u27F2 90', '\u27F3 90', '180', 'DONE',
             // §6'S THREE ANSWERS (Movie, 15 Oct), raised by DRAGGING A WALL
             // OFF ITS FOOTPRINT: "can we ask them if they would like a
             // cantilever or overhang supported by a beam ... or ... move the
@@ -957,6 +963,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // TRACE's picker and its card's three boxes: scale, width, and
             // CALIBRATE's real length.
             'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length',
+            // ROTATE's typed angle, which turns what is held and authors nothing.
+            'rotate-angle',
             // and the hologram's .draft picker.
             'hologram-file',
             // THE LOT'S OWN TWO FIGURES (Movie, 13 Oct), behind CUSTOM on

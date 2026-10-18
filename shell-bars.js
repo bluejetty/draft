@@ -697,7 +697,7 @@ ${trio(true)}
     <button type="button" data-rotate-by="-90" title="A quarter turn anticlockwise">&#x27F2; 90</button>
     <button type="button" data-rotate-by="90" title="A quarter turn clockwise">&#x27F3; 90</button>
     <button type="button" data-rotate-by="180" title="Half a turn">180</button>
-    <input type="text" data-rotate-angle inputmode="decimal" placeholder="DEG" aria-label="Turn by degrees, clockwise">
+    <input id="rotate-angle" type="text" data-rotate-angle inputmode="decimal" placeholder="DEG" aria-label="Turn by degrees, clockwise">
     <button type="button" data-rotate-done title="Put ROTATE down">DONE</button>
   </span>
     </div>
