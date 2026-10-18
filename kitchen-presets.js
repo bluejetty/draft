@@ -52,13 +52,16 @@ if (!window.DraftKitchenPresets) {
       sink: [
         { kind: 'cabinet', from: 0, to: 8.5 },
         { kind: 'sink', centre: 53 * IN, width: 2.5 },
-        { kind: 'dish', centre: 90 * IN, width: 2 },
+        { kind: 'dish', centre: 86.5 * IN, width: 2 },
       ],
       // Past the corner counter: a run with the range on it, then the fridge
-      // bay at the open end.
+      // bay at the open end. The range is the sheet's 24" apartment range,
+      // 3'-5" from the corner to its centre (Movie, 17 Oct: "can you check
+      // the predrawn kitchens KITCHEN L1 which should look like the Suite S"
+      // -- measured again off the sheet at 300 dpi; it had been drawn 30").
       stove: [
         { kind: 'cabinet', from: 2, to: 5.5 },
-        { kind: 'stove', centre: 45 * IN, width: 2.5 },
+        { kind: 'stove', centre: 41 * IN, width: 2 },
         { kind: 'fridge', centre: 84 * IN, width: 3 },
       ],
     }),
@@ -167,12 +170,39 @@ if (!window.DraftKitchenPresets) {
     return i ? `${f}'-${i}"` : `${f}'`;
   };
 
+  // ── ITS OWN TWO WALLS, WHERE THERE IS NO CORNER ─────────────────────────
+  //
+  // Movie, 17 Oct: "maybe kitchen not ready still, not working yet like the
+  // WCs which work good". Dropped in open floor the kitchen brings the corner
+  // it needs: two 2x4 walls meeting at a mitred corner, their inside faces
+  // meeting at `at`, each a leg long. Unturned they are the suite as drawn --
+  // the corner at the top right, one wall running west along the top, the
+  // other south down the right -- and `angleDeg` turns them about `at`.
+  // `inside` is a point in the L, for findCorner to read the faces from.
+  const STUD_4 = 3.5 * IN;
+  function ownWalls(id, at, angleDeg = 0) {
+    const p = PRESETS[id];
+    if (!p || !at) return null;
+    const h = STUD_4 / 2, len = p.legFt;
+    const t = (angleDeg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
+    const P = (x, z) => ({ x: at.x + c * x - s * z, y: 0, z: at.z + s * x + c * z });
+    const corner = P(h, -h);
+    return {
+      walls: [
+        { key: 'top', start: corner, end: P(-len, -h), wallType: 'stud_2x4', refLine: 'center' },
+        { key: 'side', start: corner, end: P(h, len), wallType: 'stud_2x4', refLine: 'center' },
+      ],
+      inside: P(-1, 1),
+    };
+  }
+
   window.DraftKitchenPresets = Object.freeze({
     PRESETS,
     IDS: Object.freeze(Object.keys(PRESETS)),
     REACH_FT,
     findCorner,
     place,
+    ownWalls,
   });
 })();
 }

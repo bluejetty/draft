@@ -45,10 +45,16 @@ const offsets = master => {
     Math.round((p.z - o.z) * 1000) / 1000]);
 };
 
+// ON DRAFTING THE OUTLINE OBEYS THE INSTRUMENTS (Movie, 17 Oct: "i have the
+// T and PROTRACTOR both turned OFF ... but it doesn't allow the line to move
+// freely"): square under the T-square, on the foot under the 1' light, free
+// with neither -- so the old law is asked for by lighting both.
 test('every corner is square off the last and a whole number of feet along', async ({ page }) => {
   await open(page);
   const { at } = await h.planFrame(page);
   await h.selectTool(page, 'outline');
+  await page.locator('[data-mode-tsquare]').click();
+  await page.locator('[data-mode-scale]').click();
   // Presses a little off the square and off the foot, the way a hand lands.
   await page.mouse.click(...at(-10, -8));
   await page.mouse.click(...at(10.4, -7.3));
@@ -103,6 +109,9 @@ test('a close from a corner that does not line up is refused, and says how', asy
   await open(page);
   const { at } = await h.planFrame(page);
   await h.selectTool(page, 'outline');
+  // Under the T-square the edge home must be square too.
+  await page.locator('[data-mode-tsquare]').click();
+  await page.locator('[data-mode-scale]').click();
   await page.mouse.click(...at(0, 0));
   await page.mouse.click(...at(12, 0));
   await page.mouse.click(...at(12, 10));

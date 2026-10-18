@@ -17,6 +17,12 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 
 const MUTATIONS = [
+  ['the kitchen\'s own walls do not share a corner', 'kitchen-presets.js',
+    c => c.replace("        { key: 'side', start: corner, end: P(h, len), wallType: 'stud_2x4', refLine: 'center' },",
+      "        { key: 'side', start: P(h, -h), end: P(h, len), wallType: 'stud_2x4', refLine: 'center' },")],
+  ['[ ] does not turn the kitchen\'s own walls', 'kitchen-presets.js',
+    c => c.replace('    const t = (angleDeg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);',
+      '    const t = 0, c = Math.cos(t), s = Math.sin(t);')],
   ['the sink and stove legs trade places', 'kitchen-presets.js',
     c => c.replace('cross < 0 ? [B, A] : [A, B];', 'cross < 0 ? [A, B] : [B, A];')],
   ['F swaps nothing', 'kitchen-presets.js',
@@ -118,11 +124,13 @@ const geoOf = f => FG.fixtureGeometry(WALLS, { kind: f.kind, wallId: f.wall.id, 
   const south = f => inches(geoOf(f).alongStart - HALF_6) + '..' + inches(geoOf(f).alongEnd - HALF_6);
   check('the corner counter starts at the inside corner and runs 8\'-6"', south(on('balcony', 'cabinet')), '0..102');
   check('the 30" sink is centred 4\'-5" down the leg', south(on('balcony', 'sink')), '38..68');
-  check('the 24" DW ends the leg', south(on('balcony', 'dish')), '78..102');
+  // Re-measured off the sheet at 300 dpi (Movie, 17 Oct: "check the predrawn
+  // kitchens"): the DW's centre is 7'-2 1/2" down, not at the leg's end.
+  check('the 24" DW sits 7\'-2 1/2" down the leg, its centre', south(on('balcony', 'dish')), '74.5..98.5');
   // From the inside corner, west along the end wall.
   const west = f => inches((30 - HALF_6) - geoOf(f).alongEnd) + '..' + inches((30 - HALF_6) - geoOf(f).alongStart);
   check('the end-wall counter starts past the 24" corner counter', west(on('end', 'cabinet')), '24..66');
-  check('the 30" range is on it, 3\'-9" from the corner', west(on('end', 'stove')), '30..60');
+  check('the 24" apartment range is on it, 3\'-5" from the corner to its centre', west(on('end', 'stove')), '29..53');
   check('the 36" fridge bay ends the leg', west(on('end', 'fridge')), '66..102');
   // Depths are the catalogue's, so the preset's fridge is the hand-dropped one.
   check('the fridge is the catalogue\'s 30" deep', r2(on('end', 'fridge').depth), r2(K.kindFor('fridge').depthFt));
@@ -174,6 +182,28 @@ const geoOf = f => FG.fixtureGeometry(WALLS, { kind: f.kind, wallId: f.wall.id, 
   check('a 6\' balcony wall is refused', Boolean(kit.refused), true);
   check('and the sentence names the sink leg and the 8\'-6"', /sink leg.*5'-9"/.test(kit.refused) && /8'-6"/.test(kit.refused), true);
   check('flipped, the stove leg is the short one', /stove leg/.test(KP.place('L1', corner, { depthOf, flip: true }).refused), true);
+}
+
+// ── ITS OWN TWO WALLS, IN OPEN FLOOR ─────────────────────────────────────
+// Movie, 17 Oct: "not working yet like the WCs which work good". With no
+// corner under the press the kitchen brings two 2x4s, inside faces meeting
+// at the press, and lays itself against them exactly as it would in a room.
+{
+  const at = { x: 3, z: -2 };
+  const own = KP.ownWalls('L1', at, 0);
+  check('it brings two walls', own.walls.length, 2);
+  check('that share their corner, so it mitres', own.walls[0].start === own.walls[1].start, true);
+  const corner = KP.findCorner(own.walls, own.inside, FG);
+  check('their inside corner is the press', corner && `${r2(corner.legs[0].wall.start.x - 1.75 / 12)},${r2(corner.legs[0].wall.start.z + 1.75 / 12)}`, '3,-2');
+  const kit = KP.place('L1', corner, { depthOf });
+  check('and the kitchen fits them, 8\'-6" each way', Boolean(kit && !kit.refused), true);
+  check('unturned, the sink leg runs down the right wall, as the suite', kit.sinkLeg.wall.key, 'side');
+  const turned = KP.ownWalls('L1', at, 90);
+  const d = turned.walls[0];
+  // A quarter turn clockwise on the plan (x right, z down the screen): the
+  // wall that ran west now runs north.
+  check('[ ] turns them about the press: the top wall now runs north',
+    `${r2(d.end.x - d.start.x)},${r2(d.end.z - d.start.z)}`, `0,${r2(-(8.5 + 1.75 / 12))}`);
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

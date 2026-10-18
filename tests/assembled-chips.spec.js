@@ -32,9 +32,11 @@ test('the kitchen and bath presets ride beside their titles, and nothing else do
   async ({ page }) => {
     await openBuild(page);
     // KITCHEN L1 and WC BF1 joined their rows on 17 Oct (Movie's North
-    // Point studio suite); each is the same kind of thing as its neighbour.
+    // Point studio suite). The old page's L PRESET left the kitchen row the
+    // same day: "i just need the KITCHEN L1 don't worry about the othe L
+    // PReset one" -- this page only ever answered it "not on this page yet".
     await expect(page.locator('[data-assembled-row="kitchen"] .sel-chip'))
-      .toHaveText(['L PRESET', 'KITCHEN L1']);
+      .toHaveText(['KITCHEN L1']);
     await expect(page.locator('[data-assembled-row="bath"] .sel-chip'))
       .toHaveText(['BATH A', 'BATH B', 'WC BF1']);
     // A GROUP WITH NO ASSEMBLED UNIT LOOKS EXACTLY AS IT DID. The row is
@@ -88,9 +90,9 @@ test('and they still do what they did — the press is unchanged', async ({ page
   const bathA = page.locator('[data-assembled-row="bath"] [data-washroom="A"]');
   await bathA.click();
   await expect(bathA, 'BATH A did not take the press').toHaveAttribute('aria-pressed', 'true');
-  const kitchenL = page.locator('[data-assembled-row="kitchen"] [data-fixture-kind="kitchenL"]');
+  const kitchenL = page.locator('[data-assembled-row="kitchen"] [data-kitchen="L1"]');
   await kitchenL.click();
-  await expect(kitchenL, 'L PRESET did not take the press').toHaveAttribute('aria-pressed', 'true');
+  await expect(kitchenL, 'KITCHEN L1 did not take the press').toHaveAttribute('aria-pressed', 'true');
   // AND PICKING ONE PUTS THE OTHER DOWN: a washroom and a kitchen preset are
   // both "what the next press drops", so they cannot both be held.
   await expect(bathA).toHaveAttribute('aria-pressed', 'false');

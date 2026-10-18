@@ -194,12 +194,13 @@ test('a press away from every wall places nothing and says why', async ({ page }
     .toContainText(/sit against the wall/i);
 });
 
-// THE TWO GESTURES THIS PORT DOES NOT CARRY, asserted so their absence is a
-// stated fact rather than something a drafter discovers. The tub takes two
-// WALLS (back, then faucet end) and the kitchen L drops seven fixtures at
-// once; both are their own gesture on the old page. They refuse BY NAME, which
-// is the difference between "not built yet" and "silently broken".
-for (const [kindId, label] of [['tub', 'TUB'], ['kitchenL', 'L PRESET']]) {
+// THE GESTURE THIS PORT DOES NOT CARRY, asserted so its absence is a stated
+// fact rather than something a drafter discovers. The tub takes two WALLS
+// (back, then faucet end), its own gesture on the old page, and refuses BY
+// NAME -- the difference between "not built yet" and "silently broken". The
+// old page's kitchen L PRESET is no longer offered here at all (Movie, 17
+// Oct: KITCHEN L1 is the kitchen).
+for (const [kindId, label] of [['tub', 'TUB']]) {
   test(`${label} says it is not here yet rather than placing the wrong thing`,
     async ({ page }) => {
       await houseOnLivePage(page);
