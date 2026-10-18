@@ -13526,11 +13526,12 @@
     const a = degrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
     const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
-    points.forEach(pt => {
+    const turnPoint = pt => {
       const dx = pt.x - cx, dz = pt.z - cz;
       pt.x = cx + dx * cos - dz * sin;
       pt.z = cz + dx * sin + dz * cos;
-    });
+    };
+    points.forEach(turnPoint);
     // A STAIR'S WELL IS CUT AGAIN WHERE IT NOW STANDS (Movie, 18 Oct: "when
     // i rotated the main floor stairs the foundation outline didn't show
     // rotated" -- "floor layout too"). Re-cut, not turned with it: a well
@@ -13543,11 +13544,7 @@
       return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
     }).filter(pt => !points.includes(pt));
     framing.forEach(vtx => before.push({ vtx, x: vtx.x, z: vtx.z }));
-    framing.forEach(pt => {
-      const dx = pt.x - cx, dz = pt.z - cz;
-      pt.x = cx + dx * cos - dz * sin;
-      pt.z = cz + dx * sin + dz * cos;
-    });
+    framing.forEach(turnPoint);
     const wells = [];
     entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
       const hole = stairWellOf(item).hole;
