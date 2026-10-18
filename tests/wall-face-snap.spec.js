@@ -78,6 +78,10 @@ test('and the inside corner, and a free end\'s face', async ({ page }) => {
   await press(page, at, [10 - HALF - 0.02, HALF + 0.02]);
   await press(page, at, [6, 4]);
   await page.keyboard.press('Escape');
+  // TRACK off, so the free end's face point is reached by the snap alone and
+  // not by two cross lines that happen to meet there.
+  await page.locator('[data-mode-track]').click();
+  await expect(page.locator('[data-mode-track]')).toHaveAttribute('aria-pressed', 'false');
   await armLine(page);
   // The free end of w1 at x = 0: its face at z = -2 3/4".
   await press(page, at, [0.02, -HALF - 0.02]);

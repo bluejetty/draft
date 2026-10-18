@@ -15,13 +15,13 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/wall-face-snap.spec.js tests/model-site-lot-typed.spec.js tests/snap-track.spec.js';
 const MUTANTS = [
   { file: "MODEL.html", name: "no face corners in the snap",
-    find: "    return nearest(nodeEnds({ faces: false })) || nearest(wallFaceNodes());\n",
-    with: "    return nearest(nodeEnds({ faces: false }));\n",
+    find: "    if (!G?.wallFaceCorners || !drawing) return [];\n",
+    with: "    return [];\n",
     test: "a LINE started a hair off the outside corner of two 2x6 walls starts ON it" },
   { file: "geometry-2d.js", name: "the crossings are cut short of the outside corner",
     find: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= (f.t + g.t) * 1.5) add(p);\n",
     with: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= Math.max(f.t, g.t) * 0.5) add(p);\n",
-    test: "a LINE started a hair off the outside corner of two 2x6 walls starts ON it" },
+    test: "and the inside corner, and a free end's face" },
   { file: "geometry-2d.js", name: "a free end gives no face points",
     find: "          f.offs.forEach(o => add({ x: v.x + f.n.x * o, z: v.z + f.n.z * o }));\n          return;\n        }\n        others.forEach",
     with: "          return;\n        }\n        others.forEach",

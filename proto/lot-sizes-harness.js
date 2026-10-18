@@ -94,7 +94,7 @@ const MUTATIONS = [
       '    const raw = (value) => Number(value);')],
   ['the typed lot is left at the full conversion rather than rounded to the inch',
     'lot-sizes.js',
-    c => c.replace('    const toInch = value => Math.round(value * 12) / 12;',
+    c => c.replace('    const toInch = value => (metric ? Math.round(value * 12) / 12 : Math.round(value * 192) / 192);',
       '    const toInch = value => value;')],
   ['the site datum moves to the far corner, away from E1 and E2',
     'lot-sizes.js',
