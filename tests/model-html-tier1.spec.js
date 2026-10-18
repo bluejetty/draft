@@ -375,6 +375,10 @@ test.describe('MODEL.html tier 1', () => {
       // the door's wall). MODEL paints them on its foundation view and LAYOUT
       // on the FOUNDATION sheet off the same module, so it is declared here.
       './door-bucks.js',
+      // trim-extend.js answers TRIM's and EXTEND's geometry (Movie, 17 Oct:
+      // select the cutting edges, press the piece to take away, or the end to
+      // run on); MODEL's two tools are its only readers.
+      './trim-extend.js',
       // build-house.js arrived with the BONE that builds the drafter's own
       // outline, and it is the DELETES-A-DUPLICATE kind this list should grow
       // by. Walking a loop into wall runs is a few lines and reading its
