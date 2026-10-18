@@ -6286,6 +6286,8 @@
 
   const paint = () => {
     const t0 = performance.now();
+    // Hand dimensions onto the corners they were put on, before anything draws.
+    if (typeof followDimLinks === 'function') followDimLinks();
     // THE ARROW'S HAND AND HOUSE ROTATE GO WITH THE ARROW: put away here and
     // seated again by paintNorth, which only a plan paint reaches -- so an
     // elevation or a section shows neither a click over nothing nor a turn
@@ -6818,6 +6820,7 @@
     syncRotateVerbs();
     syncBreakVerb();
     syncMoveVerb();
+    syncWallOffVerb();
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;
@@ -13940,6 +13943,137 @@
     breakButton.title = one ? 'BREAK — click the item to add a node there'
       : 'ASSEMBLY BUST — break the assembly into its pieces';
   }
+  // ── WALL OFF (Movie, 18 Oct) ──────────────────────────────────────────
+  //
+  // "on the WC and the KITCHENS. when a user clicks on a wall and is offered
+  // the BREAK or MOVE it, can you also offer to TURN OFF that wall (on one or
+  // two sides would be easier to use the HOUSE wall rather than the 'WC wall"
+  // -- "the ones behind the shower and sink too, but each plan will be
+  // different".
+  //
+  // THE HOUSE WALL IT BACKS ON TO SERVES INSTEAD. A fixture hangs on its wall
+  // by an offset along it, so taking the WC's wall away bare would take the
+  // toilet with it: each fixture, door and window on it moves onto the house
+  // wall at the same place, against the house wall's face; the WC's walls
+  // that met it run on to that face; then the WC wall goes. One UNDO.
+  var wallPicked = null;
+  var wallOffButton = document.getElementById('model-wall-off');
+  const WALL_OFF_GAP_FT = 1;
+  // The house wall a wall stands against: parallel, on its floor, the two
+  // facing faces within a foot, running along most of it. Nearest wins.
+  const wallOffHost = wall => {
+    const G = window.DraftGeometry2D;
+    const thick = openingThicknessFt();
+    const frame = w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      if (!(len > 1e-6)) return null;
+      const u = { x: dx / len, z: dz / len }, n = { x: -u.z, z: u.x };
+      const { startOff, endOff } = G.wallFaceOffsets(w, thick(w));
+      return { w, u, n, len, s: w.start, faces: [startOff, endOff] };
+    };
+    const me = frame(wall);
+    if (!me) return null;
+    let best = null;
+    (drawing.walls || []).forEach(other => {
+      if (other === wall || other.levelId !== wall.levelId || (other.view || 'plan') !== (wall.view || 'plan')) return;
+      const f = frame(other);
+      if (!f || Math.abs(me.u.x * f.u.z - me.u.z * f.u.x) > 1e-3) return;
+      const across = (me.s.x - f.s.x) * f.n.x + (me.s.z - f.s.z) * f.n.z;
+      const turn = me.n.x * f.n.x + me.n.z * f.n.z;
+      const mine = me.faces.map(o => across + o * turn);
+      const side = (Math.min(...mine) + Math.max(...mine)) / 2 >= (f.faces[0] + f.faces[1]) / 2 ? 1 : -1;
+      const hostFace = side > 0 ? Math.max(...f.faces) : Math.min(...f.faces);
+      const myFace = side > 0 ? Math.min(...mine) : Math.max(...mine);
+      const gap = side * (myFace - hostFace);
+      if (gap < -1e-3 || gap > WALL_OFF_GAP_FT) return;
+      const a = (me.s.x - f.s.x) * f.u.x + (me.s.z - f.s.z) * f.u.z;
+      const b = a + me.len * (me.u.x * f.u.x + me.u.z * f.u.z);
+      const overlap = Math.min(Math.max(a, b), f.len) - Math.max(Math.min(a, b), 0);
+      if (overlap < me.len * 0.5) return;
+      if (!best || gap < best.gap) best = { host: other, f, me, hostFace, gap };
+    });
+    return best;
+  };
+  function syncWallOffVerb() {
+    if (!wallOffButton) return;
+    const wall = wallPicked && selection.some(e => e.item === wallPicked) && walls().includes(wallPicked) ? wallPicked : null;
+    const able = !activeCut() && !modalUp() && !!wall && !!wallOffHost(wall);
+    wallOffButton.hidden = !able || !!rotateState?.open;
+  }
+  const wallOff = () => {
+    const wall = wallPicked;
+    const found = wall && wallOffHost(wall);
+    if (!found) return;
+    const { host, f } = found;
+    const FG = window.DraftFixtureGeometry;
+    const onHost = p => ({ t: (p.x - f.s.x) * f.u.x + (p.z - f.s.z) * f.u.z, across: (p.x - f.s.x) * f.n.x + (p.z - f.s.z) * f.n.z });
+    const ou = found.me.u;
+    const reversed = ou.x * f.u.x + ou.z * f.u.z < 0;
+    const edits = [];
+    const keep = item => edits.push({ item, before: { ...item } });
+    // THE FIXTURES, where they stand, onto the house wall.
+    (drawing.fixtures || []).forEach(fx => {
+      if (fx.endWallId === wall.id) { keep(fx); fx.endWallId = host.id; }
+      if (fx.wallId !== wall.id) return;
+      if (!edits.some(e => e.item === fx)) keep(fx);
+      const g = FG && FG.fixtureGeometry(drawing.walls, fx, wall);
+      if (fx.kind === 'tub') {
+        fx.wallId = host.id;
+        if (reversed) fx.dir = fx.dir === -1 ? 1 : -1;
+        if (g?.center) fx.side = onHost(g.center).across >= 0 ? 1 : -1;
+        return;
+      }
+      if (!g?.center) return;
+      const at = onHost(g.center);
+      fx.wallId = host.id;
+      fx.offset = Math.max(0, at.t);
+      fx.side = at.across >= 0 ? 1 : -1;
+    });
+    // THE DOORS AND WINDOWS, their middles across.
+    (drawing.fenestrations || []).forEach(o => {
+      if (o.wallId !== wall.id) return;
+      keep(o);
+      const mid = { x: wall.start.x + ou.x * o.offset, z: wall.start.z + ou.z * o.offset };
+      o.wallId = host.id;
+      o.offset = Math.max(0, onHost(mid).t);
+      if (reversed) {
+        if (o.type === 'door') o.hingeFlip = o.hingeFlip !== true;
+        o.swingFlip = o.swingFlip !== true;
+      }
+    });
+    // THE WALLS THAT MET IT RUN ON TO THE HOUSE WALL'S FACE.
+    const moved = [];
+    [wall.start, wall.end].forEach(v => {
+      const other = (drawing.walls || []).find(w => w !== wall && w !== host && (w.start === v || w.end === v));
+      if (!other) return;
+      const far = other.start === v ? other.end : other.start;
+      const dir = { x: v.x - far.x, z: v.z - far.z };
+      const denom = dir.x * f.n.x + dir.z * f.n.z;
+      if (Math.abs(denom) < 1e-9) return;
+      const k = (found.hostFace - ((far.x - f.s.x) * f.n.x + (far.z - f.s.z) * f.n.z)) / denom;
+      moved.push({ vtx: v, x: v.x, z: v.z });
+      v.x = far.x + dir.x * k;
+      v.z = far.z + dir.z * k;
+      relinkVertex(v);
+    });
+    const index = drawing.walls.indexOf(wall);
+    drawing.walls.splice(index, 1);
+    const groupsBefore = (drawing.groups || []).map(g => ({ g, members: g.members }));
+    (drawing.groups || []).forEach(g => { g.members = (g.members || []).filter(m => !(m.type === 'wall' && m.id === wall.id)); });
+    undoStack.push({ kind: 'node', undo: () => {
+      drawing.walls.splice(index, 0, wall);
+      edits.forEach(({ item, before }) => { Object.keys(item).forEach(k => delete item[k]); Object.assign(item, before); });
+      moved.forEach(m => { m.vtx.x = m.x; m.vtx.z = m.z; relinkVertex(m.vtx); });
+      groupsBefore.forEach(({ g, members }) => { g.members = members; });
+    } });
+    wallPicked = null;
+    markDirty();
+    setSelection(selection.filter(e => e.item !== wall));
+    sayOnStrip('WALL OFF: the house wall serves -- what hung on that wall moved onto it. UNDO puts the wall back.');
+    paint();
+  };
+  if (wallOffButton) wallOffButton.addEventListener('click', wallOff);
+
   // THE NEAREST POINT ON THE HELD ITEM: its one run for a wall or a line, its
   // ring's edges for the rest. A node on a corner already there is no node.
   const breakAt = (held, world) => {
@@ -23849,7 +23983,8 @@
     || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
     || (rulerOn && !!rulerFrom)
     || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset))
-    || (activeTool === 'dimension' && dimPoints.length > 0);
+    // DIMENSION from its first point too: the node it will lock to lights up.
+    || activeTool === 'dimension';
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
@@ -28535,7 +28670,45 @@
   const dimPoint = at => {
     const snap = board !== 'toy' ? drawSnap(at) : {};
     const p = snap.pt || cornerSnap(at, []) || at;
-    return { x: p.x, z: p.z };
+    return { x: p.x, z: p.z, ...(snap.pt || cornerSnap(at, []) ? dimLinkAt(p) : {}) };
+  };
+  // ── A HAND DIMENSION STAYS ON ITS NODE (Movie, 18 Oct: "i moved thenode
+  // but the dim didn't follow the node it should be linked too") ──────────
+  //
+  // A point that landed on a node remembers the wall corner it is nearest
+  // (the node itself, or a face corner of it): which wall, which end, and
+  // where that corner stood. Each paint, a corner that has moved carries the
+  // dimension's end with it ALONG the dimension's own run -- a HORIZ string
+  // takes the corner's x and keeps its row, so a string never tilts. An UNDO
+  // of the move puts the corner back and the end follows back.
+  const DIM_LINK_FT = 1;
+  const dimLinkAt = p => {
+    let best = null;
+    walls().forEach(w => ['start', 'end'].forEach(end => {
+      const v = w[end];
+      const d = Math.hypot(v.x - p.x, v.z - p.z);
+      if (d <= DIM_LINK_FT && (!best || d < best.d)) best = { d, ref: { wallId: String(w.id), end, x: v.x, z: v.z } };
+    }));
+    return best ? { ref: best.ref } : {};
+  };
+  var followDimLinks = () => {
+    const list = drawing?.dimensions;
+    if (!Array.isArray(list) || !list.some(d => d.startRef || d.endRef)) return;
+    const byId = new Map((drawing.walls || []).map(w => [String(w.id), w]));
+    list.forEach(dim => {
+      const len = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+      if (!(len > 1e-9)) return;
+      const u = { x: (dim.end.x - dim.start.x) / len, z: (dim.end.z - dim.start.z) / len };
+      [['startRef', 'start'], ['endRef', 'end']].forEach(([key, at]) => {
+        const ref = dim[key];
+        const v = ref && byId.get(String(ref.wallId))?.[ref.end];
+        if (!v) return;
+        const along = (v.x - ref.x) * u.x + (v.z - ref.z) * u.z;
+        if (Math.abs(v.x - ref.x) < 1e-9 && Math.abs(v.z - ref.z) < 1e-9) return;
+        dim[at] = { ...dim[at], x: dim[at].x + u.x * along, z: dim[at].z + u.z * along };
+        ref.x = v.x; ref.z = v.z;
+      });
+    });
   };
   const dimDirection = points => {
     if (dimMode === 'h') return { x: 1, z: 0 };
@@ -28568,7 +28741,8 @@
       const left = { x: -(b.z - a.z), z: b.x - a.x };
       const away = (a.x - a.from.x + b.x - b.from.x) * left.x + (a.z - a.from.z + b.z - b.from.z) * left.z;
       const [s0, s1] = away < 0 ? [b, a] : [a, b];
-      out.push({ start: { x: s0.x, y: 0, z: s0.z }, end: { x: s1.x, y: 0, z: s1.z } });
+      out.push({ start: { x: s0.x, y: 0, z: s0.z }, end: { x: s1.x, y: 0, z: s1.z },
+        ...(s0.from.ref ? { startRef: { ...s0.from.ref } } : {}), ...(s1.from.ref ? { endRef: { ...s1.from.ref } } : {}) });
     }
     return out;
   };
@@ -28591,7 +28765,8 @@
       if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
       const made = pieces.map(piece => {
         const record = { id: newDimensionId(), start: piece.start, end: piece.end, levelId, view,
-          layer: DIM_HAND_LAYER, auto: false };
+          layer: DIM_HAND_LAYER, auto: false,
+          ...(piece.startRef ? { startRef: piece.startRef } : {}), ...(piece.endRef ? { endRef: piece.endRef } : {}) };
         drawing.dimensions.push(record);
         return record;
       });
@@ -28639,6 +28814,21 @@
       : dimPoints.length ? dimString(dimPoints.concat([dimPoint(cursorWorld)]), dimPoints[0]) : [];
     const env = dimensionEnv();
     pieces.forEach(piece => R.drawDimension2D(ctx, toS, piece, { preview: true }, env));
+    // THE NODE IT WILL LOCK TO, LIT (Movie, 18 Oct: "light them NODES up for
+    // the DIMENSION points so the user will know they are going to be locked
+    // on the right spot"). Not while the string is being placed.
+    if (!dimPlacing) {
+      const snap = board !== 'toy' ? drawSnap(cursorWorld) : {};
+      const lit = snap.pt || cornerSnap(cursorWorld, []);
+      if (lit) {
+        const s = toS(lit);
+        ctx.save();
+        ctx.strokeStyle = skin['accent'] || '#e8a33d';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
     ctx.save();
     ctx.fillStyle = skin['draw-dim'];
     dimPoints.forEach(p => {
@@ -30544,6 +30734,9 @@
           : (!hit && held && roofEdgeNear(held, world) != null ? held : null);
         roofEdgeIdx = roofHit ? roofEdgeNear(roofHit, world) : null;
         roofEdgeClick = roofEdgeIdx != null ? world : null;
+        // The wall a click landed on, for WALL OFF: a click on a WC wall now
+        // picks the whole WC, and the verb still needs to know which wall.
+        wallPicked = hit?.type === 'wall' ? hit.item : null;
         setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : withGroup(hit));
       }
       paint();

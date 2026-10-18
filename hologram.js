@@ -221,8 +221,9 @@
         hidden.add(wall.id);
         const { a, dir } = alongHost(sf, hf);
         fens.filter(o => o && o.wallId === wall.id).forEach(o => {
-          const t0 = a + dir * o.offset, t1 = a + dir * (o.offset + o.width);
-          const offset = Math.max(0, Math.min(t0, t1));
+          // AN OPENING'S OFFSET IS ITS MIDDLE (clampOpeningToWall), so it
+          // maps straight across, whichever way the two walls run.
+          const offset = Math.max(0, a + dir * o.offset);
           const flipped = dir < 0;
           out.openings.push({ ...o, id: `${holo.id}:${o.id}`, wallId: hf.wall.id, levelId: hf.wall.levelId,
             offset, suite: holo.id,

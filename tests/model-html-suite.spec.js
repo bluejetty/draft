@@ -64,11 +64,12 @@ test('a SUITE keeps its mode through a save, and its shared wall hands its windo
 
 test('moved, turned over, the window follows: a mirrored suite in the far corner', async ({ page }) => {
   // Mirrored about its own middle and slid 40' along: the suite's bottom
-  // wall still lies in the shell's, from x = 40 to 60, and w1 (8'-12' from
-  // the suite's left) is now 8'-12' from its RIGHT: 48'-52' along the shell.
+  // wall still lies in the shell's, from x = 40 to 60, and w1 (centred 8'
+  // from the suite's left -- an offset is an opening's MIDDLE) is now centred
+  // 8' from its RIGHT: 52' along the shell.
   await open(page, shell({ flip: true, x: 40 }));
   const d = await saved(page);
-  expect(await hostOpenings(page, d)).toEqual([['a', 48, 4, 'h1:w1']]);
+  expect(await hostOpenings(page, d)).toEqual([['a', 52, 4, 'h1:w1']]);
   // A quarter turn off the walls' line shares nothing.
   expect(await hostOpenings(page, { ...d, holograms: [{ ...d.holograms[0], angleDeg: 45 }] })).toEqual([]);
 });
