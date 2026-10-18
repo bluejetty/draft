@@ -11,12 +11,11 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-html-roof-move.spec.js';
-const T = 'a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it';
 const MUTANTS = [
   { file: 'MODEL.html', name: "a corner DELETEd joins its edges as a plain eave",
     find: "    if (turn > 1e-6) roof.edges[(i - 1 + n0) % n0] = 'sloped';\n",
     with: "",
-    test: T },
+    test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
   { file: 'MODEL.html', name: "a node on a straight run DELETEd leaves a SLOPED edge too",
     find: "    if (turn > 1e-6) roof.edges",
     with: "    if (turn >= 0) roof.edges",
@@ -24,17 +23,17 @@ const MUTANTS = [
   { file: 'MODEL.html', name: "the EDGE panel has no SLOPED chip",
     find: "['gable', 'GABLE'], ['sloped', 'SLOPED']];",
     with: "['gable', 'GABLE']];",
-    test: T },
+    test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
   { file: 'MODEL.html', name: "a SLOPED edge reads as an eave in the page",
     find: "  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' ? k : 'eave');",
     with: "  const roofEdgeKind = k => (k === 'gable' ? k : 'eave');",
-    test: T },
+    test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
   // THE FORMAT'S MUTANT LIVES IN proto/roof-types-harness.js: MODEL never
   // reads roofs through drawing-format, so here it was equivalent.
   { file: 'geometry-2d.js', name: "the geometry ignores SLOPED",
     find: "    if (n < 3 || !kinds.includes('sloped')) return null;",
     with: "    return null;",
-    test: T },
+    test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
 ];
 
 const run = name => {
