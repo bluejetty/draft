@@ -149,6 +149,13 @@ test('Esc puts the string down, one UNDO takes a placed one, and AUTO DIMS leave
   await armDimension(page);
   await page.keyboard.press('Enter');
   await expect(page.locator('#strip-message')).not.toContainText('click where the string goes');
+  // And another tool taken up puts it down too.
+  await press(page, at, [0, 0]);
+  await press(page, at, [4, 0]);
+  await page.keyboard.press('l');
+  await armDimension(page);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#strip-message')).not.toContainText('click where the string goes');
   // A whole string, then one undo.
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
   await page.keyboard.press('Enter');
