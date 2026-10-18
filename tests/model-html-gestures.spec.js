@@ -772,6 +772,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // breaks an assembly into its pieces. It divides what is drawn and
             // starts nothing new, so no absence row moves.
             'model-break',
+            // MOVE (Movie, 18 Oct) slides a roof's edge or node, or the whole
+            // roof: it reshapes what is drawn and makes nothing new.
+            'model-move',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts
