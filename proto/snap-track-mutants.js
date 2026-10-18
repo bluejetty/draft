@@ -76,6 +76,11 @@ const MUTANTS = [
     find: "  let trackOn = stored.trackLight !== false;\n",
     with: "  let trackOn = stored.trackLight === true;\n",
     test: 'SNAP and TRACK stand in the instrument strip, lit by default' },
+  { file: 'MODEL.html',
+    name: 'a traced outline does not count as something around',
+    find: "    && !floors().length && !outlines().length && !(drawing?.boneyardOutlines || []).length;\n",
+    with: ";\n",
+    test: 'a traced outline is something around: the bullseye no longer pulls' },
 ];
 
 const run = name => {

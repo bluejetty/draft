@@ -171,3 +171,20 @@ test('ENTER places the point the cursor shows, as a click would', async ({ page 
   expect(d.walls).toHaveLength(1);
   expect(Math.abs(d.walls[0].end.x - 4)).toBeLessThan(0.1);
 });
+
+// NOT ONCE AN OUTLINE IS TRACED (18 Oct): "only when nothing is around". A
+// traced house is around while its garage is drawn -- the bullseye pulled the
+// garage's first corner a foot on to it, and his tie jog was lost.
+test('a traced outline is something around: the bullseye no longer pulls', async ({ page }) => {
+  await open(page, drawing());
+  const { at } = await frame(page);
+  await h.selectTool(page, 'outline');
+  for (const pt of [[4, 2], [8, 2], [8, 5], [4, 5], [4, 2]]) await press(page, at, pt);
+  await armWall(page);
+  await press(page, at, [1.2, -1.6]);
+  await press(page, at, [6.3, -3.1]);
+  const d = await saved(page);
+  expect(d.walls).toHaveLength(1);
+  expect(Math.abs(d.walls[0].start.x - 1.2)).toBeLessThan(0.1);
+  expect(Math.abs(d.walls[0].start.z + 1.6)).toBeLessThan(0.1);
+});

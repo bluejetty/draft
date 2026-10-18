@@ -11719,7 +11719,12 @@
     return best ? best.v : null;
   };
   let lastSnapKey = '';
-  const levelIsEmpty = () => !walls().length && !lines().length && !outlineCorners.length;
+  // NOTHING AROUND, as Movie put it ("only when nothing is around"): no
+  // wall, line, floor or footprint here, no loop in hand, and no traced
+  // outline anywhere -- the house he traced is around while its garage is
+  // drawn, and the bullseye pulled the garage's first corner a foot on to it.
+  const levelIsEmpty = () => !walls().length && !lines().length && !outlineCorners.length
+    && !floors().length && !outlines().length && !(drawing?.boneyardOutlines || []).length;
   const drawSnap = at => {
     if (!at) return {};
     if (snapOn) {
