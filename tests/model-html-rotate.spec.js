@@ -135,3 +135,25 @@ test('the PHOTO popup has ROTATE: a quarter turn, the picture\'s sides swapped; 
   u = (await saved(page)).underlays[0];
   expect([u.turn, u.widthFt, u.heightFt]).toEqual([2, 20, 10]);
 });
+
+// AND ITS WELL (Movie, 18 Oct: "when i rotated the main floor stairs the
+// foundation outline didn't show rotated"): the hole it climbs through turns
+// with it, about the same middle, and one UNDO puts both back.
+test('a stair turned takes its well with it; UNDO puts both back', async ({ page }) => {
+  const f = drawing();
+  f.floors = [{ id: 'fl-1', levelId: 3, view: 'plan', structure: 'floor',
+    points: [[-20, -20], [20, -20], [20, 20], [-20, 20]].map(([x, z]) => ({ x, y: 0, z })) }];
+  const WELL = [[-6, 1.5], [4, 1.5], [4, 4.5], [-6, 4.5]];
+  f.surfaceOpenings = [{ id: 'well-7', hostType: 'floor', hostId: 'fl-1', levelId: 3, stairId: 7,
+    points: WELL.map(([x, z]) => ({ x, y: 0, z })) }];
+  const { at } = await open(page, f);
+  await pickStair(page, at);
+  await page.locator('#model-rotate').click();
+  await page.locator('[data-rotate-by="90"]').click();
+  let d = await saved(page);
+  // About the stair's middle (-1, 3): x' = -1 - (z - 3), z' = 3 + (x + 1).
+  expect(d.surfaceOpenings[0].points.map(xz)).toEqual([[0.5, -2], [0.5, 8], [-2.5, 8], [-2.5, -2]]);
+  await page.keyboard.press('Control+z');
+  d = await saved(page);
+  expect(d.surfaceOpenings[0].points.map(xz)).toEqual(WELL);
+});
