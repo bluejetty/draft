@@ -137,8 +137,9 @@ test('the PHOTO popup has ROTATE: a quarter turn, the picture\'s sides swapped; 
 });
 
 // AND ITS WELL (Movie, 18 Oct: "when i rotated the main floor stairs the
-// foundation outline didn't show rotated"): the hole it climbs through turns
-// with it, about the same middle, and one UNDO puts both back.
+// foundation outline didn't show rotated" -- "floor layout too"): the hole it
+// climbs through is cut again around the turned flight, and one UNDO puts
+// both back.
 test('a stair turned takes its well with it; UNDO puts both back', async ({ page }) => {
   const f = drawing();
   f.floors = [{ id: 'fl-1', levelId: 3, view: 'plan', structure: 'floor',
@@ -151,8 +152,15 @@ test('a stair turned takes its well with it; UNDO puts both back', async ({ page
   await page.locator('#model-rotate').click();
   await page.locator('[data-rotate-by="90"]').click();
   let d = await saved(page);
-  // About the stair's middle (-1, 3): x' = -1 - (z - 3), z' = 3 + (x + 1).
-  expect(d.surfaceOpenings[0].points.map(xz)).toEqual([[0.5, -2], [0.5, 8], [-2.5, 8], [-2.5, -2]]);
+  // CUT AGAIN AROUND THE TURNED FLIGHT, which now runs (-1, -2) to (-1, 8):
+  // the hole runs north-south with it, astride x = -1.
+  const ring = d.surfaceOpenings[0].points;
+  const xs = ring.map(p => p.x), zs = ring.map(p => p.z);
+  expect(Math.max(...zs) - Math.min(...zs), 'long the way the flight runs').toBeGreaterThan(Math.max(...xs) - Math.min(...xs));
+  expect(Math.min(...xs)).toBeLessThan(-1);
+  expect(Math.max(...xs)).toBeGreaterThan(-1);
+  expect(Math.min(...zs), 'within a foot of the flight').toBeGreaterThanOrEqual(-3);
+  expect(Math.max(...zs)).toBeLessThanOrEqual(9);
   await page.keyboard.press('Control+z');
   d = await saved(page);
   expect(d.surfaceOpenings[0].points.map(xz)).toEqual(WELL);

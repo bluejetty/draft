@@ -13509,25 +13509,29 @@
     const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
     const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
     const a = degrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
-    // A STAIR'S WELL TURNS WITH IT (Movie, 18 Oct: "when i rotated the main
-    // floor stairs the foundation outline didn't show rotated"). The hole is
-    // cut square around the flight, so turning it about the same middle is
-    // the hole re-cut; it does not move that middle. A shared well (two
-    // flights through one hole) stays, as a drag leaves it.
-    const wells = entries.filter(entry => entry.type === 'stair')
-      .map(entry => stairWellOf(entry.item).hole).filter(Boolean)
-      .flatMap(hole => hole.points.filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z)))
-      .filter(pt => !points.includes(pt));
-    const turned = points.concat(wells);
-    const before = turned.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+    const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
-    turned.forEach(pt => {
+    points.forEach(pt => {
       const dx = pt.x - cx, dz = pt.z - cz;
       pt.x = cx + dx * cos - dz * sin;
       pt.z = cz + dx * sin + dz * cos;
     });
+    // A STAIR'S WELL IS CUT AGAIN WHERE IT NOW STANDS (Movie, 18 Oct: "when
+    // i rotated the main floor stairs the foundation outline didn't show
+    // rotated" -- "floor layout too"). Re-cut, not turned with it: a well
+    // already left behind by an earlier turn comes back around its flight.
+    // A NEW ring is written so the undo keeps the old one. A shared well (two
+    // flights through one hole) stays, as a drag leaves it.
+    const wells = [];
+    entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
+      const hole = stairWellOf(item).hole;
+      const ring = hole && stairOpeningFootprint(item);
+      if (!ring || ring.length < 3) return;
+      wells.push({ hole, points: hole.points });
+      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
+    });
     points.forEach(relinkVertex);
-    undoStack.push({ kind: 'rotate', before, detached });
+    undoStack.push({ kind: 'rotate', before, detached, wells });
     markDirty();
     paint();
     const shown = Math.round(((degrees % 360) + 360) % 360 * 100) / 100;
@@ -29720,6 +29724,7 @@
         if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
       });
       step.detached.forEach(d => { d.wall[d.key] = d.orig; });
+      (step.wells || []).forEach(w => { w.hole.points = w.points; });
     } else if (step.kind === 'move') {
       undoRedim(step);
       step.before.forEach(b => {

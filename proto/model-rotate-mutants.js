@@ -41,8 +41,8 @@ const MUTANTS = [
     find: '      row.append(name, move, turn, del);\n',
     with: '      row.append(name, move, del);\n', test: "the PHOTO popup has ROTATE: a quarter turn, the picture's sides swapped; one in hand glows and turns from the foot" },
   { file: 'MODEL.html', name: 'the stair well stays behind',
-    find: '    const turned = points.concat(wells);\n',
-    with: '    const turned = points;\n', test: 'a stair turned takes its well with it; UNDO puts both back' },
+    find: '      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));\n',
+    with: '', test: 'a stair turned takes its well with it; UNDO puts both back' },
 ];
 const run = name => {
   try {
