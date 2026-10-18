@@ -59,6 +59,16 @@ const MUTANTS = [
     find: "editRoofs(items, roof => { roof.pitch = v; roof.follows = 'none'; return null; });",
     with: "editRoofs(items, roof => { roof.follows = 'none'; return null; });",
     test: 'PITCH on the selected roof' },
+  { file: 'MODEL.html',
+    name: 'a roof in an assembly edits alone',
+    find: "    const items = kin.length > 1 && !roofScopeOne ? kin : picked;\n",
+    with: '    const items = picked;\n',
+    test: 'a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS ROOF alone' },
+  { file: 'MODEL.html',
+    name: 'THIS ROOF still edits the whole assembly',
+    find: "        roofScopeOne ? 'one' : 'assembly', id => { roofScopeOne = id === 'one'; again(); }));\n",
+    with: "        roofScopeOne ? 'one' : 'assembly', id => { again(); }));\n",
+    test: 'a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS ROOF alone' },
 ];
 
 const run = name => {

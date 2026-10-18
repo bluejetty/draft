@@ -218,3 +218,40 @@ test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge 
   roof = await saved(page);
   expect(roof.crossGables).toHaveLength(1);
 });
+
+// ROOFS IN AN ASSEMBLY (Movie, 18 Oct): "ASSEMBLY roof peices that are
+// similar so i can adjust the EAVE and PITCH for the grouped roofs seperately
+// but be able to edit the properties of all as one within the ASSEMBLY".
+test('a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS ROOF alone', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  const f = drawing();
+  const SMALL = [[100, -8], [130, -8], [130, 20], [100, 20]];
+  f.roofs.push({ id: 'roof-2', levelId: 7, follows: 'house', pitch: 4, overhang: 8,
+    points: SMALL.map(([x, z]) => ({ x, y: 0, z })), edges: SMALL.map(() => 'eave'),
+    edgeOverhang: SMALL.map(() => 8) });
+  f.groups = [{ id: 'group-9', name: 'MAIN ROOFS', fixed: false, stretchBehavior: 'item-geometry',
+    members: [{ type: 'roof', id: 'roof-1' }, { type: 'roof', id: 'roof-2' }] }];
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  await click(page, at, 30, 15);
+  await expect(page.locator('[data-prop-row="apply to"] [data-prop-value="assembly"]')).toHaveText('MAIN ROOFS (2 ROOFS)');
+  await page.locator('[data-roof-field="pitch"]').fill('5');
+  await page.locator('[data-roof-field="pitch"]').press('Enter');
+  await type(page, 'overhang, all edges', '2');
+  let d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.pitch)).toEqual([5, 5]);
+  expect(d.roofs[1].points.map(p => [p.x, p.z]), 'the other roof\'s eaves came in too')
+    .toEqual([[106, -2], [124, -2], [124, 14], [106, 14]]);
+  await page.locator('[data-prop-row="apply to"] [data-prop-value="one"]').click();
+  await page.locator('[data-roof-field="pitch"]').fill('6');
+  await page.locator('[data-roof-field="pitch"]').press('Enter');
+  d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.pitch)).toEqual([6, 5]);
+});

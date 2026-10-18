@@ -26941,10 +26941,24 @@
     return null;
   };
   const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE']];
-  const roofPropsNode = items => {
+  // A ROOF IN AN ASSEMBLY WITH OTHER ROOFS (Movie, 18 Oct): "ASSEMBLY roof
+  // peices that are similar so i can adjust the EAVE and PITCH for the
+  // grouped roofs seperately but be able to edit the properties of all as one
+  // within the ASSEMBLY". So PITCH and OVERHANG, ALL EDGES reach every roof
+  // in its assembly -- unless THIS ROOF is chosen; an edge is always this
+  // roof's own.
+  let roofScopeOne = false;
+  const roofPropsNode = picked => {
     const box = document.createElement('div');
     const again = () => { if (selection.every(e => e.type === 'roof')) showSelectionProps(); };
-    const lone = items.length === 1 ? items[0] : null;
+    const lone = picked.length === 1 ? picked[0] : null;
+    const owner = lone ? groupOf({ type: 'roof', item: lone }) : null;
+    const kin = owner ? itemsOfGroup(owner).filter(e => e.type === 'roof').map(e => e.item) : [];
+    if (kin.length > 1) {
+      box.append(propRow('APPLY TO', [['assembly', `${owner.name} (${kin.length} ROOFS)`], ['one', 'THIS ROOF']],
+        roofScopeOne ? 'one' : 'assembly', id => { roofScopeOne = id === 'one'; again(); }));
+    }
+    const items = kin.length > 1 && !roofScopeOne ? kin : picked;
     box.append(numberField('PITCH', lone ? lone.pitch : items[0].pitch, 0, 24, 0.5, v => {
       if (v !== null) {
         const refusal = editRoofs(items, roof => { roof.pitch = v; roof.follows = 'none'; return null; });
