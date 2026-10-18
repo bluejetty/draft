@@ -55,6 +55,8 @@ const ROSTER = [
   ['build', 'fenestration', 'FENESTRATION', 'E'],
   ['build', 'floor', 'FLOOR', 'F'],
   ['build', 'roof', 'ROOF', 'O'],
+  // DORMER (Movie, 18 Oct): "can we make a DORMER command in the BUILD tab?"
+  ['build', 'dormer', 'DORMER', ''],
   ['build', 'column', 'COLUMN', ''],
   ['build', 'beam', 'BEAM', ''],
   ['build', 'stair', 'STAIR', ''],
@@ -119,7 +121,7 @@ test('twenty keys, in the old page\'s order and grouping', async ({ page }) => {
     .toHaveText('BUILD');
 });
 
-test('fourteen keys carry a letter and six are deliberately bare',
+test('fourteen keys carry a letter and seven are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -131,7 +133,7 @@ test('fourteen keys carry a letter and six are deliberately bare',
     // letters were ever loosened to ''.
     expect(got.filter(k => k.key !== '')).toHaveLength(14);
     expect(got.filter(k => k.key === '').map(k => k.id))
-      .toEqual(['annotation', 'roomtag', 'column', 'beam', 'stair', 'fixture']);
+      .toEqual(['annotation', 'roomtag', 'dormer', 'column', 'beam', 'stair', 'fixture']);
   });
 
 test('a SETTINGS remap moves the letter on the key face', async ({ page }) => {

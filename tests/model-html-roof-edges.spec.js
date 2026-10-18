@@ -190,9 +190,9 @@ test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge 
   // 40' is the default, and the jog's wall is only 20' long.
   await page.locator('[data-roof-cross-gable]').click();
   await expect(page.locator('#strip-message')).toContainText('wider than the wall');
-  await type(page, 'cross gable width', '16');
-  await page.locator('[data-roof-field="cross gable pitch"]').fill('6');
-  await page.locator('[data-roof-field="cross gable pitch"]').press('Enter');
+  await type(page, 'dormer width', '16');
+  await page.locator('[data-roof-field="dormer pitch"]').fill('6');
+  await page.locator('[data-roof-field="dormer pitch"]').press('Enter');
   await page.locator('[data-roof-cross-gable]').click();
   let roof = await saved(page);
   expect(roof.crossGables).toEqual([{ at: { x: 29, z: 36 }, widthFt: 16, pitch: 6 }]);

@@ -27091,6 +27091,71 @@
   };
   let crossGableWidthFt = 40;
   let crossGablePitch = 4;
+  // ── DORMER, THE BUILD TOOL (Movie, 18 Oct) ──────────────────────────────
+  //
+  // "can we make a DORMER command in the BUILD tab?" -- "we will start with
+  // the full dormer with only front wall like on the NORTH POINT roof plan".
+  // That dormer IS the cross gable above: a full gable down to the valleys,
+  // its front wall on the outside wall line, roof cavity behind it. So the
+  // tool is a way in to the same record -- DORMER armed, a click on an eave
+  // puts one there at the panel's width and pitch, as many as he likes.
+  //
+  // THE TYPE ROW HAS ONE CHIP FOR NOW: "i will need to refine it because
+  // there are different dormer looks and ways to build". Each new look is a
+  // chip here and a shape in geometry-2d.
+  const DORMER_TYPES = [['full-gable', 'FULL GABLE — FRONT WALL ONLY']];
+  let dormerType = 'full-gable';
+  let dormerPanelUp = false;
+  const dormerSaid = () => `DORMER ${window.DraftFormatters.formatArchitecturalInches(crossGableWidthFt * 12)} wide at ${crossGablePitch}/12. UNDO takes it off.`;
+  const showDormerProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const box = document.createElement('div');
+    const types = document.createElement('div');
+    types.className = 'chip-row';
+    types.dataset.dormerTypes = '';
+    DORMER_TYPES.forEach(([id, label]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.dormerType = id;
+      btn.textContent = label;
+      btn.setAttribute('aria-pressed', String(dormerType === id));
+      btn.addEventListener('click', () => { dormerType = id; showDormerProps(); });
+      types.append(btn);
+    });
+    box.append(types);
+    box.append(propField('DORMER WIDTH', crossGableWidthFt, ft => {
+      if (!(ft > 0)) return 'A dormer needs a width.';
+      crossGableWidthFt = ft;
+      return null;
+    }, showDormerProps));
+    box.append(numberField('DORMER PITCH', crossGablePitch, 1, 24, 0.5, v => {
+      if (v !== null) crossGablePitch = v;
+      return crossGablePitch;
+    }));
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.dormerNote = '';
+    note.textContent = 'CLICK AN EAVE OF THE ROOF WHERE THE DORMER GOES. ITS FRONT WALL STANDS ON THE WALL LINE BELOW.';
+    box.append(note);
+    P.set('DORMER', box);
+    dormerPanelUp = true;
+  };
+  // THE EAVE NEAREST THE PRESS, on any roof this sheet paints (ROOF, or the
+  // ROOF level's from SITE). A gable edge has no eave to stand a dormer on.
+  const dormerPress = at => {
+    let hit = null;
+    pickRoofs().forEach(roof => {
+      if (hit) return;
+      const index = roofEdgeNear(roof, at);
+      if (index != null) hit = { roof, index };
+    });
+    if (!hit) { sayOnStrip('DORMER — click ON an eave of the roof.'); return; }
+    if (hit.roof.edges?.[hit.index] === 'gable') { sayOnStrip('DORMER — that edge is a GABLE; a dormer stands on an EAVE.'); return; }
+    const refusal = editRoofs([hit.roof], roof => addCrossGable(roof, hit.index, at));
+    sayOnStrip(refusal ? `DORMER — ${refusal}` : dormerSaid());
+  };
   const addCrossGable = (roof, index, click) => {
     const G = window.DraftGeometry2D;
     const wall = G.roofWallLine(roof);
@@ -27100,7 +27165,7 @@
     if (len2 < 1e-9) return 'That edge has no length.';
     const t = click ? Math.max(0, Math.min(1, ((click.x - a.x) * ex + (click.z - a.z) * ez) / len2)) : 0.5;
     const len = Math.sqrt(len2);
-    if (crossGableWidthFt > len + 1e-6) return 'That cross gable is wider than the wall under this edge.';
+    if (crossGableWidthFt > len + 1e-6) return 'That dormer is wider than the wall under this edge.';
     // Kept on its wall: a width that would run off the end slides it back.
     const halfT = crossGableWidthFt / 2 / len;
     const tc = Math.max(halfT, Math.min(1 - halfT, t));
@@ -27203,12 +27268,12 @@
         // that is aligned with the ext perimter wall below". Centred where
         // the edge was clicked, on the wall line under it.
         if (kind === 'eave') {
-          box.append(propField('CROSS GABLE WIDTH', crossGableWidthFt, ft => {
-            if (!(ft > 0)) return 'A cross gable needs a width.';
+          box.append(propField('DORMER WIDTH', crossGableWidthFt, ft => {
+            if (!(ft > 0)) return 'A dormer needs a width.';
             crossGableWidthFt = ft;
             return null;
           }, again));
-          box.append(numberField('CROSS GABLE PITCH', crossGablePitch, 1, 24, 0.5, v => {
+          box.append(numberField('DORMER PITCH', crossGablePitch, 1, 24, 0.5, v => {
             if (v !== null) crossGablePitch = v;
             return crossGablePitch;
           }));
@@ -27216,11 +27281,11 @@
           add.type = 'button';
           add.className = 'sel-chip';
           add.dataset.roofCrossGable = '';
-          add.textContent = 'ADD CROSS GABLE';
+          add.textContent = 'ADD DORMER';
           add.addEventListener('click', () => {
             const refusal = editRoofs([lone], roof => addCrossGable(roof, index, roofEdgeClick));
             if (refusal) sayOnStrip(refusal);
-            else sayOnStrip(`Cross gable ${window.DraftFormatters.formatArchitecturalInches(crossGableWidthFt * 12)} wide at ${crossGablePitch}/12. UNDO takes it off.`);
+            else sayOnStrip(dormerSaid());
             again();
           });
           box.append(add);
@@ -27233,7 +27298,7 @@
         row.dataset.roofCrossGableRow = String(gi);
         const word = document.createElement('span');
         word.className = 'props-title';
-        word.textContent = `CROSS GABLE ${gi + 1}: ${window.DraftFormatters.formatArchitecturalInches(gable.widthFt * 12)} @ ${gable.pitch}/12`;
+        word.textContent = `DORMER ${gi + 1}: ${window.DraftFormatters.formatArchitecturalInches(gable.widthFt * 12)} @ ${gable.pitch}/12`;
         const gone = document.createElement('button');
         gone.type = 'button';
         gone.className = 'sel-chip';
@@ -28109,6 +28174,7 @@
 
   const showToolProps = tool => {
     if (tool === 'roof') { showRoofProps(); return; }
+    if (tool === 'dormer') { showDormerProps(); return; }
     if (tool === 'wall') { showWallProps(); return; }
     if (tool === 'fenestration') { showOpeningProps(); return; }
     if (tool === 'dimension') { showDimensionProps(); return; }
@@ -28135,6 +28201,7 @@
     if (beamPanelUp) { window.ModelProps.clear(); beamPanelUp = false; }
     if (stairPanelUp) { window.ModelProps.clear(); stairPanelUp = false; }
     if (notePanelUp) { window.ModelProps.clear(); notePanelUp = false; }
+    if (dormerPanelUp) { window.ModelProps.clear(); dormerPanelUp = false; }
   };
 
   toolListeners.push(tool => {
@@ -28640,6 +28707,7 @@
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
+    if (activeTool === 'dormer') { dormerPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'floor') { floorPress(at); return; }
     if (activeTool === 'shape') { shapePress(at); return; }

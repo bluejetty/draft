@@ -62,6 +62,11 @@
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },
     { id: 'roof',         name: 'ROOF',         group: 'build', kind: 'contextual', command: 'roof' },
+    // DORMER (Movie, 18 Oct): "can we make a DORMER command in the BUILD
+    // tab?" -- "we will start with the full dormer with only front wall like
+    // on the NORTH POINT roof plan", and "i will need to refine it because
+    // there are different dormer looks". No letter yet.
+    { id: 'dormer',       name: 'DORMER',       group: 'build', kind: 'contextual', command: null },
     { id: 'column',       name: 'COLUMN',       group: 'build', kind: 'contextual', command: null },
     { id: 'beam',         name: 'BEAM',         group: 'build', kind: 'contextual', command: null },
     { id: 'stair',        name: 'STAIR',        group: 'build', kind: 'contextual', command: null },
