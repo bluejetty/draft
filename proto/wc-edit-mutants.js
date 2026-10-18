@@ -14,7 +14,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPECS = ['tests/model-html-move-selection.spec.js', 'tests/model-html-trim.spec.js',
   'tests/model-html-wall-loose.spec.js', 'tests/model-html-wall-off.spec.js', 'tests/dimension-hand.spec.js',
-  'tests/model-tool-assembly.spec.js'];
+  'tests/model-tool-assembly.spec.js', 'tests/model-html-roof-move.spec.js'];
 const MUTANTS = [
   { file: 'MODEL.html', name: "MOVE still needs a roof", spec: 'tests/model-html-move-selection.spec.js',
     find: "    const able = !activeCut() && !modalUp() && selection.length > 0;\n    if (!able || (moveState.on && roof !== moveState.roof",
@@ -68,6 +68,14 @@ const MUTANTS = [
     find: "      if (lit) {\n        const s = toS(lit);",
     with: "      if (false) {\n        const s = toS(lit);",
     test: "the node a dimension point will lock to lights up under the pointer" },
+  { file: 'MODEL.html', name: "a roof edge pulled past the corner runs on", spec: 'tests/model-html-roof-move.spec.js',
+    find: "        if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;",
+    with: "        if (stop != null && Math.abs(dist - stop) < catchFt) dist = stop;",
+    test: "an edge pulled past the corner stops on it: no roof the other side, no sliver" },
+  { file: 'MODEL.html', name: "a roof edge let go a hair short is not caught", spec: 'tests/model-html-roof-move.spec.js',
+    find: "        if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;",
+    with: "        if (stop != null && Math.abs(dist) > Math.abs(stop)) dist = stop;",
+    test: "an edge pulled past the corner stops on it: no roof the other side, no sliver" },
 ];
 
 const run = (name, spec) => {

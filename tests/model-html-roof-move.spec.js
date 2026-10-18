@@ -88,6 +88,24 @@ test('option 2: the jog\'s front dragged down onto the main eave line -- no node
   expect(ring(roof.points)).toEqual([[-8, -8], [68, -8], [68, 38], [-8, 38]]);
 });
 
+// IT STOPS ON THE CORNER (Movie, 18 Oct: "if the user pulls it past the
+// corner can you cut it at the corner rather than making new roof on the other
+// side" -- "it was hard to get right on the corner point there was a little
+// extra roof").
+test('an edge pulled past the corner stops on it: no roof the other side, no sliver', async ({ page }) => {
+  const { at } = await open(page);
+  await armMove(page, at);
+  // The jog's front pulled 1.5' past the main eave line.
+  await drag(page, at, [30, 44], [30, 36.5]);
+  let roof = await saved(page);
+  expect(ring(roof.points)).toEqual([[-8, -8], [68, -8], [68, 38], [-8, 38]]);
+  await page.keyboard.press('Control+z');
+  // And let go a hair short of it: caught.
+  await drag(page, at, [30, 44], [30, 38.05]);
+  roof = await saved(page);
+  expect(ring(roof.points)).toEqual([[-8, -8], [68, -8], [68, 38], [-8, 38]]);
+});
+
 test('a node dragged moves alone; a node clicked is picked and DELETE takes it out', async ({ page }) => {
   const { at } = await open(page);
   await armMove(page, at);

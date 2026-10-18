@@ -1187,6 +1187,10 @@
     border-bottom:1px solid var(--edge-panel); font-family: var(--font-ui); font-size:12px;
     color: var(--ink-primary); }
   .trace-row span { flex:1; overflow-wrap:anywhere; }
+  /* A HOLOGRAM'S ROW WRAPS: its name on a line of its own, the verbs under
+     it -- squeezed into one row the name stood a letter wide ("S U I T E"). */
+  .trace-row[data-hologram-row] { flex-wrap:wrap; }
+  .trace-row[data-hologram-row] [data-hologram-name] { flex-basis:100%; }
   .trace-row button { cursor:pointer; padding:3px 8px; border-radius:3px; border:1px solid var(--edge-panel);
     background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui);
     font-size:10px; font-weight:600; letter-spacing:0.04em; }
@@ -14487,7 +14491,21 @@
         const i = d.edge, n = roof.points.length, a = roof.points[i], c = roof.points[(i + 1) % n];
         const len = Math.hypot(c.x - a.x, c.z - a.z) || 1;
         const nn = { x: -(c.z - a.z) / len, z: (c.x - a.x) / len };
-        const dist = dx * nn.x + dz * nn.z;
+        let dist = dx * nn.x + dz * nn.z;
+        // IT STOPS ON THE CORNER (Movie, 18 Oct: "if the user pulls it past
+        // the corner can you cut it at the corner rather than making new roof
+        // on the other side" -- "it was hard to get right on the corner point
+        // there was a little extra roof on either one side or the other").
+        // Where an edge either side would shrink to nothing -- the slid line
+        // through its far corner -- the slide stops, and catches it from a
+        // few pixels short; the tidy on the release then drops the corner.
+        const stops = [roof.points[(i - 1 + n) % n], roof.points[(i + 2) % n]]
+          .map(p => (p.x - a.x) * nn.x + (p.z - a.z) * nn.z)
+          .filter(cd => Math.abs(cd) > 1e-6 && Math.sign(cd) === Math.sign(dist || cd));
+        const catchFt = 8 / view.scale;
+        stops.sort((p, q) => Math.abs(p) - Math.abs(q));
+        const stop = stops[0];
+        if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;
         roof.points = slideEdge(roof.points, i, dist);
         if (roof.footprint) roof.footprint = slideEdge(roof.footprint, i, dist);
       }
