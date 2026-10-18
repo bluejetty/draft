@@ -30,9 +30,9 @@ const MUTANTS = [
     with: '',
     test: 'the piece not wanted is deleted, and UNDO joins the roof again' },
   { file: 'MODEL.html', name: 'an assembly is not broken',
-    find: '    ungroupSelected();\n    sayOnStrip(`Broken into pieces',
-    with: '    sayOnStrip(`Broken into pieces',
-    test: 'an assembly selected: BREAK breaks it into its pieces' },
+    find: '    ungroupSelected();\n    sayOnStrip(`ASSEMBLY BUST: broken into pieces',
+    with: '    sayOnStrip(`ASSEMBLY BUST: broken into pieces',
+    test: "an assembly selected: the foot button says BUST and busts it into its pieces; a roof's says BREAK" },
 ];
 
 const run = name => {

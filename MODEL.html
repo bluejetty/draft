@@ -13584,6 +13584,13 @@
     const able = !activeCut() && !modalUp() && (breakRoofHeld() || selectedGroups().length > 0);
     if (!able) { breakState.roof = null; breakState.first = null; }
     breakButton.hidden = !able || !!rotateState?.open;
+    // A ROOF IS BROKEN, AN ASSEMBLY IS BUST (Movie, 18 Oct: "ASSEMBLY BREAK
+    // is different from ROOF EDGE BREAK" -- "lets go ASSEMBLY GROUP /
+    // ASSEMBLY BUST"). One button, the word for what it will do.
+    const roof = !!breakRoofHeld();
+    breakButton.textContent = roof ? 'BREAK' : 'BUST';
+    breakButton.title = roof ? 'BREAK — cut the roof in two, edge to edge'
+      : 'ASSEMBLY BUST — break the assembly into its pieces';
     breakButton.setAttribute('aria-pressed', String(!!breakState.roof));
   }
   const breakAt = (roof, world) => {
@@ -13665,7 +13672,7 @@
     const n = selectedGroups().length;
     if (!n) return;
     ungroupSelected();
-    sayOnStrip(`Broken into pieces: ${n === 1 ? 'the assembly is' : `${n} assemblies are`} gone and the pieces stay selected.`);
+    sayOnStrip(`ASSEMBLY BUST: broken into pieces, ${n === 1 ? 'the assembly is' : `${n} assemblies are`} gone and the pieces stay selected.`);
     paint();
   };
   if (breakButton) breakButton.addEventListener('click', pressBreak);
@@ -17026,7 +17033,7 @@
         .concat([{ list: drawing.groups, item: group }]),
     });
     sayOnStrip(`${room.name} placed${room.ext ? ' against the exterior wall' : ''} — `
-      + 'one assembly: UNGROUP to break it into pieces.');
+      + 'one assembly: ASSEMBLY BUST to break it into pieces.');
     markDirty();
     paint();
     return { walls: made, fixtures, doors, door: doors[0], group, levelId, viewId };
@@ -17130,7 +17137,7 @@
         .concat([{ list: drawing.groups, item: group }]),
     });
     sayOnStrip(`${kitchen.name} placed ${ownWalls.length ? 'with its own two walls' : 'in the corner'} \u2014 `
-      + 'one assembly: UNGROUP to break it into pieces. One UNDO takes it all.');
+      + 'one assembly: ASSEMBLY BUST to break it into pieces. One UNDO takes it all.');
     markDirty();
     paint();
     return { fixtures: made, walls: ownWalls, group };
@@ -23735,7 +23742,7 @@
     const notesSaid = lettered.length
       ? ` and ${lettered.length.toLocaleString()} note${lettered.length === 1 ? '' : 's'}` : '';
     sayOnStrip(`${made.length.toLocaleString()} line${made.length === 1 ? '' : 's'}${notesSaid} from ${scan.file.name} on `
-      + `${traceLevelName()}${group ? ', as one group \u2014 drag it into place, UNGROUP to edit single pieces' : ''}.`);
+      + `${traceLevelName()}${group ? ', as one group \u2014 drag it into place, ASSEMBLY BUST to edit single pieces' : ''}.`);
   };
 
   // THE DXF IS KEPT AS THE FILE, and drawn from it: its lines are never
@@ -25668,7 +25675,7 @@
     if (n) {
       createAssembly(true);
       const group = selectedGroups()[0];
-      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. UNGROUP breaks it.`);
+      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. ASSEMBLY BUST breaks it.`);
     } else {
       sayOnStrip('Nothing picked, so no assembly was made.');
     }
@@ -26020,9 +26027,11 @@
       // still find ASSEMBLY down, or the rule holds only while nothing is
       // picked, which is the half nobody would test.
       const on = window.DraftToolRoster?.panelOn('assembly', board) !== false;
-      asmBtn.textContent = gKey ? `ASSEMBLY  [${gKey}]` : 'ASSEMBLY';
+      asmBtn.textContent = gKey ? `ASSEMBLY GROUP  [${gKey}]` : 'ASSEMBLY GROUP';
       asmBtn.disabled = !on || n === 0;
-      unBtn.textContent = 'UNGROUP';
+      // ASSEMBLY GROUP / ASSEMBLY BUST (Movie, 18 Oct): BREAK is the roof's
+      // cut along its edges, so the assembly's own undoing has its own word.
+      unBtn.textContent = 'ASSEMBLY BUST';
       unBtn.disabled = !on || held.length === 0;
       unBtn.hidden = held.length === 0;
       // THE LOCK VERBS ARE SYNCED HERE, in the same pass that owns these
