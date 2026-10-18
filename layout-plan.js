@@ -1091,6 +1091,11 @@ if (!window.DraftLayoutPlan) {
       : null;
 
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
+    // THE SUITES' WINDOWS IN THE SHELL'S WALLS (hologram.js hostOpenings).
+    // A hologram's own pass has none: its holograms were dropped on the way in.
+    const H = window.DraftHologram;
+    const fensOf = () => (hologram || !H?.hostOpenings ? of('fenestrations')
+      : [...of('fenestrations'), ...H.hostOpenings(saved)]);
     const openings = of('surfaceOpenings');
     const surfaceOpeningsFor = (hostType, hostId) => openings.filter(opening =>
       opening.hostType === hostType && opening.hostId === hostId
@@ -1263,7 +1268,7 @@ if (!window.DraftLayoutPlan) {
       isPrinting: false,
 
       walls,
-      fenestrations: of('fenestrations'),
+      fenestrations: fensOf(),
       // ON A FLOOR LAYOUT THE HALF-FLOOR'S DECK COMES TOO (Movie, 7 Oct: "we
       // should also show the 0.5 FLOOR in the 1 FLOOR"), lighter and under.
       floors: env.halfLevel === true && view === 'floor' ? of('floors') : only(of('floors')),
@@ -1295,7 +1300,7 @@ if (!window.DraftLayoutPlan) {
       // under them. The slab's own wash pours through.
       doorBucks: view === 'foundation' && !shell && window.DraftDoorBucks
         ? window.DraftDoorBucks.doorBucks({
-          walls: of('walls'), fenestrations: of('fenestrations'),
+          walls: of('walls'), fenestrations: fensOf(),
           thicknessFt, faceOffsets: geo.wallFaceOffsets, concreteLevelId: levelId,
         }) : [],
       buckEnv: { paperColor, slabFill: 'rgba(89,128,166,0.16)', wallInk: '#1d1f20', belowAlpha: 0.4 },

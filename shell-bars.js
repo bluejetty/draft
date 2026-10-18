@@ -499,6 +499,19 @@ if (!window.DraftShellBars) {
         <path d="M4 10.4 H12 L10.6 12.2 H5.4 Z" fill="currentColor" stroke="none"></path>
       </svg>
     </button>
+    <!-- HOLOGRAM (Movie, 18 Oct): "an area on the MODEL AREA that shows which
+         HOLOGRAMS are loaded (maybe up by the PHOTO IMAGE loading button we
+         could have a HOLOGRAM button". A house over a house, the back one
+         dashed: another drawing under this one. Lit while any is loaded. -->
+    <button type="button" id="strip-hologram" class="chip" data-mode-hologram aria-pressed="false"
+      title="HOLOGRAM — the .draft files shown under this one (an existing house, or SUITES), and bring in another">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+        stroke-width="1.2" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 7 L9 3.5 L13 7 V12 H5 Z" stroke-dasharray="1.4 1.1" stroke-width="0.9"></path>
+        <path d="M2.5 9 L6.5 5.5 L10.5 9 V14.5 H2.5 Z"></path>
+        <path d="M5.5 14.5 V11.5 H7.5 V14.5" stroke-width="0.9"></path>
+      </svg>
+    </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>

@@ -124,7 +124,12 @@ if (!window.DraftCutViewEnv) {
       roofingIds: roofTypes ? roofTypes.ROOFING_TYPES.map(r => r.id) : null,
       cornerStyles: profiles ? profiles.GABLE_CORNER_STYLES : null,
     });
-    const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
+    // AND THE SUITES' ON THE SHELL'S WALLS (hologram.js hostOpenings, Movie,
+    // 18 Oct): a suite placed on the shell hands its windows to the shell
+    // wall its own lines up with.
+    const hologram = typeof window !== 'undefined' ? window.DraftHologram : null;
+    const fenestrations = format.fenestrations([...(Array.isArray(saved.fenestrations) ? saved.fenestrations : []),
+      ...(hologram?.hostOpenings ? hologram.hostOpenings(saved) : [])], levelIds);
     const outlines = format.outlines(saved.outlines, levelIds);
     // Columns too: the elevation draws the piles under a grade beam.
     const columns = format.columns
