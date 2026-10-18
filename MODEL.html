@@ -946,7 +946,49 @@
      panes set `display` in their own rules, which beats the attribute's UA
      style. */
   #right-rail #levels-panel[hidden],
-  #right-rail #view-rail[hidden] { display:none; }
+  #right-rail #view-rail[hidden],
+  #right-rail #notes-panel[hidden] { display:none; }
+  /* THE NOTES PAD (Movie, 16 Oct): "a 'notepad' that can open up as a tab
+     under the LEVELS/LAYERS tab ... that blue sticky pad look and put the
+     text dark grey or black that says NOTES ... when it opens up make it a
+     notepad area about the same width that the LEVELS / LAYERS opens up to
+     ... a page that can scroll down ... but only about 5 pages in length".
+     The DZDOCU pad he sent is pale sky blue with a darker gum strip along
+     its top; RUFF's pad is the yellow one. A sticky note is paper, so it
+     keeps its colour on the night sheet too. */
+  :root { --pad: #d6e9f8; --pad-gum: #a9cdea; --pad-ink: #2b2f33;
+    --pad-rule: rgba(43, 47, 51, 0.10); }
+  html[data-theme="ruff"] { --pad: #fbeea0; --pad-gum: #efd65c; }
+  #notes-tab { right:0; top: calc(var(--rail-top) + 32vh + 8px);
+    border:1px solid var(--pad-gum); border-right:none;
+    border-radius:4px 0 0 4px; writing-mode:vertical-lr; max-height:14vh;
+    background: linear-gradient(to right, var(--pad-gum) 0 6px, var(--pad) 6px);
+    color: var(--pad-ink); }
+  #notes-tab:hover, #notes-tab[aria-selected="true"] { color:#000;
+    border-color: var(--pad-ink); }
+  #right-rail[data-pane-showing="notes"] { overflow:hidden; }
+  #notes-panel { display:flex; flex-direction:column; height:100%;
+    background: var(--pad); border:1px solid var(--pad-gum);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+  .np-head { display:flex; align-items:center; gap:6px; padding:5px 6px;
+    background: var(--pad-gum); color: var(--pad-ink);
+    font-family: var(--font-ui); font-size:10px; font-weight:700;
+    letter-spacing:0.12em; }
+  .np-title { flex:1; }
+  .np-count { font-weight:600; font-size:8px; letter-spacing:0.04em; opacity:0.75; }
+  .np-count[data-full] { opacity:1; color:#8a1c1c; }
+  .np-clear { font-family: var(--font-ui); font-size:9px; font-weight:700;
+    letter-spacing:0.08em; padding:2px 6px; cursor:pointer;
+    background: var(--pad); color: var(--pad-ink); border:1px solid var(--pad-ink);
+    border-radius:2px; }
+  .np-clear:hover { background:#fff; }
+  .np-text { flex:1; min-height:0; width:100%; box-sizing:border-box;
+    resize:none; border:0; outline:none; margin:0; padding:4px 8px;
+    overflow-y:auto; color: var(--pad-ink); font-family: var(--font-ui);
+    font-size:12px; line-height:18px;
+    background: repeating-linear-gradient(to bottom, transparent 0 17px,
+      var(--pad-rule) 17px 18px) local, var(--pad); }
+  .np-text::placeholder { color: var(--pad-ink); opacity:0.45; }
   .lv-head { display:flex; align-items:center; gap:6px; }
   .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
@@ -1543,12 +1585,24 @@
      as one, which is MODEL.dc.html's own arrangement (:1840). -->
 <button id="right-tab" class="rail-tab" type="button" data-right-tab
   data-pane-tab="levels" hidden>LEVELS / LAYERS</button>
+<!-- THE NOTES PAD, under LEVELS / LAYERS on the same edge and the same rail:
+     it opens and shuts the way that tab does, and swaps with it. -->
+<button id="notes-tab" class="rail-tab" type="button" data-notes-tab
+  data-pane-tab="notes" hidden>NOTES</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
   <div id="view-rail" data-pane="levels"></div>
   <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
+  <div id="notes-panel" data-notes-panel data-pane="notes" hidden>
+    <div class="np-head"><span class="np-title">NOTES</span>
+      <span class="np-count" data-notes-count></span>
+      <button class="np-clear" type="button" data-notes-clear
+        title="Clear every note on the pad">CLEAR</button></div>
+    <textarea class="np-text" data-notes-text spellcheck="false"
+      aria-label="Notes" placeholder="Type or paste notes, numbers, anything..."></textarea>
+  </div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 
@@ -6927,7 +6981,7 @@
   // -- the pane is a second, independent fact, not a repacking of the first.
   // ONE PANE NOW (Movie, 10 Oct), so an old `pane=previews` link -- a
   // bookmark, a shared URL -- falls back to it and still shows the previews.
-  const PANES = ['levels'];
+  const PANES = ['levels', 'notes'];
   const paneShowing = () =>
     PANES.includes(params.get('pane')) ? params.get('pane') : 'levels';
   const setPane = pane => {
@@ -6942,6 +6996,91 @@
     syncShell();
     paint();
   };
+
+  // ── THE NOTES PAD ───────────────────────────────────────────────────────
+  //
+  // Movie, 16-17 Oct: "save with the draft, and also when a user starts a new
+  // plan, keep the notes still there ... try to keep those notes always in
+  // there as long as possible unless the user presses CLEAR". So the pad is
+  // the drafter's, not the drawing's: it rides in the .draft as `notepad`, it
+  // is mirrored to this browser so a reload or a crash keeps it, and a NEW
+  // plan picks it up and saves it too. The one case where a file wins is a
+  // drawing that has notes of its own -- opening it shows those.
+  //
+  // ABOUT FIVE PAGES: 15,000 characters, roughly 250 lines of the pad. The
+  // textarea's maxlength stops typing and cuts a paste at the line, and the
+  // head says how much is left before it does.
+  const NOTES_MAX = 15000;
+  const NOTES_KEY = 'draft.notepad';
+  const notesText = document.querySelector('[data-notes-text]');
+  const notesCount = document.querySelector('[data-notes-count]');
+  notesText.maxLength = NOTES_MAX;
+  const notesStored = () => {
+    try { return localStorage.getItem(NOTES_KEY) || ''; } catch { return ''; }
+  };
+  const storeNotes = text => {
+    try {
+      if (text) localStorage.setItem(NOTES_KEY, text);
+      else localStorage.removeItem(NOTES_KEY);
+    } catch { /* private window: the .draft still carries them */ }
+  };
+  const syncNotesCount = () => {
+    const used = notesText.value.length;
+    const pages = Math.max(1, Math.ceil(used / (NOTES_MAX / 5)));
+    notesCount.textContent = used >= NOTES_MAX ? 'PAD FULL' : `PAGE ${pages} OF 5`;
+    notesCount.toggleAttribute('data-full', used >= NOTES_MAX);
+  };
+  const showNotes = text => {
+    notesText.value = String(text).slice(0, NOTES_MAX);
+    syncNotesCount();
+  };
+  // ON THE DRAWING ONLY WHEN THERE IS SOMETHING TO SAY: a drawing opened and
+  // saved with an empty pad comes back key for key.
+  const notesOntoDrawing = text => {
+    if (!drawing) return;
+    if (text) drawing.notepad = text;
+    else delete drawing.notepad;
+  };
+  // Called by adoptFile once the drawing is built -- open, NEW and a re-read
+  // all come through there.
+  const adoptNotes = () => {
+    const own = typeof drawing?.notepad === 'string' ? drawing.notepad.slice(0, NOTES_MAX) : '';
+    if (own) { showNotes(own); storeNotes(own); }
+    notesOntoDrawing(notesText.value);
+  };
+  showNotes(notesStored());
+  // RIGHT UNDER LEVELS / LAYERS, wherever that tab's word ends. The stylesheet
+  // can only place it under the tab's 32vh CAP, which left a hand's width of
+  // empty edge between the two at every window height.
+  const notesTab = document.getElementById('notes-tab');
+  const seatNotesTab = () => {
+    const above = document.getElementById('right-tab').getBoundingClientRect();
+    if (above.height) notesTab.style.top = `${Math.round(above.bottom + 8)}px`;
+  };
+  // AND AGAIN WHEN THAT TAB CHANGES SIZE -- the webfont landing after the
+  // first seat makes its word a few pixels longer.
+  window.addEventListener('resize', seatNotesTab);
+  if (window.ResizeObserver) new ResizeObserver(seatNotesTab).observe(document.getElementById('right-tab'));
+  notesText.addEventListener('input', () => {
+    syncNotesCount();
+    storeNotes(notesText.value);
+    if (!drawing) return;
+    const was = drawing.notepad || '';
+    notesOntoDrawing(notesText.value);
+    if ((drawing.notepad || '') !== was) markDirty();
+  });
+  // Typing on the pad is typing, not commands: D, W, Enter and the rest stop
+  // here instead of arming tools under the drafter's words.
+  ['keydown', 'keyup', 'keypress'].forEach(type =>
+    notesText.addEventListener(type, ev => ev.stopPropagation()));
+  // CLEAR ASKS FIRST, so one stray press cannot wipe five pages.
+  document.querySelector('[data-notes-clear]').addEventListener('click', () => {
+    if (!notesText.value) return;
+    if (!window.confirm('Clear all notes?')) return;
+    showNotes('');
+    storeNotes('');
+    if (drawing && drawing.notepad !== undefined) { notesOntoDrawing(''); markDirty(); }
+  });
 
   // ── AND THE SAME TWO FACTS ON THE LEFT ──────────────────────────────────
   //
@@ -7066,6 +7205,7 @@
         String(rightOpen && tab.dataset.paneTab === pane));
       tab.setAttribute('aria-selected', String(tab.dataset.paneTab === pane));
     });
+    seatNotesTab();
   };
 
   // `#left-tab` IS A PANE TAB NOW, not the rail's on/off switch, so it goes
@@ -28868,6 +29008,7 @@
       shapes: F.shapes(parsed.shapes, levelIds, { drops: refusedItems.shapes }),
       fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };
+    adoptNotes();
     // Recorded against the RAW file: the normaliser is the only thing that knows
     // a substitution happened, and it does not say so — the two types differ and
     // nothing else marks it.
