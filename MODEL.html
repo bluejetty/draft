@@ -12211,25 +12211,31 @@
     faceCornerCache = { key, list: G.wallFaceCorners(segs, openingThicknessFt()) };
     return faceCornerCache.list;
   };
-  const nodeEnds = () => {
+  const nodeEnds = ({ faces = true } = {}) => {
     const out = [];
     [...walls(), ...lines()].forEach(seg => [seg.start, seg.end].forEach(v => {
       if (v && !out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     }));
-    wallFaceNodes().forEach(v => {
+    if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
     return out;
   };
+  // A WALL'S OWN NODE WINS: its face corners stand an inch or two off it,
+  // and a press meant for the node it always took must still land there. The
+  // face corners take a press only where no node is in reach.
   const snapNodeAt = at => {
     if (!at) return null;
     const r = Math.max(NODE_SNAP_FT, NODE_SNAP_PX / view.scale);
-    let best = null;
-    nodeEnds().forEach(v => {
-      const d = Math.hypot(v.x - at.x, v.z - at.z);
-      if (d <= r && (!best || d < best.d)) best = { d, v };
-    });
-    return best ? best.v : null;
+    const nearest = list => {
+      let best = null;
+      list.forEach(v => {
+        const d = Math.hypot(v.x - at.x, v.z - at.z);
+        if (d <= r && (!best || d < best.d)) best = { d, v };
+      });
+      return best ? best.v : null;
+    };
+    return nearest(nodeEnds({ faces: false })) || nearest(wallFaceNodes());
   };
   let lastSnapKey = '';
   // NOTHING AROUND, as Movie put it ("only when nothing is around"): no

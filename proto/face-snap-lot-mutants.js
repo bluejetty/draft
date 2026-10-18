@@ -12,11 +12,11 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPEC = 'tests/wall-face-snap.spec.js tests/model-site-lot-typed.spec.js';
+const SPEC = 'tests/wall-face-snap.spec.js tests/model-site-lot-typed.spec.js tests/snap-track.spec.js';
 const MUTANTS = [
   { file: "MODEL.html", name: "no face corners in the snap",
-    find: "    wallFaceNodes().forEach(v => {\n",
-    with: "    [].forEach(v => {\n",
+    find: "    return nearest(nodeEnds({ faces: false })) || nearest(wallFaceNodes());\n",
+    with: "    return nearest(nodeEnds({ faces: false }));\n",
     test: "a LINE started a hair off the outside corner of two 2x6 walls starts ON it" },
   { file: "geometry-2d.js", name: "the crossings are cut short of the outside corner",
     find: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= (f.t + g.t) * 1.5) add(p);\n",
@@ -54,8 +54,11 @@ const MUTANTS = [
     find: "      lotAsked = true;\n      lotReopen = false;\n",
     with: "      lotAsked = true;\n",
     test: "a double-click on the SITE PLAN seat opens it too, and NOT NOW leaves the lot as it was" },
+  { file: "MODEL.html", name: "a face corner beats the wall's own node",
+    find: "    return nearest(nodeEnds({ faces: false })) || nearest(wallFaceNodes());\n",
+    with: "    return nearest(nodeEnds());\n",
+    test: "SNAP: a press near a wall end lands exactly on it, and the orange donut marks it first" },
 ];
-
 const run = name => {
   try {
     execSync(`npx playwright test ${SPEC} --workers=1 --reporter=line`
