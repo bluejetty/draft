@@ -3446,6 +3446,53 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return { startOff, endOff: startOff + totalFt };
   };
 
+  // THE CORNERS OF A WALL'S FACES (Movie, 18 Oct: "can i make the EXT WALL
+  // corner nodes (on the outline wall lines) ... so i can reference that
+  // edge of wall when i draw or change things"). A free end gives its two
+  // face ends; where walls meet, each face line of one is crossed with each
+  // of the other's, and the crossings within the two walls' thickness of the
+  // shared point are the outside and inside corners. Walls running straight
+  // on give the face points at the joint. `thicknessFt` is the page's own.
+  const wallFaceCorners = (walls, thicknessFt) => {
+    const out = [];
+    const add = p => {
+      if (!out.some(o => Math.abs(o.x - p.x) < 1e-6 && Math.abs(o.z - p.z) < 1e-6)) out.push({ x: p.x, z: p.z });
+    };
+    const frames = (walls || []).filter(w => w && w.start && w.end).map(w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      if (len < 1e-6) return null;
+      const u = { x: dx / len, z: dz / len }, n = { x: -u.z, z: u.x };
+      const t = thicknessFt(w);
+      const { startOff, endOff } = wallFaceOffsets(w, t);
+      return { w, u, n, t, offs: [startOff, endOff] };
+    }).filter(Boolean);
+    const near = (p, q) => Math.abs(p.x - q.x) < 1e-3 && Math.abs(p.z - q.z) < 1e-3;
+    frames.forEach(f => {
+      [f.w.start, f.w.end].forEach(v => {
+        const others = frames.filter(g => g !== f && (near(g.w.start, v) || near(g.w.end, v)));
+        if (!others.length) {
+          f.offs.forEach(o => add({ x: v.x + f.n.x * o, z: v.z + f.n.z * o }));
+          return;
+        }
+        others.forEach(g => {
+          const cross = f.u.x * g.u.z - f.u.z * g.u.x;
+          if (Math.abs(cross) < 1e-9) {
+            f.offs.forEach(o => add({ x: v.x + f.n.x * o, z: v.z + f.n.z * o }));
+            return;
+          }
+          f.offs.forEach(of => g.offs.forEach(og => {
+            // f's face: v + n_f*of + u_f*s ; g's face: v + n_g*og + u_g*r.
+            const px = f.n.x * of - g.n.x * og, pz = f.n.z * of - g.n.z * og;
+            const s = (g.u.x * pz - g.u.z * px) / cross;
+            const p = { x: v.x + f.n.x * of + f.u.x * s, z: v.z + f.n.z * of + f.u.z * s };
+            if (Math.hypot(p.x - v.x, p.z - v.z) <= (f.t + g.t) * 1.5) add(p);
+          }));
+        });
+      });
+    });
+    return out;
+  };
+
   const openingGeometry = (opening, wall, opts = {}) => {
     if (!wall || !opening) return null;
     const { walls, thicknessFt, padFt = 0, faceReferenced = true } = opts;
@@ -3780,6 +3827,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     clampOpeningToWall,
     openingGeometry,
     wallFaceOffsets,
+    wallFaceCorners,
     cutPerpendiculars,
     cutSide,
     cutDirVec,

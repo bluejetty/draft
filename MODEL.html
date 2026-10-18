@@ -1973,11 +1973,11 @@
         <div class="lot-tiles" data-lot-tiles></div>
         <div class="lot-custom" data-lot-custom hidden>
           <label class="said" for="lot-w">Lot width</label>
-          <input id="lot-w" data-lot-width type="number" inputmode="decimal" step="any"
+          <input id="lot-w" data-lot-width type="text" autocomplete="off" spellcheck="false"
             placeholder="__" />
           <span data-lot-unit-w aria-hidden="true">FT X</span>
           <label class="said" for="lot-d">Lot depth</label>
-          <input id="lot-d" data-lot-depth type="number" inputmode="decimal" step="any"
+          <input id="lot-d" data-lot-depth type="text" autocomplete="off" spellcheck="false"
             placeholder="__" />
           <span data-lot-unit-d aria-hidden="true">FT</span>
         </div>
@@ -12192,11 +12192,33 @@
   const NODE_SNAP_FT = 2 / 12;
   const NODE_SNAP_PX = 6;
   const BULLSEYE_PULL_FT = 2.5;
+  // AND THE CORNERS OF THE WALLS' FACES (Movie, 18 Oct: "can i make the EXT
+  // WALL corner nodes (on the outline wall lines) ... so i can reference that
+  // edge of wall when i draw or change things"): the outside and inside
+  // corners of this level's walls, and on ROOF PLAN the corners of the wall
+  // tops drawn there. Worked out once per drawing change and level, not on
+  // every move of the mouse.
+  let faceCornerCache = { key: null, list: [] };
+  const wallFaceNodes = () => {
+    const G = window.DraftGeometry2D;
+    if (!G?.wallFaceCorners || !drawing) return [];
+    const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
+    if (faceCornerCache.key === key) return faceCornerCache.list;
+    const own = walls();
+    const segs = own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls
+      ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],
+        floors: drawing.floors || [], levels: drawing.levels || [] }) : []);
+    faceCornerCache = { key, list: G.wallFaceCorners(segs, openingThicknessFt()) };
+    return faceCornerCache.list;
+  };
   const nodeEnds = () => {
     const out = [];
     [...walls(), ...lines()].forEach(seg => [seg.start, seg.end].forEach(v => {
       if (v && !out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     }));
+    wallFaceNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     return out;
   };
   const snapNodeAt = at => {
@@ -15887,6 +15909,13 @@
   // coming back asks again -- which is right, because coming back to a site
   // with no lot on it is the drafter arriving at the question a second time.
   let lotAsked = false;
+  // ASKED AGAIN, over a lot already drawn (Movie, 18 Oct: "i accidentally put
+  // the site the wrong direction, how about if a user double clicks on the
+  // site property line or the site layout view window in the LEVELS LAYERS
+  // tab, bring up the initial SITE PLAN loading information popup so they can
+  // reload or change the info"). The card opens on the size the lot has, and
+  // what it draws then REPLACES the lot rather than adding a second one.
+  let lotReopen = false;
 
   const lotMetric = () => drawing?.units === 'metric';
   // A LENGTH THE WAY THIS PAGE WRITES ONE, for the sentences the card says
@@ -15897,9 +15926,19 @@
   const lotOnSite = () => activeLevelId() === SITE_LEVEL_ID && !boneyardActive;
   const lotExists = () => !!LS.siteOutlineOf(drawing?.outlines);
   // What the card is currently offering, in the unit in force.
+  // TYPED THE WAY EVERY OTHER LENGTH ON THE PAGE IS (Movie, 18 Oct: "allow
+  // 3/8" 11/16" etc as well as 50-6" 50'6" 50.5' etc" -- "looks like it only
+  // allowing full ft dimensions, please adjust it for better precisions").
+  // The box was a number field, which refuses 895-2 3/8 outright; in feet it
+  // now reads through the page's own length parser. Metres stay a number.
+  const lotTyped = value => {
+    if (lotMetric()) return value;
+    const parsed = window.DraftFormatters.parseArchitecturalLength(value);
+    return parsed.ok ? parsed.inches / 12 : NaN;
+  };
   const lotChosen = () => LS.lotSizeFor(lotSizeId,
-    lotCard.querySelector('[data-lot-width]').value,
-    lotCard.querySelector('[data-lot-depth]').value,
+    lotTyped(lotCard.querySelector('[data-lot-width]').value),
+    lotTyped(lotCard.querySelector('[data-lot-depth]').value),
     { metric: lotMetric() });
 
   // WHAT THE LADDER IS MEASURED AGAINST, lifted out of the paint so the OK
@@ -15939,7 +15978,7 @@
 
   paintLotPick = () => {
     if (!lotCard) return;
-    const show = lotOnSite() && !lotExists() && !lotAsked;
+    const show = lotOnSite() && ((!lotExists() && !lotAsked) || lotReopen);
     lotCard.hidden = !show;
     if (!show) return;
     const metric = lotMetric();
@@ -16098,7 +16137,8 @@
       drawing?.planTurn || 0);
     if (!pts) return;
     drawing.outlines = drawing.outlines || [];
-    addItem(drawing.outlines, {
+    const was = LS.siteOutlineOf(drawing.outlines);
+    const lotRecord = {
       id: newDrawingItemId('outline'),
       masterId: null,
       levelId: SITE_LEVEL_ID,
@@ -16110,7 +16150,23 @@
       foundation: null,
       points: pts.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
       overriddenSrcIds: [],
-    });
+    };
+    if (was) {
+      // ONE UNDO PUTS THE OLD LOT BACK, size and all.
+      const index = drawing.outlines.indexOf(was);
+      const lotBefore = drawing.lot;
+      drawing.outlines.splice(index, 1, lotRecord);
+      undoStack.push({ kind: 'node', undo: () => {
+        const at = drawing.outlines.indexOf(lotRecord);
+        if (at >= 0) drawing.outlines.splice(at, 1, was);
+        drawing.lot = lotBefore;
+        setSelection([]);
+      } });
+      markDirty();
+    } else {
+      addItem(drawing.outlines, lotRecord);
+    }
+    lotReopen = false;
     // THE SIZE IS KEPT ON THE DRAWING so the page can say what was asked for
     // after the corners have been dragged off it -- and so LAYOUT need not
     // re-derive a tier from four points that may no longer be a rectangle.
@@ -16153,6 +16209,7 @@
     lotCard.querySelector('[data-lot-pick-skip]').addEventListener('click', () => {
       lotTouched = true;
       lotAsked = true;
+      lotReopen = false;
       paintLotPick();
     });
     // DRAW IT MYSELF: the card steps out of the way and hands over the
@@ -16188,6 +16245,39 @@
     lotCard.querySelectorAll('[data-lot-width], [data-lot-depth]')
       .forEach(input => input.addEventListener('input', paintLotPick));
   }
+
+  // ── AND OPENED AGAIN ON A LOT ALREADY DRAWN ─────────────────────────────
+  // A double-click on the property line, or on the SITE PLAN seat in LEVELS /
+  // LAYERS, puts the card back up on OTHER with the lot's own size typed in,
+  // width and depth, so turning it round is swapping the two boxes.
+  const reopenLot = () => {
+    if (!lotCard || !drawing) return;
+    const lot = drawing.lot || {};
+    const outline = LS.siteOutlineOf(drawing.outlines);
+    const xs = (outline?.points || []).map(p => p.x), zs = (outline?.points || []).map(p => p.z);
+    const w = Number(lot.widthFt) || (xs.length ? Math.max(...xs) - Math.min(...xs) : 0);
+    const d = Number(lot.depthFt) || (zs.length ? Math.max(...zs) - Math.min(...zs) : 0);
+    const shown = ft => (lotMetric() ? String(Math.round(ft * 0.3048 * 100) / 100)
+      : window.DraftFormatters.formatArchitecturalInches(ft * 12));
+    lotSizeId = 'custom';
+    lotCard.querySelector('[data-lot-width]').value = w ? shown(w) : '';
+    lotCard.querySelector('[data-lot-depth]').value = d ? shown(d) : '';
+    lotReopen = true;
+    paintLotPick();
+    sayOnStrip('THE LOT — change its size and press OK or DRAW AUTOSITE; NOT NOW leaves it as it is.');
+  };
+  canvas.addEventListener('dblclick', e => {
+    if (!lotOnSite() || activeTool !== RESTING_TOOL || !lotExists()) return;
+    const r = canvas.getBoundingClientRect();
+    const hit = outlineAt(toWorld(e.clientX - r.left, e.clientY - r.top));
+    if (hit && hit.site) reopenLot();
+  });
+  document.addEventListener('dblclick', e => {
+    const seat = e.target?.closest?.(`[data-seat="${SITE_LEVEL_ID}:all"]`);
+    if (!seat) return;
+    // The first press of the double already took the sheet to SITE.
+    setTimeout(() => { if (lotOnSite()) reopenLot(); }, 0);
+  });
 
   const roomCard = document.getElementById('room-pick');
   const syncRoomCard = pick => {
