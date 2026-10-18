@@ -175,3 +175,44 @@ test('GABLE END squares the chamfered end across and makes it one gable; the rid
   await page.keyboard.press('Control+z');
   expect(ring(await saved(page)), 'two UNDOs and the hipped, chamfered end is back').toEqual(CHAMFER_EAVE.map(([x, z]) => [Math.round(x * 100) / 100, Math.round(z * 100) / 100]));
 });
+
+// CROSS GABLE (Movie, 18 Oct): "put in the GABLE where they are located.
+// its a full gable that extend down to meet the roof in the valley (no dormer
+// sidewall/ only a front wall that is aligned with the ext perimter wall
+// below". The roof PDF's: 20' + 20' across at 12/4.
+test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge and valleys in plan, its faces standing on the roof', async ({ page }) => {
+  const { at } = await open(page);
+  await click(page, at, 30, 15);
+  await click(page, at, 30, 43.8);
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText(`EDGE ${JOG_FRONT + 1} OF 8`);
+  // 40' is the default, and the jog's wall is only 20' long.
+  await page.locator('[data-roof-cross-gable]').click();
+  await expect(page.locator('#strip-message')).toContainText('wider than the wall');
+  await type(page, 'cross gable width', '16');
+  await page.locator('[data-roof-field="cross gable pitch"]').fill('6');
+  await page.locator('[data-roof-field="cross gable pitch"]').press('Enter');
+  await page.locator('[data-roof-cross-gable]').click();
+  let roof = await saved(page);
+  expect(roof.crossGables).toEqual([{ at: { x: 30, z: 36 }, widthFt: 16, pitch: 6 }]);
+  const shape = await page.evaluate(r => {
+    const G = window.DraftGeometry2D;
+    const [g] = G.crossGableShapes(r);
+    const faces = G.roofFaces(r, G.roofSkeleton(r));
+    const own = faces.filter(f => f.crossGable);
+    return { P: [g.P.x, g.P.z], lines: G.crossGableLines(r).length, own: own.length,
+      ridge: G.roofFaceRise(own[0], g.M, r.pitch), meet: G.roofFaceRise(own[0], g.P, r.pitch) };
+  }, roof);
+  // 8' half-width x 6/4 = 12' in from the wall line at z = 36.
+  expect(shape.P).toEqual([30, 24]);
+  expect(shape.lines, 'front wall, ridge and two valleys').toBe(4);
+  expect(shape.own, 'two faces of its own').toBe(2);
+  // Its ridge stands level from the wall to where it meets the main roof:
+  // 8' over the eave at 4/12 is 2'-8", plus 8' x 6/12.
+  expect(shape.ridge).toBeCloseTo(8 * 4 / 12 + 8 * 6 / 12, 6);
+  expect(shape.meet).toBeCloseTo(shape.ridge, 6);
+  await page.locator('[data-roof-cross-gable-remove="0"]').click();
+  expect('crossGables' in await saved(page)).toBe(false);
+  await page.keyboard.press('Control+z');
+  roof = await saved(page);
+  expect(roof.crossGables).toHaveLength(1);
+});

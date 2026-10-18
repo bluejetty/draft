@@ -1273,6 +1273,83 @@ if (!window.DraftGeometry2D) {
   };
 
 
+// ── CROSS GABLES ─────────────────────────────────────────────────────────
+//
+// Movie, 18 Oct, North Point: "i will need to put in the GABLE where they are
+// located. its a full gable that extend down to meet the roof in the valley
+// (no dormer sidewall/ only a front wall that is aligned with the ext
+// perimter wall below". On the roof PDF they are the triangles: 20' + 20'
+// across, 12/4 on a 12/3 roof.
+//
+// Each is `{ at: {x, z}, widthFt, pitch }` on its roof: `at` is the middle
+// of its front wall, on the WALL LINE under the eave. Its front corners sit
+// on that line at the height the main roof has there (the eave's overhang
+// times the main pitch); its ridge runs straight in at its own pitch until it
+// meets the main plane -- (width / 2) x (its pitch / main pitch) in from the
+// wall line -- and the two valleys run from the front corners to that point.
+// In plan it is a triangle, the PDF's own.
+//
+// AS FACES, so everything that reads a roof's faces reads the gable too:
+// the main faces lose the triangle (the same `cuts` a hood takes out) and two
+// faces of the gable's own go in FRONT of them, each carrying its own pitch
+// and `lift` -- the rise its zero line stands above the main eave.
+const roofWallLine = roof => {
+  const pts = (roof.points || []).map(pt => ({ x: pt.x, z: pt.z }));
+  const n = pts.length;
+  const per = Array.isArray(roof.edgeOverhang) && roof.edgeOverhang.length === n;
+  const overs = pts.map((_, i) => {
+    const v = per ? Number(roof.edgeOverhang[i]) : NaN;
+    return Number.isFinite(v) ? v : (Number(roof.overhang) || 0);
+  });
+  const kept = Array.isArray(roof.footprint) && roof.footprint.length === n
+    ? roof.footprint.map(pt => ({ x: pt.x, z: pt.z })) : null;
+  if (kept) return { ring: kept, overs };
+  if (pts.some((pt, i) => { const q = pts[(i + 1) % n]; return Math.hypot(q.x - pt.x, q.z - pt.z) < 1e-6; })) return null;
+  return { ring: offsetOutlineVariable(pts, overs.map(v => -v)), overs };
+};
+const crossGableShapes = roof => {
+  const list = Array.isArray(roof?.crossGables) ? roof.crossGables : [];
+  const pm = Number(roof?.pitch) || 0;
+  if (!list.length || pm <= 0 || (roof.points || []).length < 3) return [];
+  const wall = roofWallLine(roof);
+  if (!wall) return [];
+  const { ring, overs } = wall;
+  const n = ring.length;
+  const area2 = ring.reduce((sum, p, i) => { const q = ring[(i + 1) % n]; return sum + p.x * q.z - q.x * p.z; }, 0);
+  return list.map(gable => {
+    const at = gable?.at, w = Number(gable?.widthFt), pg = Number(gable?.pitch);
+    if (!at || !(w > 0) || !(pg > 0)) return null;
+    // The wall-line edge it stands on: the nearest one.
+    let best = null;
+    ring.forEach((a, i) => {
+      const b = ring[(i + 1) % n];
+      const ex = b.x - a.x, ez = b.z - a.z, len = Math.hypot(ex, ez);
+      if (len < 1e-6) return;
+      const t = ((at.x - a.x) * ex + (at.z - a.z) * ez) / (len * len);
+      const px = a.x + ex * t, pz = a.z + ez * t;
+      const d = Math.hypot(at.x - px, at.z - pz);
+      if (!best || d < best.d) best = { i, d, ux: ex / len, uz: ez / len, mid: { x: px, z: pz } };
+    });
+    if (!best) return null;
+    // INWARD is the left of the edge on a counter-clockwise ring.
+    const sign = area2 > 0 ? 1 : -1;
+    const inx = -best.uz * sign, inz = best.ux * sign;
+    const half = w / 2;
+    const A = { x: best.mid.x - best.ux * half, z: best.mid.z - best.uz * half };
+    const B = { x: best.mid.x + best.ux * half, z: best.mid.z + best.uz * half };
+    const depth = half * pg / pm;
+    const P = { x: best.mid.x + inx * depth, z: best.mid.z + inz * depth };
+    const lift = (overs[best.i] || 0) * pm / 12;
+    return { A, B, M: best.mid, P, lift, pitch: pg, ridgeDir: { x: inx, z: inz } };
+  }).filter(Boolean);
+};
+const crossGableLines = roof => crossGableShapes(roof).flatMap(g => [
+  { a: g.A, b: g.B, kind: 'wall' },
+  { a: g.M, b: g.P, kind: 'ridge' },
+  { a: g.A, b: g.P, kind: 'valley' },
+  { a: g.B, b: g.P, kind: 'valley' },
+]);
+
 // Planar face tracing over footprint edges + skeleton arcs: standard
 // half-edge walk taking the sharpest counter-clockwise turn, keeping
 // bounded faces. Each bounded face names the one EAVE footprint edge on
@@ -1369,7 +1446,21 @@ const roofFaces = (roof, arcs) => {
     const line = edge.parent || { a: edge.a, b: edge.b };
     faces.push({ points: poly, area: area2 / 2, eave: { a: line.a, b: line.b } });
   });
-  return cutRoofFaces(faces, roof);
+  const gables = crossGableShapes(roof);
+  if (!gables.length) return cutRoofFaces(faces, roof);
+  // The main roof gives up each gable's triangle, and the gable's two faces
+  // stand in front of it -- first in the list, so a point asked of the roof
+  // finds the gable before anything else.
+  const triangles = gables.map(g => ({ points: [g.A, g.B, g.P] }));
+  const main = cutRoofFaces(faces, { ...roof, cuts: [...(Array.isArray(roof.cuts) ? roof.cuts : []), ...triangles] });
+  const own = gables.flatMap(g => [g.A, g.B].map(corner => {
+    const poly = [corner, g.M, g.P];
+    const area2 = polyArea2(poly);
+    return { points: area2 < 0 ? poly.slice().reverse() : poly, area: Math.abs(area2) / 2,
+      eave: { a: corner, b: { x: corner.x + g.ridgeDir.x, z: corner.z + g.ridgeDir.z } },
+      pitch: g.pitch, lift: g.lift, crossGable: true };
+  }));
+  return [...own, ...main];
 };
 
 // ── A ROOF WITH A PIECE CUT OUT OF IT ──────────────────────────────────────
@@ -1484,10 +1575,13 @@ const cutRoofSegment = (seg, roof) => cutLoopsOf(roof).reduce((parts, hole) => p
   return [[0, t0], [t1, 1]].filter(([u, v]) => v - u > 1e-6).map(([u, v]) => ({ ...part, a: at(u), b: at(v) }));
 }), [seg]);
 
+// A CROSS GABLE'S FACE brings its own pitch and the rise its zero line
+// stands at above the main eave (`lift`); every other face uses the roof's.
 const roofFaceRise = (face, p, pitch) => {
   const ex = face.eave.b.x - face.eave.a.x, ez = face.eave.b.z - face.eave.a.z;
   const len = Math.hypot(ex, ez) || 1;
-  return Math.abs((p.x - face.eave.a.x) * ez - (p.z - face.eave.a.z) * ex) / len * (pitch || 4) / 12;
+  return (Number(face.lift) || 0)
+    + Math.abs((p.x - face.eave.a.x) * ez - (p.z - face.eave.a.z) * ex) / len * ((face.pitch ?? pitch) || 4) / 12;
 };
 
 // The rise of a roof's surface above its own eave line at a point, or null
@@ -3630,6 +3724,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roofFaces,
     cutRoofSegment,
     roofFaceRise,
+    crossGableShapes,
+    crossGableLines,
+    roofWallLine,
     roofRiseAt,
     roofWeldSpans,
     roofWingKinds,
