@@ -791,6 +791,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'CLEAR',   // the NOTES pad's, beside 'notes-tab' above
             // ROTATE's own row: two quarter turns, a half, and DONE.
             '\u27F2 90', '\u27F3 90', '180', 'DONE',
+            // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
+            // one answer.
+            'OK',
             // AUTO DIMS / HAND DIMS beside the north arrow (Movie, 18 Oct):
             // each kind of string shown or hidden on the sheet.
             'AUTO DIMS', 'HAND DIMS',

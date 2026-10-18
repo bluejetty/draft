@@ -1157,11 +1157,11 @@
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
   #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #trace-insert,
-  #footprint-ask { position:fixed; inset:0; z-index:7; display:flex;
+  #footprint-ask, #stair-fit { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
   #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
-  #trace-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden] { display:none; }
+  #trace-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden], #stair-fit[hidden] { display:none; }
   /* A button the pull puts out of reach is HIDDEN, not greyed -- see the
      card's own note. The row is flex, so this has to beat its display. */
   #footprint-ask button[hidden] { display:none !important; }
@@ -2085,6 +2085,20 @@
       <button type="button" id="trace-editable" data-trace-editable hidden>EDITABLE</button>
       <button type="button" id="trace-other" data-trace-other hidden>DIFFERENT FILE</button>
       <button type="button" id="trace-cancel" data-trace-cancel>CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): "make a popup that
+     tells the user the basement stair widths at the ext walls have been
+     adjusted for width to fit the new foundation thickness" -- with each
+     stair's new width, since there is no minimum to stop at. -->
+<div id="stair-fit" data-stair-fit hidden role="dialog" aria-label="Stair widths adjusted">
+  <div class="promote-card">
+    <p><b>STAIR WIDTHS ADJUSTED</b><br><span data-stair-fit-text></span></p>
+    <div data-stair-fit-list></div>
+    <div class="promote-row">
+      <button type="button" data-stair-fit-ok>OK</button>
     </div>
   </div>
 </div>
@@ -10825,6 +10839,146 @@
   // instead of refusing the gesture. Asked of the host it is filed against,
   // not of whatever floor it now overlaps: a hole belongs to one floor, and
   // re-hosting it is an edit nobody asked for.
+  // ── A STAIR LOCKED TO A WALL'S INSIDE FACE (Movie, 18 Oct) ─────────────
+  //
+  // "make the INTERIOR line of a wall (like a SNAP POINT for the stairs so
+  // the edge of the stairs can move to line up there easily. for the
+  // stiarcase going UPSTAIRS we should use the main floor wall int line, but
+  // going down to the founsation from main floor we need to use the
+  // thickness of the foundation and inside insulation" -- the insulation
+  // "drawn as part of the perimiter line", so the foundation wall's own
+  // thickness is the face. "once the stair is locked onto that wall, the
+  // user can move it, but if the user also changes the foundation wall
+  // thickness, that should also move the stairs (and reduce the width ...)"
+  // -- keeping "the other side of stairs in the same location", on walls
+  // either side or one, with no minimum, and a pop-up saying the new width.
+  //
+  // THE WALLS ARE THE FLOOR THE STAIR STANDS ON. A stair is filed on the
+  // floor it goes DOWN from, so the flight between MAIN and 2ND is filed on
+  // 2ND and stands between MAIN's walls; the one filed on MAIN stands in the
+  // basement, between the foundation walls (and any basement wall).
+  //
+  // A STRAIGHT FLIGHT ONLY, for now: an L or a U has more than one pair of
+  // sides and turns, and is left as it was.
+  const STAIR_SNAP_PX = 14;
+  const stairFaceWalls = stair => {
+    const SG = window.DraftStairGeometry;
+    const landing = SG?.stairLandingLevelId?.(stair.levelId, stairLevels().floors);
+    if (landing == null) return [];
+    const basement = Number(landing) === 1;
+    return (drawing?.walls || []).filter(wall => Number(wall.levelId) === Number(landing) && wall.start && wall.end
+      && (basement ? ['foundation', 'plan'].includes(wall.view || 'plan') : (wall.view || 'plan') === 'plan'));
+  };
+  const stairFrame = stair => {
+    if (!stair?.start || !stair?.end || (stair.shape || 'straight') !== 'straight') return null;
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z, len = Math.hypot(dx, dz);
+    if (len < 1e-6) return null;
+    const u = { x: dx / len, z: dz / len };
+    return { c: { x: (stair.start.x + stair.end.x) / 2, z: (stair.start.z + stair.end.z) / 2 },
+      u, n: { x: -u.z, z: u.x }, len, half: (Number(stair.widthFt) || 3) / 2 };
+  };
+  // WHERE A WALL'S FACE STANDS ACROSS THE FLIGHT: its offset along the
+  // stair's left normal, for the face toward the flight's middle -- or null
+  // for a wall not alongside it (not parallel, beside less than 6" of it, or
+  // standing across the walk line).
+  const wallFaceAcross = (frame, wall) => {
+    const G = window.DraftGeometry2D;
+    const wx = wall.end.x - wall.start.x, wz = wall.end.z - wall.start.z, wl = Math.hypot(wx, wz);
+    if (wl < 1e-6) return null;
+    const wu = { x: wx / wl, z: wz / wl };
+    if (Math.abs(wu.x * frame.u.z - wu.z * frame.u.x) > 1e-3) return null;
+    const along = p => (p.x - frame.c.x) * frame.u.x + (p.z - frame.c.z) * frame.u.z;
+    const a = along(wall.start), b = along(wall.end);
+    if (Math.min(Math.max(a, b), frame.len / 2) - Math.max(Math.min(a, b), -frame.len / 2) < 0.5) return null;
+    const o = (wall.start.x - frame.c.x) * frame.n.x + (wall.start.z - frame.c.z) * frame.n.z;
+    const k = -wu.z * frame.n.x + wu.x * frame.n.z;
+    const { startOff, endOff } = G.wallFaceOffsets(wall, openingThicknessFt()(wall));
+    const faces = [o + k * startOff, o + k * endOff];
+    if (faces[0] * faces[1] <= 0) return null;
+    return Math.abs(faces[0]) < Math.abs(faces[1]) ? faces[0] : faces[1];
+  };
+  // THE SNAP: how far across to move the flight so its nearer side lies on
+  // the nearest face within reach, or null.
+  const stairFaceSnap = stair => {
+    const frame = stairFrame(stair);
+    if (!frame) return null;
+    const reach = STAIR_SNAP_PX / view.scale;
+    let best = null;
+    stairFaceWalls(stair).forEach(wall => {
+      const f = wallFaceAcross(frame, wall);
+      if (f == null) return;
+      const shift = f > 0 ? f - frame.half : f + frame.half;
+      if (Math.abs(shift) <= reach && (!best || Math.abs(shift) < Math.abs(best.shift))) best = { shift, frame };
+    });
+    return best;
+  };
+  // THE SIDES THAT LIE ON A FACE NOW, which is what a lock records.
+  const stairLockNow = stair => {
+    const frame = stairFrame(stair);
+    if (!frame) return null;
+    const lock = {};
+    stairFaceWalls(stair).forEach(wall => {
+      const f = wallFaceAcross(frame, wall);
+      if (f == null) return;
+      if (f > 0 && Math.abs(f - frame.half) < 1e-3) lock.left = { wallId: wall.id };
+      if (f < 0 && Math.abs(f + frame.half) < 1e-3) lock.right = { wallId: wall.id };
+    });
+    return lock.left || lock.right ? lock : null;
+  };
+  // A WALL GROWN OR SHRUNK: every locked flight's locked sides go to where
+  // the faces now are, the free side staying put. Each one changed comes
+  // back with its width before and after.
+  const followStairLocks = () => {
+    const changed = [];
+    (drawing?.stairs || []).forEach(stair => {
+      if (!stair.lock) return;
+      const frame = stairFrame(stair);
+      if (!frame) return;
+      let left = frame.half, right = -frame.half;
+      ['left', 'right'].forEach(side => {
+        const id = stair.lock[side]?.wallId;
+        if (id == null) return;
+        const wall = (drawing.walls || []).find(w => String(w.id) === String(id));
+        const f = wall ? wallFaceAcross(frame, wall) : null;
+        if (f == null || (side === 'left') !== (f > 0)) { delete stair.lock[side]; return; }
+        if (side === 'left') left = f; else right = f;
+      });
+      if (!stair.lock.left && !stair.lock.right) delete stair.lock;
+      const widthFt = left - right, shift = (left + right) / 2;
+      if (widthFt < 0.5 || (Math.abs(widthFt - frame.half * 2) < 1e-4 && Math.abs(shift) < 1e-4)) return;
+      const by = p => ({ ...p, x: p.x + frame.n.x * shift, z: p.z + frame.n.z * shift });
+      const was = frame.half * 2;
+      stair.start = by(stair.start);
+      stair.end = by(stair.end);
+      stair.widthFt = widthFt;
+      const hole = stairWellOf(stair).hole;
+      const ring = hole && stairOpeningFootprint(stair);
+      if (ring && ring.length >= 3) hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
+      const landing = window.DraftStairGeometry?.stairLandingLevelId?.(stair.levelId, stairLevels().floors);
+      changed.push({ stair, was, now: widthFt, basement: Number(landing) === 1 });
+    });
+    return changed;
+  };
+  const showStairFitNote = changed => {
+    const card = document.getElementById('stair-fit');
+    if (!card || !changed.length) return;
+    const F = window.DraftFormatters;
+    const ftIn = ft => F.formatArchitecturalInches(ft * 12);
+    card.querySelector('[data-stair-fit-text]').textContent = changed.every(c => c.basement)
+      ? 'The basement stair widths at the exterior walls have been adjusted to fit the new foundation thickness.'
+      : 'The stair widths at the walls have been adjusted to fit the new wall thickness.';
+    card.querySelector('[data-stair-fit-list]').replaceChildren(...changed.map(c => {
+      const row = document.createElement('div');
+      row.textContent = `STAIR ${c.stair.id}: ${ftIn(c.was)} \u2192 ${ftIn(c.now)} WIDE`;
+      return row;
+    }));
+    card.hidden = false;
+    card.querySelector('[data-stair-fit-ok]').focus();
+  };
+  document.querySelector('#stair-fit [data-stair-fit-ok]')?.addEventListener('click', () => {
+    document.getElementById('stair-fit').hidden = true;
+  });
+
   const wellOffItsFloor = hole => {
     const G = window.DraftGeometry2D;
     const host = (drawing?.floors || [])
@@ -13424,7 +13578,7 @@
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
   const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join', 'garage-align',
-    'trace-ask', 'trace-insert', 'footprint-ask'];
+    'trace-ask', 'trace-insert', 'footprint-ask', 'stair-fit'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -26297,6 +26451,8 @@
       // change" is the failure the fix itself creates if this is missed.
       if (patch.wallType !== undefined) substitutedWallTypes.delete(wall.id);
     });
+    // A FACE MOVED: the flights locked to it follow, and say so.
+    if (patch.wallType !== undefined || patch.refLine !== undefined) showStairFitNote(followStairLocks());
     markDirty();
     showSelectionProps();
     paint();
@@ -29092,6 +29248,15 @@
           if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
           md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
           md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
+          // AND ON TO A WALL'S INSIDE FACE when its side comes within reach
+          // (Movie, 18 Oct), the well going the same way.
+          const snap = stairFaceSnap(md.stair);
+          if (snap) {
+            dx += snap.frame.n.x * snap.shift;
+            dz += snap.frame.n.z * snap.shift;
+            md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
+            md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
+          }
           // THE WELL TRAVELS WITH THE FLIGHT, by the same delta rather than
           // re-cut from the moved stair: the hole's LENGTH comes from headroom
           // and may have been nudged or drawn wider than the run, and re-
@@ -29441,6 +29606,9 @@
             const edits = [{ item: md.stair, before: md.before }];
             if (md.well) edits.push({ item: md.well, before: md.wellBefore });
             edits.push(...md.framingBefore);
+            // LOCKED to the faces its sides now lie on, or to none.
+            const lock = stairLockNow(md.stair);
+            if (lock) md.stair.lock = lock; else delete md.stair.lock;
             // TOUCHED BY HAND, SO NO LONGER THE SUGGESTER'S. The format says
             // `auto` tags "a placement the auto-stair rule suggested (cleared
             // the moment the drafter touches it)" -- and a drag is the plainest
