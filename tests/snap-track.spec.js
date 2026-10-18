@@ -100,7 +100,7 @@ test('TRACK: a press near the line square to a node lands on it', async ({ page 
   await armWall(page);
   await press(page, at, [6, 2.5]);
   // A hair off plumb above the wall's end at x = 10: it lands plumb.
-  await press(page, at, [10.06, -3]);
+  await press(page, at, [10.03, -3]);
   const [made] = newWalls(await saved(page));
   expect(made.end.x).toBe(10);
 });

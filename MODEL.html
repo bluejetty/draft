@@ -13508,10 +13508,12 @@
     if (locked) return onTheFoot_if() ? onTheFoot(drawStart, locked) : locked;
     const wanted = squareTo(drawStart, at);
     const fixed = squaredAxis(drawStart, at);
-    // SNAP AND TRACK ON DRAFTING: TOY's points are the foot's, and a snapped
-    // point skips the foot below.
-    const snapped = fixed ? axisSnap(wanted, fixed)
-      : ((board !== 'toy' && drawSnap(wanted).pt) || cornerSnap(wanted, []));
+    // SNAP AND TRACK ON DRAFTING: TOY's points are the foot's. A NODE is
+    // exact and skips the foot below; a CROSS LINE only sets the bearing, so
+    // with the 1' light on the run still lands on the whole foot along it.
+    const snap = !fixed && board !== 'toy' ? drawSnap(wanted) : {};
+    if (snap.pt && !snap.node && onTheFoot_if()) return onTheFoot(drawStart, snap.pt);
+    const snapped = fixed ? axisSnap(wanted, fixed) : (snap.pt || cornerSnap(wanted, []));
     if (snapped) return snapped;
     const free = { x: wanted.x, y: 0, z: wanted.z };
     // INSIDE THE HOUSE, TOY'S GRAIN comes before the foot: the point lands on
@@ -13976,15 +13978,18 @@
   //
   // SO: FROM EVERY POINT OF THE RUN IN HAND, four rays -- right, down, left,
   // up -- faint, across the whole sheet. The one the cursor is on lights up
-  // bright and glows. Nothing is pulled anywhere: the rays are a sight line
-  // for the eye, and the press lands where it always did.
+  // bright and glows, and since 17 Oct (TRACK, drawSnap) a press within that
+  // same reach lands on it: "i want to be able to 'snap' on the cross lines".
   //
   // THE WALL RUN'S POINTS ARE COLLECTED HERE because the wall gesture only
   // keeps its open end (`drawStart`); each place the run has stood is pushed
   // as it moves on, and the list empties when the run ends. The outline keeps
   // its own corners already.
   let wallRunNodes = [];
-  const RAY_HIT_PX = 6;
+  // FOUR PIXELS, the corner snap's own reach. Six was a whole foot on a house
+  // fitted to the sheet (6 px a foot), and a corner traced a foot off a line
+  // jumped on to it.
+  const RAY_HIT_PX = 4;
   const trackingNodes = () => {
     // AND THE HOUSE'S CORNERS WHILE THE GARAGE IS DRAWN (Movie, 6 Oct: "when
     // i draw the GARAGE shape can the HOUSE shape nodes also create the

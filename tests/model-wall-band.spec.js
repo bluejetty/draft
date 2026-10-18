@@ -101,7 +101,10 @@ const inkAt = (page, cx, cy) => page.evaluate(({ x, y }) => {
     // mark here whose red stands far above its blue, so that is what is
     // skipped. Where the band crosses a ray it is painted over it, and reads
     // as the band.
-    if (data[i] - data[i + 2] > 15) continue;
+    // AND SINCE 17 OCT THEY ARE NEON YELLOW-GREEN (Movie: "make the orange
+    // rays neon green / yellow"), whose GREEN stands far above its blue. Either
+    // tint is a ray; the band and the ghost stay neutral.
+    if (data[i] - data[i + 2] > 15 || data[i + 1] - data[i + 2] > 15) continue;
     worst = Math.max(worst, Math.abs(data[i] - g[0])
       + Math.abs(data[i + 1] - g[1]) + Math.abs(data[i + 2] - g[2]));
   }
