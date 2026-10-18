@@ -176,3 +176,50 @@ test('about five pages and no more: 15,000 characters, the head counts the pages
   const s = await pad(page).evaluate(el => ({ sh: el.scrollHeight, ch: el.clientHeight }));
   expect(s.sh).toBeGreaterThan(s.ch);
 });
+
+// SAVE AS TXT (Movie, 18 Oct): "can we put in the notepad a 'SAVE AS TXT
+// FILE' and allow them to save it as a TXT file in location where they save
+// their DRAFT files as a backup".
+test('SAVE AS TXT downloads the pad as a .txt where there is no save dialog, and the chip says where', async ({ page }) => {
+  await page.addInitScript(() => { delete window.showSaveFilePicker; });
+  await open(page, drawing({ notepad: 'NORTH POINT 895-2 3/8ft x 349 ft' }));
+  await openPad(page);
+  await expect(page.locator('[data-notes-save-txt]')).toHaveText('SAVE AS TXT');
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('[data-notes-save-txt]').click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/ NOTES\.txt$/);
+  const fs = require('fs');
+  expect(fs.readFileSync(await download.path(), 'utf8')).toBe('NORTH POINT 895-2 3/8ft x 349 ft');
+  await expect(page.locator('#saved-where')).toContainText('NOTES.txt');
+});
+
+test('with a save dialog, it opens beside the last .draft saved and writes the text there', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__picks = [];
+    window.showSaveFilePicker = async opts => {
+      const handle = { kind: 'file', name: opts.suggestedName, written: '',
+        createWritable: async () => ({ write: async t => { handle.written += typeof t === 'string' ? t : await new Response(t).text(); }, close: async () => {} }) };
+      window.__picks.push({ opts, handle });
+      return handle;
+    };
+  });
+  await open(page, drawing({ notepad: 'GRID 1 TO 29' }));
+  // A .draft saved through SAVE AS first.
+  await page.locator('#file-save-as').click();
+  await page.locator('[data-save-as-go]').click();
+  await expect.poll(() => page.evaluate(() => window.__picks.length)).toBe(1);
+  await openPad(page);
+  await page.locator('[data-notes-save-txt]').click();
+  await expect.poll(() => page.evaluate(() => window.__picks.length)).toBe(2);
+  const got = await page.evaluate(() => {
+    const [draft, txt] = window.__picks;
+    return { startInIsDraft: txt.opts.startIn === draft.handle, name: txt.opts.suggestedName,
+      types: txt.opts.types[0].accept, written: txt.handle.written };
+  });
+  expect(got.startInIsDraft, 'the dialog opens where the .draft went').toBe(true);
+  expect(got.name).toMatch(/ NOTES\.txt$/);
+  expect(got.types).toEqual({ 'text/plain': ['.txt'] });
+  expect(got.written).toBe('GRID 1 TO 29');
+});

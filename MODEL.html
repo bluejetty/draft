@@ -1612,6 +1612,8 @@
   <div id="notes-panel" data-notes-panel data-pane="notes" hidden>
     <div class="np-head"><span class="np-title">NOTES</span>
       <span class="np-count" data-notes-count></span>
+      <button class="np-clear" type="button" data-notes-save-txt
+        title="Save the notes as a .txt file, beside your .draft files">SAVE AS TXT</button>
       <button class="np-clear" type="button" data-notes-clear
         title="Clear every note on the pad">CLEAR</button></div>
     <textarea class="np-text" data-notes-text spellcheck="false"
@@ -30845,6 +30847,50 @@
   const chosenExtension = () => (fileExtPick ? fileExtPick.value : 'draft');
   const generatedFileName = () =>
     window.DraftDrawingFormat.drawingFileName(chosenExtension());
+  // THE LAST FILE A SAVE DIALOG WROTE, so the NOTES pad's SAVE AS TXT can
+  // open its dialog in the same folder (`startIn` takes a handle and opens
+  // beside it).
+  var lastSaveHandle = null;
+
+  // ── NOTES, SAVED AS TEXT (Movie, 18 Oct) ────────────────────────────────
+  //
+  // "can we put in the notepad a 'SAVE AS TXT FILE' and allow them to save it
+  // as a TXT file in location where they save their DRAFT files as a
+  // backup". The dialog opens where the last .draft went; a browser with no
+  // save dialog downloads it, and the chip says so, as a .draft download does.
+  const saveNotesAsText = async () => {
+    const text = notesText.value || '';
+    const name = `${generatedFileName().replace(/\.[^.]+$/, '')} NOTES.txt`;
+    if (window.showSaveFilePicker) {
+      let handle = null;
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName: name,
+          ...(lastSaveHandle ? { startIn: lastSaveHandle } : {}),
+          types: [{ description: 'Text', accept: { 'text/plain': ['.txt'] } }],
+        });
+      } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        handle = null;
+      }
+      if (handle) {
+        const writable = await handle.createWritable();
+        await writable.write(text);
+        await writable.close();
+        if (savedWhereNote) savedWhereNote.hidden = true;
+        return;
+      }
+    }
+    const file = new File([text], name, { type: 'text/plain' });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    sayWhereItWent(file.name);
+  };
+  document.querySelector('[data-notes-save-txt]').addEventListener('click', saveNotesAsText);
 
   // TWO WAYS TO PUT A FILE ON A DISK, and both have to keep working.
   //
@@ -30906,7 +30952,7 @@
   const pickSaveTarget = async suggestedName => {
     if (!window.showSaveFilePicker) return null;
     try {
-      return await window.showSaveFilePicker({
+      return lastSaveHandle = await window.showSaveFilePicker({
         suggestedName,
         types: [{
           description: 'Rough Drafter drawing',
