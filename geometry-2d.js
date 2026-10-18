@@ -1033,9 +1033,78 @@ if (!window.DraftGeometry2D) {
   // corners trace as edges collapse become the hip / valley / ridge lines.
   // Concave footprints (L / T / U) split the ring at reflex corners so each
   // wing resolves to its own ridge, joined by valleys.
+  // ── A SLOPED EDGE: THE PLANES KEPT, THE CORNER CUT (Movie, 18 Oct) ────
+  //
+  // "if i delete the corner node could we connect those 2 nodes and allow the
+  // slope to be drawn is as it would be ... and keep the slope consisten when
+  // those points are moved" -- "keep the PLANE / SLOPE of roof FIXED" -- "that
+  // corner node i would delete to cut off the corner and match the 45 (it
+  // would be a sloped eave)". So a SLOPED edge is not a third kind of plane:
+  // it is the roof the two edges either side of it WOULD make, meeting at
+  // their corner, with that corner's triangle cut away -- the same `cuts` a
+  // hood or a cross gable takes out. The planes are the full roof's; the
+  // sloped edge is where they stop, so it climbs as the planes do.
+  const slopedVirtual = roof => {
+    const pts = roof.points || [];
+    const n = pts.length;
+    const kinds = Array.isArray(roof.edges) ? roof.edges : [];
+    if (n < 3 || !kinds.includes('sloped')) return null;
+    const kindAt = k => (kinds[(k + n) % n] === 'gable' ? 'gable' : 'eave');
+    const per = Array.isArray(roof.edgeOverhang) && roof.edgeOverhang.length === n;
+    const overAt = k => (per ? Number(roof.edgeOverhang[(k + n) % n]) : Number(roof.overhang) || 0);
+    const foot = Array.isArray(roof.footprint) && roof.footprint.length === n ? roof.footprint : null;
+    const area2 = pts.reduce((sum, p, i) => { const q = pts[(i + 1) % n]; return sum + p.x * q.z - q.x * p.z; }, 0);
+    const s = area2 >= 0 ? 1 : -1;
+    const dir = (p, q) => { const l = Math.hypot(q.x - p.x, q.z - p.z) || 1; return { x: (q.x - p.x) / l, z: (q.z - p.z) / l }; };
+    const meet = (p, u, q, v) => {
+      const cross = u.x * v.z - u.z * v.x;
+      if (Math.abs(cross) < 1e-9) return null;
+      const t = ((q.x - p.x) * v.z - (q.z - p.z) * v.x) / cross;
+      return { x: p.x + u.x * t, z: p.z + u.z * t };
+    };
+    const outPts = [], outEdges = [], outOvers = [], outFoot = [], cuts = [];
+    for (let i = 0; i < n; i += 1) {
+      const a = pts[i], b = pts[(i + 1) % n];
+      outPts.push(a);
+      if (foot) outFoot.push(foot[i]);
+      if (kinds[i] !== 'sloped') { outEdges.push(kindAt(i)); outOvers.push(overAt(i)); continue; }
+      const prev = pts[(i - 1 + n) % n], next = pts[(i + 2) % n];
+      const c = kinds[(i - 1 + n) % n] !== 'sloped' && kinds[(i + 1) % n] !== 'sloped'
+        ? meet(a, dir(prev, a), b, dir(next, b)) : null;
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      const outside = c && s * ((b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x)) < -1e-9
+        && Math.hypot(c.x - a.x, c.z - a.z) < len * 20;
+      // A SLOPED EDGE WITH NO CORNER TO STAND FOR (its neighbours parallel,
+      // or meeting inside the roof) is read as the eave it most nearly is.
+      if (!outside) { outEdges.push('eave'); outOvers.push(overAt(i)); continue; }
+      outEdges.push(kindAt(i - 1), kindAt(i + 1));
+      outOvers.push(overAt(i - 1), overAt(i + 1));
+      outPts.push({ x: c.x, y: a.y || 0, z: c.z });
+      if (foot) {
+        const fa = foot[i], fb = foot[(i + 1) % n];
+        const fc = meet(fa, dir(foot[(i - 1 + n) % n], fa), fb, dir(foot[(i + 2) % n], fb)) || c;
+        outFoot.push({ x: fc.x, y: fa.y || 0, z: fc.z });
+      }
+      cuts.push({ points: [{ x: a.x, z: a.z }, { x: c.x, z: c.z }, { x: b.x, z: b.z }] });
+    }
+    if (!cuts.length) {
+      return { roof: { ...roof, edges: kinds.map((k, i) => kindAt(i)) }, cuts };
+    }
+    const virtual = { ...roof, points: outPts, edges: outEdges, edgeOverhang: outOvers,
+      cuts: [...(Array.isArray(roof.cuts) ? roof.cuts : []), ...cuts] };
+    if (foot) virtual.footprint = outFoot; else delete virtual.footprint;
+    return { roof: virtual, cuts };
+  };
+
   const roofSkeleton = (roof) => {
     const initialCount = roof.points.length;
     if (initialCount < 3) return [];
+    // A SLOPED EDGE: the full roof's lines, the corner's triangle cut from them.
+    const sloped = slopedVirtual(roof);
+    if (sloped) {
+      return roofSkeleton(sloped.roof).flatMap(seg => (sloped.cuts.length
+        ? cutRoofSegment(seg, { cuts: sloped.cuts }) : [seg]));
+    }
     const notched = notchedGableRoof(roof);
     if (notched) return notched;
     let pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
@@ -1355,6 +1424,9 @@ const crossGableLines = roof => crossGableShapes(roof).flatMap(g => [
 // bounded faces. Each bounded face names the one EAVE footprint edge on
 // its boundary — that edge's line plus the pitch is the face's plane.
 const roofFaces = (roof, arcs) => {
+  // A SLOPED EDGE: the full roof's planes, cut along it (slopedVirtual).
+  const sloped = slopedVirtual(roof);
+  if (sloped) return roofFaces(sloped.roof, roofSkeleton(sloped.roof));
   const pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
   const kinds = pts.map((_, i) => (roof.edges?.[i] === 'gable' ? 'gable' : 'eave'));
   // Arc endpoints can land mid-edge on the footprint (the skeleton drops
@@ -3446,6 +3518,53 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return { startOff, endOff: startOff + totalFt };
   };
 
+  // THE CORNERS OF A WALL'S FACES (Movie, 18 Oct: "can i make the EXT WALL
+  // corner nodes (on the outline wall lines) ... so i can reference that
+  // edge of wall when i draw or change things"). A free end gives its two
+  // face ends; where walls meet, each face line of one is crossed with each
+  // of the other's, and the crossings within the two walls' thickness of the
+  // shared point are the outside and inside corners. Walls running straight
+  // on give the face points at the joint. `thicknessFt` is the page's own.
+  const wallFaceCorners = (walls, thicknessFt) => {
+    const out = [];
+    const add = p => {
+      if (!out.some(o => Math.abs(o.x - p.x) < 1e-6 && Math.abs(o.z - p.z) < 1e-6)) out.push({ x: p.x, z: p.z });
+    };
+    const frames = (walls || []).filter(w => w && w.start && w.end).map(w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      if (len < 1e-6) return null;
+      const u = { x: dx / len, z: dz / len }, n = { x: -u.z, z: u.x };
+      const t = thicknessFt(w);
+      const { startOff, endOff } = wallFaceOffsets(w, t);
+      return { w, u, n, t, offs: [startOff, endOff] };
+    }).filter(Boolean);
+    const near = (p, q) => Math.abs(p.x - q.x) < 1e-3 && Math.abs(p.z - q.z) < 1e-3;
+    frames.forEach(f => {
+      [f.w.start, f.w.end].forEach(v => {
+        const others = frames.filter(g => g !== f && (near(g.w.start, v) || near(g.w.end, v)));
+        if (!others.length) {
+          f.offs.forEach(o => add({ x: v.x + f.n.x * o, z: v.z + f.n.z * o }));
+          return;
+        }
+        others.forEach(g => {
+          const cross = f.u.x * g.u.z - f.u.z * g.u.x;
+          if (Math.abs(cross) < 1e-9) {
+            f.offs.forEach(o => add({ x: v.x + f.n.x * o, z: v.z + f.n.z * o }));
+            return;
+          }
+          f.offs.forEach(of => g.offs.forEach(og => {
+            // f's face: v + n_f*of + u_f*s ; g's face: v + n_g*og + u_g*r.
+            const px = f.n.x * of - g.n.x * og, pz = f.n.z * of - g.n.z * og;
+            const s = (g.u.x * pz - g.u.z * px) / cross;
+            const p = { x: v.x + f.n.x * of + f.u.x * s, z: v.z + f.n.z * of + f.u.z * s };
+            if (Math.hypot(p.x - v.x, p.z - v.z) <= (f.t + g.t) * 1.5) add(p);
+          }));
+        });
+      });
+    });
+    return out;
+  };
+
   const openingGeometry = (opening, wall, opts = {}) => {
     if (!wall || !opening) return null;
     const { walls, thicknessFt, padFt = 0, faceReferenced = true } = opts;
@@ -3780,6 +3899,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     clampOpeningToWall,
     openingGeometry,
     wallFaceOffsets,
+    wallFaceCorners,
     cutPerpendiculars,
     cutSide,
     cutDirVec,

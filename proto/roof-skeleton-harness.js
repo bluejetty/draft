@@ -257,6 +257,34 @@ check('a gable a thousandth out of plumb still splits where the hips land on it'
       '4 planes, 0 doubled back'];
   });
 
+// ── A SLOPED EDGE: THE CORNER CUT, THE PLANES KEPT (Movie, 18 Oct) ──────
+//
+// "that corner node i would delete to cut off the corner and match the 45 (it
+// would be a sloped eave)" -- "keep the PLANE / SLOPE of roof FIXED". A 60 x 30
+// hip with its (0,30) corner cut to (10,30)-(0,20): the planes are the full
+// rectangle's, the sloped edge is where they stop. So the planes cover the
+// cut footprint and no more, the edge sits ON the eave at both its ends, and
+// the hip that ran into the corner now stops on the cut, at (5,25), 5 ft in.
+const SLOPED_PTS = [[0, 0], [60, 0], [60, 30], [10, 30], [0, 20]];
+const slopedRoof = () => ({ pitch: 4, points: SLOPED_PTS.map(([x, z]) => ({ x, z })),
+  edges: ['eave', 'eave', 'eave', 'sloped', 'eave'] });
+// The roof's height over a point is the LOWEST of its planes there.
+const slopedRise = (G, faces, x, z) => Math.min(...faces.map(face => G.roofFaceRise(face, { x, z }, 4)));
+check('a sloped edge: the planes tile the cut footprint, the corner gone',
+  G => { const roof = slopedRoof(); const faces = G.roofFaces(roof, G.roofSkeleton(roof));
+    const covered = faces.reduce((sum, face) => sum + face.area, 0);
+    return [covered.toFixed(2), (1800 - 50).toFixed(2)]; });
+check('a sloped edge climbs as the planes do: 5 ft in at its middle, on the eave at its ends',
+  G => { const roof = slopedRoof(); const faces = G.roofFaces(roof, G.roofSkeleton(roof));
+    return [[slopedRise(G, faces, 10, 30), slopedRise(G, faces, 5, 25), slopedRise(G, faces, 0, 20)]
+      .map(r => r.toFixed(3)).join(' '), [0, 5 * 4 / 12, 0].map(r => r.toFixed(3)).join(' ')]; });
+check('a sloped edge: the hip into the corner stops on the cut',
+  G => { const arcs = G.roofSkeleton(slopedRoof());
+    const ends = arcs.flatMap(arc => [arc.a, arc.b]).filter(Boolean);
+    const onCut = ends.some(p => Math.hypot(p.x - 5, p.z - 25) < 1e-3);
+    const pastCut = ends.some(p => p.x + (30 - p.z) < 10 - 1e-3 && p.x < 10 && p.z > 20);
+    return [`${onCut ? 'on the cut' : 'missing'}, ${pastCut ? 'runs past' : 'stops'}`, 'on the cut, stops']; });
+
 // ── AND THE RECORD THE ARCS CARRY ────────────────────────────────────────
 //
 // Each arc's ta/tb is how far the wavefront had advanced at its ends, and
@@ -621,6 +649,21 @@ const MUTATIONS = [
   ['a loop made by a split forgets how far the wavefront had already come',
     s => s.replace('const loopA = { pts: [ { ...s } ], kinds: [kinds[splitVertex]], t0: t1 };',
       'const loopA = { pts: [ { ...s } ], kinds: [kinds[splitVertex]], t0: 0 };')],
+  // SLOPED read as a plain eave: the corner is not stood for, the edge is a
+  // fourth plane of its own and the hip into the corner is lost.
+  ['a sloped edge is just an eave',
+    s => s.replace("if (n < 3 || !kinds.includes('sloped')) return null;", 'return null;')],
+  // The corner made, the triangle never cut: the full rectangle comes back.
+  ['the corner is stood for and never cut away',
+    s => s.replace('      cuts.push({ points: [{ x: a.x, z: a.z }, { x: c.x, z: c.z }, { x: b.x, z: b.z }] });\n', '')],
+  // The outside test the wrong way round: every real corner is refused.
+  ['a corner outside the roof is taken for one inside it',
+    s => s.replace('(c.x - a.x)) < -1e-9', '(c.x - a.x)) > 1e-9')],
+  // The virtual edges wear the sloped edge's own overhang instead of their
+  // neighbours' -- harmless here, so aimed at the kinds instead: both
+  // virtual edges taken as gables.
+  ['the virtual edges are gables',
+    s => s.replace('outEdges.push(kindAt(i - 1), kindAt(i + 1));', "outEdges.push('gable', 'gable');")],
 ];
 
 // A MUTATION THAT NEVER APPLIED IS NOT A MUTATION THAT WAS CAUGHT -- broken

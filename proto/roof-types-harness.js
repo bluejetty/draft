@@ -336,6 +336,12 @@ function run(win) {
     `${val(() => T.roofingById(reopened.roofing).id)} / `
     + `${T.cornerStyleOf(reopened, 'flat', PROFILES.GABLE_CORNER_STYLES)}`);
 
+  // A SLOPED EDGE (Movie, 18 Oct: "cut off the corner and match the 45 (it
+  // would be a sloped eave)") is kept, a word nobody knows still reads eave.
+  const slopedEdges = roof({ edges: ['eave', 'gable', 'sloped', 'hip'] })?.edges;
+  check('a SLOPED edge survives the format; a word it does not know reads EAVE',
+    String(slopedEdges) === 'eave,gable,sloped,eave', String(slopedEdges));
+
   return missed;
 }
 
@@ -439,6 +445,13 @@ const MUTATIONS = [
 
   // ── THE LEGEND ──────────────────────────────────────────────────────
   // ── THE RECORD ──────────────────────────────────────────────────────
+  ['the format turns SLOPED back into an eave, so a cut corner reopens square',
+    s => sub(s, 'drawing-format.js', "(roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')",
+      "(roof.edges[index] === 'gable')")],
+  ['the format keeps any word it is handed as an edge',
+    s => sub(s, 'drawing-format.js', "(Array.isArray(roof?.edges) && (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')",
+      "(Array.isArray(roof?.edges) && roof.edges[index]")],
+  // ── THE RECORD -- WHAT A ROOF WEARS ──────────────────────────────────────────────────────
   ['the roofing is written onto every roof, so opening an old drawing is a migration',
     s => sub(s, 'drawing-format.js',
       "        ...(Array.isArray(env.roofingIds) && env.roofingIds.includes(roof?.roofing)\n"

@@ -165,7 +165,9 @@ if (!window.DraftLotSizes) {
     // 44.9475 ft, and a lot line stored to four decimals prints as 44'-11
     // 3/8" and dimensions as a number nobody typed. An inch is finer than
     // any lot is ever surveyed to on this page.
-    const toInch = value => Math.round(value * 12) / 12;
+    // TYPED IN FEET AND INCHES IT KEEPS ITS SIXTEENTHS (Movie, 18 Oct: "895-2
+    // 3/8" is a surveyed frontage): only a conversion is rounded to the inch.
+    const toInch = value => (metric ? Math.round(value * 12) / 12 : Math.round(value * 192) / 192);
     return Object.freeze({
       id: 'custom', label: 'CUSTOM', widthFt: toInch(w), depthFt: toInch(d),
       character: 'Typed', custom: true,

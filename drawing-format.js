@@ -897,7 +897,9 @@ if (!window.DraftDrawingFormat) {
         sourceLevelId: levelId(roof?.sourceLevelId, levelIds),
         sourceShapeId: String(roof?.sourceShapeId || '').trim() || null,
         edges: points.map((_, index) =>
-          (Array.isArray(roof?.edges) && roof.edges[index] === 'gable' ? 'gable' : 'eave')),
+          // SLOPED (18 Oct): the planes kept, cut off along the edge.
+          (Array.isArray(roof?.edges) && (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')
+            ? roof.edges[index] : 'eave')),
         // TEN FEET, not six (Movie, 18 Oct: North Point's main eave is 8').
         overhang: Math.min(ROOF_OVERHANG_MAX_FT, Math.max(0, number(roof?.overhang, 2))),
         // PER EDGE, WHEN THE WRITER KNEW. `overhang` is one number for the

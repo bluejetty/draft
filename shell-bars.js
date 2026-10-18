@@ -697,6 +697,8 @@ ${trio(true)}
        assembly is broken into its pieces. -->
   <button id="model-break" type="button" data-break hidden
     title="Cut the roof in two, or break the assembly into its pieces">BREAK</button>
+  <button id="model-move" type="button" data-move hidden
+    title="MOVE -- drag a roof edge, a node, or the whole roof">MOVE</button>
   <button id="model-rotate" type="button" data-rotate hidden
     title="Turn what is selected about its centre">ROTATE</button>
   <span id="rotate-bar" data-rotate-bar hidden>
