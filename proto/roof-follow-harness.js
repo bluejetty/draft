@@ -97,6 +97,13 @@ check('a garage change leaves a house roof alone that disagrees with its own row
   L => { const out = L.roofsFollowingProject([HOUSE_ROOF(), GARAGE_ROOF()], D({ roofOverhang: 5 }),
     D({ roofOverhang: 5, sectionTable: { rows: { attachedGarage: { roofOverhangFt: 3 } } } }), OFFSET);
     return [out && box(out[0]), '-2,42,-2,30']; });
+// A ROOF SHAPED BY HAND (Movie, 18 Oct: an edge's overhang typed in the
+// selected roof's panel) says `follows: 'none'`, and a PROJECT change must
+// not put 8' back on the edge he just made flush.
+check('a house roof shaped by hand stops following the house row',
+  L => { const out = L.roofsFollowingProject([{ ...HOUSE_ROOF(), follows: 'none' }], D(),
+    D({ roofOverhang: 4 }), OFFSET);
+    return [out ? box(out[0]) : 'unmoved', 'unmoved']; });
 check('a roof cut by hand with the ROOF tool never moves',
   L => [L.roofsFollowingProject([HAND_ROOF()], D(), D({ roofOverhang: 4 }), OFFSET), null]);
 check('nothing changed hands back null, so PROJECT writes no roofs key',

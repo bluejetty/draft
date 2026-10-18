@@ -881,6 +881,7 @@ if (!window.DraftDrawingFormat) {
   // SHAPES and roof-types.js and profile-manager.js own the words. A caller
   // that passes neither gets a roof with neither key, which is the same trap
   // the finish page fell into -- so every call site names them.
+  const ROOF_OVERHANG_MAX_FT = 10;
   const roofs = (rawRoofs, levelIds, env = {}) => (Array.isArray(rawRoofs) ? rawRoofs : [])
     .map(roof => {
       const roofLevelId = levelId(roof?.levelId, levelIds);
@@ -894,7 +895,8 @@ if (!window.DraftDrawingFormat) {
         sourceShapeId: String(roof?.sourceShapeId || '').trim() || null,
         edges: points.map((_, index) =>
           (Array.isArray(roof?.edges) && roof.edges[index] === 'gable' ? 'gable' : 'eave')),
-        overhang: Math.min(6, Math.max(0, number(roof?.overhang, 2))),
+        // TEN FEET, not six (Movie, 18 Oct: North Point's main eave is 8').
+        overhang: Math.min(ROOF_OVERHANG_MAX_FT, Math.max(0, number(roof?.overhang, 2))),
         // PER EDGE, WHEN THE WRITER KNEW. `overhang` is one number for the
         // whole roof and was the whole truth until a roof carried a flush
         // gable and a raked one at once; `raiseRoofOver` works the array out
@@ -911,8 +913,19 @@ if (!window.DraftDrawingFormat) {
         // that edge drawn exactly as it was before this field existed.
         ...(Array.isArray(roof?.edgeOverhang) && roof.edgeOverhang.length === points.length
           ? { edgeOverhang: roof.edgeOverhang.map(value =>
-            Math.min(6, Math.max(0, number(value, number(roof?.overhang, 2))))) }
+            Math.min(ROOF_OVERHANG_MAX_FT, Math.max(0, number(value, number(roof?.overhang, 2))))) }
           : {}),
+        // THE WALL LINE THE EAVES HANG FROM, one point per roof point, kept
+        // once a drafter types an edge's overhang (Movie, 18 Oct). Every
+        // overhang is worked out from this, never from the eave: bringing the
+        // jog-out's front onto the main eave line leaves the jog's sides with
+        // no length, and an edge of no length has no direction to be pushed
+        // back out along. The wall line keeps it. Dropped unless it matches
+        // the ring point for point.
+        ...((() => {
+          const footprint = (Array.isArray(roof?.footprint) ? roof.footprint : []).map(point).filter(Boolean);
+          return footprint.length === points.length ? { footprint } : {};
+        })()),
         pitch: Math.min(24, Math.max(0, number(roof?.pitch, 4))),
         fascia: ROOF_FASCIA_IN,
         garage: roof?.garage === true,
@@ -923,7 +936,11 @@ if (!window.DraftDrawingFormat) {
         // WHICH PROJECT ROW THE BUILD CUT IT FROM, so a changed overhang or
         // pitch on the PROJECT page reshapes it (level-assembly.js
         // roofsFollowingProject). Absent on a roof the drafter cut by hand.
-        ...(['house', 'attachedGarage', 'detachedGarage'].includes(roof?.follows)
+        // 'none' IS A ROOF THE DRAFTER HAS SHAPED BY HAND -- an edge's
+        // overhang typed in, an end made a gable -- and a PROJECT change must
+        // not put it back. Without the word, a ROOF-level roof is read as the
+        // house's and follows it.
+        ...(['house', 'attachedGarage', 'detachedGarage', 'none'].includes(roof?.follows)
           ? { follows: roof.follows } : {}),
         ...(Array.isArray(env.roofingIds) && env.roofingIds.includes(roof?.roofing)
           ? { roofing: roof.roofing } : {}),
@@ -2275,6 +2292,7 @@ if (!window.DraftDrawingFormat) {
     surfaceOpenings,
     shapes,
     roofs,
+    ROOF_OVERHANG_MAX_FT,
     ROOF_FASCIA_IN,
     WINDOW_HEAD_FT,
     SUPERSEDED_WINDOW_HEADS_FT,

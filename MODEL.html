@@ -10981,6 +10981,16 @@
       });
       ctx.closePath();
       ctx.stroke();
+      // THE PICKED EDGE, in the handle colour over the halo, so the panel's
+      // EDGE 3 OF 12 is the line the drafter is looking at.
+      if (type === 'roof' && selection.length === 1 && roofEdgeIdx != null && pts[roofEdgeIdx]) {
+        const a = toS(pts[roofEdgeIdx]), b = toS(pts[(roofEdgeIdx + 1) % pts.length]);
+        ctx.save();
+        ctx.strokeStyle = selectHandle();
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.restore();
+      }
     });
     ctx.restore();
     // ── AND A PICKED OPENING SAYS HOW FAR IT IS FROM EACH CORNER ──────────
@@ -26339,6 +26349,173 @@
   // drafter could not see selected. Returning early is exactly how a panel
   // and its subject come apart, so no builder is allowed to decide for
   // itself whether to leave the box alone.
+  // ── A SELECTED ROOF: ITS EDGES, THEIR OVERHANGS, ITS PITCH ─────────────
+  //
+  // Movie, 18 Oct, on North Point: "main roof overhang at 8ft except at the
+  // front jog out, the side overhangs are only 2ft and at the left edge its
+  // no overhang, diag edge 2-5.5"". One number for the whole roof cannot say
+  // that, so a roof that is selected shows its EDGES: click one of them (or
+  // step with the arrows) and the panel shows that edge's kind and overhang.
+  //
+  // EVERY OVERHANG IS WORKED FROM THE WALL LINE, NOT THE EAVE. The record's
+  // `footprint` keeps the line the eaves hang from; an older roof gets one
+  // worked back from its eave and its overhangs the first time an edge is
+  // typed. Offsetting the EAVE instead goes wrong exactly where Movie needs
+  // it: the jog-out's front brought onto the main eave line leaves the jog's
+  // two sides with no length, and an edge of no length has no direction to be
+  // pushed back out along.
+  //
+  // AND A ROOF SHAPED BY HAND STOPS FOLLOWING THE PROJECT PAGE (`follows:
+  // 'none'`): a changed overhang there would otherwise put 8' back on the
+  // edge he just made flush.
+  let roofEdgeIdx = null;
+  const roofEdgeNear = (roof, worldPt) => {
+    const G = window.DraftGeometry2D;
+    const pts = roof?.points || [];
+    let best = null, bestD = SELECT_GRAB_PX / view.scale;
+    pts.forEach((pt, index) => {
+      const next = pts[(index + 1) % pts.length];
+      if (Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6) return;
+      const { d } = G.pointToSegment(worldPt, { start: pt, end: next });
+      if (d < bestD) { bestD = d; best = index; }
+    });
+    return best;
+  };
+  const roofOverhangs = roof => {
+    const per = Array.isArray(roof.edgeOverhang) && roof.edgeOverhang.length === roof.points.length;
+    const fallback = Number(roof.overhang) || 0;
+    return roof.points.map((_, i) => {
+      const v = per ? Number(roof.edgeOverhang[i]) : NaN;
+      return Number.isFinite(v) ? v : fallback;
+    });
+  };
+  const ringArea = ring => ring.reduce((sum, pt, i) => {
+    const next = ring[(i + 1) % ring.length];
+    return sum + (pt.x * next.z - next.x * pt.z);
+  }, 0) / 2;
+  // The kept wall line if it still hangs the eave where the eave is (some
+  // other edit may have moved the roof since), else one worked back from the
+  // eave -- which needs every edge to still have a length.
+  const roofFootprint = roof => {
+    const G = window.DraftGeometry2D;
+    const pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const was = roofOverhangs(roof);
+    const kept = Array.isArray(roof.footprint) && roof.footprint.length === pts.length
+      ? roof.footprint.map(pt => ({ x: pt.x, z: pt.z })) : null;
+    if (kept) {
+      const hung = G.offsetOutlineVariable(kept, was);
+      if (hung.every((pt, i) => Math.hypot(pt.x - pts[i].x, pt.z - pts[i].z) < 0.01)) return kept;
+    }
+    if (pts.some((pt, i) => {
+      const next = pts[(i + 1) % pts.length];
+      return Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6;
+    })) return null;
+    return G.offsetOutlineVariable(pts, was.map(v => -v));
+  };
+  const setRoofOverhangs = (roof, want) => {
+    const G = window.DraftGeometry2D;
+    const max = window.DraftDrawingFormat.ROOF_OVERHANG_MAX_FT;
+    if (want.some(v => !(v >= 0) || v > max)) {
+      return `A roof overhang runs from 0 to ${max}'.`;
+    }
+    const footprint = roofFootprint(roof);
+    if (!footprint) return 'This roof has an edge of no length, so the wall line under it cannot be found.';
+    const eave = G.offsetOutlineVariable(footprint, want);
+    if (eave.some(pt => !Number.isFinite(pt.x) || !Number.isFinite(pt.z))
+      || Math.sign(ringArea(eave)) !== Math.sign(ringArea(footprint))) {
+      return 'That overhang folds the roof over itself.';
+    }
+    roof.footprint = footprint.map(pt => ({ x: pt.x, y: 0, z: pt.z }));
+    roof.points = eave.map((pt, i) => ({ ...roof.points[i], x: pt.x, z: pt.z }));
+    roof.edgeOverhang = want.slice();
+    roof.follows = 'none';
+    return null;
+  };
+  // ONE UNDO PER EDIT, however many roofs it touched, and nothing at all if
+  // any one of them refuses -- a half-applied edit across an assembly would
+  // leave the drafter guessing which roofs took it.
+  const editRoofs = (list, change) => {
+    const edits = list.map(item => ({ item, before: { ...item } }));
+    const refusal = list.map(change).find(Boolean);
+    if (refusal) {
+      edits.forEach(({ item, before }) => {
+        Object.keys(item).forEach(key => { if (!(key in before)) delete item[key]; });
+        Object.assign(item, before);
+      });
+      return refusal;
+    }
+    undoStack.push({ kind: 'props', edits });
+    markDirty();
+    paint();
+    return null;
+  };
+  const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE']];
+  const roofPropsNode = items => {
+    const box = document.createElement('div');
+    const again = () => { if (selection.every(e => e.type === 'roof')) showSelectionProps(); };
+    const lone = items.length === 1 ? items[0] : null;
+    box.append(numberField('PITCH', lone ? lone.pitch : items[0].pitch, 0, 24, 0.5, v => {
+      if (v !== null) {
+        const refusal = editRoofs(items, roof => { roof.pitch = v; roof.follows = 'none'; return null; });
+        if (refusal) sayOnStrip(refusal);
+      }
+      again();
+      return items[0].pitch;
+    }));
+    // EVERY EDGE AT ONCE, which is where a drafter starts -- 8' all round --
+    // before picking out the edges that differ.
+    const all = items.flatMap(roofOverhangs);
+    const agree = all.every(v => Math.abs(v - all[0]) < 1e-9);
+    box.append(propField('OVERHANG, ALL EDGES', agree ? all[0] : null,
+      ft => editRoofs(items, roof => setRoofOverhangs(roof, roof.points.map(() => ft))), again));
+    if (lone) {
+      const count = lone.points.length;
+      if (roofEdgeIdx != null && roofEdgeIdx >= count) roofEdgeIdx = null;
+      const head = document.createElement('div');
+      head.className = 'chip-row';
+      head.dataset.roofEdgeHead = '';
+      const step = by => {
+        roofEdgeIdx = roofEdgeIdx == null ? (by > 0 ? 0 : count - 1) : (roofEdgeIdx + by + count) % count;
+        again();
+        paint();
+      };
+      const arrow = (face, by, key) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sel-chip';
+        btn.dataset.roofEdgeStep = key;
+        btn.textContent = face;
+        btn.addEventListener('click', () => step(by));
+        return btn;
+      };
+      const label = document.createElement('span');
+      label.className = 'props-title';
+      label.dataset.roofEdgeLabel = '';
+      label.textContent = roofEdgeIdx == null ? 'CLICK AN EDGE OF THE ROOF'
+        : `EDGE ${roofEdgeIdx + 1} OF ${count}`;
+      head.append(arrow('◀', -1, 'prev'), label, arrow('▶', 1, 'next'));
+      box.append(head);
+      if (roofEdgeIdx != null) {
+        const index = roofEdgeIdx;
+        const kind = lone.edges?.[index] === 'gable' ? 'gable' : 'eave';
+        box.append(propRow('EDGE', ROOF_EDGE_KINDS, kind, id => {
+          if (id === kind) return;
+          editRoofs([lone], roof => {
+            roof.edges = roof.points.map((_, i) => (i === index ? id
+              : (roof.edges?.[i] === 'gable' ? 'gable' : 'eave')));
+            roof.follows = 'none';
+            return null;
+          });
+          again();
+        }));
+        box.append(propField('OVERHANG, THIS EDGE', roofOverhangs(lone)[index],
+          ft => editRoofs([lone], roof => setRoofOverhangs(roof,
+            roofOverhangs(roof).map((v, i) => (i === index ? ft : v)))), again));
+      }
+    }
+    return box;
+  };
+
   const SELECTION_PANELS = {
     roomtag: items => (items.length === 1
       ? { title: 'ROOM TAG', node: roomTagPropsNode(items[0]) } : null),
@@ -26354,13 +26531,12 @@
     // to hold two, and it is not a gesture that asks for this panel.
     stair: items => (items.length === 1
       ? { title: 'STAIR', node: stairPropsNode(items[0]) } : null),
-    // ROOF IS NOT HERE, AND THAT IS A BLOCK RATHER THAN A CHOICE. hitAt's
-    // chain is fenestration, wall, line, outline, floor -- a roof cannot be
-    // selected on this page at all, so a panel for one would have nothing to
-    // be reached by. The roof TOOL's overhang and pitch box already exists
-    // and is about the NEXT roof, which is a different question.
+    // ROOF IS HERE NOW: hitAt reaches roofs, and North Point's eaves need
+    // an overhang per edge (Movie, 18 Oct). The roof TOOL's box is still
+    // about the NEXT roof; this one is about the roofs in hand.
+    roof: items => ({ title: 'ROOF', node: roofPropsNode(items) }),
     //
-    // OUTLINE IS NOT HERE EITHER: it is a guide, and what a drafter changes
+    // OUTLINE IS NOT HERE: it is a guide, and what a drafter changes
     // about one is its corners, which is a drag.
     column: items => (items.length === 1
       ? { title: 'COLUMN', node: columnPropsNode(items[0]) } : null),
@@ -26413,7 +26589,8 @@
   // and have to exist before anything is placed.
   //
   // The four presets are the order's, and they are feet because the record is
-  // (drawing-format.js:503 clamps overhang to 0..6 feet). The free entry is
+  // (drawing-format.js clamps overhang to 0..ROOF_OVERHANG_MAX_FT, ten feet
+  // since North Point's 8' eave). The free entry is
   // the same range; a value outside it is not silently clamped here, because
   // a box that swallows 9 and shows 6 teaches the drafter that 9 was taken.
   const ROOF_OVERHANGS = [['0.5', "6\""], ['1', "1'"], ['1.5', "1'-6\""], ['2', "2'"]];
@@ -26465,7 +26642,8 @@
       roofOverhangFt = Number(id);
       showRoofProps();
     }));
-    box.append(numberField('OVERHANG FT', roofOverhangFt, 0, 6, 0.25, v => {
+    box.append(numberField('OVERHANG FT', roofOverhangFt, 0,
+      window.DraftDrawingFormat.ROOF_OVERHANG_MAX_FT, 0.25, v => {
       if (v !== null) roofOverhangFt = v;
       showRoofProps();
       return roofOverhangFt;
@@ -28442,7 +28620,16 @@
       } else {
         // An empty click clears, which is the other half of select: without it
         // the drafter has no way to put a selection down.
-        setSelection(withGroup(hit));
+        //
+        // A CLICK ON A ROOF'S EDGE PICKS THE EDGE as well as the roof, and a
+        // roof already in hand answers a click just OUTSIDE its eave too --
+        // the edge is a line, and half of the grab around it is off the roof.
+        const world = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        const held = selection.length === 1 && selection[0].type === 'roof' ? selection[0].item : null;
+        const roofHit = hit?.type === 'roof' ? hit.item
+          : (!hit && held && roofEdgeNear(held, world) != null ? held : null);
+        roofEdgeIdx = roofHit ? roofEdgeNear(roofHit, world) : null;
+        setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : withGroup(hit));
       }
       paint();
     }
