@@ -691,6 +691,12 @@ ${trio(true)}
        like how those little commands cover the other ones when they are
        active", so pressing it puts its own small row OVER the verbs until
        DONE. -->
+  <!-- BREAK (Movie, 18 Oct): "can you place the BREAK command down near
+       where UNDO COPY DELETE commands show up ... when the roof or other
+       ASSEMBLIES are selected". A roof is cut in two across a line; an
+       assembly is broken into its pieces. -->
+  <button id="break" type="button" data-break hidden
+    title="Cut the roof in two, or break the assembly into its pieces">BREAK</button>
   <button id="rotate" type="button" data-rotate hidden
     title="Turn what is selected about its centre">ROTATE</button>
   <span id="rotate-bar" data-rotate-bar hidden>

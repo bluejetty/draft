@@ -768,6 +768,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // what is already drawn about its own middle and makes nothing,
             // so no absence row moves -- the same verdict COPY and DELETE got.
             'rotate',
+            // BREAK (Movie, 18 Oct) cuts a roof in two along a flush gable, or
+            // breaks an assembly into its pieces. It divides what is drawn and
+            // starts nothing new, so no absence row moves.
+            'break',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts
