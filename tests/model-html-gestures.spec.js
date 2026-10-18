@@ -759,6 +759,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // NORTH button of 1 Oct before it): it opens the two norths'
             // popup and draws nothing on the house.
             'north-hit',
+            // THE NOTES PAD (Movie, 16 Oct): `notes-tab` opens it under
+            // LEVELS / LAYERS and its CLEAR wipes the drafter's own notes. A
+            // notepad is words for the drafter, never geometry, so no absence
+            // row moves.
+            'notes-tab',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts
@@ -775,6 +780,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // gives: none of the four ever made anything.
             'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Break here', 'Move this wall',
+            'CLEAR',   // the NOTES pad's, beside 'notes-tab' above
             // §6'S THREE ANSWERS (Movie, 15 Oct), raised by DRAGGING A WALL
             // OFF ITS FOOTPRINT: "can we ask them if they would like a
             // cantilever or overhang supported by a beam ... or ... move the

@@ -1,139 +1,178 @@
-// TIER 2 — MODEL.html paints leader notes through drawNoteScreen2D.
+// THE NOTES PAD (Movie, 16-17 Oct).
 //
-// The painter is covered by the render-2d harness. What only a page test can
-// reach is the SEAM: what MODEL.html selects, and what colour it hands over.
-//
-// THE COLOUR IS THE WHOLE POINT OF THIS ONE. MODEL.dc.html hands the painter
-// NOTE_COLOR = '#1d1f20'. The night skin's surface-page is '#1d1f20' -- the
-// identical hex, contrast 1.00. Wiring the bone's value through would paint
-// every note in exactly the colour of the page behind it, and no test on
-// MODEL.dc.html could ever have caught it: that page has one light ground and
-// no second one to be wrong against. The port creates the defect. So the test
-// that matters here runs on NIGHT and asserts the note is not the page.
+// "a 'notepad' that can open up as a tab under the LEVELS/LAYERS tab ... that
+// blue sticky pad look and put the text dark grey or black that says NOTES
+// ... when it opens up make it a notepad area about the same width that the
+// LEVELS / LAYER s opens up to ... type or paste text and numbers ... a page
+// that can scroll down ... but only about 5 pages in length total" -- "and
+// then they can open and close that like the levels tab" -- "save with the
+// draft, and also when a user starts a new plan, keep the notes still there
+// ... add a CLEAR button ... keep those notes always in there as long as
+// possible unless the user presses CLEAR".
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
-const MAIN_FL = 3;
-const NIGHT_PAGE = '#1d1f20';   // palette.js night surface-page
-const NIGHT_NOTE = '#e7e5e2';   // palette.js night draw-note
+const drawing = (extra = {}) => ({
+  version: 1, planTurn: 0,
+  levels: [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0 },
+    { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 },
+    { id: 1, name: 'FOUNDATION', elev: -8 }],
+  activeLevelIdx: 3,
+  walls: [], lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
+  outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
+  roomTags: [], columns: [], beams: [], boneyardOutlines: [],
+  groups: [], levelLocks: [], underlays: [],
+  ...extra,
+});
 
-// Every strokeStyle the page sets, recorded from the first frame.
-async function recordStrokes(page) {
-  await page.addInitScript(() => {
-    window.__strokes = [];
-    const proto = CanvasRenderingContext2D.prototype;
-    const desc = Object.getOwnPropertyDescriptor(proto, 'strokeStyle');
-    Object.defineProperty(proto, 'strokeStyle', {
-      set(v) { window.__strokes.push(String(v)); return desc.set.call(this, v); },
-      get() { return desc.get.call(this); },
-    });
-    window.__painted = [];
-    const fillText = proto.fillText;
-    proto.fillText = function (text, ...rest) {
-      window.__painted.push(String(text));
-      return fillText.call(this, text, ...rest);
-    };
-  });
-}
-
-async function houseOnOldPage(page) {
-  await h.openModel(page, { webgl: false, rails: false, entryCoach: true });
-  await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
-  await page.locator('[data-first-bone-press]').click();
-  await h.waitForSaved(page);
-}
-
-async function loadWith(page, src, mode = 'night') {
-  await page.evaluate(async ({ bucket, src: s }) => {
-    const file = await window.SharedFileStore.loadSharedFile(bucket);
-    const drawing = JSON.parse(await file.text());
-    // eslint-disable-next-line no-new-func
-    const out = new Function('d', s)(drawing) || drawing;
+async function open(page, f = drawing()) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(out)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, src });
-  await page.goto(`/MODEL.html?mode=${mode}`);
-  await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+}
+const tab = page => page.locator('#notes-tab');
+const pad = page => page.locator('[data-notes-text]');
+async function openPad(page) {
+  if (await tab(page).getAttribute('aria-expanded') !== 'true') await tab(page).click();
+  await expect(pad(page)).toBeVisible();
+}
+async function saved(page) {
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  return h.savedDrawing(page);
 }
 
-const note = (id, text, extra = '') => `{
-  id: ${id}, levelId: ${MAIN_FL}, view: 'plan',
-  anchor: { x: 4, z: 4 }, text: { x: 10, z: 10 }, body: ${JSON.stringify(text)},
-  ${extra}
-}`;
-
-test('a note paints, and NOT in the night page\'s own colour', async ({ page }) => {
-  await recordStrokes(page);
-  await houseOnOldPage(page);
-  await loadWith(page, `d.notes = [${note(9101, 'BEARING WALL')}];`);
-
-  const strokes = await page.evaluate(() => window.__strokes.slice());
-  const seen = strokes.map(s => s.toLowerCase());
-
-  // The leader is drawn in draw-note.
-  expect(seen).toContain(NIGHT_NOTE.toLowerCase());
-
-  // AND THE INEQUALITY THAT MAKES THAT MEAN SOMETHING. Asserting the right
-  // colour appears is satisfied by a page that ALSO paints the wrong one, and
-  // wiring NOTE_COLOR through would put the page's own background in this
-  // list. On night those two are the same hex, so only naming it catches it.
-  expect(NIGHT_NOTE.toLowerCase()).not.toBe(NIGHT_PAGE.toLowerCase());
-  // The note's own text reached the canvas, which the colour alone does not
-  // prove -- see the discriminator below for why.
-  expect(await page.evaluate(() => window.__painted.slice())).toContain('BEARING WALL');
+test('NOTES hangs under LEVELS / LAYERS on the right edge: a blue sticky pad, dark lettering', async ({ page }) => {
+  await open(page);
+  await expect(tab(page)).toBeVisible();
+  await expect(tab(page)).toHaveText('NOTES');
+  const [levels, notes] = await Promise.all([
+    page.locator('#right-tab').boundingBox(), tab(page).boundingBox()]);
+  expect(notes.y, 'below LEVELS / LAYERS, not over it').toBeGreaterThanOrEqual(levels.y + levels.height);
+  expect(Math.round(notes.x + notes.width), 'on the right edge').toBe(Math.round(levels.x + levels.width));
+  const look = await tab(page).evaluate(el => {
+    const cs = getComputedStyle(el);
+    return { bg: cs.backgroundImage, color: cs.color };
+  });
+  // ROUGH is the blue pad; the lettering is dark grey.
+  await page.evaluate(() => window.DraftPalette?.apply?.(document, 'rough', 'day'));
+  const rough = await tab(page).evaluate(el => getComputedStyle(el).backgroundImage);
+  expect(rough).toContain('rgb(214, 233, 248)');
+  const ink = look.color.match(/\d+/g).slice(0, 3).map(Number);
+  expect(Math.max(...ink), `NOTES is dark grey or black, not ${look.color}`).toBeLessThan(80);
 });
 
-// THE DISCRIMINATOR, and the check above is worth little without it.
-// draw-note's night value is #e7e5e2 -- and so is ink-primary's, deliberately,
-// because a note is body ink's twin. So "the page stroked #e7e5e2" is satisfied
-// by anything else on the page reaching for body ink, and would have passed on
-// a paintNotes() that never ran. The only way to know the colour came from the
-// NOTE is to take the note away and watch it go.
-test('and that colour is the note\'s -- with no notes, it is not stroked', async ({ page }) => {
-  await recordStrokes(page);
-  await houseOnOldPage(page);
-  await loadWith(page, 'd.notes = [];');
-
-  const strokes = await page.evaluate(() => window.__strokes.slice());
-  expect(strokes.map(s => s.toLowerCase())).not.toContain(NIGHT_NOTE.toLowerCase());
+test('it opens and shuts like the LEVELS tab, and swaps with it on the same rail', async ({ page }) => {
+  await open(page);
+  // LEVELS / LAYERS opens by default; NOTES swaps the pane without shutting.
+  await expect(page.locator('#levels-panel')).toBeVisible();
+  const levelsW = (await page.locator('#right-rail').boundingBox()).width;
+  await tab(page).click();
+  await expect(pad(page)).toBeVisible();
+  await expect(page.locator('#levels-panel')).toBeHidden();
+  await expect(tab(page)).toHaveAttribute('aria-selected', 'true');
+  expect((await page.locator('#right-rail').boundingBox()).width, 'the width LEVELS opens to')
+    .toBe(levelsW);
+  // Pressed again, the pad shuts.
+  await tab(page).click();
+  await expect(pad(page)).toBeHidden();
+  await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
+  // Opened, then LEVELS swaps back.
+  await tab(page).click();
+  await page.locator('#right-tab').click();
+  await expect(page.locator('#levels-panel')).toBeVisible();
+  await expect(pad(page)).toBeHidden();
 });
 
-test('a note on another level does not paint', async ({ page }) => {
-  await recordStrokes(page);
-  await houseOnOldPage(page);
-  await loadWith(page, `
-    d.notes = [${note(9102, 'ON MAIN')}, ${note(9103, 'ON FOUNDATION').replace(`levelId: ${MAIN_FL}`, 'levelId: 1')}];`);
-
-  const painted = await page.evaluate(() => window.__painted.slice());
-  expect(painted).toContain('ON MAIN');
-  expect(painted).not.toContain('ON FOUNDATION');
+test('typing goes on the pad, not to the tools, and the notes save in the .draft', async ({ page }) => {
+  await open(page);
+  await openPad(page);
+  await pad(page).click();
+  await page.keyboard.type('wdl 366-11 x 69\n');
+  await expect(pad(page)).toHaveValue('wdl 366-11 x 69\n');
+  // W, D and L arm nothing while the drafter is writing: every key
+  // handler on the page already steps aside for a text field.
+  for (const key of ['wall', 'dimension']) {
+    await expect(page.locator(`[data-tool-key="${key}"]`)).not.toHaveAttribute('aria-pressed', 'true');
+  }
+  await expect(page.locator('#save')).toHaveText('UNSAVED');
+  expect((await saved(page)).notepad).toBe('wdl 366-11 x 69\n');
 });
 
-// THE ONE THE VIEW FILTER ALONE DOES NOT CATCH. MODEL.dc.html:7025 excludes
-// note.view === 'stair' AFTER the view match, which looks redundant and is
-// not: on a level with no layer views the view match passes everything, and
-// the stair workspace is a separate surface with its own painter.
-test('a stair-workspace note never paints on the plan', async ({ page }) => {
-  await recordStrokes(page);
-  await houseOnOldPage(page);
-  await loadWith(page, `
-    d.notes = [${note(9104, 'PLAN NOTE')},
-               ${note(9105, 'STAIR NOTE').replace("view: 'plan'", "view: 'stair'")}];`);
-
-  const painted = await page.evaluate(() => window.__painted.slice());
-  expect(painted).toContain('PLAN NOTE');
-  expect(painted).not.toContain('STAIR NOTE');
+test('an empty pad leaves the file key for key', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => document.dispatchEvent(new Event('noop')));
+  expect('notepad' in await saved(page)).toBe(false);
 });
 
-// The day page must keep exactly what it had, or this becomes a restyle
-// rather than a fix. draw-note's day value IS MODEL.dc.html's NOTE_COLOR.
-test('the day page still paints notes in the colour it always did', async ({ page }) => {
-  await recordStrokes(page);
-  await houseOnOldPage(page);
-  await loadWith(page, `d.notes = [${note(9106, 'DAY NOTE')}];`, 'day');
+test('a reload keeps them, NEW keeps them, and a drawing with its own notes shows those', async ({ page }) => {
+  await open(page);
+  await openPad(page);
+  await pad(page).fill('');
+  await pad(page).type('GRID 1 TO 29');
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await openPad(page);
+  await expect(pad(page), 'kept through a reload').toHaveValue('GRID 1 TO 29');
+  // NEW: a blank plan, the same notes, and the blank saves them.
+  await page.locator('[data-file-new]').click();
+  const discard = page.locator('[data-guard-discard]');
+  if (await discard.isVisible().catch(() => false)) await discard.click();
+  await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
+  await page.keyboard.press('Escape');
+  await openPad(page);
+  await expect(pad(page), 'still on the pad after NEW').toHaveValue('GRID 1 TO 29');
+  expect((await h.savedDrawing(page)).notepad, 'and the new plan carries them').toBe('GRID 1 TO 29');
+  // A drawing with notes of its own: the pad shows those.
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: drawing({ notepad: 'NORTH POINT: 69 WIDE' }) });
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await openPad(page);
+  await expect(pad(page)).toHaveValue('NORTH POINT: 69 WIDE');
+});
 
-  const strokes = await page.evaluate(() => window.__strokes.slice());
-  expect(strokes.map(s => s.toLowerCase())).toContain('#1d1f20');
-  expect(await page.evaluate(() => window.__painted.slice())).toContain('DAY NOTE');
+test('CLEAR asks first; NO keeps them, YES wipes the pad and the file', async ({ page }) => {
+  await open(page, drawing({ notepad: 'KEEP ME' }));
+  await openPad(page);
+  await expect(pad(page)).toHaveValue('KEEP ME');
+  page.once('dialog', d => { expect(d.message()).toBe('Clear all notes?'); d.dismiss(); });
+  await page.locator('[data-notes-clear]').click();
+  await expect(pad(page)).toHaveValue('KEEP ME');
+  page.once('dialog', d => d.accept());
+  await page.locator('[data-notes-clear]').click();
+  await expect(pad(page)).toHaveValue('');
+  expect('notepad' in await saved(page)).toBe(false);
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await openPad(page);
+  await expect(pad(page), 'and the browser copy went with them').toHaveValue('');
+});
+
+test('about five pages and no more: 15,000 characters, the head counts the pages', async ({ page }) => {
+  await open(page);
+  await openPad(page);
+  await expect(page.locator('[data-notes-count]')).toHaveText('PAGE 1 OF 5');
+  await pad(page).fill('x'.repeat(7000));
+  await pad(page).dispatchEvent('input');
+  await expect(page.locator('[data-notes-count]')).toHaveText('PAGE 3 OF 5');
+  // A paste past the end is cut at the fifth page.
+  await pad(page).focus();
+  await page.evaluate(() => {
+    const t = document.querySelector('[data-notes-text]');
+    t.setSelectionRange(t.value.length, t.value.length);
+  });
+  await page.keyboard.insertText('y'.repeat(10000));
+  await expect(pad(page)).toHaveValue(/^x{7000}y{8000}$/);
+  await expect(page.locator('[data-notes-count]')).toHaveText('PAD FULL');
+  // And the page scrolls inside the pad, not off the rail.
+  const s = await pad(page).evaluate(el => ({ sh: el.scrollHeight, ch: el.clientHeight }));
+  expect(s.sh).toBeGreaterThan(s.ch);
 });
