@@ -14461,7 +14461,12 @@
   const outlineAligned = at => {
     const corner = cornerSnap(at, []);
     const first = outlineCorners[0];
-    if (first && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
+    // HOME ONLY ONCE THERE IS A LOOP TO CLOSE: three corners. With one, a
+    // short first edge pressed within the reach of the first corner was
+    // pulled back on to it and lost -- the 1' step of Movie's MOD BILEVEL
+    // garage, traced with the house fitted to the sheet (6 px a foot).
+    if (first && outlineCorners.length >= 3
+      && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
     if (corner) return { x: corner.x, z: corner.z };
     // SNAP AND TRACK, as a wall's point has them: a node, or the cross lines
     // -- the first corner's among them, so the loop can always be brought

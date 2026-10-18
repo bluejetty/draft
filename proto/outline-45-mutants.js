@@ -50,6 +50,11 @@ const MUTANTS = [
     find: '    if (from) sayDiagonal(from, pt);\n',
     with: '',
     test: 'on DRAFTING a typed 45 lays the chamfer, says its legs, and the typed edge home closes square within the eighth' },
+  { file: 'MODEL.html',
+    name: 'a one-corner outline closes on a short first edge and loses it',
+    find: '    if (first && outlineCorners.length >= 3\n      && Math.hypot',
+    with: '    if (first\n      && Math.hypot',
+    test: 'a first edge shorter than the close-the-loop reach is kept, not pulled home' },
 ];
 
 const run = name => {

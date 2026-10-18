@@ -124,3 +124,27 @@ test('on DRAFTING with no instrument lit the outline turns at any angle, unround
   // The second press landed on the first corner's own line, square to it.
   expect(Math.abs(loop[1][1])).toBeLessThan(1e-9);
 });
+
+// A SHORT FIRST EDGE IS KEPT (18 Oct): the press that closes the loop on its
+// first corner reaches 8 px, and with one corner down there is no loop to
+// close -- so a first edge shorter than that reach stood on the first corner
+// and was lost. Movie's MOD BILEVEL garage starts with a 1' step, traced at
+// 6 px a foot.
+test('a first edge shorter than the close-the-loop reach is kept, not pulled home', async ({ page }) => {
+  await open(page, 'drafting');
+  const { at, scale } = await h.planFrame(page);
+  await h.selectTool(page, 'outline');
+  const step = 6 / scale;              // six pixels: inside the 8 px reach
+  for (const pt of [[0, 0], [step, 0], [step, 6], [0, 6]]) {
+    await page.mouse.move(...at(...pt));
+    await page.waitForTimeout(60);
+    await page.mouse.click(...at(...pt));
+  }
+  await page.mouse.move(...at(0, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(0, 0));
+  const loop = await savedLoop(page);
+  expect(loop, 'the loop closed').not.toBeNull();
+  expect(loop).toHaveLength(4);
+  expect(Math.abs(loop[1][0] - step)).toBeLessThan(0.05);
+});
