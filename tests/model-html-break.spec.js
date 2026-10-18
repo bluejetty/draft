@@ -1,9 +1,11 @@
 // BREAK (Movie, 18 Oct).
 //
-// "'BREAK' the roof and deleted the 2 hip peices and move the GABLE part all
-// the wal over to cover the existing roof" -- "can you place the BREAK
-// command down near where UNDO COPY DELETE commands show up. that might be a
-// good spot when the roof or other ASSEMBLIES are selected".
+// "can you place the BREAK command down near where UNDO COPY DELETE commands
+// show up" -- and what it does: "the BREAK can be used for making break in
+// line wall, edge o f shape roof floor etc", "adding a new node", and on a
+// roof "just ad a node to the edge of the roof, this way a user can ask to
+// 'gable between 2 nodes ... and only from the node to next node ... will
+// gable".
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -17,8 +19,8 @@ const drawing = () => ({
     { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 },
     { id: 1, name: 'FOUNDATION', elev: -8 }],
   activeLevelIdx: 1, nextDrawingItemId: 50, nextGroupId: 2,
-  walls: [W('a', [0, 0], [6, 0]), W('b', [6, 0], [6, 6])],
-  lines: [], floors: [], fenestrations: [], dimensions: [],
+  walls: [W('a', [0, 0], [6, 0]), W('b', [6, 0], [6, 6]), W('c', [0, 12], [12, 12])],
+  lines: [{ id: 40, start: { x: 0, y: 0, z: 20 }, end: { x: 12, y: 0, z: 20 }, levelId: 3, view: 'plan' }], floors: [], fenestrations: [], dimensions: [],
   outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
   roomTags: [], columns: [], beams: [], boneyardOutlines: [],
   groups: [{ id: 'group-1', name: 'WC 1', fixed: true, stretchBehavior: 'rigid',
@@ -48,65 +50,105 @@ async function saved(page) {
   return h.savedDrawing(page);
 }
 const r2 = n => Math.round(n * 100) / 100 + 0;
-const xs = roof => roof.points.map(p => r2(p.x));
-
-test('a roof selected: BREAK in the foot; two clicks edge to edge cut it in two along a flush gable', async ({ page }) => {
-  const { at } = await open(page);
-  await click(page, at, 30, 15);
-  await expect(page.locator('#model-break')).toBeVisible();
+const xz = p => [r2(p.x), r2(p.z)];
+async function armBreak(page) {
   await expect(page.locator('#model-break')).toHaveText('BREAK');
   await page.locator('#model-break').click();
   await expect(page.locator('#model-break')).toHaveAttribute('aria-pressed', 'true');
-  await click(page, at, 10, -7.9);
-  await click(page, at, 10, 37.9);
-  const { roofs } = await saved(page);
-  expect(roofs).toHaveLength(2);
-  const [left, right] = roofs.slice().sort((p, q) => Math.min(...xs(p)) - Math.min(...xs(q)));
-  expect([Math.min(...xs(left)), Math.max(...xs(left))]).toEqual([-8, 10]);
-  expect([Math.min(...xs(right)), Math.max(...xs(right))]).toEqual([10, 68]);
-  // THE CUT IS A FLUSH GABLE on both: the edge along x = 10.
-  for (const piece of [left, right]) {
-    const cut = piece.points.findIndex((p, i) => {
-      const q = piece.points[(i + 1) % piece.points.length];
-      return r2(p.x) === 10 && r2(q.x) === 10;
-    });
-    expect(cut, 'each piece has the cut as an edge').toBeGreaterThanOrEqual(0);
-    expect(piece.edges[cut]).toBe('gable');
-    expect(piece.edgeOverhang[cut]).toBe(0);
-  }
-  // NO HIP AT THE CUT: the ridge runs out to it.
-  const west = await page.evaluate(r => Math.min(...window.DraftGeometry2D.roofSkeleton(r)
-    .flatMap(s => [s.a.x, s.b.x])), right);
-  expect(west).toBeCloseTo(10, 6);
-  expect(new Set(roofs.map(r => r.id)).size, 'two ids').toBe(2);
-});
+}
 
-test('the piece not wanted is deleted, and UNDO joins the roof again', async ({ page }) => {
+test('a roof: BREAK adds nodes on the edge clicked, each half keeps its kind and overhang, and the wall line gains them too', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 30, 15);
-  await page.locator('#model-break').click();
-  await click(page, at, 10, -7.9);
-  await click(page, at, 10, 37.9);
-  await click(page, at, 0, 15);
-  await page.locator('#delete').click();
-  let { roofs } = await saved(page);
-  expect(roofs).toHaveLength(1);
-  expect(Math.min(...xs(roofs[0]))).toBe(10);
-  await page.keyboard.press('Control+z');
-  await page.keyboard.press('Control+z');
-  ({ roofs } = await saved(page));
-  expect(roofs).toHaveLength(1);
-  expect(roofs[0].points.map(p => [r2(p.x), r2(p.z)])).toEqual(EAVE);
+  await armBreak(page);
+  // Two nodes on the front eave, z = 38.
+  await click(page, at, 20, 37.9);
+  await click(page, at, 40, 37.9);
+  // ENTER ends it from anywhere, not only while the button has the focus.
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#model-break')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#delete'), 'ENTER ends BREAK, the roof still in hand').toBeVisible();
+  const [roof] = (await saved(page)).roofs;
+  expect(roof.points.map(xz)).toEqual([[-8, -8], [68, -8], [68, 38], [40, 38], [20, 38], [-8, 38]]);
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
+  expect(roof.edgeOverhang).toEqual([8, 8, 8, 8, 8, 8]);
+  expect(roof.footprint.map(xz), 'square across, on the wall line').toEqual([[0, 0], [60, 0], [60, 30], [40, 30], [20, 30], [0, 30]]);
 });
 
-test('Esc puts a roof BREAK down with nothing cut', async ({ page }) => {
+test('GABLE between two nodes gables that stretch only; one UNDO a node', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 30, 15);
+  await armBreak(page);
+  await click(page, at, 20, 37.9);
+  await click(page, at, 40, 37.9);
+  await page.keyboard.press('Escape');
+  await click(page, at, 30, 15);
+  await click(page, at, 30, 37.9);
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText('EDGE 4 OF 6');
+  // The panel is on the PROPERTIES tab; pressed through the page.
+  await page.locator('[data-prop-row="edge"] [data-prop-value="gable"]').dispatchEvent('click');
+  let [roof] = (await saved(page)).roofs;
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'gable', 'eave', 'eave']);
+  // The gable stands on its stretch: a roof line reaches each of its ends.
+  const ends = await page.evaluate(r => window.DraftGeometry2D.roofSkeleton(r)
+    .flatMap(s => [s.a, s.b]).map(p => [Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100]), roof);
+  expect(ends).toContainEqual([20, 38]);
+  expect(ends).toContainEqual([40, 38]);
+  // A node on the gable stretch: both halves are gable.
   await page.locator('#model-break').click();
-  await click(page, at, 10, -7.9);
+  await click(page, at, 30, 37.9);
+  await page.keyboard.press('Enter');
+  [roof] = (await saved(page)).roofs;
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'gable', 'gable', 'eave', 'eave']);
+  // ONE UNDO A STEP: that node, the gable, then each of the first two.
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  [roof] = (await saved(page)).roofs;
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
+  await page.keyboard.press('Control+z');
+  [roof] = (await saved(page)).roofs;
+  expect(roof.points).toHaveLength(5);
+  await page.keyboard.press('Control+z');
+  [roof] = (await saved(page)).roofs;
+  expect(roof.points.map(xz)).toEqual(EAVE);
+});
+
+test('a wall: BREAK makes it two joined at the node, then three; UNDO joins them back', async ({ page }) => {
+  const { at } = await open(page, 3);
+  await click(page, at, 6, 12);
+  await armBreak(page);
+  await click(page, at, 4, 12);
+  await click(page, at, 8, 12);
+  await page.keyboard.press('Enter');
+  let d = await saved(page);
+  const runs = d.walls.filter(w => w.start.z === 12).map(w => [xz(w.start), xz(w.end)]).sort((p, q) => p[0][0] - q[0][0]);
+  expect(runs).toEqual([[[0, 12], [4, 12]], [[4, 12], [8, 12]], [[8, 12], [12, 12]]]);
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  d = await saved(page);
+  const c = d.walls.filter(w => w.start.z === 12);
+  expect(c.map(w => [xz(w.start), xz(w.end)])).toEqual([[[0, 12], [12, 12]]]);
+});
+
+test('a line: BREAK makes two lines at the node', async ({ page }) => {
+  const { at } = await open(page, 3);
+  await click(page, at, 6, 20);
+  await armBreak(page);
+  await click(page, at, 3, 20);
+  await page.keyboard.press('Enter');
+  const { lines } = await saved(page);
+  expect(lines.map(l => [xz(l.start), xz(l.end)]).sort((p, q) => p[0][0] - q[0][0]))
+    .toEqual([[[0, 20], [3, 20]], [[3, 20], [12, 20]]]);
+});
+
+test('Esc puts BREAK down with nothing added', async ({ page }) => {
+  const { at } = await open(page);
+  await click(page, at, 30, 15);
+  await armBreak(page);
   await page.keyboard.press('Escape');
   await expect(page.locator('#model-break')).not.toHaveAttribute('aria-pressed', 'true');
-  expect((await saved(page)).roofs).toHaveLength(1);
+  expect((await saved(page)).roofs[0].points).toHaveLength(4);
 });
 
 // ASSEMBLY GROUP / ASSEMBLY BUST (Movie, 18 Oct): "ASSEMBLY BREAK is
@@ -121,5 +163,5 @@ test('an assembly selected: the foot button says BUST and busts it into its piec
   await expect(page.locator('#strip-message')).toContainText('ASSEMBLY BUST: broken into pieces');
   const d = await saved(page);
   expect(d.groups || []).toHaveLength(0);
-  expect(d.walls.map(w => w.id).sort()).toEqual(['a', 'b']);
+  expect(d.walls.map(w => w.id).sort()).toEqual(['a', 'b', 'c']);
 });

@@ -13516,8 +13516,22 @@
       pt.x = cx + dx * cos - dz * sin;
       pt.z = cz + dx * sin + dz * cos;
     });
+    // A STAIR'S WELL IS CUT AGAIN WHERE IT NOW STANDS (Movie, 18 Oct: "when
+    // i rotated the main floor stairs the foundation outline didn't show
+    // rotated" -- "floor layout too"). Re-cut, not turned with it: a well
+    // already left behind by an earlier turn comes back around its flight.
+    // A NEW ring is written so the undo keeps the old one. A shared well (two
+    // flights through one hole) stays, as a drag leaves it.
+    const wells = [];
+    entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
+      const hole = stairWellOf(item).hole;
+      const ring = hole && stairOpeningFootprint(item);
+      if (!ring || ring.length < 3) return;
+      wells.push({ hole, points: hole.points });
+      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
+    });
     points.forEach(relinkVertex);
-    undoStack.push({ kind: 'rotate', before, detached });
+    undoStack.push({ kind: 'rotate', before, detached, wells });
     markDirty();
     paint();
     const shown = Math.round(((degrees % 360) + 360) % 360 * 100) / 100;
@@ -13577,95 +13591,135 @@
   // AN ASSEMBLY: BREAK breaks it into its pieces -- UNGROUP, said the way he
   // says it ("BREAK the kitchen into pieces").
   const breakButton = document.getElementById('model-break');
-  var breakState = { roof: null, first: null };
-  const breakRoofHeld = () => (selection.length === 1 && selection[0].type === 'roof' ? selection[0].item : null);
+  // BREAK ADDS A NODE (Movie, 18 Oct: "the BREAK can be used for making break
+  // in line wall, edge o f shape roof floor etc" -- "adding a new node" -- and
+  // on a roof, "just ad a node to the edge of the roof, this way a user can
+  // ask to 'gable between 2 nodes"). One item held, BREAK pressed: every click
+  // on it puts a node there, until ENTER, Esc or BREAK again. A wall or a line
+  // becomes two joined at the node; a roof, shape or floor gains a corner on
+  // that edge, and the two halves are edges of their own.
+  var breakState = { held: null, pieces: [] };
+  const BREAKABLE = ['roof', 'wall', 'line', 'shape', 'floor'];
+  // A PIECE OF AN ASSEMBLY IS THE ASSEMBLY: BUST it first.
+  const breakHeld = () => (selection.length === 1 && BREAKABLE.includes(selection[0].type)
+    && !selectedGroups().length ? selection[0] : null);
   function syncBreakVerb() {
     if (!breakState || !breakButton) return;
-    const able = !activeCut() && !modalUp() && (breakRoofHeld() || selectedGroups().length > 0);
-    if (!able) { breakState.roof = null; breakState.first = null; }
+    const one = breakHeld();
+    const able = !activeCut() && !modalUp() && (!!one || selectedGroups().length > 0);
+    if (!able || (breakState.held && one?.item !== breakState.held.item)) breakState.held = null;
     breakButton.hidden = !able || !!rotateState?.open;
-    // A ROOF IS BROKEN, AN ASSEMBLY IS BUST (Movie, 18 Oct: "ASSEMBLY BREAK
+    breakButton.setAttribute('aria-pressed', String(!!breakState.held));
+    // AN ITEM IS BROKEN, AN ASSEMBLY IS BUST (Movie, 18 Oct: "ASSEMBLY BREAK
     // is different from ROOF EDGE BREAK" -- "lets go ASSEMBLY GROUP /
     // ASSEMBLY BUST"). One button, the word for what it will do.
-    const roof = !!breakRoofHeld();
-    breakButton.textContent = roof ? 'BREAK' : 'BUST';
-    breakButton.title = roof ? 'BREAK — cut the roof in two, edge to edge'
+    breakButton.textContent = one ? 'BREAK' : 'BUST';
+    breakButton.title = one ? 'BREAK — click the item to add a node there'
       : 'ASSEMBLY BUST — break the assembly into its pieces';
-    breakButton.setAttribute('aria-pressed', String(!!breakState.roof));
   }
-  const breakAt = (roof, world) => {
+  // THE NEAREST POINT ON THE HELD ITEM: its one run for a wall or a line, its
+  // ring's edges for the rest. A node on a corner already there is no node.
+  const breakAt = (held, world) => {
     const G = window.DraftGeometry2D;
-    const pts = roof.points;
+    const open = held.type === 'wall' || held.type === 'line';
+    const pts = open ? [held.item.start, held.item.end] : (held.item.points || []);
+    const edges = open ? 1 : pts.length;
     let best = null, bestD = (SELECT_GRAB_PX * 1.5) / view.scale;
-    pts.forEach((pt, index) => {
-      const next = pts[(index + 1) % pts.length];
-      if (Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6) return;
+    for (let index = 0; index < edges; index += 1) {
+      const pt = pts[index], next = pts[(index + 1) % pts.length];
+      if (!pt || !next || Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6) continue;
       const { d } = G.pointToSegment(world, { start: pt, end: next });
-      if (d >= bestD) return;
+      if (d >= bestD) continue;
       const ex = next.x - pt.x, ez = next.z - pt.z;
-      const t = Math.max(0, Math.min(1, ((world.x - pt.x) * ex + (world.z - pt.z) * ez) / (ex * ex + ez * ez)));
+      const t = ((world.x - pt.x) * ex + (world.z - pt.z) * ez) / (ex * ex + ez * ez);
+      const len = Math.hypot(ex, ez);
+      if (t * len < 0.01 || (1 - t) * len < 0.01) continue;
       bestD = d;
       best = { index, t, p: { x: pt.x + ex * t, z: pt.z + ez * t } };
-    });
+    }
     return best;
   };
-  // THE TWO RINGS, each with its own edge kinds and overhangs; the cut edge
-  // is the last of each.
-  const splitRoofRing = (roof, a, b) => {
-    const pts = roof.points, n = pts.length;
-    const kinds = pts.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
-    const overs = roofOverhangs(roof);
-    const half = (from, to) => {
-      const ring = [from.p], k = [kinds[from.index]], o = [overs[from.index]];
-      for (let i = (from.index + 1) % n; ; i = (i + 1) % n) {
-        ring.push({ x: pts[i].x, z: pts[i].z });
-        if (i === to.index) { k.push(kinds[i]); o.push(overs[i]); break; }
-        k.push(kinds[i]); o.push(overs[i]);
-      }
-      ring.push(to.p);
-      k.push('gable'); o.push(0);
-      // A click on a corner puts the cut AT the corner: drop the repeat.
-      for (let i = ring.length - 1; i >= 0 && ring.length > 3; i -= 1) {
-        const next = ring[(i + 1) % ring.length];
-        if (Math.hypot(next.x - ring[i].x, next.z - ring[i].z) < 1e-6) {
-          // Edge i had no length: point i goes, and edge i-1 runs on to i+1.
-          ring.splice(i, 1); k.splice(i, 1); o.splice(i, 1);
-        }
-      }
-      return { ring, kinds: k, overs: o };
-    };
-    return [half(a, b), half(b, a)];
-  };
-  const breakRoof = (roof, a, b) => {
-    if (a.index === b.index) return 'Click a point on a DIFFERENT edge to cut across to.';
-    const [h1, h2] = splitRoofRing(roof, a, b);
-    if ([h1, h2].some(h => h.ring.length < 3 || Math.abs(ringArea(h.ring)) < 0.5)) {
-      return 'That cut leaves a piece with no roof in it.';
-    }
+  // A ROOF'S NODE: the eave gains the point, both halves keep the edge's kind
+  // and overhang, and the wall line it hangs from gains the point square
+  // across from it -- each overhang is worked square off its own wall edge.
+  const roofGainsNode = (roof, at) => {
+    const i = at.index, n = roof.points.length;
     const y = roof.points[0]?.y ?? 0;
-    const make = (h, id) => {
-      const piece = { ...roof, id, points: h.ring.map(pt => ({ x: pt.x, y, z: pt.z })),
-        edges: h.kinds, edgeOverhang: h.overs, follows: 'none' };
-      delete piece.footprint;
-      delete piece.cuts;
-      return piece;
-    };
-    const index = drawing.roofs.indexOf(roof);
-    const first = make(h1, roof.id);
-    const second = make(h2, newDrawingItemId('roof'));
-    drawing.roofs.splice(index, 1, first, second);
-    undoStack.push({ kind: 'replace-items', list: drawing.roofs, removed: [{ item: roof, index }], added: [first, second] });
+    const kinds = roof.points.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
+    const overs = roofOverhangs(roof);
+    const foot = roofFootprint(roof);
+    roof.points = [...roof.points.slice(0, i + 1), { x: at.p.x, y, z: at.p.z }, ...roof.points.slice(i + 1)];
+    roof.edges = [...kinds.slice(0, i + 1), kinds[i], ...kinds.slice(i + 1)];
+    roof.edgeOverhang = [...overs.slice(0, i + 1), overs[i], ...overs.slice(i + 1)];
+    if (foot && foot.length === n) {
+      const a = foot[i], b = foot[(i + 1) % n];
+      const ex = b.x - a.x, ez = b.z - a.z, l2 = ex * ex + ez * ez;
+      const t = l2 > 0 ? ((at.p.x - a.x) * ex + (at.p.z - a.z) * ez) / l2 : 0.5;
+      roof.footprint = [...foot.slice(0, i + 1), { x: a.x + ex * t, y, z: a.z + ez * t }, ...foot.slice(i + 1)];
+    }
+  };
+  const breakNodeAt = (held, at) => {
+    const item = held.item;
+    if (held.type === 'wall') {
+      // THE BONE'S OWN BREAK, and the bone ring gains the point with it.
+      const end = item.end;
+      const before = [...(drawing.outlines || []), ...(drawing.boneyardOutlines || [])]
+        .map(o => ({ o, points: (o.points || []).map(pt => ({ ...pt })) }));
+      const tail = breakBoneAt(item, at.p);
+      undoStack.pop();
+      breakState.pieces.push({ type: 'wall', item: tail });
+      undoStack.push({ kind: 'node', undo: () => {
+        const k = drawing.walls.indexOf(tail);
+        if (k >= 0) drawing.walls.splice(k, 1);
+        item.end = end;
+        before.forEach(b => { b.o.points = b.points; });
+        retirePoolCorners([tail.start]);
+      } });
+      return;
+    }
+    if (held.type === 'line') {
+      const end = item.end;
+      const mid = poolVertex(at.p, item.levelId, item.view);
+      const tail = { ...item, id: newDrawingItemId('line'), start: mid, end };
+      item.end = mid;
+      const k = drawing.lines.indexOf(item);
+      drawing.lines.splice(k < 0 ? drawing.lines.length : k + 1, 0, tail);
+      breakState.pieces.push({ type: 'line', item: tail });
+      undoStack.push({ kind: 'node', undo: () => {
+        const j = drawing.lines.indexOf(tail);
+        if (j >= 0) drawing.lines.splice(j, 1);
+        item.end = end;
+        retirePoolCorners([mid]);
+      } });
+      markDirty();
+      return;
+    }
+    const before = { ...item };
+    if (held.type === 'roof') roofGainsNode(item, at);
+    else {
+      const y = item.points[0]?.y ?? 0;
+      item.points = [...item.points.slice(0, at.index + 1), { x: at.p.x, y, z: at.p.z },
+        ...item.points.slice(at.index + 1)];
+    }
+    undoStack.push({ kind: 'props', edits: [{ item, before }] });
     markDirty();
-    setSelection([{ type: 'roof', item: first }]);
-    return null;
+  };
+  const endBreak = () => {
+    if (!breakState.held) return false;
+    breakState.held = null;
+    syncBreakVerb();
+    sayOnStrip('');
+    paint();
+    return true;
   };
   const pressBreak = () => {
-    const roof = breakRoofHeld();
-    if (roof) {
-      if (breakState.roof) { breakState.roof = null; breakState.first = null; sayOnStrip(''); paint(); return; }
-      breakState.roof = roof;
-      breakState.first = null;
-      sayOnStrip('BREAK: click a point on one edge of the roof, then a point on the edge across from it. Esc stops.');
+    const one = breakHeld();
+    if (one) {
+      if (breakState.held) { endBreak(); return; }
+      breakState.held = one;
+      breakState.pieces = [one];
+      syncBreakVerb();
+      sayOnStrip('BREAK: click on it to add a node there -- as many as you like. ENTER, Esc or BREAK again ends it.');
       paint();
       return;
     }
@@ -13676,27 +13730,29 @@
     paint();
   };
   if (breakButton) breakButton.addEventListener('click', pressBreak);
-  // THE TWO CLICKS, ahead of every tool's own press while a roof BREAK is up.
+  // EACH CLICK A NODE, ahead of every tool's own press while BREAK is up.
   canvas.addEventListener('pointerdown', event => {
-    if (!breakState.roof || event.button !== 0) return;
+    if (!breakState.held || event.button !== 0) return;
     event.stopImmediatePropagation();
     event.preventDefault();
     const r = canvas.getBoundingClientRect();
     const world = toWorld(event.clientX - r.left, event.clientY - r.top);
-    const at = breakAt(breakState.roof, world);
-    if (!at) { sayOnStrip('Click ON an edge of the roof -- the cut runs from edge to edge.'); return; }
-    if (!breakState.first) {
-      breakState.first = at;
-      sayOnStrip('Now click a point on the edge across from it.');
-      paint();
-      return;
-    }
-    const refusal = breakRoof(breakState.roof, breakState.first, at);
-    if (refusal) { sayOnStrip(refusal); return; }
-    breakState.roof = null;
-    breakState.first = null;
-    sayOnStrip('The roof is in two, cut along a flush gable. Select the piece you do not want and DELETE it; UNDO joins them again.');
+    // A WALL OR LINE BROKEN IS TWO, and a click on either half breaks it
+    // again: every piece made since BREAK was pressed is still in the running.
+    const piece = breakState.pieces.find(entry => breakAt(entry, world));
+    const at = piece && breakAt(piece, world);
+    if (!at) { sayOnStrip('BREAK: click ON it, away from a corner already there.'); return; }
+    breakNodeAt(piece, at);
+    sayOnStrip('BREAK: node added. Another, or ENTER / Esc to end.');
+    setSelection([...selection]);
     paint();
+  }, true);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || !breakState.held) return;
+    if (event.target?.closest?.('input, textarea, select')) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    endBreak();
   }, true);
   // ESC NEEDS NO LISTENER OF ITS OWN: the page's Escape puts the selection
   // down, and a BREAK with no roof held goes down with it (syncBreakVerb).
@@ -29668,6 +29724,7 @@
         if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
       });
       step.detached.forEach(d => { d.wall[d.key] = d.orig; });
+      (step.wells || []).forEach(w => { w.hole.points = w.points; });
     } else if (step.kind === 'move') {
       undoRedim(step);
       step.before.forEach(b => {
@@ -29724,6 +29781,9 @@
       // word back rather than restoring a copy of the roof -- a copy would
       // detach the record every other reader already holds by reference.
       step.roof.edges[step.index] = step.was;
+    } else if (step.kind === 'node') {
+      // A BREAK's node: the step carries its own way back.
+      step.undo();
     } else if (step.kind === 'add-item') {
       // Structure placement. The list is captured in the step, so this works
       // for columns and beams without knowing which it is holding.

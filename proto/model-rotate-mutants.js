@@ -26,7 +26,7 @@ const MUTANTS = [
     find: '      rotateSelection(deg);\n      box.value = \'\';\n',
     with: "      box.value = '';\n", test: 'a typed angle, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'UNDO forgets the turn',
-    find: "    undoStack.push({ kind: 'rotate', before, detached });\n",
+    find: "    undoStack.push({ kind: 'rotate', before, detached, wells });\n",
     with: '', test: 'a typed angle, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'one wall of a WC turns alone',
     find: '      if (!owner || owner.fixed !== true) return;\n      itemsOfGroup(owner)',
@@ -40,8 +40,10 @@ const MUTANTS = [
   { file: 'MODEL.html', name: 'no ROTATE in the photo popup',
     find: '      row.append(name, move, turn, del);\n',
     with: '      row.append(name, move, del);\n', test: "the PHOTO popup has ROTATE: a quarter turn, the picture's sides swapped; one in hand glows and turns from the foot" },
+  { file: 'MODEL.html', name: 'the stair well stays behind',
+    find: '      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));\n',
+    with: '', test: 'a stair turned takes its well with it; UNDO puts both back' },
 ];
-
 const run = name => {
   try {
     execSync(`npx playwright test ${SPEC} --workers=1 --reporter=line`
