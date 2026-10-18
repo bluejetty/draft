@@ -53,6 +53,11 @@
     // since the old page. And on TOY too: "why not on TOY? could be on TOY i
     // think" -- a section is a way of LOOKING at the house, not drafting it.
     { id: 'cut',          name: 'CUT',          group: 'draw',  kind: 'contextual', command: 'cut' },
+    // ASSEMBLY (Movie, 18 Oct): "put it up in with the other main letters and
+    // allow the user to press Y first and THEN ... select ... and THEn press
+    // ENTER or DOUBLE CLICK or press Y again to close the assembly as one new
+    // unit". Y is the binding the old page already carried for `group`.
+    { id: 'assembly',     name: 'ASSEMBLY',     group: 'draw',  kind: 'contextual', command: 'group' },
     { id: 'wall',         name: 'WALL',         group: 'build', kind: 'contextual', command: 'wall' },
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },

@@ -10481,6 +10481,13 @@
     sweep('line', lines());
     sweep('floor', floors());
     sweep('note', notes());
+    // And the rest a click can pick: a kitchen with no walls of its own is an
+    // assembly of fixtures, and roofs go into assemblies too (Movie, 18 Oct).
+    sweep('fixture', fixtures());
+    sweep('stair', stairs());
+    sweep('shape', shapes());
+    sweep('roomtag', roomTags());
+    sweep('roof', roofs());
     return out;
   };
 
@@ -25252,6 +25259,79 @@
     paint();
   };
 
+  // ── THE ASSEMBLY KEY: Y, PICK, AND Y / ENTER / DOUBLE-CLICK ─────────────
+  //
+  // Movie, 18 Oct: "press Y first and THEN puts them into select mode the
+  // items and THEn press ENTER or DOUBLE CLICK or press Y again to close the
+  // assembly as one new unit with the items within moving, copy rotate as one
+  // unit". So arming ASSEMBLY keeps whatever is already selected, every click
+  // adds (or, on something already in, takes out) and a box adds what it
+  // catches; any of the three closers makes one FIXED assembly of the lot.
+  // Escape, or arming another tool, puts it down with nothing made.
+  let assemblyClosing = false;
+  const closeAssemblyKey = () => {
+    if (activeTool !== 'assembly') return false;
+    assemblyClosing = true;
+    const n = selection.length;
+    if (n) {
+      createAssembly(true);
+      const group = selectedGroups()[0];
+      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. UNGROUP breaks it.`);
+    } else {
+      sayOnStrip('Nothing picked, so no assembly was made.');
+    }
+    setTool(RESTING_TOOL);
+    assemblyClosing = false;
+    return true;
+  };
+  let assemblyWasArmed = false;
+  toolListeners.push(next => {
+    // Y AGAIN -- or the key pressed again -- is the column's own toggle back
+    // to SELECT, so it arrives here as "assembly put down for select".
+    if (assemblyWasArmed && next === RESTING_TOOL && !assemblyClosing && !assemblyEscaped) {
+      assemblyWasArmed = false;
+      activeTool = 'assembly';
+      closeAssemblyKey();
+      return;
+    }
+    assemblyWasArmed = next === 'assembly';
+    assemblyEscaped = false;
+    if (next === 'assembly') {
+      sayOnStrip('ASSEMBLY: click the items to put in it (again to take one out), '
+        + 'then ENTER, double-click or Y to make it one unit.');
+    }
+  });
+  let assemblyEscaped = false;
+  window.addEventListener('keydown', event => {
+    if (activeTool !== 'assembly') return;
+    const el = event.target;
+    if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+    if (event.key === 'Escape') {
+      assemblyEscaped = true;
+      setTool(RESTING_TOOL);
+      sayOnStrip('ASSEMBLY put down; nothing was made.');
+      return;
+    }
+    if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeAssemblyKey();
+    }
+  }, true);
+  // A DOUBLE-CLICK IS TWO CLICKS FIRST, and the second took back out what
+  // the first put in -- so whatever is under it goes back in before closing.
+  canvas.addEventListener('dblclick', e => {
+    if (activeTool !== 'assembly') return;
+    const rect = canvas.getBoundingClientRect();
+    const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+    if (hit && !selection.some(entry => entry.item === hit.item)) {
+      const owner = groupOf(hit);
+      const whole = owner ? itemsOfGroup(owner) : withGroup(hit);
+      setSelection(selection.concat(whole.filter(w => !selection.some(entry => entry.item === w.item))));
+    }
+    closeAssemblyKey();
+  });
+
   let assemblyName = '';
   let assemblyDialogOpen = false;
   let syncAssembly = () => {};
@@ -28087,7 +28167,7 @@
     // WITH SELECT IN HAND THE DRAG IS A BOX, not a pan (Movie, 4 Oct). A press
     // that never travels is still the click below; the box arms at the same
     // 4px a corner drag does.
-    if (activeTool === RESTING_TOOL) {
+    if (activeTool === RESTING_TOOL || activeTool === 'assembly') {
       itemBox = { from: at, to: at, active: false };
       dragging.box = itemBox;
     } else {
@@ -28674,7 +28754,7 @@
         .forEach(entry => withGroup(entry).forEach(w => {
           if (!caught.some(c => c.item === w.item)) caught.push(w);
         }));
-      setSelection(e && e.shiftKey
+      setSelection(e && (e.shiftKey || activeTool === 'assembly')
         ? selection.concat(caught.filter(c => !selection.some(entry => entry.item === c.item)))
         : caught);
       paint();
@@ -28695,10 +28775,16 @@
       // shift-click on something already selected takes it OUT -- the old
       // page's own toggle, and the reason the help says "adds or removes"
       // rather than "adds".
-      if (e.shiftKey) {
+      // ASSEMBLING, EVERY CLICK IS A SHIFT-CLICK: the set is being built,
+      // and a click that threw it away would make the drafter start over.
+      if (e.shiftKey || activeTool === 'assembly') {
         if (hit) {
           const at = selection.findIndex(entry => entry.item === hit.item);
-          const whole = withGroup(hit);
+          // ASSEMBLING TAKES A WHOLE ASSEMBLY AT A CLICK: a WC picked by one
+          // of its walls goes in entire, rather than that one wall being
+          // pulled out of the WC into the new unit.
+          const owner = activeTool === 'assembly' ? groupOf(hit) : null;
+          const whole = owner ? itemsOfGroup(owner) : withGroup(hit);
           setSelection(at >= 0
             ? selection.filter(entry => !whole.some(w => w.item === entry.item))
             : selection.concat(whole.filter(w =>
