@@ -826,14 +826,14 @@
      the selection, whatever is in it. It is on screen exactly while there is
      something to delete -- and the iPad has no Delete key, so this button is
      the only way to delete anything at all there. */
-  #delete, #model-undo, #rotate, #break, #rotate-bar button { font-family: var(--font-ui); font-size:12px; font-weight:600;
+  #delete, #model-undo, #model-rotate, #model-break, #rotate-bar button { font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
     color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
-  #delete:hover, #model-undo:hover, #rotate:hover, #break:hover, #rotate-bar button:hover { color: var(--accent); border-color: var(--accent); }
-  #delete[hidden], #model-undo[hidden], #rotate[hidden], #break[hidden], #rotate-bar[hidden] { display:none; }
-  #break[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  #delete:hover, #model-undo:hover, #model-rotate:hover, #model-break:hover, #rotate-bar button:hover { color: var(--accent); border-color: var(--accent); }
+  #delete[hidden], #model-undo[hidden], #model-rotate[hidden], #model-break[hidden], #rotate-bar[hidden] { display:none; }
+  #model-break[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
   /* ROTATE'S OWN ROW, standing over the verbs while it is up. */
   #rotate-bar { display:inline-flex; gap:6px; align-items:center; }
   #rotate-bar button { padding:6px 10px; border-color: var(--accent); }

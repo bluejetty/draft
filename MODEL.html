@@ -13360,7 +13360,7 @@
   // it. A PHOTO has no free angle -- it is drawn a quarter turn at a time --
   // so its turn is rounded to quarters.
   var rotateState = { open: false };
-  const rotateButton = document.getElementById('rotate');
+  const rotateButton = document.getElementById('model-rotate');
   const rotateBar = document.getElementById('rotate-bar');
   const rotatePointsOf = ({ type, item }) => {
     if (!item) return [];
@@ -13496,7 +13496,7 @@
   //
   // AN ASSEMBLY: BREAK breaks it into its pieces -- UNGROUP, said the way he
   // says it ("BREAK the kitchen into pieces").
-  const breakButton = document.getElementById('break');
+  const breakButton = document.getElementById('model-break');
   var breakState = { roof: null, first: null };
   const breakRoofHeld = () => (selection.length === 1 && selection[0].type === 'roof' ? selection[0].item : null);
   function syncBreakVerb() {

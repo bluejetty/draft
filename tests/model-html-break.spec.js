@@ -53,9 +53,9 @@ const xs = roof => roof.points.map(p => r2(p.x));
 test('a roof selected: BREAK in the foot; two clicks edge to edge cut it in two along a flush gable', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 30, 15);
-  await expect(page.locator('#break')).toBeVisible();
-  await page.locator('#break').click();
-  await expect(page.locator('#break')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#model-break')).toBeVisible();
+  await page.locator('#model-break').click();
+  await expect(page.locator('#model-break')).toHaveAttribute('aria-pressed', 'true');
   await click(page, at, 10, -7.9);
   await click(page, at, 10, 37.9);
   const { roofs } = await saved(page);
@@ -83,7 +83,7 @@ test('a roof selected: BREAK in the foot; two clicks edge to edge cut it in two 
 test('the piece not wanted is deleted, and UNDO joins the roof again', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 30, 15);
-  await page.locator('#break').click();
+  await page.locator('#model-break').click();
   await click(page, at, 10, -7.9);
   await click(page, at, 10, 37.9);
   await click(page, at, 0, 15);
@@ -101,18 +101,18 @@ test('the piece not wanted is deleted, and UNDO joins the roof again', async ({ 
 test('Esc puts a roof BREAK down with nothing cut', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 30, 15);
-  await page.locator('#break').click();
+  await page.locator('#model-break').click();
   await click(page, at, 10, -7.9);
   await page.keyboard.press('Escape');
-  await expect(page.locator('#break')).not.toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#model-break')).not.toHaveAttribute('aria-pressed', 'true');
   expect((await saved(page)).roofs).toHaveLength(1);
 });
 
 test('an assembly selected: BREAK breaks it into its pieces', async ({ page }) => {
   const { at } = await open(page, 3);
   await click(page, at, 3, 0);
-  await expect(page.locator('#break')).toBeVisible();
-  await page.locator('#break').click();
+  await expect(page.locator('#model-break')).toBeVisible();
+  await page.locator('#model-break').click();
   await expect(page.locator('#strip-message')).toContainText('Broken into pieces');
   const d = await saved(page);
   expect(d.groups || []).toHaveLength(0);

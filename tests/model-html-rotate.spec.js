@@ -66,11 +66,11 @@ const xz = p => [r2(p.x), r2(p.z)];
 test('a stair selected: ROTATE in the foot, its row over the verbs, a quarter turn clockwise on screen about its middle', async ({ page }) => {
   const { at } = await open(page);
   await pickStair(page, at);
-  await expect(page.locator('#rotate')).toBeVisible();
+  await expect(page.locator('#model-rotate')).toBeVisible();
   await expect(page.locator('#delete')).toBeVisible();
-  await page.locator('#rotate').click();
+  await page.locator('#model-rotate').click();
   await expect(page.locator('[data-rotate-bar]')).toBeVisible();
-  for (const id of ['#delete', '#copy', '#model-undo', '#rotate']) await expect(page.locator(id)).toBeHidden();
+  for (const id of ['#delete', '#copy', '#model-undo', '#model-rotate']) await expect(page.locator(id)).toBeHidden();
   const [s0, e0] = [at(-6, 3), at(4, 3)];
   await page.locator('[data-rotate-by="90"]').click();
   const stair = (await saved(page)).stairs[0];
@@ -88,7 +88,7 @@ test('a stair selected: ROTATE in the foot, its row over the verbs, a quarter tu
 test('a typed angle, and one UNDO puts it back', async ({ page }) => {
   const { at } = await open(page);
   await pickStair(page, at);
-  await page.locator('#rotate').click();
+  await page.locator('#model-rotate').click();
   await page.locator('[data-rotate-angle]').fill('180');
   await page.locator('[data-rotate-angle]').press('Enter');
   let stair = (await saved(page)).stairs[0];
@@ -102,7 +102,7 @@ test('a WC turns whole, and lets go of the corner it shared with the house wall;
   const { at } = await open(page);
   // ONE WALL OF THE WC PICKED IS THE WC PICKED: it turns whole.
   await click(page, at, 4, 0);
-  await page.locator('#rotate').click();
+  await page.locator('#model-rotate').click();
   await page.locator('[data-rotate-by="-90"]').click();
   let d = await saved(page);
   const wall = id => d.walls.find(w => w.id === id);
@@ -128,8 +128,8 @@ test('the PHOTO popup has ROTATE: a quarter turn, the picture\'s sides swapped; 
   await page.locator('[data-mode-trace]').click();
   if (!await page.locator('#trace-ask').isVisible()) await page.locator('[data-mode-trace]').click();
   await page.locator('[data-trace-move="u1"]').click();
-  await expect(page.locator('#rotate')).toBeVisible();
-  await page.locator('#rotate').click();
+  await expect(page.locator('#model-rotate')).toBeVisible();
+  await page.locator('#model-rotate').click();
   await page.locator('[data-rotate-by="90"]').click();
   await page.keyboard.press('Escape');
   u = (await saved(page)).underlays[0];
