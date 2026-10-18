@@ -151,11 +151,48 @@ test('a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corne
     return Math.min(...faces.map(fc => Gm.roofFaceRise(fc, mid, r.pitch)));
   }, roof);
   expect(rise).toBeCloseTo(5 * 4 / 12, 6);
+  // AND IT IS STILL SLOPED OPENED AGAIN: the format keeps it.
+  await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  expect((await saved(page)).edges).toEqual(['eave', 'eave', 'eave', 'sloped', 'eave']);
   // The edge panel says SLOPED for it.
   await page.keyboard.press('Escape');
   await click(page, at, 30, 15);
   await click(page, at, 5, 25);
   await expect(page.locator('[data-prop-row="edge"] [data-prop-value="sloped"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+// A NODE ON A STRAIGHT RUN IS NOT A CORNER: taken out, it just goes and the
+// eave runs on as it was -- nothing to slope.
+test('a BREAK node DELETEd from a straight eave just goes; no SLOPED edge', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  const R = [[0, 0], [60, 0], [60, 30], [0, 30]];
+  const f = drawing();
+  f.roofs[0] = { ...f.roofs[0], points: R.map(([x, z]) => ({ x, y: 0, z })),
+    edges: R.map(() => 'eave'), edgeOverhang: R.map(() => 8) };
+  delete f.roofs[0].footprint;
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  await click(page, at, 30, 15);
+  await page.locator('#model-break').click();
+  await click(page, at, 30, 0.1);
+  await page.keyboard.press('Enter');
+  expect((await saved(page)).points).toHaveLength(5);
+  await page.locator('#model-move').click();
+  await click(page, at, 30, 0);
+  await page.keyboard.press('Delete');
+  const roof = await saved(page);
+  expect(ring(roof.points)).toEqual(R);
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave']);
 });
 
 test('a drag inside the roof moves the whole roof', async ({ page }) => {
