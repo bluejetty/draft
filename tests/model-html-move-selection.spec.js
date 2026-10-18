@@ -94,6 +94,8 @@ test('MOVE takes a loose selection too, and a press that does not travel moves n
 });
 
 test('ASSEMBLY GROUP opens its name box in view, and an assembly keeps the window it was made with', async ({ page }) => {
+  // A SHORT SCREEN, his laptop's: the panel's foot is below the fold.
+  await page.setViewportSize({ width: 1280, height: 600 });
   const { at } = await open(page, drawing([]));
   await click(page, at, 8, 3);
   await page.keyboard.down('Shift');

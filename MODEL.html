@@ -27020,13 +27020,7 @@
       if (!selection.length) return;
       assemblyDialogOpen = true;
       syncAssembly();
-      // ITS OWN BOX, wherever the panel put it: the box moved onto the
-      // DRAFTING tab and `slot` no longer holds it, so the name box opened
-      // below the fold and was never seen -- "i'm not able to make an
-      // ASSEBLY" (Movie, 18 Oct). Brought into view and given the keys.
-      const name = box.querySelector('[data-assembly-name]');
-      name?.scrollIntoView({ block: 'nearest' });
-      name?.focus();
+      slot.querySelector('[data-assembly-name]')?.focus();
     });
 
     const unBtn = document.createElement('button');
