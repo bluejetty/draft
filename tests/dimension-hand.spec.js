@@ -166,3 +166,61 @@ test('Esc puts the string down, one UNDO takes a placed one, and AUTO DIMS leave
   expect(hand(d)).toHaveLength(2);
   expect((d.dimensions || []).some(x => x.auto === true), 'and AUTO DIMS did lay its own').toBe(true);
 });
+
+// AUTO DIMS / HAND DIMS ON THE SHEET (Movie, 18 Oct): two chips beside the
+// north arrow put each kind out of sight and back. The drawing keeps both.
+const DIM = (id, a, b, auto) => ({ id, start: { x: a[0], y: 0, z: a[1] }, end: { x: b[0], y: 0, z: b[1] },
+  levelId: 3, view: 'plan', auto, ...(auto ? { layer: 'A-DIMS-OVR' } : { layer: 'A-DIMS-HAND' }) });
+const BOTH = () => ({ ...drawing(RUN), dimensions: [DIM(31, [0, -2], [10, -2], true), DIM(32, [0, -4], [4, -4], false)] });
+// What one paint draws: every drawDimension2D call, by id. 0 (fit) repaints.
+async function painted(page) {
+  await page.evaluate(() => {
+    // render-2d is frozen, so the spy is a copy of it with one painter wrapped.
+    const R = window.DraftRender2D;
+    window.__dimIds = [];
+    window.__dimReal = R;
+    window.DraftRender2D = { ...R, drawDimension2D: (ctx, toS, d, ...rest) => {
+      if (!rest[0]?.preview) window.__dimIds.push(d.id);
+      return R.drawDimension2D(ctx, toS, d, ...rest);
+    } };
+  });
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  return page.evaluate(() => {
+    window.DraftRender2D = window.__dimReal;
+    return [...new Set(window.__dimIds)].sort((a, b) => a - b);
+  });
+}
+
+test('AUTO DIMS and HAND DIMS beside the north arrow show or hide each kind; the drawing keeps both; a reload remembers', async ({ page }) => {
+  await open(page, BOTH());
+  const chip = kind => page.locator(`[data-dims-show="${kind}"]`);
+  await expect(chip('auto')).toHaveText('AUTO DIMS');
+  await expect(chip('hand')).toHaveText('HAND DIMS');
+  await expect(chip('auto')).toHaveAttribute('aria-pressed', 'true');
+  // Left of the arrow, on its line.
+  const [box, north] = await Promise.all([page.locator('[data-dims-show]').first().boundingBox(),
+    page.locator('#north-hit').boundingBox()]);
+  expect(box.x + box.width).toBeLessThanOrEqual(north.x);
+  expect(Math.abs((box.y + box.height / 2) - (north.y + north.height / 2))).toBeLessThan(north.height);
+  expect(await painted(page)).toEqual([31, 32]);
+  await chip('hand').click();
+  await expect(chip('hand')).toHaveAttribute('aria-pressed', 'false');
+  expect(await painted(page)).toEqual([31]);
+  await chip('auto').click();
+  expect(await painted(page)).toEqual([]);
+  expect((await saved(page)).dimensions.map(d => d.id).sort(), 'out of sight, not out of the file').toEqual([31, 32]);
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await expect(chip('auto')).toHaveAttribute('aria-pressed', 'false');
+  await chip('auto').click();
+  expect(await painted(page)).toEqual([31]);
+});
+
+test('no strings on the level, no chips -- until the DIMENSION tool is up', async ({ page }) => {
+  await open(page, drawing(RUN));
+  await expect(page.locator('#dims-show')).toBeHidden();
+  await armDimension(page);
+  await expect(page.locator('#dims-show')).toBeVisible();
+});

@@ -114,6 +114,11 @@
     display:flex; gap:4px; padding:4px 6px; border-radius:6px;
     background: var(--surface-panel); border:1px solid var(--edge-panel); }
   #dim-pop[hidden] { display:none; }
+  /* AUTO DIMS / HAND DIMS ON THE SHEET: two chips beside the north arrow
+     that show or hide each kind (Movie, 18 Oct). */
+  #dims-show { position:absolute; display:flex; gap:4px; pointer-events:auto; }
+  #dims-show[hidden] { display:none; }
+  #dims-show .sel-chip { flex:none; white-space:nowrap; padding:5px 7px; }
   /* THE LENGTH BOX, LIVE: a line in hand (Movie, 12 Oct: "brighten up the
      LENGTH BOX ... make it orange ... around the outside, but leave the inner
      part darker"). The shared sheet draws the glow; the page names its colour,
@@ -2822,6 +2827,22 @@
   const dimensions = () => (drawing?.dimensions || [])
     .filter(d => { const f = onActiveLevel(); return f.byLevel(d)
       && (f.viewId == null || d.view === f.viewId); });
+  // AUTO DIMS / HAND DIMS ON THE SHEET (Movie, 18 Oct): each kind can be put
+  // out of sight and back with a chip beside the north arrow. A string is
+  // AUTO when AUTO DIMS laid it and HAND otherwise. It is how the screen
+  // looks, not what the drawing holds -- the sheets in LAYOUT print every
+  // string their layers allow -- so it lives in this browser, not the .draft.
+  // `var` and a hoisted function because paint() reaches here before the
+  // page's consts are made.
+  var dimsHidden = readDimsHidden();
+  function readDimsHidden() {
+    try {
+      const v = JSON.parse(localStorage.getItem('model.dimsHidden') || '{}');
+      return { auto: v.auto === true, hand: v.hand === true };
+    } catch (e) { return { auto: false, hand: false }; }
+  }
+  function dimKind(d) { return d.auto === true ? 'auto' : 'hand'; }
+  const shownDimensions = () => dimensions().filter(d => !dimsHidden[dimKind(d)]);
   // NOTES TAKE THE DIMENSION RULE -- level, plus view where the level has views
   // -- and then one exclusion the bone applies on top of it. MODEL.dc.html:7025
   // filters `note.view !== 'stair'` AFTER _activeNotes(), which reads redundant
@@ -4662,7 +4683,7 @@
     }
     const env = dimensionEnv();
     const lit = new Set(selection.filter(entry => entry.type === 'dimension').map(entry => entry.item));
-    dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
+    shownDimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
       lit.has(dimension) ? { selected: true } : {}, env));
   };
 
@@ -5816,8 +5837,48 @@
         left: `${tx - 20}px`, top: `${(top + bottom) / 2 - 20}px`,
       });
     }
+    seatDimsShow(northDock, c, (top + bottom) / 2);
     syncNorthHands();
   };
+  // THE TWO CHIPS STAND LEFT OF THE ARROW, on its line, and only where there
+  // is something for them to do: a level with strings on it, or the
+  // DIMENSION tool up.
+  var dimsShowBox = null;
+  function seatDimsShow(dock, c, midY) {
+    if (!dimsShowBox) {
+      dimsShowBox = document.createElement('div');
+      dimsShowBox.id = 'dims-show';
+      dimsShowBox.dataset.dimsShow = '';
+      [['auto', 'AUTO DIMS'], ['hand', 'HAND DIMS']].forEach(([kind, label]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sel-chip';
+        btn.dataset.dimsShow = kind;
+        btn.textContent = label;
+        btn.title = `${label} -- show or hide them on the sheet`;
+        btn.addEventListener('click', () => {
+          dimsHidden = { ...dimsHidden, [kind]: !dimsHidden[kind] };
+          try { localStorage.setItem('model.dimsHidden', JSON.stringify(dimsHidden)); } catch (e) {}
+          // A string out of sight is out of hand too.
+          if (dimsHidden[kind] && selection.some(en => en.type === 'dimension' && dimKind(en.item) === kind)) {
+            setSelection(selection.filter(en => !(en.type === 'dimension' && dimKind(en.item) === kind)));
+          }
+          paint();
+        });
+        dimsShowBox.append(btn);
+      });
+      dock.append(dimsShowBox);
+    }
+    const any = dimensions().length > 0 || activeTool === 'dimension';
+    dimsShowBox.hidden = !any;
+    if (!any) return;
+    dimsShowBox.querySelectorAll('[data-dims-show]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(!dimsHidden[btn.dataset.dimsShow]));
+    });
+    const w = dimsShowBox.offsetWidth, hgt = dimsShowBox.offsetHeight;
+    dimsShowBox.style.left = `${c.x - NORTH_R - 16 - w}px`;
+    dimsShowBox.style.top = `${midY - hgt / 2}px`;
+  }
   // THE ARROW LIGHTS UNDER THE HAND, and it has to be wired rather than
   // styled: the needles are painted on the CANVAS, so no :hover rule can
   // reach them. The invisible hand over them is what the pointer actually
@@ -10781,7 +10842,7 @@
   const dimensionAt = worldPt => {
     const s = toS(worldPt);
     let best = null, bestD = SELECT_GRAB_PX;
-    dimensions().forEach(d => {
+    shownDimensions().forEach(d => {
       const line = dimDrawnLine(d);
       if (!line) return;
       const [p, q] = line;
@@ -10804,7 +10865,7 @@
     const n = dimNormal(grabbed);
     const at = p => p.x * n.x + p.z * n.z;
     const line = at(grabbed.start);
-    return dimensions().filter(d => {
+    return shownDimensions().filter(d => {
       const m = dimNormal(d);
       const parallel = Math.abs(m.x * n.z - m.z * n.x) < 1e-6;
       return parallel && Math.abs(at(d.start) - line) < 0.01 && Math.abs(at(d.end) - line) < 0.01;
@@ -10925,7 +10986,7 @@
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
       fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes(),
-      dimension: dimensions(), note: notes() };
+      dimension: shownDimensions(), note: notes() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -27507,6 +27568,7 @@
   toolListeners.push(next => {
     if (next !== 'dimension') { dimPoints = []; dimPlacing = false; }
     syncDimPop();
+    seatNorthDock();
   });
   // THE STRING IN HAND, in the preview's ink: along the points while they
   // are being pressed (the cursor the next one), off them where the cursor
