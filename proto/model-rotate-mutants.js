@@ -12,38 +12,34 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-html-rotate.spec.js';
-const STAIR = 'a stair selected: ROTATE in the foot, its row over the verbs, a quarter turn clockwise on screen about its middle';
-const TYPED = 'a typed angle, and one UNDO puts it back';
-const WC = 'a WC turns whole, and lets go of the corner it shared with the house wall; UNDO joins it again';
-const PHOTO = "the PHOTO popup has ROTATE: a quarter turn, the picture's sides swapped; one in hand glows and turns from the foot";
 const MUTANTS = [
   { file: 'MODEL.html', name: 'the bar does not cover the other verbs',
     find: '      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; });\n',
-    with: '', test: STAIR },
+    with: '', test: 'a stair selected: ROTATE in the foot, its row over the verbs, a quarter turn clockwise on screen about its middle' },
   { file: 'MODEL.html', name: 'turned anticlockwise on screen',
     find: '      pt.x = cx + dx * cos - dz * sin;\n      pt.z = cz + dx * sin + dz * cos;\n',
-    with: '      pt.x = cx + dx * cos + dz * sin;\n      pt.z = cz - dx * sin + dz * cos;\n', test: STAIR },
+    with: '      pt.x = cx + dx * cos + dz * sin;\n      pt.z = cz - dx * sin + dz * cos;\n', test: 'a stair selected: ROTATE in the foot, its row over the verbs, a quarter turn clockwise on screen about its middle' },
   { file: 'MODEL.html', name: 'turned about the origin, not its middle',
     find: '    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;\n',
-    with: '    const cx = 0, cz = 0;\n', test: STAIR },
+    with: '    const cx = 0, cz = 0;\n', test: 'a stair selected: ROTATE in the foot, its row over the verbs, a quarter turn clockwise on screen about its middle' },
   { file: 'MODEL.html', name: 'a typed angle is ignored',
     find: '      rotateSelection(deg);\n      box.value = \'\';\n',
-    with: "      box.value = '';\n", test: TYPED },
+    with: "      box.value = '';\n", test: 'a typed angle, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'UNDO forgets the turn',
     find: "    undoStack.push({ kind: 'rotate', before, detached });\n",
-    with: '', test: TYPED },
+    with: '', test: 'a typed angle, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'one wall of a WC turns alone',
     find: '      if (!owner || owner.fixed !== true) return;\n      itemsOfGroup(owner)',
-    with: '      if (true) return;\n      itemsOfGroup(owner)', test: WC },
+    with: '      if (true) return;\n      itemsOfGroup(owner)', test: 'a WC turns whole, and lets go of the corner it shared with the house wall; UNDO joins it again' },
   { file: 'MODEL.html', name: 'the shared corner drags the house wall round',
     find: '        detached.push({ wall: item, key, orig: item[key] });\n        item[key] = { ...item[key] };\n',
-    with: '', test: WC },
+    with: '', test: 'a WC turns whole, and lets go of the corner it shared with the house wall; UNDO joins it again' },
   { file: 'MODEL.html', name: 'the photo turns without swapping its sides',
     find: '    if (q % 2) { const w = underlay.widthFt; underlay.widthFt = underlay.heightFt; underlay.heightFt = w; }\n',
-    with: '', test: PHOTO },
+    with: '', test: "the PHOTO popup has ROTATE: a quarter turn, the picture's sides swapped; one in hand glows and turns from the foot" },
   { file: 'MODEL.html', name: 'no ROTATE in the photo popup',
     find: '      row.append(name, move, turn, del);\n',
-    with: '      row.append(name, move, del);\n', test: PHOTO },
+    with: '      row.append(name, move, del);\n', test: "the PHOTO popup has ROTATE: a quarter turn, the picture's sides swapped; one in hand glows and turns from the foot" },
 ];
 
 const run = name => {
