@@ -685,6 +685,27 @@ ${trio(true)}
     title="Copy what is selected — paste it on any level or shelf">COPY</button>
   <button id="paste" type="button" data-paste hidden
     title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
+  <!-- ROTATE (Movie, 18 Oct): "i also need a ROTATE command (for items that
+       are selected like the stiarcase which i'd like to rotate 90)", down
+       here "with the DEL COPY ROTATE commands in that lower area" -- and "i
+       like how those little commands cover the other ones when they are
+       active", so pressing it puts its own small row OVER the verbs until
+       DONE. -->
+  <!-- BREAK (Movie, 18 Oct): "can you place the BREAK command down near
+       where UNDO COPY DELETE commands show up ... when the roof or other
+       ASSEMBLIES are selected". A roof is cut in two across a line; an
+       assembly is broken into its pieces. -->
+  <button id="model-break" type="button" data-break hidden
+    title="Cut the roof in two, or break the assembly into its pieces">BREAK</button>
+  <button id="model-rotate" type="button" data-rotate hidden
+    title="Turn what is selected about its centre">ROTATE</button>
+  <span id="rotate-bar" data-rotate-bar hidden>
+    <button type="button" data-rotate-by="-90" title="A quarter turn anticlockwise">&#x27F2; 90</button>
+    <button type="button" data-rotate-by="90" title="A quarter turn clockwise">&#x27F3; 90</button>
+    <button type="button" data-rotate-by="180" title="Half a turn">180</button>
+    <input id="rotate-angle" type="text" data-rotate-angle inputmode="decimal" placeholder="DEG" aria-label="Turn by degrees, clockwise">
+    <button type="button" data-rotate-done title="Put ROTATE down">DONE</button>
+  </span>
     </div>
   </div>
   <div class="grow"></div>`;

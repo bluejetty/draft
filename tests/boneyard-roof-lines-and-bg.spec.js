@@ -228,12 +228,16 @@ test('BG puts a level behind the one being edited, and takes it away again',
     const lines = await thinOn(page, '#bones2d');
     expect(lines.some(l => l.level === 'ROOF' && l.kind === 'eave'),
       'the overhang reads against the wall under it').toBe(true);
-    expect(await roofInk(page, '#bones2d'), 'and it is on the canvas').toBeGreaterThan(0);
+    // POLLED: the press re-paints on the next frame, and a pixel count taken
+    // in the same tick can read the canvas before it (CI, 18 Oct: 0 here
+    // with the roof's lines already listed above).
+    await expect.poll(() => roofInk(page, '#bones2d'), { message: 'and it is on the canvas' })
+      .toBeGreaterThan(0);
     // OFF AGAIN, on the same press.
     await bg.click();
     await expect(bg).toHaveAttribute('aria-pressed', 'false');
     expect(await faded(page)).toEqual([]);
-    expect(await roofInk(page, '#bones2d'), 'gone from the canvas').toBe(0);
+    await expect.poll(() => roofInk(page, '#bones2d'), { message: 'gone from the canvas' }).toBe(0);
   });
 
 test('a level cannot be put behind itself', async ({ page }) => {

@@ -5692,6 +5692,23 @@
       // A DXF's colour 7 is "the page's ink": white on night, black on day.
       dxfInk: skin['draw-fixture'],
     });
+    // THE PICTURE IN HAND GLOWS (Movie, 18 Oct: "allow this item to glow when
+    // selected"), so MOVE and ROTATE are plainly about this one -- while it
+    // stays drawn behind the plan as it was ("i like how it shows in the
+    // background as it does").
+    let held = null;
+    try { held = photoInHand(); } catch { held = null; }   // not set up yet on the first paints
+    if (held && underlays().includes(held)) {
+      const a = toS({ x: held.x - held.widthFt / 2, y: 0, z: held.z - held.heightFt / 2 });
+      const b = toS({ x: held.x + held.widthFt / 2, y: 0, z: held.z + held.heightFt / 2 });
+      ctx.save();
+      ctx.strokeStyle = selectHandle();
+      ctx.shadowColor = selectHandle();
+      ctx.shadowBlur = 14;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+      ctx.restore();
+    }
   };
 
   // ── THE TWO NORTHS, on the plan and on the button ───────────────────────
@@ -6666,6 +6683,8 @@
       // is wanted.
       pasteButton.hidden = !held.length || !!activeCut() || modalUp();
     }
+    syncRotateVerbs();
+    syncBreakVerb();
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;
@@ -13315,6 +13334,285 @@
     const node = document.getElementById(id);
     return !!node && !node.hidden;
   });
+
+  // ── ROTATE ──────────────────────────────────────────────────────────────
+  //
+  // Movie, 18 Oct: "i just realized i also need a ROTATE command (for items
+  // that are selected like the stiarcase which i'd like to rotate 90)" -- and
+  // for a placed WC or kitchen, and the PHOTO: "in the photo popup area can
+  // we also add 'ROTATE'". Down in the foot with DELETE and COPY, and while
+  // it is up its own small row stands OVER them ("i like how those little
+  // commands cover the other ones when they are active").
+  //
+  // WHAT TURNS: every point the selection owns, ONCE, about the middle of
+  // them all -- a wall's two ends, a floor's or a roof's ring (and the wall
+  // line the roof hangs from), a stair's start and end, a tag or a note.
+  // Doors, windows and fixtures ride their walls by an offset, so they turn
+  // with them and are never touched here.
+  //
+  // A CORNER SHARED WITH SOMETHING LEFT BEHIND IS LET GO first: a WC joined
+  // to the house wall would otherwise drag the house wall round with it. The
+  // WC's wall gets its own copy of that corner, and UNDO hands the shared one
+  // back along with every number.
+  //
+  // CLOCKWISE ON THE SCREEN: x runs right and z runs down the sheet, so a
+  // positive angle in the (x, z) turn below is clockwise as the drafter sees
+  // it. A PHOTO has no free angle -- it is drawn a quarter turn at a time --
+  // so its turn is rounded to quarters.
+  var rotateState = { open: false };
+  const rotateButton = document.getElementById('model-rotate');
+  const rotateBar = document.getElementById('rotate-bar');
+  const rotatePointsOf = ({ type, item }) => {
+    if (!item) return [];
+    if (type === 'fixture' || type === 'fenestration') return [];
+    if (type === 'roomtag') return item.at ? [item.at] : [];
+    if (type === 'note') return [item.anchor, item.text].filter(Boolean);
+    if (type === 'column') return item.point ? [item.point] : [];
+    if (Array.isArray(item.points)) {
+      return [...item.points, ...(type === 'roof' && Array.isArray(item.footprint) ? item.footprint : [])];
+    }
+    return [item.start, item.end].filter(Boolean);
+  };
+  // Asked from paint(), which can run before the trace code below has set
+  // `traceMoving` up -- so a picture is in hand only once that exists.
+  const photoInHand = () => {
+    try { return traceMoving?.underlay && !traceMoving.hologram ? traceMoving.underlay : null; } catch { return null; }
+  };
+  const turnPhoto = (underlay, quarters) => {
+    const q = ((Math.round(quarters) % 4) + 4) % 4;
+    if (!q) return false;
+    const before = { ...underlay };
+    underlay.turn = (((Number(underlay.turn) || 0) + q) % 4 + 4) % 4;
+    if (!underlay.turn) delete underlay.turn;
+    if (q % 2) { const w = underlay.widthFt; underlay.widthFt = underlay.heightFt; underlay.heightFt = w; }
+    undoStack.push({ kind: 'props', edits: [{ item: underlay, before }] });
+    markDirty();
+    paint();
+    return true;
+  };
+  const rotateSelection = degrees => {
+    const photo = photoInHand();
+    if (photo) {
+      if (turnPhoto(photo, degrees / 90)) sayOnStrip(`${photo.name || 'The picture'} turned. UNDO turns it back.`);
+      return;
+    }
+    if (!selection.length || !Number.isFinite(degrees) || Math.abs(degrees % 360) < 1e-9) return;
+    // A FIXED ASSEMBLY TURNS WHOLE (Movie: "the full WC to move and rotate
+    // ... as one unit"): one wall of a WC picked is the WC picked, the same
+    // as a drag of it takes the lot.
+    const entries = selection.slice();
+    selection.forEach(entry => {
+      const owner = groupOf(entry);
+      if (!owner || owner.fixed !== true) return;
+      itemsOfGroup(owner).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
+    });
+    // LET GO OF CORNERS SHARED WITH WALLS THAT STAY.
+    const chosen = new Set(entries.map(entry => entry.item));
+    const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
+    const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
+    const detached = [];
+    entries.forEach(({ type, item }) => {
+      if (type !== 'wall') return;
+      ['start', 'end'].forEach(key => {
+        if (!held.has(item[key])) return;
+        detached.push({ wall: item, key, orig: item[key] });
+        item[key] = { ...item[key] };
+      });
+    });
+    const points = [...new Set(entries.flatMap(rotatePointsOf))]
+      .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    if (!points.length) {
+      detached.forEach(d => { d.wall[d.key] = d.orig; });
+      sayOnStrip('Nothing in the selection can be turned on its own -- doors, windows and fixtures turn with their walls.');
+      return;
+    }
+    const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    const a = degrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
+    const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+      ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
+    points.forEach(pt => {
+      const dx = pt.x - cx, dz = pt.z - cz;
+      pt.x = cx + dx * cos - dz * sin;
+      pt.z = cz + dx * sin + dz * cos;
+    });
+    points.forEach(relinkVertex);
+    undoStack.push({ kind: 'rotate', before, detached });
+    markDirty();
+    paint();
+    const shown = Math.round(((degrees % 360) + 360) % 360 * 100) / 100;
+    sayOnStrip(`Turned ${shown}° clockwise about its middle. UNDO turns it back.`);
+  };
+  const setRotateOpen = open => {
+    rotateState.open = !!open;
+    if (rotateBar) {
+      const box = rotateBar.querySelector('[data-rotate-angle]');
+      if (box && open) box.value = '';
+    }
+    paint();
+  };
+  function syncRotateVerbs() {
+    if (!rotateState || !rotateButton || !rotateBar) return;
+    const able = (selection.length || photoInHand()) && !activeCut() && !modalUp();
+    if (!able) rotateState.open = false;
+    rotateButton.hidden = !able || rotateState.open;
+    rotateBar.hidden = !rotateState.open;
+    // OVER THE OTHER VERBS while it is up.
+    if (rotateState.open) {
+      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; });
+    }
+  }
+  if (rotateButton) rotateButton.addEventListener('click', () => setRotateOpen(true));
+  if (rotateBar) {
+    rotateBar.querySelectorAll('[data-rotate-by]').forEach(btn => btn.addEventListener('click', () =>
+      rotateSelection(Number(btn.dataset.rotateBy))));
+    rotateBar.querySelector('[data-rotate-done]')?.addEventListener('click', () => setRotateOpen(false));
+    const box = rotateBar.querySelector('[data-rotate-angle]');
+    box?.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Escape') { setRotateOpen(false); return; }
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const deg = Number(String(box.value).replace(/[^\d.+-]/g, ''));
+      if (!Number.isFinite(deg) || box.value.trim() === '') { sayOnStrip('Type the turn in degrees, clockwise -- 90, 45, -30.'); return; }
+      rotateSelection(deg);
+      box.value = '';
+    });
+  }
+
+  // ── BREAK ───────────────────────────────────────────────────────────────
+  //
+  // Movie, 18 Oct, option 2 for North Point's roof: "'BREAK' the roof and
+  // deleted the 2 hip peices and move the GABLE part all the wal over to
+  // cover the existing roof" -- and "can you place the BREAK command down
+  // near where UNDO COPY DELETE commands show up ... when the roof or other
+  // ASSEMBLIES are selected".
+  //
+  // A ROOF: BREAK, then a click on one of its edges and a click on another,
+  // and it is two roofs cut along the line between. The cut is a GABLE on
+  // both sides, flush (0 overhang), so the ridge runs straight to it and no
+  // hip appears there; delete the piece not wanted and push the other's cut
+  // edge out with OVERHANG, THIS EDGE.
+  //
+  // AN ASSEMBLY: BREAK breaks it into its pieces -- UNGROUP, said the way he
+  // says it ("BREAK the kitchen into pieces").
+  const breakButton = document.getElementById('model-break');
+  var breakState = { roof: null, first: null };
+  const breakRoofHeld = () => (selection.length === 1 && selection[0].type === 'roof' ? selection[0].item : null);
+  function syncBreakVerb() {
+    if (!breakState || !breakButton) return;
+    const able = !activeCut() && !modalUp() && (breakRoofHeld() || selectedGroups().length > 0);
+    if (!able) { breakState.roof = null; breakState.first = null; }
+    breakButton.hidden = !able || !!rotateState?.open;
+    breakButton.setAttribute('aria-pressed', String(!!breakState.roof));
+  }
+  const breakAt = (roof, world) => {
+    const G = window.DraftGeometry2D;
+    const pts = roof.points;
+    let best = null, bestD = (SELECT_GRAB_PX * 1.5) / view.scale;
+    pts.forEach((pt, index) => {
+      const next = pts[(index + 1) % pts.length];
+      if (Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6) return;
+      const { d } = G.pointToSegment(world, { start: pt, end: next });
+      if (d >= bestD) return;
+      const ex = next.x - pt.x, ez = next.z - pt.z;
+      const t = Math.max(0, Math.min(1, ((world.x - pt.x) * ex + (world.z - pt.z) * ez) / (ex * ex + ez * ez)));
+      bestD = d;
+      best = { index, t, p: { x: pt.x + ex * t, z: pt.z + ez * t } };
+    });
+    return best;
+  };
+  // THE TWO RINGS, each with its own edge kinds and overhangs; the cut edge
+  // is the last of each.
+  const splitRoofRing = (roof, a, b) => {
+    const pts = roof.points, n = pts.length;
+    const kinds = pts.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
+    const overs = roofOverhangs(roof);
+    const half = (from, to) => {
+      const ring = [from.p], k = [kinds[from.index]], o = [overs[from.index]];
+      for (let i = (from.index + 1) % n; ; i = (i + 1) % n) {
+        ring.push({ x: pts[i].x, z: pts[i].z });
+        if (i === to.index) { k.push(kinds[i]); o.push(overs[i]); break; }
+        k.push(kinds[i]); o.push(overs[i]);
+      }
+      ring.push(to.p);
+      k.push('gable'); o.push(0);
+      // A click on a corner puts the cut AT the corner: drop the repeat.
+      for (let i = ring.length - 1; i >= 0 && ring.length > 3; i -= 1) {
+        const next = ring[(i + 1) % ring.length];
+        if (Math.hypot(next.x - ring[i].x, next.z - ring[i].z) < 1e-6) {
+          // Edge i had no length: point i goes, and edge i-1 runs on to i+1.
+          ring.splice(i, 1); k.splice(i, 1); o.splice(i, 1);
+        }
+      }
+      return { ring, kinds: k, overs: o };
+    };
+    return [half(a, b), half(b, a)];
+  };
+  const breakRoof = (roof, a, b) => {
+    if (a.index === b.index) return 'Click a point on a DIFFERENT edge to cut across to.';
+    const [h1, h2] = splitRoofRing(roof, a, b);
+    if ([h1, h2].some(h => h.ring.length < 3 || Math.abs(ringArea(h.ring)) < 0.5)) {
+      return 'That cut leaves a piece with no roof in it.';
+    }
+    const y = roof.points[0]?.y ?? 0;
+    const make = (h, id) => {
+      const piece = { ...roof, id, points: h.ring.map(pt => ({ x: pt.x, y, z: pt.z })),
+        edges: h.kinds, edgeOverhang: h.overs, follows: 'none' };
+      delete piece.footprint;
+      delete piece.cuts;
+      return piece;
+    };
+    const index = drawing.roofs.indexOf(roof);
+    const first = make(h1, roof.id);
+    const second = make(h2, newDrawingItemId('roof'));
+    drawing.roofs.splice(index, 1, first, second);
+    undoStack.push({ kind: 'replace-items', list: drawing.roofs, removed: [{ item: roof, index }], added: [first, second] });
+    markDirty();
+    setSelection([{ type: 'roof', item: first }]);
+    return null;
+  };
+  const pressBreak = () => {
+    const roof = breakRoofHeld();
+    if (roof) {
+      if (breakState.roof) { breakState.roof = null; breakState.first = null; sayOnStrip(''); paint(); return; }
+      breakState.roof = roof;
+      breakState.first = null;
+      sayOnStrip('BREAK: click a point on one edge of the roof, then a point on the edge across from it. Esc stops.');
+      paint();
+      return;
+    }
+    const n = selectedGroups().length;
+    if (!n) return;
+    ungroupSelected();
+    sayOnStrip(`Broken into pieces: ${n === 1 ? 'the assembly is' : `${n} assemblies are`} gone and the pieces stay selected.`);
+    paint();
+  };
+  if (breakButton) breakButton.addEventListener('click', pressBreak);
+  // THE TWO CLICKS, ahead of every tool's own press while a roof BREAK is up.
+  canvas.addEventListener('pointerdown', event => {
+    if (!breakState.roof || event.button !== 0) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    const world = toWorld(event.clientX - r.left, event.clientY - r.top);
+    const at = breakAt(breakState.roof, world);
+    if (!at) { sayOnStrip('Click ON an edge of the roof -- the cut runs from edge to edge.'); return; }
+    if (!breakState.first) {
+      breakState.first = at;
+      sayOnStrip('Now click a point on the edge across from it.');
+      paint();
+      return;
+    }
+    const refusal = breakRoof(breakState.roof, breakState.first, at);
+    if (refusal) { sayOnStrip(refusal); return; }
+    breakState.roof = null;
+    breakState.first = null;
+    sayOnStrip('The roof is in two, cut along a flush gable. Select the piece you do not want and DELETE it; UNDO joins them again.');
+    paint();
+  }, true);
+  // ESC NEEDS NO LISTENER OF ITS OWN: the page's Escape puts the selection
+  // down, and a BREAK with no roof held goes down with it (syncBreakVerb).
 
   // ONE DELETE PRESS, whichever control did the pressing. The button and the
   // two keys were separate implementations of the same sentence and only one
@@ -23458,7 +23756,9 @@
       move.addEventListener('click', () => {
         traceAsk.hidden = true;
         traceMoving = { underlay, from: null, before: null };
-        sayOnStrip(`Drag ${underlay.name || 'the image'} to where it belongs \u2014 Esc to leave it.`);
+        sayOnStrip(`Drag ${underlay.name || 'the image'} to where it belongs \u2014 ROTATE turns it, Esc to leave it.`);
+        // Painted now, so the picture glows in hand and ROTATE is in the foot.
+        paint();
       });
       const del = document.createElement('button');
       del.type = 'button';
@@ -23475,7 +23775,17 @@
         sayOnStrip(`${underlay.name || 'The image'} is off ${traceLevelName()} \u2014 UNDO brings it back.`);
         openTraceAsk();
       });
-      row.append(name, move, del);
+      // ROTATE (Movie, 18 Oct: "in the photo popup area can we also add
+      // 'ROTATE'"): a quarter turn clockwise each press, about its middle.
+      const turn = document.createElement('button');
+      turn.type = 'button';
+      turn.textContent = 'ROTATE';
+      turn.dataset.traceRotate = underlay.id;
+      turn.title = 'A quarter turn clockwise';
+      turn.addEventListener('click', () => {
+        if (turnPhoto(underlay, 1)) sayOnStrip(`${underlay.name || 'The image'} turned a quarter. UNDO turns it back.`);
+      });
+      row.append(name, move, turn, del);
       list.appendChild(row);
       if (underlay.kind === 'dxf') {
         list.appendChild(traceLayerChips(underlay));
@@ -28988,7 +29298,18 @@
     // ONE PRESS IS ONE UNDO whether the press moved one corner or a wall's
     // two, drew a wall, or deleted one: the entry is whatever that gesture
     // captured, so a wall goes back in one keystroke rather than two.
-    if (step.kind === 'move') {
+    if (step.kind === 'replace-items') {
+      step.added.forEach(item => { const at = step.list.indexOf(item); if (at >= 0) step.list.splice(at, 1); });
+      step.removed.slice().sort((p, q) => p.index - q.index).forEach(({ item, index }) => step.list.splice(index, 0, item));
+      setSelection([]);
+    } else if (step.kind === 'rotate') {
+      step.before.forEach(b => {
+        b.vtx.x = b.x;
+        b.vtx.z = b.z;
+        if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
+      });
+      step.detached.forEach(d => { d.wall[d.key] = d.orig; });
+    } else if (step.kind === 'move') {
       undoRedim(step);
       step.before.forEach(b => {
         b.vtx.x = b.x;
