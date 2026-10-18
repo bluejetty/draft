@@ -2354,9 +2354,21 @@ if (!window.DraftRender2D) {
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = (options.selected ? 2 : 1) * k;
+    // THE EXTENSION LINES STAND OFF WHAT THEY MEASURE (Movie, 17-18 Oct:
+    // hand dimensions "same as the autodims look", and both with the small
+    // gap a drafter leaves between the object and its extension line, so the
+    // dimension never reads as part of the wall). A line shorter than the gap
+    // draws nothing rather than turning round.
+    const gap = 3 * k;
+    const startOff = (from, to) => {
+      const len = Math.hypot(to.x - from.x, to.y - from.y);
+      if (len <= gap) return null;
+      return { x: from.x + (to.x - from.x) / len * gap, y: from.y + (to.y - from.y) / len * gap };
+    };
+    const ea = startOff(a, da), eb = startOff(b, db);
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
-    ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
+    if (ea) { ctx.moveTo(ea.x, ea.y); ctx.lineTo(da.x, da.y); }
+    if (eb) { ctx.moveTo(eb.x, eb.y); ctx.lineTo(db.x, db.y); }
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
