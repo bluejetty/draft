@@ -513,6 +513,19 @@
     border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
   #frozen-angle:disabled { color: var(--ink-quiet); opacity:0.5; }
   #frozen-angle:focus { border-color: var(--accent); }
+  /* THE WORD IS A SWITCH (Movie, 17 Oct: "if they click ANGLE it uses the
+     ANGLE textbox and the typed angle is used the ANGLE word is lit up and glow
+     around the text box"). Unlit it reads as the label it always was. */
+  #strip-angle-word { font: inherit; color: inherit; background:none; border:0;
+    padding:0 2px; cursor:pointer; letter-spacing:inherit; }
+  #strip-angle-word:hover { color: var(--accent); }
+  #strip-angle-word.lit { color: var(--length-live, var(--accent));
+    text-shadow: 0 0 6px var(--length-live-glow, transparent); }
+  #frozen-angle.locked, #frozen-angle.locked:disabled { opacity:1; color: var(--ink-primary);
+    border-color: var(--length-live, var(--accent));
+    box-shadow: 0 0 0 1px var(--length-live, var(--accent)), 0 0 9px 1px var(--length-live-glow, transparent); }
+  /* NARROW, so the bar still fits 1280: a figure, not a chip-sized icon. */
+  #strip-protractor-step { padding:0 1px; margin-left:-2px; font-family: var(--font-mono); font-size:10px; }
 
   /* THE MODE CORNER, upper-left (§7b): what the drawing IS -- board, finish,
      day/night. It sat at the right-hand end of the foot strip; Movie moved it

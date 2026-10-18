@@ -2379,6 +2379,9 @@
   // them ON default yes"). Kept beside the 1' light, for the same reason.
   let snapOn = stored.snapLight !== false;
   let trackOn = stored.trackLight !== false;
+  // THE PROTRACTOR'S STEP, 45 or 30, kept with the lights (Movie, 17 Oct:
+  // "yes keep protactor at 45/90 initally").
+  let protractorStep = stored.protractorStep === 30 ? 30 : 45;
   let rulerOn = false;      // RULER down: presses measure instead of drawing
   let brushOn = false;      // DRAFTING BRUSH up: presses lift and dust
   let brushLoad = null;     // what the brush is holding — see BRUSH_PROPS
@@ -11716,7 +11719,12 @@
     return best ? best.v : null;
   };
   let lastSnapKey = '';
-  const levelIsEmpty = () => !walls().length && !lines().length && !outlineCorners.length;
+  // NOTHING AROUND, as Movie put it ("only when nothing is around"): no
+  // wall, line, floor or footprint here, no loop in hand, and no traced
+  // outline anywhere -- the house he traced is around while its garage is
+  // drawn, and the bullseye pulled the garage's first corner a foot on to it.
+  const levelIsEmpty = () => !walls().length && !lines().length && !outlineCorners.length
+    && !floors().length && !outlines().length && !(drawing?.boneyardOutlines || []).length;
   const drawSnap = at => {
     if (!at) return {};
     if (snapOn) {
@@ -13197,14 +13205,33 @@
   // together hold the run to that bearing; the hand then sets the length.
   let protractorOn = false;
   let typedAngle = null;
+  // AND SINCE 17 OCT THEY ARE THREE INSTRUMENTS, one lit at a time. Movie:
+  // "for the PROTACTOR - the user should be able to set it to 45 / or 30
+  // degrees ... and then if they click on it its kindof like the T - but the
+  // T is just for 90 degrees" -- "if they click the Protractor the T turns
+  // off. if they click ANGLE it uses the ANGLE textbox and the typed angle is
+  // used the ANGLE word is lit up and glow around the text box" -- "if they
+  // enter and ANGLE eg 33 - it should take them that angle with their line
+  // and lock it at that angle unless they enter a new angle or retouch the T
+  // or the PROTRACTOR" -- "or if they go back to angle text box and delete
+  // the number it will go back to swinigng free". So the PROTRACTOR turns the
+  // run in steps of its own (protractorStep) and the ANGLE word is what locks
+  // to the typed number.
+  let angleOn = false;
   // NOT ON TOY. Movie: "i guess this should only be allowed if not in TOY
   // mode" -- TOY holds every run to the four axes already, and §6 takes the
   // instruments away.
   // THE BOARD IS NOT ASKED ANY MORE: a TOY drawing can only be holding an
   // angle a foot and a right angle can make, because anything else promoted
   // it on the way in. So the lock is the protractor's and the number's.
-  const angleLockDeg = () => (protractorOn && typedAngle != null
+  const angleLockDeg = () => (angleOn && typedAngle != null
     ? typedAngle : null);
+  // ONE LIT AT A TIME: whichever the drafter touched last holds the run.
+  const lightInstrument = which => {
+    tsquareOn = which === 'tsquare';
+    protractorOn = which === 'protractor';
+    angleOn = which === 'angle';
+  };
   // The point along the locked bearing nearest the hand, either way along it
   // (the protractor folds a bearing to -90..90, so the hand picks the end, as
   // the typed angle always has). `step` rounds the bearing to the nearest
@@ -13506,6 +13533,10 @@
     // when that is on.
     const locked = lockedPoint(drawStart, at);
     if (locked) return onTheFoot_if() ? onTheFoot(drawStart, locked) : locked;
+    // THE PROTRACTOR, LIT: the run turns in its steps, 45 or 30, and the hand
+    // sets the length along the step it is nearest.
+    const stepped = protractorPoint(drawStart, at);
+    if (stepped) return onTheFoot_if() ? onTheFoot(drawStart, stepped) : stepped;
     const wanted = squareTo(drawStart, at);
     const fixed = squaredAxis(drawStart, at);
     // SNAP AND TRACK ON DRAFTING: TOY's points are the foot's. A NODE is
@@ -14420,7 +14451,8 @@
     // it (the orange ray), so the loop can always be brought home. TOY keeps
     // its law: square, on the foot.
     if (board !== 'toy' && !locked) {
-      const hand = tsquareOn ? outlineHand(from, at, 90) : outlineAligned(at);
+      const hand = tsquareOn ? outlineHand(from, at, 90)
+        : protractorOn ? outlineHand(from, at, protractorStep) : outlineAligned(at);
       const pt = onTheFoot_if() ? onTheFoot(from, hand) : hand;
       return { x: pt.x, z: pt.z };
     }
@@ -14434,16 +14466,20 @@
   const outlineAligned = at => {
     const corner = cornerSnap(at, []);
     const first = outlineCorners[0];
-    if (first && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
+    // HOME ONLY ONCE THERE IS A LOOP TO CLOSE: three corners. With one, a
+    // short first edge pressed within the reach of the first corner was
+    // pulled back on to it and lost -- the 1' step of Movie's MOD BILEVEL
+    // garage, traced with the house fitted to the sheet (6 px a foot).
+    if (first && outlineCorners.length >= 3
+      && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
     if (corner) return { x: corner.x, z: corner.z };
-    // SNAP AND TRACK, as a wall's point has them: a node, or the cross lines.
+    // SNAP AND TRACK, as a wall's point has them: a node, or the cross lines
+    // -- the first corner's among them, so the loop can always be brought
+    // home square. TRACK switched off, the press stays where it was (Movie:
+    // "have them ON default", and off means off).
     const snap = drawSnap(at);
     if (snap.pt) return { x: snap.pt.x, z: snap.pt.z };
-    const reach = (CORNER_SNAP_PX * 2) / view.scale;
-    const out = { x: at.x, z: at.z };
-    if (first && Math.abs(at.x - first.x) <= reach) out.x = first.x;
-    if (first && Math.abs(at.z - first.z) <= reach) out.z = first.z;
-    return out;
+    return { x: at.x, z: at.z };
   };
   // THE HAND'S BEARING, ROUNDED TO THE STEP, and the point on it nearest the
   // hand. A quarter turn is the square it always was, written as it was --
@@ -14452,9 +14488,20 @@
   const outlineHand = (from, at, step) => {
     const dx = at.x - from.x, dz = at.z - from.z;
     if (step === 90) return Math.abs(dx) >= Math.abs(dz) ? { x: at.x, z: from.z } : { x: from.x, z: at.z };
-    const [ux, uz] = eighthTurn(Math.round(Math.atan2(-dz, dx) * 180 / Math.PI / step) * step);
+    const [ux, uz] = stepTurn(Math.round(Math.atan2(-dz, dx) * 180 / Math.PI / step) * step);
     const t = dx * ux + dz * uz;
     return { x: from.x + ux * t, z: from.z + uz * t };
+  };
+  // A STEP'S DIRECTION: an eighth turn exactly (below), anything else -- the
+  // protractor's 30s and 60s -- by its cosine and sine.
+  const stepTurn = deg => (deg % 45 === 0 ? eighthTurn(deg)
+    : [Math.cos(deg * Math.PI / 180), -Math.sin(deg * Math.PI / 180)]);
+  // THE PROTRACTOR'S POINT for a run from `from`, or null when it is dark.
+  // Not on TOY, which holds every run square already.
+  const protractorPoint = (from, at) => {
+    if (!protractorOn || board === 'toy' || !from || !at) return null;
+    const p = outlineHand(from, at, protractorStep);
+    return { x: p.x, y: 0, z: p.z };
   };
   // AN EIGHTH TURN'S DIRECTION, EXACTLY. cos(90°) is 6e-17 in floating
   // point, not 0, and a square edge built from it lands its corner at
@@ -14487,11 +14534,14 @@
     const first = outlineCorners[0], last = outlineTail();
     // FREE, THE EDGE HOME IS WHATEVER IT IS: on DRAFTING with no instrument
     // lit the outline turns at any angle, so its last edge may too.
-    if (board !== 'toy' && !tsquareOn && angleLockDeg() == null) return last;
+    if (board !== 'toy' && !tsquareOn && !protractorOn && angleLockDeg() == null) return last;
     const prev = outlineCorners[outlineCorners.length - 2];
     const dx = first.x - last.x, dz = first.z - last.z;
     const r = Math.SQRT1_2;
-    const ways = outlineStep() === 90 ? [[1, 0], [0, 1]] : [[1, 0], [0, 1], [r, r], [r, -r]];
+    const ways = outlineStep() === 90 ? [[1, 0], [0, 1]]
+      : board !== 'toy' && protractorOn && protractorStep === 30
+        ? [0, 30, 60, 90, 120, 150].map(stepTurn)
+        : [[1, 0], [0, 1], [r, r], [r, -r]];
     let best = null;
     ways.forEach(([ux, uz]) => {
       const miss = Math.abs(dx * uz - dz * ux);
@@ -22310,6 +22360,8 @@
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const protractorChip = strip.querySelector('[data-mode-protractor]');
+  const protractorStepChip = strip.querySelector('[data-protractor-step]');
+  const angleWord = strip.querySelector('[data-angle-word]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
   const snapChip = strip.querySelector('[data-mode-snap]');
   const trackChip = strip.querySelector('[data-mode-track]');
@@ -22504,6 +22556,13 @@
     // the instrument was refused there; it is offered now, and a chip that
     // took the press and stayed dark would be the worst of both.
     protractorChip.classList.toggle('lit', protractorOn);
+    if (protractorStepChip) {
+      protractorStepChip.textContent = `${protractorStep}°`;
+      protractorStepChip.classList.toggle('lit', protractorOn);
+    }
+    angleWord?.classList.toggle('lit', angleOn);
+    angleWord?.setAttribute('aria-pressed', String(angleOn));
+    angleBox.classList.toggle('locked', angleLockDeg() != null);
     scaleChip.classList.toggle('lit', footOn);
     snapChip?.classList.toggle('lit', snapOn);
     trackChip?.classList.toggle('lit', trackOn);
@@ -22603,24 +22662,41 @@
     paint();
   });
   tsquareChip.addEventListener('click', () => {
-    tsquareOn = !tsquareOn;
     // ONE INSTRUMENT HOLDS THE RUN AT A TIME: "when the protractor is lit
-    // the T square should be UNLIT", and the other way round.
-    if (tsquareOn) protractorOn = false;
+    // the T square should be UNLIT", and the other way round -- and the ANGLE.
+    lightInstrument(tsquareOn ? null : 'tsquare');
+    clearNotice();
     stripRefresh();
     paint();
   });
   protractorChip.addEventListener('click', () => {
-    // NO LONGER REFUSED ON TOY (Movie, 15 Oct). Lighting the protractor asks
-    // for nothing a foot cannot hold -- it is the ANGLE TYPED INTO it that
-    // does, and that number moves the board itself now. Refusing the
-    // instrument was the "they all go dim" complaint in one chip.
-    protractorOn = !protractorOn;
-    if (protractorOn) tsquareOn = false;
-    if (protractorOn && typedAngle == null) {
-      sayOnStrip('PROTRACTOR lit — type an ANGLE and press Enter to lock to it');
+    // NO LONGER REFUSED ON TOY (Movie, 15 Oct); it turns nothing there, where
+    // every run is square already. Lit, it holds the run to its steps.
+    lightInstrument(protractorOn ? null : 'protractor');
+    if (protractorOn) sayOnStrip(`PROTRACTOR lit — the run turns in ${protractorStep}° steps; press ${protractorStep}° to change it`);
+    else clearNotice();
+    stripRefresh();
+    paint();
+  });
+  // 45 OR 30, AND THE PRESS LIGHTS THE PROTRACTOR: changing its step is
+  // asking to draw with it.
+  protractorStepChip?.addEventListener('click', () => {
+    protractorStep = protractorStep === 45 ? 30 : 45;
+    keepLight('protractorStep', protractorStep);
+    lightInstrument('protractor');
+    sayOnStrip(`PROTRACTOR lit — the run turns in ${protractorStep}° steps`);
+    stripRefresh();
+    paint();
+  });
+  // THE ANGLE WORD: lit, the run holds the typed angle. With nothing typed
+  // yet it asks for one.
+  angleWord?.addEventListener('click', () => {
+    lightInstrument(angleOn ? null : 'angle');
+    if (angleOn && typedAngle == null) {
+      sayOnStrip('ANGLE lit — type an angle (0 east, 90 north) and press Enter');
       if (!angleBox.disabled) angleBox.focus();
-    } else clearNotice();
+    } else if (angleOn) sayOnStrip(`ANGLE LOCKED ${typedAngle}°`);
+    else clearNotice();
     stripRefresh();
     paint();
   });
@@ -24325,25 +24401,36 @@
   // box sets how far.
   const commitTypedAngle = () => {
     const raw = String(angleBox.value).replace(/[°\s]/g, '');
-    if (raw === '') { typedAngle = null; angleBox.blur(); stripRefresh(); paint(); return; }
+    // CLEARED, THE RUN SWINGS FREE: the number goes and the ANGLE goes dark.
+    if (raw === '') {
+      typedAngle = null;
+      if (angleOn) lightInstrument(null);
+      angleBox.blur(); clearNotice(); stripRefresh(); paint(); return;
+    }
     const deg = parseFloat(raw);
     if (!Number.isFinite(deg) || Math.abs(deg) > 180) {
       stripMessage.textContent = 'angle in degrees, -180 to 180';
       return;
     }
     typedAngle = deg;
+    // TYPED IS LOCKED: "if they enter and ANGLE eg 33 - it should take them
+    // that angle with their line and lock it at that angle".
+    lightInstrument('angle');
     angleBox.blur();
     // "if they enter a ANGLE or length other than 1ft" -- an angle TOY would
     // have drawn is every multiple of 90, and anything else is the drafter
     // asking for a building TOY cannot make. The promotion speaks for itself
     // here; the ANGLE line below would otherwise talk over it.
     if (!promoteForNumber(toyCouldMakeAngle(deg), `${deg}°`)) {
-      if (!protractorOn) sayOnStrip(`ANGLE ${deg}° kept — light the PROTRACTOR to lock to it`);
-      else clearNotice();
+      sayOnStrip(`ANGLE LOCKED ${deg}° — clear the box to swing free`);
     }
     stripRefresh();
     paint();
   };
+  // DELETED, NOT ONLY ENTERED: an emptied box frees the run at once.
+  angleBox.addEventListener('input', () => {
+    if (String(angleBox.value).replace(/[°\s]/g, '') === '' && typedAngle != null) commitTypedAngle();
+  });
   angleBox.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commitTypedAngle(); }
     if (e.key === 'Escape') { e.preventDefault(); angleBox.blur(); stripRefresh(); }

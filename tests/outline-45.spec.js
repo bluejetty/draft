@@ -65,9 +65,9 @@ test('on DRAFTING a typed 45 lays the chamfer, says its legs, and the typed edge
   await typeEdge(page, at, [5, 20], '20');
   // The chamfer, on an angle locked to 135 (north-west): 10' each way is a
   // diagonal of 14.1421', and the nearest sixteenth is 14'-1 11/16" -- just short.
+  // Typed is locked (17 Oct), and the outline's own eighth turn holds it.
   await page.locator('#frozen-angle').fill('135');
   await page.locator('#frozen-angle').press('Enter');
-  await page.locator('[data-mode-protractor]').click();
   await typeEdge(page, at, [0, 10], '14-1 11/16');
   await expect(page.locator('#strip-message')).toContainText('45° edge 14\'-1 11/16"');
   await expect(page.locator('#strip-message')).toContainText('10\'-0" each way');
@@ -123,4 +123,28 @@ test('on DRAFTING with no instrument lit the outline turns at any angle, unround
   expect(Math.abs(loop[2][1] - 6.81)).toBeLessThan(0.1);
   // The second press landed on the first corner's own line, square to it.
   expect(Math.abs(loop[1][1])).toBeLessThan(1e-9);
+});
+
+// A SHORT FIRST EDGE IS KEPT (18 Oct): the press that closes the loop on its
+// first corner reaches 8 px, and with one corner down there is no loop to
+// close -- so a first edge shorter than that reach stood on the first corner
+// and was lost. Movie's MOD BILEVEL garage starts with a 1' step, traced at
+// 6 px a foot.
+test('a first edge shorter than the close-the-loop reach is kept, not pulled home', async ({ page }) => {
+  await open(page, 'drafting');
+  const { at, scale } = await h.planFrame(page);
+  await h.selectTool(page, 'outline');
+  const step = 6 / scale;              // six pixels: inside the 8 px reach
+  for (const pt of [[0, 0], [step, 0], [step, 6], [0, 6]]) {
+    await page.mouse.move(...at(...pt));
+    await page.waitForTimeout(60);
+    await page.mouse.click(...at(...pt));
+  }
+  await page.mouse.move(...at(0, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(0, 0));
+  const loop = await savedLoop(page);
+  expect(loop, 'the loop closed').not.toBeNull();
+  expect(loop).toHaveLength(4);
+  expect(Math.abs(loop[1][0] - step)).toBeLessThan(0.05);
 });
