@@ -77,9 +77,13 @@ test('a suite wall that does not line up face for face shares nothing', async ({
   await open(page, shell({ z: 0.25 }));
   const d = await saved(page);
   expect(await hostOpenings(page, d)).toEqual([]);
-  // A thinner suite wall in the shell's line is not the shell's either.
+  // A thinner suite wall with its OUTSIDE face on the shell's outside face
+  // -- one face lined up, the other an inch and a half short -- is not the
+  // shell's either: both faces, or nothing.
   const thin = JSON.parse(JSON.stringify(d));
-  thin.holograms[0].z = 0;
+  const [t6, t4] = await page.evaluate(() => ['stud_2x6', 'stud_2x4']
+    .map(id => window.DraftWallTypes.WALL_TYPES.find(t => t.id === id).totalIn / 12));
+  thin.holograms[0].z = -(t6 - t4) / 2;
   thin.holograms[0].source.walls[0].wallType = 'stud_2x4';
   expect(await hostOpenings(page, thin)).toEqual([]);
 });
@@ -134,10 +138,24 @@ test('a suite draws in the normal colours, not the hologram blue', async ({ page
     for (let i = 0; i < data.length; i += 4) if (data[i + 2] > 150 && data[i + 2] - data[i] > 50) n += 1;
     return n;
   });
+  // Light pixels: the suite's walls in the night page's light ink.
+  const light = () => page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) n += 1;
+    return n;
+  });
+  await open(page, shell({ hidden: true }));
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const without = await light();
   await open(page, shell());
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
   expect(await blue()).toBeLessThan(50);
+  // DRAWN, not merely not blue.
+  expect(await light()).toBeGreaterThan(without + 500);
   await open(page, shell({ mode: undefined }));
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
