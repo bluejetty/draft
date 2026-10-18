@@ -64,6 +64,8 @@ test('a roof: BREAK adds nodes on the edge clicked, each half keeps its kind and
   // Two nodes on the front eave, z = 38.
   await click(page, at, 20, 37.9);
   await click(page, at, 40, 37.9);
+  // ENTER ends it from anywhere, not only while the button has the focus.
+  await page.evaluate(() => document.activeElement?.blur?.());
   await page.keyboard.press('Enter');
   await expect(page.locator('#model-break')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#delete'), 'ENTER ends BREAK, the roof still in hand').toBeVisible();
