@@ -13611,13 +13611,8 @@
     sayOnStrip('The roof is in two, cut along a flush gable. Select the piece you do not want and DELETE it; UNDO joins them again.');
     paint();
   }, true);
-  window.addEventListener('keydown', event => {
-    if (!breakState.roof || event.key !== 'Escape') return;
-    breakState.roof = null;
-    breakState.first = null;
-    sayOnStrip('BREAK put down.');
-    paint();
-  }, true);
+  // ESC NEEDS NO LISTENER OF ITS OWN: the page's Escape puts the selection
+  // down, and a BREAK with no roof held goes down with it (syncBreakVerb).
 
   // ONE DELETE PRESS, whichever control did the pressing. The button and the
   // two keys were separate implementations of the same sentence and only one
