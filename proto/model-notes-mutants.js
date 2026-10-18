@@ -1,12 +1,10 @@
 #!/usr/bin/env node
-// MUTATION GATE for the NOTES pad (tests/model-html-notes.spec.js).
+// MUTATION GATE for the NOTES pad's SAVE AS TXT and grab spots
+// (tests/model-html-notes.spec.js).
 //
-// Movie, 16-17 Oct: "a 'notepad' that can open up as a tab under the
-// LEVELS/LAYERS tab ... that blue sticky pad look" -- "save with the draft,
-// and also when a user starts a new plan, keep the notes still there ... add
-// a CLEAR button ... keep those notes always in there as long as possible
-// unless the user presses CLEAR". Each row breaks one of those promises and
-// asks the spec that makes it whether it noticed.
+// Movie, 18 Oct: "a 'SAVE AS TXT FILE' ... in location where they save their
+// DRAFT files as a backup" -- and "add 3 'grab spots on the edges ... allow
+// them to fill basically half the page".
 //
 // Run: node proto/model-notes-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -14,63 +12,31 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-html-notes.spec.js';
-
 const MUTANTS = [
-  { file: 'MODEL.html',
-    name: 'the pad is not a pane: NOTES opens nothing',
-    find: "  const PANES = ['levels', 'notes'];\n",
-    with: "  const PANES = ['levels'];\n",
-    test: 'it opens and shuts like the LEVELS tab, and swaps with it on the same rail' },
-  { file: 'MODEL.html',
-    name: 'the tab sits on LEVELS / LAYERS instead of under it',
-    find: "    if (above.height) notesTab.style.top = `${Math.round(above.bottom + 8)}px`;\n",
-    with: "    if (above.height) notesTab.style.top = `${Math.round(above.top)}px`;\n",
-    test: 'NOTES hangs under LEVELS / LAYERS on the right edge: a blue sticky pad, dark lettering' },
-  { file: 'MODEL.html',
-    name: 'the ROUGH pad is not blue',
-    find: "  :root { --pad: #d6e9f8;",
-    with: "  :root { --pad: #ffffff;",
-    test: 'NOTES hangs under LEVELS / LAYERS on the right edge: a blue sticky pad, dark lettering' },
-  { file: 'MODEL.html',
-    name: 'the notes never reach the .draft',
-    find: "    if (text) drawing.notepad = text;\n",
-    with: "    if (text) void 0;\n",
-    test: 'typing goes on the pad, not to the tools, and the notes save in the .draft' },
-  { file: 'MODEL.html',
-    name: 'an empty pad writes an empty key into every file',
-    find: "    else delete drawing.notepad;\n",
-    with: "    else drawing.notepad = '';\n",
-    test: 'an empty pad leaves the file key for key' },
-  { file: 'MODEL.html',
-    name: 'the browser forgets them: a reload empties the pad',
-    find: "  showNotes(notesStored());\n",
-    with: "  showNotes('');\n",
-    test: 'a reload keeps them, NEW keeps them, and a drawing with its own notes shows those' },
-  { file: 'MODEL.html',
-    name: 'NEW wipes the pad',
-    find: "    notesOntoDrawing(notesText.value);\n  };\n",
-    with: "    if (!own) showNotes('');\n    notesOntoDrawing(notesText.value);\n  };\n",
-    test: 'a reload keeps them, NEW keeps them, and a drawing with its own notes shows those' },
-  { file: 'MODEL.html',
-    name: 'a drawing\'s own notes lose to the pad',
-    find: "    if (own) { showNotes(own); storeNotes(own); }\n",
-    with: "    if (own && !notesText.value) { showNotes(own); storeNotes(own); }\n",
-    test: 'a reload keeps them, NEW keeps them, and a drawing with its own notes shows those' },
-  { file: 'MODEL.html',
-    name: 'CLEAR wipes without asking',
-    find: "    if (!window.confirm('Clear all notes?')) return;\n",
+  { file: 'MODEL.html', name: "the download path says nothing",
+    find: "    setTimeout(() => URL.revokeObjectURL(url), 0);\n    sayWhereItWent(file.name);\n  };\n  document.querySelector('[data-notes-save-txt]')",
+    with: "    setTimeout(() => URL.revokeObjectURL(url), 0);\n  };\n  document.querySelector('[data-notes-save-txt]')",
+    test: "SAVE AS TXT downloads the pad as a .txt where there is no save dialog, and the chip says where" },
+  { file: 'MODEL.html', name: "the dialog does not open beside the .draft",
+    find: "          ...(lastSaveHandle ? { startIn: lastSaveHandle } : {}),\n",
     with: "",
-    test: 'CLEAR asks first; NO keeps them, YES wipes the pad and the file' },
-  { file: 'MODEL.html',
-    name: 'CLEAR leaves the browser copy behind',
-    find: "    showNotes('');\n    storeNotes('');\n",
-    with: "    showNotes('');\n",
-    test: 'CLEAR asks first; NO keeps them, YES wipes the pad and the file' },
-  { file: 'MODEL.html',
-    name: 'no five-page limit',
-    find: "  notesText.maxLength = NOTES_MAX;\n",
+    test: "with a save dialog, it opens beside the last .draft saved and writes the text there" },
+  { file: 'MODEL.html', name: "the .draft handle is not kept",
+    find: "      return lastSaveHandle = await window.showSaveFilePicker({",
+    with: "      return await window.showSaveFilePicker({",
+    test: "with a save dialog, it opens beside the last .draft saved and writes the text there" },
+  { file: 'MODEL.html', name: "no stop at the middle of the page",
+    find: "      const maxW = Math.max(minW, window.innerWidth / 2 - right);\n",
+    with: "      const maxW = window.innerWidth;\n",
+    test: "the pad pulls out by its left, top and bottom edges, to the right half of the page; LEVELS keeps its width; a reload keeps the size" },
+  { file: 'MODEL.html', name: "LEVELS takes the pad size too",
+    find: "    const on = pane === 'notes' && notesSize;\n",
+    with: "    const on = notesSize;\n",
+    test: "the pad pulls out by its left, top and bottom edges, to the right half of the page; LEVELS keeps its width; a reload keeps the size" },
+  { file: 'MODEL.html', name: "the size is forgotten on a reload",
+    find: "        try { localStorage.setItem('draft.notepad.size', JSON.stringify(notesSize)); } catch (err) {}\n",
     with: "",
-    test: 'about five pages and no more: 15,000 characters, the head counts the pages' },
+    test: "the pad pulls out by its left, top and bottom edges, to the right half of the page; LEVELS keeps its width; a reload keeps the size" },
 ];
 
 const run = name => {
@@ -78,7 +44,7 @@ const run = name => {
     execSync(`npx playwright test ${SPEC} --workers=1 --reporter=line`
       + (name ? ` -g ${JSON.stringify(name)}` : ''),
       { cwd: ROOT, stdio: 'pipe',
-        env: { ...process.env, DRAFT_TEST_PORT: '4431' } });
+        env: { ...process.env, DRAFT_TEST_PORT: '4441' } });
     return 'passed';
   } catch { return 'failed'; }
 };
