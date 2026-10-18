@@ -199,11 +199,12 @@ test('and the rail is only as tall as what is in it', async ({ page }) => {
     const strip = document.getElementById('house-strip').getBoundingClientRect();
     return { railH: rail.height, railBottom: rail.bottom, stripTop: strip.top };
   });
-  // 500: the build keys and the FIXTURE rows -- KITCHEN's lines with Movie's
-  // base cabinets (9 Oct), and the WC 1/WC 2, WC BF2-BF5 and U1/L2/L3 presets
-  // (17 Oct) -- still short of the pin.
+  // The build keys and the FIXTURE rows -- KITCHEN's lines with Movie's
+  // base cabinets (9 Oct), the WC 1/WC 2, WC BF2-BF5 and U1/L2/L3 presets
+  // (17 Oct), and DORMER's key opening a third row of build keys (18 Oct,
+  // 503px) -- still short of the 532px pin, which is the whole claim.
   expect(m.railH, 'the rail shrank to the build keys rather than filling 532px')
-    .toBeLessThan(500);
+    .toBeLessThan(532);
   expect(m.railBottom, 'and still stops above the foot bar')
     .toBeLessThanOrEqual(m.stripTop);
 });
