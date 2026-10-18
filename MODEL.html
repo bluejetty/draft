@@ -981,7 +981,7 @@
   #notes-tab:hover, #notes-tab[aria-selected="true"] { color:#000;
     border-color: var(--pad-ink); }
   #right-rail[data-pane-showing="notes"] { overflow:hidden; }
-  #notes-panel { display:flex; flex-direction:column; height:100%;
+  #notes-panel { position:relative; display:flex; flex-direction:column; height:100%;
     background: var(--pad); border:1px solid var(--pad-gum);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
   .np-head { display:flex; align-items:center; gap:6px; padding:5px 6px;
@@ -1003,6 +1003,19 @@
     background: repeating-linear-gradient(to bottom, transparent 0 17px,
       var(--pad-rule) 17px 18px) local, var(--pad); }
   .np-text::placeholder { color: var(--pad-ink); opacity:0.45; }
+  /* The grab spots: a tab of the gum colour on the left edge and on the top
+     and bottom, each with a strip of reach wider than it looks. */
+  .np-grip { position:absolute; z-index:2; touch-action:none; }
+  .np-grip::after { content:''; position:absolute; background: var(--pad-ink); opacity:0.35;
+    border-radius:2px; }
+  .np-grip:hover::after { opacity:0.7; }
+  .np-grip[data-notes-grip="left"] { left:-5px; top:0; bottom:0; width:10px; cursor:ew-resize; }
+  .np-grip[data-notes-grip="left"]::after { left:3px; top:calc(50% - 18px); width:4px; height:36px; }
+  .np-grip[data-notes-grip="top"], .np-grip[data-notes-grip="bottom"] { left:0; right:0; height:10px; cursor:ns-resize; }
+  .np-grip[data-notes-grip="top"] { top:-5px; }
+  .np-grip[data-notes-grip="bottom"] { bottom:-5px; }
+  .np-grip[data-notes-grip="top"]::after, .np-grip[data-notes-grip="bottom"]::after {
+    top:3px; left:calc(50% - 18px); width:36px; height:4px; }
   .lv-head { display:flex; align-items:center; gap:6px; }
   .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
@@ -1618,6 +1631,12 @@
         title="Clear every note on the pad">CLEAR</button></div>
     <textarea class="np-text" data-notes-text spellcheck="false"
       aria-label="Notes" placeholder="Type or paste notes, numbers, anything..."></textarea>
+    <!-- THREE GRAB SPOTS (Movie, 18 Oct): "add 3 'grab spots on the edges
+         where they can grab the edge and pull it bigger on the left and top
+         and bottom and allow them to fill basically half the page". -->
+    <div class="np-grip" data-notes-grip="left" title="Drag to widen the pad"></div>
+    <div class="np-grip" data-notes-grip="top" title="Drag to make the pad taller"></div>
+    <div class="np-grip" data-notes-grip="bottom" title="Drag to make the pad taller"></div>
   </div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
@@ -7118,6 +7137,54 @@
   // ABOUT FIVE PAGES: 15,000 characters, roughly 250 lines of the pad. The
   // textarea's maxlength stops typing and cuts a paste at the line, and the
   // head says how much is left before it does.
+  // THE PAD'S SIZE, pulled out by its grab spots: as far as the right half of
+  // the page across, and from under the instrument strip down to the foot
+  // bar. It is the drafter's way of looking, so it lives in this browser,
+  // and it is the NOTES pane's only -- LEVELS / LAYERS keeps the rail's own.
+  var notesSize = null;
+  try { notesSize = JSON.parse(localStorage.getItem('draft.notepad.size') || 'null'); } catch (e) { notesSize = null; }
+  function applyNotesSize(rail, pane) {
+    const on = pane === 'notes' && notesSize;
+    rail.style.width = on && notesSize.w ? `${notesSize.w}px` : '';
+    rail.style.top = on && notesSize.top != null ? `${notesSize.top}px` : '';
+    rail.style.bottom = on && notesSize.bottom != null ? `${notesSize.bottom}px` : '';
+  }
+  document.querySelectorAll('[data-notes-grip]').forEach(grip => {
+    grip.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rail = document.getElementById('right-rail');
+      const box = rail.getBoundingClientRect();
+      const css = getComputedStyle(rail);
+      const right = parseFloat(css.right) || 0;
+      const topMin = (document.getElementById('strip')?.getBoundingClientRect().bottom || 44) + 4;
+      const stripEl = document.getElementById('house-strip');
+      const bottomMin = stripEl ? window.innerHeight - stripEl.getBoundingClientRect().top + 4 : 8;
+      const start = { x: e.clientX, y: e.clientY, w: box.width, top: box.top, bottom: window.innerHeight - box.bottom };
+      const minW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rail-w')) || box.width;
+      const maxW = Math.max(minW, window.innerWidth / 2 - right);
+      grip.setPointerCapture(e.pointerId);
+      const move = ev => {
+        const size = { ...(notesSize || {}) };
+        if (grip.dataset.notesGrip === 'left') {
+          size.w = Math.round(Math.max(Math.min(start.w, minW), Math.min(maxW, start.w + (start.x - ev.clientX))));
+        } else if (grip.dataset.notesGrip === 'top') {
+          size.top = Math.round(Math.max(topMin, Math.min(window.innerHeight - start.bottom - 120, start.top + ev.clientY - start.y)));
+        } else {
+          size.bottom = Math.round(Math.max(bottomMin, Math.min(window.innerHeight - start.top - 120, start.bottom - (ev.clientY - start.y))));
+        }
+        notesSize = size;
+        applyNotesSize(rail, 'notes');
+      };
+      const up = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', up);
+        try { localStorage.setItem('draft.notepad.size', JSON.stringify(notesSize)); } catch (err) {}
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up);
+    });
+  });
   const NOTES_MAX = 15000;
   const NOTES_KEY = 'draft.notepad';
   const notesText = document.querySelector('[data-notes-text]');
@@ -7300,6 +7367,7 @@
     rightPanel.toggleAttribute('data-collapsed', !rightOpen);
     const pane = paneShowing();
     rightPanel.dataset.paneShowing = pane;
+    applyNotesSize(rightPanel, pane);
     rightPanel.querySelectorAll('[data-pane]').forEach(el => {
       el.hidden = el.dataset.pane !== pane;
     });

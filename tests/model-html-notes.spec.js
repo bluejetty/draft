@@ -223,3 +223,48 @@ test('with a save dialog, it opens beside the last .draft saved and writes the t
   expect(got.types).toEqual({ 'text/plain': ['.txt'] });
   expect(got.written).toBe('GRID 1 TO 29');
 });
+
+// THREE GRAB SPOTS (Movie, 18 Oct): "that ia a good DEFAULT size, but can you
+// add 3 'grab spots on the edges where they can grab the edge and pull it
+// bigger on the left and top and bottom and allow them to fill basically half
+// the page (right half of page) so they can see a couple paragraphs at a time".
+test('the pad pulls out by its left, top and bottom edges, to the right half of the page; LEVELS keeps its width; a reload keeps the size', async ({ page }) => {
+  await open(page);
+  await openPad(page);
+  const rail = page.locator('#right-rail');
+  const before = await rail.boundingBox();
+  const drag = async (which, dx, dy) => {
+    const g = await page.locator(`[data-notes-grip="${which}"]`).boundingBox();
+    const x = g.x + g.width / 2, y = g.y + g.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 5 });
+    await page.mouse.up();
+  };
+  // Far past the middle: it stops at the right half.
+  await drag('left', -2000, 0);
+  const vw = page.viewportSize().width;
+  let box = await rail.boundingBox();
+  expect(box.x, 'its left edge stops at the middle of the page').toBeGreaterThanOrEqual(vw / 2 - 1);
+  expect(box.x).toBeLessThanOrEqual(vw / 2 + 1);
+  expect(box.x + box.width, 'its right edge where it was').toBeCloseTo(before.x + before.width, 0);
+  // Up to under the instrument strip, and down to the foot bar.
+  await drag('top', 0, -2000);
+  await drag('bottom', 0, 2000);
+  box = await rail.boundingBox();
+  const strip = await page.locator('#strip').boundingBox();
+  const foot = await page.locator('#house-strip').boundingBox();
+  expect(box.y).toBeLessThan(before.y);
+  expect(box.y).toBeGreaterThanOrEqual(strip.y + strip.height);
+  expect(box.y + box.height).toBeGreaterThan(before.y + before.height);
+  expect(box.y + box.height).toBeLessThanOrEqual(foot.y);
+  // LEVELS / LAYERS keeps the rail's own size.
+  await page.locator('#right-tab').click();
+  expect((await rail.boundingBox()).width).toBeCloseTo(before.width, 0);
+  await tab(page).click();
+  expect((await rail.boundingBox()).width).toBeCloseTo(box.width, 0);
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await openPad(page);
+  expect((await rail.boundingBox()).width, 'and a reload keeps it').toBeCloseTo(box.width, 0);
+});
