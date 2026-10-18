@@ -95,7 +95,8 @@ test('typing goes on the pad, not to the tools, and the notes save in the .draft
   await pad(page).click();
   await page.keyboard.type('wdl 366-11 x 69\n');
   await expect(pad(page)).toHaveValue('wdl 366-11 x 69\n');
-  // W, D and L arm nothing while the drafter is writing.
+  // W, D and L arm nothing while the drafter is writing: every key
+  // handler on the page already steps aside for a text field.
   for (const key of ['wall', 'dimension']) {
     await expect(page.locator(`[data-tool-key="${key}"]`)).not.toHaveAttribute('aria-pressed', 'true');
   }

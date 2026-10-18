@@ -7069,10 +7069,6 @@
     notesOntoDrawing(notesText.value);
     if ((drawing.notepad || '') !== was) markDirty();
   });
-  // Typing on the pad is typing, not commands: D, W, Enter and the rest stop
-  // here instead of arming tools under the drafter's words.
-  ['keydown', 'keyup', 'keypress'].forEach(type =>
-    notesText.addEventListener(type, ev => ev.stopPropagation()));
   // CLEAR ASKS FIRST, so one stray press cannot wipe five pages.
   document.querySelector('[data-notes-clear]').addEventListener('click', () => {
     if (!notesText.value) return;
