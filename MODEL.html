@@ -14392,9 +14392,9 @@
   const selectionMoveSet = () => {
     const entries = selection.slice();
     selection.forEach(entry => {
-      const owner = groupOf(entry);
-      if (!owner || owner.fixed !== true) return;
-      itemsOfGroup(owner).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
+      const unit = groupOf(entry);
+      if (unit?.fixed !== true) return;
+      itemsOfGroup(unit).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
     });
     const chosen = new Set(entries.map(entry => entry.item));
     const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
@@ -14404,8 +14404,9 @@
       if (type !== 'wall') return;
       ['start', 'end'].forEach(key => {
         if (!held.has(item[key])) return;
-        detached.push({ wall: item, key, orig: item[key] });
-        item[key] = { ...item[key] };
+        const orig = item[key];
+        detached.push({ wall: item, key, orig });
+        item[key] = { ...orig };
       });
     });
     const points = [...new Set([

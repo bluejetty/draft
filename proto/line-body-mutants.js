@@ -26,21 +26,17 @@ const MUTANTS = [
     // ANCHORED ON THE PICK AND ITS GUARD, which segmentBodyAt alone has in
     // this spelling: cornerAt's copy is followed by its own filter note and
     // then nearestVertex, so three lines tell the two apart.
-    find: '  const segmentBodyAt = worldPt => {\n'
-      + '    const selectedSeg = selectedSegment();\n'
+    find: '    const selectedSeg = selectedSegment() || fixedWall();\n'
       + '    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;',
-    with: '  const segmentBodyAt = worldPt => {\n'
-      + '    const selectedSeg = selectedWall();\n'
+    with: '    const selectedSeg = selectedWall() || fixedWall();\n'
       + '    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;',
     test: 'a selected LINE drags by its BODY' },
 
   { file: 'MODEL.html',
     name: 'the selection rule goes: every press near any line moves it '
       + 'instead of sliding the sheet',
-    find: '  const segmentBodyAt = worldPt => {\n'
-      + '    const selectedSeg = selectedSegment();',
-    with: '  const segmentBodyAt = worldPt => {\n'
-      + '    const selectedSeg = selectedSegment() || lines()[0];',
+    find: '    const selectedSeg = selectedSegment() || fixedWall();',
+    with: '    const selectedSeg = selectedSegment() || lines()[0];',
     test: 'an UNSELECTED line is not dragged by a press on its body' },
 
   { file: 'MODEL.html',
