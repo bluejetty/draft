@@ -66,6 +66,7 @@ test('a roof: BREAK adds nodes on the edge clicked, each half keeps its kind and
   await click(page, at, 40, 37.9);
   await page.keyboard.press('Enter');
   await expect(page.locator('#model-break')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#delete'), 'ENTER ends BREAK, the roof still in hand').toBeVisible();
   const [roof] = (await saved(page)).roofs;
   expect(roof.points.map(xz)).toEqual([[-8, -8], [68, -8], [68, 38], [40, 38], [20, 38], [-8, 38]]);
   expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
@@ -92,7 +93,17 @@ test('GABLE between two nodes gables that stretch only; one UNDO a node', async 
     .flatMap(s => [s.a, s.b]).map(p => [Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100]), roof);
   expect(ends).toContainEqual([20, 38]);
   expect(ends).toContainEqual([40, 38]);
+  // A node on the gable stretch: both halves are gable.
+  await page.locator('#model-break').click();
+  await click(page, at, 30, 37.9);
+  await page.keyboard.press('Enter');
+  [roof] = (await saved(page)).roofs;
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'gable', 'gable', 'eave', 'eave']);
+  // ONE UNDO A STEP: that node, the gable, then each of the first two.
   await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  [roof] = (await saved(page)).roofs;
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
   await page.keyboard.press('Control+z');
   [roof] = (await saved(page)).roofs;
   expect(roof.points).toHaveLength(5);
