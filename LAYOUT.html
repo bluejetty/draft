@@ -251,6 +251,11 @@
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:19px; font-weight:600;
     letter-spacing:0.08em; }
   #lay-edit-row button:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #lay-edit-scale { display:flex; flex-direction:column; gap:6px; margin-top:16px; }
+  #lay-edit-scale label { font-family: var(--font-ui); font-size:11px; font-weight:600; letter-spacing:0.08em; }
+  #lay-edit-scale select, #lay-edit-scale input { font: inherit; padding:4px 6px;
+    background: var(--surface-panel); color: var(--ink-primary); border:1px solid var(--edge-panel); }
+  #lay-edit-scale-msg { min-height:1.2em; font-size:11px; color: var(--ink-secondary); }
   /* THE MARK, NOT THE ACCENT, and this one is measured rather than assumed:
      11px uppercase in --accent over the dialog's panel is 4.28 on RUFF night,
      under AA's 4.5, and the same text in --accent-mark is 9.32. It is also
@@ -709,6 +714,18 @@
       <button type="button" id="lay-edit-yes" data-edit-model-yes>Y</button>
       <button type="button" id="lay-edit-no" data-edit-model-no>N</button>
     </div>
+    <!-- AND THE SECOND QUESTION (Movie, 18 Oct): "i can't change the scale
+         when i click it and it asks to edit the document in model space, add
+         a second inquiry below: 'CHANGE SCALE?:' and have a scrollable scale
+         menu to choose from typical scales, and also have text box so they
+         can enter whatever scale they need". A pick or a typed scale takes
+         effect on the viewport at once, and stays one UNDO. -->
+    <div id="lay-edit-scale">
+      <label for="lay-edit-scale-list">CHANGE SCALE?:</label>
+      <select id="lay-edit-scale-list" data-edit-scale-list size="6"></select>
+      <input id="lay-edit-scale-text" data-edit-scale-text type="text" placeholder="OR TYPE ONE: 1/8&quot; = 1'-0&quot;, 1&quot; = 25'" autocomplete="off">
+      <div id="lay-edit-scale-msg" data-edit-scale-msg role="status"></div>
+    </div>
   </div>
 </div>
 
@@ -1145,6 +1162,52 @@ const SCALES = [
   { label: '1" = 500\'', pif: 1/500 },
 ];
 
+// A SCALE'S NAME, for any pif: the list's own label when it is on the list,
+// else one written the way the list writes its two kinds -- an engineer's
+// "1\" = N'" when a whole number of feet goes to the inch, an architect's
+// "x\" = 1'-0\"" otherwise. A scale typed into CHANGE SCALE? is named too.
+const scaleLabelOf = pif => {
+  if (!(pif > 0)) return '';
+  const listed = SCALES.find(s => Math.abs(s.pif - pif) < 1e-9);
+  if (listed) return listed.label;
+  const feet = 1 / pif;
+  if (feet >= 1 && Math.abs(feet - Math.round(feet)) < 1e-6) return `1" = ${Math.round(feet)}'`;
+  for (const den of [2, 4, 8, 16, 32, 64]) {
+    const num = pif * den;
+    if (Math.abs(num - Math.round(num)) < 1e-6) {
+      const n = Math.round(num);
+      const whole = Math.floor(n / den), rest = n % den;
+      const g = (a, b) => (b ? g(b, a % b) : a);
+      const frac = rest ? `${rest / g(rest, den)}/${den / g(rest, den)}` : '';
+      return `${whole ? whole + (frac ? ' ' : '') : ''}${frac}" = 1'-0"`;
+    }
+  }
+  return `1" = ${Math.round(feet * 100) / 100}'`;
+};
+// WHAT A DRAFTER TYPES FOR A SCALE: 1/8" = 1'-0", 3/16, 1" = 25', 1"=25',
+// 25' or 1:300. A bare fraction or inch figure is inches to the foot; a
+// figure with ' (or 1" = N') is feet to the inch; 1:N is a ratio. Null for
+// anything else.
+const parseScale = text => {
+  const t = String(text || '').trim().replace(/\s+/g, '').replace(/[\u2019\u2032]/g, "'").replace(/[\u201d\u2033]/g, '"');
+  if (!t) return null;
+  const num = str => {
+    const m = /^(\d+(?:\.\d+)?)(?:-?(\d+)\/(\d+))?$|^(\d+)\/(\d+)$/.exec(str);
+    if (!m) return null;
+    if (m[4]) return Number(m[4]) / Number(m[5]);
+    return Number(m[1]) + (m[2] ? Number(m[2]) / Number(m[3]) : 0);
+  };
+  let m = /^1:(\d+(?:\.\d+)?)$/.exec(t);
+  if (m) return Number(m[1]) > 0 ? 12 / Number(m[1]) : null;
+  m = /^1"?=(\d+(?:\.\d+)?)'$/.exec(t);
+  if (m) return Number(m[1]) > 0 ? 1 / Number(m[1]) : null;
+  m = /^(\d+(?:\.\d+)?)'$/.exec(t);
+  if (m) return Number(m[1]) > 0 ? 1 / Number(m[1]) : null;
+  m = /^([\d./-]+)"?(?:=1'(?:-0"?)?)?$/.exec(t);
+  if (m) { const v = num(m[1]); return v > 0 ? v : null; }
+  return null;
+};
+
 // The auto composer's ladder, largest first: the working plan scale, then the
 // honest steps down. Largest first, first rung that fits. 3/32" is the floor —
 // half a step under 1/8", and the rung a wide house lands on rather than
@@ -1152,9 +1215,19 @@ const SCALES = [
 // small to draft from, and a site plan wants an engineer's scale rather than
 // the bottom of this ladder. Too big is self-evident; too small is an opinion,
 // so the rule needs no fill threshold to tune.
-const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8, 3 / 32];
+//
+// AND PAST 3/32" ONTO THE ENGINEER'S SCALES (Movie, 18 Oct: "we put the E2
+// and E4 (long sides) to the same scale as the SITE PLAN is now ... 1'=30" and
+// should be used for the ROOF PLAN, and the FLOOR PLAN too. the E1 and E3
+// (short width sides) look good at the current 3/32" =1'"). North Point is
+// 367' long: at 3/32" it runs 34" across an 11x17, clipped. So a view that
+// 3/32" cannot hold walks on down 1" = 20', 1" = 30' ... rather than printing
+// clipped -- still never 1/16", which that paragraph rules out, and never
+// 1" = 10', which is larger than 3/32".
+const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8, 3 / 32,
+  1 / 20, 1 / 30, 1 / 40, 1 / 50, 1 / 60, 1 / 80, 1 / 100, 1 / 200];
 const WORKING_SCALE_IDX = SCALES.findIndex(s => s.pif === 1 / 4);
-const AUTO_SCALE_LAST_RESORT = 3 / 32;
+const AUTO_SCALE_LAST_RESORT = 1 / 200;
 // A view's type picks which ladder it walks; the chooser is the same either
 // way. A site plan at 1/8" is nonsense -- it wants an engineer's scale.
 // Metric (1:50/1:100/1:200, site 1:250/1:500) is a drawing-wide setting
@@ -1214,19 +1287,22 @@ const ELEVATION_BURIED_CROP = 0.75;
 // starts at the top of its drawing. Returns where each drawing is centred
 // (its natural frame, uncropped) and the crop that turns that frame into
 // the window: negative grows a side out, positive trims it in.
-function windowsFor(views, pif, region) {
+// `pif` IS ONE SCALE FOR THE SHEET, OR ONE PER VIEW: an elevation sheet
+// pairs a long side and a short one, and each takes its own rung.
+function windowsFor(views, pifs, region) {
   const n = views.length;
+  const pifAt = i => (Array.isArray(pifs) ? pifs[i] : pifs);
   const avail = region.h - n * COMPOSE_LABEL_IN - (n - 1) * COMPOSE_GAP_IN;
-  const full = views.map(view => Math.max(view.hFt * pif, 0.75));
+  const full = views.map((view, i) => Math.max(view.hFt * pifAt(i), 0.75));
   const short = Math.max(0, full.reduce((a, b) => a + b, 0) - avail);
-  const give = views.map(view => (view.cropFt || 0) * pif);
+  const give = views.map((view, i) => (view.cropFt || 0) * pifAt(i));
   const giveAll = give.reduce((a, b) => a + b, 0);
   const extra = short > 0 ? 0 : (avail - full.reduce((a, b) => a + b, 0)) / n;
   let top = region.y;
   return views.map((view, i) => {
     const cut = short > 0 && giveAll > 0 ? Math.min(give[i], short * give[i] / giveAll) : 0;
     const hIn = full[i] - cut + extra;
-    const wIn = Math.max(view.wFt * pif, 0.75);
+    const wIn = Math.max(view.wFt * pifAt(i), 0.75);
     const xIn = region.x + region.w / 2;
     const natTop = top + extra / 2;
     const yIn = natTop + full[i] / 2;
@@ -1237,7 +1313,7 @@ function windowsFor(views, pif, region) {
       b: (natTop + full[i]) - (top + hIn),
     };
     top += hIn + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
-    return { view, xIn, yIn, crop };
+    return { view, xIn, yIn, crop, pif: pifAt(i) };
   });
 }
 
@@ -2007,11 +2083,24 @@ class Component extends PageLogic {
       // The scale may be one the buried foundation only nearly fits, an
       // elevation then giving up to ELEVATION_BURIED_CROP of it.
       const cutSheet = views.every(view => view.kind === 'elevation' || view.kind === 'section');
+      const cropped = view => ({ ...view, hFt: view.hFt - (view.cropFt || 0) });
       const pif = cutSheet
-        ? this._autoScaleFor(views.map(view => ({ ...view, hFt: view.hFt - (view.cropFt || 0) })), region)
+        ? this._autoScaleFor(views.map(cropped), region)
         : buildingPlan(views) && Number.isFinite(sharedPif) ? sharedPif : this._autoScaleFor(views, region);
-      const commit = (view, xIn, yIn, crop = null) => {
-        const base = { id: nextId++, pif, sheet, xIn, yIn, ...(crop ? { crop } : {}) };
+      // AN ELEVATION SHEET'S TWO VIEWS EACH TAKE THEIR OWN RUNG (Movie, 18
+      // Oct): the long side E2 / E4 on the engineer's scale it needs, the
+      // short side E1 / E3 still at 3/32". Only once the pair has walked off
+      // the architect's scales: a pair that one of 1/4" ... 3/32" holds keeps
+      // sharing it, as it always has. Then each is asked what fits its own
+      // share of the sheet -- no larger than 3/32", the rung the pair shared
+      // before, so the end that already read well is drawn as it was and
+      // only the side that cannot hold it steps down.
+      const elevSheet = views.length > 1 && views.every(view => view.kind === 'elevation');
+      const share = { ...region, h: (region.h - (views.length - 1) * COMPOSE_GAP_IN) / views.length };
+      const pifs = elevSheet && pif < 3 / 32 - 1e-9
+        ? views.map(view => Math.min(3 / 32, this._autoScaleFor([cropped(view)], share))) : pif;
+      const commit = (view, xIn, yIn, crop = null, own = pif) => {
+        const base = { id: nextId++, pif: own, sheet, xIn, yIn, ...(crop ? { crop } : {}) };
         if (view.kind === 'plan') {
           viewports.push({ ...base, kind: 'plan', levelId: view.levelId, view: view.view });
         } else if (view.kind === 'section') {
@@ -2021,7 +2110,7 @@ class Component extends PageLogic {
         }
       };
       if (cutSheet) {
-        windowsFor(views, pif, region).forEach(({ view, xIn, yIn, crop }) => commit(view, xIn, yIn, crop));
+        windowsFor(views, pifs, region).forEach(({ view, xIn, yIn, crop, pif: own }) => commit(view, xIn, yIn, crop, own));
         return;
       }
       if (views.length === 1) {
@@ -2774,7 +2863,7 @@ class Component extends PageLogic {
     if (opts.thumb || opts.export) return;
     if (opts.print) {
       // ON PAPER, only the caption: in ink, centred under the drawing.
-      const scale = SCALES.find(s => s.pif === viewport.pif);
+      const scale = { label: scaleLabelOf(viewport.pif) };
       ctx.fillStyle = '#1d1f20';
       ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'center';
@@ -2802,7 +2891,7 @@ class Component extends PageLogic {
         ctx.strokeRect(hx - 4, hy - 4, 8, 8);
       });
     }
-    const scale = SCALES.find(s => s.pif === viewport.pif);
+    const scale = { label: scaleLabelOf(viewport.pif) };
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
     ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
     ctx.textAlign = 'center';
@@ -2870,6 +2959,20 @@ class Component extends PageLogic {
     this.setState({ editInModel: id, selectedViewportId: id }, () => this._draw());
   }
 
+  // THE ASKED-ABOUT VIEWPORT AT A NEW SCALE: it keeps its centre, the change
+  // is one UNDO, and it is a hand on the set so the composer lets go of it --
+  // the same as a pick from the panel's list (`_setScale`).
+  _rescaleAsked(pif) {
+    const id = this.state.editInModel;
+    if (id == null || !(pif > 0)) return;
+    const msg = document.querySelector('[data-edit-scale-msg]');
+    if (msg) msg.textContent = `Now ${scaleLabelOf(pif)}.`;
+    this.setState({
+      viewports: this.state.viewports.map(viewport => (viewport.id === id ? { ...viewport, pif } : viewport)),
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); });
+  }
+
   _closeEditInModel() {
     if (this.state.editInModel == null) return;
     // N GOES BACK TO THE LAYOUT AND DOES NOTHING (Movie's own words), so the
@@ -2922,7 +3025,7 @@ class Component extends PageLogic {
     const sheetViewports = this._sheetViewports(sheet);
     const pifs = [...new Set(sheetViewports.map(viewport => viewport.pif))];
     const scale = pifs.length === 1
-      ? (SCALES.find(s => s.pif === pifs[0])?.label || 'AS NOTED')
+      ? (scaleLabelOf(pifs[0]) || 'AS NOTED')
       : (pifs.length ? 'AS NOTED' : '');
     return {
       projectName: project.name,
@@ -3600,7 +3703,7 @@ class Component extends PageLogic {
 
     document.querySelector('[data-sheet-readout]').textContent =
       `${pw}" × ${ph}"  ·  ${selectedPif != null
-        ? (SCALES.find(scale => scale.pif === selectedPif)?.label || 'AS NOTED')
+        ? (scaleLabelOf(selectedPif) || 'AS NOTED')
         : SCALES[activeScale].label}`;
 
     this._paintProfileDialog();
@@ -3781,7 +3884,7 @@ class Component extends PageLogic {
         ents = W.shiftEntities(ents, used[2] + GAP_IN - b[0], used[3] - b[3]);
         b = W.bounds(ents);
       }
-      const scale = SCALES.find(s => s.pif === viewport.pif);
+      const scale = { label: scaleLabelOf(viewport.pif) };
       ents.push({ type: 'text', layer: 'A-ANNO-TITL', x: (b[0] + b[2]) / 2, y: b[1] - 0.3 * k,
         h: 0.125 * k * 0.7, rot: 0, align: 'center', baseline: 'top',
         text: `${this._viewportTitle(viewport)}${scale ? `  ${scale.label}` : ''}` });
@@ -4194,6 +4297,20 @@ class Component extends PageLogic {
     document.querySelector('#lay-edit-description').textContent = url
       ? `Open ${title} in the Model Space to edit it. The sheet is saved first, and the layout is here when you come back.`
       : `${title || 'This viewport'} has no drawing to open — its cut is no longer in the file.`;
+    // THE SCALE LIST, the viewport's own scale picked -- added to the list
+    // when it was typed and is not one of the usual ones.
+    const list = document.querySelector('[data-edit-scale-list]');
+    if (list && viewport) {
+      const pifs = SCALES.map(scale => scale.pif);
+      if (!pifs.some(pif => Math.abs(pif - viewport.pif) < 1e-9)) pifs.push(viewport.pif);
+      list.replaceChildren(...pifs.map(pif => {
+        const option = document.createElement('option');
+        option.value = String(pif);
+        option.textContent = scaleLabelOf(pif);
+        option.selected = Math.abs(pif - viewport.pif) < 1e-9;
+        return option;
+      }));
+    }
     const yes = document.querySelector('#lay-edit-yes');
     yes.disabled = !url;
     yes.style.opacity = url ? '' : '0.4';
@@ -4270,6 +4387,17 @@ class Component extends PageLogic {
     on('[data-edit-model-no]', 'click', () => this._closeEditInModel());
     on('#lay-edit-close', 'click', () => this._closeEditInModel());
     on('#lay-edit-scrim', 'click', e => { if (e.target.id === 'lay-edit-scrim') this._closeEditInModel(); });
+    // CHANGE SCALE?: a pick from the list, or a scale typed and ENTER.
+    on('[data-edit-scale-list]', 'change', e => this._rescaleAsked(Number(e.target.value)));
+    on('[data-edit-scale-text]', 'keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const pif = parseScale(e.target.value);
+      const msg = document.querySelector('[data-edit-scale-msg]');
+      if (!pif) { if (msg) msg.textContent = 'Not a scale I can read — try 1/8" = 1\'-0" or 1" = 25\'.'; return; }
+      e.target.value = '';
+      this._rescaleAsked(pif);
+    });
     on('[data-print-all]', 'click', () => {
       this._printPick = new Set(Array.from({ length: this._sheetCount() }, (_, i) => i + 1));
       this._paintPrintDialog();

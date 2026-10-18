@@ -383,3 +383,37 @@ test.describe('on a touchscreen', () => {
     expect(url.searchParams.get('level')).toBe('1');
   });
 });
+
+// AND THE SECOND QUESTION (Movie, 18 Oct): "add a second inquiry below:
+// 'CHANGE SCALE?:' and have a scrollable scale menu to choose from typical
+// scales, and also have text box so they can enter whatever scale they need
+// other than the ones available in the scroll box".
+test('CHANGE SCALE? under it: a list of the usual scales with this one picked, and a box for any other', async ({ page }) => {
+  await openLayout(page, houseDrawing(PLAN_VIEWPORT));
+  await doubleClickViewport(page);
+  await expect(page.locator('#lay-edit-scale label')).toHaveText('CHANGE SCALE?:');
+  const list = page.locator('[data-edit-scale-list]');
+  // The seed's 1/48 is 1" = 48', not one of the usual: it joins the list.
+  await expect(list.locator('option:checked')).toHaveText('1" = 48\'');
+  expect(await list.locator('option').count()).toBeGreaterThan(10);
+  // A pick re-scales the viewport at once, and the question stays up.
+  await list.selectOption({ label: '1/8" = 1\'-0"' });
+  await expect(page.locator('[data-edit-scale-msg]')).toHaveText('Now 1/8" = 1\'-0".');
+  await expect.poll(async () => (await savedLayout(page)).viewports[0].pif).toBe(1 / 8);
+  expect(await asking(page)).toBe(true);
+  // One the list does not carry, typed.
+  const box = page.locator('[data-edit-scale-text]');
+  await box.fill('1" = 25\'');
+  await box.press('Enter');
+  await expect.poll(async () => (await savedLayout(page)).viewports[0].pif).toBe(1 / 25);
+  await expect(list.locator('option:checked')).toHaveText('1" = 25\'');
+  // Nonsense is refused, and says so.
+  await box.fill('big');
+  await box.press('Enter');
+  await expect(page.locator('[data-edit-scale-msg]')).toContainText('Not a scale');
+  expect((await savedLayout(page)).viewports[0].pif).toBe(1 / 25);
+  // An architect's one typed bare: 3/16 is 3/16" to the foot.
+  await box.fill('3/16');
+  await box.press('Enter');
+  await expect.poll(async () => (await savedLayout(page)).viewports[0].pif).toBe(3 / 16);
+});
