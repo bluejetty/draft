@@ -1076,6 +1076,14 @@ if (!window.DraftDrawingFormat) {
   // (switchback landing, runs 4.5" apart for a rail or wall). The turn
   // ('left' / 'right' walking down) orients L and U. Winders convert the one
   // landing into 2 or 3 pie treads — at most one winder landing per stair.
+  const stairLockOf = raw => {
+    const side = s => {
+      const id = s?.wallId;
+      return id == null || String(id).trim() === '' ? null : { wallId: id };
+    };
+    const left = side(raw?.left), right = side(raw?.right);
+    return left || right ? { lock: { ...(left ? { left } : {}), ...(right ? { right } : {}) } } : {};
+  };
   const stairs = (rawStairs, levelIds) => {
     const seen = new Set();
     return (Array.isArray(rawStairs) ? rawStairs : []).map(stair => {
@@ -1113,6 +1121,10 @@ if (!window.DraftDrawingFormat) {
         winders: shape === 'L' ? oneOf(Number(stair?.winders), [0, 2, 3], 0) : 0,
         auto: stair?.auto === true,
         ...(Number.isInteger(splitTreads) && splitTreads > 0 ? { splitTreads } : {}),
+        // LOCKED TO A WALL'S INSIDE FACE (Movie, 18 Oct): which wall each side
+        // of a straight flight lies on, so a thicker wall moves that side and
+        // narrows the flight. Written only when present.
+        ...stairLockOf(stair?.lock),
         layer: 'A-STR',
       };
     }).filter(Boolean);

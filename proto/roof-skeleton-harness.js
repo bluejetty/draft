@@ -235,6 +235,28 @@ SHAPES.forEach(({ name, points, peak }) => {
         Math.abs(got - peak) < 0.01 ? 'as drawn' : peak.toFixed(3)]; });
 });
 
+// ── A GABLE A HAIR OUT OF PLUMB (Movie, 18 Oct, North Point) ────────────
+//
+// "the upper left corner roof ... got all messed up on the side view". His
+// left end is a flush gable drawn from x = 0.001 to x = 0, and a 10' x 6'
+// bump-out on the north eave beside it sends two 45-degree lines down to it.
+// Their ends sat 2e-4 off the gable's line; the edge did not split there,
+// and the bump's north and east planes traced as one bow-tie. Each must be
+// its own plane: four in all on this end.
+check('a gable a thousandth out of plumb still splits where the hips land on it',
+  G => {
+    // His points as saved, to the last digit: the hair is the whole case.
+    const pts = [[118.91666666666669, 77], [0.0013940301152928214, 77], [-0.0002534600209628498, -14],
+      [18.104166666666664, -14], [18.104166666666664, -8], [374.9166666666667, -8], [374.9166666666667, 77],
+      [238.91666666666669, 77], [238.91666666666669, 83], [118.91666666666669, 83]];
+    const roof = { pitch: 4, points: pts.map(([x, z]) => ({ x, z })),
+      edges: pts.map((_, i) => (i === 1 ? 'gable' : 'eave')) };
+    const faces = G.roofFaces(roof, G.roofSkeleton(roof));
+    const atEnd = faces.filter(face => face.points.some(p => p.x < 1));
+    return [`${atEnd.length} planes, ${faces.filter(repeatsACorner).length} doubled back`,
+      '4 planes, 0 doubled back'];
+  });
+
 // ── AND THE RECORD THE ARCS CARRY ────────────────────────────────────────
 //
 // Each arc's ta/tb is how far the wavefront had advanced at its ends, and
@@ -531,6 +553,10 @@ function run() {
 // same. So the direction half of that test is NOT covered by anything here,
 // and saying so is worth more than a table entry that is permanently red.
 const MUTATIONS = [
+  ['an arc end a hair off its edge does not split it',
+    s => s.replace('if (Math.hypot(p.x - px, p.z - pz) < 1 / 768) cuts.push', 'if (Math.hypot(p.x - px, p.z - pz) < 1e-4) cuts.push')],
+  ['the edge is cut at the projection, not at the arc end',
+    s => s.replace('cuts.push({ t, p: { x: p.x, z: p.z } });', 'cuts.push({ t, p: { x: px, z: pz } });')],
   // ── THE CRICKET (Movie, 19 Sep and 14 Oct) ───────────────────────────
   ['the corner is cut on the wrong side, so the valley still reaches it',
     s => s.replace('        && sign * ((v.x - a.x) * (b.z - v.z) - (v.z - a.z) * (b.x - v.x)) < -1e-9;',

@@ -1369,19 +1369,28 @@ const roofFaces = (roof, arcs) => {
     const a = pt, b = pts[(i + 1) % pts.length];
     const ex = b.x - a.x, ez = b.z - a.z;
     const len2 = ex * ex + ez * ez;
-    const cuts = [0, 1];
+    // A HAIR OFF THE EDGE STILL SPLITS IT, AT THE ARC'S OWN END (Movie, 18
+    // Oct, North Point: "the upper left corner roof ... got all messed up on
+    // the side view"). His gable end ran from x = 0.001 to x = 0 -- a
+    // thousandth of a foot out of plumb over 91' -- and the arcs landing on
+    // it sat 2e-4 off its line. Under the old 1e-4 the edge did not split
+    // there, the arcs ended in mid-air, and the tracing walked two faces as
+    // one bow-tie the elevations then drew as a stray slab. A sixty-fourth of
+    // an inch is the reach now, and the cut is made AT the arc's end rather
+    // than at its projection, so the two meet in one node.
+    const cuts = [{ t: 0, p: a }, { t: 1, p: b }];
     arcEnds.forEach(p => {
       const t = ((p.x - a.x) * ex + (p.z - a.z) * ez) / len2;
       if (t <= 1e-6 || t >= 1 - 1e-6) return;
       const px = a.x + ex * t, pz = a.z + ez * t;
-      if (Math.hypot(p.x - px, p.z - pz) < 1e-4) cuts.push(t);
+      if (Math.hypot(p.x - px, p.z - pz) < 1 / 768) cuts.push({ t, p: { x: p.x, z: p.z } });
     });
-    cuts.sort((p, q) => p - q);
+    cuts.sort((p, q) => p.t - q.t);
     for (let c = 0; c < cuts.length - 1; c++) {
-      if (cuts[c + 1] - cuts[c] < 1e-9) continue;
+      if (cuts[c + 1].t - cuts[c].t < 1e-9) continue;
       segments.push({
-        a: { x: a.x + ex * cuts[c], z: a.z + ez * cuts[c] },
-        b: { x: a.x + ex * cuts[c + 1], z: a.z + ez * cuts[c + 1] },
+        a: { x: cuts[c].p.x, z: cuts[c].p.z },
+        b: { x: cuts[c + 1].p.x, z: cuts[c + 1].p.z },
         boundary: true, kind: kinds[i], parent: { a, b }, index: i,
       });
     }

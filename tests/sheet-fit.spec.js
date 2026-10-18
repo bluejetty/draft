@@ -237,3 +237,38 @@ test('on a rounded border the windows stand clear of its corners', async ({ page
     expect(v.xIn).toBeCloseTo(0.85 + 14.5 / 2, 2);
   });
 });
+
+// NORTH POINT'S SCALES (Movie, 18 Oct): "we put the E2 and E4 (long sides)
+// to the same scale as the SITE PLAN is now ... 1'=30" and should be used for
+// the ROOF PLAN, and the FLOOR PLAN too. the E1 and E3 (short width sides)
+// look good at the current 3/32" =1'". A 69' x 367' building: 3/32" holds
+// its ends and not its long sides, so those walk on to the engineer's scales
+// -- 1" = 20' still runs 18" across, 1" = 30' fits -- and the ends stay put.
+// (The plans: the composer stands this fixture's long side up the sheet,
+// where North Point lies across it, so here they land a rung lower.)
+test('a building 3/32" cannot hold: the long elevations at 1" = 30\', the short ends at 3/32", the plans on one engineer\'s rung', async ({ page }) => {
+  const d = twoStoreyOverBasement();
+  d.cuts = [];
+  // Long in z, so E2 and E4 (west and east) are the long sides.
+  const long = p => ({ ...p, x: p.x === 36 ? 69 : p.x, z: p.z === 26 ? 367 : p.z });
+  d.walls = d.walls.map(w => ({ ...w, start: long(w.start), end: long(w.end) }));
+  d.roofs[0].points = [
+    { x: -1.5, z: -1.5 }, { x: 70.5, z: -1.5 }, { x: 70.5, z: 368.5 }, { x: -1.5, z: 368.5 },
+  ];
+  // Gables on the short ends, so the ridge runs the long way.
+  d.roofs[0].edges = ['gable', 'eave', 'gable', 'eave'];
+  await openLayout(page, d);
+  await waitForCompose(page);
+  const layout = await savedLayout(page);
+  const elev = id => layout.viewports.find(v => v.kind === 'elevation' && v.elevId === id);
+  expect(elev('E2').pif).toBe(1 / 30);
+  expect(elev('E4').pif).toBe(1 / 30);
+  expect(elev('E1').pif).toBe(3 / 32);
+  expect(elev('E3').pif).toBe(3 / 32);
+  // THE PLANS walk the same ladder off 3/32" -- here the building stands
+  // 367' up an 11" sheet, so it is 1" = 40' -- and still share one rung.
+  const plans = layout.viewports.filter(v => v.kind === 'plan' && v.levelId !== 8);
+  expect(plans.length).toBeGreaterThan(1);
+  expect(new Set(plans.map(v => v.pif)).size, 'one rung for every plan').toBe(1);
+  expect(plans[0].pif).toBe(1 / 40);
+});
