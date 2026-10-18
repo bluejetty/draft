@@ -35,10 +35,12 @@ test('the kitchen and bath presets ride beside their titles, and nothing else do
     // Point studio suite). The old page's L PRESET left the kitchen row the
     // same day: "i just need the KITCHEN L1 don't worry about the othe L
     // PReset one" -- this page only ever answered it "not on this page yet".
+    // The North Point suites' kitchens and WCs joined them on 18 Oct, and
+    // BATH A and B became WC 1 and WC 2 (Movie: "lets call them WC1 WC2").
     await expect(page.locator('[data-assembled-row="kitchen"] .sel-chip'))
-      .toHaveText(['KITCHEN L1']);
+      .toHaveText(['KITCHEN L1', 'KITCHEN L2', 'KITCHEN L3', 'KITCHEN U1']);
     await expect(page.locator('[data-assembled-row="bath"] .sel-chip'))
-      .toHaveText(['BATH A', 'BATH B', 'WC BF1']);
+      .toHaveText(['WC 1', 'WC 2', 'WC BF1', 'WC BF2', 'WC BF3', 'WC BF4', 'WC BF5']);
     // A GROUP WITH NO ASSEMBLED UNIT LOOKS EXACTLY AS IT DID. The row is
     // there and empty, which collapses -- LAUNDRY must not grow a gap waiting
     // for a preset nobody has drawn.
@@ -89,7 +91,7 @@ test('and they still do what they did — the press is unchanged', async ({ page
   // "only CSS" is not.
   const bathA = page.locator('[data-assembled-row="bath"] [data-washroom="A"]');
   await bathA.click();
-  await expect(bathA, 'BATH A did not take the press').toHaveAttribute('aria-pressed', 'true');
+  await expect(bathA, 'WC 1 did not take the press').toHaveAttribute('aria-pressed', 'true');
   const kitchenL = page.locator('[data-assembled-row="kitchen"] [data-kitchen="L1"]');
   await kitchenL.click();
   await expect(kitchenL, 'KITCHEN L1 did not take the press').toHaveAttribute('aria-pressed', 'true');

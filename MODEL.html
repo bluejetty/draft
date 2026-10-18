@@ -4791,7 +4791,7 @@
     const env = presetPreviewEnv(all);
     kitchen.fixtures.forEach(f => {
       const record = { kind: f.kind, wallId: f.wall.id, offset: f.offset, width: f.width,
-        depth: f.depth, side: f.side };
+        depth: f.depth, side: f.side, ...(f.standoff ? { standoff: f.standoff } : {}) };
       R.drawFixture2D(ctx, toS, record, { preview: true }, f.wall, env);
     });
   };
@@ -16358,12 +16358,13 @@
 
   // ── THE DEFAULT WASHROOMS (Movie, 9 Oct) ──────────────────────────────────
   //
-  // "make some 'default' washrooms i can select and add to the plan": BATH A
-  // and BATH B, Movie's own (washroom-presets.js holds what they are). Picked
-  // on the FIXTURE tool's BATH row, the whole room follows the
-  // cursor -- [ and ] turn it a quarter, F mirrors it, Esc puts it down -- and
-  // a press drops it: its walls, the D32, the tub, toilet and vanity, the tile
-  // coming with them because a toilet stands in the room.
+  // "make some 'default' washrooms i can select and add to the plan": WC 1
+  // and WC 2 (once BATH A and B), Movie's own, and the North Point suites'
+  // WC BF1 to BF5 with their closets and laundry (washroom-presets.js holds
+  // what they are). Picked on the FIXTURE tool's BATH row, the whole room
+  // follows the cursor -- [ and ] turn it a quarter, F mirrors it, Esc puts
+  // it down -- and a press drops it: its walls, its doors, the tub, toilet
+  // and vanity, the tile coming with them because a toilet stands in the room.
   //
   // THE TUB END JOINS THE HOUSE. Within 18" of the exterior wall it slides
   // flush and draws no wall of its own there -- the tub sits on the house's
@@ -16375,7 +16376,7 @@
   // and ASSEMBLY puts a new arrangement back together (Movie: "BREAK the
   // kitchen into pieces, add new pieces or delete pieces and ASSEMBLY the
   // kitchen in new configuration"). Fixtures and the door ride their walls.
-  let washroomPreset = null;           // 'A' | 'B' | null
+  let washroomPreset = null;           // a washroom-presets.js id, or null
   let washroomTurn = 0;                // degrees, quarter turns
   let washroomFlip = false;
 
@@ -16441,27 +16442,32 @@
       drawing.fixtures.push(record);
       return record;
     }).filter(Boolean);
-    const doorHost = hostOf(room.door.host);
-    const door = {
-      id: newDrawingItemId('fenestration'),
-      wallId: doorHost.id,
-      levelId: doorHost.levelId,
-      view: doorHost.view || 'plan',
-      type: 'door',
-      layer: 'A-DOOR',
-      offset: room.door.offset,
-      width: room.door.width,
-      sillHeight: openingSillFt('door'),
-      headHeight: openingHeadFt('door'),
-      casement: null,
-      doorType: 'int',
-      doorStyle: 'single',
-      hingeFlip: room.door.hingeFlip,
-      swingFlip: room.door.swingFlip,
-      auto: false,
-    };
+    // EVERY DOOR THE ROOM HAS, in its own style: the WC's, the closet's
+    // beyond it, the laundry's two leaves, BF1's pocket.
     if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
-    drawing.fenestrations.push(door);
+    const doors = room.doors.map(d => {
+      const doorHost = hostOf(d.host);
+      const door = {
+        id: newDrawingItemId('fenestration'),
+        wallId: doorHost.id,
+        levelId: doorHost.levelId,
+        view: doorHost.view || 'plan',
+        type: 'door',
+        layer: 'A-DOOR',
+        offset: d.offset,
+        width: d.width,
+        sillHeight: openingSillFt('door'),
+        headHeight: openingHeadFt('door'),
+        casement: null,
+        doorType: 'int',
+        doorStyle: d.style || 'single',
+        hingeFlip: d.hingeFlip,
+        swingFlip: d.swingFlip,
+        auto: false,
+      };
+      drawing.fenestrations.push(door);
+      return door;
+    });
     // THE ASSEMBLY: its walls, named for the bath. What rides them -- the
     // fixtures, the door -- moves with them without being members.
     const n = nextGroupNumber();
@@ -16484,7 +16490,7 @@
     undoStack.length = mark;
     undoStack.push({
       kind: 'built', walls: made, outlines: [], list: null,
-      openings: [door],
+      openings: doors,
       items: fixtures.map(item => ({ list: drawing.fixtures, item }))
         .concat([{ list: drawing.groups, item: group }]),
     });
@@ -16492,7 +16498,7 @@
       + 'one assembly: UNGROUP to break it into pieces.');
     markDirty();
     paint();
-    return { walls: made, fixtures, door, group, levelId, viewId };
+    return { walls: made, fixtures, doors, door: doors[0], group, levelId, viewId };
   };
 
   // ── THE DEFAULT KITCHEN (Movie, 17 Oct) ───────────────────────────────────
@@ -16507,7 +16513,7 @@
   // NO WALLS AND NO ASSEMBLY, unlike the washrooms: a kitchen stands against
   // walls already there, and its pieces are the drafter's to slide one by one
   // afterwards, which is what Movie asked of the old page's L PRESET too.
-  let kitchenPreset = null;            // 'L1' | null
+  let kitchenPreset = null;            // a kitchen-presets.js id, or null
   let kitchenFlip = false;
   let kitchenTurn = 0;                 // degrees, quarter turns -- open floor only
 
@@ -16525,7 +16531,7 @@
     const corner = KP.findCorner(walls(), at, FG);
     if (corner) return KP.place(kitchenPreset, corner, { flip: kitchenFlip, depthOf });
     const { levelId, viewId } = onActiveLevel();
-    const own = KP.ownWalls(kitchenPreset, at, kitchenTurn);
+    const own = KP.ownWalls(kitchenPreset, at, kitchenTurn, kitchenFlip);
     own.walls.forEach(w => { w.levelId = levelId; w.view = wallHomeView(viewId); w.id = `kitchen-${w.key}`; });
     const theirs = KP.findCorner(own.walls, own.inside, FG);
     const kitchen = theirs && KP.place(kitchenPreset, theirs, { flip: kitchenFlip, depthOf });
@@ -16559,6 +16565,9 @@
         width: f.width,
         depth: f.depth,
         side: f.side,
+        // AN ISLAND OR PENINSULA floats off the wall it rides, its sink and
+        // dishwasher with it.
+        ...(f.standoff ? { standoff: f.standoff } : {}),
       };
       drawing.fixtures.push(record);
       return record;
