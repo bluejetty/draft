@@ -232,3 +232,28 @@ test('an unselected stair is not dragged by a press on it', async ({ page }) => 
   expect(after.start, 'the stair did not move').toEqual(before.start);
   expect(after.end).toEqual(before.end);
 });
+
+// AND ITS FRAMING (Movie, 18 Oct: "the beam stayed in the old location
+// too"): the open side's flush beam and its post travel with the flight, in
+// the same undo step.
+test('the beam framing the well, and its post, travel with the flight', async ({ page }) => {
+  const f = base();
+  f.beams = [{ id: 1, start: { x: -2.5, y: 0, z: -2.5 }, end: { x: 8.5, y: 0, z: -2.5 }, levelId: MAIN_FL,
+    view: 'floor', mode: 'flush', stairId: STAIR_ID }];
+  f.columns = [{ id: 1, point: { x: 8.5, y: 0, z: -2.5 }, levelId: MAIN_FL, view: 'floor', footing: 'pad36' }];
+  await open(page, f);
+  const first = await saved(page);
+  const at = await onStair(page, stairOf(first));
+  await page.mouse.click(at[0], at[1]);
+  await dragBy(page, at, -3, 2);
+  await save(page);
+  const after = await saved(page);
+  moved(after.beams[0].start, first.beams[0].start, -3, 2, 'beam start');
+  moved(after.beams[0].end, first.beams[0].end, -3, 2, 'beam end');
+  moved(after.columns[0].point, first.columns[0].point, -3, 2, 'its post');
+  await page.locator('#model-undo').click();
+  await save(page);
+  const undone = await saved(page);
+  expect(undone.beams[0].start).toEqual(first.beams[0].start);
+  expect(undone.columns[0].point).toEqual(first.columns[0].point);
+});

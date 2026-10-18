@@ -10803,6 +10803,21 @@
     };
   };
 
+  // AND THE BEAMS THAT FRAME IT (Movie, 18 Oct: "the beam stayed in the old
+  // location too"). The open side's flush beams carry the stair's id; their
+  // posts do not, so a post goes with them when it stands on one of their
+  // ends and on no other beam's -- a post a second beam also bears on is that
+  // beam's too, and stays.
+  const stairFramingOf = stair => {
+    const beams = (drawing?.beams || []).filter(b => Number(b.stairId) === Number(stair.id) && b.start && b.end);
+    const near = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 0.05;
+    const others = (drawing?.beams || []).filter(b => !beams.includes(b) && b.start && b.end);
+    const columns = (drawing?.columns || []).filter(c => c.point
+      && beams.some(b => near(c.point, b.start) || near(c.point, b.end))
+      && !others.some(b => near(c.point, b.start) || near(c.point, b.end)));
+    return { beams, columns };
+  };
+
   // A WELL THAT NO LONGER SITS IN THE FLOOR IT WAS CUT FROM. buildStairOpenings
   // REFUSES to cut one of those ("the opening runs off the floor") -- but a
   // drafter moving or reshaping a stair he has already placed is mid-
@@ -13511,17 +13526,25 @@
     const a = degrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
     const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
-    points.forEach(pt => {
+    const turnPoint = pt => {
       const dx = pt.x - cx, dz = pt.z - cz;
       pt.x = cx + dx * cos - dz * sin;
       pt.z = cz + dx * sin + dz * cos;
-    });
+    };
+    points.forEach(turnPoint);
     // A STAIR'S WELL IS CUT AGAIN WHERE IT NOW STANDS (Movie, 18 Oct: "when
     // i rotated the main floor stairs the foundation outline didn't show
     // rotated" -- "floor layout too"). Re-cut, not turned with it: a well
     // already left behind by an earlier turn comes back around its flight.
     // A NEW ring is written so the undo keeps the old one. A shared well (two
     // flights through one hole) stays, as a drag leaves it.
+    // ITS FRAMING TURNS WITH IT, about the same middle.
+    const framing = entries.filter(entry => entry.type === 'stair').flatMap(({ item }) => {
+      const f = stairFramingOf(item);
+      return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
+    }).filter(pt => !points.includes(pt));
+    framing.forEach(vtx => before.push({ vtx, x: vtx.x, z: vtx.z }));
+    framing.forEach(turnPoint);
     const wells = [];
     entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
       const hole = stairWellOf(item).hole;
@@ -28786,8 +28809,10 @@
         well: well.hole, wellBefore: well.hole ? { ...well.hole } : null,
         wellPoints: well.hole ? well.hole.points.map(pt => ({ x: pt.x, z: pt.z })) : null,
         shared: well.shared,
+        framing: stairFramingOf(stairGrab),
         sx: e.clientX, sy: e.clientY, active: false,
       };
+      moveDrag.framingBefore = [...moveDrag.framing.beams, ...moveDrag.framing.columns].map(item => ({ item, before: { ...item } }));
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -29008,6 +29033,12 @@
           if (md.well) {
             md.well.points = md.wellPoints.map(pt => ({ x: pt.x + dx, z: pt.z + dz }));
           }
+          // ITS FRAMING BY THE SAME DELTA, from where each piece started.
+          md.framingBefore.forEach(({ item, before }) => {
+            const by = p => ({ ...p, x: p.x + dx, z: p.z + dz });
+            if (item.point) item.point = by(before.point);
+            else { item.start = by(before.start); item.end = by(before.end); }
+          });
           md.moved = Math.abs(dx) > 1e-9 || Math.abs(dz) > 1e-9;
           paint();
           return;
@@ -29341,6 +29372,7 @@
             // 'move' step to walk.
             const edits = [{ item: md.stair, before: md.before }];
             if (md.well) edits.push({ item: md.well, before: md.wellBefore });
+            edits.push(...md.framingBefore);
             // TOUCHED BY HAND, SO NO LONGER THE SUGGESTER'S. The format says
             // `auto` tags "a placement the auto-stair rule suggested (cleared
             // the moment the drafter touches it)" -- and a drag is the plainest
