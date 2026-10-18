@@ -95,33 +95,35 @@ test('LINE takes a typed LENGTH the way WALL does', async ({ page }) => {
   expect(Math.hypot(l.end.x - l.start.x, l.end.z - l.start.z)).toBeCloseTo(12, 3);
 });
 
-test('a typed ANGLE is kept, and only a lit PROTRACTOR holds the run to it', async ({ page }) => {
+// 17 Oct: "if they enter and ANGLE eg 33 - it should take them that angle
+// with their line and lock it at that angle unless they enter a new angle or
+// retouch the T or the PROTRACTOR".
+test('a typed ANGLE locks the run at once, and the T-square puts it out', async ({ page }) => {
   await open(page);
   await h.armFromRail(page, 'line');
   const angle = page.locator('#frozen-angle');
   await expect(angle, 'an angle can be typed before the first press').toBeEnabled();
   await angle.fill('30');
   await angle.press('Enter');
-  // Unlit: the angle is kept and engages nothing.
+  await expect(page.locator('[data-angle-word]')).toHaveClass(/lit/);
+  // Locked: straight across, but the lock turns it.
   await tapWorld(page, 0, 0);
   await tapWorld(page, 6, 0);
   await page.keyboard.press('Escape');
-  // Lit: the T-square goes out, and the run travels at 30°.
+  // The T-square lit puts the ANGLE out, and the run is square again.
   await page.locator('[data-mode-tsquare]').click();
   await expect(page.locator('[data-mode-tsquare]')).toHaveClass(/lit/);
-  await page.locator('[data-mode-protractor]').click();
-  await expect(page.locator('[data-mode-protractor]')).toHaveClass(/lit/);
-  await expect(page.locator('[data-mode-tsquare]'), 'one instrument holds the run').not.toHaveClass(/lit/);
+  await expect(page.locator('[data-angle-word]'), 'one instrument holds the run').not.toHaveClass(/lit/);
   await tapWorld(page, 0, 4);
-  await tapWorld(page, 6, 4);   // straight across, but the lock turns it
+  await tapWorld(page, 6, 4.4);
   await page.keyboard.press('Escape');
   const saved = await save(page);
   expect(saved.lines).toHaveLength(2);
-  expect(bearing(saved.lines[0]), 'unlit: drawn where pressed').toBeCloseTo(0, 3);
-  expect(bearing(saved.lines[1]), 'lit: held to the typed 30°').toBeCloseTo(30, 3);
-  // And the T-square lit again puts the protractor out.
-  await page.locator('[data-mode-tsquare]').click();
-  await expect(page.locator('[data-mode-protractor]')).not.toHaveClass(/lit/);
+  expect(bearing(saved.lines[0]), 'locked: held to the typed 30°').toBeCloseTo(30, 3);
+  expect(bearing(saved.lines[1]), 'the T: square').toBeCloseTo(0, 3);
+  // And the protractor lit puts the T-square out.
+  await page.locator('[data-mode-protractor]').click();
+  await expect(page.locator('[data-mode-tsquare]')).not.toHaveClass(/lit/);
 });
 
 test('the lock holds a WALL too', async ({ page }) => {
@@ -130,7 +132,6 @@ test('the lock holds a WALL too', async ({ page }) => {
   const angle = page.locator('#frozen-angle');
   await angle.fill('45');
   await angle.press('Enter');
-  await page.locator('[data-mode-protractor]').click();
   await tapWorld(page, 0, 0);
   await tapWorld(page, 8, 0);
   await page.keyboard.press('Escape');

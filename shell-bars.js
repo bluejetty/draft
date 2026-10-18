@@ -389,7 +389,8 @@ if (!window.DraftShellBars) {
     <span id="strip-angle-box">
       <input id="frozen-angle" data-frozen-angle type="text" disabled
         placeholder="—" aria-label="Frozen angle" autocomplete="off" />
-      <span>ANGLE</span>
+      <button type="button" id="strip-angle-word" data-angle-word
+        title="ANGLE — lit, the run holds the typed angle (0 east, 90 north) until a new angle, the T-square or the protractor; clear the box to swing free">ANGLE</button>
     </span>
 
     <button type="button" id="strip-protractor" class="chip" data-mode-protractor
@@ -401,6 +402,11 @@ if (!window.DraftShellBars) {
       </svg>
       <span id="strip-protractor-angle" data-protractor-angle>—</span>
     </button>
+    <!-- THE PROTRACTOR'S STEP (Movie, 17 Oct: "it should be clickable and can
+         change it to 30 degree increments, or back to 45"). Pressed, it flips
+         45 / 30 and lights the protractor. -->
+    <button type="button" id="strip-protractor-step" class="chip" data-protractor-step
+      title="PROTRACTOR STEP — 45° or 30°; press to change it">45°</button>
 
     <button type="button" id="strip-tsquare" class="chip" data-mode-tsquare
       title="T-SQUARE — holds the wall being drawn square to the sheet">

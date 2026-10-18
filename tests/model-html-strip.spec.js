@@ -452,14 +452,15 @@ test.describe('MODEL.html instrument strip', () => {
   // THE ANGLE BOX IS THE OTHER HALF OF THE PROTRACTOR. Movie: "we should have
   // a angle textbox actually" — the page could read a bearing and not take
   // one, which makes the protractor a gauge rather than an instrument. And on
-  // 5 Oct: "allow them to enter an angle but don't engage unless they light
-  // up the protractor" — so Enter keeps the number and commits nothing, and a
-  // lit protractor holds the run to it.
+  // 17 Oct, replacing 5 Oct's "don't engage unless they light up the
+  // protractor": "if they enter and ANGLE eg 33 - it should take them that
+  // angle with their line and lock it at that angle" -- so Enter commits
+  // nothing and LOCKS, the ANGLE word lit; the protractor turns in steps now.
   //
-  // The check is the round trip a drafter would do: aim off-square, keep the
-  // square number, light the protractor, type a length — and the stored wall
-  // is square at that length.
-  test('the ANGLE box keeps a bearing and the lit PROTRACTOR holds the wall to it',
+  // The check is the round trip a drafter would do: aim off-square, type the
+  // square number, type a length — and the stored wall is square at that
+  // length.
+  test('the ANGLE box locks a bearing at once, the ANGLE word lit, and the wall holds it',
     async ({ page }) => {
       await seed(page, { board: 'drafting' });
       await openModel(page);
@@ -483,8 +484,7 @@ test.describe('MODEL.html instrument strip', () => {
       expect((await stored(page)).walls.length, 'keeping a bearing commits nothing')
         .toBe(before);
 
-      await page.locator('[data-mode-protractor]').click();
-      await expect(page.locator('[data-mode-protractor]')).toHaveClass(/lit/);
+      await expect(page.locator('[data-angle-word]')).toHaveClass(/lit/);
       await hoverAt(page, 2, -2);
       const len = page.locator('#frozen-length');
       await len.fill("10'");

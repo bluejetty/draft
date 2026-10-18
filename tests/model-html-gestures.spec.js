@@ -737,6 +737,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // and enter a number into the ANGLE textbox and force the line to
             // travel in that angle"). It was a read-only gauge before.
             'strip-protractor',
+            // AND ITS STEP AND THE ANGLE WORD, 17 Oct: the step flips 45 / 30
+            // and the word lights the typed-angle lock (Movie: "it should be
+            // clickable and can change it to 30 degree increments" -- "if they
+            // click ANGLE it uses the ANGLE textbox"). Both hold a run; neither
+            // makes anything.
+            'strip-protractor-step', 'strip-angle-word',
             // AND SNAP AND TRACK, 17 Oct: presses that light or put out the
             // node snap and the tracking rays (Movie: "make those 2 features
             // that we can turn on and off in the Instrument pannel"). They
