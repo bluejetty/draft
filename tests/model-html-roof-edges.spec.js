@@ -255,3 +255,26 @@ test('a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS
   d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
   expect(d.roofs.map(r => r.pitch)).toEqual([6, 5]);
 });
+
+// AND ON THE SITE PLAN (Movie, 18 Oct: "i'd like to be able to select the
+// roof and on this page and change the properties of the eave i clicked
+// on"). SITE paints the ROOF level's roof over the footprint; it picks there
+// too, and its edges take the same panel.
+test('on SITE the roof picks, and the edge clicked takes its overhang', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: drawing() });
+  await page.goto('/MODEL.html?level=8&left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  await click(page, at, 30, 15);
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText('CLICK AN EDGE OF THE ROOF');
+  await click(page, at, 30, 43.8);
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText(`EDGE ${JOG_FRONT + 1} OF 8`);
+  await type(page, 'overhang, this edge', '2');
+  expect((await saved(page)).edgeOverhang[JOG_FRONT]).toBe(2);
+});

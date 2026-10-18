@@ -10460,7 +10460,7 @@
     if (all) return out;
     if (filterAllows('outline')) outlines().forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
     if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
-    if (filterAllows('roof')) roofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
+    if (filterAllows('roof')) pickRoofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
     if (filterAllows('fenestration')) {
       openingsOn(walls()).forEach(({ opening, geometry }) =>
         out.push({ type: 'fenestration', item: opening, parts: [geometry.corners] }));
@@ -10579,7 +10579,7 @@
     sweep('stair', stairs());
     sweep('shape', shapes());
     sweep('roomtag', roomTags());
-    sweep('roof', roofs());
+    sweep('roof', pickRoofs());
     return out;
   };
 
@@ -10822,7 +10822,14 @@
   // not offered -- this file's rule everywhere. LAST in the chain, as on the
   // old page (_findRoofAt after the floor), so the walls and floors drawn
   // inside a footprint keep their clicks.
-  const roofAt = worldPt => roofs().slice().reverse()
+  // AND ON SITE, THE ROOF'S (Movie, 18 Oct: "i'd like to be able to select
+  // the roof and on this page and change the properties of the eave i
+  // clicked on"). The site plan paints the ROOF level's roofs over the
+  // footprint, so a roof painted there is a roof that can be picked there --
+  // the rule above, kept, for the one level that draws another's roofs.
+  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID
+    ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());
+  const roofAt = worldPt => pickRoofs().slice().reverse()
     .find(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)) || null;
 
   // Returns { type, item } or null, in the old page's precedence.
@@ -10985,7 +10992,7 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
-      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes(),
+      fixture: fixtures(), stair: stairs(), roof: pickRoofs(), roomtag: roomTags(), shape: shapes(),
       dimension: shownDimensions(), note: notes() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
