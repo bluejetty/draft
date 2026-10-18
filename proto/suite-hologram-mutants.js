@@ -14,10 +14,9 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-html-suite.spec.js';
 const MUTANTS = [
-  { file: 'drawing-format.js', name: "the format drops SUITE",
-    find: "        ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),\n",
-    with: "",
-    test: "a SUITE keeps its mode through a save, and its shared wall hands its window to the shell wall" },
+  // THE FORMAT'S MUTANTS (mode, levelMap) live in proto/layout-plan-harness.js:
+  // MODEL never reads holograms back through drawing-format, so here they
+  // were equivalent.
   { file: 'hologram.js', name: "only one face has to line up",
     find: "          && faceGaps(sf, h).every(g => Math.abs(g) < FACE_TOL_FT)",
     with: "          && faceGaps(sf, h).some(g => Math.abs(g) < FACE_TOL_FT)",
@@ -59,10 +58,6 @@ const MUTANTS = [
     with: "      ], levelIds);",
     test: "the elevations and sheets read the suite windows on the shell" },
   // ── FLOOR TO FLOOR ("we might want the same suite on different floors")
-  { file: 'drawing-format.js', name: "the format drops the floor map",
-    find: "          return Object.keys(map).length ? { levelMap: map } : {};",
-    with: "          return {};",
-    test: "COPY up puts the suite on the next floor, lined up, its windows in that floor's shell wall" },
   { file: 'hologram.js', name: "the painters ignore the floor map",
     find: "    if (!map || typeof map !== 'object' || !Object.keys(map).length) return source;",
     with: "    return source;",

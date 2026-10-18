@@ -602,6 +602,18 @@ function run(label) {
     F.holograms([{ id: 'h', source: SAVED, flip: true }])[0].flip === true
     && F.holograms([{ id: 'h', source: SAVED, flip: 'yes' }])[0].flip === false
     && F.holograms([{ id: 'h', source: SAVED }])[0].flip === false);
+  // SUITE (Movie, 18 Oct): "shaded the normal colors but NOT editable" --
+  // and on which floor of this drawing ("the same suite on different
+  // floors"). Kept, and only in the shapes they mean.
+  check('a SUITE is kept, and only the word suite',
+    F.holograms([{ id: 'h', source: SAVED, mode: 'suite' }])[0].mode === 'suite'
+    && !('mode' in F.holograms([{ id: 'h', source: SAVED, mode: 'blue' }])[0])
+    && !('mode' in F.holograms([{ id: 'h', source: SAVED }])[0]));
+  const floorMap = raw => JSON.stringify(F.holograms([{ id: 'h', source: SAVED, levelMap: raw }])[0].levelMap ?? null);
+  check('a floor map is kept, ids to ids or to nothing, and nothing else',
+    floorMap({ 3: 5, 5: 9 }) === '{"3":5,"5":9}' && floorMap({ 3: null }) === '{"3":null}'
+    && floorMap({ x: 5, 3: 'up' }) === 'null' && floorMap([5]) === 'null' && floorMap(undefined) === 'null',
+    [floorMap({ 3: 5, 5: 9 }), floorMap({ 3: null }), floorMap({ x: 5, 3: 'up' })].join(' '));
   const over = { x: 0, z: 0, angleDeg: 0, pivotX: 10, pivotZ: 0, flip: true };
   check('mirrored, a point crosses the pivot\'s axis', same(at(over, { x: 12, z: 3 }), { x: 8, z: 3 }),
     JSON.stringify(at(over, { x: 12, z: 3 })));
@@ -1108,6 +1120,14 @@ const MUTATIONS = [
       'return { x: pivot.x + (dx * cos + dz * sin), z: pivot.z - dx * sin + dz * cos };')],
   ['a mirror is never read back',
     'drawing-format.js', c => c.replace('flip: holo?.flip === true,', 'flip: false,')],
+  ['a SUITE is never read back',
+    'drawing-format.js', c => c.replace("        ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),\n", '')],
+  ['any mode at all is read back',
+    'drawing-format.js', c => c.replace("        ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),", "        ...(holo?.mode ? { mode: holo.mode } : {}),")],
+  ['the floor map is never read back',
+    'drawing-format.js', c => c.replace('          return Object.keys(map).length ? { levelMap: map } : {};', '          return {};')],
+  ['a floor map keeps words for floors',
+    'drawing-format.js', c => c.replace('            else if (Number.isInteger(Number(to))) map[from] = Number(to);', '            else map[from] = to;')],
   ['a mirrored wall keeps its face line',
     'hologram.js', c => c.replace("moved.walls = moved.walls.map(w => (w && other[w.refLine] ? { ...w, refLine: other[w.refLine] } : w));", '')],
   ['a mirrored fixture faces the wrong way',
