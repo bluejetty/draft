@@ -853,6 +853,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // .draft to show under this one in blue. It draws nothing of
             // this drawing's; the rows it lists are built per hologram.
             'hologram-upload',
+            // And its own chip and card (Movie, 18 Oct: "an area on the MODEL
+            // AREA that shows which HOLOGRAMS are loaded ... up by the PHOTO
+            // IMAGE loading button"): the same list, BRING IN, CLOSE.
+            'strip-hologram', 'hologram-ask-upload', 'hologram-ask-close',
             // HOW FAR FORWARD THE ROOM OVER THE GARAGE COMES (Movie, 10 Oct):
             // the card beside the room's end line. It moves the line the
             // drafter already drags, in whole feet, and BUILD is the bone's

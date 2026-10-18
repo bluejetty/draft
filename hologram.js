@@ -126,6 +126,144 @@
     const at = (p, off) => ({ x: p.x + nx * off, z: p.z + nz * off });
     return [at(wall.start, startOff), at(wall.end, startOff), at(wall.end, endOff), at(wall.start, endOff)];
   };
+  // ── A SUITE: NORMAL COLOURS, AND ITS WINDOWS IN THE SHELL'S WALL ─────────
+  //
+  // Movie, 18 Oct, building the SHELL and saving each SUITE as its own .draft:
+  // "can we have an option where it is shaded the normal colors but NOT
+  // editable from the 'SHELL BUILDING' file except to MOVE, COPY or FLIP etc"
+  // -- and "CUT THE HOLES for the WINDOWS in the SUITES in the proper
+  // locations on the SHELL ... all the FENSTRATIONS from the SUITE exterior
+  // wall will 'OVERRIDE' the SOLID SHELL wall", "as long as it will look
+  // normal without having the 2 walls overlapping".
+  //
+  // SO A SUITE WALL WHOSE BOTH FACES LINE UP WITH A SHELL WALL'S, lying
+  // wholly along it, is the shell's wall: the suite's copy is not drawn, and
+  // its doors and windows are handed to the shell wall at the same spot.
+  // The shell wall stays the one real wall -- its type, its siding. Where a
+  // shell opening and a suite opening land on the same stretch, BOTH are
+  // drawn and the clash is reported ("Show both + warn").
+  const isSuite = holo => holo?.mode === 'suite';
+  const FACE_TOL_FT = 0.02;        // a quarter inch: faces "line up"
+  const wallFrame = wall => {
+    const G = window.DraftGeometry2D;
+    if (!wall?.start || !wall?.end) return null;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const len = Math.hypot(dx, dz);
+    if (!(len > 1e-6)) return null;
+    const u = { x: dx / len, z: dz / len }, n = { x: -u.z, z: u.x };
+    const { startOff, endOff } = G.wallFaceOffsets(wall, wallThicknessFt(wall));
+    return { wall, s: wall.start, u, n, len, faces: [startOff, endOff] };
+  };
+  const dot = (a, b) => a.x * b.x + a.z * b.z;
+  // How far the suite wall's faces sit from the host's, across the host: the
+  // two gaps, low face to low face and high to high.
+  const faceGaps = (sf, hf) => {
+    const across = dot({ x: sf.s.x - hf.s.x, z: sf.s.z - hf.s.z }, hf.n);
+    const turn = dot(sf.n, hf.n);
+    const S = sf.faces.map(o => across + o * turn).sort((a, b) => a - b);
+    const Hs = hf.faces.slice().sort((a, b) => a - b);
+    return [Hs[0] - S[0], Hs[1] - S[1]];
+  };
+  const parallel = (sf, hf) => Math.abs(sf.u.x * hf.u.z - sf.u.z * hf.u.x) < 1e-4;
+  // Where the suite wall runs along the host, in feet from the host's start.
+  const alongHost = (sf, hf) => {
+    const a = dot({ x: sf.s.x - hf.s.x, z: sf.s.z - hf.s.z }, hf.u);
+    const dir = dot(sf.u, hf.u) >= 0 ? 1 : -1;
+    return { a, dir, lo: Math.min(a, a + dir * sf.len), hi: Math.max(a, a + dir * sf.len) };
+  };
+  const hostWalls = saved => (Array.isArray(saved?.walls) ? saved.walls : []);
+  const shared = saved => {
+    const out = { openings: [], hidden: new Map(), clashes: [] };
+    const suites = shown(saved).filter(isSuite);
+    if (!suites.length || !window.DraftGeometry2D || !window.DraftWallTypes) return out;
+    const hosts = hostWalls(saved).map(wallFrame).filter(Boolean);
+    suites.forEach(holo => {
+      const split = parts(holo);
+      const walls = placed(holo, { walls: split.existing.walls || [] }).walls;
+      const fens = placed(holo, { fenestrations: split.existing.fenestrations || [] }).fenestrations;
+      const hidden = new Set();
+      walls.forEach(wall => {
+        const sf = wallFrame(wall);
+        if (!sf) return;
+        const hf = hosts.find(h => h.wall.levelId === wall.levelId && parallel(sf, h)
+          && faceGaps(sf, h).every(g => Math.abs(g) < FACE_TOL_FT)
+          && (() => { const r = alongHost(sf, h); return r.lo > -FACE_TOL_FT && r.hi < h.len + FACE_TOL_FT; })());
+        if (!hf) return;
+        hidden.add(wall.id);
+        const { a, dir } = alongHost(sf, hf);
+        fens.filter(o => o && o.wallId === wall.id).forEach(o => {
+          const t0 = a + dir * o.offset, t1 = a + dir * (o.offset + o.width);
+          const offset = Math.max(0, Math.min(t0, t1));
+          const flipped = dir < 0;
+          out.openings.push({ ...o, id: `${holo.id}:${o.id}`, wallId: hf.wall.id, levelId: hf.wall.levelId,
+            offset, suite: holo.id,
+            ...(flipped && o.type === 'door' ? { hingeFlip: o.hingeFlip !== true } : {}),
+            ...(flipped ? { swingFlip: o.swingFlip !== true } : {}) });
+        });
+      });
+      if (hidden.size) out.hidden.set(holo.id, hidden);
+    });
+    // THE CLASH: a suite opening over a shell opening, or over another
+    // suite's, on the same wall.
+    const own = Array.isArray(saved?.fenestrations) ? saved.fenestrations : [];
+    const span = o => [Number(o.offset) || 0, (Number(o.offset) || 0) + (Number(o.width) || 0)];
+    const overlaps = (p, q) => { const [a, b] = span(p), [c, d] = span(q); return Math.min(b, d) - Math.max(a, c) > 1e-3; };
+    out.openings.forEach((o, i) => {
+      own.filter(h => h && String(h.wallId) === String(o.wallId) && overlaps(o, h))
+        .forEach(h => out.clashes.push({ wallId: o.wallId, suite: o, other: h }));
+      out.openings.slice(i + 1).filter(p => p.wallId === o.wallId && p.suite !== o.suite && overlaps(o, p))
+        .forEach(p => out.clashes.push({ wallId: o.wallId, suite: o, other: p }));
+    });
+    return out;
+  };
+  // THE SNAP (Movie, 18 Oct: "when they go close to lining them up it snaps
+  // to make it easy for them"). While a suite is dragged, each of its walls
+  // on this level that runs beside a shell wall of the same thickness, faces
+  // within `reachFt` of lining up and the two overlapping along their length,
+  // offers the slide across the shell wall that lines them up. The nearest
+  // is taken, then the nearest across a second direction, so a suite in a
+  // corner of the shell lines up both ways. Returns the slide, { x, z }.
+  const suiteSnap = (saved, holo, levelId, reachFt = 0.5) => {
+    const none = { x: 0, z: 0 };
+    if (!isSuite(holo) || !window.DraftGeometry2D || !window.DraftWallTypes) return none;
+    const hosts = hostWalls(saved).filter(w => w?.levelId === levelId).map(wallFrame).filter(Boolean);
+    const walls = placed(holo, { walls: (parts(holo).existing.walls || []).filter(w => w?.levelId === levelId) }).walls;
+    const offers = [];
+    walls.map(wallFrame).filter(Boolean).forEach(sf => hosts.forEach(hf => {
+      if (!parallel(sf, hf)) return;
+      const [g0, g1] = faceGaps(sf, hf);
+      if (Math.abs(g0 - g1) > FACE_TOL_FT || Math.abs(g0) > reachFt) return;
+      const r = alongHost(sf, hf);
+      if (Math.min(r.hi, hf.len) - Math.max(r.lo, 0) <= FACE_TOL_FT) return;
+      offers.push({ n: hf.n, d: (g0 + g1) / 2 });
+    }));
+    if (!offers.length) return none;
+    offers.sort((p, q) => Math.abs(p.d) - Math.abs(q.d));
+    const first = offers[0];
+    const second = offers.find(o => Math.abs(o.n.x * first.n.z - o.n.z * first.n.x) > 0.5);
+    const out = { x: first.n.x * first.d, z: first.n.z * first.d };
+    if (second) {
+      // The second slide, less what the first already moved along it.
+      const left = second.d - (out.x * second.n.x + out.z * second.n.z);
+      const t = { x: -first.n.z, z: first.n.x };
+      const k = t.x * second.n.x + t.z * second.n.z;
+      if (Math.abs(k) > 1e-6) { out.x += t.x * left / k; out.z += t.z * left / k; }
+    }
+    return out;
+  };
+  // A suite's own plan less the walls the shell has taken, and their openings.
+  const suiteExisting = (holo, existing, info) => {
+    const gone = info?.hidden.get(holo.id);
+    if (!gone || !gone.size) return existing;
+    return { ...existing,
+      walls: (existing.walls || []).filter(w => !gone.has(w.id)),
+      fenestrations: (existing.fenestrations || []).filter(o => !gone.has(o.wallId)) };
+  };
+  // The openings the shell's walls carry from the suites placed on them --
+  // what every painter of the shell adds to its own.
+  const hostOpenings = saved => shared(saved).openings;
+  const clashes = saved => shared(saved).clashes;
+
   // What a demo pick or a dashed outline needs about each thing: its outline,
   // and a line to measure a click to.
   const shapes = (holo, items, levelId, view) => {
@@ -208,6 +346,58 @@
   };
   const shown = saved => (Array.isArray(saved?.holograms) ? saved.holograms : []).filter(holo => !holo.hidden);
 
+  // A page ground darker than mid-grey is a NIGHT page.
+  const darkGround = color => {
+    const m = String(color || '').match(/^#([0-9a-f]{6})$/i)
+      || null;
+    let r, g, b;
+    if (m) { const v = parseInt(m[1], 16); r = v >> 16; g = (v >> 8) & 255; b = v & 255; } else {
+      const c = String(color || '').match(/\d+(\.\d+)?/g);
+      if (!c || c.length < 3) return false;
+      [r, g, b] = c.map(Number);
+    }
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 128;
+  };
+  // SUITES IN NORMAL COLOURS. The plan painter draws a sheet's black on
+  // white; on a night page that black is turned over to the page's light ink
+  // (an invert through the scratch canvas), so a suite reads as drawing, not
+  // as the blue of an existing house.
+  const paintSuites = (ctx, toS, list, info, levelId, view, env) => {
+    const LP = window.DraftLayoutPlan;
+    const F = window.DraftDrawingFormat;
+    const night = darkGround(env.paperColor);
+    const { ink: inkCanvas } = canvasesFor(ctx.canvas);
+    const w = inkCanvas.width, h = inkCanvas.height;
+    const ink = inkCanvas.getContext('2d');
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    ink.globalCompositeOperation = 'source-over';
+    ink.clearRect(0, 0, w, h);
+    ink.setTransform(ctx.getTransform());
+    let drew = false;
+    list.forEach(holo => {
+      try {
+        const place = pt => toS(F.hologramPoint(holo, pt));
+        const existing = suiteExisting(holo, parts(holo).existing, info);
+        drew = LP.drawPlan(ink, place, existing, levelId,
+          { view, hologram: true, paperColor: night ? '#ffffff' : (env.paperColor || '#ffffff') }) || drew;
+      } catch (error) {
+        console.warn(`suite ${holo.name || holo.id} could not be drawn`, error);
+      }
+    });
+    if (drew) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      if (night) ctx.filter = 'invert(1)';
+      ctx.drawImage(inkCanvas, 0, 0);
+      ctx.restore();
+    }
+    // The scratch handed back empty: the blue pass draws on it next.
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    ink.clearRect(0, 0, w, h);
+    ink.setTransform(ctx.getTransform());
+    return drew;
+  };
+
   // Paint every shown hologram of `saved` at `levelId`. `toS` is the caller's
   // feet-to-screen; env: { view, show: { existing, demo }, paperColor }.
   // Returns whether anything was drawn.
@@ -226,8 +416,12 @@
     ink.clearRect(0, 0, w, h);
     ink.setTransform(ctx.getTransform());
     const view = planViewFor(env.view);
+    const info = shared(saved);
+    // THE SUITES FIRST, straight onto the target in the drawing's own inks.
+    const suiteDrew = list.some(isSuite) && show.existing
+      ? paintSuites(ctx, toS, list.filter(isSuite), info, levelId, view, env) : false;
     let drew = false;
-    list.forEach(holo => {
+    list.filter(holo => !isSuite(holo)).forEach(holo => {
       try {
         const place = pt => toS(F.hologramPoint(holo, pt));
         const split = parts(holo);
@@ -240,7 +434,7 @@
         console.warn(`hologram ${holo.name || holo.id} could not be drawn`, error);
       }
     });
-    if (!drew) return false;
+    if (!drew) return suiteDrew;
     ink.setTransform(1, 0, 0, 1, 0, 0);
     const mask = maskCanvas.getContext('2d');
     mask.globalCompositeOperation = 'copy';
@@ -355,7 +549,23 @@
     // In the drawing's own inks, so a night page gets night faces.
     const pass = { hologram: true, frame, paperColor, ...(env.colors ? { colors: env.colors } : {}) };
     let drew = false;
-    list.forEach(holo => {
+    const info = shared(saved);
+    // A SUITE IN THE DRAWING'S OWN INKS, straight onto the target, less the
+    // walls the shell has taken (their windows come with the shell's).
+    let suiteDrew = false;
+    if (show.existing) {
+      list.filter(isSuite).forEach(holo => {
+        try {
+          const source = holo.source || {};
+          const levels = F.levels ? F.levels(source.levels) : (source.levels || []);
+          const cutEnv = CE.buildCutViewEnv(placed(holo, suiteExisting(holo, parts(holo).existing, info)), levels);
+          if (cutEnv) { CV.drawCutView(cutEnv, ctx, w, h, cut, pass); suiteDrew = true; }
+        } catch (error) {
+          console.warn(`suite ${holo.name || holo.id} could not be drawn in ${cut.name}`, error);
+        }
+      });
+    }
+    list.filter(holo => !isSuite(holo)).forEach(holo => {
       try {
         const split = parts(holo);
         const source = holo.source || {};
@@ -388,7 +598,7 @@
         console.warn(`hologram ${holo.name || holo.id} could not be drawn in ${cut.name}`, error);
       }
     });
-    if (!drew) return false;
+    if (!drew) return suiteDrew;
     // Tint, through the mask, exactly as the plan does.
     ink.setTransform(1, 0, 0, 1, 0, 0);
     extra.setTransform(1, 0, 0, 1, 0, 0);
@@ -426,6 +636,6 @@
 
   window.DraftHologram = Object.freeze({
     BLUE, PALE, ALPHA, VIEWS, planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
-    placed, paintCut, cutOptions,
+    placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap,
   });
 })();

@@ -1614,6 +1614,11 @@ if (!window.DraftDrawingFormat) {
         pivotZ: num(holo?.pivotZ) ?? 0,
         hidden: holo?.hidden === true,
         flip: holo?.flip === true,
+        // SUITE (Movie, 18 Oct): "shaded the normal colors but NOT editable
+        // from the 'SHELL BUILDING' file except to MOVE, COPY or FLIP etc",
+        // and its exterior walls' windows cut into the shell's where the two
+        // walls' faces line up. Absent is the blue existing-house hologram.
+        ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),
         ...(Object.keys(demo).length ? { demo } : {}),
         source: flat,
         layer: 'HOLOGRAM',

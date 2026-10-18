@@ -1169,12 +1169,12 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #trace-insert,
+  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #hologram-ask, #trace-insert,
   #footprint-ask, #stair-fit { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
   #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
-  #trace-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden], #stair-fit[hidden] { display:none; }
+  #trace-ask[hidden], #hologram-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden], #stair-fit[hidden] { display:none; }
   /* A button the pull puts out of reach is HIDDEN, not greyed -- see the
      card's own note. The row is flex, so this has to beat its display. */
   #footprint-ask button[hidden] { display:none !important; }
@@ -2049,6 +2049,19 @@
       <button type="button" id="trace-upload" data-trace-upload>UPLOAD IMAGE / PDF</button>
       <button type="button" id="hologram-upload" data-hologram-upload>BRING IN .DRAFT (HOLOGRAM)</button>
       <button type="button" id="trace-later" data-trace-later>NOT NOW</button>
+    </div>
+  </div>
+</div>
+<!-- THE HOLOGRAM CHIP'S OWN CARD (Movie, 18 Oct): every hologram loaded,
+     each with HOLOGRAM / SUITE and its moves, and BRING IN for another. The
+     same rows the PHOTO card lists. -->
+<div id="hologram-ask" data-hologram-ask hidden role="dialog" aria-label="Holograms in this drawing">
+  <div class="promote-card">
+    <p><b>HOLOGRAM</b><br><span class="hologram-head" data-hologram-count></span></p>
+    <div class="trace-list" data-hologram-list></div>
+    <div class="promote-row">
+      <button type="button" id="hologram-ask-upload" data-hologram-ask-upload>BRING IN .DRAFT (HOLOGRAM)</button>
+      <button type="button" id="hologram-ask-close" data-hologram-close>CLOSE</button>
     </div>
   </div>
 </div>
@@ -4171,6 +4184,9 @@
     .flatMap(holo => H().placed(holo, H().parts(holo).existing.walls || [])) : []);
 
   const paintHolograms = () => {
+    // The HOLOGRAM chip lit while any is loaded -- after an UNDO, an open.
+    // (Its consts may still be ahead of us on the first paint.)
+    try { setHologramChip(); } catch { /* not wired yet */ }
     if (!H()) return;
     const drew = H().paint(ctx, toS, drawing, activeLevelId(),
       { view: activeViewId(), show: hologramShow, paperColor: skin['surface-page'] });
@@ -4280,7 +4296,7 @@
     // every real drawing in this app -- opened here showing BLANK WALLS, and
     // nothing said so: the records were loaded, saved back untouched, and
     // simply never drawn.
-    openingsOn(shown).forEach(({ opening, geometry }) =>
+    openingsOn(shown, true).forEach(({ opening, geometry }) =>
       R.drawOpening2D(ctx, toS, opening, { geometry }, openingEnv()));
     paintWindowSizes(ctx, toS, shown);
   };
@@ -4353,7 +4369,7 @@
     };
     ctx.save();
     ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
-    openingsOn(shown).forEach(({ opening, geometry }) => {
+    openingsOn(shown, true).forEach(({ opening, geometry }) => {
       if (!geometry || !geometry.glazing) return;
       const isWindow = opening.type === 'window';
       if (isWindow ? !showWin : (opening.type !== 'door' || !showDoor)) return;
@@ -4631,7 +4647,13 @@
   // wallId against the walls this pass is painting rather than by level: a
   // wall can be shown from another level through a shared context, and its
   // openings have to come with it or the wall arrives solid.
-  const openingsOn = shown => {
+  // THE SHELL'S OPENINGS AND THE SUITES' ON ITS WALLS (Movie, 18 Oct: "all
+  // the FENSTRATIONS from the SUITE exterior wall will 'OVERRIDE' the SOLID
+  // SHELL wall"). Drawn, dimensioned and drawn in elevation like the shell's
+  // own, but never picked: they belong to the suite's .draft.
+  const shellOpenings = () => [...(drawing?.fenestrations || []),
+    ...(H()?.hostOpenings ? H().hostOpenings(drawing) : [])];
+  const openingsOn = (shown, withSuites = false) => {
     // Resolved HERE rather than captured at module scope: eight modules in
     // this repo bind a global at load and break when their dependency arrives
     // later, and MODEL.html's own head comment is about exactly that. Every
@@ -4643,7 +4665,7 @@
       thicknessFt: openingThicknessFt(),
       padFt: openingPadFt(),
     };
-    return (drawing?.fenestrations || []).reduce((out, opening) => {
+    return (withSuites ? shellOpenings() : (drawing?.fenestrations || [])).reduce((out, opening) => {
       const wall = byId.get(String(opening.wallId));
       if (!wall || !wall.start || !wall.end) return out;
       const geometry = G.openingGeometry(opening, wall, opts);
@@ -5482,7 +5504,7 @@
       // elevation draws the piles under a grade beam, and they are filed on
       // FOUNDATION while the drafter may be looking at any level.
       columns: () => drawing?.columns || [],
-      fenestrations: () => drawing?.fenestrations || [],
+      fenestrations: () => shellOpenings(),
       garageOutlines: levelId => (drawing?.outlines || [])
         .filter(outline => outline.levelId === levelId && outline.garage),
       // WHICH FOUNDATION A GARAGE HAS. Lifted OUT of this env (see
@@ -19407,7 +19429,7 @@
     // from the SAME filtered list, so an opening whose wall is not on this
     // level and view drops out rather than dragging a foreign wall in.
     const wallById = new Map(walls.map(wall => [String(wall.id), wall]));
-    const openings = openingsOn(walls)
+    const openings = openingsOn(walls, true)
       .map(entry => ({
         center: entry.geometry && entry.geometry.center,
         wall: wallById.get(String(entry.opening.wallId)),
@@ -24554,6 +24576,24 @@
   // with Shift; the arrows turn it a quarter. REFRESH picks the newer file
   // and keeps where it sits. Every one of them is one UNDO.
   const hologramFile = document.querySelector('[data-hologram-file]');
+  const hologramAsk = document.getElementById('hologram-ask');
+  const hologramChip = strip.querySelector('[data-mode-hologram]');
+  const closeHologramCards = () => { traceAsk.hidden = true; if (hologramAsk) hologramAsk.hidden = true; setHologramChip(); };
+  function setHologramChip() {
+    if (!hologramChip) return;
+    hologramChip.classList.toggle('lit', holograms().length > 0);
+    hologramChip.setAttribute('aria-pressed', hologramAsk && !hologramAsk.hidden ? 'true' : 'false');
+  }
+  if (hologramChip && hologramAsk) {
+    hologramChip.addEventListener('click', () => {
+      if (!drawing) return;
+      if (!hologramAsk.hidden) { closeHologramCards(); return; }
+      traceAsk.hidden = true;
+      hologramAsk.hidden = false;
+      renderHologramList();
+    });
+    hologramAsk.querySelector('[data-hologram-close]').addEventListener('click', closeHologramCards);
+  }
   let hologramRefreshing = null;   // the hologram REFRESH is replacing
   const hologramNoun = holo => holo.name || 'The hologram';
   const hologramPivot = source => {
@@ -24586,12 +24626,31 @@
       ? `${hologramNoun(holo)} is mirrored \u2014 MIRROR again, or UNDO, turns it back.`
       : `${hologramNoun(holo)} is the right way round again.`);
   };
+  // THE LIST IS DRAWN INTO BOTH CARDS -- PHOTO's and the HOLOGRAM chip's
+  // own (Movie, 18 Oct: "an area on the MODEL AREA that shows which
+  // HOLOGRAMS are loaded ... up by the PHOTO IMAGE loading button").
+  // INTO THE ONE THAT IS UP, the other's emptied: two copies of every row
+  // would be two of every button.
   function renderHologramList() {
+    const into = hologramAsk && !hologramAsk.hidden ? hologramAsk : traceAsk;
+    [traceAsk, hologramAsk].forEach(card => {
+      if (!card) return;
+      if (card === into) renderHologramListInto(card);
+      else card.querySelector('[data-hologram-list]').textContent = '';
+    });
+    setHologramChip();
+  }
+  function renderHologramListInto(card) {
     const all = holograms();
-    traceAsk.querySelector('[data-hologram-count]').textContent = all.length
-      ? `${all.length} hologram${all.length === 1 ? '' : 's'} \u2014 another drawing shown in blue, never edited.`
-      : 'No hologram. Bring in a .draft to show it here in blue (an existing house, say).';
-    const list = traceAsk.querySelector('[data-hologram-list]');
+    const suites = all.filter(holo => holo.mode === 'suite').length;
+    const clashCount = H()?.clashes ? H().clashes(drawing).length : 0;
+    card.querySelector('[data-hologram-count]').textContent = (all.length
+      ? `${all.length} hologram${all.length === 1 ? '' : 's'}`
+        + (suites ? ` (${suites} SUITE${suites === 1 ? '' : 'S'})` : '')
+        + ' \u2014 another drawing shown under this one, never edited here.'
+      : 'No hologram. Bring in a .draft to show it here (an existing house, or a SUITE).')
+      + (clashCount ? ` \u26a0 ${clashCount} window clash${clashCount === 1 ? '' : 'es'} on the shell walls.` : '');
+    const list = card.querySelector('[data-hologram-list]');
     list.textContent = '';
     // THE THREE SWITCHES, once there is a hologram to switch.
     if (all.length) {
@@ -24624,14 +24683,32 @@
         b.addEventListener('click', onClick);
         return b;
       };
-      row.append(name,
+      const suite = holo.mode === 'suite';
+      // HOLOGRAM / SUITE (Movie, 18 Oct): a SUITE is drawn in the normal
+      // colours and only ever moved, turned, mirrored, copied or deleted
+      // here; its insides are its own .draft's. No DEMO on a suite.
+      const mode = button(suite ? 'SUITE' : 'HOLOGRAM', 'hologramMode',
+        suite ? 'Drawn in normal colours, its windows cut into the shell walls it lines up with; press for the blue HOLOGRAM'
+          : 'Press to make it a SUITE: normal colours, locked, its windows cut into the shell walls it lines up with', () => {
+          const next = suite ? null : 'suite';
+          const before = { ...holo };
+          if (next) holo.mode = next; else delete holo.mode;
+          undoStack.push({ kind: 'props', edits: [{ item: holo, before }] });
+          markDirty();
+          paint();
+          sayOnStrip(next ? `${hologramNoun(holo)} is a SUITE \u2014 normal colours, moved and copied whole; edit it in its own file and REFRESH.`
+            : `${hologramNoun(holo)} is a blue HOLOGRAM again.`);
+          renderHologramList();
+        });
+      mode.setAttribute('aria-pressed', suite ? 'true' : 'false');
+      row.append(name, mode,
         button(holo.hidden ? 'SHOW' : 'HIDE', 'hologramShow', '', () => {
           hologramEdit(holo, { hidden: !holo.hidden });
           renderHologramList();
         }),
-        button(hologramDemoCount(holo) ? `DEMO (${hologramDemoCount(holo)})` : 'DEMO', 'hologramDemo',
+        ...(suite ? [] : [button(hologramDemoCount(holo) ? `DEMO (${hologramDemoCount(holo)})` : 'DEMO', 'hologramDemo',
           'Click its walls, doors, windows and fixtures to mark them coming out', () => {
-            traceAsk.hidden = true;
+            closeHologramCards();
             hologramPicking = holo;
             hologramPartMode = false;
             hologramPartStart = null;
@@ -24640,16 +24717,16 @@
             paint();
           }),
         button('DEMO PART', 'hologramDemoPart', 'Click two points on one of its walls to cut that piece out', () => {
-          traceAsk.hidden = true;
+          closeHologramCards();
           hologramPicking = holo;
           hologramPartMode = true;
           hologramPartStart = null;
           if (!hologramShow.demo) setHologramShow('demo', true);
           sayOnStrip(`Click one end, then the other, of the piece of ${hologramNoun(holo)}'s wall coming out \u2014 click inside a piece to keep it, Esc when done.`);
           paint();
-        }),
+        })]),
         button('MOVE', 'hologramMove', 'Drag it; [ and ] turn it, F mirrors it, Esc leaves it', () => {
-          traceAsk.hidden = true;
+          closeHologramCards();
           traceMoving = { underlay: holo, from: null, before: null, hologram: true };
           sayOnStrip(traceMoveWord(traceMoving));
         }),
@@ -24672,7 +24749,7 @@
           while (holograms().some(h => h.id === id)) id = newDrawingItemId('hologram');
           const copy = { ...rest, id };
           addItem(drawing.holograms, copy);
-          traceAsk.hidden = true;
+          closeHologramCards();
           traceMoving = { underlay: copy, from: null, before: null, hologram: true };
           sayOnStrip(`A copy of ${hologramNoun(holo)} is in \u2014 ${traceMoveWord(traceMoving)}`);
           paint();
@@ -24771,11 +24848,11 @@
     sayOnStrip(`${name} is in \u2014 ${traceMoveWord(traceMoving)}`);
     paint();
   });
-  traceAsk.querySelector('[data-hologram-upload]').addEventListener('click', () => {
-    traceAsk.hidden = true;
+  [traceAsk.querySelector('[data-hologram-upload]'), hologramAsk?.querySelector('[data-hologram-ask-upload]')].forEach(b => b?.addEventListener('click', () => {
+    closeHologramCards();
     hologramRefreshing = null;
     hologramFile.click();
-  });
+  }));
   // ── MARKING DEMO ON THE PLAN ─────────────────────────────────────────────
   //
   // While a hologram is being marked, a press on the plan finds the thing of
@@ -24980,6 +25057,14 @@
     const at = tracePoint(event);
     m.underlay.x = m.before.x + (at.x - m.from.x);
     m.underlay.z = m.before.z + (at.z - m.from.z);
+    // A SUITE SNAPS ONTO THE SHELL (Movie, 18 Oct: "when they go close to
+    // lining them up it snaps to make it easy for them"): within 6" of a
+    // shell wall's faces lining up with its own, it slides the rest.
+    if (m.hologram && m.underlay.mode === 'suite' && H()?.suiteSnap) {
+      const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), 0.5);
+      m.underlay.x += slide.x;
+      m.underlay.z += slide.z;
+    }
     paint();
   }, true);
   // The click the browser sends after the drag is the drag's own, not a
