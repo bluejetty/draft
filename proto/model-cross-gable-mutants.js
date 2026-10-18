@@ -23,7 +23,7 @@ const MUTANTS = [
     find: '  const gables = crossGableShapes(roof);\n  if (!gables.length) return cutRoofFaces(faces, roof);\n',
     with: '  const gables = [];\n  if (!gables.length) return cutRoofFaces(faces, roof);\n', test: 'CROSS GABLE on an eave: centred where clicked on the wall line, its ridge and valleys in plan, its faces standing on the roof' },
   { file: 'MODEL.html', name: 'a gable wider than its wall goes in anyway',
-    find: "    if (crossGableWidthFt > len + 1e-6) return 'That cross gable is wider than the wall under this edge.';\n",
+    find: "    if (crossGableWidthFt > len + 1e-6) return 'That dormer is wider than the wall under this edge.';\n",
     with: '', test: 'CROSS GABLE on an eave: centred where clicked on the wall line, its ridge and valleys in plan, its faces standing on the roof' },
   { file: 'MODEL.html', name: 'it goes at the middle of the wall, not where clicked',
     find: '    const t = click ? Math.max(0, Math.min(1, ((click.x - a.x) * ex + (click.z - a.z) * ez) / len2)) : 0.5;\n',
