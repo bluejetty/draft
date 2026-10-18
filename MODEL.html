@@ -14268,10 +14268,8 @@
       : 'Edge moved; its overhang kept. UNDO puts it back.');
     paint();
   }, true);
-  document.addEventListener('keydown', event => {
-    if (!moveState?.on || event.key !== 'Escape') return;
-    endMove();
-  }, true);
+  // ESC NEEDS NO LISTENER OF ITS OWN: the page's Escape puts the roof down,
+  // and MOVE goes down with it (syncMoveVerb), as BREAK does.
   function paintRoofMoveNode() {
     const pick = moveState?.node;
     if (!pick || !pick.roof.points[pick.i]) return;
@@ -30339,7 +30337,6 @@
     // neither can learn something the other does not.
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (activeCut() && elevSelected) { e.preventDefault(); deleteElevMark(); return; }
-      if (moveState?.node) { e.preventDefault(); deleteRoofNode(); return; }
       if (!selection.length) return;
       e.preventDefault();
       pressDelete();

@@ -77,6 +77,12 @@ test('option 1: the jog\'s side pushed all the way across smooths it into the ma
 test('option 2: the jog\'s front dragged down onto the main eave line -- no node left over', async ({ page }) => {
   const { at } = await open(page);
   await armMove(page, at);
+  // Part way first: the wall line under it comes the same 3'.
+  await drag(page, at, [30, 44], [30, 41]);
+  let part = await saved(page);
+  expect(ring(part.points)).toContainEqual([48, 41]);
+  expect(ring(part.footprint)).toContainEqual([40, 33]);
+  await page.keyboard.press('Control+z');
   await drag(page, at, [30, 44], [30, 38]);
   const roof = await saved(page);
   expect(ring(roof.points)).toEqual([[-8, -8], [68, -8], [68, 38], [-8, 38]]);
@@ -114,4 +120,29 @@ test('Esc puts MOVE down', async ({ page }) => {
   await armMove(page, at);
   await page.keyboard.press('Escape');
   await expect(page.locator('#model-move')).not.toHaveAttribute('aria-pressed', 'true');
+});
+
+// AN EDGE BESIDE THE 45: its end slides along the chamfer's own line.
+test('an edge beside a 45-degree corner: its end slides along the 45', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  const CH = [[-8, -8], [68, -8], [68, 38], [6.6863, 38], [-8, 23.3137]];
+  const f = drawing();
+  f.roofs[0] = { ...f.roofs[0], points: CH.map(([x, z]) => ({ x, y: 0, z })),
+    edges: CH.map(() => 'eave'), edgeOverhang: CH.map(() => 8) };
+  delete f.roofs[0].footprint;
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html?level=7');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  await armMove(page, at);
+  // The left edge, x = -8, pushed 2' right.
+  await drag(page, at, [-8, 8], [-6, 8]);
+  const roof = await saved(page);
+  expect(ring(roof.points)).toContainEqual([-6, 25.31]);
+  expect(ring(roof.points)).toContainEqual([-6, -8]);
 });
