@@ -175,3 +175,83 @@ test('GABLE END squares the chamfered end across and makes it one gable; the rid
   await page.keyboard.press('Control+z');
   expect(ring(await saved(page)), 'two UNDOs and the hipped, chamfered end is back').toEqual(CHAMFER_EAVE.map(([x, z]) => [Math.round(x * 100) / 100, Math.round(z * 100) / 100]));
 });
+
+// CROSS GABLE (Movie, 18 Oct): "put in the GABLE where they are located.
+// its a full gable that extend down to meet the roof in the valley (no dormer
+// sidewall/ only a front wall that is aligned with the ext perimter wall
+// below". The roof PDF's: 20' + 20' across at 12/4.
+test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge and valleys in plan, its faces standing on the roof', async ({ page }) => {
+  const { at } = await open(page);
+  await click(page, at, 30, 15);
+  // A little off the middle of the jog's front, so the gable has to go
+  // where it was clicked and not simply at the middle.
+  await click(page, at, 29, 43.8);
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText(`EDGE ${JOG_FRONT + 1} OF 8`);
+  // 40' is the default, and the jog's wall is only 20' long.
+  await page.locator('[data-roof-cross-gable]').click();
+  await expect(page.locator('#strip-message')).toContainText('wider than the wall');
+  await type(page, 'cross gable width', '16');
+  await page.locator('[data-roof-field="cross gable pitch"]').fill('6');
+  await page.locator('[data-roof-field="cross gable pitch"]').press('Enter');
+  await page.locator('[data-roof-cross-gable]').click();
+  let roof = await saved(page);
+  expect(roof.crossGables).toEqual([{ at: { x: 29, z: 36 }, widthFt: 16, pitch: 6 }]);
+  const shape = await page.evaluate(r => {
+    const G = window.DraftGeometry2D;
+    const [g] = G.crossGableShapes(r);
+    const faces = G.roofFaces(r, G.roofSkeleton(r));
+    const own = faces.filter(f => f.crossGable);
+    return { P: [g.P.x, g.P.z], lines: G.crossGableLines(r).length, own: own.length,
+      ridge: G.roofFaceRise(own[0], g.M, r.pitch), meet: G.roofFaceRise(own[0], g.P, r.pitch) };
+  }, roof);
+  // 8' half-width x 6/4 = 12' in from the wall line at z = 36.
+  expect(shape.P).toEqual([29, 24]);
+  expect(shape.lines, 'front wall, ridge and two valleys').toBe(4);
+  expect(shape.own, 'two faces of its own').toBe(2);
+  // Its ridge stands level from the wall to where it meets the main roof:
+  // 8' over the eave at 4/12 is 2'-8", plus 8' x 6/12.
+  expect(shape.ridge).toBeCloseTo(8 * 4 / 12 + 8 * 6 / 12, 6);
+  expect(shape.meet).toBeCloseTo(shape.ridge, 6);
+  await page.locator('[data-roof-cross-gable-remove="0"]').click();
+  expect('crossGables' in await saved(page)).toBe(false);
+  await page.keyboard.press('Control+z');
+  roof = await saved(page);
+  expect(roof.crossGables).toHaveLength(1);
+});
+
+// ROOFS IN AN ASSEMBLY (Movie, 18 Oct): "ASSEMBLY roof peices that are
+// similar so i can adjust the EAVE and PITCH for the grouped roofs seperately
+// but be able to edit the properties of all as one within the ASSEMBLY".
+test('a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS ROOF alone', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  const f = drawing();
+  const SMALL = [[100, -8], [130, -8], [130, 20], [100, 20]];
+  f.roofs.push({ id: 'roof-2', levelId: 7, follows: 'house', pitch: 4, overhang: 8,
+    points: SMALL.map(([x, z]) => ({ x, y: 0, z })), edges: SMALL.map(() => 'eave'),
+    edgeOverhang: SMALL.map(() => 8) });
+  f.groups = [{ id: 'group-9', name: 'MAIN ROOFS', fixed: false, stretchBehavior: 'item-geometry',
+    members: [{ type: 'roof', id: 'roof-1' }, { type: 'roof', id: 'roof-2' }] }];
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  await click(page, at, 30, 15);
+  await expect(page.locator('[data-prop-row="apply to"] [data-prop-value="assembly"]')).toHaveText('MAIN ROOFS (2 ROOFS)');
+  await page.locator('[data-roof-field="pitch"]').fill('5');
+  await page.locator('[data-roof-field="pitch"]').press('Enter');
+  await type(page, 'overhang, all edges', '2');
+  let d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.pitch)).toEqual([5, 5]);
+  expect(d.roofs[1].points.map(p => [p.x, p.z]), 'the other roof\'s eaves came in too')
+    .toEqual([[106, -2], [124, -2], [124, 14], [106, 14]]);
+  await page.locator('[data-prop-row="apply to"] [data-prop-value="one"]').click();
+  await page.locator('[data-roof-field="pitch"]').fill('6');
+  await page.locator('[data-roof-field="pitch"]').press('Enter');
+  d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.pitch)).toEqual([6, 5]);
+});

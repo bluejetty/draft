@@ -927,6 +927,19 @@ if (!window.DraftDrawingFormat) {
           return footprint.length === points.length ? { footprint } : {};
         })()),
         pitch: Math.min(24, Math.max(0, number(roof?.pitch, 4))),
+        // CROSS GABLES (Movie, 18 Oct): each the middle of its front wall on
+        // the wall line, its width and its own pitch. geometry-2d's
+        // crossGableShapes works the rest out from the roof.
+        ...((() => {
+          const list = (Array.isArray(roof?.crossGables) ? roof.crossGables : []).map(gable => {
+            const at = point(gable?.at);
+            const widthFt = positive(gable?.widthFt, null);
+            const pitch = number(gable?.pitch, NaN);
+            return at && widthFt && pitch > 0 && pitch <= 24
+              ? { at: { x: at.x, z: at.z }, widthFt, pitch } : null;
+          }).filter(Boolean);
+          return list.length ? { crossGables: list } : {};
+        })()),
         fascia: ROOF_FASCIA_IN,
         garage: roof?.garage === true,
         // A real number or nothing: `Number(null)` is 0, and a stored null

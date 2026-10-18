@@ -676,6 +676,17 @@ if (!window.DraftRender2D) {
       const a = toS(seg.a), b = toS(seg.b);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     });
+    // CROSS GABLES (Movie, 18 Oct): the ridge and the two valleys as guides,
+    // and the front wall on the wall line solid, as the roof PDF draws them.
+    if (env.crossGableLines) {
+      env.crossGableLines(roof).forEach(seg => {
+        const a = toS(seg.a), b = toS(seg.b);
+        ctx.save();
+        if (seg.kind === 'wall') { ctx.setLineDash([]); ctx.strokeStyle = referenceColor || roofColor; }
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.restore();
+      });
+    }
     ctx.setLineDash([]);
     if (!env.isPrinting && !referenceColor) {
       // The corner handles. Same role as the outline they sit on -- this was
