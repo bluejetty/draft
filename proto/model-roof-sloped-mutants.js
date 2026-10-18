@@ -29,10 +29,8 @@ const MUTANTS = [
     find: "  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' ? k : 'eave');",
     with: "  const roofEdgeKind = k => (k === 'gable' ? k : 'eave');",
     test: T },
-  { file: 'drawing-format.js', name: "the format turns SLOPED back into an eave",
-    find: "(roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')",
-    with: "(roof.edges[index] === 'gable')",
-    test: T },
+  // THE FORMAT'S MUTANT LIVES IN proto/roof-types-harness.js: MODEL never
+  // reads roofs through drawing-format, so here it was equivalent.
   { file: 'geometry-2d.js', name: "the geometry ignores SLOPED",
     find: "    if (n < 3 || !kinds.includes('sloped')) return null;",
     with: "    return null;",
