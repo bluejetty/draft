@@ -14463,14 +14463,13 @@
     const first = outlineCorners[0];
     if (first && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
     if (corner) return { x: corner.x, z: corner.z };
-    // SNAP AND TRACK, as a wall's point has them: a node, or the cross lines.
+    // SNAP AND TRACK, as a wall's point has them: a node, or the cross lines
+    // -- the first corner's among them, so the loop can always be brought
+    // home square. TRACK switched off, the press stays where it was (Movie:
+    // "have them ON default", and off means off).
     const snap = drawSnap(at);
     if (snap.pt) return { x: snap.pt.x, z: snap.pt.z };
-    const reach = (CORNER_SNAP_PX * 2) / view.scale;
-    const out = { x: at.x, z: at.z };
-    if (first && Math.abs(at.x - first.x) <= reach) out.x = first.x;
-    if (first && Math.abs(at.z - first.z) <= reach) out.z = first.z;
-    return out;
+    return { x: at.x, z: at.z };
   };
   // THE HAND'S BEARING, ROUNDED TO THE STEP, and the point on it nearest the
   // hand. A quarter turn is the square it always was, written as it was --

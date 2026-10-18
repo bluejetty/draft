@@ -65,9 +65,9 @@ test('on DRAFTING a typed 45 lays the chamfer, says its legs, and the typed edge
   await typeEdge(page, at, [5, 20], '20');
   // The chamfer, on an angle locked to 135 (north-west): 10' each way is a
   // diagonal of 14.1421', and the nearest sixteenth is 14'-1 11/16" -- just short.
+  // Typed is locked (17 Oct), and the outline's own eighth turn holds it.
   await page.locator('#frozen-angle').fill('135');
   await page.locator('#frozen-angle').press('Enter');
-  await page.locator('[data-mode-protractor]').click();
   await typeEdge(page, at, [0, 10], '14-1 11/16');
   await expect(page.locator('#strip-message')).toContainText('45° edge 14\'-1 11/16"');
   await expect(page.locator('#strip-message')).toContainText('10\'-0" each way');
