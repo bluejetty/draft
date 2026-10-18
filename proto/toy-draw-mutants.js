@@ -28,11 +28,13 @@ const MUTANTS = [
     name: 'the lift stops placing the line',
     find: '    const rect = canvas.getBoundingClientRect();\n    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));\n  });',
     with: '  });',
-    test: 'a press, a drag and a lift' },
+    test: 'a pen press, drag and lift' },
   { file: 'MODEL.html',
     name: 'every lift commits, so a PC click makes a zero-length wall',
-    find: '    if (press.opened ? !travelled : !press.touch) return;',
-    with: '',
+    // RE-AIMED: the guard is two lines now, a mouse lift never placing and a
+    // tap that opened the run not closing it. Every lift committing is both gone.
+    find: '    if (!press.touch) return;\n    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;\n    if (press.opened && !travelled) return;\n',
+    with: '    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;\n',
     test: 'click-move-click reaches the same wall' },
   { file: 'MODEL.html',
     name: 'a finger commits on the down again, so the drag after it is ignored',

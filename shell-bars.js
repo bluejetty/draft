@@ -436,6 +436,26 @@ if (!window.DraftShellBars) {
         <path d="M9.7 4.8 L10.6 7.1" stroke-width="1.1"></path>
       </svg>
     </button>
+    <!-- SNAP AND TRACK, on by default (Movie, 17 Oct): "make those 2 features
+         that we can turn on and off in the Instrument pannel" -- "make one a
+         glowing node like a star with a ring around it, and make the other one
+         a cross with the beam ... at 3/4 height of the cross". SNAP lands a
+         point on a node near it; TRACK lands it on the cross lines square to
+         a node, "so i can easily connect back to a node perpendicular". -->
+    <button type="button" id="strip-snap" class="chip" data-mode-snap
+      title="SNAP — a point near a wall or line end lands exactly on it">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.3"></circle>
+        <path d="M8 3.6 L9.1 6.6 L12.2 6.7 L9.7 8.6 L10.6 11.6 L8 9.8 L5.4 11.6 L6.3 8.6 L3.8 6.7 L6.9 6.6 Z" fill="currentColor" stroke-width="0.6"></path>
+      </svg>
+    </button>
+    <button type="button" id="strip-track" class="chip" data-mode-track
+      title="TRACK — the cross lines square to a node; a point near one lands on it">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M8 1.5 V14.5"></path>
+        <path d="M3.5 4.75 H12.5"></path>
+      </svg>
+    </button>
     <!-- PHOTO: a photo or PDF under the plan to draw over (Movie, 7 Oct:
          "make it an INSTRUMENT PANEL. when you press it it turn ON and if
          there is images already loaded it will show them, click it again and
