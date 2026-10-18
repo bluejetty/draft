@@ -109,9 +109,36 @@ async function committed(page) {
 }
 const spanOf = w => Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]);
 
-// A MOUSE PRESS-DRAG-LIFT. Playwright's mouse reports pointerType 'mouse', so
-// this is the PC pointer doing the drag gesture -- which must still work: §1's
-// "either drag, or press again and drag" is not addressed to touch only.
+// A PEN PRESS-DRAG-LIFT. §1's "either drag, or press again and drag" stands
+// for a finger or a pen only now (Movie, 17 Oct: "there is a click drag drop
+// function for drawing a wall --- ITS NOT GOOD ... if it is needed for IPAD it
+// can be put for IPAD / Mobile only, but not on PC or Linux"). Playwright's
+// mouse reports pointerType 'mouse', so the pen is dispatched by hand, on the
+// plan canvas the page listens to.
+async function penAt(page, type, [x, y]) {
+  await page.evaluate(({ type, x, y }) => {
+    const plan = document.getElementById('plan');
+    plan.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true,
+      pointerId: 7, pointerType: 'pen', isPrimary: true, clientX: x, clientY: y,
+      button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1 }));
+  }, { type, x, y });
+}
+async function penDown(page, at, from, to) {
+  await penAt(page, 'pointerdown', at(...from));
+  for (let i = 1; i <= 10; i++) {
+    await penAt(page, 'pointermove', at(from[0] + (to[0] - from[0]) * i / 10,
+      from[1] + (to[1] - from[1]) * i / 10));
+  }
+}
+async function penDrag(page, from, to) {
+  const { at } = await frame(page);
+  await h.armWall(page);
+  await penDown(page, at, from, to);
+  await penAt(page, 'pointerup', at(...to));
+  await page.waitForTimeout(120);
+}
+
+// AND A MOUSE PRESS-DRAG-LIFT, which places nothing any more.
 async function mouseDrag(page, from, to) {
   const { at } = await frame(page);
   await h.armWall(page);
@@ -206,17 +233,19 @@ test('a tremor during the press does not move where the run started',
     await open(page, base({ board: 'drafting' }));
     const { at } = await frame(page);
     await h.armWall(page);
+    // A PEN, since 17 Oct: a mouse lift places nothing at all now, so the
+    // threshold is a finger's and a pen's alone.
     const [x, y] = at(0, 0);
-    await page.mouse.move(x, y);
-    await page.mouse.down();
+    await penAt(page, 'pointerdown', [x, y]);
     // 2px EACH WAY, NOT 3. Diagonal displacement is the hypotenuse, and 3,3 is
     // 4.24px -- over DRAG_ARM_PX's 4, so my first version of this line was a
     // DRAG being called a tremor, and it committed. 2,2 is 2.83 and is what
     // the threshold is meant to absorb.
-    await page.mouse.move(x + 2, y + 2);
-    await page.mouse.up();
-    await page.mouse.move(...at(6, 0));
-    await page.mouse.click(...at(6, 0));
+    await penAt(page, 'pointermove', [x + 2, y + 2]);
+    await penAt(page, 'pointerup', [x + 2, y + 2]);
+    await penAt(page, 'pointermove', at(6, 0));
+    await penAt(page, 'pointerdown', at(6, 0));
+    await penAt(page, 'pointerup', at(6, 0));
     await page.waitForTimeout(120);
     const shaky = await committed(page);
 
@@ -227,12 +256,12 @@ test('a tremor during the press does not move where the run started',
     expect(shaky, 'and drew the same wall a steady one does').toEqual(steady);
   });
 
-test('acceptance #1 — a press, a drag and a lift commit a squared whole-foot wall',
+test('acceptance #1 — a pen press, drag and lift commit a squared whole-foot wall',
   async ({ page }) => {
     // Deliberately awkward, as the order asks: 5.4 across and 0.8 down, so an
     // honest build has to both square it and round it.
     await open(page, base({ board: 'toy' }));
-    await mouseDrag(page, [0, 0], [5.4, 0.8]);
+    await penDrag(page, [0, 0], [5.4, 0.8]);
     const w = await committed(page);
     expect(w, 'the lift placed a wall').toBeTruthy();
     expect(Math.abs(w.e[1] - w.s[1]), 'exactly axis-aligned').toBeLessThan(1e-9);
@@ -246,7 +275,7 @@ test('acceptance #2 — click-move-click reaches the same wall as press-drag-lif
     // live in either handler: a constant would let the two drift apart as long
     // as both happened to be axis-aligned and whole.
     await open(page, base({ board: 'toy' }));
-    await mouseDrag(page, [0, 0], [5.4, 0.8]);
+    await penDrag(page, [0, 0], [5.4, 0.8]);
     const dragged = await committed(page);
 
     await open(page, base({ board: 'toy' }));
@@ -266,15 +295,13 @@ test('the length on screen is the length that gets committed', async ({ page }) 
   await open(page, base({ board: 'toy' }));
   const { at } = await frame(page);
   await h.armWall(page);
-  await page.mouse.move(...at(0, 0));
-  await page.mouse.down();
-  await page.mouse.move(...at(5.4, 0.8), { steps: 10 });
+  await penDown(page, at, [0, 0], [5.4, 0.8]);
 
   const label = page.locator('[data-draw-length]');
   await expect(label, 'the drafter can see a length while drawing').toBeVisible();
   const shown = (await label.textContent()).trim();
 
-  await page.mouse.up();
+  await penAt(page, 'pointerup', at(5.4, 0.8));
   await page.waitForTimeout(120);
   const w = await committed(page);
   expect(w).toBeTruthy();
@@ -301,11 +328,17 @@ test('the length goes out when the run does', async ({ page }) => {
   // A length still on screen after the gesture is over is the one thing a
   // drafter should never be able to misread.
   await open(page, base({ board: 'toy' }));
-  await mouseDrag(page, [0, 0], [5.4, 0.8]);
+  await penDrag(page, [0, 0], [5.4, 0.8]);
   // The chain leaves a run open at the wall's end, so put the tool down.
   await h.disarmWall(page);
   await page.waitForTimeout(80);
   await expect(page.locator('[data-draw-length]')).toBeHidden();
+});
+
+test('a MOUSE press-drag-lift places no wall: on a PC it is click, choose, click', async ({ page }) => {
+  await open(page, base({ board: 'toy' }));
+  await mouseDrag(page, [0, 0], [5.4, 0.8]);
+  expect(await committed(page)).toBeFalsy();
 });
 
 test('acceptance #4 — DRAFTING keeps the off-axis, off-foot wall the drag makes',
@@ -314,7 +347,7 @@ test('acceptance #4 — DRAFTING keeps the off-axis, off-foot wall the drag make
     // handler is shared by both boards, so if the squaring rode in the handler
     // rather than in drawPoint this is what would catch it.
     await open(page, base({ board: 'drafting' }));
-    await mouseDrag(page, [0, 0], [5.4, 0.8]);
+    await penDrag(page, [0, 0], [5.4, 0.8]);
     const w = await committed(page);
     expect(w, 'the lift placed a wall on DRAFTING too').toBeTruthy();
     expect(Math.abs(w.e[1] - w.s[1]), 'and it is NOT squared').toBeGreaterThan(0.1);

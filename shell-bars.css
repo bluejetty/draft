@@ -438,7 +438,9 @@
      the brush and the rest of the not-built chips for nothing. Movie, 15
      Sep: "the drafting brush and a bunch of other unused instrument lights
      vanished can we put them back". */
-  @media (max-width: 1180px) {
+  /* 1300 SINCE 17 OCT, when SNAP and TRACK came in and PRINTSCREEN went off
+     the 1280 sheet again. 1366, Movie's laptop, keeps every chip. */
+  @media (max-width: 1300px) {
     #strip-center .chip.dormant { display:none; }
   }
   /* THE LABEL OUTLASTS THE WIDTH IT COSTS. Dropping the word LENGTH saved
@@ -447,7 +449,10 @@
      "there is a big blank spot where it should say LENGTH". The box gives up
      the width instead -- 72px still holds 12'-11 1/2". */
   @media (max-width: 1500px) {
-    #strip-center, .strip-half { gap:6px; }
+    /* 4px AND SLIMMER CHIPS since SNAP and TRACK (17 Oct): two more chips
+       and the bar must still fit 1280 without dropping a working one. */
+    #strip-center, .strip-half { gap:4px; }
+    #strip-center .chip:not(.dormant) { padding-inline:2px; }
     #frozen-length { width:72px; }
     #strip-len:not(:empty) { min-width:66px; }
   }

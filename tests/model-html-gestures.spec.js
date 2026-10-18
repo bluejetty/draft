@@ -737,6 +737,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // and enter a number into the ANGLE textbox and force the line to
             // travel in that angle"). It was a read-only gauge before.
             'strip-protractor',
+            // AND SNAP AND TRACK, 17 Oct: presses that light or put out the
+            // node snap and the tracking rays (Movie: "make those 2 features
+            // that we can turn on and off in the Instrument pannel"). They
+            // change where a press lands and make nothing themselves.
+            'strip-snap', 'strip-track',
             // AND THE SECOND CONTROL THE OLD PAGE DOES NOT HAVE, for the same
             // reason the brush is the first: MODEL.dc.html cannot turn a
             // house at all. Movie, 27 Sep: "can we add a HOUSE ROTATE

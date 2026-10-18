@@ -2374,6 +2374,11 @@
   // and SKIN_KEY is where this page already keeps exactly that kind of
   // setting. Reported rather than quietly reinterpreted.
   let footOn = stored.footLight === true;
+  // SNAP AND TRACK, ON UNLESS TURNED OFF (Movie, 17 Oct: "make those 2
+  // features that we can turn on and off in the Instrument pannel" -- "have
+  // them ON default yes"). Kept beside the 1' light, for the same reason.
+  let snapOn = stored.snapLight !== false;
+  let trackOn = stored.trackLight !== false;
   let rulerOn = false;      // RULER down: presses measure instead of drawing
   let brushOn = false;      // DRAFTING BRUSH up: presses lift and dust
   let brushLoad = null;     // what the brush is holding — see BRUSH_PROPS
@@ -11670,6 +11675,74 @@
     window.DraftGeometry2D.nearestVertex(
       snapCandidates([moving]), worldPt, CORNER_SNAP_PX / view.scale);
 
+  // ── SNAP AND TRACK (Movie, 17 Oct) ──────────────────────────────────────
+  //
+  // SNAP: "when i draw a LINE or a WALL, see those nodes where the wall ends,
+  // i'd like them to light up glow orange when the mouse scrolls over and if
+  // the user clicks NEARBY those within an 4" dia 2" radius ... make the point
+  // go righton the other node". Two inches -- or a few pixels, whichever is
+  // more, because zoomed out two inches is less than a pixel and no hand can
+  // find it.
+  //
+  // TRACK: the cross lines square to a node, and "i want to be able to 'snap'
+  // on the cross lines yes so i can easily connect back to a node
+  // perpendicular" -- which turns over his 1 Oct "no snapping to the line"
+  // for the rays; with TRACK unlit they are gone altogether. A press within
+  // a few pixels of a node's line lands on it; near two (one level with a
+  // node, one plumb with another) it lands where they cross.
+  //
+  // THE BULLSEYE, on an empty level only: "when the user mouses over the
+  // TARGET when the screen is clear (nothing on it) snap that node to within
+  // 2.5ft radius of that point. (only when nothing is around, later on once
+  // the user has drawn a line or wall, don't make it magnetic after that".
+  const NODE_SNAP_FT = 2 / 12;
+  const NODE_SNAP_PX = 6;
+  const BULLSEYE_PULL_FT = 2.5;
+  const nodeEnds = () => {
+    const out = [];
+    [...walls(), ...lines()].forEach(seg => [seg.start, seg.end].forEach(v => {
+      if (v && !out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    }));
+    return out;
+  };
+  const snapNodeAt = at => {
+    if (!at) return null;
+    const r = Math.max(NODE_SNAP_FT, NODE_SNAP_PX / view.scale);
+    let best = null;
+    nodeEnds().forEach(v => {
+      const d = Math.hypot(v.x - at.x, v.z - at.z);
+      if (d <= r && (!best || d < best.d)) best = { d, v };
+    });
+    return best ? best.v : null;
+  };
+  let lastSnapKey = '';
+  const levelIsEmpty = () => !walls().length && !lines().length && !outlineCorners.length;
+  const drawSnap = at => {
+    if (!at) return {};
+    if (snapOn) {
+      const node = snapNodeAt(at);
+      if (node) return { pt: { x: node.x, y: 0, z: node.z }, node };
+      if (!drawStart && levelIsEmpty()) {
+        const b = gridDatum();
+        if (b && Math.hypot(b.x - at.x, b.z - at.z) <= BULLSEYE_PULL_FT) return { pt: { x: b.x, y: 0, z: b.z }, bullseye: true };
+      }
+    }
+    if (trackOn) {
+      const reach = RAY_HIT_PX / view.scale;
+      let bx = null, bz = null;
+      [...trackingNodes(), ...nodeEnds()].forEach(n => {
+        const dx = Math.abs(at.x - n.x), dz = Math.abs(at.z - n.z);
+        if (dx <= reach && dz > reach && (!bx || dx < bx.d)) bx = { d: dx, n };
+        if (dz <= reach && dx > reach && (!bz || dz < bz.d)) bz = { d: dz, n };
+      });
+      if (bx || bz) {
+        return { pt: { x: bx ? bx.n.x : at.x, y: 0, z: bz ? bz.n.z : at.z },
+          rays: [bx && { n: bx.n, axis: 'x' }, bz && { n: bz.n, axis: 'z' }].filter(Boolean) };
+      }
+    }
+    return {};
+  };
+
   // A SNAP THAT ONLY SLIDES ALONG THE AXIS. When a run is being held square,
   // one coordinate is fixed by the square and the other is free; a corner off
   // the fixed one is not reachable without breaking the square, and the square
@@ -13435,7 +13508,12 @@
     if (locked) return onTheFoot_if() ? onTheFoot(drawStart, locked) : locked;
     const wanted = squareTo(drawStart, at);
     const fixed = squaredAxis(drawStart, at);
-    const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
+    // SNAP AND TRACK ON DRAFTING: TOY's points are the foot's. A NODE is
+    // exact and skips the foot below; a CROSS LINE only sets the bearing, so
+    // with the 1' light on the run still lands on the whole foot along it.
+    const snap = !fixed && board !== 'toy' ? drawSnap(wanted) : {};
+    if (snap.pt && !snap.node && onTheFoot_if()) return onTheFoot(drawStart, snap.pt);
+    const snapped = fixed ? axisSnap(wanted, fixed) : (snap.pt || cornerSnap(wanted, []));
     if (snapped) return snapped;
     const free = { x: wanted.x, y: 0, z: wanted.z };
     // INSIDE THE HOUSE, TOY'S GRAIN comes before the foot: the point lands on
@@ -13900,15 +13978,18 @@
   //
   // SO: FROM EVERY POINT OF THE RUN IN HAND, four rays -- right, down, left,
   // up -- faint, across the whole sheet. The one the cursor is on lights up
-  // bright and glows. Nothing is pulled anywhere: the rays are a sight line
-  // for the eye, and the press lands where it always did.
+  // bright and glows, and since 17 Oct (TRACK, drawSnap) a press within that
+  // same reach lands on it: "i want to be able to 'snap' on the cross lines".
   //
   // THE WALL RUN'S POINTS ARE COLLECTED HERE because the wall gesture only
   // keeps its open end (`drawStart`); each place the run has stood is pushed
   // as it moves on, and the list empties when the run ends. The outline keeps
   // its own corners already.
   let wallRunNodes = [];
-  const RAY_HIT_PX = 6;
+  // FOUR PIXELS, the corner snap's own reach. Six was a whole foot on a house
+  // fitted to the sheet (6 px a foot), and a corner traced a foot off a line
+  // jumped on to it.
+  const RAY_HIT_PX = 4;
   const trackingNodes = () => {
     // AND THE HOUSE'S CORNERS WHILE THE GARAGE IS DRAWN (Movie, 6 Oct: "when
     // i draw the GARAGE shape can the HOUSE shape nodes also create the
@@ -13942,12 +14023,50 @@
     });
     return lit;
   };
+  const TRACK_LIT = '#c8ff3a';
+  const TRACK_FAINT = 'rgba(190, 255, 60, 0.28)';
+  const TRACK_GLOW = 'rgba(200, 255, 60, 0.95)';
+  // THE NODE A PRESS WOULD LAND ON, while a wall, line or outline is being
+  // drawn: an orange glowing donut with an orange dot on the exact point
+  // (Movie, 17 Oct: "a glowing donut with a orange dot in the middle" --
+  // "node snape orange glow"). And a cross line snapped to from a node that
+  // sends no ray of its own, lit while it holds the point.
+  const paintSnapNode = () => {
+    if (!cursorWorld || !(drawsRun() || activeTool === 'outline')) return;
+    const snap = drawSnap(cursorWorld);
+    if (snap.node || snap.bullseye) {
+      const p = toS(snap.pt);
+      ctx.save();
+      ctx.shadowColor = 'rgba(255, 150, 30, 0.95)';
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = '#ff9a1f';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#ff9a1f';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      canvas.setAttribute('data-snap-node', JSON.stringify([Number(snap.pt.x.toFixed(4)), Number(snap.pt.z.toFixed(4))]));
+    } else {
+      canvas.removeAttribute('data-snap-node');
+    }
+    (snap.rays || []).forEach(ray => {
+      const p = toS(ray.n), q = toS(snap.pt);
+      ctx.save();
+      ctx.strokeStyle = TRACK_LIT;
+      ctx.lineWidth = 1.25;
+      ctx.shadowColor = TRACK_GLOW;
+      ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+      ctx.restore();
+    });
+  };
   const paintTrackingRays = () => {
     // THE SHEET ONLY. The rail paints its thumbnails through this same pass
     // with `ctx` pointed at a little canvas; a sight line has no business on
     // a thumbnail, and its attribute must describe the sheet.
     if (ctx.canvas !== canvas) return;
-    const nodes = trackingNodes();
+    paintSnapNode();
+    const nodes = trackOn ? trackingNodes() : [];
     if (!nodes.length) { canvas.removeAttribute('data-tracking-rays'); return; }
     const w = canvas.clientWidth, h = canvas.clientHeight;
     const lit = litRays(nodes, cursorWorld);
@@ -13960,9 +14079,12 @@
       [0, 90, 180, 270].forEach(dir => {
         const on = isLit(i, dir);
         const q = end(p, dir);
-        ctx.strokeStyle = on ? '#ffa21a' : 'rgba(255, 140, 26, 0.28)';
-        ctx.lineWidth = on ? 1.75 : 1;
-        ctx.shadowColor = on ? 'rgba(255, 170, 40, 0.95)' : 'transparent';
+        // NEON YELLOW-GREEN, VERY THIN (Movie, 17 Oct: "can we make the
+        // cross more of a yellow green neon color and very very thin line
+        // that glows brighter when you are in 'snap mode closeness to it").
+        ctx.strokeStyle = on ? TRACK_LIT : TRACK_FAINT;
+        ctx.lineWidth = on ? 1.25 : 0.75;
+        ctx.shadowColor = on ? TRACK_GLOW : 'transparent';
         ctx.shadowBlur = on ? 10 : 0;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -14277,6 +14399,8 @@
     if (!from) {
       const corner = cornerSnap(at, []);
       if (corner) return { x: corner.x, z: corner.z };
+      const snap = board !== 'toy' ? drawSnap(at) : {};
+      if (snap.node || snap.bullseye) return { x: snap.pt.x, z: snap.pt.z };
       const house = garageRunHouse();
       const onHouse = house && snapOntoHouse(house, at);
       return onHouse || { x: at.x, z: at.z };
@@ -14312,6 +14436,9 @@
     const first = outlineCorners[0];
     if (first && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
     if (corner) return { x: corner.x, z: corner.z };
+    // SNAP AND TRACK, as a wall's point has them: a node, or the cross lines.
+    const snap = drawSnap(at);
+    if (snap.pt) return { x: snap.pt.x, z: snap.pt.z };
     const reach = (CORNER_SNAP_PX * 2) / view.scale;
     const out = { x: at.x, z: at.z };
     if (first && Math.abs(at.x - first.x) <= reach) out.x = first.x;
@@ -22184,6 +22311,8 @@
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const protractorChip = strip.querySelector('[data-mode-protractor]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
+  const snapChip = strip.querySelector('[data-mode-snap]');
+  const trackChip = strip.querySelector('[data-mode-track]');
   // IN THE BOTTOM BAR since 1 Oct, not the top strip -- so asked of the
   // document rather than of the strip.
   const rotateChip = document.querySelector('[data-mode-rotate]');
@@ -22376,6 +22505,10 @@
     // took the press and stayed dark would be the worst of both.
     protractorChip.classList.toggle('lit', protractorOn);
     scaleChip.classList.toggle('lit', footOn);
+    snapChip?.classList.toggle('lit', snapOn);
+    trackChip?.classList.toggle('lit', trackOn);
+    snapChip?.setAttribute('aria-pressed', String(snapOn));
+    trackChip?.setAttribute('aria-pressed', String(trackOn));
     // LIT MEANS LOADED, not merely armed, and that is the whole reason this
     // tool needs no mode indicator anywhere else: an armed-but-empty brush
     // does nothing to the drawing, and a loaded one says what it will do.
@@ -22496,6 +22629,23 @@
   // order says to follow that neighbour exactly, and this does -- toggle,
   // refresh, paint -- but the T-SQUARE keeps nothing across a reload and
   // acceptance 3 requires that this does.
+  // SNAP AND TRACK: on and off, kept beside the 1' light.
+  const keepLight = (key, on) => {
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [key]: on }));
+    } catch { /* a browser refusing storage still gets the light, for this tab */ }
+  };
+  snapChip?.addEventListener('click', () => {
+    snapOn = !snapOn; keepLight('snapLight', snapOn);
+    sayOnStrip(`SNAP ${snapOn ? 'on — a point near a node lands on it' : 'off'}`);
+    stripRefresh(); paint();
+  });
+  trackChip?.addEventListener('click', () => {
+    trackOn = !trackOn; keepLight('trackLight', trackOn);
+    sayOnStrip(`TRACK ${trackOn ? 'on — the cross lines square to a node, and a point near one lands on it' : 'off'}`);
+    stripRefresh(); paint();
+  });
   scaleChip.addEventListener('click', () => {
     footOn = !footOn;
     try {
@@ -24097,8 +24247,25 @@
     return feet > 0 ? feet : undefined;
   };
 
+  // ENTER PLACES THE POINT THE CURSOR SHOWS (Movie, 17 Oct: "to place the
+  // walls the click choose direction and length and then click again or
+  // ENTER"). With nothing typed, Enter on a run in hand is the click it
+  // stands for; a typed LENGTH still takes its own Enter, in its own box.
+  const enterPlaces = () => {
+    if (!cursorWorld) return false;
+    if (activeTool === 'outline' && outlineCorners.length) { outlinePress(cursorWorld); return true; }
+    if (drawsRun() && drawStart) { drawPress(cursorWorld); return true; }
+    return false;
+  };
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.repeat || modalUp()) return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
+    if (enterPlaces()) { e.preventDefault(); stripRefresh(); paint(); }
+  });
   const commitTypedLength = () => {
     if (activeTool === 'outline') {
+      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
       const feet = typedOutlineFeet();
       if (feet !== undefined) {
         // AND THE NUMBER MOVES THE BOARD, as a typed wall length does. This
@@ -24119,6 +24286,7 @@
       lengthBox.blur();
       return;
     }
+    if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
     const parsed = F.parseArchitecturalLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
@@ -27172,7 +27340,7 @@
       // second, the PC click-click's second press would commit on the down and
       // then again on the up.
       wallPress = { x: e.clientX, y: e.clientY, opened: !drawStart,
-        touch: e.pointerType === 'touch' };
+        touch: e.pointerType === 'touch' || e.pointerType === 'pen' };
       // THE POINTER TYPE DECIDES WHICH HANDLER FIRES THE SHARED COMMIT, and
       // that split is §1's, not an invention: "for PC the line creation will
       // be normal pc method ... Touch gets the press-drag-lift."
@@ -27732,6 +27900,14 @@
       // `else`, so a move that crossed a corner boundary paints ONCE: the
       // branch above has already done it.
       else if (previewTracksCursor()) paint();
+      // AND WHEN THE SNAP UNDER THE CURSOR CHANGES, with no run in hand yet:
+      // the orange donut has to come and go over a node before the first
+      // press, and nothing else repaints there.
+      else if (drawsRun() || activeTool === 'outline') {
+        const snap = drawSnap(at);
+        const key = snap.pt ? `${snap.pt.x},${snap.pt.z},${snap.node ? 'n' : snap.bullseye ? 'b' : 'r'}` : '';
+        if (key !== lastSnapKey) { lastSnapKey = key; paint(); }
+      }
       return;
     }
     dragging.moved = Math.max(dragging.moved,
@@ -28065,8 +28241,16 @@
     // press-again-and-drag and a plain two-tap, and neither has any other
     // handler left to commit it. On a mouse the down already committed, so
     // there is nothing here to do.
+    // A MOUSE NEVER PLACES A WALL ON THE LIFT (Movie, 17 Oct: "there is a
+    // click drag drop function for drawing a wall --- ITS NOT GOOD ... if it
+    // is needed for IPAD it can be put for IPAD / Mobile only, but not on PC
+    // or Linux" -- "the click drag wall can be easy to make mistakes"). On a
+    // PC a wall is click, choose direction and length, click again or ENTER;
+    // a press that slips a few pixels is not a wall. A finger or a pen keeps
+    // press-drag-lift.
+    if (!press.touch) return;
     const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;
-    if (press.opened ? !travelled : !press.touch) return;
+    if (press.opened && !travelled) return;
     const rect = canvas.getBoundingClientRect();
     drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
   });
