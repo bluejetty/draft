@@ -1040,6 +1040,25 @@ if (!window.DraftGeometry2D) {
     if (notched) return notched;
     let pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
     let kinds = pts.map((_, index) => (roof.edges[index] === 'gable' ? 'gable' : 'eave'));
+    // A CORNER THAT IS NOT A CORNER IS DROPPED BEFORE THE WAVEFRONT RUNS.
+    // Movie, 18 Oct: the main eave at 8' and the jog-out's front at 2' put
+    // the two on ONE line -- the jog's short sides shrink to nothing and its
+    // front corners sit in the middle of a straight eave. Left in, each of
+    // those points walks inward on its own and draws a hip across the plane
+    // where the PDF has none. Dropping point i hands edge i-1 the run to
+    // point i+1, which is the same line whether edge i had no length or ran
+    // straight on; a straight-through corner between an EAVE and a GABLE
+    // stays, because there the kind really does change.
+    for (let index = 0; pts.length > 3 && index < pts.length;) {
+      const size = pts.length;
+      const prev = pts[(index + size - 1) % size], pt = pts[index], next = pts[(index + 1) % size];
+      const zero = Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6;
+      const ax = pt.x - prev.x, az = pt.z - prev.z, bx = next.x - pt.x, bz = next.z - pt.z;
+      const straight = Math.abs(ax * bz - az * bx) < 1e-9 * Math.max(1, Math.hypot(ax, az) * Math.hypot(bx, bz))
+        && ax * bx + az * bz > 0 && kinds[(index + size - 1) % size] === kinds[index];
+      if (zero || straight) { pts.splice(index, 1); kinds.splice(index, 1); } else index += 1;
+    }
+    const count = pts.length;
     const signedArea = list => list.reduce((sum, pt, index) => {
       const next = list[(index + 1) % list.length];
       return sum + (pt.x * next.z - next.x * pt.z);
@@ -1049,7 +1068,7 @@ if (!window.DraftGeometry2D) {
     if (signedArea(pts) < 0) {
       const original = kinds;
       pts = pts.slice().reverse();
-      kinds = pts.map((_, index) => original[(initialCount * 2 - 2 - index) % initialCount]);
+      kinds = pts.map((_, index) => original[(count * 2 - 2 - index) % count]);
     }
     const gableEdges = [];
     pts.forEach((pt, index) => {

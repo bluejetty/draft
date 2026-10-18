@@ -10481,6 +10481,13 @@
     sweep('line', lines());
     sweep('floor', floors());
     sweep('note', notes());
+    // And the rest a click can pick: a kitchen with no walls of its own is an
+    // assembly of fixtures, and roofs go into assemblies too (Movie, 18 Oct).
+    sweep('fixture', fixtures());
+    sweep('stair', stairs());
+    sweep('shape', shapes());
+    sweep('roomtag', roomTags());
+    sweep('roof', roofs());
     return out;
   };
 
@@ -10981,6 +10988,16 @@
       });
       ctx.closePath();
       ctx.stroke();
+      // THE PICKED EDGE, in the handle colour over the halo, so the panel's
+      // EDGE 3 OF 12 is the line the drafter is looking at.
+      if (type === 'roof' && selection.length === 1 && roofEdgeIdx != null && pts[roofEdgeIdx]) {
+        const a = toS(pts[roofEdgeIdx]), b = toS(pts[(roofEdgeIdx + 1) % pts.length]);
+        ctx.save();
+        ctx.strokeStyle = selectHandle();
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.restore();
+      }
     });
     ctx.restore();
     // ── AND A PICKED OPENING SAYS HOW FAR IT IS FROM EACH CORNER ──────────
@@ -25242,6 +25259,79 @@
     paint();
   };
 
+  // ── THE ASSEMBLY KEY: Y, PICK, AND Y / ENTER / DOUBLE-CLICK ─────────────
+  //
+  // Movie, 18 Oct: "press Y first and THEN puts them into select mode the
+  // items and THEn press ENTER or DOUBLE CLICK or press Y again to close the
+  // assembly as one new unit with the items within moving, copy rotate as one
+  // unit". So arming ASSEMBLY keeps whatever is already selected, every click
+  // adds (or, on something already in, takes out) and a box adds what it
+  // catches; any of the three closers makes one FIXED assembly of the lot.
+  // Escape, or arming another tool, puts it down with nothing made.
+  let assemblyClosing = false;
+  const closeAssemblyKey = () => {
+    if (activeTool !== 'assembly') return false;
+    assemblyClosing = true;
+    const n = selection.length;
+    if (n) {
+      createAssembly(true);
+      const group = selectedGroups()[0];
+      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. UNGROUP breaks it.`);
+    } else {
+      sayOnStrip('Nothing picked, so no assembly was made.');
+    }
+    setTool(RESTING_TOOL);
+    assemblyClosing = false;
+    return true;
+  };
+  let assemblyWasArmed = false;
+  toolListeners.push(next => {
+    // Y AGAIN -- or the key pressed again -- is the column's own toggle back
+    // to SELECT, so it arrives here as "assembly put down for select".
+    if (assemblyWasArmed && next === RESTING_TOOL && !assemblyClosing && !assemblyEscaped) {
+      assemblyWasArmed = false;
+      activeTool = 'assembly';
+      closeAssemblyKey();
+      return;
+    }
+    assemblyWasArmed = next === 'assembly';
+    assemblyEscaped = false;
+    if (next === 'assembly') {
+      sayOnStrip('ASSEMBLY: click the items to put in it (again to take one out), '
+        + 'then ENTER, double-click or Y to make it one unit.');
+    }
+  });
+  let assemblyEscaped = false;
+  window.addEventListener('keydown', event => {
+    if (activeTool !== 'assembly') return;
+    const el = event.target;
+    if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+    if (event.key === 'Escape') {
+      assemblyEscaped = true;
+      setTool(RESTING_TOOL);
+      sayOnStrip('ASSEMBLY put down; nothing was made.');
+      return;
+    }
+    if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeAssemblyKey();
+    }
+  }, true);
+  // A DOUBLE-CLICK IS TWO CLICKS FIRST, and the second took back out what
+  // the first put in -- so whatever is under it goes back in before closing.
+  canvas.addEventListener('dblclick', e => {
+    if (activeTool !== 'assembly') return;
+    const rect = canvas.getBoundingClientRect();
+    const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+    if (hit && !selection.some(entry => entry.item === hit.item)) {
+      const owner = groupOf(hit);
+      const whole = owner ? itemsOfGroup(owner) : withGroup(hit);
+      setSelection(selection.concat(whole.filter(w => !selection.some(entry => entry.item === w.item))));
+    }
+    closeAssemblyKey();
+  });
+
   let assemblyName = '';
   let assemblyDialogOpen = false;
   let syncAssembly = () => {};
@@ -26339,6 +26429,262 @@
   // drafter could not see selected. Returning early is exactly how a panel
   // and its subject come apart, so no builder is allowed to decide for
   // itself whether to leave the box alone.
+  // ── A SELECTED ROOF: ITS EDGES, THEIR OVERHANGS, ITS PITCH ─────────────
+  //
+  // Movie, 18 Oct, on North Point: "main roof overhang at 8ft except at the
+  // front jog out, the side overhangs are only 2ft and at the left edge its
+  // no overhang, diag edge 2-5.5"". One number for the whole roof cannot say
+  // that, so a roof that is selected shows its EDGES: click one of them (or
+  // step with the arrows) and the panel shows that edge's kind and overhang.
+  //
+  // EVERY OVERHANG IS WORKED FROM THE WALL LINE, NOT THE EAVE. The record's
+  // `footprint` keeps the line the eaves hang from; an older roof gets one
+  // worked back from its eave and its overhangs the first time an edge is
+  // typed. Offsetting the EAVE instead goes wrong exactly where Movie needs
+  // it: the jog-out's front brought onto the main eave line leaves the jog's
+  // two sides with no length, and an edge of no length has no direction to be
+  // pushed back out along.
+  //
+  // AND A ROOF SHAPED BY HAND STOPS FOLLOWING THE PROJECT PAGE (`follows:
+  // 'none'`): a changed overhang there would otherwise put 8' back on the
+  // edge he just made flush.
+  let roofEdgeIdx = null;
+  const roofEdgeNear = (roof, worldPt) => {
+    const G = window.DraftGeometry2D;
+    const pts = roof?.points || [];
+    let best = null, bestD = SELECT_GRAB_PX / view.scale;
+    pts.forEach((pt, index) => {
+      const next = pts[(index + 1) % pts.length];
+      if (Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6) return;
+      const { d } = G.pointToSegment(worldPt, { start: pt, end: next });
+      if (d < bestD) { bestD = d; best = index; }
+    });
+    return best;
+  };
+  const roofOverhangs = roof => {
+    const per = Array.isArray(roof.edgeOverhang) && roof.edgeOverhang.length === roof.points.length;
+    const fallback = Number(roof.overhang) || 0;
+    return roof.points.map((_, i) => {
+      const v = per ? Number(roof.edgeOverhang[i]) : NaN;
+      return Number.isFinite(v) ? v : fallback;
+    });
+  };
+  const ringArea = ring => ring.reduce((sum, pt, i) => {
+    const next = ring[(i + 1) % ring.length];
+    return sum + (pt.x * next.z - next.x * pt.z);
+  }, 0) / 2;
+  // The kept wall line if it still hangs the eave where the eave is (some
+  // other edit may have moved the roof since), else one worked back from the
+  // eave -- which needs every edge to still have a length.
+  const roofFootprint = roof => {
+    const G = window.DraftGeometry2D;
+    const pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const was = roofOverhangs(roof);
+    const kept = Array.isArray(roof.footprint) && roof.footprint.length === pts.length
+      ? roof.footprint.map(pt => ({ x: pt.x, z: pt.z })) : null;
+    if (kept) {
+      const hung = G.offsetOutlineVariable(kept, was);
+      if (hung.every((pt, i) => Math.hypot(pt.x - pts[i].x, pt.z - pts[i].z) < 0.01)) return kept;
+    }
+    if (pts.some((pt, i) => {
+      const next = pts[(i + 1) % pts.length];
+      return Math.hypot(next.x - pt.x, next.z - pt.z) < 1e-6;
+    })) return null;
+    return G.offsetOutlineVariable(pts, was.map(v => -v));
+  };
+  const setRoofOverhangs = (roof, want) => {
+    const G = window.DraftGeometry2D;
+    const max = window.DraftDrawingFormat.ROOF_OVERHANG_MAX_FT;
+    if (want.some(v => !(v >= 0) || v > max)) {
+      return `A roof overhang runs from 0 to ${max}'.`;
+    }
+    const footprint = roofFootprint(roof);
+    if (!footprint) return 'This roof has an edge of no length, so the wall line under it cannot be found.';
+    const eave = G.offsetOutlineVariable(footprint, want);
+    if (eave.some(pt => !Number.isFinite(pt.x) || !Number.isFinite(pt.z))
+      || Math.sign(ringArea(eave)) !== Math.sign(ringArea(footprint))) {
+      return 'That overhang folds the roof over itself.';
+    }
+    roof.footprint = footprint.map(pt => ({ x: pt.x, y: 0, z: pt.z }));
+    roof.points = eave.map((pt, i) => ({ ...roof.points[i], x: pt.x, z: pt.z }));
+    roof.edgeOverhang = want.slice();
+    roof.follows = 'none';
+    return null;
+  };
+  // ONE UNDO PER EDIT, however many roofs it touched, and nothing at all if
+  // any one of them refuses -- a half-applied edit across an assembly would
+  // leave the drafter guessing which roofs took it.
+  const editRoofs = (list, change) => {
+    const edits = list.map(item => ({ item, before: { ...item } }));
+    const refusal = list.map(change).find(Boolean);
+    if (refusal) {
+      edits.forEach(({ item, before }) => {
+        Object.keys(item).forEach(key => { if (!(key in before)) delete item[key]; });
+        Object.assign(item, before);
+      });
+      return refusal;
+    }
+    undoStack.push({ kind: 'props', edits });
+    markDirty();
+    paint();
+    return null;
+  };
+  // ── GABLE END: THE END SQUARED ACROSS AND MADE A GABLE ────────────────
+  //
+  // Movie, 18 Oct: "change bother hips to GABLE on the left end of the plan".
+  // His left end is not one edge: the end wall, the 45° chamfer at its corner
+  // and the hips over both. The roof PDF runs the gable square across that
+  // whole end, so this does too: from the picked edge it walks each way to
+  // the first edge running ACROSS it -- the two long eaves -- and puts one
+  // straight GABLE between them where the end reaches furthest out. Whatever
+  // stood between (the chamfer, a short return) is swallowed by the roof.
+  //
+  // DONE ON THE WALL LINE, then hung again by the overhangs, so the gable's
+  // own overhang is the picked edge's and every eave keeps its own.
+  const squareEnd = (ring, index) => {
+    const n = ring.length;
+    const dir = k => {
+      const a = ring[k % n], b = ring[(k + 1) % n];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      return len < 1e-9 ? null : { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+    };
+    const d = dir(index);
+    if (!d) return null;
+    const across = k => { const e = dir(k); return e && Math.abs(e.x * d.x + e.z * d.z) < Math.sin(5 * Math.PI / 180); };
+    let l = null, r = null;
+    for (let step = 1; step < n; step += 1) {
+      if (l == null && across((index - step + n) % n)) l = (index - step + n) % n;
+      if (r == null && across((index + step) % n)) r = (index + step) % n;
+    }
+    if (l == null || r == null || l === r) return null;
+    // Rotated so the eave BEFORE the end is edge 0 and the one after is `rr`.
+    const rot = ring.map((_, k) => ring[(k + l) % n]);
+    const rr = (r - l + n) % n;
+    if (rr < 2) return null;
+    // OUTWARD, across the picked edge: the normal that points away from the
+    // middle of the ring.
+    const mid = ring.reduce((m, pt) => ({ x: m.x + pt.x / n, z: m.z + pt.z / n }), { x: 0, z: 0 });
+    const a0 = ring[index];
+    let out = { x: d.z, z: -d.x };
+    if ((a0.x - mid.x) * out.x + (a0.z - mid.z) * out.z < 0) out = { x: -out.x, z: -out.z };
+    const reach = Math.max(...rot.slice(1, rr + 1).map(pt => pt.x * out.x + pt.z * out.z));
+    const onEnd = (a, b) => {
+      // Where the line a->b meets the end line {p : p.out = reach}.
+      const da = a.x * out.x + a.z * out.z, db = b.x * out.x + b.z * out.z;
+      if (Math.abs(db - da) < 1e-12) return null;
+      const t = (reach - da) / (db - da);
+      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+    };
+    const A = onEnd(rot[0], rot[1]);
+    const B = onEnd(rot[rr], rot[(rr + 1) % n]);
+    if (!A || !B) return null;
+    return { rot: l, rr, ring: [rot[0], A, B, ...rot.slice(rr + 1)] };
+  };
+  const gableEnd = (roof, index) => {
+    const G = window.DraftGeometry2D;
+    const n = roof.points.length;
+    const footprint = roofFootprint(roof);
+    if (!footprint) return 'This roof has an edge of no length, so the wall line under it cannot be found.';
+    const done = squareEnd(footprint, index);
+    if (!done) return 'GABLE END needs an eave running across each side of the end.';
+    const keep = arr => { const rot = arr.map((_, k) => arr[(k + done.rot) % n]); return [rot[0], null, ...rot.slice(done.rr)]; };
+    const overs = roofOverhangs(roof);
+    const kinds = roof.points.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
+    const nextOvers = keep(overs); nextOvers[1] = overs[index];
+    const nextKinds = keep(kinds); nextKinds[1] = 'gable';
+    const eave = G.offsetOutlineVariable(done.ring, nextOvers);
+    if (eave.some(pt => !Number.isFinite(pt.x) || !Number.isFinite(pt.z))
+      || Math.sign(ringArea(eave)) !== Math.sign(ringArea(done.ring))) {
+      return 'That end folds the roof over itself.';
+    }
+    const y = roof.points[0]?.y ?? 0;
+    roof.footprint = done.ring.map(pt => ({ x: pt.x, y: 0, z: pt.z }));
+    roof.points = eave.map(pt => ({ x: pt.x, y, z: pt.z }));
+    roof.edges = nextKinds;
+    roof.edgeOverhang = nextOvers;
+    roof.follows = 'none';
+    roofEdgeIdx = 1;
+    return null;
+  };
+  const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE']];
+  const roofPropsNode = items => {
+    const box = document.createElement('div');
+    const again = () => { if (selection.every(e => e.type === 'roof')) showSelectionProps(); };
+    const lone = items.length === 1 ? items[0] : null;
+    box.append(numberField('PITCH', lone ? lone.pitch : items[0].pitch, 0, 24, 0.5, v => {
+      if (v !== null) {
+        const refusal = editRoofs(items, roof => { roof.pitch = v; roof.follows = 'none'; return null; });
+        if (refusal) sayOnStrip(refusal);
+      }
+      again();
+      return items[0].pitch;
+    }));
+    // EVERY EDGE AT ONCE, which is where a drafter starts -- 8' all round --
+    // before picking out the edges that differ.
+    const all = items.flatMap(roofOverhangs);
+    const agree = all.every(v => Math.abs(v - all[0]) < 1e-9);
+    box.append(propField('OVERHANG, ALL EDGES', agree ? all[0] : null,
+      ft => editRoofs(items, roof => setRoofOverhangs(roof, roof.points.map(() => ft))), again));
+    if (lone) {
+      const count = lone.points.length;
+      if (roofEdgeIdx != null && roofEdgeIdx >= count) roofEdgeIdx = null;
+      const head = document.createElement('div');
+      head.className = 'chip-row';
+      head.dataset.roofEdgeHead = '';
+      const step = by => {
+        roofEdgeIdx = roofEdgeIdx == null ? (by > 0 ? 0 : count - 1) : (roofEdgeIdx + by + count) % count;
+        again();
+        paint();
+      };
+      const arrow = (face, by, key) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sel-chip';
+        btn.dataset.roofEdgeStep = key;
+        btn.textContent = face;
+        btn.addEventListener('click', () => step(by));
+        return btn;
+      };
+      const label = document.createElement('span');
+      label.className = 'props-title';
+      label.dataset.roofEdgeLabel = '';
+      label.textContent = roofEdgeIdx == null ? 'CLICK AN EDGE OF THE ROOF'
+        : `EDGE ${roofEdgeIdx + 1} OF ${count}`;
+      head.append(arrow('◀', -1, 'prev'), label, arrow('▶', 1, 'next'));
+      box.append(head);
+      if (roofEdgeIdx != null) {
+        const index = roofEdgeIdx;
+        const kind = lone.edges?.[index] === 'gable' ? 'gable' : 'eave';
+        box.append(propRow('EDGE', ROOF_EDGE_KINDS, kind, id => {
+          if (id === kind) return;
+          editRoofs([lone], roof => {
+            roof.edges = roof.points.map((_, i) => (i === index ? id
+              : (roof.edges?.[i] === 'gable' ? 'gable' : 'eave')));
+            roof.follows = 'none';
+            return null;
+          });
+          again();
+        }));
+        box.append(propField('OVERHANG, THIS EDGE', roofOverhangs(lone)[index],
+          ft => editRoofs([lone], roof => setRoofOverhangs(roof,
+            roofOverhangs(roof).map((v, i) => (i === index ? ft : v)))), again));
+        const end = document.createElement('button');
+        end.type = 'button';
+        end.className = 'sel-chip';
+        end.dataset.roofGableEnd = '';
+        end.textContent = 'GABLE END';
+        end.title = 'Square this end of the roof across and make it a gable';
+        end.addEventListener('click', () => {
+          const refusal = editRoofs([lone], roof => gableEnd(roof, index));
+          if (refusal) sayOnStrip(refusal);
+          again();
+        });
+        box.append(end);
+      }
+    }
+    return box;
+  };
+
   const SELECTION_PANELS = {
     roomtag: items => (items.length === 1
       ? { title: 'ROOM TAG', node: roomTagPropsNode(items[0]) } : null),
@@ -26354,13 +26700,12 @@
     // to hold two, and it is not a gesture that asks for this panel.
     stair: items => (items.length === 1
       ? { title: 'STAIR', node: stairPropsNode(items[0]) } : null),
-    // ROOF IS NOT HERE, AND THAT IS A BLOCK RATHER THAN A CHOICE. hitAt's
-    // chain is fenestration, wall, line, outline, floor -- a roof cannot be
-    // selected on this page at all, so a panel for one would have nothing to
-    // be reached by. The roof TOOL's overhang and pitch box already exists
-    // and is about the NEXT roof, which is a different question.
+    // ROOF IS HERE NOW: hitAt reaches roofs, and North Point's eaves need
+    // an overhang per edge (Movie, 18 Oct). The roof TOOL's box is still
+    // about the NEXT roof; this one is about the roofs in hand.
+    roof: items => ({ title: 'ROOF', node: roofPropsNode(items) }),
     //
-    // OUTLINE IS NOT HERE EITHER: it is a guide, and what a drafter changes
+    // OUTLINE IS NOT HERE: it is a guide, and what a drafter changes
     // about one is its corners, which is a drag.
     column: items => (items.length === 1
       ? { title: 'COLUMN', node: columnPropsNode(items[0]) } : null),
@@ -26413,7 +26758,8 @@
   // and have to exist before anything is placed.
   //
   // The four presets are the order's, and they are feet because the record is
-  // (drawing-format.js:503 clamps overhang to 0..6 feet). The free entry is
+  // (drawing-format.js clamps overhang to 0..ROOF_OVERHANG_MAX_FT, ten feet
+  // since North Point's 8' eave). The free entry is
   // the same range; a value outside it is not silently clamped here, because
   // a box that swallows 9 and shows 6 teaches the drafter that 9 was taken.
   const ROOF_OVERHANGS = [['0.5', "6\""], ['1', "1'"], ['1.5', "1'-6\""], ['2', "2'"]];
@@ -26465,7 +26811,8 @@
       roofOverhangFt = Number(id);
       showRoofProps();
     }));
-    box.append(numberField('OVERHANG FT', roofOverhangFt, 0, 6, 0.25, v => {
+    box.append(numberField('OVERHANG FT', roofOverhangFt, 0,
+      window.DraftDrawingFormat.ROOF_OVERHANG_MAX_FT, 0.25, v => {
       if (v !== null) roofOverhangFt = v;
       showRoofProps();
       return roofOverhangFt;
@@ -27820,7 +28167,7 @@
     // WITH SELECT IN HAND THE DRAG IS A BOX, not a pan (Movie, 4 Oct). A press
     // that never travels is still the click below; the box arms at the same
     // 4px a corner drag does.
-    if (activeTool === RESTING_TOOL) {
+    if (activeTool === RESTING_TOOL || activeTool === 'assembly') {
       itemBox = { from: at, to: at, active: false };
       dragging.box = itemBox;
     } else {
@@ -28407,7 +28754,7 @@
         .forEach(entry => withGroup(entry).forEach(w => {
           if (!caught.some(c => c.item === w.item)) caught.push(w);
         }));
-      setSelection(e && e.shiftKey
+      setSelection(e && (e.shiftKey || activeTool === 'assembly')
         ? selection.concat(caught.filter(c => !selection.some(entry => entry.item === c.item)))
         : caught);
       paint();
@@ -28428,10 +28775,16 @@
       // shift-click on something already selected takes it OUT -- the old
       // page's own toggle, and the reason the help says "adds or removes"
       // rather than "adds".
-      if (e.shiftKey) {
+      // ASSEMBLING, EVERY CLICK IS A SHIFT-CLICK: the set is being built,
+      // and a click that threw it away would make the drafter start over.
+      if (e.shiftKey || activeTool === 'assembly') {
         if (hit) {
           const at = selection.findIndex(entry => entry.item === hit.item);
-          const whole = withGroup(hit);
+          // ASSEMBLING TAKES A WHOLE ASSEMBLY AT A CLICK: a WC picked by one
+          // of its walls goes in entire, rather than that one wall being
+          // pulled out of the WC into the new unit.
+          const owner = activeTool === 'assembly' ? groupOf(hit) : null;
+          const whole = owner ? itemsOfGroup(owner) : withGroup(hit);
           setSelection(at >= 0
             ? selection.filter(entry => !whole.some(w => w.item === entry.item))
             : selection.concat(whole.filter(w =>
@@ -28442,7 +28795,16 @@
       } else {
         // An empty click clears, which is the other half of select: without it
         // the drafter has no way to put a selection down.
-        setSelection(withGroup(hit));
+        //
+        // A CLICK ON A ROOF'S EDGE PICKS THE EDGE as well as the roof, and a
+        // roof already in hand answers a click just OUTSIDE its eave too --
+        // the edge is a line, and half of the grab around it is off the roof.
+        const world = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        const held = selection.length === 1 && selection[0].type === 'roof' ? selection[0].item : null;
+        const roofHit = hit?.type === 'roof' ? hit.item
+          : (!hit && held && roofEdgeNear(held, world) != null ? held : null);
+        roofEdgeIdx = roofHit ? roofEdgeNear(roofHit, world) : null;
+        setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : withGroup(hit));
       }
       paint();
     }

@@ -611,6 +611,7 @@ if (!window.DraftLevelAssembly) {
   // drafter cut with the ROOF tool sits on its own storey and follows
   // nothing, so a PROJECT change never moves it.
   const roofFollows = roof => {
+    if (roof?.follows === 'none') return null;
     if (ROOF_ROWS.includes(roof?.follows)) return roof.follows;
     if (Number(roof?.levelId) !== ROOF_LEVEL_ID) return null;
     if (roof?.garage !== true) return 'house';

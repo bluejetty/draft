@@ -72,8 +72,10 @@ const MUTANTS = [
     // appears twice in MODEL.html -- the other is the never-armed press path
     // at :9253 -- and an anchor that matches the wrong one mutates the wrong
     // branch while still reporting a result.
-    find: "        // An empty click clears, which is the other half of select: without it\n        // the drafter has no way to put a selection down.\n        setSelection(withGroup(hit));",
-    with: "        // An empty click clears, which is the other half of select: without it\n        // the drafter has no way to put a selection down.\n        if (hit) setSelection(withGroup(hit));",
+    // RE-POINTED AGAIN (18 Oct): the roof edge pick sits between the comment
+    // and the call now, so the anchor is the call itself, which is unique.
+    find: "        setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : withGroup(hit));",
+    with: "        setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : (hit ? withGroup(hit) : selection));",
     test: 'a plain click on empty space',
   },
   {

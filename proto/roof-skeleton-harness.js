@@ -101,6 +101,15 @@ const SHAPES = [
     points: [P(0, 0), P(12, 0), P(32, 0), P(32, 40), P(36, 40),
       P(36, 70), P(12, 70), P(12, 40), P(0, 40)],
     peak: 16 * PITCH / 12 },
+  // THE JOG BROUGHT ONTO THE EAVE (Movie, 18 Oct, North Point): the main
+  // eave at 8' and the jog-out's front at 2' land on one line, so the jog's
+  // two short sides have no length left and its front corners sit in the
+  // middle of a straight eave. One hip roof, four planes, no hips across the
+  // front -- 85 ft across the eaves, so the ridge sits 42.5 ft in.
+  { name: 'a jog brought onto the eave line, its sides of no length',
+    points: [P(-8, -8), P(375, -8), P(375, 77), P(248, 77), P(248, 77),
+      P(112, 77), P(112, 77), P(-8, 77)],
+    peak: 42.5 * PITCH / 12 },
   // Four reflex corners and every one of them arriving at the same instant.
   // Not the shape that broke -- kept because the fix is ABOUT simultaneity,
   // and a symmetric cross is simultaneity everywhere at once. If handling one
@@ -196,8 +205,15 @@ const CHECKS = [];
 const check = (label, fn) => CHECKS.push({ label, fn });
 
 SHAPES.forEach(({ name, points, peak }) => {
+  // ONE PER STRAIGHT EAVE RUN, not one per point: a splice point the wall
+  // runs straight through is not a corner, and since Movie's 18 Oct jog (the
+  // main eave and the jog front brought onto one line) the skeleton drops it,
+  // so the wall under it carries ONE plane rather than two coplanar halves.
   check(`${name}: one roof plane per eave`,
-    G => [roofOver(G, points).faces.length, points.length]);
+    G => [roofOver(G, points).faces.length, points.filter((pt, i) => {
+      const a = points[(i + points.length - 1) % points.length], b = points[(i + 1) % points.length];
+      return Math.abs((pt.x - a.x) * (b.z - pt.z) - (pt.z - a.z) * (b.x - pt.x)) > 1e-9;
+    }).length]);
 
   check(`${name}: the planes tile the footprint`,
     G => { const { faces } = roofOver(G, points);
