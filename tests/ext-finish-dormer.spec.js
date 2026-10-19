@@ -76,7 +76,10 @@ test('the dormer\'s gable stands on the elevation that looks at it, from the mai
   }
   expect(seen.filter(n => n === 1), 'one elevation, one dormer').toHaveLength(1);
   expect(seen.filter(n => n === 0)).toHaveLength(3);
-  const { dg } = await facingDormer(page);
+  const { dg, f } = await facingDormer(page);
+  // AND IT IS THE ONE IN FRONT OF THE DORMER: its cut stands out past the
+  // z = 30 wall the dormer is on, not behind the house looking at its back.
+  expect(f.cut.startPt.z, 'the elevation faces the dormer\'s front').toBeGreaterThan(30);
   // 20' wide at 4/12: 3'-4" from its foot to its ridge.
   expect(dg.apex - dg.base).toBeCloseTo(20 / 2 * 4 / 12, 3);
   expect(dg.hi - dg.lo).toBeCloseTo(20, 3);
