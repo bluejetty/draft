@@ -3763,6 +3763,37 @@
   // store already holds beams and columns -- which this page kept faithfully
   // through every save and did not draw. A drafter could not see the structure
   // holding their floor up.
+  // THE BEAMS BESIDE A BAY PAST THE TABLE (Movie, 19 Oct: "the beams and
+  // joists will be marked BEAM / JOIST SPAN REQUIRES ENGINEERING"): for each
+  // level that frames an OWJ floor, the bays its beams leave, and the beams
+  // that bound one past 31 ft. Read every paint, never stored.
+  const beamsPastTheTable = () => {
+    const B = window.DraftBuildHouse, LA = window.DraftLevelAssembly;
+    const out = new Set();
+    if (!drawing || !B?.overSpanBays || !LA) return out;
+    const byLevel = new Map();
+    (drawing.beams || []).forEach(b => {
+      if (!b.start || !b.end) return;
+      const id = Number(b.levelId);
+      if (!byLevel.has(id)) byLevel.set(id, []);
+      byLevel.get(id).push(b);
+    });
+    byLevel.forEach((list, framingId) => {
+      storeyBodiesOver(framingId).forEach(({ outline, storeyId }) => {
+        const asm = LA.levelAssemblyFor(drawing.levelAssemblies, storeyId);
+        const bays = B.overSpanBays(B.joistBays(outline.points.map(p => ({ x: p.x, z: p.z })), { beams: list }), asm);
+        (bays?.bays || []).filter(bay => bay.warn).forEach(bay => {
+          const along = bays.axis === 'x' ? 'x' : 'z';
+          list.forEach(b => {
+            const fixed = (b.start[along] + b.end[along]) / 2;
+            const runs = Math.abs(b.end[along] - b.start[along]) < 0.01;
+            if (runs && (Math.abs(fixed - bay.from) < 0.01 || Math.abs(fixed - bay.to) < 0.01)) out.add(b);
+          });
+        });
+      });
+    });
+    return out;
+  };
   const paintStructure = () => {
     const R = window.DraftRender2D;
     const env = paintEnv();
@@ -3771,7 +3802,9 @@
     // THE TAG OPPOSITE THE STRING, one per beam line (render-2d
     // beamTagSides): read off this level and view's own column rows.
     const tags = R.beamTagSides(beams(), dimensions());
-    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env));
+    const marked = beamsPastTheTable();
+    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam,
+      { tag: tags.get(beam.id), warn: marked.has(beam) ? B?.ENGINEERING_MARK : null }, env));
     // ── THE PADS GO DOWN FIRST, UNDER EVERYTHING THEY CARRY ─────────────────
     //
     // Movie, 25 Sep: "we have beam and columns, but no footing, we will need
@@ -3887,7 +3920,8 @@
     const doorPoints = (drawing?.fenestrations || []).filter(fen => fen.garage === true)
       .map(fen => wallById.get(String(fen.wallId))).filter(Boolean)
       .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
-    const label = B.joistCallout(LA.levelAssemblyFor(drawing?.levelAssemblies, levelId));
+    const asm = LA.levelAssemblyFor(drawing?.levelAssemblies, levelId);
+    const label = B.joistCallout(asm);
     // THE BODIES AUTO BEAM FRAMES: this level's outlines, the garage's own
     // aside (layout-plan joistCalloutsFor reads the same), the floors only
     // where a level has no outline.
@@ -3901,7 +3935,7 @@
         beams: belowBeams, holes,
         axis: B.deckJoistAxis(points, { garages, doorPoints }),
       });
-      if (bays) R.drawJoistSpans2D(ctx, toS, { ...bays, label }, {}, env);
+      if (bays) R.drawJoistSpans2D(ctx, toS, B.overSpanBays({ ...bays, label }, asm), {}, env);
     });
   };
 
@@ -14384,6 +14418,15 @@
     const mark = undoStack.length;
     doomed.forEach(entry => { if (deleteEntry(entry)) gone += 1; });
     if (!gone) return 0;
+    // A DELETED ROW OF BEAM LENGTHENS THE BAYS EITHER SIDE OF IT, so its
+    // floor is asked again -- see stepUpJoists -- in the same UNDO.
+    const framing = [...new Set(doomed.filter(e => e.type === 'beam').map(e => Number(e.item.levelId)))];
+    const stepped = framing.map(stepUpJoists);
+    const stepEdits = stepped.flatMap(r => r.edits);
+    if (stepEdits.length) {
+      undoStack.push({ kind: 'props', edits: stepEdits });
+      sayOnStrip(`${stepped.flatMap(r => r.said).join('. ')}. UNDO puts it back.`);
+    }
     // ONE DELETE, ONE UNDO: a row of beam is several pieces, and a click
     // takes them all, so the press that took them puts them back together.
     if (undoStack.length - mark > 1) undoStack.push({ kind: 'batch', steps: undoStack.splice(mark) });
@@ -15161,6 +15204,78 @@
       pt.z = o.z + u.z * to + u.x * across;
     });
   };
+  // ── THE FLOOR STEPS UP WHEN A MOVED BEAM LENGTHENS ITS SPAN ──────────────
+  //
+  // Movie, 19 Oct: "allow the user to INCREASE the thickness of the floor if
+  // the span is increased past acceptable span, and would be 31 feet max space
+  // for OWJ, they can span further, but the floor will stay at the same
+  // thickness (24" 23.25" plus 3/4" sheathin)" -- and asked whether the
+  // deeper floor raises the house: "yes the whole house will need to increase
+  // height ... to maintain floor to ceiling heights which should be
+  // maintained, if it is a crawl space under the main floor (if it is less
+  // than 8ft height foundation) THAT ceiling height can be decreased".
+  //
+  // So after a beam row is moved or deleted, each OWJ floor it carries is
+  // measured bay by bay, and one whose longest bay is past what its joist
+  // reaches takes the shallowest row of build-house's own table that does --
+  // 16" o.c. first, 12" the last resort, never past 23-1/4". The storey stack
+  // is built from these numbers, so every storey above rises by the
+  // difference and keeps its ceiling; over a crawl space the pour gives the
+  // difference up instead, so the floor deepens down into it. Past the table
+  // the floor stays at 23-1/4" @ 12" and the bay is marked (paintJoistCallouts).
+  //
+  // A floor is never stepped DOWN here: a beam moved to shorten a span leaves
+  // the depth the drafter or an earlier step chose. Answers the 'props' edits
+  // it made, for the gesture's own undo, and a line for the strip.
+  const CRAWL_SPACE_POUR_FT = 8;
+  const stepUpJoists = framingLevelId => {
+    const B = window.DraftBuildHouse, LA = window.DraftLevelAssembly;
+    if (!drawing || !B?.joistBays || !B?.owjFor || !LA) return { edits: [], said: [] };
+    const beamsHere = (drawing.beams || []).filter(b => Number(b.levelId) === Number(framingLevelId) && b.start && b.end);
+    const spanOf = new Map();
+    storeyBodiesOver(Number(framingLevelId)).forEach(({ outline, storeyId }) => {
+      const bays = B.joistBays(outline.points.map(p => ({ x: p.x, z: p.z })), { beams: beamsHere });
+      if (bays) spanOf.set(storeyId, Math.max(spanOf.get(storeyId) || 0, bays.spanFt));
+    });
+    const edits = [], said = [];
+    const tableSpan = (depthIn, ocIn) => (B.OWJ_SPANS || [])
+      .find(row => Math.abs(row.depthIn - depthIn) < 1e-6)?.spanFt?.[ocIn];
+    spanOf.forEach((span, storeyId) => {
+      const asm = LA.levelAssemblyFor(drawing.levelAssemblies, storeyId);
+      if (asm.joistType !== 'owj') return;
+      const reach = tableSpan(asm.joistDepthIn, asm.joistSpacingIn);
+      if (Number.isFinite(reach) && span <= reach + 1e-6) return;
+      const want = B.owjFor(span, { minDepthIn: asm.joistDepthIn });
+      if (Math.abs(want.depthIn - asm.joistDepthIn) < 1e-6 && Math.abs(want.ocIn - asm.joistSpacingIn) < 1e-6) return;
+      drawing.levelAssemblies = drawing.levelAssemblies || {};
+      const rec = drawing.levelAssemblies[storeyId] || (drawing.levelAssemblies[storeyId] = {});
+      edits.push({ item: rec, before: { ...rec } });
+      const deeperFt = (want.depthIn - asm.joistDepthIn) / 12;
+      rec.joistType = 'owj';
+      rec.joistDepthIn = want.depthIn;
+      rec.joistSpacingIn = want.ocIn;
+      // THE CRAWL SPACE TAKES IT, not the house: the floor carried straight
+      // off a foundation poured under 8 ft deepens down into the crawl, so
+      // the footing stays where it was. A BALLOON / LEDGER floor adds no
+      // depth to begin with and has nothing to give.
+      let crawl = false;
+      if (Number(framingLevelId) === FOUNDATION_LEVEL_ID && deeperFt > 0 && asm.framing !== 'balloon') {
+        const fdn = LA.levelAssemblyFor(drawing.levelAssemblies, FOUNDATION_LEVEL_ID);
+        if (fdn.wallHeightFt - LA.SILL_PLATE_IN / 12 < CRAWL_SPACE_POUR_FT - 1e-6) {
+          const fRec = drawing.levelAssemblies[FOUNDATION_LEVEL_ID]
+            || (drawing.levelAssemblies[FOUNDATION_LEVEL_ID] = {});
+          edits.push({ item: fRec, before: { ...fRec } });
+          fRec.wallHeightFt = fdn.wallHeightFt - deeperFt;
+          crawl = true;
+        }
+      }
+      const level = (drawing.levels || []).find(l => Number(l.id) === Number(storeyId));
+      said.push(`${level?.name || 'FLOOR'} OWJ ${B.inchesLabel(want.depthIn)} @ ${want.ocIn}" O.C. for the ${feetLabel(span)} span`
+        + (want.fits ? '' : ' -- PAST THE TABLE: REQUIRES ENGINEERING')
+        + (deeperFt > 0 ? (crawl ? '; the crawl space gives up the depth' : '; the house above rises to keep its ceilings') : ''));
+    });
+    return { edits, said };
+  };
   const selectionMoveSet = () => {
     const entries = selection.slice();
     selection.forEach(entry => {
@@ -15336,10 +15451,15 @@
     if (d.kind === 'selection') {
       if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); paint(); return; }
       d.set.points.forEach(relinkVertex);
-      undoStack.push({ kind: 'rotate', before: d.set.before, detached: d.set.detached, wells: d.set.wells });
+      const moveStep = { kind: 'rotate', before: d.set.before, detached: d.set.detached, wells: d.set.wells };
+      // A MOVED BEAM ROW RE-ASKS ITS FLOOR'S SPAN -- see stepUpJoists. The
+      // deeper floor and the move are one gesture and go back with one UNDO.
+      const stepped = d.set.run ? stepUpJoists(d.set.run[0].levelId) : { edits: [], said: [] };
+      undoStack.push(stepped.edits.length
+        ? { kind: 'batch', steps: [moveStep, { kind: 'props', edits: stepped.edits }] } : moveStep);
       markDirty();
       setSelection([...selection]);
-      sayOnStrip('Moved. UNDO puts it back.');
+      sayOnStrip(stepped.said.length ? `Moved. ${stepped.said.join('. ')}. UNDO puts it all back.` : 'Moved. UNDO puts it back.');
       paint();
       return;
     }
