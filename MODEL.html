@@ -31752,6 +31752,7 @@
       fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };
     adoptNotes();
+    trimSlivers({ walls: true });
     // Recorded against the RAW file: the normaliser is the only thing that knows
     // a substitution happened, and it does not say so — the two types differ and
     // nothing else marks it.
@@ -32097,7 +32098,57 @@
     ...(drawing.board ? { board: drawing.board } : {}),
   });
 
+  // ── SLIVERS ARE TRIMMED OFF (Movie, 18 Oct) ───────────────────────────
+  //
+  // "if there is a peice of roof or wall or floor with less that 1/64"
+  // thickness can you autoamatically TRIM it off ... i think this might solve
+  // some of our roof problems" -- and, told his worst sliver measured about
+  // 1/60", "ok lets go 1/16" on your advice". The roof painter already reads
+  // past anything under a sixteenth (geometry-2d cleanRoofRing); this takes
+  // it out of the drawing itself, so every reader -- sections, elevations,
+  // plans, the file -- sees the same clean ring:
+  //   a roof, floor, shape or outline loses a point that sits within 1/16"
+  //   of the next, or that the ring doubles back through (a spike);
+  //   a wall shorter than 1/16" goes, with the doors and windows on it.
+  // On open, and on every save. Walls only on open: a wall being dragged
+  // through zero length is not a sliver yet.
+  const SLIVER_FT = 1 / 192;
+  function trimSlivers({ walls: doWalls = false } = {}) {
+    const G = window.DraftGeometry2D;
+    if (!drawing || !G?.cleanRoofRing) return 0;
+    let trimmed = 0;
+    (drawing.roofs || []).forEach(roof => {
+      const clean = G.cleanRoofRing(roof);
+      if (!clean) return;
+      roof.points = clean.points;
+      roof.edges = clean.edges;
+      roof.edgeOverhang = clean.edgeOverhang;
+      delete roof.footprint;
+      trimmed += 1;
+    });
+    ['floors', 'shapes', 'outlines'].forEach(key => (drawing[key] || []).forEach(item => {
+      if (!Array.isArray(item?.points) || item.points.length < 4) return;
+      const clean = G.cleanRoofRing({ points: item.points });
+      if (!clean) return;
+      item.points = clean.points;
+      trimmed += 1;
+    }));
+    if (doWalls && Array.isArray(drawing.walls)) {
+      const gone = drawing.walls.filter(w => w.start && w.end
+        && Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) < SLIVER_FT);
+      if (gone.length) {
+        const ids = new Set(gone.map(w => String(w.id)));
+        drawing.walls = drawing.walls.filter(w => !gone.includes(w));
+        if (Array.isArray(drawing.fenestrations)) {
+          drawing.fenestrations = drawing.fenestrations.filter(o => !ids.has(String(o.wallId)));
+        }
+        trimmed += gone.length;
+      }
+    }
+    return trimmed;
+  }
   const serializeDrawing = () => {
+    trimSlivers();
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
     // Destructured out of the spread rather than overwritten with `undefined`,
     // so the key is genuinely absent from the OBJECT and not merely absent from
