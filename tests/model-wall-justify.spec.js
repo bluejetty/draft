@@ -225,4 +225,8 @@ test('the WALL panel offers the six types, 2X6 lit; a pick is the next wall\'s t
     const saved = await saveAndRead(page);
     expect(drawnWalls(saved).map(w => w.wallType)).toEqual(['stud_2x8', 'icf_13', 'icf_13']);
     expect(saved.activeWallType).toBe('icf_13');
+    // AND THE PAGE KNOWS EACH, at its own thickness: the 2x8 is 7 1/4".
+    const thick = await page.evaluate(() => Object.fromEntries(['stud_2x8', 'icf', 'icf_13', 'concrete_8']
+      .map(id => [id, window.DraftWallTypes.WALL_TYPES.find(t => t.id === id)?.totalIn ?? null])));
+    expect(thick).toEqual({ stud_2x8: 7.25, icf: 11.25, icf_13: 13.25, concrete_8: 8 });
   });
