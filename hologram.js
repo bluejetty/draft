@@ -400,6 +400,32 @@
     return pair;
   };
   const shown = saved => (Array.isArray(saved?.holograms) ? saved.holograms : []).filter(holo => !holo.hidden);
+  // ── A HOLOGRAM'S OWN HOLOGRAMS COME WITH IT (Movie, 18 Oct: "i put a
+  // HOLOGRAM of SUITE S into the PHASE 1, and then i saved it and i loaded the
+  // PHASE 1 into PHASE 2 and the SUITE HOLOGRAMS didn't show. we need those to
+  // also show as part of the PHASE 1 hologram") ────────────────────────────
+  //
+  // WHAT IS DRAWN, not what is listed: the card still shows PHASE 1 as one
+  // hologram, moved and turned as one. Each hologram inside it is drawn as
+  // part of it -- placed where PHASE 1 put it, then wherever PHASE 1 is put
+  // here -- and PHASE 1's shell wears its suites' windows, with the suite
+  // walls that are the shell's own left out, exactly as PHASE 1 drew them.
+  // In PHASE 1's own colours here: what came in with it is existing work.
+  // As deep as the files go: a suite holding a hologram brings that too.
+  const drawn = (saved, depth = 0) => shown(saved).flatMap(holo => {
+    const src = holo?.source || {};
+    if (depth > 4 || !shown(src).length) return [holo];
+    const own = shared(src);
+    const outer = { ...holo, source: { ...src, holograms: [],
+      fenestrations: [...(Array.isArray(src.fenestrations) ? src.fenestrations : []), ...own.openings] } };
+    const inner = drawn(src, depth + 1).map(child => {
+      const moved = placed(child, levelsMoved(child));
+      const hidden = own.hidden.get(child.id);
+      if (hidden && Array.isArray(moved.walls)) moved.walls = moved.walls.filter(w => !hidden.has(w.id));
+      return { ...holo, id: `${holo.id}/${child.id}`, demo: child.demo, source: moved, nested: true };
+    });
+    return [outer, ...inner];
+  });
 
   // A page ground darker than mid-grey is a NIGHT page.
   const darkGround = color => {
@@ -457,7 +483,7 @@
   // feet-to-screen; env: { view, show: { existing, demo }, paperColor }.
   // Returns whether anything was drawn.
   const paint = (ctx, toS, saved, levelId, env = {}) => {
-    const list = shown(saved);
+    const list = drawn(saved);
     const LP = window.DraftLayoutPlan;
     const F = window.DraftDrawingFormat;
     if (!list.length || !LP || !F) return false;
@@ -515,7 +541,7 @@
   // the drawing -- every level, or one.
   const framePoints = (saved, levelId = null) => {
     const F = window.DraftDrawingFormat;
-    return shown(saved).flatMap(holo => (Array.isArray(levelsMoved(holo).walls) ? levelsMoved(holo).walls : [])
+    return drawn(saved).flatMap(holo => (Array.isArray(levelsMoved(holo).walls) ? levelsMoved(holo).walls : [])
       .filter(wall => levelId == null || wall?.levelId === levelId)
       .flatMap(wall => [wall?.start, wall?.end])
       .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z))
@@ -582,7 +608,7 @@
   // the existing house and hides what stands behind it. env:
   // { show: { existing, demo }, paperColor }.
   const paintCut = (ctx, w, h, cut, saved, frame, env = {}) => {
-    const list = shown(saved);
+    const list = drawn(saved);
     const CV = window.DraftCutView;
     const CE = window.DraftCutViewEnv;
     const F = window.DraftDrawingFormat;
@@ -686,7 +712,7 @@
   // `underlay` and, with NEW off, `underlayOnly`. Nothing at all when there
   // is no hologram to show, so a plain drawing paints exactly as before.
   const cutOptions = (ctx, w, h, cut, saved, env = {}) => {
-    if (!shown(saved).length) return {};
+    if (!drawn(saved).length) return {};
     const show = { existing: true, demo: true, new: true, ...(env.show || {}) };
     return {
       underlay: frame => paintCut(ctx, w, h, cut, saved, frame, { ...env, show }),
@@ -697,5 +723,6 @@
   window.DraftHologram = Object.freeze({
     BLUE, PALE, ALPHA, VIEWS, planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
+    drawn,
   });
 })();

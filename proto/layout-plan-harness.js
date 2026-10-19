@@ -515,7 +515,10 @@ function run(label) {
     source: { ...SAVED, holograms: [{ id: 'inner', source: SAVED }] } }]);
   check('a hologram keeps its copy of the other drawing',
     kept && kept.source.walls.length === SAVED.walls.length);
-  check('but never that drawing\'s own holograms', kept && kept.source.holograms === undefined);
+  // AND THAT DRAWING'S OWN HOLOGRAMS WITH IT (Movie, 18 Oct: PHASE 1's suites
+  // "need to also show as part of the PHASE 1 hologram"), normalised too.
+  check('and that drawing\'s own holograms, normalised', kept && kept.source.holograms?.length === 1
+    && kept.source.holograms[0].id === 'inner' && kept.source.holograms[0].x === 0);
   check('a turn is kept inside a circle', kept && kept.angleDeg === 270);
   check('and the name trimmed', kept && kept.name === 'existing');
   check('a file that is not a drawing is not a hologram',
@@ -1095,8 +1098,10 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace("noteEnv: hologram ? null : unless(", 'noteEnv: unless(')],
   ['a hologram is drawn as the bare shell',
     'layout-plan.js', c => c.replace('const shell = env.shell === true;', 'const shell = env.shell === true || env.hologram === true;')],
-  ['a hologram keeps its own holograms',
-    'drawing-format.js', c => c.replace('const { holograms: nested, ...flat } = source;', 'const flat = source;')],
+  ['a hologram drops its own holograms again',
+    'drawing-format.js', c => c.replace('const inner = depth < 4 ? holograms(nested, depth + 1) : [];', 'const inner = [];')],
+  ['a hologram keeps its own holograms unnormalised',
+    'drawing-format.js', c => c.replace('const flat = inner.length ? { ...rest, holograms: inner } : rest;', 'const flat = source;')],
   ['a hologram of a newer Draft comes in',
     'drawing-format.js', c => c.replace('if (!checkEnvelope(source).ok) return null;', '')],
   ['a hologram turns the wrong way',

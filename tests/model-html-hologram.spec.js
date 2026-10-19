@@ -249,7 +249,7 @@ test('MIRROR turns it over across its own axis, F in hand does too, and the blue
   expect((await saved(page)).holograms[0].flip).toBe(true);
 });
 
-test('DELETE takes it off, UNDO brings it back, and its own holograms never come in', async ({ page }) => {
+test('DELETE takes it off, UNDO brings it back, and its own holograms come in with it', async ({ page }) => {
   const nested = { ...JSON.parse(HOUSE.toString('utf8')),
     holograms: [{ id: 'hologram-1', source: JSON.parse(HOUSE.toString('utf8')) }] };
   await open(page);
@@ -258,7 +258,9 @@ test('DELETE takes it off, UNDO brings it back, and its own holograms never come
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'nested.draft', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(nested)) });
   await expect.poll(async () => (await saved(page)).holograms?.length || 0).toBe(1);
-  expect((await saved(page)).holograms[0].source.holograms).toBeUndefined();
+  // ITS OWN HOLOGRAMS COME WITH IT (Movie, 18 Oct: PHASE 1's suites "need to
+  // also show as part of the PHASE 1 hologram").
+  expect((await saved(page)).holograms[0].source.holograms?.map(h => h.id)).toEqual(['hologram-1']);
   await chip(page).click();
   await chip(page).click();
   await page.locator('[data-hologram-delete]').click();

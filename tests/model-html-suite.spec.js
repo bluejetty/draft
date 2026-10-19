@@ -318,3 +318,38 @@ test('a blue hologram lined up with the shell says to make it a SUITE to snap an
   await expect(page.locator('#strip-message')).toContainText('Set it to SUITE');
   await page.mouse.up();
 });
+
+// A SHELL'S SUITES COME WITH IT INTO THE NEXT PHASE (Movie, 18 Oct: "i put a
+// HOLOGRAM of SUITE S into the PHASE 1, and then i saved it and i loaded the
+// PHASE 1 into PHASE 2 and the SUITE HOLOGRAMS didn't show. we need those to
+// also show as part of the PHASE 1 hologram").
+test('PHASE 1 brought in as a hologram draws its suites, their windows in its shell, where PHASE 1 put them', async ({ page }) => {
+  const phase1 = shell({ x: 0, z: 0 });
+  const phase2 = { version: 1, board: 'drafting', planTurn: 0, levels: LEVELS, activeLevelIdx: 2, ...EMPTY,
+    holograms: [{ id: 'p1', name: 'PHASE 1', x: 100, z: 0, angleDeg: 0, pivotX: 30, pivotZ: 15, source: phase1 }] };
+  await open(page, phase2);
+  const got = await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const d = JSON.parse(await file.text());
+    const list = window.DraftHologram.drawn(d);
+    const F = window.DraftDrawingFormat;
+    return {
+      kept: (d.holograms[0].source.holograms || []).map(h => h.id),
+      ids: list.map(h => h.id),
+      shellWindows: (list[0].source.fenestrations || []).map(o => `${o.wallId}:${o.offset}`),
+      suiteWalls: (list[1]?.source.walls || []).map(w => {
+        const p = F.hologramPoint(list[1], w.start);
+        return `${w.id}@${Math.round(p.x)},${Math.round(p.z)}`;
+      }).sort(),
+    };
+  }, BUCKET);
+  // KEPT IN THE FILE, then drawn as part of PHASE 1.
+  expect(got.kept).toEqual(['h1']);
+  expect(got.ids).toEqual(['p1', 'p1/h1']);
+  // THE SHELL WEARS THE SUITE'S WINDOW at 8' along its front wall, beside
+  // its own.
+  expect(got.shellWindows).toEqual(expect.arrayContaining(['a:40', 'a:8']));
+  // THE SUITE WALLS THAT ARE THE SHELL'S ARE LEFT OUT; the other two stand
+  // where PHASE 1 put them, moved 100' with it.
+  expect(got.suiteWalls).toEqual(['s2@120,0', 's3@120,15']);
+});
