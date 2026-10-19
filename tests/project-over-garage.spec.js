@@ -292,6 +292,20 @@ test('ON-GRADE and 1 STOREY are one type, told apart by the floor framing', asyn
     .toHaveAttribute('aria-pressed', 'true');
 });
 
+// AN ON-GRADE HOUSE STANDS ON A 4' FROST WALL (Movie, 18 Oct: "for the
+// project ON GRADE foundation use 4' frost wall with footing (not 8ft / go to
+// 4ft" -- "default 4ft, allow the user to change to 8ft or 9ft etc if they want
+// to later"). The stored height is the pour plus the sill plate.
+test('ON-GRADE pours a 4\' frost wall; 1 STOREY puts the basement height back', async ({ page }) => {
+  await openProject(page);
+  await page.locator('[data-family-entry="bungalow"]').click();
+  const fdnHt = async () => (await h.savedDrawing(page))?.levelAssemblies?.[1]?.wallHeightFt;
+  await page.locator('[data-family-entry="bungalow-ongrade"]').click();
+  await expect.poll(fdnHt, { message: '4\' of concrete and the 1 1/2" plate' }).toBeCloseTo(4 + 1.5 / 12, 6);
+  await page.locator('[data-family-entry="bungalow"]').click();
+  await expect.poll(fdnHt, { message: 'the office basement wall again' }).toBeGreaterThan(8);
+});
+
 // THE BILEVEL COLUMN SHARES THE BUILDER AND MUST NOT SHARE THE ANSWER. Its
 // tiles say nothing about floor framing, so a press there has to leave MAIN
 // FL's alone -- a drafter who set BALLOON / LEDGER on the level card and

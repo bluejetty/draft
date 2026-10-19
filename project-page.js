@@ -852,7 +852,16 @@ if (!window.DraftProjectPage) {
     const below = floors.slice(0, datumIndex).reduce((sum, level, i) =>
       sum + level.wallHeightFt + (floors[i + 1].joistDepthIn + floors[i + 1].sheathingIn) / 12, 0);
     let y = -below;
-    const mainDepthFt = (floors[datumIndex].joistDepthIn + floors[datumIndex].sheathingIn) / 12;
+    // A FLOOR HUNG ON LEDGERS SITS ITS SHEATHING ONLY ABOVE THE PLATE (Movie,
+    // 18 Oct, on the ON-GRADE section: "the Floor Joists for the ON-GRADE
+    // version should be attached on the SIDE of the foundation wall (inside
+    // edge) NOT on TOP" -- "the top of joists should be level with the top of
+    // the sill plate so that the 3/4\" sheathing can cover the sill plate and
+    // the top of joists flush"). So the foundation's plate lands one
+    // sheathing below 0, not a whole floor package.
+    const hungFloor = level => level?.framing === 'balloon';
+    const mainDepthFt = (hungFloor(floors[datumIndex]) ? floors[datumIndex].sheathingIn
+      : floors[datumIndex].joistDepthIn + floors[datumIndex].sheathingIn) / 12;
     // WHERE EACH DECK ENDED UP, so a level can stand on one that is not the
     // level below it. A split's upper floor bears over the ENTRY and the
     // garage -- Movie, 16 Sep: "the main floor area doesn't have a 2nd floor
@@ -928,7 +937,23 @@ if (!window.DraftProjectPage) {
       // A floor with its own wall type draws at its own width; the shared
       // wallThicknessIn is the answer for every level that never split.
       const levelWallFt = (level.wallIn ?? wallIn) / 12;
-      if (deckShown(level)) {
+      // THE FLOOR ON THE FOUNDATION, HUNG ON ITS INSIDE FACE: the sheathing
+      // runs out over the sill plate to the exterior face, and the joists
+      // under it start at the concrete's inside face, their tops flush with
+      // the top of the plate.
+      const hung = hungFloor(level) && index === datumIndex;
+      const sheathFt = level.sheathingIn / 12, joistFt = level.joistDepthIn / 12;
+      if (hung && deckShown(level)) {
+        deckRuns(span).forEach(([x0, x1]) => {
+          rect(x0, y - sheathFt, x1 - x0, sheathFt, 1);          // sheathing over the plate
+          line(x0, y, x1, y, 1.5);                               // sheathing top
+          const jx = Math.max(x0, fdnFt);
+          if (x1 - jx > 0.01) rect(jx, y - sheathFt - joistFt, x1 - jx, joistFt, 1); // joists off the wall
+          if (x1 < span) line(x1, y, x1, y - sheathFt - joistFt, 1.5);
+        });
+        anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - sheathFt - joistFt / 2 };
+        anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - sheathFt / 2 };
+      } else if (deckShown(level)) {
         deckRuns(span).forEach(([x0, x1]) => {
           rect(x0, y - depthFt, x1 - x0, depthFt, 1);            // floor band
           line(x0, y, x1, y, 1.5);                               // sheathing top
@@ -945,8 +970,10 @@ if (!window.DraftProjectPage) {
         line(0, y - depthFt, 0, y, 2);                           // exterior face
         line(levelWallFt, y - depthFt, levelWallFt, y, 1.5);     // interior face
       }
-      anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - depthFt / 2 };
-      anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - (level.sheathingIn / 12) / 2 };
+      if (!hung) {
+        anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - depthFt / 2 };
+        anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - (level.sheathingIn / 12) / 2 };
+      }
       line(0, y, 0, y + level.wallHeightFt, 2);                  // exterior face
       line(levelWallFt, y, levelWallFt, y + level.wallHeightFt, 1.5); // interior face
       // The inner end of a level that stops short: the framing the balcony

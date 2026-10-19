@@ -1225,6 +1225,8 @@
       // label on 16 Sep: "the foundation should be 8' and then the sill plat
       // is 1.5\"".
       const housePourFt = () => assembly(1).wallHeightFt - attachmentFt();
+      // The frost wall an ON-GRADE house pours: 4' of concrete to its plate.
+      const ON_GRADE_FROST_WALL_FT = 4;
       // A TALLER PLATE RAISES THE FLOOR, IT DOES NOT EAT THE CONCRETE. Typing
       // 3" here has to leave the pour at 8'-0" and move the bearing line to
       // 8'-3", so the attachment's setter re-composes the stored height
@@ -1472,6 +1474,7 @@
           const asm = assembly(level.id);
           return { id: level.id, name: level.name, wallHeightFt: asm.wallHeightFt,
             joistDepthIn: asm.joistDepthIn, sheathingIn: asm.sheathingIn,
+            framing: asm.framing,
             wallIn: floorWallIn(level.id) };
         }),
         foundation: (() => {
@@ -3629,6 +3632,19 @@
           // and must not quietly reset a level card somebody edited.
           if (answersFraming) {
             setAssembly(MAIN_FLOOR_LEVEL_ID, 'framing', entry.framing || DEFAULT_FRAMING);
+            // AN ON-GRADE HOUSE STANDS ON A FROST WALL (Movie, 18 Oct: "for the
+            // project ON GRADE foundation use 4' frost wall with footing (not
+            // 8ft / go to 4ft" -- "default 4ft, allow the user to change to
+            // 8ft or 9ft etc if they want to later"). The pour goes to 4' when
+            // the tile is pressed, and stays whatever is typed after. Back to
+            // a platform tile, a pour still at the frost wall's 4' goes back
+            // to the office's basement height; one somebody typed is kept.
+            const pourNow = housePourFt();
+            if (entry.framing === 'balloon') {
+              setAssembly(1, 'wallHeightFt', ON_GRADE_FROST_WALL_FT + attachmentFt());
+            } else if (Math.abs(pourNow - ON_GRADE_FROST_WALL_FT) < 1e-6) {
+              setAssembly(1, 'wallHeightFt', assemblyDefaults(1).wallHeightFt);
+            }
           }
           applyGaragePlan(planForEntry(entry));
         });
