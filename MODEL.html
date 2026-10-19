@@ -19025,11 +19025,18 @@
   // exactly that reason and this keeps the comparison rather than simplifying
   // it to a sign test, which would be wrong for a left- or right-referenced
   // wall.
-  const fixturePlacement = worldPt => {
+  // THE REACH IS THE FIXTURE'S OWN DEPTH as well as the grab zone (Movie,
+  // 19 Oct: "i can't insert WASHER or DRYER"). A drafter presses where the
+  // machine will STAND, which for a 27" washer is over a foot off the wall's
+  // centreline -- and at the zoom a room is drawn at, 30px is about a foot and
+  // a half, so the press read as "near no wall" however close to the wall it
+  // looked. `reachFt` is measured from the centreline: the depth plus half a
+  // thick wall.
+  const fixturePlacement = (worldPt, reachFt = 0) => {
     const G = window.DraftGeometry2D;
     const FG = window.DraftFixtureGeometry;
     if (!G || !FG) return null;
-    const thresh = FIXTURE_PICK_PX / view.scale;
+    const thresh = Math.max(FIXTURE_PICK_PX / view.scale, reachFt);
     let best = null, bestD = thresh;
     walls().forEach(wall => {
       if (!wall.start || !wall.end) return;
@@ -19396,7 +19403,7 @@
       sayOnStrip(`${kind.label} is not on this page yet — it takes a gesture of its own.`);
       return null;
     }
-    const placement = fixturePlacement(at);
+    const placement = fixturePlacement(at, kind.run ? 0 : (Number(kind.depthFt) || 0) + 0.5);
     if (!placement) {
       sayOnStrip('Press near a wall — fixtures and cabinets sit against the wall that carries them.');
       return null;

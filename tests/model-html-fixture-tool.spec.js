@@ -124,6 +124,33 @@ test('a cabinet presses onto a wall and lands on that wall', async ({ page }) =>
   expect(fixtures[0].layer).toBe('A-FIXT');
 });
 
+// PRESSED WHERE THE MACHINE WILL STAND (Movie, 19 Oct: "i can't insert
+// WASHER or DRYER - i need it for LAUNDRY"). At his zoom the 30px grab zone
+// is about a foot and a half, and the middle of a 27" washer is
+// past that from the wall's centreline -- so the press said "near no wall".
+// The reach is the fixture's own depth now.
+for (const kindId of ['washer', 'dryer']) {
+  test(`a ${kindId} pressed where it will stand lands on the wall`, async ({ page }) => {
+    await houseOnLivePage(page);
+    const wall = await longestPlanWall(page);
+    const { at } = await h.planFrame(page);
+    const [cx, cy] = at((wall.start.x + wall.end.x) / 2, (wall.start.z + wall.end.z) / 2);
+    await page.mouse.move(cx, cy);
+    // TO HIS ZOOM, about 20px a foot: 30px is a foot and a half there.
+    for (let i = 0; i < 12 && (await h.planFrame(page)).scale < 20; i++) {
+      await page.mouse.wheel(0, -200);
+      await page.waitForTimeout(60);
+    }
+    const { scale } = await h.planFrame(page);
+    expect(30 / scale, 'the old grab zone is short of where the machine stands').toBeLessThan(2);
+    await armKind(page, kindId);
+    await pressWorld(page, alongWall(wall, 0.5, 2));
+    await saveNow(page);
+    const fixtures = await fixturesOf(page);
+    expect(fixtures.map(f => [f.kind, f.wallId])).toEqual([[kindId, wall.id]]);
+  });
+}
+
 test('casework lands on its own layer', async ({ page }) => {
   await houseOnLivePage(page);
   const wall = await longestPlanWall(page);

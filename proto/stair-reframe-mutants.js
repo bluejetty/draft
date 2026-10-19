@@ -1,24 +1,31 @@
 #!/usr/bin/env node
 // MUTATION GATE for the stair framed again after a move or a turn, and the
-// MOVE verb sliding a door (tests/stair-reframe.spec.js, and the MOVE test in
-// tests/model-html-fenestration.spec.js).
+// MOVE verb sliding a door, and a fixture reaching from where it will stand
+// (tests/stair-reframe.spec.js, the MOVE test in model-html-fenestration, the
+// washer and dryer tests in model-html-fixture-tool).
 //
 // Movie, 19 Oct: "is there a way to regenerate the beam after the stairs
 // move" -- "the short ends won't need beams ever ... only the long end needs a
 // beam on side that span 10 ft or more" -- "i'm trying to select and then MOVE
-// the door to SLIDE it on the wall, but it isn't moving".
+// the door to SLIDE it on the wall, but it isn't moving" -- "i can't insert
+// WASHER or DRYER - i need it for LAUNDRY".
 //
 // Run: node proto/stair-reframe-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js';
+const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js';
 const TURNED = 'turned to lie with the joists, the stair keeps no side beam; one UNDO brings it back';
 const HALF = 'turned end for end, the beam goes on the open side, never where the wall carries it';
 const SLID = 'slid and let go, the stair is framed again where it landed, in the same UNDO';
 const DOOR = 'MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back';
+const WASHER = 'a washer pressed where it will stand lands on the wall';
 const MUTANTS = [
+  { file: 'MODEL.html', name: 'a fixture reaches only the 30px grab zone',
+    find: "    const thresh = Math.max(FIXTURE_PICK_PX / view.scale, reachFt);\n",
+    with: "    const thresh = FIXTURE_PICK_PX / view.scale;\n",
+    test: WASHER },
   { file: 'MODEL.html', name: 'a run with the joists still takes a side beam',
     find: "    if (joist && (Math.abs(u.x) >= Math.abs(u.z) ? 'x' : 'z') === joist) return [];\n",
     with: "",
