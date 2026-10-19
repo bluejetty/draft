@@ -36,8 +36,16 @@ const MUTANTS = [
     test: 'the node glows orange, the corner yellow, the face neon' },
   { file: 'MODEL.html',
     name: 'a drag sees no crossings',
-    find: '        ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],\n',
-    with: '      ],\n',
+    find: "    const still = walls().filter(w => !touches(w.start) && !touches(w.end));\n"
+      + "    const stillRuns = [...still, ...lines().filter(l => !touches(l.start) && !touches(l.end))];\n"
+      + "    return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),\n"
+      + "      corners: [...G.wallFaceCorners(still, openingThicknessFt()),\n"
+      + "        ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],\n",
+    with: "    const still = walls().filter(w => !touches(w.start) && !touches(w.end));\n"
+      + "    const stillRuns = [...still, ...lines().filter(l => !touches(l.start) && !touches(l.end))];\n"
+      + "    return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),\n"
+      + "      corners: [...G.wallFaceCorners(still, openingThicknessFt()),\n"
+      + "      ],\n",
     test: 'a dragged node lands on a crossing, and takes the yellow' },
   { file: 'geometry-2d.js',
     name: 'a T-junction counts as a crossing',
