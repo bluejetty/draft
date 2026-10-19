@@ -12501,6 +12501,85 @@
     faceCornerCache = { key, list: G.wallFaceCorners(segs, openingThicknessFt()) };
     return faceCornerCache.list;
   };
+  // ── THE MAGNET: FACE CORNERS PULL HARDEST, THEN THE FACE LINES ─────────
+  //
+  // Movie, 19 Oct, lining a 3 1/2" wall's node up with the inside corner of a
+  // 5 1/2" interior wall: "can these interior walls be 'attracted' to SNAP to
+  // the INTERIOR CORNER and also to the INTERIOR WALL LINE (but more pull
+  // from the inside/outside corners" -- "when i draw a LINE i'd also like
+  // these NODES and int lines to allow SNAPPING and magnetic type behavior
+  // with glowing mouse rollovers". So a face corner reaches twice as far as a
+  // face line, every wall's faces -- interior walls as much as exterior --
+  // pull a point drawn or dragged near them, and the corners and faces in
+  // reach light up in the cross lines' neon.
+  const FACE_CORNER_PULL_PX = 14;
+  const FACE_LINE_PULL_PX = 7;
+  // How near the cursor a magnet has to be to light up at all.
+  const MAGNET_SHOW_PX = 48;
+  let faceLineCache = { key: null, list: [] };
+  const wallFaceSegs = () => {
+    const G = window.DraftGeometry2D;
+    if (!G?.wallFaceLines || !drawing) return [];
+    const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
+    if (faceLineCache.key === key) return faceLineCache.list;
+    faceLineCache = { key, list: G.wallFaceLines(walls(), openingThicknessFt()) };
+    return faceLineCache.list;
+  };
+  const pullFt = px => Math.max(NODE_SNAP_FT, px / view.scale);
+  const nearestWithin = (list, at, px) => {
+    const r = pullFt(px);
+    let best = null;
+    list.forEach(v => {
+      const d = Math.hypot(v.x - at.x, v.z - at.z);
+      if (d <= r && (!best || d < best.d)) best = { d, v };
+    });
+    return best ? best.v : null;
+  };
+  const faceFoot = (seg, at) => {
+    const dx = seg.b.x - seg.a.x, dz = seg.b.z - seg.a.z, len2 = dx * dx + dz * dz;
+    if (len2 < 1e-9) return null;
+    const t = Math.max(0, Math.min(1, ((at.x - seg.a.x) * dx + (at.z - seg.a.z) * dz) / len2));
+    return { x: seg.a.x + t * dx, z: seg.a.z + t * dz };
+  };
+  const nearestFace = (segs, at, px = FACE_LINE_PULL_PX) => {
+    const r = px / view.scale;
+    let best = null;
+    segs.forEach(seg => {
+      const p = faceFoot(seg, at);
+      if (!p) return;
+      const d = Math.hypot(p.x - at.x, p.z - at.z);
+      if (d <= r && (!best || d < best.d)) best = { d, pt: p, seg };
+    });
+    return best;
+  };
+  // The magnets a point being drawn answers to; null when SNAP is off.
+  const drawMagnet = () => (snapOn && board !== 'toy'
+    ? { corners: wallFaceNodes(), segs: wallFaceSegs() } : null);
+  // A DRAGGED NODE answers to every wall but its own: the walls it is an end
+  // of move with it, so their faces are not where they were. Worked out once
+  // when the drag starts.
+  const dragMagnet = vtx => {
+    const G = window.DraftGeometry2D;
+    if (!G?.wallFaceLines || !vtx) return { corners: [], segs: [] };
+    const touches = v => v && (v === vtx || (Math.abs(v.x - vtx.x) < 0.001 && Math.abs(v.z - vtx.z) < 0.001));
+    const still = walls().filter(w => !touches(w.start) && !touches(w.end));
+    return { corners: G.wallFaceCorners(still, openingThicknessFt()),
+      segs: G.wallFaceLines(still, openingThicknessFt()) };
+  };
+  // Where a dragged point lands: a node first, then a face corner, then a
+  // face line. `{ pt, corner }` or `{ pt, seg }`, or null.
+  const dragMagnetAt = (at, vtx, magnet) => {
+    const node = cornerSnap(at, vtx);
+    if (node) return { pt: { x: node.x, y: 0, z: node.z }, corner: node, node: true };
+    if (!magnet) return null;
+    const corner = nearestWithin(magnet.corners, at, FACE_CORNER_PULL_PX);
+    if (corner) return { pt: { x: corner.x, y: 0, z: corner.z }, corner };
+    const face = nearestFace(magnet.segs, at);
+    return face ? { pt: { x: face.pt.x, y: 0, z: face.pt.z }, seg: face.seg } : null;
+  };
+  // A wall's or a line's own end, as opposed to a face corner.
+  const isOwnNode = v => [...walls(), ...lines()].some(seg => [seg.start, seg.end]
+    .some(e => e && Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6));
   const nodeEnds = ({ faces = true } = {}) => {
     const out = [];
     [...walls(), ...lines()].forEach(seg => [seg.start, seg.end].forEach(v => {
@@ -12525,7 +12604,8 @@
       });
       return best ? best.v : null;
     };
-    return nearest(nodeEnds({ faces: false })) || nearest(wallFaceNodes());
+    return nearest(nodeEnds({ faces: false }))
+      || nearestWithin(wallFaceNodes(), at, FACE_CORNER_PULL_PX);
   };
   let lastSnapKey = '';
   // NOTHING AROUND, as Movie put it ("only when nothing is around"): no
@@ -12539,6 +12619,10 @@
     if (snapOn) {
       const node = snapNodeAt(at);
       if (node) return { pt: { x: node.x, y: 0, z: node.z }, node };
+      if (board !== 'toy') {
+        const face = nearestFace(wallFaceSegs(), at);
+        if (face) return { pt: { x: face.pt.x, y: 0, z: face.pt.z }, face: face.seg };
+      }
       if (!drawStart && levelIsEmpty()) {
         const b = gridDatum();
         if (b && Math.hypot(b.x - at.x, b.z - at.z) <= BULLSEYE_PULL_FT) return { pt: { x: b.x, y: 0, z: b.z }, bullseye: true };
@@ -12587,13 +12671,34 @@
   // dragged point is its own nearest candidate and the square's free
   // coordinate snaps straight back to where the drag started -- a point that
   // refuses to move, which reads as a lock rather than a snap.
-  const axisSnap = (worldPt, fixed, moving = []) => {
-    const corner = cornerSnap(worldPt, moving);
-    if (!corner) return null;
-    return fixed === 'z'
-      ? { x: corner.x, y: 0, z: worldPt.z }
-      : { x: worldPt.x, y: 0, z: corner.z };
+  //
+  // AND THE MAGNET, SQUARED: a face corner lends its free coordinate the way
+  // a node does, and failing that the point stops where the squared run
+  // crosses a wall's face -- a run held square meets the face it is drawn to.
+  const axisMagnet = (worldPt, fixed, moving = [], magnet = null) => {
+    const node = cornerSnap(worldPt, moving);
+    const corner = node || (magnet && nearestWithin(magnet.corners, worldPt, FACE_CORNER_PULL_PX));
+    if (corner) {
+      return { pt: fixed === 'z' ? { x: corner.x, y: 0, z: worldPt.z } : { x: worldPt.x, y: 0, z: corner.z },
+        corner, node: !!node };
+    }
+    if (!magnet) return null;
+    const free = fixed === 'z' ? 'x' : 'z';
+    const r = FACE_LINE_PULL_PX / view.scale;
+    let best = null;
+    magnet.segs.forEach(seg => {
+      const d0 = seg.a[fixed] - worldPt[fixed], d1 = seg.b[fixed] - worldPt[fixed];
+      if (d0 * d1 > 0 || Math.abs(d1 - d0) < 1e-9) return;
+      const at = seg.a[free] + (seg.b[free] - seg.a[free]) * (d0 / (d0 - d1));
+      const d = Math.abs(at - worldPt[free]);
+      if (d <= r && (!best || d < best.d)) best = { d, at, seg };
+    });
+    if (!best) return null;
+    return { pt: fixed === 'z' ? { x: best.at, y: 0, z: worldPt.z } : { x: worldPt.x, y: 0, z: best.at },
+      seg: best.seg };
   };
+  const axisSnap = (worldPt, fixed, moving = [], magnet = null) =>
+    axisMagnet(worldPt, fixed, moving, magnet)?.pt || null;
 
   // ── move a whole wall ─────────────────────────────────────────────────────
   // BOTH ENDS BY THE SAME DELTA. Their corners are pooled, so the neighbouring
@@ -15323,8 +15428,9 @@
     // exact and skips the foot below; a CROSS LINE only sets the bearing, so
     // with the 1' light on the run still lands on the whole foot along it.
     const snap = !fixed && board !== 'toy' ? drawSnap(wanted) : {};
-    if (snap.pt && !snap.node && onTheFoot_if()) return onTheFoot(drawStart, snap.pt);
-    const snapped = fixed ? axisSnap(wanted, fixed) : (snap.pt || cornerSnap(wanted, []));
+    if (snap.pt && !snap.node && !snap.face && onTheFoot_if()) return onTheFoot(drawStart, snap.pt);
+    const snapped = fixed ? axisSnap(wanted, fixed, [], board !== 'toy' ? drawMagnet() : null)
+      : (snap.pt || cornerSnap(wanted, []));
     if (snapped) return snapped;
     const free = { x: wanted.x, y: 0, z: wanted.z };
     // INSIDE THE HOUSE, TOY'S GRAIN comes before the foot: the point lands on
@@ -15880,24 +15986,114 @@
   // (Movie, 17 Oct: "a glowing donut with a orange dot in the middle" --
   // "node snape orange glow"). And a cross line snapped to from a node that
   // sends no ray of its own, lit while it holds the point.
+  // ORANGE ON A NODE, NEON OFF ONE (Movie, 19 Oct: "please make mouseover
+  // glow orange at 'magnetic snap nodes' and glow yellow green neon for LINE
+  // and non node corner magnetic snaps"). A node is a wall's or a line's own
+  // end; a face corner or a point on a face is not, and wears the cross
+  // lines' colour.
+  const paintDonut = (pt, neon = false) => {
+    const p = toS(pt);
+    ctx.save();
+    ctx.shadowColor = neon ? TRACK_GLOW : 'rgba(255, 150, 30, 0.95)';
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = neon ? TRACK_LIT : '#ff9a1f';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = neon ? TRACK_LIT : '#ff9a1f';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  };
+  // THE MAGNETS IN REACH, in the cross lines' neon (Movie, 19 Oct: "make the
+  // nodes light up bright orange and the edge of walls and corners that are
+  // magnetic to light up the neon green yellow shade we have for the cross
+  // lines"). The faces and face corners near the cursor glow faintly, so the
+  // hand can see what will pull before it does; the one that has the point
+  // glows bright, and the point itself takes the orange donut.
+  const paintMagnets = (cursor, magnet, lit) => {
+    if (!cursor || !magnet) return;
+    const reach = MAGNET_SHOW_PX / view.scale;
+    const segOn = seg => {
+      const a = toS(seg.a), b = toS(seg.b);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    };
+    ctx.save();
+    magnet.segs.forEach(seg => {
+      const foot = faceFoot(seg, cursor);
+      if (!foot || Math.hypot(foot.x - cursor.x, foot.z - cursor.z) > reach) return;
+      const on = lit?.seg === seg;
+      ctx.strokeStyle = on ? TRACK_LIT : TRACK_FAINT;
+      ctx.lineWidth = on ? 2 : 1;
+      ctx.shadowColor = on ? TRACK_GLOW : 'transparent';
+      ctx.shadowBlur = on ? 10 : 0;
+      segOn(seg);
+    });
+    magnet.corners.forEach(c => {
+      if (Math.hypot(c.x - cursor.x, c.z - cursor.z) > reach) return;
+      const p = toS(c);
+      ctx.fillStyle = TRACK_LIT;
+      ctx.shadowColor = TRACK_GLOW;
+      ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+  };
+  // FOR THE SPECS: what the point is held by, and where.
+  const markMagnet = lit => {
+    if (!lit) { canvas.removeAttribute('data-snap-magnet'); return; }
+    canvas.setAttribute('data-snap-magnet', JSON.stringify({
+      kind: lit.seg ? 'face' : lit.node ? 'node' : 'corner',
+      at: [Number(lit.pt.x.toFixed(4)), Number(lit.pt.z.toFixed(4))] }));
+  };
+  // THE NODE A PRESS WOULD LAND ON, while a wall, line or outline is being
+  // drawn: an orange glowing donut with an orange dot on the exact point
+  // (Movie, 17 Oct: "a glowing donut with a orange dot in the middle" --
+  // "node snape orange glow"). And a cross line snapped to from a node that
+  // sends no ray of its own, lit while it holds the point.
   const paintSnapNode = () => {
-    if (!cursorWorld || !(drawsRun() || activeTool === 'outline')) return;
-    const snap = drawSnap(cursorWorld);
-    if (snap.node || snap.bullseye) {
-      const p = toS(snap.pt);
-      ctx.save();
-      ctx.shadowColor = 'rgba(255, 150, 30, 0.95)';
-      ctx.shadowBlur = 12;
-      ctx.strokeStyle = '#ff9a1f';
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = '#ff9a1f';
-      ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-      canvas.setAttribute('data-snap-node', JSON.stringify([Number(snap.pt.x.toFixed(4)), Number(snap.pt.z.toFixed(4))]));
+    // A NODE BEING DRAGGED shows what has it, from the drag's own answer.
+    if (moveDrag?.kind === 'corner' && moveDrag.active) {
+      canvas.removeAttribute('data-snap-node');
+      paintMagnets(moveDrag.cursor, moveDrag.magnet, moveDrag.lit);
+      if (moveDrag.lit) paintDonut(moveDrag.lit.pt, !moveDrag.lit.node);
+      markMagnet(moveDrag.lit);
+      return;
+    }
+    if (!cursorWorld || !(drawsRun() || activeTool === 'outline')) { markMagnet(null); return; }
+    // A RUN HELD SQUARE asks the squared magnet, as drawPoint does; the
+    // locked bearing and the protractor take no magnet at all.
+    const runs = drawsRun() && board !== 'toy' && drawStart;
+    const steered = runs && (lockedPoint(drawStart, cursorWorld) || protractorPoint(drawStart, cursorWorld));
+    const fixed = runs && !steered ? squaredAxis(drawStart, cursorWorld) : null;
+    const magnet = drawsRun() && !steered ? drawMagnet() : null;
+    if (fixed) {
+      const lit = axisMagnet(squareTo(drawStart, cursorWorld), fixed, [], magnet);
+      paintMagnets(cursorWorld, magnet, lit);
+      if (lit) paintDonut(lit.pt, !lit.node);
+      markMagnet(lit);
+      canvas.removeAttribute('data-snap-node');
+      return;
+    }
+    // AND THE WIDER CORNER CATCH UNDER IT. drawPoint falls back on
+    // cornerSnap when SNAP finds nothing, and that took a wall's node with no
+    // glow at all (Movie, 19 Oct: "looks like the LINE does attach to nodes,
+    // but the rollover doesn't glow so the user is unaware of this").
+    let snap = drawSnap(cursorWorld);
+    if (!snap.pt && drawsRun() && board !== 'toy') {
+      const caught = cornerSnap(cursorWorld, []);
+      if (caught) snap = { pt: { x: caught.x, y: 0, z: caught.z }, node: caught };
+    }
+    paintMagnets(cursorWorld, magnet, snap.face ? { seg: snap.face } : null);
+    const ownNode = snap.node && isOwnNode(snap.node);
+    if (snap.node || snap.bullseye || snap.face) {
+      paintDonut(snap.pt, !!snap.face || (!!snap.node && !ownNode));
+      if (snap.node || snap.bullseye) {
+        canvas.setAttribute('data-snap-node', JSON.stringify([Number(snap.pt.x.toFixed(4)), Number(snap.pt.z.toFixed(4))]));
+      } else canvas.removeAttribute('data-snap-node');
     } else {
       canvas.removeAttribute('data-snap-node');
     }
+    markMagnet(snap.face ? { pt: snap.pt, seg: snap.face }
+      : snap.node ? { pt: snap.pt, node: ownNode, corner: snap.node } : null);
     (snap.rays || []).forEach(ray => {
       const p = toS(ray.n), q = toS(snap.pt);
       ctx.save();
@@ -30744,9 +30940,15 @@
           const from = { x: grabbed.x, z: grabbed.z };
           const wanted = tsquareOn ? squareTo(from, raw) : raw;
           const fixed = tsquareOn ? squaredAxis(from, raw) : null;
-          const snapped = fixed
-            ? axisSnap(wanted, fixed, grabbed.vtx)
-            : cornerSnap(wanted, grabbed.vtx);
+          // THE MAGNET ON A DRAG TOO, with SNAP lit off TOY: the corners and
+          // faces of every wall the node does not belong to.
+          const magnet = snapOn && board !== 'toy' ? (md.magnet ||= dragMagnet(grabbed.vtx)) : null;
+          const hit = fixed
+            ? axisMagnet(wanted, fixed, grabbed.vtx, magnet)
+            : dragMagnetAt(wanted, grabbed.vtx, magnet);
+          md.lit = hit;
+          md.cursor = raw;
+          const snapped = hit?.pt || null;
           // MIN 0 FEET, not the drawn run's 1: a nudge of less than half a foot
           // rounds back to where the corner started, and a corner that stayed
           // put is the honest answer to a hand that barely moved.
