@@ -34,7 +34,7 @@ const MUTANTS = [
     with: "",
     test: "a node dragged moves alone; a node clicked is picked and DELETE takes it out" },
   { file: 'MODEL.html', name: "a clicked node is never picked",
-    find: "      moveState.node = d.kind === 'node' ? { roof: d.targets[0], i: d.node } : null;\n",
+    find: "      moveState.node = d.node != null ? { roof: d.targets[0], list: [d.node] } : null;\n",
     with: "      moveState.node = null;\n",
     test: "a node dragged moves alone; a node clicked is picked and DELETE takes it out" },
   { file: 'MODEL.html', name: "inside the roof grabs nothing",

@@ -949,8 +949,12 @@ if (!window.DraftDrawingFormat) {
             const at = point(gable?.at);
             const widthFt = positive(gable?.widthFt, null);
             const pitch = number(gable?.pitch, NaN);
+            // AND ITS GABLE WALL'S OWN FINISH (Movie, 18 Oct), set in EXT
+            // FINISH; absent, it wears the wall under it.
+            const finish = typeof gable?.finish === 'string' && /^[a-z0-9_-]{1,40}$/i.test(gable.finish)
+              ? { finish: gable.finish } : {};
             return at && widthFt && pitch > 0 && pitch <= 24
-              ? { at: { x: at.x, z: at.z }, widthFt, pitch } : null;
+              ? { at: { x: at.x, z: at.z }, widthFt, pitch, ...finish } : null;
           }).filter(Boolean);
           return list.length ? { crossGables: list } : {};
         })()),
