@@ -14,7 +14,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/wall-magnet.spec.js';
 const MUTANTS = [
   { file: "MODEL.html", name: "no face lines in the draw snap",
-    find: "        const face = nearestFace(wallFaceSegs(), at);\n",
+    find: "        const face = nearestFace(magnetSegs(), at);\n",
     with: "        const face = null;\n",
     test: 'a LINE started a hair off an interior wall\'s face starts ON the face, and the face lights neon' },
   { file: "geometry-2d.js", name: "the face lines sit on the wall's centre",
@@ -22,7 +22,7 @@ const MUTANTS = [
     with: "      return [0, 0].map(o => ({",
     test: 'a LINE started a hair off an interior wall\'s face starts ON the face, and the face lights neon' },
   { file: "MODEL.html", name: "face corners pull no further than a line",
-    find: "  const FACE_CORNER_PULL_PX = 14;\n",
+    find: "  const FACE_CORNER_PULL_PX = 11;\n",
     with: "  const FACE_CORNER_PULL_PX = 6;\n",
     test: 'the inside corner pulls harder than the face: 10px along the face still lands on the corner' },
   { file: "MODEL.html", name: "a face corner glows as a node",
