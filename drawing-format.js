@@ -1078,6 +1078,11 @@ if (!window.DraftDrawingFormat) {
         // header from one that has not -- and a stair taken away can take its
         // header with it. Absent on every other beam.
         ...(Number.isInteger(stairId) && stairId > 0 ? { stairId } : {}),
+        // THE ENGINEER'S MARK (Movie, 19 Oct: "STEEL, LAMINATED BEAMS etc"):
+        // what the beam is labelled instead of FLUSH / DROPPED BEAM. Kept
+        // only when it says something.
+        ...(typeof beam?.mark === 'string' && beam.mark.trim()
+          ? { mark: beam.mark.trim().slice(0, 80) } : {}),
         layer: 'S-BEAM',
       };
     }), env.drops).filter(Boolean);

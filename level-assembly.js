@@ -364,6 +364,10 @@ if (!window.DraftLevelAssembly) {
       // hand-edited file or an older save cannot strand a drawing on a
       // foundation no page knows how to draw.
       foundationKind: raw.foundationKind === 'gradebeam' ? 'gradebeam' : 'wall',
+      // The engineer's own callout for this floor's joists, or null for the
+      // one build-house works out (Movie, 19 Oct).
+      joistCallout: typeof raw.joistCallout === 'string' && raw.joistCallout.trim()
+        ? raw.joistCallout.trim().slice(0, 80) : null,
     };
   };
 

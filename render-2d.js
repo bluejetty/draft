@@ -1075,8 +1075,11 @@ if (!window.DraftRender2D) {
       // the same text at +offset, hung from its top so it still clears the
       // line.
       const flip = tag === 1 || tag === '+';
+      // A MARK the engineer typed names the beam instead (Movie, 19 Oct).
+      const named = typeof beam.mark === 'string' && beam.mark.trim() ? beam.mark.trim()
+        : (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM');
       labelAlongLine2D(ctx, a, b,
-        (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM') + (below ? ' BELOW' : above ? ' ABOVE' : ''),
+        named + (below ? ' BELOW' : above ? ' ABOVE' : ''),
         { font: env.labelFont, color: env.beamColor, offset: flip ? -5 : 5,
           baseline: flip ? 'top' : 'bottom' });
     }
