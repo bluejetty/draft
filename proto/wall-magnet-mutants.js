@@ -14,7 +14,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/wall-magnet.spec.js';
 const MUTANTS = [
   { file: "MODEL.html", name: "no face lines in the draw snap",
-    find: "        const face = nearestFace(wallFaceSegs(), at);\n",
+    find: "        const face = nearestFace(magnetSegs(), at);\n",
     with: "        const face = null;\n",
     test: 'a LINE started a hair off an interior wall\'s face starts ON the face, and the face lights neon' },
   { file: "geometry-2d.js", name: "the face lines sit on the wall's centre",

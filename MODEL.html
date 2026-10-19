@@ -12546,6 +12546,34 @@
     return faceLineCache.list;
   };
   const pullFt = px => Math.max(NODE_SNAP_FT, px / view.scale);
+  // ── EVERY RUN AND LOOP ON THE LEVEL FEEDS ONE MAGNET (Movie, 19 Oct) ──
+  //
+  // "id like the lines / walls / areas / floors/ roofs etc to all act in
+  // this way". A loop's corners -- a floor's, a roof's, an outline's, a
+  // shape's -- are its own nodes (orange); its edges and a line's body are
+  // faces (neon); and where any two runs cross with no node there is a
+  // corner that acts like one (yellow). One list each, read by the draw,
+  // the drag and the paint alike.
+  const loopsHere = () => [...floors(), ...roofs(), ...outlines(), ...shapes()]
+    .filter(item => Array.isArray(item?.points) && item.points.length >= 3);
+  const loopCorners = () => loopsHere().flatMap(item => item.points
+    .filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.z)));
+  const loopEdges = () => loopsHere().flatMap(item => item.points.map((p, i) =>
+    ({ start: p, end: item.points[(i + 1) % item.points.length], loop: item })));
+  // Every straight run on the level, start to end.
+  const runsHere = () => [...walls(), ...lines(), ...loopEdges()];
+  // A line's body and a loop's edge are faces as they stand (a wall's are
+  // its two, wallFaceLines).
+  const bodySegs = runs => runs.filter(r => r?.start && r?.end && !r.bulge)
+    .map(r => ({ a: r.start, b: r.end, run: r }));
+  let magnetSegCache = { key: null, list: [] };
+  const magnetSegs = () => {
+    if (!drawing) return [];
+    const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
+    if (magnetSegCache.key === key) return magnetSegCache.list;
+    magnetSegCache = { key, list: [...wallFaceSegs(), ...bodySegs([...lines(), ...loopEdges()])] };
+    return magnetSegCache.list;
+  };
   // WHERE RUNS CROSS WITH NO NODE THERE: yellow corners too, on this level.
   let crossingCache = { key: null, list: [] };
   const crossingNodes = () => {
@@ -12553,7 +12581,7 @@
     if (!G?.lineCrossings || !drawing) return [];
     const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
     if (crossingCache.key === key) return crossingCache.list;
-    crossingCache = { key, list: G.lineCrossings([...walls(), ...lines()]) };
+    crossingCache = { key, list: G.lineCrossings(runsHere()) };
     return crossingCache.list;
   };
   // EVERY YELLOW CORNER: the faces' corners and the crossings.
@@ -12604,7 +12632,7 @@
   };
   // The magnets a point being drawn answers to; null when SNAP is off.
   const drawMagnet = () => (snapOn && board !== 'toy'
-    ? { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: wallFaceSegs() } : null);
+    ? { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: magnetSegs() } : null);
   // A DRAGGED NODE answers to every wall but its own: the walls it is an end
   // of move with it, so their faces are not where they were. Worked out once
   // when the drag starts.
@@ -12613,11 +12641,12 @@
     if (!G?.wallFaceLines || !vtx) return { corners: [], segs: [] };
     const touches = v => v && (v === vtx || (Math.abs(v.x - vtx.x) < 0.001 && Math.abs(v.z - vtx.z) < 0.001));
     const still = walls().filter(w => !touches(w.start) && !touches(w.end));
-    const stillRuns = [...still, ...lines().filter(l => !touches(l.start) && !touches(l.end))];
+    const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));
+    const stillRuns = [...still, ...stillOthers];
     return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),
       corners: [...G.wallFaceCorners(still, openingThicknessFt()),
         ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],
-      segs: G.wallFaceLines(still, openingThicknessFt()) };
+      segs: [...G.wallFaceLines(still, openingThicknessFt()), ...bodySegs(stillOthers)] };
   };
   // A DRAGGED WALL answers to every wall it is not joined to: its own ends'
   // neighbours travel with it, so their faces are not where they were.
@@ -12627,11 +12656,58 @@
     const ends = [body.start, body.end];
     const touches = v => v && ends.some(e => e === v || (Math.abs(v.x - e.x) < 0.001 && Math.abs(v.z - e.z) < 0.001));
     const still = walls().filter(w => w !== body && !touches(w.start) && !touches(w.end));
-    const stillRuns = [...still, ...lines().filter(l => !touches(l.start) && !touches(l.end))];
+    const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));
+    const stillRuns = [...still, ...stillOthers];
     return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),
       corners: [...G.wallFaceCorners(still, openingThicknessFt()),
         ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],
-      segs: G.wallFaceLines(still, openingThicknessFt()) };
+      segs: [...G.wallFaceLines(still, openingThicknessFt()), ...bodySegs(stillOthers)] };
+  };
+  // ── A MOVED SELECTION OR ROOF SEEKS BY EVERY POINT IT CARRIES ────────
+  //
+  // (Movie, 19 Oct: areas, floors and roofs "act in this way".) The magnet
+  // is everything on the level that is not moving, worked out once per
+  // drag; each carried point, where the hand would put it, feels the three
+  // tiers, and the whole set shifts by the one shortfall that wins -- the
+  // corner drag's rule applied to a set, so a floor dragged near a wall's
+  // node lands a corner on it and keeps its shape. Moving points are kept
+  // out by reference AND by position (a roof's points are rebuilt on every
+  // move, so the reference alone would miss them).
+  const magnetExcluding = pts => {
+    const G = window.DraftGeometry2D;
+    if (!G?.wallFaceLines) return { nodes: [], corners: [], segs: [] };
+    const moving = new Set(pts);
+    const stillPt = v => v && !moving.has(v)
+      && !pts.some(p => Math.abs(p.x - v.x) < 0.001 && Math.abs(p.z - v.z) < 0.001);
+    const stillRun = r => stillPt(r.start) && stillPt(r.end);
+    const stillWalls = walls().filter(stillRun);
+    const stillOthers = [...lines(), ...loopEdges()].filter(stillRun);
+    return { nodes: nodeEnds({ faces: false }).filter(stillPt),
+      corners: [...G.wallFaceCorners(stillWalls, openingThicknessFt()),
+        ...(G.lineCrossings ? G.lineCrossings([...stillWalls, ...stillOthers]) : [])],
+      segs: [...G.wallFaceLines(stillWalls, openingThicknessFt()), ...bodySegs(stillOthers)] };
+  };
+  const pointsSeek = (before, dx, dz, magnet) => {
+    let best = null;
+    const offer = (share, make) => { if (!best || share < best.share) best = { share, make }; };
+    before.forEach(b => {
+      const at = { x: b.x + dx, z: b.z + dz };
+      const point = strongerPoint(at, magnet.nodes, magnet.corners);
+      if (point) {
+        const r = pullFt(point.node ? NODE_PULL_PX : FACE_CORNER_PULL_PX);
+        offer(Math.hypot(point.v.x - at.x, point.v.z - at.z) / r, () => ({
+          dx: dx + point.v.x - at.x, dz: dz + point.v.z - at.z,
+          lit: { pt: { x: point.v.x, y: 0, z: point.v.z }, corner: point.v, node: point.node } }));
+        return;
+      }
+      const face = nearestFace(magnet.segs, at);
+      if (face) {
+        offer(face.d / (FACE_LINE_PULL_PX / view.scale), () => ({
+          dx: dx + face.pt.x - at.x, dz: dz + face.pt.z - at.z,
+          lit: { pt: { x: face.pt.x, y: 0, z: face.pt.z }, seg: face.seg } }));
+      }
+    });
+    return best ? best.make() : null;
   };
   // ── A MOVED WALL'S FACES SEEK (Movie, 19 Oct) ───────────────────────────
   //
@@ -12717,12 +12793,17 @@
   };
   // A wall's or a line's own end, as opposed to a face corner.
   const isOwnNode = v => [...walls(), ...lines()].some(seg => [seg.start, seg.end]
-    .some(e => e && Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6));
+    .some(e => e && Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6))
+    || loopCorners().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6);
   const nodeEnds = ({ faces = true } = {}) => {
     const out = [];
     [...walls(), ...lines()].forEach(seg => [seg.start, seg.end].forEach(v => {
       if (v && !out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     }));
+    // A LOOP'S CORNERS ARE ITS NODES (Movie, 19 Oct).
+    loopCorners().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
@@ -12758,7 +12839,7 @@
       const node = snapNodeAt(at);
       if (node) return { pt: { x: node.x, y: 0, z: node.z }, node };
       if (board !== 'toy') {
-        const face = nearestFace(wallFaceSegs(), at);
+        const face = nearestFace(magnetSegs(), at);
         if (face) return { pt: { x: face.pt.x, y: 0, z: face.pt.z }, face: face.seg };
       }
       if (!drawStart && levelIsEmpty()) {
@@ -12766,20 +12847,25 @@
         if (b && Math.hypot(b.x - at.x, b.z - at.z) <= BULLSEYE_PULL_FT) return { pt: { x: b.x, y: 0, z: b.z }, bullseye: true };
       }
     }
-    if (trackOn) {
-      const reach = RAY_HIT_PX / view.scale;
-      let bx = null, bz = null;
-      [...trackingNodes(), ...nodeEnds()].forEach(n => {
-        const dx = Math.abs(at.x - n.x), dz = Math.abs(at.z - n.z);
-        if (dx <= reach && dz > reach && (!bx || dx < bx.d)) bx = { d: dx, n };
-        if (dz <= reach && dx > reach && (!bz || dz < bz.d)) bz = { d: dz, n };
-      });
-      if (bx || bz) {
-        return { pt: { x: bx ? bx.n.x : at.x, y: 0, z: bz ? bz.n.z : at.z },
-          rays: [bx && { n: bx.n, axis: 'x' }, bz && { n: bz.n, axis: 'z' }].filter(Boolean) };
-      }
-    }
-    return {};
+    return trackSnap(at) || {};
+  };
+  // THE CROSS LINES' CATCH, on its own so a dragged loop corner can take it
+  // without the node catch that would find the corner itself. `skip` is the
+  // point in hand: its own rays are no guide to where it should go.
+  const trackSnap = (at, skip = []) => {
+    if (!trackOn) return null;
+    const reach = RAY_HIT_PX / view.scale;
+    const skipped = n => skip.some(s => Math.abs(s.x - n.x) < 1e-6 && Math.abs(s.z - n.z) < 1e-6);
+    let bx = null, bz = null;
+    [...trackingNodes(), ...nodeEnds()].forEach(n => {
+      if (skipped(n)) return;
+      const dx = Math.abs(at.x - n.x), dz = Math.abs(at.z - n.z);
+      if (dx <= reach && dz > reach && (!bx || dx < bx.d)) bx = { d: dx, n };
+      if (dz <= reach && dx > reach && (!bz || dz < bz.d)) bz = { d: dz, n };
+    });
+    if (!bx && !bz) return null;
+    return { pt: { x: bx ? bx.n.x : at.x, y: 0, z: bz ? bz.n.z : at.z },
+      rays: [bx && { n: bx.n, axis: 'x' }, bz && { n: bz.n, axis: 'z' }].filter(Boolean) };
   };
 
   // A SNAP THAT ONLY SLIDES ALONG THE AXIS. When a run is being held square,
@@ -14969,11 +15055,25 @@
     let dx = at.x - d.at.x, dz = at.z - d.at.z;
     if (!d.moved && Math.hypot(dx, dz) * view.scale < 3) return;
     d.moved = true;
+    d.cursor = at;
     if (d.kind === 'selection') {
+      // THE SELECTION SEEKS by every point it carries (SNAP lit, off TOY).
+      if (snapOn && board !== 'toy') {
+        const seek = pointsSeek(d.set.before, dx, dz, (d.magnet ||= magnetExcluding(d.set.points)));
+        d.lit = seek?.lit || null;
+        if (seek) { dx = seek.dx; dz = seek.dz; }
+      }
       d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
       d.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
       paint();
       return;
+    }
+    // A WHOLE ROOF SEEKS by its corners, the way a selection does.
+    if (d.kind === 'roof' && snapOn && board !== 'toy') {
+      const carried = d.targets.flatMap(r => [...r.points, ...(r.footprint || [])]);
+      const seek = pointsSeek(d.befores.flatMap(b => b.points), dx, dz, (d.magnet ||= magnetExcluding(carried)));
+      d.lit = seek?.lit || null;
+      if (seek) { dx = seek.dx; dz = seek.dz; }
     }
     d.targets.forEach((roof, k) => {
       const b = d.befores[k];
@@ -14991,7 +15091,13 @@
           if (roof.footprint) roof.footprint[k] = { ...roof.footprint[k], x: b.footprint[k].x + dx, z: b.footprint[k].z + dz };
         });
       } else if (d.kind === 'node') {
-        const snap = drawSnap(at).pt;
+        // A ROOF'S CORNER IN HAND reads the three tiers and the cross lines,
+        // never itself: its own place is kept out of the magnet.
+        const own = b.points[d.node];
+        const magnet = snapOn && board !== 'toy' ? (d.magnet ||= magnetExcluding([own])) : null;
+        const hit = magnet ? dragMagnetAt(at, own, magnet) : null;
+        d.lit = hit || null;
+        const snap = hit?.pt || trackSnap(at, [own])?.pt || null;
         const to = snap ? { x: snap.x, z: snap.z } : at;
         const sx = to.x - b.points[d.node].x, sz = to.z - b.points[d.node].z;
         roof.points[d.node] = { ...roof.points[d.node], x: to.x, z: to.z };
@@ -16225,13 +16331,24 @@
       markMagnet(moveDrag.lit);
       return;
     }
-    if (!cursorWorld || !(drawsRun() || activeTool === 'outline')) { markMagnet(null); return; }
+    // THE MOVE TOOL'S DRAG shows what has it, the same way.
+    const mv = moveState?.drag;
+    if (mv?.moved && (mv.kind === 'selection' || mv.kind === 'roof' || mv.kind === 'node')) {
+      canvas.removeAttribute('data-snap-node');
+      paintMagnets(mv.cursor, mv.magnet, mv.lit);
+      if (mv.lit) paintDonut(mv.lit.pt, tierOf(mv.lit));
+      markMagnet(mv.lit);
+      return;
+    }
+    // A LOOP BEING TRACED -- outline, floor, shape -- reads the magnet too.
+    const tracesLoop = activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape';
+    if (!cursorWorld || !(drawsRun() || tracesLoop)) { markMagnet(null); return; }
     // A RUN HELD SQUARE asks the squared magnet, as drawPoint does; the
     // locked bearing and the protractor take no magnet at all.
     const runs = drawsRun() && board !== 'toy' && drawStart;
     const steered = runs && (lockedPoint(drawStart, cursorWorld) || protractorPoint(drawStart, cursorWorld));
     const fixed = runs && !steered ? squaredAxis(drawStart, cursorWorld) : null;
-    const magnet = drawsRun() && !steered ? drawMagnet() : null;
+    const magnet = (drawsRun() || tracesLoop) && !steered ? drawMagnet() : null;
     if (fixed) {
       const lit = axisMagnet(squareTo(drawStart, cursorWorld), fixed, [], magnet);
       paintMagnets(cursorWorld, magnet, lit);
@@ -16245,7 +16362,7 @@
     // glow at all (Movie, 19 Oct: "looks like the LINE does attach to nodes,
     // but the rollover doesn't glow so the user is unaware of this").
     let snap = drawSnap(cursorWorld);
-    if (!snap.pt && drawsRun() && board !== 'toy') {
+    if (!snap.pt && (drawsRun() || tracesLoop) && board !== 'toy') {
       const caught = cornerSnap(cursorWorld, []);
       if (caught) snap = { pt: { x: caught.x, y: 0, z: caught.z }, node: caught };
     }
@@ -17819,8 +17936,19 @@
   // OUT OF SCOPE AND ABSENT RATHER THAN HALF-DONE: the typed-length ruler, arc
   // edges, the slope and thickened-edge properties, and the FLOOR JOISTS box.
   // Each is a panel of its own and none of them is the gesture.
+  // A LOOP'S CORNER READS THE MAGNET AS A WALL'S POINT DOES (Movie, 19 Oct:
+  // "the lines / walls / areas / floors/ roofs etc to all act in this way"):
+  // a node in reach, else a face, else where it was pressed. TOY keeps its
+  // raw press, as it keeps its own law everywhere.
+  const loopPoint = at => {
+    if (board === 'toy') return { x: at.x, z: at.z };
+    const corner = cornerSnap(at, []);
+    if (corner) return { x: corner.x, z: corner.z };
+    const snap = drawSnap(at);
+    return snap.pt ? { x: snap.pt.x, z: snap.pt.z } : { x: at.x, z: at.z };
+  };
   const floorPress = at => {
-    const here = { x: at.x, z: at.z };
+    const here = loopPoint(at);
     // THREE CORNERS BEFORE CLOSING IS LEGAL and two is not, for the reason the
     // outline's own guard gives: two enclose no area. Below three, a press near
     // the first corner is a drafter putting a corner there.
@@ -17842,7 +17970,7 @@
   // a shape and use that shape for the area)". A crossed loop is refused, as
   // the outline and the floor refuse one.
   const shapePress = at => {
-    const here = { x: at.x, z: at.z };
+    const here = loopPoint(at);
     if (shapeCorners.length >= 3) {
       const first = shapeCorners[0];
       if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
@@ -24716,7 +24844,7 @@
     // and shapes like roof and floor too"): the edge from the last corner to
     // the cursor. Their LENGTH box still takes no typing.
     const corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : null;
-    if (corners && corners.length) return { from: corners[corners.length - 1], to: cursorWorld };
+    if (corners && corners.length) return { from: corners[corners.length - 1], to: loopPoint(cursorWorld) };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
     return null;
   };

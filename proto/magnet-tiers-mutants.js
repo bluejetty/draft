@@ -26,7 +26,7 @@ const MUTANTS = [
     test: 'a node pulls harder than a crossing that acts like one; a crossing close by still wins' },
   { file: 'MODEL.html',
     name: 'a crossing is no corner',
-    find: "    crossingCache = { key, list: G.lineCrossings([...walls(), ...lines()]) };\n",
+    find: "    crossingCache = { key, list: G.lineCrossings(runsHere()) };\n",
     with: '    crossingCache = { key, list: [] };\n',
     test: 'a node pulls harder than a crossing that acts like one; a crossing close by still wins' },
   { file: 'MODEL.html',
@@ -37,12 +37,14 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'a drag sees no crossings',
     find: "    const still = walls().filter(w => !touches(w.start) && !touches(w.end));\n"
-      + "    const stillRuns = [...still, ...lines().filter(l => !touches(l.start) && !touches(l.end))];\n"
+      + "    const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));\n"
+      + "    const stillRuns = [...still, ...stillOthers];\n"
       + "    return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),\n"
       + "      corners: [...G.wallFaceCorners(still, openingThicknessFt()),\n"
       + "        ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],\n",
     with: "    const still = walls().filter(w => !touches(w.start) && !touches(w.end));\n"
-      + "    const stillRuns = [...still, ...lines().filter(l => !touches(l.start) && !touches(l.end))];\n"
+      + "    const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));\n"
+      + "    const stillRuns = [...still, ...stillOthers];\n"
       + "    return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),\n"
       + "      corners: [...G.wallFaceCorners(still, openingThicknessFt()),\n"
       + "      ],\n",
