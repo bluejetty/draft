@@ -126,6 +126,37 @@ test('turned to lie with the joists, the stair keeps no side beam; one UNDO brin
   expect(mainStair(undone).start).toEqual(stair.start);
 });
 
+// THE JOIST RULE ON ITS OWN. Turned a quarter, the stock flight lies across
+// the mid-span beam, which would excuse both its sides by itself -- so it is
+// slid along its own run, clear of every beam, where only the joists can say
+// it needs nothing: 15 ft and more of floor each side, run with, not cut.
+test('a run with the joists, clear of every beam, takes no side beam', async ({ page }) => {
+  await build(page);
+  const stair = mainStair(await saved(page));
+  await pick(page, stair);
+  await turn(page, 90);
+  await page.locator('[data-rotate-done]').click();
+  const turned = mainStair(await saved(page));
+  const at = await pick(page, turned);
+  const { scale } = await h.planFrame(page);
+  const len = Math.hypot(turned.end.x - turned.start.x, turned.end.z - turned.start.z);
+  const u = { x: (turned.end.x - turned.start.x) / len, z: (turned.end.z - turned.start.z) / len };
+  // Toward whichever end is nearer the middle beam's far side: away from x = 0.
+  const mid = (turned.start.x + turned.end.x) / 2;
+  const away = Math.sign(mid) || -1;
+  const by = 6 * away * Math.sign(u.x || 1);
+  await page.mouse.move(...at);
+  await page.mouse.down();
+  await page.mouse.move(at[0] + u.x * by * scale, at[1] + u.z * by * scale, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const d = await saved(page);
+  const slid = mainStair(d);
+  const xs = [slid.start.x, slid.end.x];
+  expect(Math.min(...xs) > 0.5 || Math.max(...xs) < -0.5, 'clear of the beam on x = 0').toBe(true);
+  expect(sideBeams(d, slid), 'it lies with the joists: no side beam').toHaveLength(0);
+});
+
 test('turned end for end, the beam goes on the open side, never where the wall carries it', async ({ page }) => {
   await build(page);
   const first = await saved(page);

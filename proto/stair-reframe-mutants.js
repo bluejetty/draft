@@ -16,52 +16,47 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js';
-const TURNED = 'turned to lie with the joists, the stair keeps no side beam; one UNDO brings it back';
-const HALF = 'turned end for end, the beam goes on the open side, never where the wall carries it';
-const SLID = 'slid and let go, the stair is framed again where it landed, in the same UNDO';
-const DOOR = 'MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back';
-const WASHER = 'a washer pressed where it will stand lands on the wall';
 const MUTANTS = [
   { file: 'MODEL.html', name: 'a fixture reaches only the 30px grab zone',
     find: "    const thresh = Math.max(FIXTURE_PICK_PX / view.scale, reachFt);\n",
     with: "    const thresh = FIXTURE_PICK_PX / view.scale;\n",
-    test: WASHER },
+    test: 'a washer pressed where it will stand lands on the wall' },
   { file: 'MODEL.html', name: 'a run with the joists still takes a side beam',
     find: "    if (joist && (Math.abs(u.x) >= Math.abs(u.z) ? 'x' : 'z') === joist) return [];\n",
     with: "",
-    test: TURNED },
+    test: 'a run with the joists, clear of every beam, takes no side beam' },
   { file: 'MODEL.html', name: 'the joists are read along the beams, not across them',
     find: "    if (joist && (Math.abs(u.x) >= Math.abs(u.z) ? 'x' : 'z') === joist) return [];\n",
     with: "    if (joist && (Math.abs(u.x) >= Math.abs(u.z) ? 'x' : 'z') !== joist) return [];\n",
-    test: TURNED },
+    test: 'turned to lie with the joists, the stair keeps no side beam; one UNDO brings it back' },
   { file: 'MODEL.html', name: 'a turn is not framed again (the framing rides it)',
     find: "    const reframed = entries.filter(entry => entry.type === 'stair').map(({ item }) => reframeStair(item));\n",
     with: "    const reframed = [];\n",
-    test: HALF },
+    test: 'turned end for end, the beam goes on the open side, never where the wall carries it' },
   { file: 'MODEL.html', name: 'the re-frame is an UNDO of its own after a turn',
     find: "    undoStack.push(steps.length ? { kind: 'batch', steps: [turn, ...steps] } : turn);\n",
     with: "    undoStack.push(turn, ...steps);\n",
-    test: TURNED },
+    test: 'turned to lie with the joists, the stair keeps no side beam; one UNDO brings it back' },
   { file: 'MODEL.html', name: 'a slide is not framed again (the framing rides it)',
     find: "            const reframed = [reframeStair(md.stair)];\n",
     with: "            const reframed = [{ steps: [], beams: 0, before: 0 }];\n",
-    test: SLID },
+    test: 'slid and let go, the stair is framed again where it landed, in the same UNDO' },
   { file: 'MODEL.html', name: 'the old framing stays when the new is laid',
-    find: "        if (index < 0) return;\n        list.splice(index, 1);\n        removed.push({ list, index, item });\n",
-    with: "        if (index < 0) return;\n        removed.push({ list, index, item });\n",
-    test: TURNED },
+    find: "        const index = list.indexOf(item);\n        if (index < 0) return;\n        list.splice(index, 1);\n        removed.push({ list, index, item });\n      });\n    });\n    const framed = placeStairSideFraming([stair]);\n",
+    with: "        const index = list.indexOf(item);\n        if (index < 0) return;\n        removed.push({ list, index, item });\n      });\n    });\n    const framed = placeStairSideFraming([stair]);\n",
+    test: 'turned to lie with the joists, the stair keeps no side beam; one UNDO brings it back' },
   { file: 'MODEL.html', name: 'MOVE carries a door as a selection with no points',
     find: "      if (host) {\n        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false };\n",
     with: "      if (false) {\n        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false };\n",
-    test: DOOR },
+    test: 'MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'MOVE takes the door with the pointer, not along the wall',
     find: "      const along = d.was + (dx * wx + dz * wz) / length;\n",
     with: "      const along = d.was + Math.hypot(dx, dz);\n",
-    test: DOOR },
+    test: 'MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'a door slid by MOVE has no UNDO',
     find: "        undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));\n        markDirty();\n        sayOnStrip('Slid along its wall. UNDO puts it back.');\n",
     with: "        markDirty();\n        sayOnStrip('Slid along its wall. UNDO puts it back.');\n",
-    test: DOOR },
+    test: 'MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back' },
 ];
 const run = name => {
   try {
