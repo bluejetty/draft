@@ -12545,7 +12545,16 @@
     faceLineCache = { key, list: G.wallFaceLines(walls(), openingThicknessFt()) };
     return faceLineCache.list;
   };
-  const pullFt = px => Math.max(NODE_SNAP_FT, px / view.scale);
+  // A REACH IN PIXELS, FLOORED AND CEILINGED IN FEET. Two inches at least,
+  // because zoomed in a few pixels is less than a hand can find; SIX INCHES
+  // at most, because zoomed out a few pixels is a room -- at 6 px a foot (a
+  // house fitted to the sheet) 14 px is 2'-4", and a garage leg pressed two
+  // feet off the house's corner was pulled onto it, and a garage front
+  // drawn a foot north of the house's line (his MOD BILEVEL) was pulled
+  // onto the line. Movie's own measure was "a 4" dia 2" radius ... or a few
+  // pixels, whichever is more"; a drafter's deliberate foot is never a miss.
+  const MAGNET_REACH_MAX_FT = 0.5;
+  const pullFt = px => Math.min(MAGNET_REACH_MAX_FT, Math.max(NODE_SNAP_FT, px / view.scale));
   // ── EVERY RUN AND LOOP ON THE LEVEL FEEDS ONE MAGNET (Movie, 19 Oct) ──
   //
   // "id like the lines / walls / areas / floors/ roofs etc to all act in
@@ -12620,7 +12629,7 @@
     return { x: seg.a.x + t * dx, z: seg.a.z + t * dz };
   };
   const nearestFace = (segs, at, px = FACE_LINE_PULL_PX) => {
-    const r = px / view.scale;
+    const r = pullFt(px);
     let best = null;
     segs.forEach(seg => {
       const p = faceFoot(seg, at);
@@ -12702,7 +12711,7 @@
       }
       const face = nearestFace(magnet.segs, at);
       if (face) {
-        offer(face.d / (FACE_LINE_PULL_PX / view.scale), () => ({
+        offer(face.d / pullFt(FACE_LINE_PULL_PX), () => ({
           dx: dx + face.pt.x - at.x, dz: dz + face.pt.z - at.z,
           lit: { pt: { x: face.pt.x, y: 0, z: face.pt.z }, seg: face.seg } }));
       }
@@ -12814,7 +12823,10 @@
   // face corners take a press only where no node is in reach.
   const snapNodeAt = at => {
     if (!at) return null;
-    const r = Math.max(NODE_SNAP_FT, NODE_SNAP_PX / view.scale);
+    // THE EXACT CATCH TAKES THE SAME CEILING: six pixels at six a foot is a
+    // foot, and a garage front drawn a foot off the house's corner (his MOD
+    // BILEVEL) was taken for a press on it.
+    const r = pullFt(NODE_SNAP_PX);
     const nearest = list => {
       let best = null;
       list.forEach(v => {
@@ -12910,7 +12922,7 @@
     }
     if (!magnet) return null;
     const free = fixed === 'z' ? 'x' : 'z';
-    const r = FACE_LINE_PULL_PX / view.scale;
+    const r = pullFt(FACE_LINE_PULL_PX);
     let best = null;
     magnet.segs.forEach(seg => {
       const d0 = seg.a[fixed] - worldPt[fixed], d1 = seg.b[fixed] - worldPt[fixed];
