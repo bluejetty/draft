@@ -933,6 +933,11 @@ if (!window.DraftRender2D) {
       if (callout.label && !env.isPrinting) {
         labelAlongLine2D(ctx, a, b, callout.label, { font: env.labelFont, color: colour, offset: 5 });
       }
+      // A BAY PAST WHAT ITS JOIST REACHES says so on the other side of its
+      // arrow (build-house overSpanBays).
+      if (bay.warn && !env.isPrinting) {
+        labelAlongLine2D(ctx, a, b, bay.warn, { font: env.labelFont, color: colour, offset: -5, baseline: 'top' });
+      }
     });
     ctx.restore();
   }
@@ -1078,6 +1083,12 @@ if (!window.DraftRender2D) {
       // A MARK the engineer typed names the beam instead (Movie, 19 Oct).
       const named = typeof beam.mark === 'string' && beam.mark.trim() ? beam.mark.trim()
         : (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM');
+      // AND A BEAM BESIDE A BAY PAST THE TABLE CARRIES THE MARK TOO, on its
+      // other side -- unless the engineer has named the beam already.
+      if (options.warn && !(typeof beam.mark === 'string' && beam.mark.trim())) {
+        labelAlongLine2D(ctx, a, b, options.warn,
+          { font: env.labelFont, color: env.beamColor, offset: flip ? 5 : -5, baseline: flip ? 'bottom' : 'top' });
+      }
       labelAlongLine2D(ctx, a, b,
         named + (below ? ' BELOW' : above ? ' ABOVE' : ''),
         { font: env.labelFont, color: env.beamColor, offset: flip ? -5 : 5,

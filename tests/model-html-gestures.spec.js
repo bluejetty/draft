@@ -925,6 +925,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // choosing a size first -- so it is a second door to the outline
             // row that is already **present**, exactly as DRAW IT MYSELF is.
             'OK',
+            // AND THE BEAM QUESTION AFTER AUTO HOUSE (Movie, 19 Oct: "make a
+            // popup that says PLACE BEAMS and COLUMS (if they are needed due
+            // to span)"). NO ABSENCE ROW MOVES: YES keeps what AUTO BEAM
+            // already placed and NOT NOW takes it back out -- both doors to
+            // the AUTO BEAM row the table already carries.
+            'PLACE BEAMS AND COLUMNS', 'NOT NOW',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a

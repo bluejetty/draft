@@ -604,7 +604,8 @@ if (!window.DraftLayoutPlan) {
     const doorPoints = of('fenestrations').filter(fen => fen?.garage === true)
       .map(fen => wallById.get(String(fen.wallId))).filter(wall => wall?.start && wall?.end)
       .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
-    const label = B.joistCallout(LA.levelAssemblyFor(saved?.levelAssemblies, levelId));
+    const asm = LA.levelAssemblyFor(saved?.levelAssemblies, levelId);
+    const label = B.joistCallout(asm);
     // THE BODIES AUTO BEAM FRAMES -- the level's outlines, the garage's own
     // aside -- so the callout and the beam plan read one deck. A floor
     // record can carry a stair landing's tab past the room, and its box is
@@ -619,7 +620,8 @@ if (!window.DraftLayoutPlan) {
       .map(floor => {
         const points = floor.points.map(pt => ({ x: num(pt.x), z: num(pt.z) }));
         const bays = B.joistBays(points, { beams, holes, axis: B.deckJoistAxis(points, { garages, doorPoints }) });
-        return bays ? { ...bays, label } : null;
+        // Past the table, the ENGINEERING mark rides the bay (overSpanBays).
+        return bays ? (B.overSpanBays ? B.overSpanBays({ ...bays, label }, asm) : { ...bays, label }) : null;
       }).filter(Boolean);
   }
 
