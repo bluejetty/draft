@@ -281,6 +281,31 @@
     }
     return out;
   };
+  // WHAT A DRAGGED SUITE IS BESIDE (Movie, 18 Oct: "the wall alignement snap
+  // should light up the walls when they are close enough for auto snap
+  // allignment and then show where the windows ard doors are"). Each shell
+  // wall on this level a suite wall runs beside, faces within `reachFt`:
+  // whether both faces line up (it will cut), or the two are not one
+  // thickness and never can.
+  const suiteNear = (saved, holo, levelId, reachFt = 0.5) => {
+    if (!isSuite(holo) || !window.DraftGeometry2D || !window.DraftWallTypes) return [];
+    const hosts = hostWalls(saved).filter(w => w?.levelId === levelId).map(wallFrame).filter(Boolean);
+    const walls = placed(holo, { walls: (parts(holo).existing.walls || []).filter(w => w?.levelId === levelId) }).walls;
+    const out = [];
+    walls.map(wallFrame).filter(Boolean).forEach(sf => hosts.forEach(hf => {
+      if (!parallel(sf, hf)) return;
+      const [g0, g1] = faceGaps(sf, hf);
+      if (Math.min(Math.abs(g0), Math.abs(g1)) > reachFt) return;
+      const r = alongHost(sf, hf);
+      if (Math.min(r.hi, hf.len) - Math.max(r.lo, 0) <= FACE_TOL_FT) return;
+      if (out.some(o => o.host === hf.wall && o.lined)) return;
+      out.push({ host: hf.wall, wall: sf.wall,
+        lined: Math.abs(g0) < FACE_TOL_FT && Math.abs(g1) < FACE_TOL_FT,
+        sameThickness: Math.abs(g0 - g1) < FACE_TOL_FT,
+        suiteIn: wallThicknessFt(sf.wall) * 12, shellIn: wallThicknessFt(hf.wall) * 12 });
+    }));
+    return out;
+  };
   // A suite's own plan less the walls the shell has taken, and their openings.
   const suiteExisting = (holo, existing, info) => {
     const gone = info?.hidden.get(holo.id);
@@ -671,6 +696,6 @@
 
   window.DraftHologram = Object.freeze({
     BLUE, PALE, ALPHA, VIEWS, planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
-    placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved,
+    placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
   });
 })();

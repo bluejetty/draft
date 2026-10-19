@@ -268,3 +268,45 @@ test('a double-click on a hologram opens the HOLOGRAM card; off it, nothing', as
   await expect(page.locator('#hologram-ask')).toBeVisible();
   await expect(page.locator('#hologram-ask [data-hologram-row="h1"]')).toBeVisible();
 });
+
+// WHILE IT IS DRAGGED (Movie, 18 Oct: "the wall alignement snap should light
+// up the walls when they are close enough for auto snap allignment and then
+// show where the windows ard doors are").
+const accentPixels = page => page.evaluate(() => {
+  const c = document.getElementById('plan');
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) > 90 && d[i] > 150) n += 1;
+  }
+  return n;
+});
+async function holdSuite(page, from, to) {
+  await page.locator('[data-mode-hologram]').click();
+  await page.locator('#hologram-ask [data-hologram-move="h1"]').click();
+  const { at } = await h.planFrame(page);
+  await page.mouse.move(...at(...from));
+  await page.mouse.down();
+  await page.mouse.move(...at(...to), { steps: 4 });
+  await page.waitForTimeout(150);
+}
+test('a suite in hand lights the shell wall it lines up with, and the window it will cut', async ({ page }) => {
+  await open(page, shell({ z: 3 }));
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const before = await accentPixels(page);
+  await holdSuite(page, [10, 10], [10, 7.1]);      // 3' up, inside the snap: lined up
+  const during = await accentPixels(page);
+  expect(during, 'the lit wall and the window it will cut').toBeGreaterThan(before + 300);
+  await page.mouse.up();
+});
+test('a suite wall that is not the shell wall\'s thickness is told so', async ({ page }) => {
+  const thin = JSON.parse(JSON.stringify(SUITE));
+  thin.walls.forEach(w => { w.wallType = 'stud_2x4'; });
+  await open(page, shell({ z: 3, source: thin }));
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  await holdSuite(page, [10, 10], [10, 7.1]);
+  await expect(page.locator('#strip-message')).toContainText('both faces have to line up');
+  await page.mouse.up();
+});

@@ -4194,6 +4194,48 @@
     if (!H()) return;
     const drew = H().paint(ctx, toS, drawing, activeLevelId(),
       { view: activeViewId(), show: hologramShow, paperColor: skin['surface-page'] });
+    // A SUITE IN HAND LIGHTS THE SHELL WALL IT IS LINING UP WITH, and the
+    // doors and windows it will cut there (Movie, 18 Oct: "light up the walls
+    // when they are close enough for auto snap allignment and then show where
+    // the windows ard doors are"). A wall beside it that is not its thickness
+    // is lit in the warning ink: those faces can never line up.
+    const inHand = (() => { try { return traceMoving?.hologram ? traceMoving.underlay : null; } catch { return null; } })();
+    if (inHand && inHand.mode === 'suite' && H().suiteNear) {
+      const G = window.DraftGeometry2D;
+      const thick = openingThicknessFt();
+      const body = w => {
+        const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz) || 1;
+        const n = { x: -dz / len, z: dx / len };
+        const { startOff, endOff } = G.wallFaceOffsets(w, thick(w));
+        const at = (p, o) => toS({ x: p.x + n.x * o, z: p.z + n.z * o });
+        return [at(w.start, startOff), at(w.end, startOff), at(w.end, endOff), at(w.start, endOff)];
+      };
+      const near = H().suiteNear(drawing, inHand, activeLevelId(), 0.5);
+      ctx.save();
+      ctx.lineWidth = 2.5;
+      near.forEach(n => {
+        ctx.strokeStyle = n.lined ? (skin['accent'] || '#e8a33d') : '#d04848';
+        const q = body(n.host);
+        ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.stroke();
+      });
+      const cuts = H().hostOpenings(drawing).filter(o => o.suite === inHand.id && o.levelId === activeLevelId());
+      ctx.fillStyle = skin['accent'] || '#e8a33d';
+      ctx.globalAlpha = 0.55;
+      cuts.forEach(o => {
+        const w = (drawing.walls || []).find(x => String(x.id) === String(o.wallId));
+        if (!w) return;
+        const g = G.openingGeometry(o, w, { walls: drawing.walls, thicknessFt: thick, padFt: 0 });
+        if (!g?.corners) return;
+        const q = g.corners.map(p => toS(p));
+        ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill();
+      });
+      ctx.restore();
+      const odd = near.find(n => !n.sameThickness);
+      if (odd && !near.some(n => n.lined)) {
+        const f = window.DraftFormatters.formatArchitecturalInches;
+        sayOnStrip(`That suite wall is ${f(odd.suiteIn)} and the shell wall ${f(odd.shellIn)} -- both faces have to line up, so no windows cut there. Make them one thickness.`);
+      }
+    }
     // DEMO PART's first click, so the drafter can see where the cut starts.
     if (drew && hologramPartStart) {
       const at = toS(hologramPartStart.at);
