@@ -18,10 +18,11 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const SRC = fs.readFileSync(path.join(__dirname, '..', 'calc-engine.js'), 'utf8');
+const SRC = path.join(__dirname, '..', 'calc-engine.js');
+const TEXT = fs.readFileSync(SRC, 'utf8');
 const load = (mutate = s => s) => {
   const window = {};
-  vm.runInNewContext(mutate(SRC), { window });
+  vm.runInNewContext(mutate(TEXT), { window });
   return window.DraftCalc;
 };
 
@@ -105,7 +106,7 @@ if (!MUTATE) {
 } else {
   let survived = 0, broken = 0;
   MUTATIONS.forEach(([label, mutate]) => {
-    if (mutate(SRC) === SRC) { broken += 1; console.log(`!!! NEVER APPLIED  ${label}`); return; }
+    if (mutate(TEXT) === TEXT) { broken += 1; console.log(`!!! NEVER APPLIED  ${label}`); return; }
     let C;
     try { C = load(mutate); } catch (err) { console.log(`caught (load)  ${label}`); return; }
     const caught = runChecks(C).filter(r => !r.ok);
