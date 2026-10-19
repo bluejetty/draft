@@ -2279,6 +2279,7 @@
 <script src="./palette.js"></script>
 <script src="./layer-views.js"></script>
 <script src="./geometry-2d.js"></script>
+<script src="./line-styles.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./wall-types.js"></script>
 <script src="./formatters.js"></script>
@@ -3608,16 +3609,21 @@
 
   const paintLines = () => {
     ctx.save();
-    ctx.strokeStyle = skin['draw-line'];
-    ctx.lineWidth = 1;
     // A CURVED LINE IS DRAWN CURVED. Every line here was a straight stroke
     // from end to end, so a `bulge` -- a DXF's arcs brought in EDITABLE, or
     // the old page's arcs -- drew as its chord. render-2d's segment path
     // owns the curve, through geometry-2d's control point, the same maths
     // the hit test reads.
-    const R = window.DraftRender2D, G = window.DraftGeometry2D;
+    const R = window.DraftRender2D, G = window.DraftGeometry2D, LS = window.DraftLineStyles;
     lines().forEach(line => {
       if (!line.start || !line.end) return;
+      // ITS OWN WEIGHT, COLOUR AND STYLE (Movie, 19 Oct), off line-styles.js;
+      // a line with none set is FINE, solid, in the skin's line ink -- what
+      // every line drew before today.
+      const ink = LS ? LS.strokeFor(line) : { lineWidth: 1, dash: [], color: null };
+      ctx.strokeStyle = ink.color || skin['draw-line'];
+      ctx.lineWidth = ink.lineWidth;
+      ctx.setLineDash(ink.dash);
       if (line.bulge) {
         R.strokeSegPath2D(ctx, toS, line, { controlPoint: G.lineControlPoint });
         return;
@@ -13685,6 +13691,9 @@
       levelId,
       view: lineView,
       layer: 'draft',
+      // THE LAST STYLE CHOSEN STICKS (Movie, 19 Oct): the next line drawn
+      // takes the weight, colour and style the panel last set.
+      ...lineStyleDefaults(),
     });
     return { type: 'line', item: line };
   };
@@ -25263,6 +25272,9 @@
       layer: seg.layer,
       importedFrom: scan.file.name,
       ...(seg.bulge ? { bulge: seg.bulge } : {}),
+      // THE FILE'S OWN COLOUR, where it gave one (a DXF's lines are coloured
+      // by entity or by layer; the reader resolves both).
+      ...(window.DraftLineStyles?.colorHex(seg.color) ? { color: window.DraftLineStyles.colorHex(seg.color) } : {}),
     }));
     made.forEach(line => drawing.lines.push(line));
     drawing.notes = drawing.notes || [];
@@ -28403,7 +28415,48 @@
     return box;
   };
 
+  // ── A LINE'S WEIGHT, COLOUR AND STYLE (Movie, 19 Oct) ─────────────────
+  //
+  // "for the LINE -- it need some PROPERTIES that can change too. put in 5
+  // line weights from thin to thick ... allow the user to select line color
+  // from full spectrum as another property, and also if the line is DASHED
+  // (stuff above), SOLID, DOT DASHED (property lines / beams), etc" -- and
+  // "Add 4.5 XTRA-BOLD". Six weight chips drawn at their own thickness, four
+  // style chips, a colour picker with the full spectrum behind it. A change
+  // writes every selected line in one undo, and becomes the default for the
+  // next line drawn, remembered per browser with the lights.
+  const LINE_STYLE_KEY = 'lineStyle';
+  let lineDefaults = (() => {
+    const LS = window.DraftLineStyles;
+    const raw = stored[LINE_STYLE_KEY] || {};
+    return LS ? { weight: LS.weightId(raw.weight), style: LS.styleId(raw.style), color: LS.colorHex(raw.color) }
+      : { weight: 2, style: 'solid', color: null };
+  })();
+  const lineStyleDefaults = () => ({
+    weight: lineDefaults.weight, style: lineDefaults.style,
+    ...(lineDefaults.color ? { color: lineDefaults.color } : {}),
+  });
+  const keepLineDefaults = () => {
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [LINE_STYLE_KEY]: lineDefaults }));
+    } catch { /* a browser refusing storage still keeps it for this tab */ }
+  };
+  const writeLineStyle = (lines, patch) => {
+    const edits = lines.map(line => ({ item: line, before: { ...line } }));
+    lines.forEach(line => {
+      Object.entries(patch).forEach(([key, value]) => {
+        if (value == null) delete line[key]; else line[key] = value;
+      });
+    });
+    undoStack.push({ kind: 'props', edits });
+    lineDefaults = { ...lineDefaults, ...patch };
+    keepLineDefaults();
+    markDirty();
+    paint();
+  };
   const linePropsNode = lines => {
+    const LS = window.DraftLineStyles;
     const box = document.createElement('div');
     const total = lines.reduce((sum, line) => sum
       + Math.hypot(line.end.x - line.start.x, line.end.z - line.start.z), 0);
@@ -28412,6 +28465,90 @@
     len.className = 'props-title';
     len.textContent = `${lines.length > 1 ? 'TOTAL ' : ''}LENGTH ${feetLabel(total)}`;
     box.append(len);
+    if (LS) {
+      const same = key => (lines.every(l => (l[key] ?? null) === (lines[0][key] ?? null)) ? (lines[0][key] ?? null) : undefined);
+      const weightNow = same('weight') === undefined ? undefined : LS.weightId(same('weight'));
+      const styleNow = same('style') === undefined ? undefined : LS.styleId(same('style'));
+      const colorNow = same('color');
+      const title = text => {
+        const t = document.createElement('div');
+        t.className = 'props-title';
+        t.textContent = text;
+        return t;
+      };
+      // WEIGHT: six chips, each with a stroke of its own thickness.
+      box.append(title('WEIGHT'));
+      const weights = document.createElement('div');
+      weights.className = 'chip-row';
+      LS.WEIGHTS.forEach(w => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'sel-chip';
+        chip.dataset.lineWeight = String(w.id);
+        chip.title = `${w.name} \u2014 ${w.px} px`;
+        chip.setAttribute('aria-pressed', String(weightNow === w.id));
+        chip.classList.toggle('lit', weightNow === w.id);
+        const bar = document.createElement('span');
+        bar.style.cssText = `display:inline-block;width:22px;height:${w.px}px;background:currentColor;vertical-align:middle;margin-right:5px;`;
+        chip.append(bar, document.createTextNode(w.name));
+        chip.addEventListener('click', () => { writeLineStyle(lines, { weight: w.id }); showSelectionProps(); });
+        weights.append(chip);
+      });
+      box.append(weights);
+      // STYLE: solid, dashed, dot dash, dotted.
+      box.append(title('STYLE'));
+      const styles = document.createElement('div');
+      styles.className = 'chip-row';
+      LS.STYLES.forEach(st => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'sel-chip';
+        chip.dataset.lineStyle = st.id;
+        chip.setAttribute('aria-pressed', String(styleNow === st.id));
+        chip.classList.toggle('lit', styleNow === st.id);
+        chip.textContent = st.name;
+        chip.addEventListener('click', () => { writeLineStyle(lines, { style: st.id }); showSelectionProps(); });
+        styles.append(chip);
+      });
+      box.append(styles);
+      // COLOUR: the full spectrum, and SKIN to hand the line back to the
+      // page's own ink.
+      box.append(title('COLOUR'));
+      const colours = document.createElement('div');
+      colours.className = 'chip-row';
+      const pick = document.createElement('input');
+      pick.type = 'color';
+      pick.dataset.lineColor = '';
+      pick.value = colorNow || '#ff0000';
+      pick.title = 'Line colour';
+      // THE PICKER PREVIEWS AS IT DRAGS AND WRITES ONCE ON RELEASE: every
+      // 'input' paints the colour live without an undo step, and 'change'
+      // puts the lines back to where they were and writes the one change,
+      // so a single UNDO takes the whole pick back.
+      let preview = null;
+      pick.addEventListener('input', () => {
+        if (!preview) preview = lines.map(line => [line, line.color ?? null]);
+        lines.forEach(line => { line.color = LS.colorHex(pick.value); });
+        paint();
+      });
+      pick.addEventListener('change', () => {
+        if (preview) { preview.forEach(([line, was]) => { if (was == null) delete line.color; else line.color = was; }); preview = null; }
+        writeLineStyle(lines, { color: LS.colorHex(pick.value) });
+        showSelectionProps();
+      });
+      colours.append(pick);
+      const skinChip = document.createElement('button');
+      skinChip.type = 'button';
+      skinChip.className = 'sel-chip';
+      skinChip.dataset.lineColorSkin = '';
+      skinChip.setAttribute('aria-pressed', String(colorNow === null));
+      skinChip.classList.toggle('lit', colorNow === null);
+      skinChip.textContent = 'SKIN';
+      skinChip.title = 'The page\'s own line ink';
+      skinChip.addEventListener('click', () => { writeLineStyle(lines, { color: null }); showSelectionProps(); });
+      colours.append(skinChip);
+      box.append(colours);
+    }
     const note = document.createElement('div');
     note.dataset.propNote = '';
     note.className = 'props-title';

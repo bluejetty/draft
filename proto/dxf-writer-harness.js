@@ -26,7 +26,7 @@ const MUTATIONS = [
   ['every fill is kept, the poché with it', 'dxf-writer.js',
     c => c.replace('if (Math.max(...xs) - Math.min(...xs) > SOLID_MAX || Math.max(...ys) - Math.min(...ys) > SOLID_MAX) return;', '')],
   ['a dashed line goes out solid', 'dxf-writer.js',
-    c => c.replace("const lt = () => { if (e.dashed) put(6, 'DASHED'); };", 'const lt = () => {};')],
+    c => c.replace("        if (name && name !== 'CONTINUOUS') put(6, name);\n", '')],
   ['the layer named last is forgotten', 'dxf-writer.js',
     c => c.replace('set dxfLayer(v) { state.dxfLayer = v || layer; },', 'set dxfLayer(v) {},')],
   ['save and restore lose the layer', 'dxf-writer.js',
@@ -37,6 +37,10 @@ const MUTATIONS = [
     c => c.replace('h: size * s * 0.7,', 'h: size * s,')],
   ['a layer keeps lower case and spaces', 'dxf-writer.js',
     c => c.replace(".toUpperCase().replace(/[^A-Z0-9$_-]/g, '_')", '')],
+  ['a dot dash goes out DASHED', 'dxf-writer.js',
+    c => c.replace("    if (d.length >= 4) return 'CENTER';\n", '')],
+  ['a coloured line loses its colour', 'dxf-writer.js',
+    c => c.replace('        if (Number.isInteger(e.color)) put(62, e.color);\n', '')],
   ['the ZIP lies about its CRC', 'dxf-writer.js',
     c => c.replace('return (c ^ 0xffffffff) >>> 0;', 'return 0;')],
 ];
@@ -112,6 +116,25 @@ const box = (geo, layer) => {
   ctx.setLineDash([4, 4]);
   ctx.beginPath(); ctx.moveTo(0, 50); ctx.lineTo(50, 50); ctx.stroke();
   check('a dashed line goes out DASHED', /\r\nLINE\r\n8\r\nA\r\n6\r\nDASHED/.test(written(ctx)), true);
+}
+
+// ── A LINE'S OWN STYLE AND COLOUR (Movie, 19 Oct) ─────────────────────────
+{
+  const ctx = W.recorder({ layer: 'A' });
+  ctx.strokeStyle = '#1d1f20';
+  ctx.setLineDash([12, 5, 2, 5]);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(50, 0); ctx.stroke();
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(50, 10); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#ff0000';
+  ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(50, 20); ctx.stroke();
+  const text = written(ctx);
+  check('a dot dash goes out CENTER', /\r\nLINE\r\n8\r\nA\r\n6\r\nCENTER\r\n/.test(text), true);
+  check('dots go out DOT', /\r\nLINE\r\n8\r\nA\r\n6\r\nDOT\r\n/.test(text), true);
+  check('the table names both linetypes', /\r\nLTYPE\r\n2\r\nCENTER\r\n/.test(text) && /\r\nLTYPE\r\n2\r\nDOT\r\n/.test(text), true);
+  check('a red line carries its colour on the entity', /\r\nLINE\r\n8\r\nA\r\n62\r\n1\r\n/.test(text), true);
+  check('a grey line keeps its layer\'s colour', (text.match(/\r\n62\r\n/g) || []).length, 2);
 }
 
 // ── CLIPPED TO THE VIEWPORT ────────────────────────────────────────────────

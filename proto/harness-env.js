@@ -59,7 +59,7 @@ function loadDraftModules() {
   // not: an elevation asked for `finishes: true` without it drew nothing and
   // said nothing, which is how a probe came back reporting zero hatch strokes
   // on a house whose every wall was clad.
-  for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
+  for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'line-styles.js', 'drawing-format.js',
     // AND WHAT THE DRAWING ALREADY HOLDS. building-bodies.js reads no
     // other module and is read by MODEL.html and layout-plan.js, but it
     // was absent from this list -- so its own harness built a SECOND vm

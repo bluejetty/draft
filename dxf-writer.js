@@ -113,6 +113,37 @@ if (!window.DraftDxfWriter) {
   const CURVE_STEPS = 16;        // a bezier or quadratic
   const SOLID_MAX = 40;          // a filled mark this many pixels or smaller is kept
 
+  // THE LINETYPE FOR A DASH PATTERN: four marks a DOT DASH (CENTER), a mark
+  // well shorter than its gap a DOT, two others DASHED, none CONTINUOUS.
+  // The same rule line-styles.js states for its own four styles, written
+  // here rather than reached, because this file reads a canvas's dash and
+  // owes nothing to the page's table: a recorder with no page loaded still
+  // names what was stroked.
+  const linetypeFor = dash => {
+    const d = Array.isArray(dash) ? dash.filter(Number.isFinite) : [];
+    if (!d.length) return 'CONTINUOUS';
+    if (d.length >= 4) return 'CENTER';
+    return d[0] * 1.5 <= d[1] ? 'DOT' : 'DASHED';
+  };
+  // THE NEAREST OF AUTOCAD'S FIRST NINE COLOURS to an ink, or null for ink
+  // that is one of the page's own greys (a line nobody coloured keeps its
+  // layer's colour). R12 has no true colour, so the index is what goes out.
+  const ACI = [[1, 255, 0, 0], [2, 255, 255, 0], [3, 0, 255, 0], [4, 0, 255, 255],
+    [5, 0, 0, 255], [6, 255, 0, 255], [7, 255, 255, 255], [8, 128, 128, 128], [9, 192, 192, 192]];
+  const entityColor = ink => {
+    const c = parseColor(ink);
+    if (!c) return null;
+    const [r, g, b] = c;
+    const spread = Math.max(r, g, b) - Math.min(r, g, b);
+    if (spread < 40) return null;
+    let best = null;
+    ACI.forEach(([i, cr, cg, cb]) => {
+      const d = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
+      if (!best || d < best.d) best = { d, i };
+    });
+    return best ? best.i : null;
+  };
+
   function recorder({ width = 1000, height = 1000, layer = '0' } = {}) {
     const entities = [];
     let state = {
@@ -245,12 +276,20 @@ if (!window.DraftDxfWriter) {
       stroke() {
         if (isPaper(state.strokeStyle, state.globalAlpha)) return;
         const dashed = state.dash.length > 0;
+        // WHAT KIND OF DASH, AND WHAT COLOUR (Movie, 19 Oct: a LINE's own
+        // weight, colour and style): the linetype is read off the pattern
+        // (four marks CENTER, two short DOT, two DASHED) and the ink's colour
+        // goes out on the entity as the nearest AutoCAD colour, so a line a
+        // drafter coloured keeps its colour in the engineer's file. Ink in
+        // the page's own line colours stays on its layer's colour.
+        const linetype = linetypeFor(state.dash);
+        const color = entityColor(state.strokeStyle);
         const layerNow = state.dxfLayer;
         const runOut = (pts, closed) => {
           if (pts.length < 4) return;
           clipRun(pts, state.clip).forEach(run => {
             const whole = closed && run.length === pts.length;
-            entities.push({ type: 'poly', layer: layerNow, dashed,
+            entities.push({ type: 'poly', layer: layerNow, dashed, linetype, color,
               pts: whole ? run.slice(0, -2) : run, closed: whole });
           });
         };
@@ -267,7 +306,7 @@ if (!window.DraftDxfWriter) {
               const [cx, cy] = ap(m, seg.cx, seg.cy);
               const det = m[0] * m[3] - m[1] * m[2];
               const flip = det < 0 ? -1 : 1;
-              entities.push({ type: 'arc', layer: layerNow, dashed, cx, cy, r: seg.r * Math.sqrt(Math.abs(det)),
+              entities.push({ type: 'arc', layer: layerNow, dashed, linetype, color, cx, cy, r: seg.r * Math.sqrt(Math.abs(det)),
                 a0: flip * seg.a0 + Math.atan2(m[1], m[0]), sweep: flip * seg.sweep });
             } else {
               runOut(seg.pts, false);
@@ -442,10 +481,16 @@ if (!window.DraftDxfWriter) {
     put(0, 'ENDSEC');
 
     put(0, 'SECTION'); put(2, 'TABLES');
-    put(0, 'TABLE'); put(2, 'LTYPE'); put(70, 2);
+    put(0, 'TABLE'); put(2, 'LTYPE'); put(70, 4);
     put(0, 'LTYPE'); put(2, 'CONTINUOUS'); put(70, 0); put(3, 'Solid line'); put(72, 65); put(73, 0); put(40, 0);
     put(0, 'LTYPE'); put(2, 'DASHED'); put(70, 0); put(3, '__ __ __'); put(72, 65); put(73, 2); put(40, 9);
     put(49, 6); put(49, -3);
+    // DOT DASH (property lines, beams) and DOTTED, the two Movie named
+    // beside DASHED (19 Oct).
+    put(0, 'LTYPE'); put(2, 'CENTER'); put(70, 0); put(3, '____ _ ____ _'); put(72, 65); put(73, 4); put(40, 20);
+    put(49, 12.5); put(49, -2.5); put(49, 2.5); put(49, -2.5);
+    put(0, 'LTYPE'); put(2, 'DOT'); put(70, 0); put(3, '. . . .'); put(72, 65); put(73, 2); put(40, 2.5);
+    put(49, 0); put(49, -2.5);
     put(0, 'ENDTAB');
     put(0, 'TABLE'); put(2, 'LAYER'); put(70, colorOf.size);
     colorOf.forEach((color, name) => {
@@ -464,7 +509,12 @@ if (!window.DraftDxfWriter) {
     const deg = r => n((((r * 180) / Math.PI) % 360 + 360) % 360);
     entities.forEach(e => {
       const layer = layerName(e.layer);
-      const lt = () => { if (e.dashed) put(6, 'DASHED'); };
+      // THE LINETYPE BY NAME, and the entity's own colour where it has one.
+      const lt = () => {
+        const name = e.linetype || (e.dashed ? 'DASHED' : null);
+        if (name && name !== 'CONTINUOUS') put(6, name);
+        if (Number.isInteger(e.color)) put(62, e.color);
+      };
       if (e.type === 'poly') {
         if (e.pts.length === 4 && !e.closed) {
           put(0, 'LINE'); put(8, layer); lt();
