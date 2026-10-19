@@ -30747,6 +30747,19 @@
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
           // SHIFT HELD: the wall goes on its own, its corners let go.
           if (board !== 'toy') setWallLoose(md, e.shiftKey);
+          // THE T-SQUARE HOLDS A MOVED WALL SQUARE (Movie, 18 Oct: "i like how
+          // the walls move, but when the T is on they should stay moving 90
+          // degrees it is free moving right now but the T is on"). The wall
+          // slides across its own run only, so the walls meeting its ends
+          // stretch along their own lines and stay at 90.
+          if (tsquareOn && board !== 'toy' && md.body?.start && md.body?.end) {
+            const ux = md.body.end.x - md.body.start.x, uz = md.body.end.z - md.body.start.z;
+            const len = Math.hypot(ux, uz);
+            if (len > 1e-6) {
+              const nx = -uz / len, nz = ux / len, across = dx * nx + dz * nz;
+              dx = nx * across; dz = nz * across;
+            }
+          }
           // §3: ON THE TOY BOARD THE MOVE IS toy-constraints.js's TO DECIDE.
           // Not a second constraint path -- the page proposes a distance and
           // allowedMove rounds it, welds the group, refuses what it must and
