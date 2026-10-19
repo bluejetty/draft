@@ -15011,6 +15011,16 @@
   // round what moved, so a BREAK node elsewhere is kept.
   const moveButton = document.getElementById('model-move');
   var moveState = { on: false, roof: null, node: null, drag: null };
+  // THE LAST MOVE, kept for a typed length (Movie, 19 Oct: "i would like to
+  // move exactly 12'1 down (at 90 with T on) but it won't allow me to enter a
+  // LENGTH"). The drag gives the direction, the box the distance: drag it
+  // roughly where it goes, type 12'1, ENTER, and it lands exactly that far
+  // along the line the drag took. Good only while that move is still the
+  // last thing done -- `step` is its undo entry, and anything pushed after it
+  // means the drawing has moved on.
+  var moveTyped = null;
+  const moveTypedReady = () => !!(moveTyped && moveState.on && !moveState.drag
+    && undoStack[undoStack.length - 1] === moveTyped.step);
   const moveRoofHeld = () => {
     if (selection.length && selection.every(entry => entry.type === 'roof')) return selection[0].item;
     return null;
@@ -15437,6 +15447,7 @@
         if (Math.abs(at.x - d.at.x) >= Math.abs(at.z - d.at.z)) dz = 0; else dx = 0;
       }
       d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+      d.dx = dx; d.dz = dz;
       if (d.set.run) reclipRun(d.set.run);
       d.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
       paint();
@@ -15530,6 +15541,12 @@
       const steps = [moveStep, ...(stepped.edits.length ? [{ kind: 'props', edits: stepped.edits }] : []),
         ...reframed.flatMap(r => r.steps)];
       undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : moveStep);
+      // A TYPED LENGTH MAY FINISH IT -- see moveTyped. Not for a beam row or a
+      // stair, whose release re-derived the floor depth or the framing for
+      // where the drag left them: a distance typed after would leave those
+      // answering a place the drawing is no longer in.
+      moveTyped = !d.set.run && !(d.set.stairs || []).length && Math.hypot(d.dx || 0, d.dz || 0) > 1e-6
+        ? { set: d.set, dx: d.dx, dz: d.dz, step: undoStack[undoStack.length - 1] } : null;
       markDirty();
       setSelection([...selection]);
       const framedSaid = stairFramingSaid(reframed);
@@ -25565,8 +25582,10 @@
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
     // have nowhere to put it.
+    // AND AFTER A MOVE, for the distance it went (moveTyped).
+    const moveTypable = moveTypedReady();
     const typable = !!(((drawsRun() && drawStart)
-      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld);
+      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable;
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
@@ -25606,6 +25625,9 @@
       lengthBox.value = dist === null ? '' : feetLabel(dist);
     } else if (!live && !typable && lengthBox.value) {
       lengthBox.value = '';
+    }
+    if (moveTypable && document.activeElement !== lengthBox) {
+      lengthBox.value = feetLabel(Math.hypot(moveTyped.dx, moveTyped.dz));
     }
     // A NOTICE OUTLIVES ONE REFRESH, and it has to. Both the refusal and the
     // cancel wrote straight to stripMessage and were erased microseconds later
@@ -27534,7 +27556,27 @@
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
     if (enterPlaces()) { e.preventDefault(); stripRefresh(); paint(); }
   });
+  // THE MOVE, MADE EXACT: the same points, from where the drag found them,
+  // the typed distance along the line the drag took. The drag's own undo
+  // entry restores those starting points, so one UNDO still takes it back.
+  const moveByTyped = () => {
+    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+    const feet = parsed.inches / 12;
+    const m = moveTyped;
+    const len = Math.hypot(m.dx, m.dz);
+    if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
+    const dx = m.dx / len * feet, dz = m.dz / len * feet;
+    m.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+    m.set.points.forEach(relinkVertex);
+    m.dx = dx; m.dz = dz;
+    lengthBox.blur();
+    markDirty();
+    sayOnStrip(`Moved ${feetLabel(feet)}. UNDO puts it back.`);
+    paint();
+  };
   const commitTypedLength = () => {
+    if (moveTypedReady()) { moveByTyped(); return; }
     if (activeTool === 'outline') {
       if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
       const feet = typedOutlineFeet();

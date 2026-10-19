@@ -110,3 +110,29 @@ test('with the T-square unlit the move is free, as it was', async ({ page }) => 
   expect(wall(d, 'wc1').start.x).toBeCloseTo(5, 0);
   expect(wall(d, 'wc1').start.z).toBeCloseTo(1.5, 0);
 });
+
+// AND A TYPED LENGTH MAKES IT EXACT (Movie, 19 Oct: "i would like to move
+// exactly 12'1 down (at 90 with T on) but it won't allow me to enter a
+// LENGTH"). Drag it roughly down, type the distance -- no click into the box,
+// the way a wall's length is typed -- and ENTER puts it exactly there along
+// the line the drag took. One UNDO takes the whole move back.
+test('after a MOVE drag, a typed length moves it exactly that far the same way', async ({ page }) => {
+  const { at } = await open(page);
+  await pickAssembly(page, at);
+  await lightTsquare(page);
+  await page.locator('#model-move').click();
+  await drag(page, at(4, 3), at(4.6, 6));
+  const box = page.locator('#frozen-length');
+  await expect(box, 'the box takes a number after the move').toBeEnabled();
+  await page.keyboard.type("12'1");
+  await expect(box).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#strip-message')).toContainText('Moved');
+  let d = await saved(page);
+  expect(wall(d, 'wc1').start.z, "exactly 12'-1\" down").toBeCloseTo(12 + 1 / 12, 6);
+  expect(wall(d, 'wc1').start.x, 'and square').toBeCloseTo(0, 6);
+  expect(wall(d, 'wc2').end.z, 'the whole assembly').toBeCloseTo(18 + 1 / 12, 6);
+  await page.keyboard.press('Control+z');
+  d = await saved(page);
+  expect(wall(d, 'wc1').start.z, 'one UNDO, back where it started').toBeCloseTo(0, 6);
+});

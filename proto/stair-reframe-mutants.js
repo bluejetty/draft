@@ -9,7 +9,8 @@
 // beam on side that span 10 ft or more" -- "i'm trying to select and then MOVE
 // the door to SLIDE it on the wall, but it isn't moving" -- "i can't insert
 // WASHER or DRYER - i need it for LAUNDRY" -- "the T SQUARE isn't keeping it
-// at 90 degrees it is freemoving".
+// at 90 degrees it is freemoving" -- "move exactly 12'1 down (at 90 with T on)
+// but it won't allow me to enter a LENGTH".
 //
 // Run: node proto/stair-reframe-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -18,6 +19,18 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js tests/move-tsquare.spec.js';
 const MUTANTS = [
+  { file: 'MODEL.html', name: 'the LENGTH box stays shut after a move',
+    find: "    const moveTypable = moveTypedReady();\n",
+    with: "    const moveTypable = false;\n",
+    test: 'after a MOVE drag, a typed length moves it exactly that far the same way' },
+  { file: 'MODEL.html', name: 'a typed length after a move is read as a wall length',
+    find: "    if (moveTypedReady()) { moveByTyped(); return; }\n",
+    with: "",
+    test: 'after a MOVE drag, a typed length moves it exactly that far the same way' },
+  { file: 'MODEL.html', name: 'the typed move adds to the drag instead of replacing it',
+    find: "    m.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n    m.set.points.forEach(relinkVertex);\n",
+    with: "    m.set.before.forEach(b => { b.vtx.x += dx; b.vtx.z += dz; });\n    m.set.points.forEach(relinkVertex);\n",
+    test: 'after a MOVE drag, a typed length moves it exactly that far the same way' },
   { file: 'MODEL.html', name: 'MOVE goes free with the T-square lit',
     find: "      if (tsquareOn && board !== 'toy' && !d.set.across) {\n",
     with: "      if (false) {\n",
