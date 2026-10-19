@@ -66,13 +66,18 @@ function recorder() {
 
 // A canvas that answers every call and draws nothing. `strokeLines` really
 // strokes, so the tape gets a mark from the context rather than a painter.
-function ctxStub(tape) {
-  return {
+function ctxStub(tape, inks = []) {
+  const ctx = {
     save() {}, restore() {}, beginPath() {}, closePath() {},
     moveTo() {}, lineTo() {}, quadraticCurveTo() {},
-    stroke() { tape.push('line'); }, fill() {}, fillText() {},
-    strokeStyle: '', fillStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
+    // AND WHAT EACH STROKE WAS MADE WITH, for the line checks: its width,
+    // its dash and its ink, as the canvas would have them.
+    stroke() { tape.push('line'); inks.push(`${ctx.lineWidth}|${ctx.dash.join(',')}|${ctx.strokeStyle}`); },
+    setLineDash(d) { ctx.dash = d.slice(); },
+    fill() {}, fillText() {},
+    strokeStyle: '', fillStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '', dash: [],
   };
+  return ctx;
 }
 
 function load(mutate) {
@@ -87,6 +92,9 @@ function load(mutate) {
     src = next;
   }
   const window = {};
+  // THE LINE TABLE FIRST, as LAYOUT loads it: strokeLines reads a line's
+  // weight, colour and style through window.DraftLineStyles.
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'line-styles.js'), 'utf8'))(window);
   new Function('window', src)(window);
   return window;
 }
@@ -135,8 +143,31 @@ const run = (win, over) => {
   win.DraftPlanComposition.drawPlan(ctxStub(tape), toS, fullEnv(over));
   return tape;
 };
+// THE INKS THE LINES WERE STROKED WITH, in order.
+const inksOf = (win, over) => {
+  const { render, tape } = recorder();
+  win.DraftRender2D = render;
+  const inks = [];
+  win.DraftPlanComposition.drawPlan(ctxStub(tape, inks), toS, fullEnv(over));
+  return inks;
+};
 
 const CHECKS = [
+  // ── A LINE'S OWN WEIGHT, COLOUR AND STYLE ON THE SHEET (Movie, 19 Oct) ──
+  {
+    label: 'a line with nothing set strokes FINE, solid, in the sheet\'s line ink',
+    fn: win => [inksOf(win, { lineColor: '#123456' }).join(' '), '1||#123456'],
+  },
+  {
+    label: 'an XTRA-BOLD dot-dash red line strokes at 4.5 with its dash scaled and its own colour',
+    fn: win => [inksOf(win, { lines: [{ id: 'l1', levelId: 3, view: 'plan', layer: 'A-ANNO', weight: 6, style: 'dotdash', color: '#ff0000',
+      start: { x: 0, z: 0 }, end: { x: 1, z: 1 } }] }).join(' '), '4.5|54,22.5,9,22.5|#ff0000'],
+  },
+  {
+    label: 'print\'s ink scale doubles a line\'s width and its dash',
+    fn: win => [inksOf(win, { inkScale: 2, lines: [{ id: 'l1', levelId: 3, view: 'plan', layer: 'A-ANNO', weight: 2, style: 'dashed',
+      start: { x: 0, z: 0 }, end: { x: 1, z: 1 } }] }).join(' '), '2|16,10|#1d1f20'],
+  },
   {
     label: 'the order, end to end, with one of every entity on the level',
     fn: win => [run(win).join(' '),
@@ -438,6 +469,14 @@ const MUTATIONS = [
       '.filter(opening => opening.levelId === env.levelId && shows(opening.layer));')],
   // RE-AIMED (17 Oct): the caller may hand the list over (`stairsShown`);
   // the fallback pick is the half these two bend.
+  ['a line\'s weight is ignored on the sheet',
+    s => s.replace('      ctx.lineWidth = ink.lineWidth;\n', '      ctx.lineWidth = 1;\n')],
+  ['a line\'s dash is ignored on the sheet',
+    s => s.replace('      if (ctx.setLineDash) ctx.setLineDash(ink.dash);\n', '')],
+  ['a line\'s colour is ignored on the sheet',
+    s => s.replace("      ctx.strokeStyle = ink.color || env.lineColor || '#1d1f20';\n", "      ctx.strokeStyle = env.lineColor || '#1d1f20';\n")],
+  ['print\'s ink scale does not reach the lines',
+    s => s.replace('    const inkScale = env.inkScale || 1;\n', '    const inkScale = 1;\n')],
   ['the stair painter gets the whole collection',
     s => s.replace('env.stairsShown : pick(env.stairs, { strict: true })', 'env.stairsShown : env.stairs')],
   ['stairs take the `|| \'plan\'` fallback like everything else',
