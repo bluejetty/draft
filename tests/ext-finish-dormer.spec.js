@@ -119,4 +119,13 @@ test('the gable wall is clad, and a line runs along its foot where it stands on 
   const column = [];
   for (let e = dg.base + 0.3; e < dg.base + 2.6; e += 0.05) column.push(lum(await at(dg.mid, e)));
   expect(Math.max(...column) - Math.min(...column), 'the siding is drawn on the gable wall').toBeGreaterThan(60);
+  // THE RAKE BOARD: in stucco (no coursing to confuse it), a fascia's depth
+  // under the rake at its peak is a line, and a foot below that is wall.
+  await page.mouse.click(...await toPage(page, f, dg.mid, dg.base + 0.8));
+  await page.locator('#dormer-finish').selectOption('stucco');
+  await expect.poll(async () => (await stored(page)).finish).toBe('stucco');
+  const fascia = 5.5 / 12;
+  const board = await at(dg.mid, dg.apex - fascia);
+  const wall = await at(dg.mid, dg.apex - fascia - 1);
+  expect(Math.abs(lum(board) - lum(wall)), 'the rake board\'s lower edge').toBeGreaterThan(90);
 });
