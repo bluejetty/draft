@@ -12761,6 +12761,10 @@
     const choices = contextWallTypes(viewId);
     const active = wallSetting('activeWallType', null);
     if (choices.some(t => t.id === active)) return active;
+    // A TYPE PICKED ON THE WALL PANEL IS DRAWN WHERE IT IS PICKED: ICF and
+    // concrete stand above grade too, so the panel's six are not held to the
+    // foundation set or kept off it.
+    if (WALL_PANEL_TYPES.some(([id]) => id === active)) return active;
     const want = viewId === 'foundation' ? 'concrete_8' : 'stud_2x6';
     return (choices.find(t => t.id === want) || choices[0]).id;
   };
@@ -17914,11 +17918,24 @@
   // which every drawn wall reads (wallShape) and the save keeps. The ghost
   // body in hand follows it at once, through the same wallShape.
   const WALL_SIDES = [['right', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['left', 'RIGHT SIDE']];
+  // THE WALL TYPE, PICKED BEFORE DRAWING (Movie, 18 Oct: "under the WALL title
+  // can we put the TYPE of WALL - 2x4, 2X6, 2X8, 11.25" (6"CORE) ICF 13.25
+  // (8"CORE) ICF, 8" CONC" -- "so i can select a wall type / thickness before
+  // drawing"). Sticky, and the drawing's, like the side: every wall drawn
+  // after takes it.
+  var WALL_PANEL_TYPES = [['stud_2x4', '2X4'], ['stud_2x6', '2X6'], ['stud_2x8', '2X8'],
+    ['icf', '11 1/4" ICF (6" CORE)'], ['icf_13', '13 1/4" ICF (8" CORE)'], ['concrete_8', '8" CONC']];
   const wallSideNow = () => wallShape({}).refLine;
   const showWallProps = () => {
     const P = window.ModelProps;
     if (!P) return;
     const box = document.createElement('div');
+    box.append(propRow('WALL TYPE', WALL_PANEL_TYPES, wallShape({}).wallType, id => {
+      drawing.activeWallType = id;
+      markDirty();
+      showWallProps();
+      paint();
+    }));
     box.append(propRow('WALL SIDE', WALL_SIDES, wallSideNow(), id => {
       drawing.wallRefLine = id;
       markDirty();

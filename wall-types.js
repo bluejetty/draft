@@ -6,6 +6,9 @@ if (!window.DraftWallTypes) {
   const WALL_TYPES = [
     { id:'stud_2x4',    label:'2×4 Stud  (3½")',   totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
     { id:'stud_2x6',    label:'2×6 Stud  (5½")',   totalIn:5.5,   layers:[{in:5.5,   fill:'stud'}] },
+    // 2x8 (Movie, 18 Oct, on the WALL panel's types: "2x4, 2X6, 2X8, 11.25"
+    // (6"CORE) ICF 13.25 (8"CORE) ICF, 8" CONC").
+    { id:'stud_2x8',    label:'2×8 Stud  (7¼")',   totalIn:7.25,  layers:[{in:7.25,  fill:'stud'}] },
     // Basement wall insul at concrete — 2×4 SPF @ 24" O.C. held 2½" off the conc
     // wall, 5½" batt filling out to a ½" air space at the concrete, VB on the
     // warm side under ½" drywall; lines the concrete on the foundation PLAN.

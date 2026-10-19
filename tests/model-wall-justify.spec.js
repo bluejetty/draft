@@ -203,3 +203,26 @@ test('a run square INTO the face is not along it: the panel\'s pick stands', asy
   expect(w.end.z, 'cut at the face').toBeCloseTo(-10 + T_2X6, 9);
   expect(w.refLine, 'but the face is not its line, so the pick holds').toBe('right');
 });
+
+// THE WALL TYPE, PICKED BEFORE DRAWING (Movie, 18 Oct: "under the WALL title
+// can we put the TYPE of WALL - 2x4, 2X6, 2X8, 11.25" (6"CORE) ICF 13.25
+// (8"CORE) ICF, 8" CONC" -- "so i can select a wall type / thickness before
+// drawing").
+const typeRow = page => page.locator('[data-prop-row="wall type"]');
+test('the WALL panel offers the six types, 2X6 lit; a pick is the next wall\'s type and sticks, ICF on a floor plan too',
+  async ({ page }) => {
+    await open(page, house('drafting'));
+    await h.armWall(page);
+    await expect(typeRow(page).locator('[data-prop-value]')).toHaveText(
+      ['2X4', '2X6', '2X8', '11 1/4" ICF (6" CORE)', '13 1/4" ICF (8" CORE)', '8" CONC']);
+    await expect(typeRow(page).locator('[data-prop-value="stud_2x6"]')).toHaveAttribute('aria-pressed', 'true');
+    await typeRow(page).locator('[data-prop-value="stud_2x8"]').click();
+    await drawRun(page, 2, 2, 8, 2);
+    await h.armWall(page);
+    await typeRow(page).locator('[data-prop-value="icf_13"]').click();
+    await drawRun(page, 2, 6, 8, 6);
+    await drawRun(page, 2, -6, 8, -6);
+    const saved = await saveAndRead(page);
+    expect(drawnWalls(saved).map(w => w.wallType)).toEqual(['stud_2x8', 'icf_13', 'icf_13']);
+    expect(saved.activeWallType).toBe('icf_13');
+  });
