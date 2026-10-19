@@ -797,6 +797,14 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'Break here', 'Move this wall',
             'CLEAR',   // the NOTES pad's, beside 'notes-tab' above
             'SAVE AS TXT',   // and its backup to a .txt (Movie, 18 Oct)
+            // AND ITS CALC TAB (Movie, 18 Oct: "can we add a construction
+            // calculator tab under the notebook tab"): NOTES and CALC swap the
+            // pad's page; the keys type on the calculator's line, = works it,
+            // -> NOTES writes the answer on the pad. Arithmetic for the
+            // drafter, never geometry, so no absence row moves.
+            'NOTES', 'CALC', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.',
+            '(', ')', '+', '\u2212', '\u00D7', '\u00F7', '=', 'C', '\u232B', '\u2423',
+            'FT', 'IN', 'M', 'MM', 'a/b', 'FT-IN', '\u2192 NOTES',
             // ROTATE's own row: two quarter turns, a half, and DONE.
             '\u27F2 90', '\u27F3 90', '180', 'DONE',
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
@@ -982,6 +990,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // kind of switch as the garage lesson's: it puts a note away and
             // authors nothing.
             'length-hint-hide',
+            // THE CALC TAB'S LINE (18 Oct): a sum typed, never a length drawn.
+            'calc-line',
             // TRACE's picker and its card's three boxes: scale, width, and
             // CALIBRATE's real length.
             'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length',
