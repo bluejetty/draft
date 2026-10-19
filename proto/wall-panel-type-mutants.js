@@ -8,20 +8,24 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPECS = ['tests/model-wall-justify.spec.js'];
+const SPECS = ['tests/model-wall-justify.spec.js', 'tests/model-html-draw-delete.spec.js'];
 const MUTANTS = [
   { file: "MODEL.html", name: "the WALL panel has no type row", spec: 'tests/model-wall-justify.spec.js',
     find: "    box.append(propRow('WALL TYPE', WALL_PANEL_TYPES, wallShape({}).wallType, id => {\n      drawing.activeWallType = id;",
     with: "    box.append(propRow('WALL TYPE', WALL_PANEL_TYPES, wallShape({}).wallType, id => {\n      void id;",
     test: "the WALL panel offers the six types" },
   { file: "MODEL.html", name: "ICF picked on a floor plan draws a stud wall", spec: 'tests/model-wall-justify.spec.js',
-    find: "    if (WALL_PANEL_TYPES.some(([id]) => id === active)) return active;\n",
+    find: "    if (viewId !== 'foundation' && WALL_PANEL_TYPES.some(([id]) => id === active)) return active;\n",
     with: "",
     test: "the WALL panel offers the six types" },
   { file: "wall-types.js", name: "there is no 2x8", spec: 'tests/model-wall-justify.spec.js',
     find: "    { id:'stud_2x8',    label:'2\u00d78 Stud  (7\u00bc\")',   totalIn:7.25,  layers:[{in:7.25,  fill:'stud'}] },\n",
     with: "",
     test: "the WALL panel offers the six types" },
+  { file: 'MODEL.html', name: "a stud wall picked on the panel is drawn on the foundation", spec: 'tests/model-html-draw-delete.spec.js',
+    find: "    if (viewId !== 'foundation' && WALL_PANEL_TYPES.some(([id]) => id === active)) return active;\n",
+    with: "    if (WALL_PANEL_TYPES.some(([id]) => id === active)) return active;\n",
+    test: "FOUNDATION draws a foundation-set wall, not a stud one" },
 ];
 
 const run = (name, spec) => {

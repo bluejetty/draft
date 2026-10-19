@@ -12761,10 +12761,10 @@
     const choices = contextWallTypes(viewId);
     const active = wallSetting('activeWallType', null);
     if (choices.some(t => t.id === active)) return active;
-    // A TYPE PICKED ON THE WALL PANEL IS DRAWN WHERE IT IS PICKED: ICF and
-    // concrete stand above grade too, so the panel's six are not held to the
-    // foundation set or kept off it.
-    if (WALL_PANEL_TYPES.some(([id]) => id === active)) return active;
+    // ICF AND CONCRETE PICKED ON THE WALL PANEL ARE DRAWN ON A FLOOR TOO:
+    // they stand above grade as well. A stud wall is still never the
+    // foundation's -- there the foundation set is the only answer.
+    if (viewId !== 'foundation' && WALL_PANEL_TYPES.some(([id]) => id === active)) return active;
     const want = viewId === 'foundation' ? 'concrete_8' : 'stud_2x6';
     return (choices.find(t => t.id === want) || choices[0]).id;
   };
