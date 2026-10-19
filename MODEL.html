@@ -14601,7 +14601,8 @@
     // already left behind by an earlier turn comes back around its flight.
     // A NEW ring is written so the undo keeps the old one. A shared well (two
     // flights through one hole) stays, as a drag leaves it.
-    // ITS FRAMING TURNS WITH IT, about the same middle.
+    // ITS FRAMING TURNS WITH IT, about the same middle -- and is then laid
+    // again below where there is a house to measure it against.
     const framing = entries.filter(entry => entry.type === 'stair').flatMap(({ item }) => {
       const f = stairFramingOf(item);
       return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
@@ -14617,11 +14618,18 @@
       hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
     });
     points.forEach(relinkVertex);
-    undoStack.push({ kind: 'rotate', before, detached, wells });
+    // AND ITS FRAMING IS LAID AGAIN (reframeStair), not left as it turned: a
+    // run turned to lie with the joists needs no side beam, and one turned
+    // end for end has its open side where the wall was. One UNDO takes the
+    // turn and the new framing back together.
+    const turn = { kind: 'rotate', before, detached, wells };
+    const reframed = entries.filter(entry => entry.type === 'stair').map(({ item }) => reframeStair(item));
+    const steps = reframed.flatMap(r => r.steps);
+    undoStack.push(steps.length ? { kind: 'batch', steps: [turn, ...steps] } : turn);
     markDirty();
     paint();
     const shown = Math.round(((degrees % 360) + 360) % 360 * 100) / 100;
-    sayOnStrip(`Turned ${shown}° clockwise about its middle. UNDO turns it back.`);
+    sayOnStrip(`Turned ${shown}° clockwise about its middle.${stairFramingSaid(reframed)} UNDO turns it back.`);
   };
   const setRotateOpen = open => {
     rotateState.open = !!open;
@@ -15003,6 +15011,16 @@
   // round what moved, so a BREAK node elsewhere is kept.
   const moveButton = document.getElementById('model-move');
   var moveState = { on: false, roof: null, node: null, drag: null };
+  // THE LAST MOVE, kept for a typed length (Movie, 19 Oct: "i would like to
+  // move exactly 12'1 down (at 90 with T on) but it won't allow me to enter a
+  // LENGTH"). The drag gives the direction, the box the distance: drag it
+  // roughly where it goes, type 12'1, ENTER, and it lands exactly that far
+  // along the line the drag took. Good only while that move is still the
+  // last thing done -- `step` is its undo entry, and anything pushed after it
+  // means the drawing has moved on.
+  var moveTyped = null;
+  const moveTypedReady = () => !!(moveTyped && moveState.on && !moveState.drag
+    && undoStack[undoStack.length - 1] === moveTyped.step);
   const moveRoofHeld = () => {
     if (selection.length && selection.every(entry => entry.type === 'roof')) return selection[0].item;
     return null;
@@ -15336,6 +15354,7 @@
     const wells = entries.filter(e => e.type === 'stair').map(({ item }) => stairWellOf(item))
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
     return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across,
+      stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
       before: points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
         ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })) };
   };
@@ -15348,6 +15367,19 @@
       event.preventDefault();
       const r = canvas.getBoundingClientRect();
       const at = toWorld(event.clientX - r.left, event.clientY - r.top);
+      // A DOOR OR WINDOW SLIDES ALONG ITS WALL (Movie, 19 Oct: "i'm trying
+      // to select and then MOVE the door to SLIDE it on the wall, but it isn't
+      // moving"). An opening is a width and an offset along its host, with no
+      // points of its own for the selection move to carry -- so MOVE drives
+      // the same slide the SELECT drag does, by the press's travel along the
+      // wall, wherever on the sheet the press began.
+      const lone = selection.length === 1 && selection[0].type === 'fenestration' ? selection[0].item : null;
+      const host = lone && walls().find(wall => String(wall.id) === String(lone.wallId));
+      if (host) {
+        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false };
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
       moveState.drag = { kind: 'selection', at, set: selectionMoveSet(), moved: false };
       canvas.setPointerCapture(event.pointerId);
       return;
@@ -15380,6 +15412,20 @@
     if (!d.moved && Math.hypot(dx, dz) * view.scale < 3) return;
     d.moved = true;
     d.cursor = at;
+    if (d.kind === 'opening') {
+      // ALONG THE WALL ONLY, and clamped every event -- the SELECT drag's
+      // reasons, the same bearing kept under the lintel.
+      const wall = d.host;
+      const wx = wall.end.x - wall.start.x, wz = wall.end.z - wall.start.z;
+      const length = Math.hypot(wx, wz) || 1;
+      const along = d.was + (dx * wx + dz * wz) / length;
+      const clamped = window.DraftGeometry2D.clampOpeningToWall(wall, along, d.opening.width, {
+        walls: walls(), thicknessFt: openingThicknessFt(),
+      });
+      if (clamped) d.opening.offset = clamped.offset;
+      paint();
+      return;
+    }
     if (d.kind === 'selection') {
       // A BEAM ROW SLIDES ACROSS ITSELF and takes no magnet (Movie, 19 Oct:
       // the beams are placed and moved by hand); every other selection
@@ -15392,7 +15438,16 @@
         d.lit = seek?.lit || null;
         if (seek) { dx = seek.dx; dz = seek.dz; }
       }
+      // THE T-SQUARE HOLDS IT SQUARE (Movie, 19 Oct: "i'm trying to move this
+      // ASSEMBLY of WALLS and the T SQUARE isn't keeping it at 90 degrees it
+      // is freemoving"). The hand's larger travel wins and the other is
+      // dropped -- after the magnet, so a catch can only slide it along the
+      // axis the hand chose.
+      if (tsquareOn && board !== 'toy' && !d.set.across) {
+        if (Math.abs(at.x - d.at.x) >= Math.abs(at.z - d.at.z)) dz = 0; else dx = 0;
+      }
       d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+      d.dx = dx; d.dz = dz;
       if (d.set.run) reclipRun(d.set.run);
       d.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
       paint();
@@ -15463,6 +15518,17 @@
     event.stopImmediatePropagation();
     moveState.drag = null;
     if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    if (d.kind === 'opening') {
+      // One slide, one UNDO, with the strings that measure it re-laid in the
+      // same step; nothing pushed when the clamp held it where it was.
+      if (d.opening.offset !== d.was) {
+        undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));
+        markDirty();
+        sayOnStrip('Slid along its wall. UNDO puts it back.');
+      }
+      paint();
+      return;
+    }
     if (d.kind === 'selection') {
       if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); paint(); return; }
       d.set.points.forEach(relinkVertex);
@@ -15470,11 +15536,23 @@
       // A MOVED BEAM ROW RE-ASKS ITS FLOOR'S SPAN -- see stepUpJoists. The
       // deeper floor and the move are one gesture and go back with one UNDO.
       const stepped = d.set.run ? stepUpJoists(d.set.run[0].levelId) : { edits: [], said: [] };
-      undoStack.push(stepped.edits.length
-        ? { kind: 'batch', steps: [moveStep, { kind: 'props', edits: stepped.edits }] } : moveStep);
+      // A MOVED STAIR IS FRAMED AGAIN WHERE IT LANDED -- see reframeStair.
+      const reframed = (d.set.stairs || []).map(reframeStair);
+      const steps = [moveStep, ...(stepped.edits.length ? [{ kind: 'props', edits: stepped.edits }] : []),
+        ...reframed.flatMap(r => r.steps)];
+      undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : moveStep);
+      // A TYPED LENGTH MAY FINISH IT -- see moveTyped. Not for a beam row or a
+      // stair, whose release re-derived the floor depth or the framing for
+      // where the drag left them: a distance typed after would leave those
+      // answering a place the drawing is no longer in.
+      moveTyped = !d.set.run && !(d.set.stairs || []).length && Math.hypot(d.dx || 0, d.dz || 0) > 1e-6
+        ? { set: d.set, dx: d.dx, dz: d.dz, step: undoStack[undoStack.length - 1] } : null;
       markDirty();
       setSelection([...selection]);
-      sayOnStrip(stepped.said.length ? `Moved. ${stepped.said.join('. ')}. UNDO puts it all back.` : 'Moved. UNDO puts it back.');
+      const framedSaid = stairFramingSaid(reframed);
+      sayOnStrip(stepped.said.length || framedSaid
+        ? `Moved.${stepped.said.length ? ` ${stepped.said.join('. ')}.` : ''}${framedSaid} UNDO puts it all back.`
+        : 'Moved. UNDO puts it back.');
       paint();
       return;
     }
@@ -18972,11 +19050,18 @@
   // exactly that reason and this keeps the comparison rather than simplifying
   // it to a sign test, which would be wrong for a left- or right-referenced
   // wall.
-  const fixturePlacement = worldPt => {
+  // THE REACH IS THE FIXTURE'S OWN DEPTH as well as the grab zone (Movie,
+  // 19 Oct: "i can't insert WASHER or DRYER"). A drafter presses where the
+  // machine will STAND, which for a 27" washer is over a foot off the wall's
+  // centreline -- and at the zoom a room is drawn at, 30px is about a foot and
+  // a half, so the press read as "near no wall" however close to the wall it
+  // looked. `reachFt` is measured from the centreline: the depth plus half a
+  // thick wall.
+  const fixturePlacement = (worldPt, reachFt = 0) => {
     const G = window.DraftGeometry2D;
     const FG = window.DraftFixtureGeometry;
     if (!G || !FG) return null;
-    const thresh = FIXTURE_PICK_PX / view.scale;
+    const thresh = Math.max(FIXTURE_PICK_PX / view.scale, reachFt);
     let best = null, bestD = thresh;
     walls().forEach(wall => {
       if (!wall.start || !wall.end) return;
@@ -19343,7 +19428,7 @@
       sayOnStrip(`${kind.label} is not on this page yet — it takes a gesture of its own.`);
       return null;
     }
-    const placement = fixturePlacement(at);
+    const placement = fixturePlacement(at, kind.run ? 0 : (Number(kind.depthFt) || 0) + 0.5);
     if (!placement) {
       sayOnStrip('Press near a wall — fixtures and cabinets sit against the wall that carries them.');
       return null;
@@ -22465,6 +22550,19 @@
   // with nothing under it, which is the one that needs framing -- so a stair
   // pushed to the wall by the rule above comes out with ONE beam, not two,
   // and the columns stay minimised the way he asked.
+  // THE WAY THE JOISTS RUN UNDER A STAIR'S FLOOR: across the beams carrying
+  // it (its own framing aside -- that is the answer, not the question), or
+  // the short way on a deck with none. joistBays' reading, so the arrows on
+  // the sheet and this rule never disagree. 'x', 'z', or null for no body.
+  const stairJoistAxis = stair => {
+    const B = window.DraftBuildHouse;
+    const outline = houseOutlineOn(stair.levelId);
+    if (!B?.joistBays || !outline || outline.points.length < 3) return null;
+    const beams = stairFloorBeams(stair.levelId)
+      .filter(beam => Number(beam.stairId) !== Number(stair.id));
+    return B.joistBays(outline.points.map(pt => ({ x: pt.x, z: pt.z })), { beams })?.axis || null;
+  };
+
   const stairOpenSideFraming = stair => {
     const poly = stairOpeningFootprint(stair);
     if (!poly || poly.length < 3) return [];
@@ -22472,6 +22570,14 @@
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
     const len = Math.hypot(dx, dz) || 1;
     const u = { x: dx / len, z: dz / len };
+    // A RUN WITH THE JOISTS CUTS NONE ALONG ITS SIDES (Movie, 19 Oct: "the
+    // short ends won't need beams ever it can be supported but the side
+    // joists only the long end needs a beam on side that span 10 ft or
+    // more"). The joists beside it run past the hole whole; only the ones at
+    // its ends are cut, and a header on the next joist carries those. So a
+    // stair parallel to the joists -- across the beams -- takes no side beam.
+    const joist = stairJoistAxis(stair);
+    if (joist && (Math.abs(u.x) >= Math.abs(u.z) ? 'x' : 'z') === joist) return [];
     const mid = poly.reduce((sum, pt) => ({
       x: sum.x + pt.x / poly.length, z: sum.z + pt.z / poly.length }), { x: 0, z: 0 });
     // TEN FEET OF FLOOR OR MORE on that side, to the wall or to a beam.
@@ -23038,6 +23144,49 @@
       });
     });
     return { placed, beams, columns };
+  };
+
+  // A STAIR MOVED OR TURNED IS FRAMED AGAIN (Movie, 19 Oct: "is there a way
+  // to regenerate the beam after the stairs move"). Its framing used to ride
+  // along with it, which is right for a slide and wrong for a turn: a run
+  // turned to lie with the joists needs no side beam at all, and one turned
+  // end for end has its open side where the wall was. So the old framing
+  // (stairFramingOf: its beams and the posts only they stand on) comes out
+  // and stairOpenSideFraming lays what the stair asks for where it now is.
+  // Returns the two undo steps -- out, then in -- for the gesture's batch.
+  //
+  // NOTHING TO MEASURE, NOTHING RE-LAID: with no house ring on the stair's
+  // level there is no span to read, and the framing the drafter has stays
+  // where the gesture carried it.
+  const reframeStair = stair => {
+    const ring = houseOutlineOn(stair.levelId);
+    if (!ring || ring.points.length < 3) return { steps: [], beams: 0, before: 0 };
+    const old = stairFramingOf(stair);
+    const removed = [];
+    [[drawing?.beams, old.beams], [drawing?.columns, old.columns]].forEach(([list, items]) => {
+      items.forEach(item => {
+        const index = list.indexOf(item);
+        if (index < 0) return;
+        list.splice(index, 1);
+        removed.push({ list, index, item });
+      });
+    });
+    const framed = placeStairSideFraming([stair]);
+    const steps = [];
+    if (removed.length) steps.push({ kind: 'remove-items', removed });
+    if (framed.placed.length) steps.push({ kind: 'built', walls: [], outlines: [], list: null, items: framed.placed });
+    if (steps.length) setSelection(selection.filter(entry => !old.beams.includes(entry.item) && !old.columns.includes(entry.item)));
+    return { steps, beams: framed.beams, before: old.beams.length };
+  };
+
+  // The strip's word on a re-frame: what the stair now stands on, or nothing
+  // when nothing changed.
+  const stairFramingSaid = reframed => {
+    const now = reframed.reduce((n, r) => n + r.beams, 0);
+    const was = reframed.reduce((n, r) => n + r.before, 0);
+    if (!now && !was) return '';
+    if (!now) return ' Its side beam is not needed where it is now, so it came out.';
+    return ` Framed again: ${now === 1 ? 'a side beam' : `${now} side beams`} on posts where the stair now is.`;
   };
 
   const placeAutoStairs = ({ served = new Set(), only = null } = {}) => {
@@ -25433,8 +25582,10 @@
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
     // have nowhere to put it.
+    // AND AFTER A MOVE, for the distance it went (moveTyped).
+    const moveTypable = moveTypedReady();
     const typable = !!(((drawsRun() && drawStart)
-      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld);
+      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable;
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
@@ -25474,6 +25625,9 @@
       lengthBox.value = dist === null ? '' : feetLabel(dist);
     } else if (!live && !typable && lengthBox.value) {
       lengthBox.value = '';
+    }
+    if (moveTypable && document.activeElement !== lengthBox) {
+      lengthBox.value = feetLabel(Math.hypot(moveTyped.dx, moveTyped.dz));
     }
     // A NOTICE OUTLIVES ONE REFRESH, and it has to. Both the refusal and the
     // cancel wrote straight to stripMessage and were erased microseconds later
@@ -27402,7 +27556,27 @@
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
     if (enterPlaces()) { e.preventDefault(); stripRefresh(); paint(); }
   });
+  // THE MOVE, MADE EXACT: the same points, from where the drag found them,
+  // the typed distance along the line the drag took. The drag's own undo
+  // entry restores those starting points, so one UNDO still takes it back.
+  const moveByTyped = () => {
+    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+    const feet = parsed.inches / 12;
+    const m = moveTyped;
+    const len = Math.hypot(m.dx, m.dz);
+    if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
+    const dx = m.dx / len * feet, dz = m.dz / len * feet;
+    m.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+    m.set.points.forEach(relinkVertex);
+    m.dx = dx; m.dz = dz;
+    lengthBox.blur();
+    markDirty();
+    sayOnStrip(`Moved ${feetLabel(feet)}. UNDO puts it back.`);
+    paint();
+  };
   const commitTypedLength = () => {
+    if (moveTypedReady()) { moveByTyped(); return; }
     if (activeTool === 'outline') {
       if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
       const feet = typedOutlineFeet();
@@ -31799,7 +31973,10 @@
           // distance to within the float drift of a hundred pointermove
           // events. Each point is written from its OWN start, so the assembly
           // keeps its shape no matter how many events the drag took.
-          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          // HELD SQUARE BY THE T-SQUARE, the MOVE verb's rule: the larger
+          // travel wins.
+          if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
           md.before.forEach(b => relinkVertex(b.vtx));
           // THE LOCKED SIBLINGS DO NOT MOVE HERE. They move ONCE, on the
@@ -32133,7 +32310,13 @@
             // the moment the drafter touches it)" -- and a drag is the plainest
             // touch there is. In the undo step, so Ctrl+Z gives it back.
             md.stair.auto = false;
-            undoStack.push({ kind: 'props', edits });
+            // AND FRAMED AGAIN WHERE IT LANDED (reframeStair): the framing
+            // rode along for the drag so the drafter sees it go with him, and
+            // is laid fresh on the drop -- a stair slid into a room of its own
+            // can need a side beam it did not, or no longer need one it had.
+            const reframed = [reframeStair(md.stair)];
+            const slid = { kind: 'props', edits };
+            undoStack.push(reframed[0].steps.length ? { kind: 'batch', steps: [slid, ...reframed[0].steps] } : slid);
             markDirty();
             // WHAT MOVED AND WHAT DID NOT, in one sentence. The two things a
             // drafter cannot see from the plan are a well left behind because
@@ -32142,7 +32325,7 @@
             const said = [md.well ? 'STAIR and its well moved' : 'STAIR moved'];
             if (md.shared) said.push('the shared well stayed put — two flights climb through it');
             if (md.well && wellOffItsFloor(md.well)) said.push('the well now runs off its floor');
-            sayOnStrip(`${said.join(' · ')}.`);
+            sayOnStrip(`${said.join(' · ')}.${stairFramingSaid(reframed)}`);
           }
           moveDrag = null;
           if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
