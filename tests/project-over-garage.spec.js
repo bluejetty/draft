@@ -357,3 +357,32 @@ test('a bilevel press leaves the floor framing where it was', async ({ page }) =
   await expect(bilevel, 'and its tile lights on a balloon-framed drawing')
     .toHaveAttribute('aria-pressed', 'true');
 });
+
+// CONCRETE STANDS ON CONCRETE, NOT ON A FLOOR (Movie, 19 Oct: "due to the
+// weight of the concrete the PLATFORM framing method won't work on floors with
+// CONC ICF bearing down on floors about, need the BALOON framing" -- "on wood
+// wall all options can be available"). ON GRADE / 2 STOREY comes in wood with
+// the 2ND FL free to choose; ICF on it holds that floor on BALLOON / LEDGER
+// and takes PLATFORM off its list, and back to wood offers both again.
+test('an ICF storey holds its floor on BALLOON / LEDGER; on wood both stay offered', async ({ page }) => {
+  await openProject(page);
+  await page.locator('[data-family-entry="twoStorey-ongrade"]').click();
+  const framing = page.locator('[data-detail-input="framing-5"]');
+  const offered = () => framing.locator('option').evaluateAll(o => o.map(x => x.value));
+  const stored = async () => (await h.savedDrawing(page))?.levelAssemblies?.[5]?.framing;
+  await expect(framing).toHaveValue('platform');
+  expect(await offered()).toEqual(['platform', 'balloon']);
+  await page.locator('[data-detail-input="wallType-5"]').selectOption('icf');
+  await expect.poll(stored, { message: 'ICF on the 2ND FL hangs its floor' }).toBe('balloon');
+  await expect(framing).toHaveValue('balloon');
+  await expect.poll(offered, { message: 'and PLATFORM is off its list' }).toEqual(['balloon']);
+  await page.locator('[data-detail-input="wallType-5"]').selectOption('stud_2x6');
+  await expect.poll(offered, { message: 'wood offers both again' }).toEqual(['platform', 'balloon']);
+  // AND THE MAIN FLOOR THE SAME, on a basement house: 1 STOREY is platform,
+  // and ICF on MAIN FL puts it on a ledger.
+  await page.locator('[data-family-entry="bungalow"]').click();
+  const main = async () => (await h.savedDrawing(page))?.levelAssemblies?.[3]?.framing;
+  await expect.poll(main).toBe('platform');
+  await page.locator('[data-detail-input="wallType-3"]').selectOption('icf_13');
+  await expect.poll(main, { message: 'ICF on MAIN FL hangs it too' }).toBe('balloon');
+});

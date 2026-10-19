@@ -5,6 +5,8 @@
 // floor hung on the foundation's inside face is gated in
 // proto/section-table-harness.js --mutate.
 //
+// The ICF floor-framing hold (19 Oct) is gated here too.
+//
 // Run: node proto/project-ongrade-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
 const fs = require('fs');
@@ -20,6 +22,25 @@ const MUTANTS = [
     find: "              setAssembly(1, 'wallHeightFt', assemblyDefaults(1).wallHeightFt);\n",
     with: "",
     test: "ON-GRADE pours a 4' frost wall" },
+  // CONCRETE STANDS ON CONCRETE (Movie, 19 Oct: "the PLATFORM framing method
+  // won't work on floors with CONC ICF bearing down"): an ICF storey holds its
+  // floor on BALLOON / LEDGER; wood leaves both.
+  { file: 'PROJECT.html', name: "ICF lets the floor stay platform", spec: 'tests/project-over-garage.spec.js',
+    find: "const ledgerForced = levelId => /^icf|^concrete/.test(floorWallType(levelId));",
+    with: "const ledgerForced = () => false;",
+    test: "an ICF storey holds its floor on BALLOON / LEDGER" },
+  { file: 'PROJECT.html', name: "a wall type change never re-holds the floor", spec: 'tests/project-over-garage.spec.js',
+    find: "setAssembly(level.id, 'wallType', value);\n            holdIcfLedgers();",
+    with: "setAssembly(level.id, 'wallType', value);",
+    test: "an ICF storey holds its floor on BALLOON / LEDGER" },
+  { file: 'PROJECT.html', name: "PLATFORM still offered on ICF", spec: 'tests/project-over-garage.spec.js',
+    find: ".filter(type => type.id === 'balloon' || !ledgerForced(level.id)",
+    with: ".filter(type => true || !ledgerForced(level.id)",
+    test: "an ICF storey holds its floor on BALLOON / LEDGER" },
+  { file: 'PROJECT.html', name: "an anchorless choice keeps its first list", spec: 'tests/project-over-garage.spec.js',
+    find: "          refreshChoices(control, el);\n",
+    with: "",
+    test: "an ICF storey holds its floor on BALLOON / LEDGER" },
 ];
 
 const run = (name, spec) => {

@@ -3617,6 +3617,27 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return out;
   };
 
+  // AND THE FACE LINES THEMSELVES (Movie, 19 Oct, lining a 3 1/2" wall's
+  // node up with the inside corner of a 5 1/2" one: "can these interior walls
+  // be 'attracted' to SNAP to the INTERIOR CORNER and also to the INTERIOR
+  // WALL LINE (but more pull from the inside/outside corners"). Each wall's
+  // two faces, start to end, as segments; the corners above are where they
+  // meet, and the page pulls harder to those.
+  // A bulged wall's faces are arcs, not lines, and are left out.
+  const wallFaceLines = (walls, thicknessFt) => (walls || [])
+    .filter(w => w && w.start && w.end && !w.bulge)
+    .flatMap(w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      if (len < 1e-6) return [];
+      const n = { x: -dz / len, z: dx / len };
+      const { startOff, endOff } = wallFaceOffsets(w, thicknessFt(w));
+      return [startOff, endOff].map(o => ({
+        wall: w,
+        a: { x: w.start.x + n.x * o, z: w.start.z + n.z * o },
+        b: { x: w.end.x + n.x * o, z: w.end.z + n.z * o },
+      }));
+    });
+
   const openingGeometry = (opening, wall, opts = {}) => {
     if (!wall || !opening) return null;
     const { walls, thicknessFt, padFt = 0, faceReferenced = true } = opts;
@@ -3952,6 +3973,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     openingGeometry,
     wallFaceOffsets,
     wallFaceCorners,
+    wallFaceLines,
     cleanRoofRing,
     cutPerpendiculars,
     cutSide,
