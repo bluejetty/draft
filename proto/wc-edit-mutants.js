@@ -84,6 +84,14 @@ const MUTANTS = [
     find: "    if (hitAt(world) || !hologramUnder(world)) return;",
     with: "    if (hitAt(world)) return;",
     test: "a double-click on a hologram opens the HOLOGRAM card; off it, nothing" },
+  { file: 'MODEL.html', name: "a suite in hand lights nothing", spec: 'tests/model-html-suite.spec.js',
+    find: "    if (inHand && inHand.mode === 'suite' && H().suiteNear) {",
+    with: "    if (false) {",
+    test: "a suite in hand lights the shell wall it lines up with, and the window it will cut" },
+  { file: 'MODEL.html', name: "a wall of another thickness is not told", spec: 'tests/model-html-suite.spec.js',
+    find: "      if (odd && !near.some(n => n.lined)) {",
+    with: "      if (false) {",
+    test: "a suite wall that is not the shell wall's thickness is told so" },
 ];
 
 const run = (name, spec) => {
