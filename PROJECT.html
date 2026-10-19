@@ -1216,6 +1216,23 @@
           ? override : activeWallType;
       };
       const floorWallIn = levelId => WALL_TYPE_VIEW[floorWallType(levelId)].totalIn;
+      // CONCRETE STANDS ON CONCRETE, NOT ON A FLOOR (Movie, 19 Oct: "due to
+      // the weight of the concrete the PLATFORM framing method won't work on
+      // floors with CONC ICF bearing down on floors about, need the BALOON
+      // framing due to the weight of the concrete needs to be solid all the
+      // way up" -- and of ON GRADE / 2 STOREY: "second floor should be IN /
+      // BALLOON / LEDGER only if the wall is ICF ... on wood wall all options
+      // can be available"). So a floor whose own wall is ICF or concrete is
+      // held on BALLOON / LEDGER -- the wall runs on down past it to the one
+      // below and the floor hangs off its face -- and a floor under wood
+      // keeps both choices. ON GRADE's main floor is a ledger already, by its
+      // tile.
+      const ledgerForced = levelId => /^icf|^concrete/.test(floorWallType(levelId));
+      const holdIcfLedgers = () => floorLevels.forEach(level => {
+        if (ledgerForced(level.id) && assembly(level.id).framing !== 'balloon') {
+          setAssembly(level.id, 'framing', 'balloon');
+        }
+      });
       // THE POUR, WHICH IS NOT WHAT THE FOUNDATION LEVEL STORES. The stored
       // wallHeightFt is the BEARING LINE -- 8'-1 1/2", pour plus plate --
       // because that is the height MODEL.dc.html stands the wall at and the
@@ -1475,7 +1492,7 @@
           return { id: level.id, name: level.name, wallHeightFt: asm.wallHeightFt,
             joistDepthIn: asm.joistDepthIn, sheathingIn: asm.sheathingIn,
             framing: asm.framing,
-            wallIn: floorWallIn(level.id) };
+            wallIn: floorWallIn(level.id), wallType: floorWallType(level.id) };
         }),
         foundation: (() => {
           const asm = assembly(1);
@@ -3048,6 +3065,7 @@
           set: value => {
             if (!EXTERIOR_CHOICES.includes(value)) return false;
             setAssembly(level.id, 'wallType', value);
+            holdIcfLedgers();
             return true;
           },
         });
@@ -3071,11 +3089,16 @@
           name: `framing-${level.id}`,
           levelId: level.id,
           kind: 'choice',
-          choices: () => FRAMING_TYPES.map(type => ({ id: type.id, label: type.label })),
+          choices: () => FRAMING_TYPES
+            .filter(type => type.id === 'balloon' || !ledgerForced(level.id)
+              || assembly(level.id).framing !== 'balloon')
+            .map(type => ({ id: type.id, label: type.label })),
           get: () => assembly(level.id).framing,
           set: value => {
             if (!FRAMING_TYPES.some(type => type.id === value)) return false;
+            if (ledgerForced(level.id) && value !== 'balloon') return false;
             setAssembly(level.id, 'framing', value);
+            holdIcfLedgers();
             return true;
           },
         });
@@ -3632,6 +3655,7 @@
           // and must not quietly reset a level card somebody edited.
           if (answersFraming) {
             setAssembly(MAIN_FLOOR_LEVEL_ID, 'framing', entry.framing || DEFAULT_FRAMING);
+            holdIcfLedgers();
             // AN ON-GRADE HOUSE STANDS ON A FROST WALL (Movie, 18 Oct: "for the
             // project ON GRADE foundation use 4' frost wall with footing (not
             // 8ft / go to 4ft" -- "default 4ft, allow the user to change to
@@ -4717,7 +4741,27 @@
         if (garageSched) garageSched.hidden = !garageShown();
         // And the door in takes the column's place when there is no garage.
         syncGarageAdd();
+        // OPTIONS ARE REBUILT, NOT BUILT ONCE. The ICF gate depends on the
+        // wall type, which the drafter can change after the dropdown was
+        // created -- so a list filled at construction shows LADDER on an ICF
+        // wall forever. The gate has to be re-asked every repaint or it is not
+        // a gate, it is a first impression. Asked FIRST, before the rows that
+        // return early: a choice with no anchor on the drawing (FLOOR FRAMING,
+        // whose list an ICF wall shortens) is still a list that can change.
+        const refreshChoices = (control, el) => {
+          if (control.kind !== 'choice' || !control.choices) return;
+          const want = control.choices();
+          const have = [...el.options].map(o => o.value).join(',');
+          if (have === want.map(o => o.id).join(',')) return;
+          el.textContent = '';
+          want.forEach(({ id, label }) => {
+            const option = document.createElement('option');
+            option.value = id; option.textContent = label;
+            el.appendChild(option);
+          });
+        };
         controlEls.forEach(({ control, el, tag }, key) => {
+          refreshChoices(control, el);
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
           // INVISIBLE, NOT GONE: the row keeps its seat in the column (the
@@ -4839,23 +4883,6 @@
           // BESIDE its own line (handled above) still draws on the margins.
           tag.style.display = 'none';
           if (control.kind === 'annotation') return;
-          if (control.kind === 'choice' && control.choices) {
-            // OPTIONS ARE REBUILT, NOT BUILT ONCE. The ICF gate depends on the
-            // wall type, which the drafter can change after the dropdown was
-            // created -- so a list filled at construction shows LADDER on an
-            // ICF wall forever. The gate has to be re-asked every repaint or
-            // it is not a gate, it is a first impression.
-            const want = control.choices();
-            const have = [...el.options].map(o => o.value).join(',');
-            if (have !== want.map(o => o.id).join(',')) {
-              el.textContent = '';
-              want.forEach(({ id, label }) => {
-                const option = document.createElement('option');
-                option.value = id; option.textContent = label;
-                el.appendChild(option);
-              });
-            }
-          }
           if (typeof control.name === 'function') {
             // ONLY A FUNCTION, never a plain string. A house control's `name`
             // is its input's name ATTRIBUTE -- 'pitch', 'fdnHeight' -- not a

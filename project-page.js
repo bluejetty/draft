@@ -849,9 +849,6 @@ if (!window.DraftProjectPage) {
     // package-difference off 0 and floated the ENTRY deck 2 1/2" above the
     // house sill it bears on (Movie, 4 Oct: "looks like house sill plate is
     // lower").
-    const below = floors.slice(0, datumIndex).reduce((sum, level, i) =>
-      sum + level.wallHeightFt + (floors[i + 1].joistDepthIn + floors[i + 1].sheathingIn) / 12, 0);
-    let y = -below;
     // A FLOOR HUNG ON LEDGERS SITS ITS SHEATHING ONLY ABOVE THE PLATE (Movie,
     // 18 Oct, on the ON-GRADE section: "the Floor Joists for the ON-GRADE
     // version should be attached on the SIDE of the foundation wall (inside
@@ -860,6 +857,52 @@ if (!window.DraftProjectPage) {
     // the top of joists flush"). So the foundation's plate lands one
     // sheathing below 0, not a whole floor package.
     const hungFloor = level => level?.framing === 'balloon';
+    // AND EVERY FLOOR ABOVE IT CAN HANG THE SAME WAY (Movie, 19 Oct: "ICF
+    // walls running every storey" -- "we will add this to the floors that
+    // have ICF on main or 2nd floor as an option. i guess it could be an
+    // option for wood or regular 8\" cocrete too as a connection"). A floor
+    // on BALLOON / LEDGER over a storey of wall hangs off that wall's inside
+    // face, its joist tops flush with the wall's top, so the wall runs
+    // straight on through it with no plate and no rim and the climb to the
+    // next deck is the sheathing alone -- what levelFloorFt says too. Only
+    // from the datum up: a bilevel's ENTRY below it is a landing on its own
+    // footing, not a floor hung on a storey of wall.
+    const hungAt = (level, index) => hungFloor(level) && index >= datumIndex;
+    const climbFt = (level, index) => (hungAt(level, index) ? level.sheathingIn
+      : level.joistDepthIn + level.sheathingIn) / 12;
+    // A WOOD WALL CARRIES ITS HUNG FLOOR ON A LEDGER BOARD, a 2x bolted to
+    // its inside face (Movie, 19 Oct: "with a small ledger drawn on wood
+    // walls -- sounds good give it a try"). Concrete and ICF take the
+    // hangers on the wall itself, so the joists start right at its face.
+    const LEDGER_FT = 1.5 / 12;
+    const woodWall = type => /^stud_|^pt_wood/.test(type || '');
+    // UNLESS THE WALL CHANGES THERE. Movie, 19 Oct: "the SHEATING and SILL
+    // plate only need to be added when there is a TRANSITION from
+    // FOUNDATION / ICF to WOOD wall on floor above". So ICF over ICF (or
+    // studs over studs) is one wall through the floor, but a wood storey on
+    // a concrete or ICF one stands on a sill plate, the joists hung inside
+    // flush with its top and the sheathing over both -- the ON-GRADE
+    // foundation's joint, one storey up. The plate is inside the storey
+    // below's height, as it is in the foundation's bearing line, so the
+    // floor heights are the same either way.
+    const SILL_FT = sillPlateIn() / 12;
+    // AND THE SAME AT THE FOUNDATION. An ICF or concrete main floor wall on
+    // the foundation is that same concrete carried on up ("ICF walls ...
+    // from the footing to the underside of the roof"), so the ON-GRADE joint
+    // loses its sill there: the pour runs to the underside of the sheathing,
+    // the wall's faces run on through, and the sheathing starts at the inside
+    // face. Under a wood wall it is the plate-and-sheathing joint it was.
+    const concreteWall = type => /^icf|^concrete/.test(type || '');
+    const datumThrough = hungFloor(floors[datumIndex])
+      && concreteWall(floors[datumIndex].wallType);
+    const transitionAt = index => {
+      const level = floors[index], carrier = floors[index - 1];
+      return !!(level && carrier && hungAt(level, index) && index > datumIndex
+        && !woodWall(carrier.wallType) && woodWall(level.wallType));
+    };
+    const below = floors.slice(0, datumIndex).reduce((sum, level, i) =>
+      sum + level.wallHeightFt + climbFt(floors[i + 1], i + 1), 0);
+    let y = -below;
     const mainDepthFt = (hungFloor(floors[datumIndex]) ? floors[datumIndex].sheathingIn
       : floors[datumIndex].joistDepthIn + floors[datumIndex].sheathingIn) / 12;
     // WHERE EACH DECK ENDED UP, so a level can stand on one that is not the
@@ -941,13 +984,39 @@ if (!window.DraftProjectPage) {
       // runs out over the sill plate to the exterior face, and the joists
       // under it start at the concrete's inside face, their tops flush with
       // the top of the plate.
-      const hung = hungFloor(level) && index === datumIndex;
+      const hung = hungAt(level, index);
       const sheathFt = level.sheathingIn / 12, joistFt = level.joistDepthIn / 12;
-      if (hung && deckShown(level)) {
+      // AN UPPER FLOOR HUNG ON THE STOREY BELOW. The wall's two faces carry
+      // on up through the sheathing; the deck starts at the inside face of
+      // the wall it hangs on, behind a ledger where that wall is wood.
+      const hungUp = hung && index > datumIndex;
+      const carrier = floors[index - 1];
+      const carrierFt = hungUp ? (carrier.wallIn ?? wallIn) / 12 : 0;
+      const ledgerFt = hungUp && woodWall(carrier.wallType) ? LEDGER_FT : 0;
+      const onPlate = transitionAt(index);
+      if (hungUp && deckShown(level)) {
+        if (onPlate) rect(0, y - sheathFt - SILL_FT, carrierFt, SILL_FT, 1); // sill on the concrete
         deckRuns(span).forEach(([x0, x1]) => {
-          rect(x0, y - sheathFt, x1 - x0, sheathFt, 1);          // sheathing over the plate
-          line(x0, y, x1, y, 1.5);                               // sheathing top
-          const jx = Math.max(x0, fdnFt);
+          const sx = onPlate ? x0 : Math.max(x0, carrierFt);
+          if (x1 - sx <= 0.01) return;
+          rect(sx, y - sheathFt, x1 - sx, sheathFt, 1);          // sheathing off the inside face
+          line(sx, y, x1, y, 1.5);                               // sheathing top
+          if (ledgerFt) rect(carrierFt, y - sheathFt - joistFt, ledgerFt, joistFt, 1); // the ledger
+          const jx = Math.max(x0, carrierFt) + ledgerFt;
+          if (x1 - jx > 0.01) rect(jx, y - sheathFt - joistFt, x1 - jx, joistFt, 1); // joists hung on it
+          if (x1 < span) line(x1, y, x1, y - sheathFt - joistFt, 1.5);
+        });
+        anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - sheathFt - joistFt / 2 };
+        anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - sheathFt / 2 };
+      } else if (hung && deckShown(level)) {
+        // The wall's own inside face when it runs through, as it is thicker
+        // than the pour under it more often than not (11 1/4" ICF on 8").
+        const faceFt = datumThrough ? Math.max(fdnFt, levelWallFt) : 0;
+        deckRuns(span).forEach(([x0, x1]) => {
+          const sx = Math.max(x0, faceFt);
+          if (x1 - sx > 0.01) rect(sx, y - sheathFt, x1 - sx, sheathFt, 1); // sheathing over the plate
+          line(sx, y, x1, y, 1.5);                               // sheathing top
+          const jx = Math.max(x0, fdnFt, faceFt);
           if (x1 - jx > 0.01) rect(jx, y - sheathFt - joistFt, x1 - jx, joistFt, 1); // joists off the wall
           if (x1 < span) line(x1, y, x1, y - sheathFt - joistFt, 1.5);
         });
@@ -962,7 +1031,7 @@ if (!window.DraftProjectPage) {
           // floor that ran out of drawing.
           if (x1 < span) line(x1, y, x1, y - depthFt, 1.5);
         });
-      } else {
+      } else if (!hungUp) {
         // THE WALL DOES NOT STOP WHERE THE FLOOR IS NOT SHOWN. The band's own
         // edges were carrying the exterior and interior faces across the
         // depth of the floor package, so hiding the band opened a hole in a
@@ -974,8 +1043,14 @@ if (!window.DraftProjectPage) {
         anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - depthFt / 2 };
         anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - (level.sheathingIn / 12) / 2 };
       }
-      line(0, y, 0, y + level.wallHeightFt, 2);                  // exterior face
-      line(levelWallFt, y, levelWallFt, y + level.wallHeightFt, 1.5); // interior face
+      // Through a hung floor the wall is one wall: its faces start at the
+      // top of the storey below rather than at the deck.
+      const faceFromY = (hungUp && !onPlate) || (hung && index === datumIndex && datumThrough)
+        ? y - sheathFt : y;
+      // and stop under the plate where a wood storey stands on this one.
+      const faceToY = y + level.wallHeightFt - (transitionAt(index + 1) ? SILL_FT : 0);
+      line(0, faceFromY, 0, faceToY, 2);                  // exterior face
+      line(levelWallFt, faceFromY, levelWallFt, faceToY, 1.5); // interior face
       // The inner end of a level that stops short: the framing the balcony
       // ends against, and the wall the ceiling drops down.
       //
@@ -994,8 +1069,7 @@ if (!window.DraftProjectPage) {
       deckY.set(level.id, y);
       const topY = y + level.wallHeightFt;
       plateTop = plateTop == null ? topY : Math.max(plateTop, topY);
-      y = topY + ((floors[index + 1])
-        ? (floors[index + 1].joistDepthIn + floors[index + 1].sheathingIn) / 12 : 0);
+      y = topY + ((floors[index + 1]) ? climbFt(floors[index + 1], index + 1) : 0);
     });
     const plateY = plateTop;
 
@@ -1142,8 +1216,15 @@ if (!window.DraftProjectPage) {
     const gradeBeam = fdn.foundationKind === 'gradebeam';
     const beamFt = GRADE_BEAM_THICKNESS_IN / 12;
     const bandFt = gradeBeam ? beamFt : fdnFt;
-    rect(0, fdnBot, bandFt, concTopFt - fdnBot, 2);
-    attachment(rect, line, fdn.attachment, 0, concTopFt, bandFt, attachFt * 12, fdn.ladderIn);
+    if (datumThrough && !fillFt) {
+      // Open at the top: the pour and the wall over it are one wall.
+      line(0, fdnBot, 0, fdnTop, 2);
+      line(bandFt, fdnBot, bandFt, fdnTop, 2);
+      line(0, fdnBot, bandFt, fdnBot, 2);
+    } else {
+      rect(0, fdnBot, bandFt, concTopFt - fdnBot, 2);
+      attachment(rect, line, fdn.attachment, 0, concTopFt, bandFt, attachFt * 12, fdn.ladderIn);
+    }
     // The fill wall stands on the attachment, its own faces at the wall's
     // thickness rather than the concrete's -- it is framing, not pour.
     if (fillFt) {

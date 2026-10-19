@@ -494,6 +494,79 @@ check('on-grade: the sheathing runs out over the plate to the exterior face', P 
   return [!!r.find(p => nearFt(p.x, 0) && nearFt(p.y, -sheath) && nearFt(p.h, sheath)), true];
 });
 
+// AND THE 2ND FL HUNG THE SAME WAY, OFF ONE ICF WALL (Movie, 19 Oct: "ICF
+// walls running every storey" -- "So an all-ICF ON GRADE / 2 STOREY with both
+// floors on INT LEDGER draws one ICF wall from the footing to the underside of
+// the roof, with both floors hanging off it. yes"). The ICF case first: no
+// ledger, the joists on the wall's own face. Then the same floor over wood,
+// which hangs behind a 1 1/2" ledger.
+const ICF_IN = 11.25;
+const ICF_TWO = Object.freeze({ ...ASSEMBLY, wallThicknessIn: ICF_IN,
+  floors: [{ ...ASSEMBLY.floors[0], framing: 'balloon', wallIn: ICF_IN, wallType: 'icf' },
+    { ...ASSEMBLY.floors[1], framing: 'balloon', wallIn: ICF_IN, wallType: 'icf' }] });
+const WOOD_TWO = Object.freeze({ ...ASSEMBLY,
+  floors: [{ ...ASSEMBLY.floors[0], framing: 'balloon', wallType: 'stud_2x6' },
+    { ...ASSEMBLY.floors[1], framing: 'balloon', wallType: 'stud_2x6' }] });
+// The 2ND FL deck: main wall height plus its sheathing alone, not its joists.
+const upperDeck = A => A.floors[0].wallHeightFt + A.floors[1].sheathingIn / 12;
+check('ICF 2 storey: the 2ND FL deck climbs its sheathing only, the joists hung inside the main wall', P => {
+  const r = rects(P.buildWallSection(ICF_TWO));
+  const y = upperDeck(ICF_TWO), sheath = 0.75 / 12, joist = 9.25 / 12, wall = ICF_IN / 12;
+  const joists = r.find(p => nearFt(p.h, joist) && nearFt(p.y, y - sheath - joist));
+  const sheathing = r.find(p => nearFt(p.h, sheath) && nearFt(p.y, y - sheath));
+  return [`${joists ? nearFt(joists.x, wall) : 'no joists'} ${sheathing ? nearFt(sheathing.x, wall) : 'no sheathing'}`,
+    'true true'];
+});
+check('ICF 2 storey: one wall -- its faces run on through the 2ND FL with no break, and no ledger', P => {
+  const s = P.buildWallSection(ICF_TWO);
+  const y = upperDeck(ICF_TWO), wall = ICF_IN / 12, top = ICF_TWO.floors[0].wallHeightFt;
+  const faces = [0, wall].map(x => s.parts.some(p => p.kind === 'line' && nearFt(p.x1, x) && nearFt(p.x2, x)
+    && nearFt(Math.min(p.y1, p.y2), top) && Math.max(p.y1, p.y2) > y));
+  const ledger = rects(s).some(p => nearFt(p.w, 1.5 / 12));
+  return [`${faces.join()} ${ledger}`, 'true,true false'];
+});
+check('wood 2 storey: the hung 2ND FL sits behind a 1 1/2" ledger on the wall\'s inside face', P => {
+  const r = rects(P.buildWallSection(WOOD_TWO));
+  const y = upperDeck(WOOD_TWO), sheath = 0.75 / 12, joist = 9.25 / 12, wall = 5.5 / 12;
+  const ledger = r.find(p => nearFt(p.x, wall) && nearFt(p.w, 1.5 / 12) && nearFt(p.y, y - sheath - joist));
+  const joists = r.find(p => nearFt(p.h, joist) && nearFt(p.y, y - sheath - joist) && p.w > 1);
+  return [`${!!ledger} ${joists ? nearFt(joists.x, wall + 1.5 / 12) : 'no joists'}`, 'true true'];
+});
+
+// AND NO PLATE AT THE FOUNDATION EITHER, UNDER ICF: the ICF main wall is the
+// pour carried on up, so there is no sill, the pour reaches the underside of
+// the sheathing, and the sheathing starts at the ICF's inside face. The plain
+// ON GRADE (no wall type: wood) keeps its sill -- the checks above.
+check('ICF main floor on the foundation: no sill, one wall, sheathing from the inside face', P => {
+  const s = P.buildWallSection(ICF_TWO), r = rects(s);
+  const sheath = 0.75 / 12, wall = ICF_IN / 12;
+  const sill = r.some(p => nearFt(p.h, 1.5 / 12) && p.y < 0 && p.y > -0.5);
+  const sheathing = r.find(p => nearFt(p.h, sheath) && nearFt(p.y, -sheath));
+  const pourTop = Math.max(...s.parts.filter(p => p.kind === 'line' && nearFt(p.x1, 0) && nearFt(p.x2, 0)
+    && Math.min(p.y1, p.y2) < -1).map(p => Math.max(p.y1, p.y2)));
+  return [`${sill} ${sheathing ? nearFt(sheathing.x, wall) : 'no sheathing'} ${nearFt(pourTop, -sheath)}`,
+    'false true true'];
+});
+
+// THE ONE PLACE A HUNG FLOOR GETS A PLATE (Movie, 19 Oct: "the SHEATING and
+// SILL plate only need to be added when there is a TRANSITION from FOUNDATION
+// / ICF to WOOD wall on floor above"). ICF main, 2x6 above: a sill on the ICF,
+// its top flush with the joists', sheathing out to the exterior face over it,
+// and the ICF's faces stopping under the plate. The deck is where it was.
+const ICF_TO_WOOD = Object.freeze({ ...ICF_TWO,
+  floors: [ICF_TWO.floors[0], { ...ICF_TWO.floors[1], wallIn: 5.5, wallType: 'stud_2x6' }] });
+check('ICF to wood: the 2x6 storey stands on a sill on the ICF, sheathing over it to the exterior face', P => {
+  const s = P.buildWallSection(ICF_TO_WOOD), r = rects(s);
+  const y = upperDeck(ICF_TO_WOOD), sheath = 0.75 / 12, sill = 1.5 / 12, wall = ICF_IN / 12, joist = 9.25 / 12;
+  const plate = r.find(p => nearFt(p.x, 0) && nearFt(p.y, y - sheath - sill) && nearFt(p.h, sill) && nearFt(p.w, wall));
+  const sheathing = r.find(p => nearFt(p.x, 0) && nearFt(p.y, y - sheath) && nearFt(p.h, sheath));
+  const joists = r.find(p => nearFt(p.h, joist) && nearFt(p.y, y - sheath - joist));
+  const icfTop = Math.max(...s.parts.filter(p => p.kind === 'line' && nearFt(p.x1, 0) && nearFt(p.x2, 0)
+    && Math.min(p.y1, p.y2) < 1).map(p => Math.max(p.y1, p.y2)));
+  return [`${!!plate} ${!!sheathing} ${joists ? nearFt(joists.x, wall) : 'no joists'} ${nearFt(icfTop, y - sheath - sill)}`,
+    'true true true true'];
+});
+
 // The garage, in the shape garageValues() hands it over. Its one offset is
 // deliberately a round -2 so the numbers below read as arithmetic rather than
 // coincidence.
@@ -1090,7 +1163,29 @@ const MUTATIONS = [
   ['the on-grade floor sits on top of the wall again',
     s => s.replace("const hungFloor = level => level?.framing === 'balloon';", "const hungFloor = () => false;")],
   ['the on-grade joists run out over the foundation',
-    s => s.replace('          const jx = Math.max(x0, fdnFt);', '          const jx = x0;')],
+    s => s.replace('          const jx = Math.max(x0, fdnFt, faceFt);', '          const jx = Math.max(x0, faceFt);')],
+  ['the 2ND FL climbs a whole floor package again',
+    s => s.replace("const climbFt = (level, index) => (hungAt(level, index) ? level.sheathingIn", "const climbFt = (level, index) => (false ? level.sheathingIn")],
+  ['only the datum floor hangs again',
+    s => s.replace('const hungUp = hung && index > datumIndex;', 'const hungUp = false;')],
+  ['the hung 2ND FL sheathing runs out over the wall',
+    s => s.replace('const sx = onPlate ? x0 : Math.max(x0, carrierFt);', 'const sx = x0;')],
+  ['the wall breaks at the hung 2ND FL',
+    s => s.replace('const faceFromY = (hungUp && !onPlate) ||', 'const faceFromY = false &&')],
+  ['ICF gets a wood ledger too',
+    s => s.replace("const woodWall = type => /^stud_|^pt_wood/.test(type || '');", 'const woodWall = () => true;')],
+  ['wood walls lose their ledger',
+    s => s.replace("const woodWall = type => /^stud_|^pt_wood/.test(type || '');", 'const woodWall = () => false;')],
+  ['no plate where a wood storey stands on ICF',
+    s => s.replace('&& !woodWall(carrier.wallType) && woodWall(level.wallType));', '&& false);')],
+  ['a plate at every hung floor, ICF over ICF too',
+    s => s.replace('&& !woodWall(carrier.wallType) && woodWall(level.wallType));', ');')],
+  ['the ICF runs up through the plate',
+    s => s.replace('(transitionAt(index + 1) ? SILL_FT : 0)', '0')],
+  ['an ICF main wall still sits on a sill plate',
+    s => s.replace('&& concreteWall(floors[datumIndex].wallType);', '&& false;')],
+  ['the ICF main floor sheathing runs out over the wall',
+    s => s.replace('const faceFt = datumThrough ? Math.max(fdnFt, levelWallFt) : 0;', 'const faceFt = 0;')],
   ['BILEVEL loses its wood fill again',
     s => s.replace("const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);", "const SPLIT_TYPES = Object.freeze(['modifiedBilevel']);")],
   ['the split pours a 6\' wall',
