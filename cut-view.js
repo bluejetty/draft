@@ -1641,6 +1641,47 @@ if (!window.DraftCutView) {
   // they are concrete, and what a drafter sees of them is whatever stands
   // above grade -- but the painter needs them in the same pass, so they are
   // returned rather than re-derived.
+  // ── A DORMER'S GABLE, SEEN FROM IN FRONT (Movie, 18 Oct) ──────────────
+  //
+  // "i noticed the RAKE needs to show a line and 'gable wall in the triangle'
+  // where the user can change the materials in the EXT FINISH area". A
+  // cross gable's front is a wall of its own: a triangle standing on the
+  // main roof at the wall line, from the height the main roof has there up
+  // to its own ridge. Only an elevation looking AT it shows it -- from the
+  // side its two slopes are the drawing. Each comes with the house wall it
+  // stands over, whose finish it wears until the drafter gives it its own.
+  function dormerGables(env, cut, stack, axis) {
+    const dir = cut.dirVec;
+    const u = p => p.x * axis.x + p.z * axis.z;
+    const walls = (env.walls() || []).filter(w => (w.view || 'plan') === 'plan' && w.start && w.end);
+    const out = [];
+    env.roofs().forEach(roof => {
+      const list = Array.isArray(roof.crossGables) ? roof.crossGables : [];
+      if (!list.length) return;
+      const eaveTop = roofEaveElev(roof, stack, env);
+      list.forEach((gable, index) => {
+        const g = geo().crossGableShapes({ ...roof, crossGables: [gable] })[0];
+        if (!g) return;
+        // FACING THE VIEWER: its front looks out along -ridgeDir, and the
+        // viewer stands on +dir (the painter puts the larger depth on top).
+        if (-(g.ridgeDir.x * dir.x + g.ridgeDir.z * dir.z) < 0.5) return;
+        const half = Math.hypot(g.B.x - g.A.x, g.B.z - g.A.z) / 2;
+        const base = eaveTop + g.lift;
+        let below = null, bestTop = -Infinity;
+        walls.forEach(w => {
+          const { d } = geo().pointToSegment(g.M, { start: w.start, end: w.end });
+          const top = Number(w.topHeight) || 0;
+          if (d < 1 && top > bestTop) { below = w; bestTop = top; }
+        });
+        const lo = Math.min(u(g.A), u(g.B)), hi = Math.max(u(g.A), u(g.B));
+        out.push({ roof, index, gable, lo, hi, mid: u(g.M), base, apex: base + half * g.pitch / 12,
+          pitch: g.pitch, depth: g.M.x * dir.x + g.M.z * dir.z, below,
+          finish: gable.finish || below?.finish || DEFAULT_FINISH_ID });
+      });
+    });
+    return out;
+  }
+
   function elevationFaces(env, cut, stack, axis) {
     const dir = cut.dirVec;
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
@@ -6189,6 +6230,47 @@ if (!window.DraftCutView) {
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
     ].sort((a, b) => a.depth - b.depth).forEach(item => item.go());
 
+    // ── EACH DORMER'S GABLE WALL, ITS BASE LINE AND ITS RAKE BOARDS ─────
+    //
+    // Movie, 18 Oct, the two dormers on E2 marked in blue along their feet:
+    // "the RAKE needs to show a line and 'gable wall in the triangle'". The
+    // triangle is filled as a wall and clad (on the finish sheets) in its own
+    // finish; the line across its foot is where it stands on the main roof;
+    // a fascia board's depth under each rake is the rake board.
+    if (facesByRoof) {
+      dormerGables(env, cut, stack, axis).forEach(dg => {
+        const slope = dg.pitch / 12;
+        const inset = fasciaFt / slope;
+        const tri = [[dg.lo, dg.base], [dg.mid, dg.apex], [dg.hi, dg.base]];
+        const wallTri = [[dg.lo + inset, dg.base], [dg.mid, dg.apex - fasciaFt], [dg.hi - inset, dg.base]];
+        const path = pts => { ctx.beginPath(); pts.forEach(([uu, ee], i) => (i ? ctx.lineTo(X(uu), Y(ee)) : ctx.moveTo(X(uu), Y(ee)))); ctx.closePath(); };
+        ctx.save();
+        ctx.fillStyle = C.face;
+        path(tri); ctx.fill();
+        if (opts && opts.finishes && window.DraftFinishPatterns && wallTri[1][1] > dg.base + 0.05) {
+          ctx.save();
+          path(wallTri); ctx.clip();
+          window.DraftFinishPatterns.drawFinish(ctx, {
+            // X runs either way along an elevation, so the box takes the
+            // smaller end first, as the wall's own box does.
+            x0: Math.min(X(dg.lo), X(dg.hi)), x1: Math.max(X(dg.lo), X(dg.hi)),
+            yTop: Y(dg.apex), yBottom: Y(dg.base), pxPerFt,
+          }, finishById(dg.finish), C);
+          ctx.restore();
+        }
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+        // The rakes and the foot, then the rake boards' lower edges.
+        path(tri); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(X(wallTri[0][0]), Y(wallTri[0][1]));
+        ctx.lineTo(X(wallTri[1][0]), Y(wallTri[1][1]));
+        ctx.lineTo(X(wallTri[2][0]), Y(wallTri[2][1]));
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
     // ── A WALL STANDING ON THE ROOF BELOW SHOWS WHERE IT CLEARS THAT ROOF ──
     //
     // Movie, 5 Oct, on E2 of a MOD BILEVEL whose upper roof was pushed out
@@ -7375,6 +7457,7 @@ if (!window.DraftCutView) {
     sectionWallCrossings,
     cutViewExtents,
     elevationFaces,
+    dormerGables,
     faceSillFt,
     roofBaseElev,
     roofEaveElev,

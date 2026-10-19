@@ -949,8 +949,12 @@ if (!window.DraftDrawingFormat) {
             const at = point(gable?.at);
             const widthFt = positive(gable?.widthFt, null);
             const pitch = number(gable?.pitch, NaN);
+            // AND ITS GABLE WALL'S OWN FINISH (Movie, 18 Oct), set in EXT
+            // FINISH; absent, it wears the wall under it.
+            const finish = typeof gable?.finish === 'string' && /^[a-z0-9_-]{1,40}$/i.test(gable.finish)
+              ? { finish: gable.finish } : {};
             return at && widthFt && pitch > 0 && pitch <= 24
-              ? { at: { x: at.x, z: at.z }, widthFt, pitch } : null;
+              ? { at: { x: at.x, z: at.z }, widthFt, pitch, ...finish } : null;
           }).filter(Boolean);
           return list.length ? { crossGables: list } : {};
         })()),
@@ -1584,15 +1588,20 @@ if (!window.DraftDrawingFormat) {
   // turned mirrored suite is the mirrored suite turned -- the order a
   // drafter sees on the card, MIRROR then the arrows.
   //
-  // ONE DEEP. A hologram's own holograms are dropped: the existing house is
-  // the existing house, not the existing house and whatever it referenced.
-  const holograms = raw => (Array.isArray(raw) ? raw : [])
+  // ITS OWN HOLOGRAMS COME WITH IT (Movie, 18 Oct: "i put a HOLOGRAM of SUITE
+  // S into the PHASE 1, and then i saved it and i loaded the PHASE 1 into
+  // PHASE 2 and the SUITE HOLOGRAMS didn't show"). This dropped them -- "the
+  // existing house is the existing house" -- but a shell's suites ARE the
+  // existing building. Kept, normalised the same way, four deep at most.
+  const holograms = (raw, depth = 0) => (Array.isArray(raw) ? raw : [])
     .map(holo => {
       const id = String(holo?.id || '').trim();
       const source = holo?.source;
       if (!id || !source || typeof source !== 'object' || !Array.isArray(source.levels)) return null;
       if (!checkEnvelope(source).ok) return null;
-      const { holograms: nested, ...flat } = source;
+      const { holograms: nested, ...rest } = source;
+      const inner = depth < 4 ? holograms(nested, depth + 1) : [];
+      const flat = inner.length ? { ...rest, holograms: inner } : rest;
       const angle = num(holo?.angleDeg);
       // DEMO (Movie, 8 Oct): "just parts will be 'removed' from the new
       // 'hologram' the DEMO parts, and then the user can REDRAW the new stuff

@@ -689,6 +689,13 @@
       filter:var(--bone-lift) brightness(1.3) drop-shadow(0 0 9px rgba(255,64,51,0.8)); }
   }
   #build-entries[hidden] { display:none; }
+  /* TILES WITH NO CARD SHARE ONE CARD'S SLOT, stacked (Movie, 18 Oct: ON
+     GRADE / ONE STOREY and ON GRADE / 2 STOREY side by side wrapped the row
+     and spilled the board). Each takes half the square, its words wrapped. */
+  #build-entries .dt-stack { display:flex; flex-direction:column; gap:4px;
+    width:clamp(48px, calc(var(--dt-w) * 0.14), 134px); }
+  #build-entries .dt-stack button { flex:1 1 0; white-space:normal;
+    line-height:1.15; padding:3px 4px; }
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
      one light, and a night-skin chip on it would read as a hole. */
@@ -8010,7 +8017,7 @@
 
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
     entryRow.hidden = !open;
-    entryRow.replaceChildren(...(open ? open.entries.map(entry => {
+    const tiles = open ? open.entries.map(entry => {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.buildEntry = entry.id;
@@ -8018,7 +8025,22 @@
       button.classList.toggle('chosen', entry.id === chosenEntryId);
       button.onclick = () => pressEntry(entry.id);
       return button;
-    }) : []));
+    }) : [];
+    // Neighbouring tiles with no card go into one stacked slot (see the CSS).
+    const slots = [];
+    tiles.forEach(button => {
+      const last = slots[slots.length - 1];
+      if (button.classList.contains('card')) { slots.push(button); return; }
+      if (last?.classList?.contains('dt-stack')) { last.append(button); return; }
+      const prev = last && !last.classList.contains('card') ? slots.pop() : null;
+      if (prev) {
+        const stack = document.createElement('span');
+        stack.className = 'dt-stack';
+        stack.append(prev, button);
+        slots.push(stack);
+      } else slots.push(button);
+    });
+    entryRow.replaceChildren(...slots);
 
     // AND THE BONE SAYS IT IS READY. Pulsing means "this order can be
     // placed", not merely "something is chosen": a detached garage whose size
@@ -11517,6 +11539,10 @@
       // A DIMENSION IS DRAWN SELECTED BY ITS OWN PAINTER (paintDimensions),
       // halo and all, so it reads as the same mark lit up.
       if (type === 'dimension') return;
+      // A ROOF WHOSE NODES ARE PICKED STAYS DARK (Movie, 18 Oct: "i'd like to
+      // select just the NODE so it lights up and the rest of the roof
+      // doesn't"): the nodes are lit by paintRoofMoveNode.
+      if (type === 'roof' && moveState?.node?.roof === item) return;
       if (type === 'roomtag' || type === 'note') {
         const b = type === 'note' ? noteBox(item) : roomTagBox(item);
         ctx.save();
@@ -14158,9 +14184,14 @@
     // AN ITEM IS BROKEN, AN ASSEMBLY IS BUST (Movie, 18 Oct: "ASSEMBLY BREAK
     // is different from ROOF EDGE BREAK" -- "lets go ASSEMBLY GROUP /
     // ASSEMBLY BUST"). One button, the word for what it will do.
-    breakButton.textContent = one ? 'BREAK' : 'BUST';
-    breakButton.title = one ? 'BREAK — click the item to add a node there'
-      : 'ASSEMBLY BUST — break the assembly into its pieces';
+    // TWO ROOF NODES PICKED, IT IS BREAK ROOF (Movie, 18 Oct: "a 3rd command
+    // 'BREAK ROOF at NODE' where the user could split the roof and make
+    // different properties or move one of them").
+    const splits = moveState?.node?.list?.length === 2;
+    breakButton.textContent = splits ? 'BREAK ROOF' : one ? 'BREAK' : 'BUST';
+    breakButton.title = splits ? 'BREAK ROOF — split the roof in two between the two picked nodes'
+      : one ? 'BREAK — click the item to add a node there'
+        : 'ASSEMBLY BUST — break the assembly into its pieces';
   }
   // ── WALL OFF (Movie, 18 Oct) ──────────────────────────────────────────
   //
@@ -14389,6 +14420,7 @@
     return true;
   };
   const pressBreak = () => {
+    if (moveState?.node?.list?.length === 2) { splitRoofAtNodes(); return; }
     const one = breakHeld();
     if (one) {
       if (breakState.held) { endBreak(); return; }
@@ -14470,6 +14502,7 @@
     if (!able || (moveState.on && roof !== moveState.roof && !moveState.drag)) {
       moveState.on = false; moveState.roof = null; moveState.node = null;
     }
+    if (moveState.node && roof !== moveState.node.roof) moveState.node = null;
     moveButton.hidden = !able || !!rotateState?.open;
     moveButton.setAttribute('aria-pressed', String(!!moveState.on));
   }
@@ -14534,8 +14567,8 @@
       drop(hit);
     }
   };
-  const roofNodeAt = (roof, at) => {
-    const reach = SELECT_GRAB_PX / view.scale;
+  const roofNodeAt = (roof, at, px = SELECT_GRAB_PX) => {
+    const reach = px / view.scale;
     let best = null;
     roof.points.forEach((p, i) => {
       const d = Math.hypot(p.x - at.x, p.z - at.z);
@@ -14571,33 +14604,38 @@
       paint();
       return;
     }
-    moveState.on = true; moveState.roof = roof; moveState.node = null;
+    moveState.on = true; moveState.roof = roof;
+    if (moveState.node?.roof !== roof) moveState.node = null;
     syncMoveVerb();
     sayOnStrip('MOVE: drag an EDGE in or out, drag a NODE (or click one and DELETE it), or drag inside the roof to move it all. Esc or MOVE again ends.');
     paint();
   };
   const deleteRoofNode = () => {
-    const { roof, i } = moveState.node || {};
-    if (!roof || roof.points.length <= 3) { sayOnStrip('A roof needs three corners at least.'); return; }
+    const { roof, list } = moveState.node || {};
+    if (!roof || !list?.length) return;
+    if (roof.points.length - list.length < 3) { sayOnStrip('A roof needs three corners at least.'); return; }
     const before = roofBefore(roof);
     normaliseForMove(roof);
     // A CORNER TAKEN OUT LEAVES A SLOPED EDGE (Movie, 18 Oct: "that corner
     // node i would delete to cut off the corner and match the 45 (it would be
     // a sloped eave)"): the planes stay, cut along the new edge. A node on a
-    // straight run just goes.
-    const n0 = roof.points.length;
-    const p0 = roof.points[(i - 1 + n0) % n0], c0 = roof.points[i], q0 = roof.points[(i + 1) % n0];
-    const turn = Math.abs((c0.x - p0.x) * (q0.z - c0.z) - (c0.z - p0.z) * (q0.x - c0.x));
-    if (turn > 1e-6) roof.edges[(i - 1 + n0) % n0] = 'sloped';
-    roof.points.splice(i, 1);
-    roof.edges.splice(i, 1);
-    roof.edgeOverhang.splice(i, 1);
-    if (roof.footprint) roof.footprint.splice(i, 1);
+    // straight run just goes. Several picked go highest index first, so the
+    // ones still to go keep their places.
+    list.slice().sort((a, b) => b - a).forEach(i => {
+      const n0 = roof.points.length;
+      const p0 = roof.points[(i - 1 + n0) % n0], c0 = roof.points[i], q0 = roof.points[(i + 1) % n0];
+      const turn = Math.abs((c0.x - p0.x) * (q0.z - c0.z) - (c0.z - p0.z) * (q0.x - c0.x));
+      if (turn > 1e-6) roof.edges[(i - 1 + n0) % n0] = 'sloped';
+      roof.points.splice(i, 1);
+      roof.edges.splice(i, 1);
+      roof.edgeOverhang.splice(i, 1);
+      if (roof.footprint) roof.footprint.splice(i, 1);
+    });
     undoStack.push({ kind: 'props', edits: [{ item: roof, before }] });
     moveState.node = null;
     markDirty();
     setSelection([...selection]);
-    sayOnStrip('Node taken out: the new edge is SLOPED -- the roof planes kept, cut along it. UNDO puts it back.');
+    sayOnStrip(`${list.length === 1 ? 'Node' : `${list.length} nodes`} taken out: a cut corner is SLOPED -- the roof planes kept, cut along it. UNDO puts it back.`);
     paint();
   };
   if (moveButton) moveButton.addEventListener('click', pressMove);
@@ -14667,7 +14705,9 @@
     if (node == null && edge == null && !inside) { moveState.node = null; paint(); return; }
     const targets = inside ? whole : [roof];
     targets.forEach(normaliseForMove);
-    moveState.drag = { kind: node != null ? 'node' : edge != null ? 'edge' : 'roof', at, node, edge, targets,
+    const carried = node != null && moveState.node?.roof === roof && moveState.node.list.length > 1
+      && moveState.node.list.includes(node);
+    moveState.drag = { kind: carried ? 'nodes' : node != null ? 'node' : edge != null ? 'edge' : 'roof', at, node, edge, targets,
       befores: targets.map(roofBefore), moved: false };
     canvas.setPointerCapture(event.pointerId);
   }, true);
@@ -14696,6 +14736,11 @@
         roof.points = roof.points.map(by);
         if (roof.footprint) roof.footprint = roof.footprint.map(by);
         if (b.crossGables) roof.crossGables = b.crossGables.map(g => ({ ...g, at: by(g.at) }));
+      } else if (d.kind === 'nodes') {
+        moveState.node.list.forEach(k => {
+          roof.points[k] = { ...roof.points[k], x: b.points[k].x + dx, z: b.points[k].z + dz };
+          if (roof.footprint) roof.footprint[k] = { ...roof.footprint[k], x: b.footprint[k].x + dx, z: b.footprint[k].z + dz };
+        });
       } else if (d.kind === 'node') {
         const snap = drawSnap(at).pt;
         const to = snap ? { x: snap.x, z: snap.z } : at;
@@ -14746,21 +14791,22 @@
     if (!d.moved) {
       // A NODE CLICKED AND LET GO WHERE IT WAS IS PICKED, for DELETE.
       d.targets.forEach((roof, k) => Object.assign(roof, d.befores[k]));
-      moveState.node = d.kind === 'node' ? { roof: d.targets[0], i: d.node } : null;
+      moveState.node = d.node != null ? { roof: d.targets[0], list: [d.node] } : null;
       if (moveState.node) sayOnStrip('NODE picked: DELETE takes it out, or drag it to move it.');
       paint();
       return;
     }
     if (d.kind !== 'roof') {
       const roof = d.targets[0], n = roof.points.length;
-      const near = d.kind === 'node' ? [d.node] : [d.edge, (d.edge + 1) % n];
+      const near = d.kind === 'nodes' ? moveState.node.list.slice()
+        : d.kind === 'node' ? [d.node] : [d.edge, (d.edge + 1) % n];
       tidyRoof(roof, near);
     }
     undoStack.push({ kind: 'props', edits: d.targets.map((item, k) => ({ item, before: d.befores[k] })) });
     moveState.node = null;
     markDirty();
     setSelection([...selection]);
-    sayOnStrip(d.kind === 'roof' ? 'Roof moved. UNDO puts it back.' : d.kind === 'node' ? 'Node moved; the roof keeps its pitch. UNDO puts it back.'
+    sayOnStrip(d.kind === 'roof' ? 'Roof moved. UNDO puts it back.' : d.kind === 'node' || d.kind === 'nodes' ? 'Node moved; the roof keeps its pitch. UNDO puts it back.'
       : 'Edge moved; its overhang kept. UNDO puts it back.');
     paint();
   }, true);
@@ -14768,16 +14814,129 @@
   // and MOVE goes down with it (syncMoveVerb), as BREAK does.
   function paintRoofMoveNode() {
     const pick = moveState?.node;
-    if (!pick || !pick.roof.points[pick.i]) return;
-    const s = toS(pick.roof.points[pick.i]);
+    if (!pick) return;
     ctx.save();
     ctx.strokeStyle = skin['accent'] || '#e8a33d';
+    ctx.fillStyle = skin['accent'] || '#e8a33d';
     ctx.lineWidth = 2;
-    ctx.strokeRect(s.x - 6, s.y - 6, 12, 12);
+    pick.list.forEach(i => {
+      if (!pick.roof.points[i]) return;
+      const s = toS(pick.roof.points[i]);
+      ctx.globalAlpha = 0.45; ctx.fillRect(s.x - 6, s.y - 6, 12, 12);
+      ctx.globalAlpha = 1; ctx.strokeRect(s.x - 6, s.y - 6, 12, 12);
+    });
     ctx.restore();
   }
   // ESC NEEDS NO LISTENER OF ITS OWN: the page's Escape puts the selection
   // down, and a BREAK with no roof held goes down with it (syncBreakVerb).
+
+  // ── A ROOF'S NODES PICKED WITHOUT MOVE (Movie, 18 Oct) ────────────────
+  //
+  // "could we do that right sweep rectangle over a node, or even just click
+  // close to a ROOF node" -- "select just the NODE so it lights up and the
+  // rest of the roof doesn't" -- "and then offer thing to do with that node
+  // - MOVE, DELETE". The roof is held so the foot offers its verbs; the
+  // nodes are what they act on: DELETE takes them out, MOVE then a drag on
+  // one carries them all, a click on one picks just it; two picked and
+  // BREAK ROOF splits the roof between them.
+  const ROOF_NODE_CATCH_PX = 14;
+  // ── BREAK ROOF: TWO ROOFS FROM ONE, ALONG THE LINE BETWEEN TWO NODES ──
+  //
+  // Each piece keeps its own run of the outline, its edges' kinds and
+  // overhangs, and every other property; the cut is a flush GABLE on both,
+  // so where the cut crosses a ridge each piece's ridge runs straight out to
+  // it and the two still meet. A dormer goes with the piece it stands on.
+  // The wall line is worked out again from the overhangs. One UNDO.
+  function splitRoofAtNodes() {
+    const { roof, list } = moveState.node || {};
+    if (!roof || list?.length !== 2) return;
+    const n = roof.points.length;
+    const [i, j] = list.slice().sort((a, b) => a - b);
+    if (j - i < 2 || n - (j - i) < 2) {
+      sayOnStrip('BREAK ROOF — those two nodes share an edge. Pick two across the roof.');
+      return;
+    }
+    const G = window.DraftGeometry2D;
+    const pi = roof.points[i], pj = roof.points[j];
+    const mid = { x: (pi.x + pj.x) / 2, z: (pi.z + pj.z) / 2 };
+    const crosses = roof.points.some((a, k) => {
+      const k2 = (k + 1) % n;
+      if ([k, k2].includes(i) || [k, k2].includes(j)) return false;
+      const b = roof.points[k2];
+      const d = (u, v, w) => (v.x - u.x) * (w.z - u.z) - (v.z - u.z) * (w.x - u.x);
+      return (d(pi, pj, a) > 0) !== (d(pi, pj, b) > 0) && (d(a, b, pi) > 0) !== (d(a, b, pj) > 0);
+    });
+    if (crosses || !pointInRing(roof.points, mid) || !G) {
+      sayOnStrip('BREAK ROOF — the line between those nodes leaves the roof. Pick two that see each other across it.');
+      return;
+    }
+    const before = roofBefore(roof);
+    normaliseForMove(roof);
+    const piece = idx => ({
+      points: idx.map(k => ({ ...roof.points[k] })),
+      edges: idx.map((k, m) => (m === idx.length - 1 ? 'gable' : roof.edges[k])),
+      edgeOverhang: idx.map((k, m) => (m === idx.length - 1 ? 0 : roof.edgeOverhang[k])),
+    });
+    const run = (from, to) => { const out = []; for (let k = from; ; k = (k + 1) % n) { out.push(k); if (k === to) break; } return out; };
+    const a = piece(run(i, j)), b = piece(run(j, i));
+    const gables = Array.isArray(roof.crossGables) ? roof.crossGables : [];
+    const onA = gables.filter(g => pointInRing(a.points, g.at));
+    const onB = gables.filter(g => !onA.includes(g));
+    let id = newDrawingItemId('roof');
+    while (drawing.roofs.some(r => r.id === id)) id = newDrawingItemId('roof');
+    const other = { ...JSON.parse(JSON.stringify(before)), ...b, id };
+    delete other.footprint;
+    if (onB.length) other.crossGables = onB.map(g => ({ ...g, at: { ...g.at } })); else delete other.crossGables;
+    Object.assign(roof, a);
+    delete roof.footprint;
+    if (onA.length) roof.crossGables = onA; else delete roof.crossGables;
+    const list0 = drawing.roofs;
+    list0.splice(list0.indexOf(roof) + 1, 0, other);
+    undoStack.push({ kind: 'node', undo: () => {
+      Object.keys(roof).forEach(key => { if (!(key in before)) delete roof[key]; });
+      Object.assign(roof, before);
+      const at = list0.indexOf(other);
+      if (at >= 0) list0.splice(at, 1);
+    } });
+    moveState.node = null;
+    markDirty();
+    setSelection([{ type: 'roof', item: roof }]);
+    sayOnStrip('ROOF BROKEN in two between the nodes: each piece has its own PITCH and overhangs now and MOVEs on its own. UNDO joins them.');
+    paint();
+  }
+  function roofNodeNear(world) {
+    if (!filterAllows('roof')) return null;
+    let best = null;
+    pickRoofs().forEach(roof => {
+      const i = roofNodeAt(roof, world, ROOF_NODE_CATCH_PX);
+      if (i == null) return;
+      const d = Math.hypot(roof.points[i].x - world.x, roof.points[i].z - world.z);
+      if (!best || d < best.d) best = { roof, i, d };
+    });
+    return best;
+  }
+  function roofNodesInBox(a, b) {
+    if (!filterAllows('roof')) return null;
+    const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x);
+    const minZ = Math.min(a.z, b.z), maxZ = Math.max(a.z, b.z);
+    let best = null;
+    pickRoofs().forEach(roof => {
+      const list = (roof.points || []).map((p, i) => (p.x >= minX && p.x <= maxX && p.z >= minZ && p.z <= maxZ ? i : -1))
+        .filter(i => i >= 0);
+      if (list.length && list.length < roof.points.length && (!best || list.length > best.list.length)) best = { roof, list };
+    });
+    return best;
+  }
+  function pickRoofNodes(roof, list) {
+    roofEdgeIdx = null;
+    if (!(selection.length === 1 && selection[0].item === roof)) setSelection([{ type: 'roof', item: roof }]);
+    moveState.node = { roof, list: list.slice() };
+    syncBreakVerb();
+    sayOnStrip(list.length === 1
+      ? 'NODE picked: DELETE takes it out, or MOVE and drag it. SHIFT-click another node to pick two and BREAK ROOF between them.'
+      : `${list.length} NODES picked: DELETE takes them out, MOVE and drag one to move them all, click one to pick just it`
+        + (list.length === 2 ? ', or BREAK ROOF to split the roof between them.' : '.'));
+  }
 
   // ONE DELETE PRESS, whichever control did the pressing. The button and the
   // two keys were separate implementations of the same sentence and only one
@@ -30944,6 +31103,16 @@
         .forEach(entry => withGroup(entry).forEach(w => {
           if (!caught.some(c => c.item === w.item)) caught.push(w);
         }));
+      // A BOX OVER A ROOF'S NODES, AND NOTHING WHOLE, PICKS THOSE NODES
+      // (Movie, 18 Oct: "if the user makes a right sweeping rectangle select
+      // over roof nodes it will select the nodes and allow the user to either
+      // delete all, move all, or reselect one node in the square").
+      const nodes = !caught.length && !e?.shiftKey ? roofNodesInBox(box.from, box.to) : null;
+      if (nodes) {
+        pickRoofNodes(nodes.roof, nodes.list);
+        paint();
+        return;
+      }
       setSelection(e && (e.shiftKey || activeTool === 'assembly')
         ? selection.concat(caught.filter(c => !selection.some(entry => entry.item === c.item)))
         : caught);
@@ -30967,7 +31136,14 @@
       // rather than "adds".
       // ASSEMBLING, EVERY CLICK IS A SHIFT-CLICK: the set is being built,
       // and a click that threw it away would make the drafter start over.
-      if (e.shiftKey || activeTool === 'assembly') {
+      const shiftNode = e.shiftKey && moveState?.node
+        ? roofNodeNear(toWorld(e.clientX - rect.left, e.clientY - rect.top)) : null;
+      if (shiftNode && shiftNode.roof === moveState.node.roof) {
+        const list = moveState.node.list.includes(shiftNode.i)
+          ? moveState.node.list.filter(i => i !== shiftNode.i) : [...moveState.node.list, shiftNode.i];
+        if (list.length) pickRoofNodes(shiftNode.roof, list); else moveState.node = null;
+        syncBreakVerb();
+      } else if (e.shiftKey || activeTool === 'assembly') {
         if (hit) {
           const at = selection.findIndex(entry => entry.item === hit.item);
           // ASSEMBLING TAKES A WHOLE ASSEMBLY AT A CLICK: a WC picked by one
@@ -30990,6 +31166,19 @@
         // roof already in hand answers a click just OUTSIDE its eave too --
         // the edge is a line, and half of the grab around it is off the roof.
         const world = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        // A CLICK CLOSE TO A ROOF NODE PICKS THAT NODE (Movie, 18 Oct: "or
+        // even just click close to a ROOF node"), ahead of the roof and of
+        // whatever is under it.
+        const nodeHit = roofNodeNear(world);
+        if (nodeHit) {
+          pickRoofNodes(nodeHit.roof, [nodeHit.i]);
+          paint();
+          dragging = null;
+          canvas.classList.remove('dragging');
+          if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          return;
+        }
+        if (moveState?.node) moveState.node = null;
         const held = selection.length === 1 && selection[0].type === 'roof' ? selection[0].item : null;
         const roofHit = hit?.type === 'roof' ? hit.item
           : (!hit && held && roofEdgeNear(held, world) != null ? held : null);
@@ -31585,6 +31774,7 @@
       fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };
     adoptNotes();
+    trimSlivers({ walls: true });
     // Recorded against the RAW file: the normaliser is the only thing that knows
     // a substitution happened, and it does not say so — the two types differ and
     // nothing else marks it.
@@ -31930,7 +32120,70 @@
     ...(drawing.board ? { board: drawing.board } : {}),
   });
 
+  // ── SLIVERS ARE TRIMMED OFF (Movie, 18 Oct) ───────────────────────────
+  //
+  // "if there is a peice of roof or wall or floor with less that 1/64"
+  // thickness can you autoamatically TRIM it off ... i think this might solve
+  // some of our roof problems" -- and, told his worst sliver measured about
+  // 1/60", "ok lets go 1/16" on your advice". The roof painter already reads
+  // past anything under a sixteenth (geometry-2d cleanRoofRing); this takes
+  // it out of the drawing itself, so every reader -- sections, elevations,
+  // plans, the file -- sees the same clean ring:
+  //   a roof, floor, shape or outline loses a point that sits within 1/16"
+  //   of the next, or that the ring doubles back through (a spike);
+  //   a wall shorter than 1/16" goes, with the doors and windows on it.
+  // On open, and on every save. Walls only on open: a wall being dragged
+  // through zero length is not a sliver yet.
+  const SLIVER_FT = 1 / 192;
+  function trimSlivers({ walls: doWalls = false } = {}) {
+    const G = window.DraftGeometry2D;
+    if (!drawing || !G?.cleanRoofRing) return 0;
+    let trimmed = 0;
+    // A CORNER EXACTLY ON ITS NEIGHBOUR IS MEANT, A HAIR OFF IT IS NOT. A
+    // jog whose front overhang lands it on the main eave puts its two eave
+    // corners on one spot to the last decimal -- worked out from the
+    // overhangs, over walls still six feet apart, and meant to come back out
+    // when the overhang does -- so a roof carrying one is left whole (the
+    // painter already reads past it). A slid edge leaves a near miss, his
+    // 1/60" strip, and that is the sliver.
+    (drawing.roofs || []).forEach(roof => {
+      const pts = roof.points || [];
+      const landed = pts.some((p, i) => {
+        const q = pts[(i + 1) % pts.length];
+        return Math.hypot(q.x - p.x, q.z - p.z) < 1e-6;
+      });
+      if (landed) return;
+      const clean = G.cleanRoofRing(roof);
+      if (!clean) return;
+      roof.points = clean.points;
+      roof.edges = clean.edges;
+      roof.edgeOverhang = clean.edgeOverhang;
+      delete roof.footprint;
+      trimmed += 1;
+    });
+    ['floors', 'shapes', 'outlines'].forEach(key => (drawing[key] || []).forEach(item => {
+      if (!Array.isArray(item?.points) || item.points.length < 4) return;
+      const clean = G.cleanRoofRing({ points: item.points });
+      if (!clean) return;
+      item.points = clean.points;
+      trimmed += 1;
+    }));
+    if (doWalls && Array.isArray(drawing.walls)) {
+      const gone = drawing.walls.filter(w => w.start && w.end
+        && Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) < SLIVER_FT);
+      if (gone.length) {
+        const ids = new Set(gone.map(w => String(w.id)));
+        drawing.walls = drawing.walls.filter(w => !gone.includes(w));
+        if (Array.isArray(drawing.fenestrations)) {
+          drawing.fenestrations = drawing.fenestrations.filter(o => !ids.has(String(o.wallId)));
+        }
+        trimmed += gone.length;
+      }
+    }
+    return trimmed;
+  }
   const serializeDrawing = () => {
+    trimSlivers();
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
     // Destructured out of the spread rather than overwritten with `undefined`,
     // so the key is genuinely absent from the OBJECT and not merely absent from

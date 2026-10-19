@@ -256,6 +256,17 @@
       <div class="rail right">
         <p class="rail-title">Wall finish</p>
         <p class="empty" id="pick-note">Click a wall on the elevation.</p>
+        <!-- A DORMER'S GABLE WALL (Movie, 18 Oct: "'gable wall in the
+             triangle' where the user can change the materials in the EXT
+             FINISH area"). Clicked on the elevation like a wall; it wears the
+             finish of the house wall under it until it is given its own. -->
+        <div id="dormer-props" hidden>
+          <div class="prop">
+            <label for="dormer-finish">Dormer gable</label>
+            <select id="dormer-finish"></select>
+          </div>
+          <p class="empty" id="dormer-note"></p>
+        </div>
         <div id="wall-props" hidden>
           <div class="prop">
             <label for="base-finish">Whole wall</label>
@@ -561,6 +572,7 @@
         .map(f => `<option value="${f.id}">${f.label}</option>`).join('');
       document.getElementById('base-finish').innerHTML = finishOptions();
       document.getElementById('band-finish').innerHTML = finishOptions();
+      document.getElementById('dormer-finish').innerHTML = finishOptions();
 
       const elevList = document.getElementById('elev-list');
       const paintElevList = () => {
@@ -581,6 +593,18 @@
       // The wall a pick landed on, as it sits in the drawing -- the object the
       // save writes, not the painter's copy of it.
       const storedWall = () => (drawing?.walls || []).find(w => String(w.id) === picked);
+      // A DORMER IS PICKED AS `dormer:<roof id>:<its index>`, which no wall id
+      // can be, so storedWall answers nothing while one is in hand.
+      const storedDormer = () => {
+        const m = /^dormer:(.+):(\d+)$/.exec(picked || '');
+        const roof = m && (drawing?.roofs || []).find(r => String(r.id) === m[1]);
+        const gable = roof?.crossGables?.[Number(m[2])];
+        return gable ? { roof, gable, index: Number(m[2]) } : null;
+      };
+      // The finish of the house wall the picked dormer stands over, as the
+      // painter found it.
+      let dormerUnderFinish = null;
+      const dormerUnder = () => dormerUnderFinish;
 
       // ── THE ROOF AREA ──────────────────────────────────────
       //
@@ -709,8 +733,16 @@
 
       const paintProps = () => {
         const wall = storedWall();
+        const dormer = storedDormer();
         document.getElementById('wall-props').hidden = !wall;
-        document.getElementById('pick-note').hidden = !!wall;
+        document.getElementById('dormer-props').hidden = !dormer;
+        document.getElementById('pick-note').hidden = !!wall || !!dormer;
+        if (dormer) {
+          const under = dormerUnder();
+          document.getElementById('dormer-finish').value = dormer.gable.finish || under || WT.DEFAULT_FINISH_ID;
+          document.getElementById('dormer-note').textContent = dormer.gable.finish
+            ? 'Its own finish.' : 'The same as the wall under it until you pick one.';
+        }
         if (!wall) return;
         // ── CONCRETE TAKES ONE FINISH, NOT BANDS -- YET ─────────────────
         //
@@ -905,6 +937,21 @@
         save();
       };
 
+      document.getElementById('dormer-finish').addEventListener('change', event => {
+        const dormer = storedDormer();
+        if (!dormer) return;
+        const value = event.target.value;
+        if (value === (dormerUnder() || WT.DEFAULT_FINISH_ID)) delete dormer.gable.finish;
+        else dormer.gable.finish = value;
+        drawing.roofs = FORMAT.roofs(drawing.roofs, new Set(levels.map(l => l.id)), {
+          roofingIds: RT.ROOFING_TYPES.map(r => r.id),
+          cornerStyles: PROFILES.GABLE_CORNER_STYLES,
+        });
+        env = null;
+        rebuild();
+        paintProps();
+        save();
+      });
       document.getElementById('base-finish').addEventListener('change', event =>
         writeWall({ finish: event.target.value === WT.DEFAULT_FINISH_ID
           ? null : event.target.value }));
@@ -1006,6 +1053,11 @@
         const x0 = (canvas.width - (uMax - uMin) * pxPerFt) / 2;
         const y0 = (canvas.height - (yTop - yBottom) * pxPerFt) / 2;
         frame = { uMin, uMax, yTop, yBottom, pxPerFt, x0, y0, cut, axis };
+        // Read by the specs, which aim clicks at what was drawn.
+        window.__extFinishFrame = frame;
+        window.__extFinishDormers = () => (CV.dormerGables && env && CV.sectionLevelStack(env)
+          ? CV.dormerGables(env, cut, CV.sectionLevelStack(env), axis)
+            .map(dg => ({ lo: dg.lo, hi: dg.hi, mid: dg.mid, base: dg.base, apex: dg.apex, finish: dg.finish })) : []);
         const colors = CV.inksFromSkin(window.__reSkin);
         CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
           { pxPerFt, extents, colors, finishes: true });
@@ -1057,6 +1109,12 @@
         const e = frame.yTop - (py - frame.y0) / frame.pxPerFt;
         const stack = CV.sectionLevelStack(env);
         if (!stack) return null;
+        // A DORMER'S GABLE FIRST: it stands in front of the roof behind it, and
+        // no wall face reaches up there.
+        const dormer = (CV.dormerGables ? CV.dormerGables(env, frame.cut, stack, frame.axis) : []).find(dg =>
+          u >= dg.lo && u <= dg.hi && e >= dg.base
+          && e <= dg.apex - Math.abs(u - dg.mid) * dg.pitch / 12);
+        if (dormer) return { dormer };
         const list = pickables(stack);
         // NEAREST FIRST, which is the painter's order reversed. An elevation
         // is occlusion by paint ORDER -- each face covers what stands behind
@@ -1074,10 +1132,26 @@
       const paintPickMark = ctx => {
         const stack = CV.sectionLevelStack(env);
         if (!stack || !frame) return;
-        const g = pickables(stack).find(f => String(f.wall.id) === picked);
-        if (!g) return;
         const X = u => frame.x0 + (u - frame.uMin) * frame.pxPerFt;
         const Y = el => frame.y0 + (frame.yTop - el) * frame.pxPerFt;
+        const dormer = storedDormer();
+        if (dormer && CV.dormerGables) {
+          const dg = CV.dormerGables(env, frame.cut, stack, frame.axis)
+            .find(d => d.roof.id === dormer.roof.id && d.index === dormer.index);
+          if (!dg) return;
+          ctx.save();
+          ctx.strokeStyle = window.__reSkin['accent-mark'];
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath();
+          ctx.moveTo(X(dg.lo), Y(dg.base)); ctx.lineTo(X(dg.mid), Y(dg.apex)); ctx.lineTo(X(dg.hi), Y(dg.base));
+          ctx.closePath();
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
+        const g = pickables(stack).find(f => String(f.wall.id) === picked);
+        if (!g) return;
         ctx.save();
         ctx.strokeStyle = window.__reSkin['accent-mark'];
         ctx.lineWidth = 2;
@@ -1092,6 +1166,15 @@
         const face = faceAt(
           (event.clientX - box.left) * canvas.width / box.width,
           (event.clientY - box.top) * canvas.height / box.height);
+        if (face?.dormer) {
+          const dg = face.dormer;
+          picked = `dormer:${dg.roof.id}:${dg.index}`;
+          dormerUnderFinish = dg.below?.finish || null;
+          paintElevation();
+          paintProps();
+          say(`Dormer gable, ${(dg.hi - dg.lo).toFixed(1)} ft wide on ${currentElev}`);
+          return;
+        }
         picked = face ? String(face.wall.id) : null;
         paintElevation();
         paintProps();

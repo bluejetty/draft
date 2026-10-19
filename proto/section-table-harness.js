@@ -473,6 +473,27 @@ const ASSEMBLY = Object.freeze({
 const section = P => P.buildWallSection(ASSEMBLY);
 const rects = s => s.parts.filter(p => p.kind === 'rect');
 
+// THE ON-GRADE FLOOR, HUNG ON THE FOUNDATION'S INSIDE FACE (Movie, 18 Oct:
+// "the Floor Joists for the ON-GRADE version should be attached on the SIDE of
+// the foundation wall (inside edge) NOT on TOP" -- "the top of joists should be
+// level with the top of the sill plate so that the 3/4" sheathing can cover
+// the sill plate and the top of joists flush").
+const HUNG = Object.freeze({ ...ASSEMBLY,
+  floors: [{ ...ASSEMBLY.floors[0], framing: 'balloon' }, ASSEMBLY.floors[1]] });
+const nearFt = (a, b) => Math.abs(a - b) < 1e-9;
+check('on-grade: the joists start at the foundation\'s inside face, their tops flush with the sill plate', P => {
+  const r = rects(P.buildWallSection(HUNG));
+  const sheath = 0.75 / 12, joist = 11.875 / 12;
+  const joists = r.find(p => nearFt(p.h, joist) && nearFt(p.y, -sheath - joist));
+  const sill = r.find(p => nearFt(p.x, 0) && nearFt(p.y + p.h, -sheath) && nearFt(p.w, 8 / 12));
+  return [`${joists ? nearFt(joists.x, 8 / 12) : 'no joists'} ${!!sill}`, 'true true'];
+});
+check('on-grade: the sheathing runs out over the plate to the exterior face', P => {
+  const r = rects(P.buildWallSection(HUNG));
+  const sheath = 0.75 / 12;
+  return [!!r.find(p => nearFt(p.x, 0) && nearFt(p.y, -sheath) && nearFt(p.h, sheath)), true];
+});
+
 // The garage, in the shape garageValues() hands it over. Its one offset is
 // deliberately a round -2 so the numbers below read as arithmetic rather than
 // coincidence.
@@ -1066,6 +1087,10 @@ console.log(`\n${CHECKS.length - baseline.length}/${CHECKS.length} checks passed
 // occurrence mutates a different line and survives, reporting a gap that is
 // not there (the geometry-2d.js lesson, 4 Sep).
 const MUTATIONS = [
+  ['the on-grade floor sits on top of the wall again',
+    s => s.replace("const hungFloor = level => level?.framing === 'balloon';", "const hungFloor = () => false;")],
+  ['the on-grade joists run out over the foundation',
+    s => s.replace('          const jx = Math.max(x0, fdnFt);', '          const jx = x0;')],
   ['BILEVEL loses its wood fill again',
     s => s.replace("const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);", "const SPLIT_TYPES = Object.freeze(['modifiedBilevel']);")],
   ['the split pours a 6\' wall',

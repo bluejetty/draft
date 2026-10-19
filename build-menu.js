@@ -137,7 +137,13 @@ if (!window.DraftBuildMenu) {
         // the framing is a flag rather than a build type: the board running
         // out of room is exactly what a flag survives and a fifth BUILD_TYPES
         // id would not.
-        Object.freeze({ id: 'bungalow-ongrade', label: 'ON-GRADE', type: 'bungalow', framing: 'balloon' }),
+        // RENAMED, AND A SECOND STOREY BESIDE IT (Movie, 18 Oct: "i need an
+        // additional house type: BUNGALOW / ON GRADE / 2 STOREY" -- "the othe
+        // ON / GRADE can be calle ON GRADE / ONE STOREY"). The same ledger
+        // floor under a two-storey house; the id stays, so every drawing that
+        // pressed ON-GRADE still lights its tile.
+        Object.freeze({ id: 'bungalow-ongrade', label: 'ON GRADE / ONE STOREY', type: 'bungalow', framing: 'balloon' }),
+        Object.freeze({ id: 'twoStorey-ongrade', label: 'ON GRADE / 2 STOREY', type: 'twoStorey', framing: 'balloon' }),
         Object.freeze({ id: 'twoStorey', label: '2 STOREY', type: 'twoStorey' }),
         Object.freeze({ id: 'twoStorey-garage', label: '2 STOREY + GARAGE', type: 'twoStorey', garage: 'attached' }),
         // The room over the garage on a 2 STOREY is the UPPER FLOOR REACHING

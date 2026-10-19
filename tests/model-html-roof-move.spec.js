@@ -253,3 +253,90 @@ test('an edge beside a 45-degree corner: its end slides along the 45', async ({ 
   expect(ring(roof.points)).toContainEqual([-6, 25.31]);
   expect(ring(roof.points)).toContainEqual([-6, -8]);
 });
+
+// A ROOF'S NODES PICKED WITHOUT MOVE (Movie, 18 Oct: "could we do that right
+// sweep rectangle over a node, or even just click close to a ROOF node" --
+// "select just the NODE so it lights up and the rest of the roof doesn't" --
+// "and then offer thing to do with that node - MOVE, DELETE" -- "a 3rd command
+// 'BREAK ROOF at NODE' where the user could split the roof and make different
+// properties or move one of them").
+// The colour 3px outside the roof's eave at (x, z): the halo's, while the
+// roof is lit; the sheet's, while it is not.
+const besideEave = (page, [px, py]) => page.evaluate(([px, py]) => {
+  const c = document.getElementById('plan');
+  const r = c.getBoundingClientRect();
+  const k = c.width / r.width;
+  return [...c.getContext('2d').getImageData(Math.round((px - r.left) * k), Math.round((py - 3 - r.top) * k), 1, 1).data].slice(0, 3);
+}, [px, py]);
+const far = (u, v) => Math.abs(u[0] - v[0]) + Math.abs(u[1] - v[1]) + Math.abs(u[2] - v[2]);
+test('a click close to a roof node picks just the node; the roof stays dark; DELETE takes it out', async ({ page }) => {
+  const { at } = await open(page);
+  await click(page, at, 30, 15);
+  const lit = await besideEave(page, at(30, -8));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  const dark = await besideEave(page, at(30, -8));
+  expect(far(lit, dark), 'the halo shows beside the eave of a roof picked whole').toBeGreaterThan(40);
+  // Half a foot off the jog's front-left corner (12, 44): close enough.
+  await page.mouse.click(...at(12.4, 44.3));
+  await page.waitForTimeout(100);
+  await expect(page.locator('#strip-message')).toContainText('NODE picked');
+  expect(far(await besideEave(page, at(30, -8)), dark), 'the roof is not lit with its node').toBeLessThan(20);
+  await page.locator('#delete').click();
+  const roof = await saved(page);
+  expect(roof.points).toHaveLength(7);
+  expect(ring(roof.points)).not.toContainEqual([12, 44]);
+});
+test('a box over two roof nodes picks them: DELETE takes both, MOVE and a drag carries both, a click picks one', async ({ page }) => {
+  const { at } = await open(page);
+  // Left to right round the jog's two right-hand corners (48, 38) and (48, 44).
+  await drag(page, at, [45, 35], [51, 47]);
+  await expect(page.locator('#strip-message')).toContainText('2 NODES picked');
+  await page.locator('#model-move').click();
+  await drag(page, at, [48, 44], [50, 44]);
+  let roof = await saved(page);
+  expect(ring(roof.points)).toContainEqual([50, 38]);
+  expect(ring(roof.points)).toContainEqual([50, 44]);
+  await page.keyboard.press('Escape');
+  await drag(page, at, [47, 35], [53, 47]);
+  await expect(page.locator('#strip-message')).toContainText('2 NODES picked');
+  await page.locator('#delete').click();
+  roof = await saved(page);
+  expect(roof.points).toHaveLength(6);
+  // And a click on one of a pair picks just that one.
+  await page.keyboard.press('Escape');
+  await drag(page, at, [-11, -11], [-5, 41]);
+  await expect(page.locator('#strip-message')).toContainText('2 NODES picked');
+  await page.mouse.click(...at(-8, 38));
+  await page.waitForTimeout(100);
+  await expect(page.locator('#strip-message')).toContainText('NODE picked:');
+});
+test('two nodes picked, BREAK ROOF splits the roof between them; each piece its own; one UNDO joins them', async ({ page }) => {
+  const { at } = await open(page);
+  await page.mouse.click(...at(48, 38));
+  await page.waitForTimeout(100);
+  await page.keyboard.down('Shift');
+  await page.mouse.click(...at(12, 38));
+  await page.keyboard.up('Shift');
+  await page.waitForTimeout(100);
+  await expect(page.locator('#strip-message')).toContainText('2 NODES picked');
+  await expect(page.locator('#model-break')).toHaveText('BREAK ROOF');
+  await page.locator('#model-break').click();
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  let roofs = (await h.savedDrawing(page)).roofs;
+  expect(roofs).toHaveLength(2);
+  const jog = roofs.find(r => r.points.length === 4), main = roofs.find(r => r.points.length === 6);
+  expect(ring(jog.points)).toEqual([[48, 38], [48, 44], [12, 44], [12, 38]]);
+  expect(jog.edges[3]).toBe('gable');
+  expect(jog.edgeOverhang[3]).toBe(0);
+  expect(main.edges[5]).toBe('gable');
+  expect(main.pitch).toBe(4);
+  expect(new Set(roofs.map(r => r.id)).size).toBe(2);
+  await page.keyboard.press('Control+z');
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  roofs = (await h.savedDrawing(page)).roofs;
+  expect(roofs).toHaveLength(1);
+  expect(roofs[0].points).toHaveLength(8);
+});

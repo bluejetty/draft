@@ -89,9 +89,12 @@ test('each column pairs a build with the thing that is added to it', async ({ pa
   // a few hours on 13 Oct and lost it to Gruff's shelf, which holds a single
   // row of cards (build-menu.js says why); an on-grade house with a garage is
   // 1 STOREY + GARAGE switched to BALLOON / LEDGER on this very page.
+  // AND ON GRADE / 2 STOREY BELOW IT (Movie, 18 Oct), on its own line for
+  // the same reason; the first was renamed ON GRADE / ONE STOREY that day.
   expect(await columnLines(page, 'family-row')).toEqual([
     ['1 STOREY', '+ GARAGE'],
-    ['ON-GRADE'],
+    ['ON GRADE / ONE STOREY'],
+    ['ON GRADE / 2 STOREY'],
     ['2 STOREY', '+ GARAGE'],
     ['2 STOREY + GARAGE + ROOM OVER'],
   ]);
@@ -290,6 +293,20 @@ test('ON-GRADE and 1 STOREY are one type, told apart by the floor framing', asyn
   await page.reload();
   await expect(page.locator('[data-family-entry="bungalow-ongrade"]'))
     .toHaveAttribute('aria-pressed', 'true');
+});
+
+// AN ON-GRADE HOUSE STANDS ON A 4' FROST WALL (Movie, 18 Oct: "for the
+// project ON GRADE foundation use 4' frost wall with footing (not 8ft / go to
+// 4ft" -- "default 4ft, allow the user to change to 8ft or 9ft etc if they want
+// to later"). The stored height is the pour plus the sill plate.
+test('ON-GRADE pours a 4\' frost wall; 1 STOREY puts the basement height back', async ({ page }) => {
+  await openProject(page);
+  await page.locator('[data-family-entry="bungalow"]').click();
+  const fdnHt = async () => (await h.savedDrawing(page))?.levelAssemblies?.[1]?.wallHeightFt;
+  await page.locator('[data-family-entry="bungalow-ongrade"]').click();
+  await expect.poll(fdnHt, { message: '4\' of concrete and the 1 1/2" plate' }).toBeCloseTo(4 + 1.5 / 12, 6);
+  await page.locator('[data-family-entry="bungalow"]').click();
+  await expect.poll(fdnHt, { message: 'the office basement wall again' }).toBeGreaterThan(8);
 });
 
 // THE BILEVEL COLUMN SHARES THE BUILDER AND MUST NOT SHARE THE ANSWER. Its
