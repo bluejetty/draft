@@ -89,9 +89,12 @@ test('each column pairs a build with the thing that is added to it', async ({ pa
   // a few hours on 13 Oct and lost it to Gruff's shelf, which holds a single
   // row of cards (build-menu.js says why); an on-grade house with a garage is
   // 1 STOREY + GARAGE switched to BALLOON / LEDGER on this very page.
+  // AND ON GRADE / 2 STOREY BELOW IT (Movie, 18 Oct), on its own line for
+  // the same reason; the first was renamed ON GRADE / ONE STOREY that day.
   expect(await columnLines(page, 'family-row')).toEqual([
     ['1 STOREY', '+ GARAGE'],
-    ['ON-GRADE'],
+    ['ON GRADE / ONE STOREY'],
+    ['ON GRADE / 2 STOREY'],
     ['2 STOREY', '+ GARAGE'],
     ['2 STOREY + GARAGE + ROOM OVER'],
   ]);

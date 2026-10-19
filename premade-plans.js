@@ -938,8 +938,9 @@ if (!window.DraftPremadePlans) {
   // It was unserved for a while on the belief that it wanted level 4, and a
   // drawing has no level 4 by default -- so the tile built a house and a
   // garage and no room, and said nothing about the missing one.
-  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({
+  const twoStorey = ({ garage = false, overGarage = false, framing = null } = {}) => ({
     house: houseLoop(),
+    framing,
     houseOpenings: houseOpenings(),
     upperOpenings: upperOpenings(),
     storeys: 2,
@@ -1494,6 +1495,9 @@ if (!window.DraftPremadePlans) {
     // design arrives. `twoStorey-over` is deliberately absent -- see the note
     // on twoStorey: the room over the garage wants the over-garage level.
     twoStorey: () => twoStorey({ garage: false }),
+    // ON GRADE / 2 STOREY (Movie, 18 Oct): the two-storey house on the
+    // on-grade ledger floor.
+    'twoStorey-ongrade': () => twoStorey({ garage: false, framing: 'balloon' }),
     'twoStorey-garage': () => twoStorey({ garage: true }),
     'twoStorey-over': () => twoStorey({ garage: true, overGarage: true }),
     bilevel: () => bilevel({ garage: false }),

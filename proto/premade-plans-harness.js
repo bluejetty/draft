@@ -394,7 +394,17 @@ check('the board offers a plan for every entry that has one',
     // tile can order has to be reachable by that tile's own name.
     ['bilevel', 'bilevel-garage', 'bungalow', 'bungalow-garage',
       'bungalow-ongrade',
-      'modifiedBilevel', 'twoStorey', 'twoStorey-garage', 'twoStorey-over'].join(',')]);
+      'modifiedBilevel', 'twoStorey', 'twoStorey-garage', 'twoStorey-ongrade', 'twoStorey-over'].join(',')]);
+
+// ── ON GRADE / 2 STOREY (Movie, 18 Oct: "i need an additional house type:
+// BUNGALOW / ON GRADE / 2 STOREY") -- the two-storey house on the ledger floor:
+// the same building as 2 STOREY, framed the on-grade way.
+check('ON GRADE / 2 STOREY is the 2 STOREY house on a ledger floor',
+  P => {
+    const grade = P.planFor('twoStorey-ongrade'), plain = P.planFor('twoStorey');
+    const same = JSON.stringify({ ...grade, framing: null }) === JSON.stringify({ ...plain, framing: null });
+    return [`${grade.framing},${plain.framing ?? null},${grade.storeys},${same}`, 'balloon,null,2,true'];
+  });
 
 // ── ON-GRADE (Movie, 12 Oct) ──
 //
@@ -1470,6 +1480,8 @@ const GARAGE_TIE_DECL = `    // One foot BEHIND the house's front line, which is
     const tieZ = houseFront - GARAGE_TIE_FT;`;
 
 const MUTATIONS = [
+  ['ON GRADE / 2 STOREY forgets its ledger floor',
+    s => s.replace("    'twoStorey-ongrade': () => twoStorey({ garage: false, framing: 'balloon' }),", "    'twoStorey-ongrade': () => twoStorey({ garage: false }),")],
   ['ON-GRADE loses its balloon framing and becomes an ordinary bungalow',
     s2 => s2.replace(
       `    'bungalow-ongrade': () => bungalow({ garage: false, framing: 'balloon' }),`,
@@ -1685,8 +1697,8 @@ const MUTATIONS = [
     s2 => s2.replace("    doubleCasement(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2),",
       "    doubleCasement(3, OVER_GARAGE_LENGTH_FT / 2),")],
   ['a 2 STOREY is bigger than the 1 STOREY beside it on the board',
-    s2 => s2.replace('  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({\n    house: houseLoop(),',
-      '  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({\n'
+    s2 => s2.replace('  const twoStorey = ({ garage = false, overGarage = false, framing = null } = {}) => ({\n    house: houseLoop(),',
+      '  const twoStorey = ({ garage = false, overGarage = false, framing = null } = {}) => ({\n'
       + '    house: houseLoop().map(p => pt(p.x * 1.2, p.z)),')],
   ['the 2 STOREY forgets it has two storeys',
     s2 => s2.replace('    upperOpenings: upperOpenings(),\n    storeys: 2,',

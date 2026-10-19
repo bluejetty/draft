@@ -1638,3 +1638,30 @@ test('2 STOREY + GARAGE + ROOM OVER roofs the room WITH the house, and the stub 
     expect(kept.garageKept, 'and the garage flag came back').toBe(1);
     expect(kept.platesKept, 'and so did the plate that makes it drop').toBe(1);
   });
+
+// ON GRADE / 2 STOREY (Movie, 18 Oct: "i need an additional house type:
+// BUNGALOW / ON GRADE / 2 STOREY" -- "the othe ON / GRADE can be calle ON
+// GRADE / ONE STOREY"): the 2 STOREY house, its main floor hung on the
+// foundation's inside face like the one-storey ON GRADE's.
+test('ON GRADE / 2 STOREY builds the two-storey house on a ledger floor; the board keeps one row', async ({ page }) => {
+  await open(page);
+  await h.openDriveThru(page);
+  await page.locator('[data-build-family="bungalow"]').click();
+  // THE TWO ON GRADE TILES SHARE ONE SLOT, so the row still fits the board.
+  const one = await page.locator('[data-build-entry="bungalow-ongrade"]').boundingBox();
+  const two = await page.locator('[data-build-entry="twoStorey-ongrade"]').boundingBox();
+  expect(Math.abs(one.x - two.x), 'stacked, not side by side').toBeLessThan(2);
+  const tops = await page.locator('[data-build-entry]').evaluateAll(els =>
+    els.map(el => el.getBoundingClientRect()).filter(r => r.width > 0).map(r => Math.round(r.top)));
+  const firstTop = Math.min(...tops);
+  expect(tops.every(t => t < firstTop + one.height * 2 + 8), 'one row of slots').toBe(true);
+  await page.locator('[data-build-entry="twoStorey-ongrade"]').click();
+  await page.locator('#dt-bone').click();
+  await page.waitForTimeout(250);
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+  expect(saved.buildType).toBe('twoStorey');
+  expect(saved.levelAssemblies?.[3]?.framing).toBe('balloon');
+  expect(new Set(saved.walls.filter(w => (w.view || 'plan') === 'plan').map(w => w.levelId)).size,
+    'walls on two storeys').toBe(2);
+});

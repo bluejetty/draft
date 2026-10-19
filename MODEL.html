@@ -689,6 +689,13 @@
       filter:var(--bone-lift) brightness(1.3) drop-shadow(0 0 9px rgba(255,64,51,0.8)); }
   }
   #build-entries[hidden] { display:none; }
+  /* TILES WITH NO CARD SHARE ONE CARD'S SLOT, stacked (Movie, 18 Oct: ON
+     GRADE / ONE STOREY and ON GRADE / 2 STOREY side by side wrapped the row
+     and spilled the board). Each takes half the square, its words wrapped. */
+  #build-entries .dt-stack { display:flex; flex-direction:column; gap:4px;
+    width:clamp(48px, calc(var(--dt-w) * 0.14), 134px); }
+  #build-entries .dt-stack button { flex:1 1 0; white-space:normal;
+    line-height:1.15; padding:3px 4px; }
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
      one light, and a night-skin chip on it would read as a hole. */
@@ -8010,7 +8017,7 @@
 
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
     entryRow.hidden = !open;
-    entryRow.replaceChildren(...(open ? open.entries.map(entry => {
+    const tiles = open ? open.entries.map(entry => {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.buildEntry = entry.id;
@@ -8018,7 +8025,22 @@
       button.classList.toggle('chosen', entry.id === chosenEntryId);
       button.onclick = () => pressEntry(entry.id);
       return button;
-    }) : []));
+    }) : [];
+    // Neighbouring tiles with no card go into one stacked slot (see the CSS).
+    const slots = [];
+    tiles.forEach(button => {
+      const last = slots[slots.length - 1];
+      if (button.classList.contains('card')) { slots.push(button); return; }
+      if (last?.classList?.contains('dt-stack')) { last.append(button); return; }
+      const prev = last && !last.classList.contains('card') ? slots.pop() : null;
+      if (prev) {
+        const stack = document.createElement('span');
+        stack.className = 'dt-stack';
+        stack.append(prev, button);
+        slots.push(stack);
+      } else slots.push(button);
+    });
+    entryRow.replaceChildren(...slots);
 
     // AND THE BONE SAYS IT IS READY. Pulsing means "this order can be
     // placed", not merely "something is chosen": a detached garage whose size
