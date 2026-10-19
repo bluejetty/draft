@@ -8,15 +8,24 @@
 // move" -- "the short ends won't need beams ever ... only the long end needs a
 // beam on side that span 10 ft or more" -- "i'm trying to select and then MOVE
 // the door to SLIDE it on the wall, but it isn't moving" -- "i can't insert
-// WASHER or DRYER - i need it for LAUNDRY".
+// WASHER or DRYER - i need it for LAUNDRY" -- "the T SQUARE isn't keeping it
+// at 90 degrees it is freemoving".
 //
 // Run: node proto/stair-reframe-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js';
+const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js tests/move-tsquare.spec.js';
 const MUTANTS = [
+  { file: 'MODEL.html', name: 'MOVE goes free with the T-square lit',
+    find: "      if (tsquareOn && board !== 'toy' && !d.set.across) {\n",
+    with: "      if (false) {\n",
+    test: 'MOVE with the T-square lit slides the assembly straight across, not with the hand' },
+  { file: 'MODEL.html', name: 'an assembly dragged under SELECT goes free with the T-square lit',
+    find: "          if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }\n",
+    with: "",
+    test: 'an assembly dragged under SELECT is held square too' },
   { file: 'MODEL.html', name: 'a fixture reaches only the 30px grab zone',
     find: "    const thresh = Math.max(FIXTURE_PICK_PX / view.scale, reachFt);\n",
     with: "    const thresh = FIXTURE_PICK_PX / view.scale;\n",
