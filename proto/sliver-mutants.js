@@ -8,7 +8,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPECS = ['tests/model-html-slivers.spec.js'];
+const SPECS = ['tests/model-html-slivers.spec.js', 'tests/model-html-roof-edges.spec.js'];
 const MUTANTS = [
   { file: 'MODEL.html', name: "a wall under 1/16\" stays", spec: 'tests/model-html-slivers.spec.js',
     find: "    trimSlivers({ walls: true });\n",
@@ -26,6 +26,10 @@ const MUTANTS = [
     find: "          drawing.fenestrations = drawing.fenestrations.filter(o => !ids.has(String(o.wallId)));\n",
     with: "",
     test: "on open and save" },
+  { file: 'MODEL.html', name: "a jog landed on the main eave is trimmed for good", spec: 'tests/model-html-roof-edges.spec.js',
+    find: "      if (landed) return;\n",
+    with: "",
+    test: "the jog-out front at 2' lands on the main eave line" },
 ];
 
 const run = (name, spec) => {

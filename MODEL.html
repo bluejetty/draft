@@ -32117,7 +32117,20 @@
     const G = window.DraftGeometry2D;
     if (!drawing || !G?.cleanRoofRing) return 0;
     let trimmed = 0;
+    // A CORNER EXACTLY ON ITS NEIGHBOUR IS MEANT, A HAIR OFF IT IS NOT. A
+    // jog whose front overhang lands it on the main eave puts its two eave
+    // corners on one spot to the last decimal -- worked out from the
+    // overhangs, over walls still six feet apart, and meant to come back out
+    // when the overhang does -- so a roof carrying one is left whole (the
+    // painter already reads past it). A slid edge leaves a near miss, his
+    // 1/60" strip, and that is the sliver.
     (drawing.roofs || []).forEach(roof => {
+      const pts = roof.points || [];
+      const landed = pts.some((p, i) => {
+        const q = pts[(i + 1) % pts.length];
+        return Math.hypot(q.x - p.x, q.z - p.z) < 1e-6;
+      });
+      if (landed) return;
       const clean = G.cleanRoofRing(roof);
       if (!clean) return;
       roof.points = clean.points;
