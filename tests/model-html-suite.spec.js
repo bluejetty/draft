@@ -310,3 +310,11 @@ test('a suite wall that is not the shell wall\'s thickness is told so', async ({
   await expect(page.locator('#strip-message')).toContainText('both faces have to line up');
   await page.mouse.up();
 });
+test('a blue hologram lined up with the shell says to make it a SUITE to snap and cut', async ({ page }) => {
+  await open(page, shell({ z: 3, mode: undefined }));
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  await holdSuite(page, [10, 10], [10, 7.1]);
+  await expect(page.locator('#strip-message')).toContainText('Set it to SUITE');
+  await page.mouse.up();
+});

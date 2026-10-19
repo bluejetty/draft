@@ -25682,6 +25682,14 @@
       m.underlay.x += slide.x;
       m.underlay.z += slide.z;
     }
+    // A BLUE HOLOGRAM NEVER SNAPS -- only a SUITE does -- so where a suite
+    // would have caught, the strip says how to make it one (Movie, 18 Oct:
+    // "the suite wall isn't SNAPPING or GLOWING to show they line up ... and
+    // the window holes too").
+    if (m.hologram && m.underlay.mode !== 'suite' && H()?.suiteNear
+      && H().suiteNear(drawing, { ...m.underlay, mode: 'suite' }, activeLevelId(), 0.5).length) {
+      sayOnStrip('This hologram is blue, so it does not snap. Set it to SUITE on the HOLOGRAM card: it snaps, its lined-up walls glow, and its windows cut the shell wall.');
+    }
     paint();
   }, true);
   // The click the browser sends after the drag is the drag's own, not a

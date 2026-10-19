@@ -92,6 +92,10 @@ const MUTANTS = [
     find: "      if (odd && !near.some(n => n.lined)) {",
     with: "      if (false) {",
     test: "a suite wall that is not the shell wall's thickness is told so" },
+  { file: 'MODEL.html', name: "a blue hologram lined up says nothing", spec: 'tests/model-html-suite.spec.js',
+    find: "    if (m.hologram && m.underlay.mode !== 'suite' && H()?.suiteNear",
+    with: "    if (false && m.hologram && m.underlay.mode !== 'suite' && H()?.suiteNear",
+    test: "a blue hologram lined up with the shell says to make it a SUITE to snap and cut" },
 ];
 
 const run = (name, spec) => {
