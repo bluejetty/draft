@@ -12512,7 +12512,27 @@
   // face line, every wall's faces -- interior walls as much as exterior --
   // pull a point drawn or dragged near them, and the corners and faces in
   // reach light up in the cross lines' neon.
-  const FACE_CORNER_PULL_PX = 14;
+  // ── THREE TIERS OF MAGNET (Movie, 19 Oct) ────────────────────────────
+  //
+  // "all the ext CORNERS become NODES, or to ACT like nodes (the ACT LIKE
+  // nodes, also on all interior corners will be YELLOW glow and will be
+  // slightly less magnetic than the ORANGE NODES and then the YELLOW/ GREEN
+  // NEON color will be for WALL SURFACES which will also be magnetic".
+  //
+  // ORANGE is a wall's or a line's own end. YELLOW is a corner that acts
+  // like one: a face corner (outside, inside, a free end's two), or where two
+  // runs cross with no node there. NEON is a face line. Each tier pulls over
+  // its own reach, orange furthest. Between two POINTS in reach the stronger
+  // pull wins -- the one nearer as a share of its own reach -- so a yellow
+  // corner three pixels off the hand beats an orange node ten pixels off,
+  // and at one distance the orange wins: "slightly less magnetic", literally.
+  // (Tier first would have been simpler and wrong: a wall's inside corner
+  // stands 2 3/4" off its node, under 14 px at most zooms, and the yellow
+  // would never have been reachable beside the orange.) A face is a LINE and
+  // the hand is always on some point of it, so a point in reach beats a face
+  // every time -- #807's "more pull from the inside/outside corners".
+  const NODE_PULL_PX = 14;
+  const FACE_CORNER_PULL_PX = 11;
   const FACE_LINE_PULL_PX = 7;
   // How near the cursor a magnet has to be to light up at all.
   const MAGNET_SHOW_PX = 48;
@@ -12526,6 +12546,36 @@
     return faceLineCache.list;
   };
   const pullFt = px => Math.max(NODE_SNAP_FT, px / view.scale);
+  // WHERE RUNS CROSS WITH NO NODE THERE: yellow corners too, on this level.
+  let crossingCache = { key: null, list: [] };
+  const crossingNodes = () => {
+    const G = window.DraftGeometry2D;
+    if (!G?.lineCrossings || !drawing) return [];
+    const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
+    if (crossingCache.key === key) return crossingCache.list;
+    crossingCache = { key, list: G.lineCrossings([...walls(), ...lines()]) };
+    return crossingCache.list;
+  };
+  // EVERY YELLOW CORNER: the faces' corners and the crossings.
+  const actLikeNodes = () => [...wallFaceNodes(), ...crossingNodes()];
+  // THE STRONGER PULL between an orange node and a yellow corner in reach:
+  // nearer as a share of its own reach wins, the orange on a tie. `{ v,
+  // node }`, or null when neither reaches.
+  const strongerPoint = (at, nodes, corners) => {
+    const score = (list, px) => {
+      const r = pullFt(px);
+      let best = null;
+      list.forEach(v => {
+        const d = Math.hypot(v.x - at.x, v.z - at.z);
+        if (d <= r && (!best || d < best.d)) best = { d, v, share: d / r };
+      });
+      return best;
+    };
+    const node = score(nodes, NODE_PULL_PX);
+    const corner = score(corners, FACE_CORNER_PULL_PX);
+    if (node && (!corner || node.share <= corner.share)) return { v: node.v, node: true };
+    return corner ? { v: corner.v, node: false } : null;
+  };
   const nearestWithin = (list, at, px) => {
     const r = pullFt(px);
     let best = null;
@@ -12554,7 +12604,7 @@
   };
   // The magnets a point being drawn answers to; null when SNAP is off.
   const drawMagnet = () => (snapOn && board !== 'toy'
-    ? { corners: wallFaceNodes(), segs: wallFaceSegs() } : null);
+    ? { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: wallFaceSegs() } : null);
   // A DRAGGED NODE answers to every wall but its own: the walls it is an end
   // of move with it, so their faces are not where they were. Worked out once
   // when the drag starts.
@@ -12563,7 +12613,10 @@
     if (!G?.wallFaceLines || !vtx) return { corners: [], segs: [] };
     const touches = v => v && (v === vtx || (Math.abs(v.x - vtx.x) < 0.001 && Math.abs(v.z - vtx.z) < 0.001));
     const still = walls().filter(w => !touches(w.start) && !touches(w.end));
-    return { corners: G.wallFaceCorners(still, openingThicknessFt()),
+    const stillRuns = [...still, ...lines().filter(l => !touches(l.start) && !touches(l.end))];
+    return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),
+      corners: [...G.wallFaceCorners(still, openingThicknessFt()),
+        ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],
       segs: G.wallFaceLines(still, openingThicknessFt()) };
   };
   // Where a dragged point lands: a node first, then a face corner, then a
@@ -12572,8 +12625,8 @@
     const node = cornerSnap(at, vtx);
     if (node) return { pt: { x: node.x, y: 0, z: node.z }, corner: node, node: true };
     if (!magnet) return null;
-    const corner = nearestWithin(magnet.corners, at, FACE_CORNER_PULL_PX);
-    if (corner) return { pt: { x: corner.x, y: 0, z: corner.z }, corner };
+    const point = strongerPoint(at, magnet.nodes || [], magnet.corners);
+    if (point) return { pt: { x: point.v.x, y: 0, z: point.v.z }, corner: point.v, node: point.node };
     const face = nearestFace(magnet.segs, at);
     return face ? { pt: { x: face.pt.x, y: 0, z: face.pt.z }, seg: face.seg } : null;
   };
@@ -12605,7 +12658,7 @@
       return best ? best.v : null;
     };
     return nearest(nodeEnds({ faces: false }))
-      || nearestWithin(wallFaceNodes(), at, FACE_CORNER_PULL_PX);
+      || strongerPoint(at, nodeEnds({ faces: false }), actLikeNodes())?.v || null;
   };
   let lastSnapKey = '';
   // NOTHING AROUND, as Movie put it ("only when nothing is around"): no
@@ -12677,10 +12730,12 @@
   // crosses a wall's face -- a run held square meets the face it is drawn to.
   const axisMagnet = (worldPt, fixed, moving = [], magnet = null) => {
     const node = cornerSnap(worldPt, moving);
-    const corner = node || (magnet && nearestWithin(magnet.corners, worldPt, FACE_CORNER_PULL_PX));
+    const point = node ? { v: node, node: true }
+      : (magnet && strongerPoint(worldPt, magnet.nodes || [], magnet.corners));
+    const corner = point?.v;
     if (corner) {
       return { pt: fixed === 'z' ? { x: corner.x, y: 0, z: worldPt.z } : { x: worldPt.x, y: 0, z: corner.z },
-        corner, node: !!node };
+        corner, node: !!point.node };
     }
     if (!magnet) return null;
     const free = fixed === 'z' ? 'x' : 'z';
@@ -15991,15 +16046,24 @@
   // and non node corner magnetic snaps"). A node is a wall's or a line's own
   // end; a face corner or a point on a face is not, and wears the cross
   // lines' colour.
-  const paintDonut = (pt, neon = false) => {
+  // THREE COLOURS FOR THREE TIERS (Movie, 19 Oct): ORANGE on a node,
+  // YELLOW on a corner that acts like one, NEON on a face.
+  const DONUT = {
+    orange: { ink: '#ff9a1f', glow: 'rgba(255, 150, 30, 0.95)' },
+    yellow: { ink: '#ffe600', glow: 'rgba(255, 230, 0, 0.95)' },
+    neon: { ink: TRACK_LIT, glow: TRACK_GLOW },
+  };
+  const tierOf = lit => (lit?.seg ? 'neon' : lit?.node ? 'orange' : 'yellow');
+  const paintDonut = (pt, tier = 'orange') => {
+    const c = DONUT[tier] || DONUT.orange;
     const p = toS(pt);
     ctx.save();
-    ctx.shadowColor = neon ? TRACK_GLOW : 'rgba(255, 150, 30, 0.95)';
+    ctx.shadowColor = c.glow;
     ctx.shadowBlur = 12;
-    ctx.strokeStyle = neon ? TRACK_LIT : '#ff9a1f';
+    ctx.strokeStyle = c.ink;
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = neon ? TRACK_LIT : '#ff9a1f';
+    ctx.fillStyle = c.ink;
     ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   };
@@ -16027,11 +16091,12 @@
       ctx.shadowBlur = on ? 10 : 0;
       segOn(seg);
     });
+    // THE CORNERS THAT ACT LIKE NODES, in yellow.
     magnet.corners.forEach(c => {
       if (Math.hypot(c.x - cursor.x, c.z - cursor.z) > reach) return;
       const p = toS(c);
-      ctx.fillStyle = TRACK_LIT;
-      ctx.shadowColor = TRACK_GLOW;
+      ctx.fillStyle = DONUT.yellow.ink;
+      ctx.shadowColor = DONUT.yellow.glow;
       ctx.shadowBlur = 8;
       ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
     });
@@ -16054,7 +16119,7 @@
     if (moveDrag?.kind === 'corner' && moveDrag.active) {
       canvas.removeAttribute('data-snap-node');
       paintMagnets(moveDrag.cursor, moveDrag.magnet, moveDrag.lit);
-      if (moveDrag.lit) paintDonut(moveDrag.lit.pt, !moveDrag.lit.node);
+      if (moveDrag.lit) paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
       markMagnet(moveDrag.lit);
       return;
     }
@@ -16068,7 +16133,7 @@
     if (fixed) {
       const lit = axisMagnet(squareTo(drawStart, cursorWorld), fixed, [], magnet);
       paintMagnets(cursorWorld, magnet, lit);
-      if (lit) paintDonut(lit.pt, !lit.node);
+      if (lit) paintDonut(lit.pt, tierOf(lit));
       markMagnet(lit);
       canvas.removeAttribute('data-snap-node');
       return;
@@ -16085,7 +16150,7 @@
     paintMagnets(cursorWorld, magnet, snap.face ? { seg: snap.face } : null);
     const ownNode = snap.node && isOwnNode(snap.node);
     if (snap.node || snap.bullseye || snap.face) {
-      paintDonut(snap.pt, !!snap.face || (!!snap.node && !ownNode));
+      paintDonut(snap.pt, snap.face ? 'neon' : snap.node && !ownNode ? 'yellow' : 'orange');
       if (snap.node || snap.bullseye) {
         canvas.setAttribute('data-snap-node', JSON.stringify([Number(snap.pt.x.toFixed(4)), Number(snap.pt.z.toFixed(4))]));
       } else canvas.removeAttribute('data-snap-node');

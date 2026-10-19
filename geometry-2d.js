@@ -3638,6 +3638,24 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
       }));
     });
 
+  // WHERE TWO RUNS CROSS WITH NO NODE THERE (Movie, 19 Oct: "all the ext
+  // CORNERS become NODES, or to ACT like nodes"; a crossing of two walls'
+  // or lines' centre lines is a corner a drafter aims at the way he aims at
+  // a wall's end, so it acts like one). Only a crossing INSIDE both runs: one
+  // on either run's end is that end, a node already. Each crossing once.
+  const lineCrossings = segs => {
+    const out = [];
+    const runs = (segs || []).filter(s => s && s.start && s.end && !s.bulge);
+    for (let i = 0; i < runs.length; i++) {
+      for (let j = i + 1; j < runs.length; j++) {
+        const hit = segmentIntersection(runs[i], runs[j]);
+        if (!hit || hit.t < 0.001 || hit.t > 0.999 || hit.u < 0.001 || hit.u > 0.999) continue;
+        if (!out.some(o => Math.abs(o.x - hit.x) < 1e-6 && Math.abs(o.z - hit.z) < 1e-6)) out.push({ x: hit.x, z: hit.z });
+      }
+    }
+    return out;
+  };
+
   const openingGeometry = (opening, wall, opts = {}) => {
     if (!wall || !opening) return null;
     const { walls, thicknessFt, padFt = 0, faceReferenced = true } = opts;
@@ -3974,6 +3992,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     wallFaceOffsets,
     wallFaceCorners,
     wallFaceLines,
+    lineCrossings,
     cleanRoofRing,
     cutPerpendiculars,
     cutSide,

@@ -22,7 +22,7 @@ const MUTANTS = [
     with: "      return [0, 0].map(o => ({",
     test: 'a LINE started a hair off an interior wall\'s face starts ON the face, and the face lights neon' },
   { file: "MODEL.html", name: "face corners pull no further than a line",
-    find: "  const FACE_CORNER_PULL_PX = 14;\n",
+    find: "  const FACE_CORNER_PULL_PX = 11;\n",
     with: "  const FACE_CORNER_PULL_PX = 6;\n",
     test: 'the inside corner pulls harder than the face: 10px along the face still lands on the corner' },
   { file: "MODEL.html", name: "a face corner glows as a node",

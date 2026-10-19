@@ -18,10 +18,13 @@ const MUTANTS = [
     find: "    if (!G?.wallFaceCorners || !drawing) return [];\n",
     with: "    return [];\n",
     test: "a LINE started a hair off the outside corner of two 2x6 walls starts ON it" },
+  // CAUGHT BY THE INSIDE-CORNER TEST, not the outside corner's: with the
+  // corner cut, TRACK's cross lines from the free ends' face points still
+  // meet at the outside corner and the press lands there anyway.
   { file: "geometry-2d.js", name: "the crossings are cut short of the outside corner",
     find: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= (f.t + g.t) * 1.5) add(p);\n",
     with: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= Math.max(f.t, g.t) * 0.5) add(p);\n",
-    test: "a LINE started a hair off the outside corner of two 2x6 walls starts ON it" },
+    test: "and the inside corner, and a free end's face" },
   { file: "geometry-2d.js", name: "a free end gives no face points",
     find: "          f.offs.forEach(o => add({ x: v.x + f.n.x * o, z: v.z + f.n.z * o }));\n          return;\n        }\n        others.forEach",
     with: "          return;\n        }\n        others.forEach",
@@ -55,7 +58,7 @@ const MUTANTS = [
     with: "      lotAsked = true;\n",
     test: "a double-click on the SITE PLAN seat opens it too, and NOT NOW leaves the lot as it was" },
   { file: "MODEL.html", name: "a face corner beats the wall's own node",
-    find: "    return nearest(nodeEnds({ faces: false }))\n      || nearestWithin(wallFaceNodes(), at, FACE_CORNER_PULL_PX);\n",
+    find: "    return nearest(nodeEnds({ faces: false }))\n      || strongerPoint(at, nodeEnds({ faces: false }), actLikeNodes())?.v || null;\n",
     with: "    return nearest(nodeEnds());\n",
     test: "SNAP: a press near a wall end lands exactly on it, and the orange donut marks it first" },
 ];
