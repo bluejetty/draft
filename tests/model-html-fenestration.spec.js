@@ -591,6 +591,32 @@ test('one undo puts a slid opening back', async ({ page }) => {
     .toBeCloseTo(before.offset, 3);
 });
 
+// AND THE MOVE VERB SLIDES IT TOO (Movie, 19 Oct: "i'm trying to select and
+// then MOVE the door to SLIDE it on the wall, but it isn't moving"). The foot
+// bar's MOVE carried the selection's points, and an opening has none -- so it
+// said "Moved" and left the door where it was. Pressed ANYWHERE: MOVE drags
+// by the press's travel, so it is measured from a press off the wall.
+test('MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back', async ({ page }) => {
+  const f = await doorOnTheNorthWall(page);
+  await save(page);
+  const before = (await survives(page)).openings[0];
+  await pressAt(page, f, 0, -10);
+  await expect(page.locator('[data-delete]')).toBeVisible();
+  await page.locator('#model-move').click();
+  await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
+  await slide(page, f, [0, -6], [4, -3]);
+  await expect(page.locator('#strip-message')).toContainText('Slid along its wall');
+  await save(page);
+  const after = (await survives(page)).openings[0];
+  expect(centreX(after) - centreX(before), 'four feet along, the across part dropped').toBeCloseTo(4, 0);
+  expect(after.id).toBe(before.id);
+  expect(String(after.wallId)).toBe(String(before.wallId));
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  await save(page);
+  expect((await survives(page)).openings[0].offset).toBeCloseTo(before.offset, 3);
+});
+
 // ── TYPED SIZES ─────────────────────────────────────────────────────────────
 //
 // The panel used to carry a line saying the width, sill and head were "not

@@ -59,6 +59,9 @@ async function build(page) {
   await page.locator('#dt-bone').click();
   await page.waitForTimeout(1200);
   await pastTheCards(page);
+  // ON THE MAIN FL PLAN, where the flight is drawn: the build leaves the
+  // page on the roof.
+  await h.pickModelLayer(page, MAIN_FL, 'plan');
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
 }
@@ -89,7 +92,8 @@ async function pick(page, stair) {
 }
 
 async function turn(page, degrees) {
-  await page.locator('#model-rotate').click();
+  // The row stays up after a turn, over the button that raised it.
+  if (await page.locator('#model-rotate').isVisible()) await page.locator('#model-rotate').click();
   await page.locator(`[data-rotate-by="${degrees}"]`).click();
   await page.waitForTimeout(150);
 }
@@ -147,25 +151,31 @@ test('slid and let go, the stair is framed again where it landed, in the same UN
   const first = await saved(page);
   const stair = mainStair(first);
   const [beam] = sideBeams(first, stair);
+  const posts = (first.columns || []).length;
   const at = await pick(page, stair);
   const { scale } = await h.planFrame(page);
-  // A foot along its own run: the side spans do not change, so the framing
-  // comes back on the same side, a foot along -- laid fresh, not ridden.
-  const u = runsAlongX(stair) ? { x: 1, z: 0 } : { x: 0, z: 1 };
+  // FIVE FEET TOWARD THE OPEN SIDE, across the run. The stock well has about
+  // 11 1/2 ft of floor on its open side and the mid-span beam hard on the
+  // other; slid five feet, neither side has 10 ft left -- so a framing laid
+  // fresh has no side beam, where one that rode the slide would still be
+  // standing.
+  const across = runsAlongX(stair) ? 'z' : 'x';
+  const mid = (stair.start[across] + stair.end[across]) / 2;
+  const out = Math.sign(beam.start[across] - mid) || -1;
+  const step = across === 'x' ? { x: out * 5, z: 0 } : { x: 0, z: out * 5 };
   await page.mouse.move(...at);
   await page.mouse.down();
-  await page.mouse.move(at[0] + u.x * scale, at[1] + u.z * scale, { steps: 6 });
+  await page.mouse.move(at[0] + step.x * scale, at[1] + step.z * scale, { steps: 6 });
   await page.mouse.up();
-  await page.waitForTimeout(150);
+  await expect(page.locator('#strip-message')).toContainText('side beam is not needed');
   const d = await saved(page);
-  const now = sideBeams(d, mainStair(d));
-  expect(now.length).toBe(1);
-  expect(now[0].id, 'a new record, laid where the stair now is').not.toBe(beam.id);
-  const along = runsAlongX(stair) ? 'x' : 'z';
-  const lo = b => Math.min(b.start[along], b.end[along]);
-  expect(lo(now[0]) - lo(beam), 'a foot along with the flight').toBeCloseTo(1, 1);
+  const slid = mainStair(d);
+  expect(slid.start[across] - stair.start[across], 'it slid five feet').toBeCloseTo(out * 5, 0);
+  expect(sideBeams(d, slid), 'under 10 ft of floor on both sides now').toHaveLength(0);
+  expect((d.columns || []).length, 'and its posts went with it').toBe(posts - 2);
   await page.keyboard.press('Control+z');
   const undone = await saved(page);
-  expect(sideBeams(undone, mainStair(undone)).map(b => b.id)).toEqual([beam.id]);
+  expect(sideBeams(undone, mainStair(undone)).map(b => [b.start, b.end]),
+    'the slide and the re-frame are one UNDO').toEqual([[beam.start, beam.end]]);
   expect(mainStair(undone).start).toEqual(stair.start);
 });

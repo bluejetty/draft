@@ -15357,6 +15357,19 @@
       event.preventDefault();
       const r = canvas.getBoundingClientRect();
       const at = toWorld(event.clientX - r.left, event.clientY - r.top);
+      // A DOOR OR WINDOW SLIDES ALONG ITS WALL (Movie, 19 Oct: "i'm trying
+      // to select and then MOVE the door to SLIDE it on the wall, but it isn't
+      // moving"). An opening is a width and an offset along its host, with no
+      // points of its own for the selection move to carry -- so MOVE drives
+      // the same slide the SELECT drag does, by the press's travel along the
+      // wall, wherever on the sheet the press began.
+      const lone = selection.length === 1 && selection[0].type === 'fenestration' ? selection[0].item : null;
+      const host = lone && walls().find(wall => String(wall.id) === String(lone.wallId));
+      if (host) {
+        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false };
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
       moveState.drag = { kind: 'selection', at, set: selectionMoveSet(), moved: false };
       canvas.setPointerCapture(event.pointerId);
       return;
@@ -15389,6 +15402,20 @@
     if (!d.moved && Math.hypot(dx, dz) * view.scale < 3) return;
     d.moved = true;
     d.cursor = at;
+    if (d.kind === 'opening') {
+      // ALONG THE WALL ONLY, and clamped every event -- the SELECT drag's
+      // reasons, the same bearing kept under the lintel.
+      const wall = d.host;
+      const wx = wall.end.x - wall.start.x, wz = wall.end.z - wall.start.z;
+      const length = Math.hypot(wx, wz) || 1;
+      const along = d.was + (dx * wx + dz * wz) / length;
+      const clamped = window.DraftGeometry2D.clampOpeningToWall(wall, along, d.opening.width, {
+        walls: walls(), thicknessFt: openingThicknessFt(),
+      });
+      if (clamped) d.opening.offset = clamped.offset;
+      paint();
+      return;
+    }
     if (d.kind === 'selection') {
       // A BEAM ROW SLIDES ACROSS ITSELF and takes no magnet (Movie, 19 Oct:
       // the beams are placed and moved by hand); every other selection
@@ -15472,6 +15499,17 @@
     event.stopImmediatePropagation();
     moveState.drag = null;
     if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    if (d.kind === 'opening') {
+      // One slide, one UNDO, with the strings that measure it re-laid in the
+      // same step; nothing pushed when the clamp held it where it was.
+      if (d.opening.offset !== d.was) {
+        undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));
+        markDirty();
+        sayOnStrip('Slid along its wall. UNDO puts it back.');
+      }
+      paint();
+      return;
+    }
     if (d.kind === 'selection') {
       if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); paint(); return; }
       d.set.points.forEach(relinkVertex);
