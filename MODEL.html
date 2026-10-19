@@ -14442,9 +14442,11 @@
       undoStack.push({ kind: 'props', edits: stepEdits });
       sayOnStrip(`${stepped.flatMap(r => r.said).join('. ')}. UNDO puts it back.`);
     }
-    // AND THE STAIRS BESIDE A CARRYING BEAM THAT WENT -- see reframeStairsOn.
-    // Not for a stair's own side beam: deleting that is the drafter's call.
-    const carriers = [...new Set(doomed.filter(e => e.type === 'beam' && !e.item.stairId)
+    // AND THE STAIRS BESIDE A BEAM THAT WENT -- see reframeStairsOn. Every
+    // beam counts: another stair measures its sides to this one's framing as
+    // to any carrier. But not the stair whose OWN side beam went: deleting
+    // that is the drafter's call (`spare`).
+    const carriers = [...new Set(doomed.filter(e => e.type === 'beam')
       .map(e => Number(e.item.levelId)))];
     const spare = (drawing.stairs || []).filter(stair =>
       doomed.some(e => e.type === 'beam' && Number(e.item.stairId) === Number(stair.id)));

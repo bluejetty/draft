@@ -43,7 +43,7 @@ const MUTANTS = [
   { file: 'MODEL.html', name: 'a stair\'s own beam deleted by hand is put back',
     find: "    .filter(stair => !spare.includes(stair)\n",
     with: "    .filter(stair => true\n",
-    test: 'the carrying beam deleted, the stair takes a side beam; its own beam deleted is left deleted' },
+    test: 'the row and the stair\'s own beam deleted together: the stair is not re-framed' },
   { file: 'MODEL.html', name: 'a typed distance leaves the door where the slide did',
     find: "    undoOnce();\n    m.opening.offset = clamped.offset;\n",
     with: "    undoOnce();\n",

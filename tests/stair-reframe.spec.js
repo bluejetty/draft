@@ -335,3 +335,19 @@ test('the carrying beam deleted, the stair takes a side beam; its own beam delet
   expect(stairBeams(d), 'left as he left it').toHaveLength(0);
   expect(carrying(d), 'and the row untouched').toHaveLength(4);
 });
+
+// AND TAKEN TOGETHER: the row and the stair's own side beam in one DELETE.
+// The row going would earn the stair two side beams -- but its own was taken
+// out by hand in the same press, so the stair is left as he left it.
+test('the row and the stair\'s own beam deleted together: the stair is not re-framed', async ({ page }) => {
+  const { at } = await openFramed(page);
+  await pickAt(page, at, 0, -15);
+  await page.keyboard.down('Shift');
+  await page.mouse.click(...at(-3.3958, 0));
+  await page.keyboard.up('Shift');
+  await page.waitForTimeout(120);
+  await page.locator('#delete').click();
+  const d = await saved(page);
+  expect(carrying(d), 'the row gone').toHaveLength(0);
+  expect(stairBeams(d), 'its own beam gone, and none laid in its place').toHaveLength(0);
+});
