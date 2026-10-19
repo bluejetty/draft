@@ -1271,7 +1271,13 @@ if (!window.DraftBuildHouse) {
     const g = gcd(eighths, 8);
     return `${whole}-${eighths / g}/${8 / g}"`;
   };
+  // AN ENGINEER'S WORDS WIN (Movie, 19 Oct: "make that TEXT editable so and
+  // ENGINEER can change it to whatever they specify the floor or beams as
+  // (STEEL, LAMINATED BEAMS etc)"). A floor's typed JOIST CALLOUT replaces
+  // the computed one everywhere this is asked; a blank one gives it back.
   const joistCallout = assembly => {
+    const typed = typeof assembly?.joistCallout === 'string' ? assembly.joistCallout.trim() : '';
+    if (typed) return typed;
     const type = String(assembly?.joistType || 'owj');
     const depthIn = Number(assembly?.joistDepthIn);
     if (/^conv_/.test(type)) return `${type.replace(/^conv_/, '')} JOISTS`;

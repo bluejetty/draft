@@ -10672,6 +10672,29 @@
   // _findOutlineEdgeHit and the corner branch above it both select the WHOLE
   // outline, from an edge or from a corner. Copying the tooltip would have
   // produced a filter that behaves differently from the one it was ported from.
+  // A post is picked within the same reach as a line, or anywhere on its
+  // own footprint when that is bigger on screen.
+  const columnAt = worldPt => {
+    const reach = Math.max(SELECT_GRAB_PX / view.scale, 0.5);
+    let best = null, bestD = reach;
+    columns().forEach(c => {
+      if (!c.point) return;
+      const d = Math.hypot(c.point.x - worldPt.x, c.point.z - worldPt.z);
+      if (d < bestD) { best = c; bestD = d; }
+    });
+    return best;
+  };
+  // THE POSTS A BEAM STANDS ON: its own level and view, on its line between
+  // its ends -- and not also on another beam that is staying, which keeps
+  // the post where two beams meet.
+  const COLUMN_ON_BEAM_FT = 0.25;
+  const onBeamLine = (beam, pt) => pt && beam.start && beam.end
+    && window.DraftGeometry2D.pointToSegment(pt, beam).d <= COLUMN_ON_BEAM_FT;
+  const columnsOnBeam = (beam, keepBeams = []) => (drawing?.columns || []).filter(c =>
+    Number(c.levelId) === Number(beam.levelId) && (c.view || 'plan') === (beam.view || 'plan')
+    && onBeamLine(beam, c.point)
+    && !keepBeams.some(other => other !== beam && Number(other.levelId) === Number(beam.levelId)
+      && (other.view || 'plan') === (beam.view || 'plan') && onBeamLine(other, c.point)));
   const segAt = (list, worldPt) => {
     const G = window.DraftGeometry2D;
     const thresh = SELECT_GRAB_PX / view.scale;
@@ -10814,6 +10837,9 @@
     if (filterAllows('outline')) outlines().forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
     if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
     if (filterAllows('roof')) pickRoofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
+    if (filterAllows('beam')) beams().forEach(item => out.push({ type: 'beam', item, parts: seg(item), open: true }));
+    if (filterAllows('column')) columns().filter(c => c.point)
+      .forEach(item => out.push({ type: 'column', item, parts: [[item.point]], open: true }));
     if (filterAllows('fenestration')) {
       openingsOn(walls()).forEach(({ opening, geometry }) =>
         out.push({ type: 'fenestration', item: opening, parts: [geometry.corners] }));
@@ -11092,7 +11118,35 @@
   const withGroup = entry => {
     if (!entry) return [];
     const owner = groupOf(entry);
-    return owner && owner.fixed === true ? itemsOfGroup(owner) : [entry];
+    if (owner && owner.fixed === true) return itemsOfGroup(owner);
+    // A BEAM IS ITS WHOLE ROW. AUTO BEAM lays a row in pieces, post to post,
+    // and what Movie moves and deletes is "one line of beams" -- so a click
+    // on any piece takes them all.
+    if (entry.type === 'beam') return beamRun(entry.item).map(item => ({ type: 'beam', item }));
+    return [entry];
+  };
+  // The pieces of beam that make one row with this one: the same level and
+  // view, on the same line, joined end to end.
+  const beamRun = beam => {
+    const G = window.DraftGeometry2D;
+    if (!beam?.start || !beam?.end) return [beam];
+    const ux = beam.end.x - beam.start.x, uz = beam.end.z - beam.start.z, len = Math.hypot(ux, uz);
+    if (len < 1e-6) return [beam];
+    const sameLine = other => {
+      if (!other?.start || !other?.end) return false;
+      if (Number(other.levelId) !== Number(beam.levelId) || (other.view || 'plan') !== (beam.view || 'plan')) return false;
+      const vx = other.end.x - other.start.x, vz = other.end.z - other.start.z, vlen = Math.hypot(vx, vz);
+      if (vlen < 1e-6 || Math.abs(ux * vz - uz * vx) / (len * vlen) > 1e-3) return false;
+      return Math.abs((other.start.x - beam.start.x) * uz - (other.start.z - beam.start.z) * ux) / len < 0.01;
+    };
+    const pool = (drawing?.beams || []).filter(sameLine);
+    const touches = (a, b) => [a.start, a.end].some(p => [b.start, b.end]
+      .some(q => Math.hypot(p.x - q.x, p.z - q.z) < 0.01 || G.pointToSegment(p, b).d < 0.01));
+    const run = [beam];
+    for (let i = 0; i < run.length; i++) {
+      pool.forEach(other => { if (!run.includes(other) && touches(run[i], other)) run.push(other); });
+    }
+    return run;
   };
 
   // ── WHAT ELSE A CLICK CAN PICK (Movie, 1 Oct: "when i try to SELECT a
@@ -11447,6 +11501,20 @@
       const line = lineAt(worldPt);
       if (line) return { type: 'line', item: line };
     }
+    // A COLUMN, THEN THE BEAM IT HOLDS UP (Movie, 19 Oct: "I'd like to be
+    // able to move the BEAM manually so that all the columns follow. i will
+    // also want to probably DELETE one line of beams"). A beam a click could
+    // not reach could be neither, so they pick like a line does; the post
+    // first, since it stands on the beam and a beam-first chain would make
+    // every post on one unreachable.
+    if (filterAllows('column')) {
+      const column = columnAt(worldPt);
+      if (column) return { type: 'column', item: column };
+    }
+    if (filterAllows('beam')) {
+      const beam = segAt(beams(), worldPt);
+      if (beam) return { type: 'beam', item: beam };
+    }
     // A STAIR BEATS THE FLOOR IT STANDS IN, which would otherwise take every
     // click inside the stairwell.
     if (filterAllows('stair')) {
@@ -11518,7 +11586,7 @@
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
       fixture: fixtures(), stair: stairs(), roof: pickRoofs(), roomtag: roomTags(), shape: shapes(),
-      dimension: shownDimensions(), note: notes() };
+      dimension: shownDimensions(), note: notes(), beam: beams(), column: columns() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -11551,7 +11619,15 @@
         ctx.restore();
         return;
       }
-      if (type === 'wall' || type === 'line') {
+      if (type === 'column') {
+        const c = toS(item.point);
+        ctx.save();
+        ctx.lineWidth = 3;
+        ctx.strokeRect(c.x - 9, c.y - 9, 18, 18);
+        ctx.restore();
+        return;
+      }
+      if (type === 'wall' || type === 'line' || type === 'beam') {
         const a = toS(item.start), b = toS(item.end);
         if (item.bulge) {
           // The halo follows the curve the line is drawn on.
@@ -13941,6 +14017,27 @@
       markDirty();
       return true;
     }
+    // A BEAM TAKES ITS POSTS WITH IT (Movie, 19 Oct: "i will also want to
+    // probably DELETE one line of beams"). A row of teleposts with nothing to
+    // hold up is not structure; one undo puts the row back whole. A post the
+    // drafter placed off the beam, or one another beam still stands on, stays.
+    if (entry.type === 'beam') {
+      const removed = [];
+      const take = (list, item) => {
+        const index = list.indexOf(item);
+        if (index < 0) return;
+        list.splice(index, 1);
+        removed.push({ list, index, item });
+      };
+      const posts = columnsOnBeam(entry.item,
+        (drawing.beams || []).filter(b => !selection.some(e => e.item === b)));
+      take(drawing.beams || [], entry.item);
+      if (!removed.length) return false;
+      posts.forEach(post => take(drawing.columns || [], post));
+      undoStack.push({ kind: 'remove-items', removed });
+      markDirty();
+      return true;
+    }
     const key = SELECTION_LISTS[entry.type];
     const list = key ? drawing[key] : null;
     if (!Array.isArray(list)) return false;
@@ -14037,8 +14134,12 @@
     if (!drawing || !selection.length) return 0;
     const doomed = selection.slice();
     let gone = 0;
+    const mark = undoStack.length;
     doomed.forEach(entry => { if (deleteEntry(entry)) gone += 1; });
     if (!gone) return 0;
+    // ONE DELETE, ONE UNDO: a row of beam is several pieces, and a click
+    // takes them all, so the press that took them puts them back together.
+    if (undoStack.length - mark > 1) undoStack.push({ kind: 'batch', steps: undoStack.splice(mark) });
     setSelection(selection.filter(entry => !doomed.includes(entry)));
     return gone;
   };
@@ -14755,6 +14856,64 @@
   // walls left behind keep their place; doors, windows and fixtures ride
   // their walls by offset; a stair's framing goes with it and its well is
   // carried. Every point once.
+  // A MOVED ROW SPANS WALL TO WALL AGAIN: its line is run out both ways to
+  // the footprint of the floor it carries, so sliding it across an L or a jog
+  // lengthens it to the walls it now meets -- or shortens it, though never
+  // past the first post-to-post joint, so no piece of it is driven to
+  // nothing. A row that has left every footprint keeps the length it had.
+  const reclipRun = run => {
+    const beam = run[0];
+    const ux = beam.end.x - beam.start.x, uz = beam.end.z - beam.start.z, len = Math.hypot(ux, uz);
+    if (len < 1e-6) return;
+    const u = { x: ux / len, z: uz / len };
+    const o = beam.start;
+    const at = p => (p.x - o.x) * u.x + (p.z - o.z) * u.z;
+    const ends = run.flatMap(b => [b.start, b.end]);
+    const params = ends.map(at);
+    const lo = Math.min(...params), hi = Math.max(...params);
+    const joints = [...new Set(params.map(p => Math.round(p * 1000) / 1000))]
+      .filter(p => p > lo + 1e-3 && p < hi - 1e-3);
+    const rings = storeyBodiesOver(Number(beam.levelId)).map(b => b.outline?.points || [])
+      .filter(ring => ring.length >= 3);
+    // FROM A POINT OF THE ROW THAT IS OVER THE FLOOR: its middle first, then
+    // out along it, so a row whose middle sits right on a wall of a jog still
+    // finds the floor it crosses.
+    let from = null, ring = null;
+    [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.1, 0.9].some(t => {
+      const p = lo + (hi - lo) * t;
+      const pt = { x: o.x + u.x * p, z: o.z + u.z * p };
+      const hit = rings.find(r => pointInRing(r, pt));
+      if (hit) { from = { pt, p }; ring = hit; }
+      return !!hit;
+    });
+    if (!ring) return;
+    const reach = sign => {
+      let best = Infinity;
+      ring.forEach((a, i) => {
+        const b = ring[(i + 1) % ring.length];
+        const ex = b.x - a.x, ez = b.z - a.z;
+        const dx = sign * u.x, dz = sign * u.z;
+        const den = dx * ez - dz * ex;
+        if (Math.abs(den) < 1e-12) return;
+        const t = ((a.x - from.pt.x) * ez - (a.z - from.pt.z) * ex) / den;
+        const s = ((a.x - from.pt.x) * dz - (a.z - from.pt.z) * dx) / den;
+        if (t > 1e-9 && s >= -1e-9 && s <= 1 + 1e-9) best = Math.min(best, t);
+      });
+      return best;
+    };
+    const back = reach(-1), fwd = reach(1);
+    if (!Number.isFinite(back) || !Number.isFinite(fwd)) return;
+    const newLo = Math.min(from.p - back, joints.length ? joints[0] - 0.5 : hi - 0.5);
+    const newHi = Math.max(from.p + fwd, joints.length ? joints[joints.length - 1] + 0.5 : lo + 0.5);
+    ends.forEach((pt, i) => {
+      const p = params[i];
+      const to = Math.abs(p - lo) < 1e-6 ? newLo : Math.abs(p - hi) < 1e-6 ? newHi : null;
+      if (to == null) return;
+      const across = (pt.x - o.x) * -u.z + (pt.z - o.z) * u.x;
+      pt.x = o.x + u.x * to - u.z * across;
+      pt.z = o.z + u.z * to + u.x * across;
+    });
+  };
   const selectionMoveSet = () => {
     const entries = selection.slice();
     selection.forEach(entry => {
@@ -14782,10 +14941,24 @@
         const f = stairFramingOf(item);
         return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
       }),
+      // A BEAM'S POSTS RIDE WITH IT (Movie, 19 Oct: "move the BEAM manually
+      // so that all the columns follow"), the ones a beam staying behind
+      // also stands on excepted.
+      ...entries.filter(e => e.type === 'beam').flatMap(({ item }) =>
+        columnsOnBeam(item, (drawing.beams || []).filter(b => !chosen.has(b))).map(c => c.point)),
     ])].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    // A LONE BEAM SLIDES ACROSS ITSELF ONLY -- "move beams up or down (in
+    // this situation but if positioned the other direction from side to
+    // side)" -- and its ends find the walls again wherever it lands.
+    const lone = entries.length && entries.every(e => e.type === 'beam')
+      && entries.every(e => beamRun(entries[0].item).includes(e.item)) ? entries[0].item : null;
+    const across = lone && lone.start && lone.end ? (() => {
+      const ux = lone.end.x - lone.start.x, uz = lone.end.z - lone.start.z, len = Math.hypot(ux, uz);
+      return len > 1e-6 ? { x: -uz / len, z: ux / len } : null;
+    })() : null;
     const wells = entries.filter(e => e.type === 'stair').map(({ item }) => stairWellOf(item))
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
-    return { points, detached, wells,
+    return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across,
       before: points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
         ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })) };
   };
@@ -14830,7 +15003,12 @@
     if (!d.moved && Math.hypot(dx, dz) * view.scale < 3) return;
     d.moved = true;
     if (d.kind === 'selection') {
+      if (d.set.across) {
+        const k = dx * d.set.across.x + dz * d.set.across.z;
+        dx = d.set.across.x * k; dz = d.set.across.z * k;
+      }
       d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+      if (d.set.run) reclipRun(d.set.run);
       d.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
       paint();
       return;
@@ -21128,9 +21306,17 @@
         placeGarageColumns(points, storeyId);
         return;
       }
+      // THE ROW SPACING IS THE FLOOR'S OWN JOIST (Movie, 19 Oct, on a 40 ft
+      // deep North Point with three rows of beams where he wanted two: "31
+      // feet max space for OWJ"). The 19 ft rule is the 1'-0 5/8" floor's; an
+      // OWJ floor spans what its table says at 16" o.c. -- 28 ft at the 24"
+      // package -- the same bare-deck ceiling garageBareSpanFt gives a garage
+      // floor, keeping 12" o.c. as the last resort it is.
+      const carriedAsm = window.DraftLevelAssembly?.levelAssemblyFor?.(drawing.levelAssemblies, storeyId);
       const plan = window.DraftBuildHouse.midSpanBeams(points, {
         holes: stairHolesOn(points, storeyId),
         supportsBelow: supportsUnder(levelId),
+        ...(carriedAsm?.joistType === 'owj' ? { beamAtFt: window.DraftBuildHouse.garageBareSpanFt() } : {}),
       });
       // THE LINK IS THIS BODY'S OWN. `srcIndex` indexes the points THIS call
       // was handed, so the closure has to be rebuilt per body -- one hoisted
@@ -21192,6 +21378,24 @@
     const headers = placeStairHeaders({ levelId });
     placed.push(...headers);
     beamCount += headers.length;
+    // A MARK OUTLIVES THE RE-PRESS (Movie, 19 Oct: the engineer's text for
+    // "STEEL, LAMINATED BEAMS etc"). A beam laid back down on the line of one
+    // this press swept takes that beam's mark, so pressing AUTO BEAM again
+    // never wipes what the engineer specified.
+    const marked = sweptBeams.filter(b => typeof b.mark === 'string' && b.mark.trim() && b.start && b.end);
+    if (marked.length) {
+      placed.filter(entry => entry.list === drawing.beams).forEach(({ item }) => {
+        if (item.mark) return;
+        const mid = { x: (item.start.x + item.end.x) / 2, z: (item.start.z + item.end.z) / 2 };
+        const ux = item.end.x - item.start.x, uz = item.end.z - item.start.z, len = Math.hypot(ux, uz) || 1;
+        const twin = marked.find(old => {
+          const vx = old.end.x - old.start.x, vz = old.end.z - old.start.z, vlen = Math.hypot(vx, vz) || 1;
+          return Math.abs(ux * vz - uz * vx) / (len * vlen) < 0.01
+            && window.DraftGeometry2D.pointToSegment(mid, old).d < COLUMN_ON_BEAM_FT;
+        });
+        if (twin) item.mark = twin.mark.trim();
+      });
+    }
     return {
       placed,
       restored: [
@@ -27208,6 +27412,8 @@
     { id: 'shape', label: 'SHAPE', aria: 'Grab only shapes' },
     { id: 'roof', label: 'ROOF', aria: 'Grab only roofs' },
     { id: 'dimension', label: 'DIM', aria: 'Grab only dimensions' },
+    { id: 'beam', label: 'BEAM', aria: 'Grab only beams' },
+    { id: 'column', label: 'COLUMN', aria: 'Grab only columns' },
   ];
   const filterHelp = () => (selectFilter === 'all'
     ? 'Nothing lit grabs everything. Press a type so Select only grabs that object — even under other geometry.'
@@ -27870,11 +28076,12 @@
     return box;
   };
 
-  const beamPropsNode = item => {
+  const beamPropsNode = list => {
+    const items = Array.isArray(list) ? list : [list];
     const box = document.createElement('div');
-    const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
-    box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
-      item.mode = id;
+    const span = items.reduce((sum, item) => sum + Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z), 0);
+    box.append(propRow('BEAM', BEAM_MODES, agreedOn(items, item => item.mode), id => {
+      items.forEach(item => { item.mode = id; });
       markDirty();
       showSelectionProps();
       paint();
@@ -27887,6 +28094,18 @@
     // would believe the one on the panel.
     len.textContent = `SPAN ${feetLabel(span)}`;
     box.append(len);
+    // THE ENGINEER'S MARK (Movie, 19 Oct: "make that TEXT editable so and
+    // ENGINEER can change it to whatever they specify the floor or beams as
+    // (STEEL, LAMINATED BEAMS etc)"). It labels the beam on the plan and the
+    // sheets in place of FLUSH / DROPPED BEAM; blank puts that back.
+    box.append(propText('MARK', agreedOn(items, item => item.mark || '') || '', text => {
+      const edits = items.map(item => ({ item, before: { ...item } }));
+      items.forEach(item => { if (text.trim()) item.mark = text.trim(); else delete item.mark; });
+      undoStack.push({ kind: 'props', edits });
+      markDirty();
+      showSelectionProps();
+      paint();
+    }));
     return box;
   };
 
@@ -29010,8 +29229,9 @@
     // about one is its corners, which is a drag.
     column: items => (items.length === 1
       ? { title: 'COLUMN', node: columnPropsNode(items[0]) } : null),
-    beam: items => (items.length === 1
-      ? { title: 'BEAM', node: beamPropsNode(items[0]) } : null),
+    // A BEAM IS A ROW: AUTO BEAM lays one in pieces post to post, and a
+    // click takes the whole row, so the panel answers for all of it.
+    beam: items => (items.length ? { title: 'BEAM', node: beamPropsNode(items) } : null),
   };
 
   let selectionPanelUp = false;
@@ -29765,6 +29985,29 @@
     note.textContent = 'FILES ON FOUNDATION';
 
     box.append(row, note);
+    // THE CARRIED FLOOR'S JOIST CALLOUT, typed (Movie, 19 Oct: "make that
+    // TEXT editable so and ENGINEER can change it"). It replaces the callout
+    // in every bay of that floor -- on its layout here and on the sheets --
+    // and blank gives back the one worked out from the joist.
+    if (carried) {
+      const asm = drawing.levelAssemblies?.[carried.id] || {};
+      const computed = window.DraftBuildHouse?.joistCallout?.({
+        ...window.DraftLevelAssembly.levelAssemblyFor(drawing.levelAssemblies, carried.id), joistCallout: null }) || '';
+      const field = propText(`JOIST CALLOUT ${levelLabel(carried.id, carried.name)}`, asm.joistCallout || '', text => {
+        drawing.levelAssemblies = drawing.levelAssemblies || {};
+        const rec = drawing.levelAssemblies[carried.id] || (drawing.levelAssemblies[carried.id] = {});
+        const before = { ...rec };
+        if (text.trim()) rec.joistCallout = text.trim(); else delete rec.joistCallout;
+        undoStack.push({ kind: 'props', edits: [{ item: rec, before }] });
+        markDirty();
+        showBeamProps();
+        paint();
+      });
+      field.dataset.joistCallout = '';
+      const input = field.querySelector('input');
+      if (input) input.placeholder = computed;
+      box.append(field);
+    }
     P.set('BEAM & COLUMN', box);
     beamPanelUp = true;
   };
@@ -31600,6 +31843,12 @@
     }
     const step = undoStack.pop();
     if (!step) return false;
+    // A BATCH is several steps one gesture took: they go back last first.
+    if (step.kind === 'batch') {
+      undoStack.push(...step.steps);
+      step.steps.forEach(() => undoOnce());
+      return true;
+    }
     // ONE PRESS IS ONE UNDO whether the press moved one corner or a wall's
     // two, drew a wall, or deleted one: the entry is whatever that gesture
     // captured, so a wall goes back in one keystroke rather than two.
