@@ -167,33 +167,38 @@ test('a roof node dragged lands on another roof\'s corner, and never on itself',
     roofs: [ROOF('ra', [[0, 0], [10, 0], [10, 8], [0, 8]]), ROOF('rb', [[13, 0], [20, 0], [20, 8], [13, 8]])] }),
     '/MODEL.html?level=7');
   const { at } = await zoomTo(page, 32);
-  // Pick roof B and arm MOVE.
-  await page.mouse.click(...at(16.5, 4));
+  // EVERY POINT PRESSED IS ON THE SHEET, not under the right rail (a press
+  // there arms nothing and looks like a magnet that failed).
+  for (const [x, z] of [[16.5, 4], [13, 8], [13, 0], [10, 0]]) {
+    const [px, py] = at(x, z);
+    expect(await page.evaluate(([cx, cy]) => document.elementFromPoint(cx, cy)?.id, [px, py]), `(${x}, ${z}) is on the sheet`).toBe('plan');
+  }
+  const armOnB = async () => {
+    await page.mouse.click(...at(16.5, 4));
+    await page.waitForTimeout(100);
+    await expect(page.locator('#model-move')).toBeVisible();
+    await page.locator('#model-move').click();
+    await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
+  };
+  // FIRST THE NUDGE, while no corner of B stands on A's: B's bottom-left
+  // node 5" (0.42 ft) in hand shows no magnet. The node is not its own, so
+  // its old place, inside the six-inch reach, does not take it, and it is
+  // clear of its neighbours' cross lines (9.6 px off each).
+  await armOnB();
+  await dragFrom(page, at, [13, 8], [13.3, 8.3]);
+  expect(await magnet(page)).toBeNull();
+  await page.mouse.up();
   await page.waitForTimeout(100);
-  await expect(page.locator('#model-move')).toBeVisible();
-  await page.locator('#model-move').click();
-  await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
-  // Its top-left node to 2.4" off roof A's top-right corner: on it.
+  await expect(page.locator('#strip-message')).toContainText('Node moved');
+  let rb = (await saved(page)).roofs.find(r => r.id === 'rb');
+  expect([r3(rb.points[3].x), r3(rb.points[3].z)]).toEqual([13.3, 8.3]);
+  // THEN THE LANDING: its top-left node to 2.4" off roof A's top-right
+  // corner, and on it. (The save's Escape put MOVE down: arm it again.)
+  await armOnB();
   await dragFrom(page, at, [13, 0], [10.2, 0.2]);
   expect(await magnet(page)).toEqual({ kind: 'node', at: [10, 0] });
   await page.mouse.up();
   await page.waitForTimeout(100);
-  let rb = (await saved(page)).roofs.find(r => r.id === 'rb');
-  expect([r3(rb.points[0].x), r3(rb.points[0].z)]).toEqual([10, 0]);
-  // A NUDGE OF 4.8" IN HAND shows no magnet: the node is not its own, so
-  // its old place, inside the six-inch reach, does not take it. Proved while
-  // the hand still holds it -- the roof tool rounds a released node to the
-  // foot, so a nudge under a foot goes back on the release whatever the
-  // magnet did. (The save's Escape put MOVE down and let the roof go: pick
-  // it again.)
-  await page.mouse.click(...at(16.5, 4));
-  await page.waitForTimeout(100);
-  await page.locator('#model-move').click();
-  await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
-  await dragFrom(page, at, [20, 8], [20.4, 8.4]);
-  expect(await magnet(page)).toBeNull();
-  await page.mouse.up();
-  await page.waitForTimeout(100);
   rb = (await saved(page)).roofs.find(r => r.id === 'rb');
-  expect(rb.points.length).toBe(4);
+  expect([r3(rb.points[0].x), r3(rb.points[0].z)]).toEqual([10, 0]);
 });
