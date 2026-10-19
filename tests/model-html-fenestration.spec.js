@@ -617,6 +617,29 @@ test('MOVE in the foot slides a selected opening along its wall, and one UNDO pu
   expect((await survives(page)).openings[0].offset).toBeCloseTo(before.offset, 3);
 });
 
+// AND A TYPED DISTANCE MAKES THE SLIDE EXACT (Movie, 19 Oct): slid roughly,
+// then the distance typed -- straight from the keyboard -- and ENTER puts it
+// exactly that far from where it started, the way the slide went.
+test('after a MOVE slide, a typed distance puts the door exactly that far along', async ({ page }) => {
+  const f = await doorOnTheNorthWall(page);
+  await save(page);
+  const before = (await survives(page)).openings[0];
+  await pressAt(page, f, 0, -10);
+  await page.locator('#model-move').click();
+  await slide(page, f, [0, -6], [2, -6]);
+  await expect(page.locator('#frozen-length')).toBeEnabled();
+  await page.keyboard.type("4'6");
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#strip-message')).toContainText("Slid");
+  await save(page);
+  const after = (await survives(page)).openings[0];
+  expect(after.offset - before.offset, "exactly 4'-6\" along").toBeCloseTo(4.5, 6);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  await save(page);
+  expect((await survives(page)).openings[0].offset, 'one UNDO').toBeCloseTo(before.offset, 6);
+});
+
 // ── TYPED SIZES ─────────────────────────────────────────────────────────────
 //
 // The panel used to carry a line saying the width, sill and head were "not
