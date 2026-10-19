@@ -1198,6 +1198,9 @@ if (!window.DraftLayoutPlan) {
     composition.drawPlan(ctx, toS, {
       levelId,
       viewId: view,
+      // PRINT'S INK SCALE reaches the lines too, so a BOLD line on paper is
+      // bold in proportion with the rest of the sheet's ink.
+      inkScale: env.inkScale,
       // THE DRAWING'S OWN SWITCH, for the window and door size tags: a sheet
       // off a metric drawing tags W 915 X 1065, as the Model Space does.
       units: saved?.units === 'metric' ? 'metric' : 'imperial',

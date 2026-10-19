@@ -468,12 +468,24 @@ if (!window.DraftPlanComposition) {
 
   // Lines carry a bulge, so they are not all straight: the control point comes
   // from the caller because the curve's shape is the page's arithmetic.
+  //
+  // EACH LINE IN ITS OWN WEIGHT, COLOUR AND STYLE (Movie, 19 Oct: "for the
+  // LINE -- it need some PROPERTIES that can change too"), off line-styles.js
+  // -- the table the Model Space's painter and the LINE panel read -- so a
+  // line printed is the line drawn. `env.inkScale` is print's multiplier on
+  // every width, 1 on screen. A line with none of the three set is FINE,
+  // solid, in the sheet's line ink: what every line printed as before. A
+  // page that does not load the table strokes as it always did.
   const strokeLines = (ctx, toS, lines, env) => {
     if (!lines.length) return;
+    const LS = typeof window !== 'undefined' ? window.DraftLineStyles : null;
+    const inkScale = env.inkScale || 1;
     ctx.save();
-    ctx.strokeStyle = env.lineColor || '#1d1f20';
-    ctx.lineWidth = 1;
     lines.forEach(seg => {
+      const ink = LS ? LS.strokeFor(seg, { inkScale }) : { lineWidth: 1, dash: [], color: null };
+      ctx.strokeStyle = ink.color || env.lineColor || '#1d1f20';
+      ctx.lineWidth = ink.lineWidth;
+      if (ctx.setLineDash) ctx.setLineDash(ink.dash);
       const a = toS(seg.start), b = toS(seg.end);
       onLayer(ctx, seg.layer || 'draft');
       ctx.beginPath();
