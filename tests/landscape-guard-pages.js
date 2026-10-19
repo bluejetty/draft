@@ -55,6 +55,10 @@ const EXEMPT = {
   // BUILDING CODES / SPAN TABLES (12 Oct), off ENTRY's link ring: references
   // to read, a phone held upright included. Nobody drafts on it.
   'CODES.html': 'reference page off ENTRY, read on any device',
+  // INTERNET LINKS (19 Oct), the second reference page off ENTRY's ring: a
+  // list of links to other programs and sites, read on any device, in
+  // CODES.html's skin. Nobody drafts on it either.
+  'LINKS.html': 'reference page off ENTRY, read on any device',
   // Single-component preview pages: a <x-dc> block, react, support.js and
   // nothing else — around 5KB each, with no app shell, no store and no
   // drawing surface. Nobody drafts on them, so there is no landscape to

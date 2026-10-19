@@ -45,6 +45,9 @@ const EXEMPT = {
   // BUILDING CODES / SPAN TABLES (12 Oct), reached from ENTRY's link ring: a
   // reading page of references and one table, in ENTRY's own fixed look.
   'CODES.html': 'reference page off ENTRY, carries ENTRY\'s look',
+  // INTERNET LINKS (19 Oct): the second reference page off ENTRY's ring, in
+  // CODES.html's own fixed look. No palette.js, no shell bars, no dashboard.
+  'LINKS.html': 'reference page off ENTRY, carries ENTRY\'s look',
   // Single-component preview pages: an <x-dc> block, react, support.js and
   // nothing else. No app shell, no store, no drawing surface, and a
   // transparent body — there is no dashboard here to skin. (MODEL.dc.html
