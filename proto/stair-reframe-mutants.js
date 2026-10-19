@@ -57,8 +57,8 @@ const MUTANTS = [
     with: "",
     test: 'after a MOVE drag, a typed length moves it exactly that far the same way' },
   { file: 'MODEL.html', name: 'the typed move adds to the drag instead of replacing it',
-    find: "    m.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n    m.set.points.forEach(relinkVertex);\n",
-    with: "    m.set.before.forEach(b => { b.vtx.x += dx; b.vtx.z += dz; });\n    m.set.points.forEach(relinkVertex);\n",
+    find: "    m.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n    if (m.set.run) reclipRun(m.set.run);\n",
+    with: "    m.set.before.forEach(b => { b.vtx.x += dx; b.vtx.z += dz; });\n    if (m.set.run) reclipRun(m.set.run);\n",
     test: 'after a MOVE drag, a typed length moves it exactly that far the same way' },
   { file: 'MODEL.html', name: 'MOVE goes free with the T-square lit',
     find: "      if (tsquareOn && board !== 'toy' && !d.set.across) {\n",
@@ -105,8 +105,8 @@ const MUTANTS = [
     with: "      const along = d.was + Math.hypot(dx, dz);\n",
     test: 'MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back' },
   { file: 'MODEL.html', name: 'a door slid by MOVE has no UNDO',
-    find: "        undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));\n        markDirty();\n        sayOnStrip('Slid along its wall. UNDO puts it back.');\n",
-    with: "        markDirty();\n        sayOnStrip('Slid along its wall. UNDO puts it back.');\n",
+    find: "        undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));\n        // AND A TYPED DISTANCE",
+    with: "        // AND A TYPED DISTANCE",
     test: 'MOVE in the foot slides a selected opening along its wall, and one UNDO puts it back' },
 ];
 const run = name => {
