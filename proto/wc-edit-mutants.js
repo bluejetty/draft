@@ -14,7 +14,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPECS = ['tests/model-html-move-selection.spec.js', 'tests/model-html-trim.spec.js',
   'tests/model-html-wall-loose.spec.js', 'tests/model-html-wall-off.spec.js', 'tests/dimension-hand.spec.js',
-  'tests/model-tool-assembly.spec.js', 'tests/model-html-roof-move.spec.js'];
+  'tests/model-tool-assembly.spec.js', 'tests/model-html-roof-move.spec.js', 'tests/model-html-suite.spec.js'];
 const MUTANTS = [
   { file: 'MODEL.html', name: "MOVE still needs a roof", spec: 'tests/model-html-move-selection.spec.js',
     find: "    const able = !activeCut() && !modalUp() && selection.length > 0;\n    if (!able || (moveState.on && roof !== moveState.roof",
@@ -76,6 +76,14 @@ const MUTANTS = [
     find: "        if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;",
     with: "        if (stop != null && Math.abs(dist) > Math.abs(stop)) dist = stop;",
     test: "an edge pulled past the corner stops on it: no roof the other side, no sliver" },
+  { file: 'MODEL.html', name: "a double-click on a hologram opens nothing", spec: 'tests/model-html-suite.spec.js',
+    find: "    if (hitAt(world) || !hologramUnder(world)) return;",
+    with: "    return;",
+    test: "a double-click on a hologram opens the HOLOGRAM card; off it, nothing" },
+  { file: 'MODEL.html', name: "a double-click anywhere opens the HOLOGRAM card", spec: 'tests/model-html-suite.spec.js',
+    find: "    if (hitAt(world) || !hologramUnder(world)) return;",
+    with: "    if (hitAt(world)) return;",
+    test: "a double-click on a hologram opens the HOLOGRAM card; off it, nothing" },
 ];
 
 const run = (name, spec) => {

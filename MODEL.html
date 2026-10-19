@@ -24891,6 +24891,31 @@
     });
     hologramAsk.querySelector('[data-hologram-close]').addEventListener('click', closeHologramCards);
   }
+  // A DOUBLE-CLICK ON A HOLOGRAM OPENS ITS CARD (Movie, 18 Oct: "when a user
+  // double clicks on a HOLOGRAM can you bring up this menu for him make it
+  // easier"). Only where nothing of this drawing's own is under the pointer,
+  // so a double-click on a wall drawn over the hologram is still the wall's.
+  // "On" the hologram is within its placed walls' box on this level.
+  const hologramUnder = world => holograms().find(holo => {
+    if (holo.hidden || !H()) return false;
+    const walls = H().placed(holo, (H().parts(holo).existing.walls || [])
+      .filter(w => w?.levelId === activeLevelId()));
+    const pts = walls.flatMap(w => [w.start, w.end]).filter(p => Number.isFinite(p?.x));
+    if (!pts.length) return false;
+    const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+    return world.x >= Math.min(...xs) - 0.5 && world.x <= Math.max(...xs) + 0.5
+      && world.z >= Math.min(...zs) - 0.5 && world.z <= Math.max(...zs) + 0.5;
+  }) || null;
+  canvas.addEventListener('dblclick', e => {
+    if (!drawing || !hologramAsk || activeTool !== RESTING_TOOL || activeCut()) return;
+    const r = canvas.getBoundingClientRect();
+    const world = toWorld(e.clientX - r.left, e.clientY - r.top);
+    if (hitAt(world) || !hologramUnder(world)) return;
+    e.preventDefault();
+    traceAsk.hidden = true;
+    hologramAsk.hidden = false;
+    renderHologramList();
+  });
   let hologramRefreshing = null;   // the hologram REFRESH is replacing
   const hologramNoun = holo => holo.name || 'The hologram';
   const hologramPivot = source => {

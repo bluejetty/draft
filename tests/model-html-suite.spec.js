@@ -252,3 +252,19 @@ test('a two-storey suite moves as one: its upper floor takes the next floor of t
   expect(d.holograms[0].levelMap).toEqual({ 3: 5, 5: 9 });
   expect((await hostOpenings(page, d)).map(([wall, at]) => [wall, at]).sort()).toEqual([['a2', 8], ['a3', 2]]);
 });
+
+// A DOUBLE-CLICK ON IT OPENS ITS CARD (Movie, 18 Oct: "when a user double
+// clicks on a HOLOGRAM can you bring up this menu for him make it easier").
+test('a double-click on a hologram opens the HOLOGRAM card; off it, nothing', async ({ page }) => {
+  await open(page, shell());
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  await page.mouse.dblclick(...at(40, 20));
+  await page.waitForTimeout(150);
+  await expect(page.locator('#hologram-ask')).toBeHidden();
+  await page.mouse.dblclick(...at(10, 7));
+  await page.waitForTimeout(150);
+  await expect(page.locator('#hologram-ask')).toBeVisible();
+  await expect(page.locator('#hologram-ask [data-hologram-row="h1"]')).toBeVisible();
+});
