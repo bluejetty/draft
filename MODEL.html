@@ -12761,6 +12761,10 @@
     const choices = contextWallTypes(viewId);
     const active = wallSetting('activeWallType', null);
     if (choices.some(t => t.id === active)) return active;
+    // ICF AND CONCRETE PICKED ON THE WALL PANEL ARE DRAWN ON A FLOOR TOO:
+    // they stand above grade as well. A stud wall is still never the
+    // foundation's -- there the foundation set is the only answer.
+    if (viewId !== 'foundation' && WALL_PANEL_TYPES.some(([id]) => id === active)) return active;
     const want = viewId === 'foundation' ? 'concrete_8' : 'stud_2x6';
     return (choices.find(t => t.id === want) || choices[0]).id;
   };
@@ -17914,11 +17918,24 @@
   // which every drawn wall reads (wallShape) and the save keeps. The ghost
   // body in hand follows it at once, through the same wallShape.
   const WALL_SIDES = [['right', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['left', 'RIGHT SIDE']];
+  // THE WALL TYPE, PICKED BEFORE DRAWING (Movie, 18 Oct: "under the WALL title
+  // can we put the TYPE of WALL - 2x4, 2X6, 2X8, 11.25" (6"CORE) ICF 13.25
+  // (8"CORE) ICF, 8" CONC" -- "so i can select a wall type / thickness before
+  // drawing"). Sticky, and the drawing's, like the side: every wall drawn
+  // after takes it.
+  var WALL_PANEL_TYPES = [['stud_2x4', '2X4'], ['stud_2x6', '2X6'], ['stud_2x8', '2X8'],
+    ['icf', '11 1/4" ICF (6" CORE)'], ['icf_13', '13 1/4" ICF (8" CORE)'], ['concrete_8', '8" CONC']];
   const wallSideNow = () => wallShape({}).refLine;
   const showWallProps = () => {
     const P = window.ModelProps;
     if (!P) return;
     const box = document.createElement('div');
+    box.append(propRow('WALL TYPE', WALL_PANEL_TYPES, wallShape({}).wallType, id => {
+      drawing.activeWallType = id;
+      markDirty();
+      showWallProps();
+      paint();
+    }));
     box.append(propRow('WALL SIDE', WALL_SIDES, wallSideNow(), id => {
       drawing.wallRefLine = id;
       markDirty();
@@ -30747,6 +30764,19 @@
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
           // SHIFT HELD: the wall goes on its own, its corners let go.
           if (board !== 'toy') setWallLoose(md, e.shiftKey);
+          // THE T-SQUARE HOLDS A MOVED WALL SQUARE (Movie, 18 Oct: "i like how
+          // the walls move, but when the T is on they should stay moving 90
+          // degrees it is free moving right now but the T is on"). The wall
+          // slides across its own run only, so the walls meeting its ends
+          // stretch along their own lines and stay at 90.
+          if (tsquareOn && board !== 'toy' && md.body?.start && md.body?.end) {
+            const ux = md.body.end.x - md.body.start.x, uz = md.body.end.z - md.body.start.z;
+            const len = Math.hypot(ux, uz);
+            if (len > 1e-6) {
+              const nx = -uz / len, nz = ux / len, across = dx * nx + dz * nz;
+              dx = nx * across; dz = nz * across;
+            }
+          }
           // §3: ON THE TOY BOARD THE MOVE IS toy-constraints.js's TO DECIDE.
           // Not a second constraint path -- the page proposes a distance and
           // allowedMove rounds it, welds the group, refuses what it must and

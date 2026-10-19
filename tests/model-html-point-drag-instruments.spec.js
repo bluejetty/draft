@@ -239,3 +239,27 @@ test('a dragged point is never its own snap target', async ({ page }) => {
   const pt = corner(await saveAndRead(page));
   expect(pt.x, 'the point went where it was pulled').toBeCloseTo(13, 2);
 });
+
+// A WALL DRAGGED WITH THE T-SQUARE LIT GOES ACROSS ITSELF ONLY (Movie, 18 Oct:
+// "i like how the walls move, but when the T is on they should stay moving 90
+// degrees it is free moving right now but the T is on").
+test('T-square lit: a dragged wall slides square across its own run; the walls it meets stay at 90', async ({ page }) => {
+  await open(page);
+  await tsquare(page).click();
+  expect(await lit(tsquare(page))).toBe(true);
+  const { at } = await h.planFrame(page);
+  await page.mouse.click(...at(10, 0));
+  await page.waitForTimeout(80);
+  await page.mouse.move(...at(10, 0));
+  await page.mouse.down();
+  // Out three feet and up four: only the three across the wall counts.
+  await dragTo(page, at, [13, 4]);
+  const saved = await saveAndRead(page);
+  const e = saved.walls.find(w => w.id === 'e');
+  expect(e.start.x).toBeCloseTo(13, 1);
+  expect(e.end.x).toBeCloseTo(13, 1);
+  expect(e.start.z).toBeCloseTo(-10, 6);
+  expect(e.end.z).toBeCloseTo(10, 6);
+  const n = saved.walls.find(w => w.id === 'n');
+  expect(n.end.z, 'the north wall is still square').toBeCloseTo(n.start.z, 6);
+});
