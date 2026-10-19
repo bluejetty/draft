@@ -584,6 +584,10 @@ test.describe('MODEL.html tier 1', () => {
       // cut-view-env.js reads a saved drawing as the cut painter's world --
       // the hologram's copy, for the existing house in an elevation.
       './cut-view-env.js', './hologram.js',
+      // THE CALC TAB'S ARITHMETIC (Movie, 18 Oct: "a construction calculator
+      // tab under the notebook tab"): it defines DraftCalc and stops; nothing
+      // runs until a line is typed on the pad.
+      './calc-engine.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT
