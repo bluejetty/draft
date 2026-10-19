@@ -1016,6 +1016,34 @@
   .np-grip[data-notes-grip="bottom"] { bottom:-5px; }
   .np-grip[data-notes-grip="top"]::after, .np-grip[data-notes-grip="bottom"]::after {
     top:3px; left:calc(50% - 18px); width:36px; height:4px; }
+  /* NOTES | CALC, on the gum strip. */
+  .np-tabs { display:flex; gap:2px; }
+  .np-tab { font-family: var(--font-ui); font-size:10px; font-weight:700; letter-spacing:0.12em;
+    padding:1px 6px; cursor:pointer; background:transparent; color: var(--pad-ink);
+    border:1px solid transparent; border-radius:2px; opacity:0.6; }
+  .np-tab[aria-selected="true"] { opacity:1; border-color: var(--pad-ink); background: var(--pad); }
+  .calc { flex:1; min-height:0; display:flex; flex-direction:column; gap:4px; padding:6px;
+    color: var(--pad-ink); font-family: var(--font-ui); }
+  .calc[hidden] { display:none; }
+  .calc-tape { flex:1; min-height:40px; overflow-y:auto; font-size:11px; line-height:16px;
+    background: repeating-linear-gradient(to bottom, transparent 0 15px, var(--pad-rule) 15px 16px) local; }
+  .calc-row { display:flex; gap:6px; cursor:pointer; padding:0 2px; }
+  .calc-row:hover { background: rgba(255,255,255,0.45); }
+  .calc-row .ex { flex:1; opacity:0.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .calc-row .an { font-weight:700; white-space:nowrap; }
+  .calc-line { width:100%; box-sizing:border-box; font-family: var(--font-ui); font-size:13px;
+    padding:4px 6px; border:1px solid var(--pad-ink); border-radius:2px; background:#fff; color:#111; }
+  .calc-answer { min-height:34px; font-size:16px; font-weight:700; text-align:right; }
+  .calc-answer small { display:block; font-size:10px; font-weight:600; opacity:0.7; }
+  .calc-answer[data-bad] { font-size:11px; color:#8a1c1c; }
+  .calc-keys { display:grid; grid-template-columns:repeat(5, 1fr); gap:3px; }
+  .calc-keys button { font-family: var(--font-ui); font-size:12px; font-weight:700; padding:6px 0;
+    cursor:pointer; background:#fff; color: var(--pad-ink); border:1px solid var(--pad-gum); border-radius:3px; }
+  .calc-keys button:hover { border-color: var(--pad-ink); }
+  .calc-keys .op { background: var(--pad-gum); }
+  .calc-keys .unit { font-size:10px; letter-spacing:0.06em; }
+  .calc-keys .wide { font-size:9px; letter-spacing:0.06em; }
+  .calc-keys .eq { background: var(--pad-ink); color: var(--pad); }
   .lv-head { display:flex; align-items:center; gap:6px; }
   .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
@@ -1627,7 +1655,14 @@
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
   <div id="notes-panel" data-notes-panel data-pane="notes" hidden>
-    <div class="np-head"><span class="np-title">NOTES</span>
+    <div class="np-head">
+      <!-- NOTES | CALC (Movie, 18 Oct: "can we add a construction calculator
+           tab under the notebook tab ... metric and ft and do area"). -->
+      <span class="np-tabs" role="tablist">
+        <button type="button" class="np-tab" data-pad-tab="notes" role="tab" aria-selected="true">NOTES</button>
+        <button type="button" class="np-tab" data-pad-tab="calc" role="tab" aria-selected="false">CALC</button>
+      </span>
+      <span class="np-title"></span>
       <span class="np-count" data-notes-count></span>
       <button class="np-clear" type="button" data-notes-save-txt
         title="Save the notes as a .txt file, beside your .draft files">SAVE AS TXT</button>
@@ -1635,6 +1670,36 @@
         title="Clear every note on the pad">CLEAR</button></div>
     <textarea class="np-text" data-notes-text spellcheck="false"
       aria-label="Notes" placeholder="Type or paste notes, numbers, anything..."></textarea>
+    <!-- THE CALCULATOR: a tape of every line worked, the line being typed,
+         the answer in ft-in and metric, and a keypad. calc-engine.js does
+         the arithmetic. -->
+    <div class="calc" data-calc hidden>
+      <div class="calc-tape" data-calc-tape aria-live="polite"></div>
+      <input class="calc-line" data-calc-line type="text" spellcheck="false" autocomplete="off"
+        aria-label="Calculator line" placeholder="367-10 1/4 - 10-1 1/4   or   12'6&quot; x 10'">
+      <div class="calc-answer" data-calc-answer></div>
+      <div class="calc-keys" data-calc-keys>
+        <button type="button" data-calc-key="7">7</button><button type="button" data-calc-key="8">8</button>
+        <button type="button" data-calc-key="9">9</button><button type="button" data-calc-key="/" class="op">&divide;</button>
+        <button type="button" data-calc-key="'" class="unit">FT</button>
+        <button type="button" data-calc-key="4">4</button><button type="button" data-calc-key="5">5</button>
+        <button type="button" data-calc-key="6">6</button><button type="button" data-calc-key=" x " class="op">&times;</button>
+        <button type="button" data-calc-key='"' class="unit">IN</button>
+        <button type="button" data-calc-key="1">1</button><button type="button" data-calc-key="2">2</button>
+        <button type="button" data-calc-key="3">3</button><button type="button" data-calc-key=" - " class="op">&minus;</button>
+        <button type="button" data-calc-key="/" class="unit" title="Fraction: 3/8">a/b</button>
+        <button type="button" data-calc-key="0">0</button><button type="button" data-calc-key=".">.</button>
+        <button type="button" data-calc-key=" " title="Space: 10 1/4">&#9251;</button><button type="button" data-calc-key=" + " class="op">+</button>
+        <button type="button" data-calc-key="m" class="unit">M</button>
+        <button type="button" data-calc-key="(">(</button><button type="button" data-calc-key=")">)</button>
+        <button type="button" data-calc-do="back" title="Take off the last">&#9003;</button>
+        <button type="button" data-calc-do="clear" title="Clear the line">C</button>
+        <button type="button" data-calc-key="mm" class="unit">MM</button>
+        <button type="button" data-calc-do="units" class="wide" title="Answers first in ft-in, or in metric">FT-IN</button>
+        <button type="button" data-calc-do="notes" class="wide" title="Put this line and its answer on the NOTES pad">&rarr; NOTES</button>
+        <button type="button" data-calc-do="equals" class="eq">=</button>
+      </div>
+    </div>
     <!-- THREE GRAB SPOTS (Movie, 18 Oct): "add 3 'grab spots on the edges
          where they can grab the edge and pull it bigger on the left and top
          and bottom and allow them to fill basically half the page". -->
@@ -2373,6 +2438,7 @@
 <script src="./layout-plan.js"></script>
 <script src="./cut-view-env.js"></script>
 <script src="./hologram.js"></script>
+<script src="./calc-engine.js"></script>
 
 <script>
 (() => {
@@ -7326,6 +7392,113 @@
     storeNotes('');
     if (drawing && drawing.notepad !== undefined) { notesOntoDrawing(''); markDirty(); }
   });
+
+  // ── THE CALCULATOR, THE PAD'S OTHER TAB (Movie, 18 Oct: "a construction
+  // calculator tab under the notebook tab ... metric and ft and do area" --
+  // "need areas for sure"). ──────────────────────────────────────────────
+  //
+  // Typed or keyed, a line is worked as it is written and its answer shown
+  // under it; = (or ENTER) puts the line on the tape. A tape line clicked
+  // brings its answer back to work on. -> NOTES writes the line and its
+  // answer onto the pad. The tape and FT-IN / METRIC are kept per browser.
+  const padTabs = [...document.querySelectorAll('[data-pad-tab]')];
+  const calcBox = document.querySelector('[data-calc]');
+  const calcLine = document.querySelector('[data-calc-line]');
+  const calcAnswer = document.querySelector('[data-calc-answer]');
+  const calcTape = document.querySelector('[data-calc-tape]');
+  const CALC_KEY = 'draft.calc';
+  const calcState = (() => {
+    try { const v = JSON.parse(localStorage.getItem(CALC_KEY) || '{}');
+      return { tape: Array.isArray(v.tape) ? v.tape.slice(-60) : [], metric: v.metric === true }; }
+    catch { return { tape: [], metric: false }; }
+  })();
+  const keepCalc = () => { try { localStorage.setItem(CALC_KEY, JSON.stringify(calcState)); } catch { /* this tab only */ } };
+  const showPad = which => {
+    padTabs.forEach(b => b.setAttribute('aria-selected', String(b.dataset.padTab === which)));
+    notesText.hidden = which !== 'notes';
+    calcBox.hidden = which !== 'calc';
+    notesCount.hidden = which !== 'notes';
+    document.querySelectorAll('[data-notes-save-txt], [data-notes-clear]').forEach(b => { b.hidden = which !== 'notes'; });
+    if (which === 'calc') calcLine.focus();
+  };
+  padTabs.forEach(b => b.addEventListener('click', () => showPad(b.dataset.padTab)));
+  const calcWork = () => window.DraftCalc.work(calcLine.value, { metric: calcState.metric });
+  const showAnswer = () => {
+    calcAnswer.textContent = '';
+    calcAnswer.removeAttribute('data-bad');
+    if (!calcLine.value.trim()) return null;
+    const r = calcWork();
+    if (!r.ok) { calcAnswer.textContent = r.why; calcAnswer.setAttribute('data-bad', ''); return r; }
+    calcAnswer.append(r.main);
+    if (r.alt.length) { const sm = document.createElement('small'); sm.textContent = r.alt.join('   '); calcAnswer.append(sm); }
+    return r;
+  };
+  const drawTape = () => {
+    calcTape.textContent = '';
+    calcState.tape.forEach(row => {
+      const div = document.createElement('div');
+      div.className = 'calc-row';
+      div.dataset.calcRow = '';
+      const ex = document.createElement('span'); ex.className = 'ex'; ex.textContent = row.line;
+      const an = document.createElement('span'); an.className = 'an'; an.textContent = row.main;
+      div.append(ex, an);
+      div.title = 'Work on from this answer';
+      div.addEventListener('click', () => { calcLine.value = row.reuse || row.main; showAnswer(); calcLine.focus(); });
+      calcTape.append(div);
+    });
+    calcTape.scrollTop = calcTape.scrollHeight;
+  };
+  // An answer as a line the calculator reads back: feet-inches as written,
+  // an area in sq ft (or sq m), a plain number as it is.
+  const reusable = r => (r.dim === 2 ? (calcState.metric ? `${(r.v / (window.DraftCalc.FT_PER_M ** 2)).toFixed(4)} sqm`
+    : `${r.v.toFixed(4)} sqft`) : r.dim === 1 ? window.DraftCalc.feetInches(r.v, 16).replace('-', ' ') : String(+r.v.toFixed(6)));
+  const calcEquals = () => {
+    const r = showAnswer();
+    if (!r || !r.ok) return;
+    calcState.tape.push({ line: calcLine.value.trim(), main: r.main, reuse: reusable(r) });
+    calcState.tape = calcState.tape.slice(-60);
+    keepCalc();
+    drawTape();
+    calcLine.value = reusable(r);
+    calcLine.select();
+  };
+  const unitsButton = document.querySelector('[data-calc-do="units"]');
+  const syncUnits = () => { unitsButton.textContent = calcState.metric ? 'METRIC' : 'FT-IN'; };
+  document.querySelectorAll('[data-calc-key]').forEach(b => b.addEventListener('click', () => {
+    const at = calcLine.selectionStart ?? calcLine.value.length, to = calcLine.selectionEnd ?? at;
+    calcLine.value = calcLine.value.slice(0, at) + b.dataset.calcKey + calcLine.value.slice(to);
+    const caret = at + b.dataset.calcKey.length;
+    calcLine.focus();
+    calcLine.setSelectionRange(caret, caret);
+    showAnswer();
+  }));
+  document.querySelectorAll('[data-calc-do]').forEach(b => b.addEventListener('click', () => {
+    const what = b.dataset.calcDo;
+    if (what === 'equals') calcEquals();
+    else if (what === 'clear') { calcLine.value = ''; showAnswer(); }
+    else if (what === 'back') { calcLine.value = calcLine.value.replace(/\s*\S\s*$/, ''); showAnswer(); }
+    else if (what === 'units') { calcState.metric = !calcState.metric; keepCalc(); syncUnits(); showAnswer(); }
+    else if (what === 'notes') {
+      const r = showAnswer();
+      if (!r || !r.ok) return;
+      const line = `${calcLine.value.trim()} = ${r.main}`;
+      const text = notesText.value ? `${notesText.value.replace(/\s*$/, '')}\n${line}` : line;
+      showNotes(text);
+      storeNotes(notesText.value);
+      if (drawing) { notesOntoDrawing(notesText.value); markDirty(); }
+      sayOnStrip(`On the NOTES pad: ${line}`);
+    }
+    if (what !== 'notes') calcLine.focus();
+  }));
+  calcLine.addEventListener('input', showAnswer);
+  // THE PAGE'S KEYS STAY OFF THIS LINE: a D typed here is a D, not DIMENSION.
+  calcLine.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); calcEquals(); }
+    if (e.key === 'Escape') { calcLine.blur(); }
+  });
+  syncUnits();
+  drawTape();
 
   // ── AND THE SAME TWO FACTS ON THE LEFT ──────────────────────────────────
   //
