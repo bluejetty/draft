@@ -663,7 +663,9 @@ if (!window.DraftDxfReader) {
         const off = (m.x - (start.x + end.x) / 2) * (-dz / len) + (m.z - (start.z + end.z) / 2) * (dx / len);
         bulge = Math.abs(off) > 1e-9 ? 2 * off : 0;
       }
-      return { start, end, bulge, layer: pc.layer };
+      // AND THE FILE'S COLOUR, resolved by entity or layer (Movie, 19 Oct: a
+      // line's colour is its own now, so an import keeps what it was given).
+      return { start, end, bulge, layer: pc.layer, ...(pc.color ? { color: pc.color } : {}) };
     }).filter(Boolean);
   }
 
