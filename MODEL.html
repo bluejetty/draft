@@ -1213,6 +1213,9 @@
   /* A button the pull puts out of reach is HIDDEN, not greyed -- see the
      card's own note. The row is flex, so this has to beat its display. */
   #footprint-ask button[hidden] { display:none !important; }
+  /* THE BEAM QUESTION HOLDS NOTHING: no backdrop, over the top of the sheet. */
+  #beam-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #beam-ask[hidden] { display:none; }
   /* THE TRACE CARD: what the file is, the scale it was drawn at, and the
      two-point CALIBRATE on its own preview. */
   .trace-card [hidden] { display:none !important; }
@@ -2238,6 +2241,18 @@
      THE ONE THAT DOES NOT FIT IS HIDDEN rather than greyed: past 4'-6" a
      cantilever is not a near miss, it is a different building, and an 8 ft
      pull clamped back to 2 ft is not what the hand did. -->
+<!-- PLACE BEAMS AND COLUMNS? (Movie, 19 Oct) -- asked after AUTO HOUSE when a
+     floor's span wants mid-span beams. Not modal: no backdrop, and not in
+     MODAL_IDS, so the drafter can look at the house before answering. -->
+<div id="beam-ask" data-beam-ask hidden role="dialog" aria-label="Place beams and columns">
+  <div class="promote-card">
+    <p><b>PLACE BEAMS AND COLUMNS?</b><br><span data-beam-ask-why></span></p>
+    <div class="promote-row">
+      <button type="button" data-beam-ask-yes>PLACE BEAMS AND COLUMNS</button>
+      <button type="button" data-beam-ask-no>NOT NOW</button>
+    </div>
+  </div>
+</div>
 <div id="footprint-ask" data-footprint-ask hidden role="dialog" aria-label="The wall left its footprint">
   <div class="promote-card">
     <p><b>THIS WALL LEFT ITS FOOTPRINT</b><br>It stands <span data-footprint-out>2'-0"</span> <span data-footprint-side>past</span> the floor below. What did you mean?</p>
@@ -21400,7 +21415,13 @@
     return out.length ? out : null;
   };
 
+  // `midSpan` answers which of the records placed are the house's own mid-span
+  // rows and their posts -- not a garage's framing, not a stair's header --
+  // with the bare span that wanted them, for AUTO HOUSE's question (Movie,
+  // 19 Oct, askForBeams).
   const placeAutoBeam = ({ levelId = FOUNDATION_LEVEL_ID } = {}) => {
+    const midSpan = [];
+    let midSpanFt = 0;
     if (!drawing) return -1;
     // A LEVEL THE DRAWING ACTUALLY HAS, which is what levelPresent exists for:
     // a beam filed against a level this drawing has not got would paint once
@@ -21755,6 +21776,10 @@
         supportsBelow: supportsUnder(levelId),
         ...(carriedAsm?.joistType === 'owj' ? { beamAtFt: window.DraftBuildHouse.garageBareSpanFt() } : {}),
       });
+      if (plan.beams.length) {
+        const bare = window.DraftBuildHouse.joistBays(points, {});
+        midSpanFt = Math.max(midSpanFt, bare?.spanFt || 0);
+      }
       // THE LINK IS THIS BODY'S OWN. `srcIndex` indexes the points THIS call
       // was handed, so the closure has to be rebuilt per body -- one hoisted
       // out of the loop would read the last body's corners for every beam.
@@ -21779,6 +21804,7 @@
         };
         drawing.beams.push(record);
         placed.push({ list: drawing.beams, item: record });
+        midSpan.push({ list: drawing.beams, item: record });
       });
       plan.columns.forEach(column => {
         const record = {
@@ -21791,6 +21817,7 @@
         };
         drawing.columns.push(record);
         placed.push({ list: drawing.columns, item: record });
+        midSpan.push({ list: drawing.columns, item: record });
       });
       beamCount += plan.beams.length;
       columnCount += plan.columns.length;
@@ -21843,6 +21870,8 @@
       columns: columnCount,
       unsupported: unsupportedCount,
       levelId,
+      midSpan,
+      midSpanFt,
     };
   };
 
@@ -24157,11 +24186,23 @@
     // complete job". No branch here says so; the lookup does.
     const sweptStructure = [];
     const framedTally = { beams: 0, columns: 0, unsupported: 0 };
+    // THE HOUSE'S MID-SPAN ROWS ARE ASKED ABOUT (Movie, 19 Oct: "on the
+    // AUTOHOUSE, before the beams are placed, maybe we should make a popup
+    // that says PLACE BEAMS and COLUMS (if they are needed due to span) --
+    // place all the stair opening beams and columns AUTOMATICALLY"). They
+    // still go down HERE, first, because the stairs below are placed against
+    // them -- a well hugs a carrying beam, and the dead strip beside it is
+    // framed only where no beam already is -- so laying them afterwards
+    // would move his stairs. What the drafter decides is whether they stay:
+    // askForBeams, once the build is done.
+    const beamAsk = { items: [], spanFt: 0 };
     [FOUNDATION_LEVEL_ID, ...window.DraftLayerViews
       .floorLevels(drawing?.levels || []).map(level => Number(level.id))]
       .forEach(id => {
         const beamed = placeAutoBeam({ levelId: id });
         if (beamed === -1) return;
+        beamAsk.items.push(...beamed.midSpan);
+        beamAsk.spanFt = Math.max(beamAsk.spanFt, beamed.midSpanFt);
         extra.push(...beamed.placed);
         sweptStructure.push(...beamed.restored);
         framedTally.beams += beamed.beams;
@@ -24389,8 +24430,62 @@
     markDirty();
     buildChrome();
     paint();
+    if (beamAsk.items.length) askForBeams(beamAsk);
     return raised;
   };
+
+  // ── PLACE BEAMS AND COLUMNS? ────────────────────────────────────────────
+  //
+  // Movie, 19 Oct, of AUTO HOUSE: "before the beams are placed, maybe we
+  // should make a popup that says PLACE BEAMS and COLUMS (if they are needed
+  // due to span)". Asked once, after the build, and only when a floor's span
+  // wants mid-span beams -- the stair opening headers and their posts were
+  // never in question and are already down.
+  //
+  // IT DOES NOT HOLD THE PAGE. It sits over the top of the sheet without a
+  // backdrop, so the drafter can look at the house before answering. YES is
+  // AUTO BEAM on every level, bottom-up, as one UNDO of its own; NOT NOW
+  // leaves the floors bare -- AUTO BEAM in the BEAM panel places them later,
+  // and a bay past what its joist reaches says so meanwhile.
+  //
+  // NOT TO BE CONFUSED with the AUTO BEAM popup Movie had taken out on 15
+  // Oct ("don't ask the user about placing beams and columns ... just make
+  // the decision based on spans"): that one asked WHICH answer; this asks
+  // whether at all, on AUTO HOUSE only. The AUTO BEAM button stays silent.
+  const beamAskBox = document.getElementById('beam-ask');
+  let beamAskItems = [];
+  const askForBeams = ({ items, spanFt }) => {
+    if (!beamAskBox) return;
+    beamAskItems = items;
+    const why = beamAskBox.querySelector('[data-beam-ask-why]');
+    if (why) why.textContent = `The floor spans ${feetLabel(spanFt)} -- past what its joists reach without a beam.`;
+    beamAskBox.hidden = false;
+  };
+  beamAskBox?.querySelector('[data-beam-ask-yes]')?.addEventListener('click', () => {
+    beamAskBox.hidden = true;
+    sayOnStrip('Beams and columns placed. MOVE or DELETE a row to change them.');
+    beamAskItems = [];
+  });
+  // NOT NOW takes the mid-span rows and their posts out again, as one UNDO;
+  // the stair headers, the stairwell framing and the garage's beams stay.
+  beamAskBox?.querySelector('[data-beam-ask-no]')?.addEventListener('click', () => {
+    beamAskBox.hidden = true;
+    const removed = [];
+    beamAskItems.forEach(({ list, item }) => {
+      const index = list.indexOf(item);
+      if (index < 0) return;
+      list.splice(index, 1);
+      removed.push({ list, index, item });
+    });
+    beamAskItems = [];
+    if (removed.length) {
+      undoStack.push({ kind: 'remove-items', removed });
+      markDirty();
+    }
+    setSelection(selection.filter(entry => !removed.some(r => r.item === entry.item)));
+    sayOnStrip('No mid-span beams. AUTO BEAM in the BEAM panel places them when you want them; UNDO puts them back.');
+    paint();
+  });
 
   // A HOUSE ORDER AT THE WINDOW IS BUILT, OR IT IS REFUSED OUT LOUD.
   //
@@ -32437,6 +32532,8 @@
     }
     const step = undoStack.pop();
     if (!step) return false;
+    // The beam question is about the house as it stands; an UNDO puts it away.
+    if (beamAskBox && !beamAskBox.hidden) beamAskBox.hidden = true;
     // A BATCH is several steps one gesture took: they go back last first.
     if (step.kind === 'batch') {
       undoStack.push(...step.steps);
