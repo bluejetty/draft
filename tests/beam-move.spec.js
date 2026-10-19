@@ -93,6 +93,27 @@ test('a click on one piece picks the row; MOVE slides it across itself only, its
   expect(d.columns.map(pt)).toEqual([[-8, 8], [-14, 8], [-10, 12]]);
 });
 
+// A TYPED DISTANCE FINISHES A BEAM ROW'S MOVE TOO, re-clipped and its floor
+// asked again for the exact place (Movie, 19 Oct: "can you do this one in
+// that PR too").
+test('after a MOVE drag, a typed distance puts the row exactly that far across', async ({ page }) => {
+  await open(page);
+  const { at } = await toFoundation(page);
+  await click(page, at, -4, 8);
+  await page.locator('#model-move').click();
+  await drag(page, at, [-4, 8], [-4, 6]);
+  await expect(page.locator('#frozen-length')).toBeEnabled();
+  await page.keyboard.type('8');
+  await page.keyboard.press('Enter');
+  let d = await saved(page);
+  expect(d.beams.map(seg), 'eight up, and the far end finds the wall again').toEqual([[-20, 0, -8, 0], [-8, 0, 20, 0]]);
+  expect(d.columns.map(pt)).toEqual([[-8, 0], [-14, 0], [-10, 12]]);
+  await page.keyboard.press('Escape');
+  await page.locator('#model-undo').click();
+  d = await saved(page);
+  expect(d.beams.map(seg), 'one UNDO').toEqual([[-20, 8, -8, 8], [-8, 8, 0, 8]]);
+});
+
 test('DELETE on a beam takes its whole row and its posts; a post off the row stays; one UNDO brings it back', async ({ page }) => {
   await open(page);
   const { at } = await toFoundation(page);

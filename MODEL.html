@@ -14442,6 +14442,16 @@
       undoStack.push({ kind: 'props', edits: stepEdits });
       sayOnStrip(`${stepped.flatMap(r => r.said).join('. ')}. UNDO puts it back.`);
     }
+    // AND THE STAIRS BESIDE A CARRYING BEAM THAT WENT -- see reframeStairsOn.
+    // Not for a stair's own side beam: deleting that is the drafter's call.
+    const carriers = [...new Set(doomed.filter(e => e.type === 'beam' && !e.item.stairId)
+      .map(e => Number(e.item.levelId)))];
+    const spare = (drawing.stairs || []).filter(stair =>
+      doomed.some(e => e.type === 'beam' && Number(e.item.stairId) === Number(stair.id)));
+    const reframed = carriers.length ? reframeStairsOn(carriers, spare) : [];
+    reframed.forEach(r => undoStack.push(...r.steps));
+    const framedSaid = stairFramingSaid(reframed);
+    if (framedSaid) sayOnStrip(`${framedSaid.trim()} UNDO puts it back.`);
     // ONE DELETE, ONE UNDO: a row of beam is several pieces, and a click
     // takes them all, so the press that took them puts them back together.
     if (undoStack.length - mark > 1) undoStack.push({ kind: 'batch', steps: undoStack.splice(mark) });
@@ -15358,6 +15368,24 @@
       before: points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
         ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })) };
   };
+  // WHAT A MOVE'S RELEASE WORKS OUT AGAIN for where the pieces now are: a
+  // moved beam row re-asks its floor's span (stepUpJoists -- the deeper floor
+  // and the move are one gesture and go back with one UNDO), and a moved
+  // stair is framed again where it landed (reframeStair). The undo steps for
+  // both, after the move's own, and the strip's word on them. Shared by the
+  // drag's release and by a typed length that finishes it.
+  const settleSelectionMove = set => {
+    const stepped = set.run ? stepUpJoists(set.run[0].levelId) : { edits: [], said: [] };
+    const carrying = set.run && !set.run.some(beam => beam.stairId);
+    const reframed = [...(set.stairs || []).map(reframeStair),
+      ...(carrying ? reframeStairsOn([Number(set.run[0].levelId)], set.stairs || []) : [])];
+    const framedSaid = stairFramingSaid(reframed);
+    return {
+      steps: [...(stepped.edits.length ? [{ kind: 'props', edits: stepped.edits }] : []),
+        ...reframed.flatMap(r => r.steps)],
+      said: `${stepped.said.length ? ` ${stepped.said.join('. ')}.` : ''}${framedSaid}`,
+    };
+  };
   canvas.addEventListener('pointerdown', event => {
     if (!moveState.on || event.button !== 0) return;
     const roof = moveState.roof;
@@ -15523,8 +15551,12 @@
       // same step; nothing pushed when the clamp held it where it was.
       if (d.opening.offset !== d.was) {
         undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));
+        // AND A TYPED DISTANCE MAY FINISH IT, as it does a wall (moveTyped):
+        // the slide gives the way along the wall, the box how far.
+        moveTyped = { opening: d.opening, host: d.host, was: d.was,
+          dir: Math.sign(d.opening.offset - d.was), step: undoStack[undoStack.length - 1] };
         markDirty();
-        sayOnStrip('Slid along its wall. UNDO puts it back.');
+        sayOnStrip('Slid along its wall. Type a distance for an exact one, or UNDO puts it back.');
       }
       paint();
       return;
@@ -15533,26 +15565,16 @@
       if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); paint(); return; }
       d.set.points.forEach(relinkVertex);
       const moveStep = { kind: 'rotate', before: d.set.before, detached: d.set.detached, wells: d.set.wells };
-      // A MOVED BEAM ROW RE-ASKS ITS FLOOR'S SPAN -- see stepUpJoists. The
-      // deeper floor and the move are one gesture and go back with one UNDO.
-      const stepped = d.set.run ? stepUpJoists(d.set.run[0].levelId) : { edits: [], said: [] };
-      // A MOVED STAIR IS FRAMED AGAIN WHERE IT LANDED -- see reframeStair.
-      const reframed = (d.set.stairs || []).map(reframeStair);
-      const steps = [moveStep, ...(stepped.edits.length ? [{ kind: 'props', edits: stepped.edits }] : []),
-        ...reframed.flatMap(r => r.steps)];
+      const settled = settleSelectionMove(d.set);
+      const steps = [moveStep, ...settled.steps];
       undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : moveStep);
-      // A TYPED LENGTH MAY FINISH IT -- see moveTyped. Not for a beam row or a
-      // stair, whose release re-derived the floor depth or the framing for
-      // where the drag left them: a distance typed after would leave those
-      // answering a place the drawing is no longer in.
-      moveTyped = !d.set.run && !(d.set.stairs || []).length && Math.hypot(d.dx || 0, d.dz || 0) > 1e-6
-        ? { set: d.set, dx: d.dx, dz: d.dz, step: undoStack[undoStack.length - 1] } : null;
+      // A TYPED LENGTH MAY FINISH IT -- see moveTyped.
+      moveTyped = Math.hypot(d.dx || 0, d.dz || 0) > 1e-6
+        ? { set: d.set, dx: d.dx, dz: d.dz, moveStep, step: undoStack[undoStack.length - 1] } : null;
       markDirty();
       setSelection([...selection]);
-      const framedSaid = stairFramingSaid(reframed);
-      sayOnStrip(stepped.said.length || framedSaid
-        ? `Moved.${stepped.said.length ? ` ${stepped.said.join('. ')}.` : ''}${framedSaid} UNDO puts it all back.`
-        : 'Moved. UNDO puts it back.');
+      sayOnStrip(settled.said
+        ? `Moved.${settled.said} UNDO puts it all back.` : 'Moved. UNDO puts it back.');
       paint();
       return;
     }
@@ -22566,7 +22588,11 @@
   const stairOpenSideFraming = stair => {
     const poly = stairOpeningFootprint(stair);
     if (!poly || poly.length < 3) return [];
-    const beams = stairFloorBeams(stair.levelId);
+    // ITS OWN FRAMING ASIDE, as stairSideSpans has it: the question is what
+    // the well needs, and the beam already answering it is not a carrier
+    // that excuses the side it stands on.
+    const beams = stairFloorBeams(stair.levelId)
+      .filter(beam => Number(beam.stairId) !== Number(stair.id));
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
     const len = Math.hypot(dx, dz) || 1;
     const u = { x: dx / len, z: dz / len };
@@ -23178,6 +23204,19 @@
     if (steps.length) setSelection(selection.filter(entry => !old.beams.includes(entry.item) && !old.columns.includes(entry.item)));
     return { steps, beams: framed.beams, before: old.beams.length };
   };
+
+  // AND A STAIR BESIDE A CARRYING BEAM THAT MOVED OR WENT (Movie, 19 Oct: the
+  // stair beam is re-checked when a beam changes too). The beam is what the
+  // well's side spans are measured to, so moving it can earn a side beam or
+  // take one away. Re-laid ONLY WHEN THE ANSWER CHANGES -- a stair that needs
+  // the same number of side beams keeps the ones it has, hand-adjusted or
+  // not -- and never the stairs in `spare`: a stair whose own framing the
+  // drafter just moved or deleted is being adjusted by hand.
+  const reframeStairsOn = (framingLevelIds, spare = []) => (drawing?.stairs || [])
+    .filter(stair => !spare.includes(stair)
+      && framingLevelIds.includes(Number(stairFrameFiling(stair.levelId).levelId))
+      && stairOpenSideFraming(stair).length !== stairFramingOf(stair).beams.length)
+    .map(reframeStair);
 
   // The strip's word on a re-frame: what the stair now stands on, or nothing
   // when nothing changed.
@@ -25627,7 +25666,9 @@
       lengthBox.value = '';
     }
     if (moveTypable && document.activeElement !== lengthBox) {
-      lengthBox.value = feetLabel(Math.hypot(moveTyped.dx, moveTyped.dz));
+      lengthBox.value = feetLabel(moveTyped.opening
+        ? Math.abs(moveTyped.opening.offset - moveTyped.was)
+        : Math.hypot(moveTyped.dx, moveTyped.dz));
     }
     // A NOTICE OUTLIVES ONE REFRESH, and it has to. Both the refusal and the
     // cancel wrote straight to stripMessage and were erased microseconds later
@@ -27564,15 +27605,53 @@
     if (!parsed.ok) { sayOnStrip(parsed.error); return; }
     const feet = parsed.inches / 12;
     const m = moveTyped;
+    if (m.opening) return slideByTyped(m, feet);
     const len = Math.hypot(m.dx, m.dz);
     if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
     const dx = m.dx / len * feet, dz = m.dz / len * feet;
+    // WHAT THE RELEASE WORKED OUT COMES BACK FIRST -- a floor stepped deeper
+    // for the drag's span, a stair's framing laid where the drag left it --
+    // last first, the way UNDO takes a batch. The move's own step stays: it
+    // holds where the pieces started, which is what the typed distance is
+    // measured from.
+    const after = m.step.kind === 'batch' ? m.step.steps.slice(1) : [];
+    after.slice().reverse().forEach(step => { undoStack.push(step); undoOnce(); });
     m.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+    if (m.set.run) reclipRun(m.set.run);
+    m.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
     m.set.points.forEach(relinkVertex);
     m.dx = dx; m.dz = dz;
+    // AND IS WORKED OUT AGAIN FOR THE EXACT PLACE, in the same UNDO.
+    const settled = settleSelectionMove(m.set);
+    const steps = [m.moveStep, ...settled.steps];
+    const entry = steps.length > 1 ? { kind: 'batch', steps } : m.moveStep;
+    undoStack[undoStack.length - 1] = entry;
+    m.step = entry;
     lengthBox.blur();
     markDirty();
-    sayOnStrip(`Moved ${feetLabel(feet)}. UNDO puts it back.`);
+    sayOnStrip(`Moved ${feetLabel(feet)}.${settled.said} UNDO puts it ${settled.said ? 'all ' : ''}back.`);
+    paint();
+  };
+  // A DOOR OR WINDOW, THE SAME WAY (Movie, 19 Oct: typed distance for doors):
+  // the typed distance from where the slide began, the way the slide went,
+  // clamped to the wall like every slide. The slide's step is taken back and
+  // one written for the exact place, so the jamb dimensions are re-laid there
+  // and a single UNDO still returns the door to where it started.
+  const slideByTyped = (m, feet) => {
+    if (!(feet >= 0)) { sayOnStrip('Type a distance.'); return; }
+    const clamped = window.DraftGeometry2D.clampOpeningToWall(m.host, m.was + m.dir * feet,
+      m.opening.width, { walls: walls(), thicknessFt: openingThicknessFt() });
+    if (!clamped) return;
+    undoOnce();
+    m.opening.offset = clamped.offset;
+    undoStack.push(foldRedim({ kind: 'move-opening', opening: m.opening, was: m.was }));
+    m.step = undoStack[undoStack.length - 1];
+    const went = Math.abs(clamped.offset - m.was);
+    lengthBox.blur();
+    markDirty();
+    sayOnStrip(Math.abs(went - feet) > 1e-6
+      ? `Slid ${feetLabel(went)} -- as far as the wall carries it. UNDO puts it back.`
+      : `Slid ${feetLabel(feet)}. UNDO puts it back.`);
     paint();
   };
   const commitTypedLength = () => {

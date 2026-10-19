@@ -10,15 +10,44 @@
 // the door to SLIDE it on the wall, but it isn't moving" -- "i can't insert
 // WASHER or DRYER - i need it for LAUNDRY" -- "the T SQUARE isn't keeping it
 // at 90 degrees it is freemoving" -- "move exactly 12'1 down (at 90 with T on)
-// but it won't allow me to enter a LENGTH".
+// but it won't allow me to enter a LENGTH" -- and the typed distance for doors,
+// stairs and beam rows, and a stair asked again when its carrying beam moves.
 //
 // Run: node proto/stair-reframe-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js tests/move-tsquare.spec.js';
+const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js tests/move-tsquare.spec.js tests/beam-move.spec.js';
 const MUTANTS = [
+  { file: 'MODEL.html', name: 'a typed distance does not re-frame the stair for the exact place',
+    find: "    const settled = settleSelectionMove(m.set);\n    const steps = [m.moveStep, ...settled.steps];\n",
+    with: "    const settled = { steps: [], said: '' };\n    const steps = [m.moveStep, ...settled.steps];\n",
+    test: 'after a MOVE drag, a typed distance puts the stair exactly there and frames it there' },
+  { file: 'MODEL.html', name: 'what the drag\'s release worked out is left standing under the typed one',
+    find: "    after.slice().reverse().forEach(step => { undoStack.push(step); undoOnce(); });\n",
+    with: "",
+    test: 'after a MOVE drag, a typed distance puts the stair exactly there and frames it there' },
+  { file: 'MODEL.html', name: 'a typed distance leaves a beam row unclipped',
+    find: "    if (m.set.run) reclipRun(m.set.run);\n    m.set.wells.forEach(",
+    with: "    m.set.wells.forEach(",
+    test: 'after a MOVE drag, a typed distance puts the row exactly that far across' },
+  { file: 'MODEL.html', name: 'a moved carrying beam never asks the stair beside it',
+    find: "      ...(carrying ? reframeStairsOn([Number(set.run[0].levelId)], set.stairs || []) : [])];\n",
+    with: "    ];\n",
+    test: 'the carrying beam moved away, the stair takes a side beam where it lost one' },
+  { file: 'MODEL.html', name: 'a deleted carrying beam never asks the stair beside it',
+    find: "    const reframed = carriers.length ? reframeStairsOn(carriers, spare) : [];\n",
+    with: "    const reframed = [];\n",
+    test: 'the carrying beam deleted, the stair takes a side beam; its own beam deleted is left deleted' },
+  { file: 'MODEL.html', name: 'a stair\'s own beam deleted by hand is put back',
+    find: "    const carriers = [...new Set(doomed.filter(e => e.type === 'beam' && !e.item.stairId)\n",
+    with: "    const carriers = [...new Set(doomed.filter(e => e.type === 'beam')\n",
+    test: 'the carrying beam deleted, the stair takes a side beam; its own beam deleted is left deleted' },
+  { file: 'MODEL.html', name: 'a typed distance leaves the door where the slide did',
+    find: "    undoOnce();\n    m.opening.offset = clamped.offset;\n",
+    with: "    undoOnce();\n",
+    test: 'after a MOVE slide, a typed distance puts the door exactly that far along' },
   { file: 'MODEL.html', name: 'the LENGTH box stays shut after a move',
     find: "    const moveTypable = moveTypedReady();\n",
     with: "    const moveTypable = false;\n",
