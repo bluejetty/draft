@@ -231,3 +231,60 @@ test('no strings on the level, no chips -- until the DIMENSION tool is up', asyn
   await armDimension(page);
   await expect(page.locator('#dims-show')).toBeVisible();
 });
+
+// ON ITS NODE (Movie, 18 Oct: "i moved thenode but the dim didn't follow the
+// node it should be linked too" -- and "light them NODES up for the DIMENSION
+// points so the user will know they are going to be locked on the right spot").
+test('a hand dimension follows the corner it was put on, along its own run; UNDO brings it back', async ({ page }) => {
+  await open(page, drawing(RUN));
+  const { at } = await frame(page);
+  await armDimension(page);
+  await press(page, at, [4, 0]);
+  await press(page, at, [10, 0]);
+  await page.keyboard.press('Enter');
+  await press(page, at, [7, -1.5]);
+  let d = await saved(page);
+  expect(hand(d).map(span)).toEqual([[4, 10, -1.5, -1.5]]);
+  expect(hand(d)[0].endRef || hand(d)[0].startRef).toBeTruthy();
+  // The corner at (10, 0) dragged 2' along: the string's end goes with it,
+  // and its row stays where it was put.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('s');
+  await press(page, at, [7, 0]);
+  await page.mouse.move(...at(10, 0));
+  await page.mouse.down();
+  await page.mouse.move(...at(12, 0), { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  d = await saved(page);
+  expect(hand(d).map(span)).toEqual([[4, 12, -1.5, -1.5]]);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+z');
+  d = await saved(page);
+  expect(hand(d).map(span)).toEqual([[4, 10, -1.5, -1.5]]);
+});
+
+test('the node a dimension point will lock to lights up under the pointer', async ({ page }) => {
+  await open(page, drawing(RUN));
+  const { at } = await frame(page);
+  await armDimension(page);
+  const ringAt = async (x, z) => page.evaluate(([px, py]) => {
+    const c = document.getElementById('plan');
+    const r = c.getBoundingClientRect(), dpr = c.width / r.width;
+    const g = c.getContext('2d');
+    // Sample the ring 7px out from the node, round it.
+    let lit = 0;
+    for (let k = 0; k < 16; k += 1) {
+      const a = k * Math.PI / 8;
+      const d = g.getImageData(Math.round((px - r.left + 7 * Math.cos(a)) * dpr), Math.round((py - r.top + 7 * Math.sin(a)) * dpr), 1, 1).data;
+      if (Math.max(d[0], d[1], d[2]) - Math.min(d[0], d[1], d[2]) > 80) lit += 1;   // the accent, not the grey ink
+    }
+    return lit;
+  }, at(x, z));
+  await page.mouse.move(...at(2, 3));
+  await page.waitForTimeout(150);
+  expect(await ringAt(4, 0), 'no ring with the pointer away').toBeLessThan(3);
+  await page.mouse.move(...at(4.1, 0.1));
+  await page.waitForTimeout(150);
+  expect(await ringAt(4, 0)).toBeGreaterThan(6);
+});

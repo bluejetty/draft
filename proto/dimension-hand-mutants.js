@@ -14,11 +14,11 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/dimension-hand.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html', name: "the strings land on an auto layer",
-    find: "          layer: DIM_HAND_LAYER, auto: false };\n",
-    with: "          layer: 'A-DIMS-OVR', auto: false };\n", test: 'a HORIZ string: three points, ENTER, a press above stands two dimensions there, on A-DIMS-HAND' },
+    find: "          layer: DIM_HAND_LAYER, auto: false,\n",
+    with: "          layer: 'A-DIMS-OVR', auto: false,\n", test: 'a HORIZ string: three points, ENTER, a press above stands two dimensions there, on A-DIMS-HAND' },
   { file: 'MODEL.html', name: "the strings are marked auto, for AUTO DIMS to sweep",
-    find: "          layer: DIM_HAND_LAYER, auto: false };\n",
-    with: "          layer: DIM_HAND_LAYER, auto: true };\n", test: 'a HORIZ string: three points, ENTER, a press above stands two dimensions there, on A-DIMS-HAND' },
+    find: "          layer: DIM_HAND_LAYER, auto: false,\n",
+    with: "          layer: DIM_HAND_LAYER, auto: true,\n", test: 'a HORIZ string: three points, ENTER, a press above stands two dimensions there, on A-DIMS-HAND' },
   { file: 'MODEL.html', name: "ENTER does not end the string",
     find: "    if (activeTool === 'dimension' && dimPoints.length) return endDimString();\n",
     with: "", test: 'a HORIZ string: three points, ENTER, a press above stands two dimensions there, on A-DIMS-HAND' },

@@ -1187,6 +1187,10 @@
     border-bottom:1px solid var(--edge-panel); font-family: var(--font-ui); font-size:12px;
     color: var(--ink-primary); }
   .trace-row span { flex:1; overflow-wrap:anywhere; }
+  /* A HOLOGRAM'S ROW WRAPS: its name on a line of its own, the verbs under
+     it -- squeezed into one row the name stood a letter wide ("S U I T E"). */
+  .trace-row[data-hologram-row] { flex-wrap:wrap; }
+  .trace-row[data-hologram-row] [data-hologram-name] { flex-basis:100%; }
   .trace-row button { cursor:pointer; padding:3px 8px; border-radius:3px; border:1px solid var(--edge-panel);
     background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui);
     font-size:10px; font-weight:600; letter-spacing:0.04em; }
@@ -4190,6 +4194,48 @@
     if (!H()) return;
     const drew = H().paint(ctx, toS, drawing, activeLevelId(),
       { view: activeViewId(), show: hologramShow, paperColor: skin['surface-page'] });
+    // A SUITE IN HAND LIGHTS THE SHELL WALL IT IS LINING UP WITH, and the
+    // doors and windows it will cut there (Movie, 18 Oct: "light up the walls
+    // when they are close enough for auto snap allignment and then show where
+    // the windows ard doors are"). A wall beside it that is not its thickness
+    // is lit in the warning ink: those faces can never line up.
+    const inHand = (() => { try { return traceMoving?.hologram ? traceMoving.underlay : null; } catch { return null; } })();
+    if (inHand && inHand.mode === 'suite' && H().suiteNear) {
+      const G = window.DraftGeometry2D;
+      const thick = openingThicknessFt();
+      const body = w => {
+        const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz) || 1;
+        const n = { x: -dz / len, z: dx / len };
+        const { startOff, endOff } = G.wallFaceOffsets(w, thick(w));
+        const at = (p, o) => toS({ x: p.x + n.x * o, z: p.z + n.z * o });
+        return [at(w.start, startOff), at(w.end, startOff), at(w.end, endOff), at(w.start, endOff)];
+      };
+      const near = H().suiteNear(drawing, inHand, activeLevelId(), 0.5);
+      ctx.save();
+      ctx.lineWidth = 2.5;
+      near.forEach(n => {
+        ctx.strokeStyle = n.lined ? (skin['accent'] || '#e8a33d') : '#d04848';
+        const q = body(n.host);
+        ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.stroke();
+      });
+      const cuts = H().hostOpenings(drawing).filter(o => o.suite === inHand.id && o.levelId === activeLevelId());
+      ctx.fillStyle = skin['accent'] || '#e8a33d';
+      ctx.globalAlpha = 0.55;
+      cuts.forEach(o => {
+        const w = (drawing.walls || []).find(x => String(x.id) === String(o.wallId));
+        if (!w) return;
+        const g = G.openingGeometry(o, w, { walls: drawing.walls, thicknessFt: thick, padFt: 0 });
+        if (!g?.corners) return;
+        const q = g.corners.map(p => toS(p));
+        ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill();
+      });
+      ctx.restore();
+      const odd = near.find(n => !n.sameThickness);
+      if (odd && !near.some(n => n.lined)) {
+        const f = window.DraftFormatters.formatArchitecturalInches;
+        sayOnStrip(`That suite wall is ${f(odd.suiteIn)} and the shell wall ${f(odd.shellIn)} -- both faces have to line up, so no windows cut there. Make them one thickness.`);
+      }
+    }
     // DEMO PART's first click, so the drafter can see where the cut starts.
     if (drew && hologramPartStart) {
       const at = toS(hologramPartStart.at);
@@ -6286,6 +6332,8 @@
 
   const paint = () => {
     const t0 = performance.now();
+    // Hand dimensions onto the corners they were put on, before anything draws.
+    if (typeof followDimLinks === 'function') followDimLinks();
     // THE ARROW'S HAND AND HOUSE ROTATE GO WITH THE ARROW: put away here and
     // seated again by paintNorth, which only a plan paint reaches -- so an
     // elevation or a section shows neither a click over nothing nor a turn
@@ -6818,6 +6866,7 @@
     syncRotateVerbs();
     syncBreakVerb();
     syncMoveVerb();
+    syncWallOffVerb();
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;
@@ -10689,6 +10738,13 @@
     sweep('shape', shapes());
     sweep('roomtag', roomTags());
     sweep('roof', pickRoofs());
+    // AND THE DOORS, WINDOWS, OUTLINES AND DIMENSIONS a window of the WC took
+    // in (Movie, 18 Oct: "i'm not able to make an ASSEBLY - so i can select
+    // it as 1 UNIT - its always in peiced"): an assembly that could not find
+    // them again dropped them the moment it was picked.
+    sweep('fenestration', (drawing?.fenestrations || []).filter(o => walls().some(w => String(w.id) === String(o.wallId))));
+    sweep('outline', outlines());
+    sweep('dimension', dimensions());
     return out;
   };
 
@@ -10832,7 +10888,17 @@
   // UNGROUP still releases an assembly from a click on one of its walls. The
   // expansion was parity I reached for, not a requirement, and the established
   // behaviour wins while the question is open.
-  const withGroup = entry => (entry ? [entry] : []);
+  //
+  // DECIDED FOR A FIXED ONE (Movie, 18 Oct: "i'm not able to make an ASSEBLY
+  // - so i can select it as 1 UNIT - its always in peiced"). A FIXED
+  // assembly is one unit -- a WC -- and a click on any piece of it picks it
+  // whole, the way ROTATE and MOVE already take it whole. A NOT FIXED one
+  // still picks piece by piece, which is what NOT FIXED says.
+  const withGroup = entry => {
+    if (!entry) return [];
+    const owner = groupOf(entry);
+    return owner && owner.fixed === true ? itemsOfGroup(owner) : [entry];
+  };
 
   // ── WHAT ELSE A CLICK CAN PICK (Movie, 1 Oct: "when i try to SELECT a
   // stair or the CLOSET or other stuff (ROOF) i can't select it") ──────────
@@ -12364,7 +12430,13 @@
   // splitRunCorners leaves early on anything but a TOY wall. What the two
   // callers below needed was to stop assuming the answer is a wall.
   const segmentBodyAt = worldPt => {
-    const selectedSeg = selectedSegment();
+    // A FIXED ASSEMBLY HELD WHOLE (a click on any piece of it picks it all)
+    // is grabbed by any of its walls: the rigid drag below takes it from
+    // there, as it did when one wall of it was all a click picked.
+    const fixedWall = () => selection.find(entry => entry.type === 'wall' && entry.item?.start && entry.item?.end
+      && groupOf(entry)?.fixed === true
+      && window.DraftGeometry2D.pointToSegment(worldPt, entry.item).d < SELECT_GRAB_PX / view.scale)?.item || null;
+    const selectedSeg = selectedSegment() || fixedWall();
     if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
     // AND THE TYPE FILTER GOVERNS THE GRAB, not just the pick. "WALL is
     // engaged: nothing else responds" is the whole rule, and a press that
@@ -13917,6 +13989,137 @@
     breakButton.title = one ? 'BREAK — click the item to add a node there'
       : 'ASSEMBLY BUST — break the assembly into its pieces';
   }
+  // ── WALL OFF (Movie, 18 Oct) ──────────────────────────────────────────
+  //
+  // "on the WC and the KITCHENS. when a user clicks on a wall and is offered
+  // the BREAK or MOVE it, can you also offer to TURN OFF that wall (on one or
+  // two sides would be easier to use the HOUSE wall rather than the 'WC wall"
+  // -- "the ones behind the shower and sink too, but each plan will be
+  // different".
+  //
+  // THE HOUSE WALL IT BACKS ON TO SERVES INSTEAD. A fixture hangs on its wall
+  // by an offset along it, so taking the WC's wall away bare would take the
+  // toilet with it: each fixture, door and window on it moves onto the house
+  // wall at the same place, against the house wall's face; the WC's walls
+  // that met it run on to that face; then the WC wall goes. One UNDO.
+  var wallPicked = null;
+  var wallOffButton = document.getElementById('model-wall-off');
+  const WALL_OFF_GAP_FT = 1;
+  // The house wall a wall stands against: parallel, on its floor, the two
+  // facing faces within a foot, running along most of it. Nearest wins.
+  const wallOffHost = wall => {
+    const G = window.DraftGeometry2D;
+    const thick = openingThicknessFt();
+    const frame = w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      if (!(len > 1e-6)) return null;
+      const u = { x: dx / len, z: dz / len }, n = { x: -u.z, z: u.x };
+      const { startOff, endOff } = G.wallFaceOffsets(w, thick(w));
+      return { w, u, n, len, s: w.start, faces: [startOff, endOff] };
+    };
+    const me = frame(wall);
+    if (!me) return null;
+    let best = null;
+    (drawing.walls || []).forEach(other => {
+      if (other === wall || other.levelId !== wall.levelId || (other.view || 'plan') !== (wall.view || 'plan')) return;
+      const f = frame(other);
+      if (!f || Math.abs(me.u.x * f.u.z - me.u.z * f.u.x) > 1e-3) return;
+      const across = (me.s.x - f.s.x) * f.n.x + (me.s.z - f.s.z) * f.n.z;
+      const turn = me.n.x * f.n.x + me.n.z * f.n.z;
+      const mine = me.faces.map(o => across + o * turn);
+      const side = (Math.min(...mine) + Math.max(...mine)) / 2 >= (f.faces[0] + f.faces[1]) / 2 ? 1 : -1;
+      const hostFace = side > 0 ? Math.max(...f.faces) : Math.min(...f.faces);
+      const myFace = side > 0 ? Math.min(...mine) : Math.max(...mine);
+      const gap = side * (myFace - hostFace);
+      if (gap < -1e-3 || gap > WALL_OFF_GAP_FT) return;
+      const a = (me.s.x - f.s.x) * f.u.x + (me.s.z - f.s.z) * f.u.z;
+      const b = a + me.len * (me.u.x * f.u.x + me.u.z * f.u.z);
+      const overlap = Math.min(Math.max(a, b), f.len) - Math.max(Math.min(a, b), 0);
+      if (overlap < me.len * 0.5) return;
+      if (!best || gap < best.gap) best = { host: other, f, me, hostFace, gap };
+    });
+    return best;
+  };
+  function syncWallOffVerb() {
+    if (!wallOffButton) return;
+    const wall = wallPicked && selection.some(e => e.item === wallPicked) && walls().includes(wallPicked) ? wallPicked : null;
+    const able = !activeCut() && !modalUp() && !!wall && !!wallOffHost(wall);
+    wallOffButton.hidden = !able || !!rotateState?.open;
+  }
+  const wallOff = () => {
+    const wall = wallPicked;
+    const found = wall && wallOffHost(wall);
+    if (!found) return;
+    const { host, f } = found;
+    const FG = window.DraftFixtureGeometry;
+    const onHost = p => ({ t: (p.x - f.s.x) * f.u.x + (p.z - f.s.z) * f.u.z, across: (p.x - f.s.x) * f.n.x + (p.z - f.s.z) * f.n.z });
+    const ou = found.me.u;
+    const reversed = ou.x * f.u.x + ou.z * f.u.z < 0;
+    const edits = [];
+    const keep = item => edits.push({ item, before: { ...item } });
+    // THE FIXTURES, where they stand, onto the house wall.
+    (drawing.fixtures || []).forEach(fx => {
+      if (fx.endWallId === wall.id) { keep(fx); fx.endWallId = host.id; }
+      if (fx.wallId !== wall.id) return;
+      if (!edits.some(e => e.item === fx)) keep(fx);
+      const g = FG && FG.fixtureGeometry(drawing.walls, fx, wall);
+      if (fx.kind === 'tub') {
+        fx.wallId = host.id;
+        if (reversed) fx.dir = fx.dir === -1 ? 1 : -1;
+        if (g?.center) fx.side = onHost(g.center).across >= 0 ? 1 : -1;
+        return;
+      }
+      if (!g?.center) return;
+      const at = onHost(g.center);
+      fx.wallId = host.id;
+      fx.offset = Math.max(0, at.t);
+      fx.side = at.across >= 0 ? 1 : -1;
+    });
+    // THE DOORS AND WINDOWS, their middles across.
+    (drawing.fenestrations || []).forEach(o => {
+      if (o.wallId !== wall.id) return;
+      keep(o);
+      const mid = { x: wall.start.x + ou.x * o.offset, z: wall.start.z + ou.z * o.offset };
+      o.wallId = host.id;
+      o.offset = Math.max(0, onHost(mid).t);
+      if (reversed) {
+        if (o.type === 'door') o.hingeFlip = o.hingeFlip !== true;
+        o.swingFlip = o.swingFlip !== true;
+      }
+    });
+    // THE WALLS THAT MET IT RUN ON TO THE HOUSE WALL'S FACE.
+    const moved = [];
+    [wall.start, wall.end].forEach(v => {
+      const other = (drawing.walls || []).find(w => w !== wall && w !== host && (w.start === v || w.end === v));
+      if (!other) return;
+      const far = other.start === v ? other.end : other.start;
+      const dir = { x: v.x - far.x, z: v.z - far.z };
+      const denom = dir.x * f.n.x + dir.z * f.n.z;
+      if (Math.abs(denom) < 1e-9) return;
+      const k = (found.hostFace - ((far.x - f.s.x) * f.n.x + (far.z - f.s.z) * f.n.z)) / denom;
+      moved.push({ vtx: v, x: v.x, z: v.z });
+      v.x = far.x + dir.x * k;
+      v.z = far.z + dir.z * k;
+      relinkVertex(v);
+    });
+    const index = drawing.walls.indexOf(wall);
+    drawing.walls.splice(index, 1);
+    const groupsBefore = (drawing.groups || []).map(g => ({ g, members: g.members }));
+    (drawing.groups || []).forEach(g => { g.members = (g.members || []).filter(m => !(m.type === 'wall' && m.id === wall.id)); });
+    undoStack.push({ kind: 'node', undo: () => {
+      drawing.walls.splice(index, 0, wall);
+      edits.forEach(({ item, before }) => { Object.keys(item).forEach(k => delete item[k]); Object.assign(item, before); });
+      moved.forEach(m => { m.vtx.x = m.x; m.vtx.z = m.z; relinkVertex(m.vtx); });
+      groupsBefore.forEach(({ g, members }) => { g.members = members; });
+    } });
+    wallPicked = null;
+    markDirty();
+    setSelection(selection.filter(e => e.item !== wall));
+    sayOnStrip('WALL OFF: the house wall serves -- what hung on that wall moved onto it. UNDO puts the wall back.');
+    paint();
+  };
+  if (wallOffButton) wallOffButton.addEventListener('click', wallOff);
+
   // THE NEAREST POINT ON THE HELD ITEM: its one run for a wall or a line, its
   // ring's edges for the rest. A node on a corner already there is no node.
   const breakAt = (held, world) => {
@@ -14087,7 +14290,10 @@
   function syncMoveVerb() {
     if (!moveState || !moveButton) return;
     const roof = moveRoofHeld();
-    const able = !activeCut() && !modalUp() && !!roof;
+    // ANY SELECTION MOVES (Movie, 18 Oct, a WC picked whole: "need to be
+    // able to MOVE the SELECTED items too, not able too move the WC when all
+    // selected like this"). A roof on its own keeps its edge and node MOVE.
+    const able = !activeCut() && !modalUp() && selection.length > 0;
     if (!able || (moveState.on && roof !== moveState.roof && !moveState.drag)) {
       moveState.on = false; moveState.roof = null; moveState.node = null;
     }
@@ -14184,7 +14390,14 @@
   const pressMove = () => {
     if (moveState.on) { endMove(); return; }
     const roof = moveRoofHeld();
-    if (!roof) return;
+    if (!roof) {
+      if (!selection.length) return;
+      moveState.on = true; moveState.roof = null; moveState.node = null;
+      syncMoveVerb();
+      sayOnStrip('MOVE: drag anywhere to move what is selected -- the doors, windows and fixtures on its walls go with them. Esc or MOVE again ends.');
+      paint();
+      return;
+    }
     moveState.on = true; moveState.roof = roof; moveState.node = null;
     syncMoveVerb();
     sayOnStrip('MOVE: drag an EDGE in or out, drag a NODE (or click one and DELETE it), or drag inside the roof to move it all. Esc or MOVE again ends.');
@@ -14215,10 +14428,60 @@
     paint();
   };
   if (moveButton) moveButton.addEventListener('click', pressMove);
+  // ── WHAT A MOVE OF THE SELECTION CARRIES ─────────────────────────────
+  //
+  // ROTATE's own set, the same reasons: a FIXED assembly goes whole when any
+  // of it is picked; a corner shared with a wall that stays is let go, so the
+  // walls left behind keep their place; doors, windows and fixtures ride
+  // their walls by offset; a stair's framing goes with it and its well is
+  // carried. Every point once.
+  const selectionMoveSet = () => {
+    const entries = selection.slice();
+    selection.forEach(entry => {
+      const unit = groupOf(entry);
+      if (unit?.fixed !== true) return;
+      itemsOfGroup(unit).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
+    });
+    const chosen = new Set(entries.map(entry => entry.item));
+    const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
+    const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
+    const detached = [];
+    entries.forEach(({ type, item }) => {
+      if (type !== 'wall') return;
+      ['start', 'end'].forEach(key => {
+        if (!held.has(item[key])) return;
+        const orig = item[key];
+        detached.push({ wall: item, key, orig });
+        item[key] = { ...orig };
+      });
+    });
+    const points = [...new Set([
+      ...entries.flatMap(rotatePointsOf),
+      ...entries.filter(e => e.type === 'roof').flatMap(({ item }) => (item.crossGables || []).map(g => g.at)),
+      ...entries.filter(e => e.type === 'stair').flatMap(({ item }) => {
+        const f = stairFramingOf(item);
+        return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
+      }),
+    ])].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    const wells = entries.filter(e => e.type === 'stair').map(({ item }) => stairWellOf(item))
+      .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
+    return { points, detached, wells,
+      before: points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+        ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })) };
+  };
   canvas.addEventListener('pointerdown', event => {
     if (!moveState.on || event.button !== 0) return;
     const roof = moveState.roof;
-    if (!roof) return;
+    if (!roof) {
+      if (!selection.length) return;
+      event.stopImmediatePropagation();
+      event.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      const at = toWorld(event.clientX - r.left, event.clientY - r.top);
+      moveState.drag = { kind: 'selection', at, set: selectionMoveSet(), moved: false };
+      canvas.setPointerCapture(event.pointerId);
+      return;
+    }
     event.stopImmediatePropagation();
     event.preventDefault();
     const r = canvas.getBoundingClientRect();
@@ -14244,6 +14507,12 @@
     let dx = at.x - d.at.x, dz = at.z - d.at.z;
     if (!d.moved && Math.hypot(dx, dz) * view.scale < 3) return;
     d.moved = true;
+    if (d.kind === 'selection') {
+      d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+      d.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
+      paint();
+      return;
+    }
     d.targets.forEach((roof, k) => {
       const b = d.befores[k];
       roof.points = b.points.map(p => ({ ...p }));
@@ -14264,7 +14533,21 @@
         const i = d.edge, n = roof.points.length, a = roof.points[i], c = roof.points[(i + 1) % n];
         const len = Math.hypot(c.x - a.x, c.z - a.z) || 1;
         const nn = { x: -(c.z - a.z) / len, z: (c.x - a.x) / len };
-        const dist = dx * nn.x + dz * nn.z;
+        let dist = dx * nn.x + dz * nn.z;
+        // IT STOPS ON THE CORNER (Movie, 18 Oct: "if the user pulls it past
+        // the corner can you cut it at the corner rather than making new roof
+        // on the other side" -- "it was hard to get right on the corner point
+        // there was a little extra roof on either one side or the other").
+        // Where an edge either side would shrink to nothing -- the slid line
+        // through its far corner -- the slide stops, and catches it from a
+        // few pixels short; the tidy on the release then drops the corner.
+        const stops = [roof.points[(i - 1 + n) % n], roof.points[(i + 2) % n]]
+          .map(p => (p.x - a.x) * nn.x + (p.z - a.z) * nn.z)
+          .filter(cd => Math.abs(cd) > 1e-6 && Math.sign(cd) === Math.sign(dist || cd));
+        const catchFt = 8 / view.scale;
+        stops.sort((p, q) => Math.abs(p) - Math.abs(q));
+        const stop = stops[0];
+        if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;
         roof.points = slideEdge(roof.points, i, dist);
         if (roof.footprint) roof.footprint = slideEdge(roof.footprint, i, dist);
       }
@@ -14277,6 +14560,16 @@
     event.stopImmediatePropagation();
     moveState.drag = null;
     if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    if (d.kind === 'selection') {
+      if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); paint(); return; }
+      d.set.points.forEach(relinkVertex);
+      undoStack.push({ kind: 'rotate', before: d.set.before, detached: d.set.detached, wells: d.set.wells });
+      markDirty();
+      setSelection([...selection]);
+      sayOnStrip('Moved. UNDO puts it back.');
+      paint();
+      return;
+    }
     if (!d.moved) {
       // A NODE CLICKED AND LET GO WHERE IT WAS IS PICKED, for DELETE.
       d.targets.forEach((roof, k) => Object.assign(roof, d.befores[k]));
@@ -14886,6 +15179,44 @@
     return Math.abs((rx * oz - rz * ox) / (a * b)) < 1e-6;
   };
 
+  // ── SHIFT LETS A WALL GO OF ITS CORNERS (Movie, 18 Oct) ───────────────
+  //
+  // "an option to DISCONNECT the nodes at corners, maybe by pressing SHIFT
+  // while attempting to move the line, then the nodes will disconnect when
+  // SHIFT is being depressed but will bouce back to connected if SHIFT is
+  // released" -- for the inside wall of a suite moved half an inch off the
+  // party wall. Held, the dragged wall rides corners of its own and the walls
+  // it met stay where they were; let go mid-drag, it takes the shared corners
+  // back and they stretch with it again. Whichever it is on the release is
+  // what is drawn, and one UNDO puts it all back.
+  const setWallLoose = (md, on) => {
+    if (md.kind !== 'wall' || !md.body || !walls().includes(md.body)) return;
+    const wall = md.body;
+    if (on && !md.loose) {
+      const shared = md.before;
+      // The shared corners back where they started, for the walls that stay.
+      shared.forEach(b => { b.vtx.x = b.x; b.vtx.z = b.z; relinkVertex(b.vtx); });
+      const fresh = shared.map(b => {
+        const v = { x: b.x, y: b.vtx.y ?? 0, z: b.z, srcId: b.vtx.srcId ?? null, offX: b.vtx.offX ?? 0, offZ: b.vtx.offZ ?? 0 };
+        vertexPool.push(v);
+        if (wall.start === b.vtx) wall.start = v;
+        if (wall.end === b.vtx) wall.end = v;
+        return { vtx: v, x: b.x, z: b.z };
+      });
+      md.loose = { shared, fresh };
+      md.before = fresh;
+    } else if (!on && md.loose) {
+      const { shared, fresh } = md.loose;
+      fresh.forEach((f, i) => {
+        if (wall.start === f.vtx) wall.start = shared[i].vtx;
+        if (wall.end === f.vtx) wall.end = shared[i].vtx;
+        const at = vertexPool.indexOf(f.vtx);
+        if (at >= 0) vertexPool.splice(at, 1);
+      });
+      md.before = shared;
+      md.loose = null;
+    }
+  };
   const splitRunCorners = md => {
     if (board !== 'toy' || md.kind !== 'wall' || !md.body) return;
     const wall = md.body;
@@ -23448,7 +23779,14 @@
         const c = o && o.wallId === seg.id ? Number(o.offset) || 0 : NaN;
         if (c > fromFt - 1e-9 && c < toFt + 1e-9) moved.add(o);
       });
-      const corner = trimCornerWith(seg, cutter);
+      // A CORNER ONLY WHEN BOTH ARE ASKED FOR (Movie, 18 Oct: "when i trim i
+      // don't want to trim both ends only the one i touch (pink one)" -- "to
+      // trim a corner i'd like the user to need to select both ends to trim,
+      // if they only select one only trim the one they touch at the location
+      // the other line crosses"). The edge it is cut at has to be SELECTED
+      // for the two to meet in a corner; otherwise only the pink piece goes
+      // and the other runs on through.
+      const corner = trimCuttersPicked().includes(cutter) ? trimCornerWith(seg, cutter) : null;
       if (corner) {
         trimMoveEnd(seg, end, corner.at, changes);
         trimMoveEnd(cutter, corner.cutterEnd, seg[end], changes);
@@ -23706,7 +24044,8 @@
     || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
     || (rulerOn && !!rulerFrom)
     || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset))
-    || (activeTool === 'dimension' && dimPoints.length > 0);
+    // DIMENSION from its first point too: the node it will lock to lights up.
+    || activeTool === 'dimension';
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
@@ -24594,6 +24933,31 @@
     });
     hologramAsk.querySelector('[data-hologram-close]').addEventListener('click', closeHologramCards);
   }
+  // A DOUBLE-CLICK ON A HOLOGRAM OPENS ITS CARD (Movie, 18 Oct: "when a user
+  // double clicks on a HOLOGRAM can you bring up this menu for him make it
+  // easier"). Only where nothing of this drawing's own is under the pointer,
+  // so a double-click on a wall drawn over the hologram is still the wall's.
+  // "On" the hologram is within its placed walls' box on this level.
+  const hologramUnder = world => holograms().find(holo => {
+    if (holo.hidden || !H()) return false;
+    const walls = H().placed(holo, (H().parts(holo).existing.walls || [])
+      .filter(w => w?.levelId === activeLevelId()));
+    const pts = walls.flatMap(w => [w.start, w.end]).filter(p => Number.isFinite(p?.x));
+    if (!pts.length) return false;
+    const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+    return world.x >= Math.min(...xs) - 0.5 && world.x <= Math.max(...xs) + 0.5
+      && world.z >= Math.min(...zs) - 0.5 && world.z <= Math.max(...zs) + 0.5;
+  }) || null;
+  canvas.addEventListener('dblclick', e => {
+    if (!drawing || !hologramAsk || activeTool !== RESTING_TOOL || activeCut()) return;
+    const r = canvas.getBoundingClientRect();
+    const world = toWorld(e.clientX - r.left, e.clientY - r.top);
+    if (hitAt(world) || !hologramUnder(world)) return;
+    e.preventDefault();
+    traceAsk.hidden = true;
+    hologramAsk.hidden = false;
+    renderHologramList();
+  });
   let hologramRefreshing = null;   // the hologram REFRESH is replacing
   const hologramNoun = holo => holo.name || 'The hologram';
   const hologramPivot = source => {
@@ -28386,7 +28750,45 @@
   const dimPoint = at => {
     const snap = board !== 'toy' ? drawSnap(at) : {};
     const p = snap.pt || cornerSnap(at, []) || at;
-    return { x: p.x, z: p.z };
+    return { x: p.x, z: p.z, ...(snap.pt || cornerSnap(at, []) ? dimLinkAt(p) : {}) };
+  };
+  // ── A HAND DIMENSION STAYS ON ITS NODE (Movie, 18 Oct: "i moved thenode
+  // but the dim didn't follow the node it should be linked too") ──────────
+  //
+  // A point that landed on a node remembers the wall corner it is nearest
+  // (the node itself, or a face corner of it): which wall, which end, and
+  // where that corner stood. Each paint, a corner that has moved carries the
+  // dimension's end with it ALONG the dimension's own run -- a HORIZ string
+  // takes the corner's x and keeps its row, so a string never tilts. An UNDO
+  // of the move puts the corner back and the end follows back.
+  const DIM_LINK_FT = 1;
+  const dimLinkAt = p => {
+    let best = null;
+    walls().forEach(w => ['start', 'end'].forEach(end => {
+      const v = w[end];
+      const d = Math.hypot(v.x - p.x, v.z - p.z);
+      if (d <= DIM_LINK_FT && (!best || d < best.d)) best = { d, ref: { wallId: String(w.id), end, x: v.x, z: v.z } };
+    }));
+    return best ? { ref: best.ref } : {};
+  };
+  var followDimLinks = () => {
+    const list = drawing?.dimensions;
+    if (!Array.isArray(list) || !list.some(d => d.startRef || d.endRef)) return;
+    const byId = new Map((drawing.walls || []).map(w => [String(w.id), w]));
+    list.forEach(dim => {
+      const len = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+      if (!(len > 1e-9)) return;
+      const u = { x: (dim.end.x - dim.start.x) / len, z: (dim.end.z - dim.start.z) / len };
+      [['startRef', 'start'], ['endRef', 'end']].forEach(([key, at]) => {
+        const ref = dim[key];
+        const v = ref && byId.get(String(ref.wallId))?.[ref.end];
+        if (!v) return;
+        const along = (v.x - ref.x) * u.x + (v.z - ref.z) * u.z;
+        if (Math.abs(v.x - ref.x) < 1e-9 && Math.abs(v.z - ref.z) < 1e-9) return;
+        dim[at] = { ...dim[at], x: dim[at].x + u.x * along, z: dim[at].z + u.z * along };
+        ref.x = v.x; ref.z = v.z;
+      });
+    });
   };
   const dimDirection = points => {
     if (dimMode === 'h') return { x: 1, z: 0 };
@@ -28419,7 +28821,8 @@
       const left = { x: -(b.z - a.z), z: b.x - a.x };
       const away = (a.x - a.from.x + b.x - b.from.x) * left.x + (a.z - a.from.z + b.z - b.from.z) * left.z;
       const [s0, s1] = away < 0 ? [b, a] : [a, b];
-      out.push({ start: { x: s0.x, y: 0, z: s0.z }, end: { x: s1.x, y: 0, z: s1.z } });
+      out.push({ start: { x: s0.x, y: 0, z: s0.z }, end: { x: s1.x, y: 0, z: s1.z },
+        ...(s0.from.ref ? { startRef: { ...s0.from.ref } } : {}), ...(s1.from.ref ? { endRef: { ...s1.from.ref } } : {}) });
     }
     return out;
   };
@@ -28442,7 +28845,8 @@
       if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
       const made = pieces.map(piece => {
         const record = { id: newDimensionId(), start: piece.start, end: piece.end, levelId, view,
-          layer: DIM_HAND_LAYER, auto: false };
+          layer: DIM_HAND_LAYER, auto: false,
+          ...(piece.startRef ? { startRef: piece.startRef } : {}), ...(piece.endRef ? { endRef: piece.endRef } : {}) };
         drawing.dimensions.push(record);
         return record;
       });
@@ -28490,6 +28894,21 @@
       : dimPoints.length ? dimString(dimPoints.concat([dimPoint(cursorWorld)]), dimPoints[0]) : [];
     const env = dimensionEnv();
     pieces.forEach(piece => R.drawDimension2D(ctx, toS, piece, { preview: true }, env));
+    // THE NODE IT WILL LOCK TO, LIT (Movie, 18 Oct: "light them NODES up for
+    // the DIMENSION points so the user will know they are going to be locked
+    // on the right spot"). Not while the string is being placed.
+    if (!dimPlacing) {
+      const snap = board !== 'toy' ? drawSnap(cursorWorld) : {};
+      const lit = snap.pt || cornerSnap(cursorWorld, []);
+      if (lit) {
+        const s = toS(lit);
+        ctx.save();
+        ctx.strokeStyle = skin['accent'] || '#e8a33d';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
     ctx.save();
     ctx.fillStyle = skin['draw-dim'];
     dimPoints.forEach(p => {
@@ -29986,6 +30405,8 @@
           // distance" exactly true, rather than true to within the float drift
           // of a hundred pointermove events.
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          // SHIFT HELD: the wall goes on its own, its corners let go.
+          if (board !== 'toy') setWallLoose(md, e.shiftKey);
           // §3: ON THE TOY BOARD THE MOVE IS toy-constraints.js's TO DECIDE.
           // Not a second constraint path -- the page proposes a distance and
           // allowedMove rounds it, welds the group, refuses what it must and
@@ -30249,7 +30670,9 @@
           return;
         }
         const moveStep = { kind: 'move',
-          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before };
+          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before,
+          // A WALL LET GO WITH SHIFT takes its old corners back on UNDO.
+          ...(md.loose ? { loose: { wall: md.body, shared: md.loose.shared.map(b => b.vtx), fresh: md.loose.fresh.map(f => f.vtx) } } : {}) };
         undoStack.push(moveStep);
         markDirty();
         // §5: the bone moved, so what the storey above covers has changed and
@@ -30391,6 +30814,9 @@
           : (!hit && held && roofEdgeNear(held, world) != null ? held : null);
         roofEdgeIdx = roofHit ? roofEdgeNear(roofHit, world) : null;
         roofEdgeClick = roofEdgeIdx != null ? world : null;
+        // The wall a click landed on, for WALL OFF: a click on a WC wall now
+        // picks the whole WC, and the verb still needs to know which wall.
+        wallPicked = hit?.type === 'wall' ? hit.item : null;
         setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : withGroup(hit));
       }
       paint();
@@ -30589,6 +31015,15 @@
       (step.wells || []).forEach(w => { w.hole.points = w.points; });
     } else if (step.kind === 'move') {
       undoRedim(step);
+      if (step.loose) {
+        const { wall, shared, fresh } = step.loose;
+        fresh.forEach((v, i) => {
+          if (wall.start === v) wall.start = shared[i];
+          if (wall.end === v) wall.end = shared[i];
+          const at = vertexPool.indexOf(v);
+          if (at >= 0) vertexPool.splice(at, 1);
+        });
+      }
       step.before.forEach(b => {
         b.vtx.x = b.x;
         b.vtx.z = b.z;

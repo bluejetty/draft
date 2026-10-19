@@ -207,3 +207,26 @@ test('a tee and an X draw no line across the joint', async ({ page }) => {
   expect(await darkAlong(5, 0.05, 5, 0.6), 'crossing it beside the tee finds the line').toBeGreaterThan(0);
 });
 
+
+// ONE CLICK, ONE PIECE (Movie, 18 Oct: "when i trim i don't want to trim both
+// ends only the one i touch (pink one)" -- "to trim a corner i'd like the user
+// to need to select both ends to trim, if they only select one only trim the
+// one they touch at the location the other line crosses").
+const L = () => [W('wall-5', [-20, 5], [-10, 5], 'stud_2x4'), W('wall-6', [-13, 12], [-13, 4], 'stud_2x4')];
+test('TRIM with nothing selected takes only the piece pressed; the wall it crosses runs on through', async ({ page }) => {
+  await open(page, house(L()));
+  await page.keyboard.press('q');
+  await press(page, -11, 5);                                  // the pink end past wall-6
+  const d = await saved(page);
+  expect(pt(wallOf(d, 'wall-5').end), 'wall-5 stops at wall-6\'s near face').toEqual([r3(-13 - T4 / 2), 5]);
+  expect(pt(wallOf(d, 'wall-6').end), 'wall-6 is not touched').toEqual([-13, 4]);
+});
+test('with the other wall SELECTED, TRIM makes the corner: both ends on one point', async ({ page }) => {
+  await open(page, house(L()));
+  await press(page, -13, 9);                                  // select wall-6
+  await page.keyboard.press('q');
+  await press(page, -11, 5);
+  const d = await saved(page);
+  expect(pt(wallOf(d, 'wall-5').end)).toEqual([-13, 5]);
+  expect(pt(wallOf(d, 'wall-6').end), 'wall-6 comes to the corner too').toEqual([-13, 5]);
+});

@@ -167,22 +167,13 @@ test('NOT FIXED is a different assembly, not the same one with a flag off',
     expect(groups[0].name).toBe('ASSEMBLY 1');
   });
 
-test('clicking one member takes THAT member — the assembly is not expanded',
+test('clicking one member of a FIXED assembly takes it whole; of a NOT FIXED one, just that member',
   async ({ page }) => {
-    // A DELIBERATE DIVERGENCE FROM THE OLD PAGE, left open rather than decided
-    // in this PR. Its _addItemsAndTheirGroups pulls a hit item's group in with
-    // it, and that shipped here first — then broke ten checks in
-    // model-html-draw-delete.spec.js, whose fixture groups w-a with w-b. A tap
-    // meant to select ONE wall selected two, the DELETE button (which means
-    // "exactly one wall") went dark, and "delete this wall" had quietly become
-    // "delete this assembly".
-    //
-    // That is a product decision — a drafter who groups two walls and presses
-    // Delete on one may or may not mean both — and this order says only that
-    // ASSEMBLY groups and UNGROUP releases. Nothing in it needs the expansion:
-    // selectedGroups() counts a group as selected when ANY member is, which is
-    // the old page's own test, so UNGROUP still works from a click on one wall
-    // (asserted below). Established behaviour wins while the question is open.
+    // DECIDED (Movie, 18 Oct: "i'm not able to make an ASSEBLY - so i can
+    // select it as 1 UNIT - its always in peiced"). The question this test
+    // used to hold open -- does a click on one member take the assembly? --
+    // has its answer: a FIXED assembly is one unit and a click takes it all,
+    // as ROTATE and MOVE already did; NOT FIXED says the pieces stay pieces.
     await open(page);
     await pickTwoWalls(page);
     await assemble(page, { name: 'pair', fixed: true });
@@ -192,14 +183,21 @@ test('clicking one member takes THAT member — the assembly is not expanded',
     await page.waitForTimeout(60);
     expect(await selCount(page)).toBe(0);
 
-    // ONE wall of the assembly, and one is what is selected.
+    // ONE wall of the FIXED assembly, and the assembly is what is selected.
     await page.mouse.click(...await at(page, 0, -W));
     await page.waitForTimeout(80);
-    expect(await selCount(page),
-      'the assembly is not pulled in behind the wall that was clicked').toBe(1);
+    expect(await selCount(page), 'a FIXED assembly comes whole behind the wall that was clicked').toBe(2);
 
-    // And the DELETE button still means what it meant — the reading that broke
-    // when the expansion was in.
+    // NOT FIXED: the wall alone, and DELETE still means "this wall".
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(60);
+    await pickTwoWalls(page);
+    await assemble(page, { name: 'loose', fixed: false });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(60);
+    await page.mouse.click(...await at(page, 0, -W));
+    await page.waitForTimeout(80);
+    expect(await selCount(page), 'a NOT FIXED assembly is not pulled in behind the wall that was clicked').toBe(1);
     await expect(page.locator('[data-delete]')).toBeVisible();
   });
 

@@ -1096,9 +1096,58 @@ if (!window.DraftGeometry2D) {
     return { roof: virtual, cuts };
   };
 
+  // ── A SLIVER OR A SPIKE IN THE EAVE RING IS NOT ROOF (Movie, 18 Oct,
+  // North Point's E1 and E3: "it might make the roof do weird stuff or the
+  // roof already did weird stuff") ──────────────────────────────────────
+  //
+  // His gable was drawn a hair out of plumb (x 0.001 against 0), so its foot
+  // carried a 0.001' eave; an edge later slid against that sliver ran back up
+  // the gable's own line, and the ring went down to z -8 and back to -2 -- a
+  // spike of no width that the planes traced as a step and a wall standing in
+  // mid-roof. An edge under a sixteenth of an inch, and a point the ring
+  // doubles back through, are taken out before anything is traced; the edge
+  // kept is the one coming in. Nothing else is touched (a straight run
+  // between two edges, a BREAK's node, stays for the skeleton's own rule).
+  const ROOF_SLIVER_FT = 1 / 192;
+  const cleanRoofRing = roof => {
+    const pts = roof.points || [];
+    if (pts.length < 4) return null;
+    const keep = pts.map((_, i) => i);
+    let changed = false;
+    for (let guard = 0; guard < 400 && keep.length > 3; guard += 1) {
+      const n = keep.length;
+      let hit = -1;
+      for (let k = 0; k < n && hit < 0; k += 1) {
+        const p = pts[keep[(k - 1 + n) % n]], c = pts[keep[k]], q = pts[keep[(k + 1) % n]];
+        if (Math.hypot(q.x - c.x, q.z - c.z) < ROOF_SLIVER_FT) { hit = k; break; }
+        const ax = c.x - p.x, az = c.z - p.z, bx = q.x - c.x, bz = q.z - c.z;
+        const la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+        if (Math.abs(ax * bz - az * bx) < 1e-3 * la * lb && ax * bx + az * bz < 0) hit = k;
+      }
+      if (hit < 0) break;
+      keep.splice(hit, 1);
+      changed = true;
+    }
+    if (!changed) return null;
+    const pick = list => (Array.isArray(list) && list.length === pts.length ? keep.map(i => list[i]) : list);
+    // Edge i runs point i to i+1: a dropped point's outgoing edge goes, the
+    // incoming one runs on -- so each kept point keeps its own edge's kind,
+    // except that the kept point BEFORE a dropped run inherits nothing new.
+    // THE WALL LINE IS DRAWN AGAIN off the cleaned ring and each edge's
+    // overhang: the slide that left the spike carried the stored footprint
+    // with it -- his ran eight feet OUT past the gable, and the elevations
+    // stood a wall and the dormer's front up off it.
+    const { footprint, ...rest } = roof;
+    void footprint;
+    return { ...rest, points: keep.map(i => pts[i]), edges: pick(roof.edges),
+      edgeOverhang: pick(roof.edgeOverhang) };
+  };
+
   const roofSkeleton = (roof) => {
     const initialCount = roof.points.length;
     if (initialCount < 3) return [];
+    const cleaned = cleanRoofRing(roof);
+    if (cleaned) return roofSkeleton(cleaned);
     // A SLOPED EDGE: the full roof's lines, the corner's triangle cut from them.
     const sloped = slopedVirtual(roof);
     if (sloped) {
@@ -1424,6 +1473,9 @@ const crossGableLines = roof => crossGableShapes(roof).flatMap(g => [
 // bounded faces. Each bounded face names the one EAVE footprint edge on
 // its boundary — that edge's line plus the pitch is the face's plane.
 const roofFaces = (roof, arcs) => {
+  // A SLIVER OR A SPIKE IN THE RING: the ring without it (cleanRoofRing).
+  const cleaned = cleanRoofRing(roof);
+  if (cleaned) return roofFaces(cleaned, roofSkeleton(cleaned));
   // A SLOPED EDGE: the full roof's planes, cut along it (slopedVirtual).
   const sloped = slopedVirtual(roof);
   if (sloped) return roofFaces(sloped.roof, roofSkeleton(sloped.roof));
@@ -3900,6 +3952,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     openingGeometry,
     wallFaceOffsets,
     wallFaceCorners,
+    cleanRoofRing,
     cutPerpendiculars,
     cutSide,
     cutDirVec,

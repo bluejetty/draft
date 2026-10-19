@@ -270,11 +270,20 @@ if (!window.DraftDrawingFormat) {
       const moved = m && (m.axis === 'x' || m.axis === 'z')
         && Number.isFinite(Number(m.from)) && Number.isFinite(Number(m.by))
         ? { axis: m.axis, from: Number(m.from), by: Number(m.by) } : null;
+      // THE CORNER A HAND DIMENSION'S END WAS PUT ON (Movie, 18 Oct: "the
+      // dim didn't follow the node it should be linked too"): which wall,
+      // which end, and where that corner stood. Written only when present.
+      const ref = r => (r && String(r.wallId || '').trim() && (r.end === 'start' || r.end === 'end')
+        && Number.isFinite(Number(r.x)) && Number.isFinite(Number(r.z))
+        ? { wallId: String(r.wallId).trim(), end: r.end, x: Number(r.x), z: Number(r.z) } : null);
+      const startRef = ref(dimension?.startRef), endRef = ref(dimension?.endRef);
       return {
         id, start, end, levelId: dimensionLevelId, view,
         ...(layer ? { layer } : {}),
         auto: dimension?.auto === true,
         ...(moved ? { moved } : {}),
+        ...(startRef ? { startRef } : {}),
+        ...(endRef ? { endRef } : {}),
       };
     }), env.drops).filter(Boolean);
   };

@@ -775,6 +775,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // MOVE (Movie, 18 Oct) slides a roof's edge or node, or the whole
             // roof: it reshapes what is drawn and makes nothing new.
             'model-move',
+            // WALL OFF (Movie, 18 Oct) takes a WC or kitchen wall away against
+            // a house wall, its fixtures onto the house wall: it takes away and
+            // re-hangs what is drawn, and makes nothing new.
+            'model-wall-off',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts

@@ -712,6 +712,12 @@ ${trio(true)}
     title="Cut the roof in two, or break the assembly into its pieces">BREAK</button>
   <button id="model-move" type="button" data-move hidden
     title="MOVE -- drag a roof edge, a node, or the whole roof">MOVE</button>
+  <!-- WALL OFF (Movie, 18 Oct): "on the WC and the KITCHENS. when a user
+       clicks on a wall and is offered the BREAK or MOVE it, can you also offer
+       to TURN OFF that wall ... easier to use the HOUSE wall rather than the
+       'WC wall". -->
+  <button id="model-wall-off" type="button" data-wall-off hidden
+    title="WALL OFF -- the house wall behind it serves instead: its fixtures move onto the house wall">WALL OFF</button>
   <button id="model-rotate" type="button" data-rotate hidden
     title="Turn what is selected about its centre">ROTATE</button>
   <span id="rotate-bar" data-rotate-bar hidden>
