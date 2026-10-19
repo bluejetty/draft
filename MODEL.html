@@ -26024,10 +26024,17 @@
   // drafter cannot see is a mode they will assume is over.
   const traceMoveWord = m => (m?.hologram
     ? `Drag ${hologramNoun(m.underlay)} to where it belongs \u2014 [ and ] turn it, F mirrors it, Esc to leave it.`
-    : 'Drag the picture to where it belongs \u2014 Esc to leave it.');
+    : 'Drag the picture to where it belongs \u2014 Esc to leave it.')
+    + (squaring() ? ' The T-SQUARE holds the move to one axis.' : '');
   const tracePoint = event => {
     const r = canvas.getBoundingClientRect();
     return toWorld(event.clientX - r.left, event.clientY - r.top);
+  };
+  // WHERE THE HAND'S RUN ENDS under the lit instruments: squared first, then
+  // on the foot (no floor on the length -- see the pointermove below).
+  const traceMovedPoint = (from, at) => {
+    const squaredAt = squareTo(from, at);
+    return onTheFoot_if() ? onTheFoot(from, squaredAt, 0) : squaredAt;
   };
   window.addEventListener('pointerdown', event => {
     if (!traceMoving || event.target !== canvas || event.button !== 0) return;
@@ -26044,15 +26051,30 @@
     if (!m || !m.from) return;
     event.stopImmediatePropagation();
     const at = tracePoint(event);
-    m.underlay.x = m.before.x + (at.x - m.from.x);
-    m.underlay.z = m.before.z + (at.z - m.from.z);
+    // THE MOVE READS THE SAME INSTRUMENTS AS A DRAWN RUN (Movie, 19 Oct:
+    // "when i MOVE the hologram --- when the T SQUARE is engaged it should
+    // only move in 90's from its original position"). The drag is a run from
+    // the press to the hand: the T-SQUARE holds it to one axis, so the thing
+    // in hand goes straight across or straight up from where it stood, and
+    // the FOOT LIGHT lands that run on the whole foot -- squareTo then
+    // onTheFoot, drawPoint's own order, with no floor on the length, because
+    // a nudge of four inches with the light lit should round back to where it
+    // started (model-html-point-drag-instruments has the same rule for a
+    // dragged corner). TOY lights both, as it does for everything else.
+    const to = traceMovedPoint(m.from, at);
+    m.underlay.x = m.before.x + (to.x - m.from.x);
+    m.underlay.z = m.before.z + (to.z - m.from.z);
     // A SUITE SNAPS ONTO THE SHELL (Movie, 18 Oct: "when they go close to
     // lining them up it snaps to make it easy for them"): within 6" of a
     // shell wall's faces lining up with its own, it slides the rest.
     if (m.hologram && m.underlay.mode === 'suite' && H()?.suiteSnap) {
       const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), 0.5);
-      m.underlay.x += slide.x;
-      m.underlay.z += slide.z;
+      // AND NOT OFF THE SQUARE: with the T-SQUARE down the slide may only
+      // take the suite further along the axis the hand is moving on. A slide
+      // on the held axis would be the snap moving what the square forbade.
+      const held = squaredAxis(m.from, at);
+      m.underlay.x += held === 'x' ? 0 : slide.x;
+      m.underlay.z += held === 'z' ? 0 : slide.z;
     }
     // A BLUE HOLOGRAM NEVER SNAPS -- only a SUITE does -- so where a suite
     // would have caught, the strip says how to make it one (Movie, 18 Oct:
