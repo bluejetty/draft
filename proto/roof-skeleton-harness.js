@@ -285,6 +285,30 @@ check('a sloped edge: the hip into the corner stops on the cut',
     const pastCut = ends.some(p => p.x + (30 - p.z) < 10 - 1e-3 && p.x < 10 && p.z > 20);
     return [`${onCut ? 'on the cut' : 'missing'}, ${pastCut ? 'runs past' : 'stops'}`, 'on the cut, stops']; });
 
+// ── A SLIVER AND A SPIKE (Movie, 18 Oct, North Point: "the roof already did
+// weird stuff") ──────────────────────────────────────────────────────────
+//
+// His ring, as saved: down the gable to z -8, a 0.001' eave, and back up the
+// gable's own line to -2 -- a spike of no width. The planes must be the
+// ring's without it: they tile the cleaned outline, and nothing of the
+// spike's corner reaches a face.
+const SPIKED = [[113.854, 83], [15.012, 83], [0.001, 83], [0.001, 68.02], [0, -8], [0.001, -8], [0.001, -2],
+  [375.854, -2], [375.854, 83], [245.854, 83], [245.854, 89], [113.854, 89]];
+const spikedRoof = () => ({ pitch: 3, points: SPIKED.map(([x, z]) => ({ x, z })),
+  edges: ['eave', 'eave', 'gable', 'gable', 'eave', 'eave', 'eave', 'eave', 'eave', 'eave', 'eave', 'eave'],
+  footprint: [[121.85, 75], [15.01, 75], [0, 75], [0, 68], [0, -16], [-8, -16], [-8, 6], [367.85, 6],
+    [367.85, 75], [237.85, 75], [237.85, 81], [121.85, 81]].map(([x, z]) => ({ x, z })) });
+check('a sliver and a spike in the ring are not roof: the planes tile the ring without them',
+  G => { const roof = spikedRoof(); const faces = G.roofFaces(roof, G.roofSkeleton(roof));
+    const covered = faces.reduce((sum, face) => sum + face.area, 0);
+    const clean = SPIKED.filter((_, i) => i !== 4 && i !== 5);
+    const spikeTip = faces.some(face => face.points.some(p => p.z < -2.01));
+    return [`${covered.toFixed(1)} ${spikeTip ? 'reaches the spike' : 'clear'}`,
+      `${areaOf(clean.map(([x, z]) => ({ x, z }))).toFixed(1)} clear`]; });
+check('and the wall line is drawn again off the cleaned ring, not the spiked one it was saved with',
+  G => { const c = G.cleanRoofRing(spikedRoof());
+    return [c && !('footprint' in c) && c.points.length === 10, true]; });
+
 // ── AND THE RECORD THE ARCS CARRY ────────────────────────────────────────
 //
 // Each arc's ta/tb is how far the wavefront had advanced at its ends, and
@@ -664,6 +688,14 @@ const MUTATIONS = [
   // virtual edges taken as gables.
   ['the virtual edges are gables',
     s => s.replace('outEdges.push(kindAt(i - 1), kindAt(i + 1));', "outEdges.push('gable', 'gable');")],
+  // THE SLIVER CLEAN-UP: off, the spike traces a plane of its own.
+  ['a sliver or spike in the ring is traced as roof',
+    s => s.replace("    const cleaned = cleanRoofRing(roof);\n    if (cleaned) return roofSkeleton(cleaned);", '')
+      .replace("  const cleaned = cleanRoofRing(roof);\n  if (cleaned) return roofFaces(cleaned, roofSkeleton(cleaned));", '')],
+  ['the spike is kept: only the sliver goes',
+    s => s.replace("        if (Math.abs(ax * bz - az * bx) < 1e-3 * la * lb && ax * bx + az * bz < 0) hit = k;", '')],
+  ['the saved wall line rides on past the clean-up',
+    s => s.replace("    const { footprint, ...rest } = roof;\n    void footprint;", "    const rest = roof;")],
 ];
 
 // A MUTATION THAT NEVER APPLIED IS NOT A MUTATION THAT WAS CAUGHT -- broken
