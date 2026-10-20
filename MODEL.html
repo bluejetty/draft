@@ -10056,10 +10056,11 @@
         + 'keeps its own geometry';
       row.addEventListener('click', event => {
         event.stopPropagation();
-        // THE SECOND CLICK OF A DOUBLE-CLICK IS THE RENAME'S, not a second
-        // trip: going there again would rebuild this row under the pointer
-        // and the double-click would land on nothing.
-        if (event.detail > 1 || row.querySelector('input')) return;
+        // A CLICK ON THE SHELF ALREADY OPEN STAYS PUT -- and so does the
+        // second click of a double-click, which is the rename's: going there
+        // again would rebuild this row under the pointer and the double-click
+        // would land on nothing.
+        if (row.querySelector('input')) return;
         if (boneyardActive && Number(shelf.id) === activeShelfId()) return;
         goToBoneyard(Number(shelf.id));
       });
@@ -10187,7 +10188,7 @@
   const shelfSuiteFile = (shelfId, kind) => {
     const full = serializeDrawing();
     const owner = -Number(shelfId);
-    const out = {};
+    const out = Object.create(Object.prototype);
     Object.keys(full).forEach(key => {
       const value = full[key];
       if (Array.isArray(value) && value.some(item => item && typeof item === 'object' && 'levelId' in item)) {

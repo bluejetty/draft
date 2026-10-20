@@ -20,7 +20,7 @@ const MUTANTS = [
     with: '',
     test: 'a double-click on a shelf renames it' },
   { file: 'MODEL.html', name: 'the second click of a double-click goes there again',
-    find: "        if (event.detail > 1 || row.querySelector('input')) return;\n",
+    find: "        if (boneyardActive && Number(shelf.id) === activeShelfId()) return;\n",
     with: '',
     test: 'a double-click on a shelf renames it' },
   { file: 'MODEL.html', name: 'Esc keeps the typed name',
