@@ -1773,6 +1773,40 @@ if (!window.DraftRender2D) {
     return [...picked];
   }
 
+  // WHICH SIDE THE TILE IS SQUARE TO. Movie, 20 Oct: "i noticed the
+  // flooring in the washroom changed to not being straight after i rotated 90
+  // degrees" -- "its lik 87". The grid used to take the loop's single longest
+  // edge, and a loop's corners are WELDED wall ends: a wall stopping a few
+  // inches short of its neighbour leaves one edge a hair off square, and a
+  // hair longer than the true wall beside it. Which of two near-equal sides
+  // won came down to the last digit, and the turn moved that digit.
+  //
+  // SO THE ROOM VOTES. Each edge's direction, folded to a quarter turn, is
+  // scored by the length of every edge running the same way (within half a
+  // degree): the four square sides of a bathroom out-vote the one crooked
+  // weld however long it is. Of the winners the longest edge is the one the
+  // tiler starts from, as before.
+  const SQUARE_TOL = Math.PI / 360;
+  function squareSideOf(pts) {
+    const n = pts.length;
+    const sides = pts.map((p, i) => {
+      const q = pts[(i + 1) % n];
+      const len = Math.hypot(q.x - p.x, q.z - p.z);
+      const quarter = Math.PI / 2;
+      const a = ((Math.atan2(q.z - p.z, q.x - p.x) % quarter) + quarter) % quarter;
+      return { i, len, a };
+    });
+    const apart = (a, b) => { const d = Math.abs(a - b) % (Math.PI / 2); return Math.min(d, Math.PI / 2 - d); };
+    let best = null;
+    sides.forEach(side => {
+      const vote = sides.reduce((sum, other) => sum + (apart(side.a, other.a) <= SQUARE_TOL ? other.len : 0), 0);
+      if (!best || vote > best.vote + 1e-6 || (Math.abs(vote - best.vote) <= 1e-6 && side.len > best.len)) {
+        best = { ...side, vote };
+      }
+    });
+    return best ? best.i : 0;
+  }
+
   function drawWetFloors2D(ctx, toS, env) {
     const loops = wetRoomLoops(env.walls, env.fixtures, env.fixtureGeometry,
       env.roomLoops || window.DraftGeometry2D?.roomLoops);
@@ -1782,12 +1816,8 @@ if (!window.DraftRender2D) {
     if (Math.hypot(b.x - a.x, b.y - a.y) < 4) return;
     loops.forEach(loop => {
       const pts = loop.points;
-      let k = 0, longest = -1;
-      pts.forEach((p, i) => {
-        const q = pts[(i + 1) % pts.length];
-        const len = Math.hypot(q.x - p.x, q.z - p.z);
-        if (len > longest) { longest = len; k = i; }
-      });
+      const k = squareSideOf(pts);
+      const longest = Math.hypot(pts[(k + 1) % pts.length].x - pts[k].x, pts[(k + 1) % pts.length].z - pts[k].z);
       const o = pts[k], q = pts[(k + 1) % pts.length];
       const ux = (q.x - o.x) / longest, uz = (q.z - o.z) / longest;
       const vx = -uz, vz = ux;
@@ -3238,6 +3268,7 @@ if (!window.DraftRender2D) {
     drawFixture2D,
     drawWetFloors2D,
     wetRoomLoops,
+    squareSideOf,
     drawRoomTag2D,
     drawUnderlays2D,
     drawGrid2D,

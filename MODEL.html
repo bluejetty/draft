@@ -1242,6 +1242,10 @@
   /* THE BEAM QUESTION HOLDS NOTHING: no backdrop, over the top of the sheet. */
   #beam-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #beam-ask[hidden] { display:none; }
+  #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #brush-warn[hidden] { display:none; }
+  #brush-warn .promote-card { border-color: var(--ink-warn); box-shadow: 0 0 14px var(--ink-warn); }
+  #brush-warn b { color: var(--ink-warn); }
   /* THE TRACE CARD: what the file is, the scale it was drawn at, and the
      two-point CALIBRATE on its own preview. */
   .trace-card [hidden] { display:none !important; }
@@ -2290,6 +2294,14 @@
     </div>
   </div>
 </div>
+<!-- TOO BIG (Movie, 20 Oct: "a popup warning good idea") -- the door or
+     window that could not be made, said where he is looking. Not modal. -->
+<div id="brush-warn" data-brush-warn hidden role="alert">
+  <div class="promote-card">
+    <p><b data-brush-warn-text></b></p>
+    <div class="promote-row"><button type="button" data-brush-warn-ok>OK</button></div>
+  </div>
+</div>
 <div id="footprint-ask" data-footprint-ask hidden role="dialog" aria-label="The wall left its footprint">
   <div class="promote-card">
     <p><b>THIS WALL LEFT ITS FOOTPRINT</b><br>It stands <span data-footprint-out>2'-0"</span> <span data-footprint-side>past</span> the floor below. What did you mean?</p>
@@ -2631,6 +2643,7 @@
   let rulerOn = false;      // RULER down: presses measure instead of drawing
   let brushOn = false;      // DRAFTING BRUSH up: presses lift and dust
   let brushLoad = null;     // what the brush is holding — see BRUSH_PROPS
+  let brushWarned = null;   // { opening } or { wall } a TOO BIG glows on, until the next press
   let rulerFrom = null;     // the ruler's first press, in world feet
   let cursorWorld = null;   // where the cursor last was, for the live readouts
   // THE CORNER UNDER THE CURSOR, or null. Painted, not just cursored -- see
@@ -4622,7 +4635,42 @@
     // simply never drawn.
     openingsOn(shown, true).forEach(({ opening, geometry }) =>
       R.drawOpening2D(ctx, toS, opening, { geometry }, openingEnv()));
+    paintTooBig(ctx, toS, shown);
     paintWindowSizes(ctx, toS, shown);
+  };
+
+  // ── WHAT COULD NOT BE MADE GLOWS ───────────────────────────────────────
+  //
+  // Movie, 20 Oct: "make it glow to be obvious too them when it can't be made
+  // due to width etc". The door a brush could not widen, or the wall too short
+  // for the opening pressed onto it, is ringed in the warning ink with a halo
+  // until the next press or the popup is closed. Screen only: the painters
+  // above it are what prints.
+  const paintTooBig = (ctx, toS, shown) => {
+    if (!brushWarned) return;
+    let ring = null;
+    if (brushWarned.opening) {
+      const hit = openingsOn(shown).find(({ opening }) => opening === brushWarned.opening);
+      if (hit) ring = hit.geometry.corners;
+    } else if (brushWarned.wall && shown.includes(brushWarned.wall)) {
+      ring = [brushWarned.wall.start, brushWarned.wall.end];
+    }
+    if (!ring) return;
+    ctx.save();
+    ctx.strokeStyle = skin['ink-warn'];
+    ctx.shadowColor = skin['ink-warn'];
+    ctx.shadowBlur = 14;
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ring.forEach((pt, i) => {
+      const p = toS({ x: pt.x, y: 0, z: pt.z });
+      if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
+    });
+    if (ring.length > 2) ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
   };
 
   // ── AND EACH WINDOW SAYS ITS SIZE ──────────────────────────────────────
@@ -4681,8 +4729,11 @@
     // and the elevation cannot answer differently about one layer: a layer
     // the table does not carry DRAWS.
     // AND THE DOORS, by A-DIMS-DOOR's own tick (Movie, 1 Oct: "all
-    // window/door/equipe sizes on floor plans"). Only the window's tag takes
-    // a press; a door's is read, and its size is changed in PROPERTIES.
+    // window/door/equipe sizes on floor plans"). A door's tag takes a press
+    // too now (Movie, 20 Oct: "when they click on the D48 - if they change
+    // that to D60 the door width would also change to 5ft wide ... 2 ways to
+    // change the width") -- all but a garage door's, whose G 16W x 8H is
+    // feet and a height, and is changed in PROPERTIES.
     const showWin = layerStandardOf('A-DIMS-WIN')?.visible !== false;
     const showDoor = layerStandardOf('A-DIMS-DOOR')?.visible !== false;
     if (!showWin && !showDoor) return;
@@ -4731,7 +4782,7 @@
       //
       // MEASURED HERE RATHER THAN IN THE HELPER: a width costs a measureText
       // per label, and of this page's labels only these take a click.
-      if (live && placed && isWindow) {
+      if (live && placed && (isWindow || opening.garage !== true)) {
         windowTagHits.push({
           opening, label, cx: placed.cx, cy: placed.cy, angle: placed.angle,
           halfW: ctx.measureText(label).width / 2 + TAG_HIT_PAD,
@@ -4843,6 +4894,26 @@
   // THE HEAD IS THE DATUM for the same reason the placers are head-anchored:
   // heads line up across a wall and sills do not, so height is spent
   // downwards.
+  // THE WIDEST THIS WALL CAN CARRY, said with a refusal (Movie, 20 Oct, on a
+  // French pair that would not go to 5'-0" in a 5'-3" closet wall: "ok
+  // that's why"). clampOpeningToWall is the one rule; this only asks it, to
+  // the half inch, from the top down.
+  const widestOpeningFt = wall => {
+    const G = window.DraftGeometry2D;
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    const opts = { walls: walls(), thicknessFt: openingThicknessFt() };
+    let lo = 0, hi = Math.floor(len * 24);
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (G.clampOpeningToWall(wall, len / 2, mid / 24, opts)) lo = mid; else hi = mid - 1;
+    }
+    return lo / 24;
+  };
+  const widestSaid = (wall, say) => {
+    const most = widestOpeningFt(wall);
+    return most > 0 ? ` The most it can take is ${say(most)}.` : ' It cannot take an opening at all.';
+  };
+
   const commitWindowSize = (opening, text) => {
     const FL = window.DraftFenLabels;
     const G = window.DraftGeometry2D;
@@ -4850,14 +4921,25 @@
     // IN THE DRAWING'S UNITS: the box opened on the tag as painted, so a metric
     // drawing hands back millimetres.
     const metric = drawing?.units === 'metric';
-    const size = FL.parseWindowSize(text, { units: drawing?.units });
+    const isDoor = opening.type === 'door';
+    // A DOOR'S TAG IS ITS WIDTH ALONE -- D60 is sixty inches -- so it reads
+    // one number, and its height stays what PROPERTIES says (Movie: "only
+    // change height in properties").
+    const doorWidth = () => {
+      const nums = String(text ?? '').match(/\d+(?:\.\d+)?/g);
+      if (!nums || nums.length !== 1 || !(Number(nums[0]) > 0)) return null;
+      const widthFt = Number(nums[0]) / (metric ? FL.MM_PER_FT : 12);
+      return { widthFt, heightFt: (Number(opening.headHeight) || 0) - (Number(opening.sillHeight) || 0) };
+    };
+    const size = isDoor ? doorWidth() : FL.parseWindowSize(text, { units: drawing?.units });
     const say = ft => (metric ? `${FL.mmTo(ft, 5)} mm` : `${Math.round(ft * 12)}"`);
     // REFUSE, DO NOT GUESS -- the numberField above keeps the same rule. A
     // size that cannot be read must never become a size nobody typed: this is
     // a drawing someone builds from.
     if (!size) {
       sayOnStrip(`${String(text).trim() || 'That'} is not a size — type it as `
-        + `${metric ? '915 X 1065, in millimetres' : '36 X 42, in inches'}.`);
+        + (isDoor ? `${metric ? 'D 915, in millimetres' : 'D60, in inches'}.`
+          : `${metric ? '915 X 1065, in millimetres' : '36 X 42, in inches'}.`));
       return;
     }
     const host = walls().find(wall => String(wall.id) === String(opening.wallId));
@@ -4869,7 +4951,8 @@
     const fits = G.clampOpeningToWall(host, opening.offset, size.widthFt,
       { walls: walls(), thicknessFt: openingThicknessFt() });
     if (!fits) {
-      sayOnStrip(`${say(size.widthFt)} is wider than this wall can carry.`);
+      brushWarn(`TOO BIG — ${say(size.widthFt)} is wider than this wall can carry.`
+        + widestSaid(host, say), { opening });
       return;
     }
     const head = Number(opening.headHeight) || 0;
@@ -20197,8 +20280,8 @@
       thicknessFt: openingThicknessFt(),
     });
     if (!clamped) {
-      sayOnStrip(`That wall is too short to carry a ${window.DraftFormatters
-        .formatArchitecturalInches(width * 12)} opening.`);
+      brushWarn(`TOO BIG — that wall is too short to carry a ${window.DraftFormatters
+        .formatArchitecturalInches(width * 12)} opening.`, { wall });
       return null;
     }
     const record = {
@@ -26331,6 +26414,7 @@
     // does nothing to the drawing, and a loaded one says what it will do.
     brushChip.classList.toggle('lit', !!brushLoad);
     brushChip.classList.toggle('armed', brushOn);
+    applyBrushCursor();
     const said = brushSays();
     brushLoadOut.textContent = said.short;
     brushChip.title = brushLoad
@@ -28154,8 +28238,8 @@
       const fit = wall && G.clampOpeningToWall(wall, Number(item.offset) || 0, width,
         { walls: walls(), thicknessFt: openingThicknessFt() });
       if (!fit || Math.abs(fit.offset - (Number(item.offset) || 0)) > 1e-6) {
-        sayOnStrip(`TOO BIG — that wall cannot carry a `
-          + `${F.formatArchitecturalInches(width * 12)} opening there. Nothing changed.`);
+        brushWarn(`TOO BIG — that wall cannot carry a `
+          + `${F.formatArchitecturalInches(width * 12)} opening there. Nothing changed.`, { opening: item });
         return;
       }
     }
@@ -28171,8 +28255,37 @@
     sayOnStrip(`${BRUSH_KIND_SAID[hit.type]} takes the brush's properties.`);
   };
 
+  // ── WITHIN A FOOT OF AN OPENING'S DOT, IT IS THE OPENING ──────────────
+  //
+  // Movie, 20 Oct: "i'm trying to GRAB properties from a int FRENCH door and
+  // trying to copy those to a 36 INT normal door, but not working" -- the
+  // strip said THE BRUSH IS HOLDING WALL PROPERTIES: his first press had
+  // landed on the wall beside the door, since an opening only answered a
+  // press inside its own gap. His rule: "if the user is within 1ft of the DOT
+  // for fenstration radius 2ft dia can they pickup the DOOR properties (not
+  // other items lit wall etc)". The dot is the opening's centre grab point.
+  // Asked first, and only by a brush that is empty or holding an opening --
+  // a brush holding a wall still means the wall.
+  const BRUSH_DOT_FT = 1;
+  const openingByDot = worldPt => {
+    let best = null, bestD = BRUSH_DOT_FT;
+    openingsOn(walls()).forEach(({ opening, geometry }) => {
+      const d = Math.hypot(geometry.center.x - worldPt.x, geometry.center.z - worldPt.z);
+      if (d <= bestD) { bestD = d; best = opening; }
+    });
+    return best;
+  };
+  const brushHitAt = at => {
+    if (!brushLoad || brushLoad.kind === 'fenestration') {
+      const opening = openingByDot(at);
+      if (opening) return { type: 'fenestration', item: opening };
+    }
+    return hitAt(at);
+  };
+
   const brushPress = at => {
-    const hit = hitAt(at);
+    brushWarnClear();
+    const hit = brushHitAt(at);
     // ── NOTHING UNDER THE PRESS ──────────────────────────────────────────
     if (!hit) {
       sayOnStrip(brushLoad
@@ -28237,6 +28350,75 @@
       + `properties. That is a ${BRUSH_KIND_SAID[kind] || 'different kind of thing'}.`);
   };
 
+  // ── TOO BIG: A POPUP AND A GLOW ──────────────────────────────────────
+  //
+  // Movie, 20 Oct, on why the French door would not go onto the 36" one:
+  // "oh that's why it didn't fit too wide makes sens a popup warning good
+  // idea" -- and "make it glow to be obvious". The strip still says it; the
+  // card says it where he is looking, and paintTooBig rings what refused.
+  // Not modal: the next press, OK, or Escape puts both away.
+  const brushWarnBox = document.getElementById('brush-warn');
+  const brushWarn = (text, target) => {
+    sayOnStrip(text);
+    brushWarned = target || null;
+    if (brushWarnBox) {
+      brushWarnBox.querySelector('[data-brush-warn-text]').textContent = text;
+      brushWarnBox.hidden = false;
+    }
+    paint();
+  };
+  const brushWarnClear = () => {
+    const had = brushWarned || (brushWarnBox && !brushWarnBox.hidden);
+    brushWarned = null;
+    if (brushWarnBox) brushWarnBox.hidden = true;
+    if (had) paint();
+  };
+  brushWarnBox?.querySelector('[data-brush-warn-ok]')?.addEventListener('click', brushWarnClear);
+
+  // ── TWO CURSORS: PICKING UP, AND PUTTING DOWN ────────────────────────
+  //
+  // Movie, 20 Oct: "can we have 2 different ICONS for cursor - one for when
+  // it empty and GRABBING a property - and a second one that looks like it
+  // DROPPING the properties". An eyedropper while the brush is empty, a brush
+  // with a drip on it while it is loaded -- whether the brush chip is up or
+  // FENESTRATION came up wearing the load. Drawn in the skin's own inks, so
+  // the cursor reads on a night sheet and a day one; the hot spot is the
+  // dropper's tip and the drip.
+  const cursorSvg = (body, hotX, hotY, fallback) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">${body}</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hotX} ${hotY}, ${fallback}`;
+  };
+  const brushCursorFor = loaded => {
+    const ink = skin['accent'], edge = skin['surface-page'];
+    const line = `stroke="${edge}" stroke-width="1.5" stroke-linejoin="round"`;
+    return loaded
+      // A BRUSH, BRISTLES DOWN-LEFT, A DROP FALLING OFF THEM.
+      ? cursorSvg(`<g transform="translate(2 -4)"><path d="M24 2 L27 5 L15 17 L12 14 Z" fill="${ink}" ${line}/>`
+        + `<path d="M12 14 L15 17 L11 22 Q7 25 4 23 Q6 20 7 17 Z" fill="${ink}" ${line}/></g>`
+        + `<path d="M5 21 Q2 25 5 26.5 Q8 25 5 21 Z" fill="${ink}" ${line}/>`, 5, 26, 'copy')
+      // AN EYEDROPPER, TIP DOWN-LEFT: a bulb, a collar, a glass tube.
+      : cursorSvg(`<circle cx="22" cy="6" r="4.5" fill="${ink}" ${line}/>`
+        + `<path d="M15 9 L19 13" stroke="${edge}" stroke-width="5" stroke-linecap="round"/>`
+        + `<path d="M15 9 L19 13" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`
+        + `<path d="M17 11 L4 24 L2 26 L4 24" fill="none" stroke="${edge}" stroke-width="4.5" stroke-linecap="round"/>`
+        + `<path d="M17 11 L3 25" fill="none" stroke="${ink}" stroke-width="2.5" stroke-linecap="round"/>`, 2, 26, 'copy');
+  };
+  // WHICH ONE, IF EITHER. Asked after every tool change and every load: a
+  // brush that is up and empty picks; a load in hand -- brush up, or
+  // FENESTRATION armed with it -- puts down.
+  const brushCursorNow = () => {
+    if (brushOn && !brushLoad) return brushCursorFor(false);
+    if (brushLoad && (brushOn || (activeTool === 'fenestration' && brushLoad.kind === 'fenestration'))) {
+      return brushCursorFor(true);
+    }
+    return null;
+  };
+  const applyBrushCursor = () => {
+    const c = brushCursorNow();
+    if (c) canvas.style.cursor = c;
+    else if (canvas.style.cursor.startsWith('url(')) canvas.style.cursor = drawsRun() || activeTool !== RESTING_TOOL ? 'crosshair' : '';
+  };
+
   // THE LOAD GOES DOWN, THE TOOL STAYS UP -- which the chip alone cannot do,
   // and is why the spec gives Escape a step of its own. Called from the
   // canvas Escape branch, where every other half-taken gesture is put down.
@@ -28257,6 +28439,7 @@
     // the page says is on and that no press can reach.
     if (brushOn && activeTool !== RESTING_TOOL) setTool(RESTING_TOOL);
     canvas.style.cursor = brushOn ? 'copy' : (drawsRun() ? 'crosshair' : '');
+    if (!brushOn) brushWarnClear();
     stripRefresh();
     paint();
   });
@@ -30303,8 +30486,11 @@
         clamped.set(opening, fit.offset);
       });
       if (refused.length) {
-        return `That wall is too short to carry a `
-          + `${sizeText(feet)} opening.`;
+        const wall = openingHostWall(refused[0]);
+        const said = `TOO BIG — that wall is too short to carry a ${sizeText(feet)} opening.`
+          + (wall ? widestSaid(wall, sizeText) : '');
+        brushWarn(said, { opening: refused[0] });
+        return said;
       }
       applyToOpenings(openings, opening =>
         ({ width: feet, offset: clamped.get(opening), ...extra(opening) }));
@@ -32878,8 +33064,9 @@
       // THE BRUSH'S LOAD GOES ONTO AN OPENING PRESSED, not beside it (Movie,
       // 20 Oct: "paste the properties of that door to another existing door
       // which the user would like to change"); bare wall takes a new one.
+      brushWarnClear();
       if (brushHas('fenestration')) {
-        const hit = hitAt(at);
+        const hit = brushHitAt(at);
         if (hit?.type === 'fenestration') { brushDust(hit); return; }
       }
       placeOpening(at);
@@ -34011,6 +34198,7 @@
       // chip cannot do -- pressing that turns the brush off altogether. An
       // empty brush is not an in-progress gesture, so it does not eat the
       // press that a drafter meant for his selection.
+      if (brushWarned || (brushWarnBox && !brushWarnBox.hidden)) { brushWarnClear(); return; }
       if (brushLoad) { brushDrop(); return; }
       // THROUGH THE SHARED LIST, which is what turned this line from a claim
       // into a fact. It used to be `drawStart = null` plus the ruler and the
