@@ -143,8 +143,8 @@ test('a GARDEN door splits into a door width and a window width', async ({ page 
   await page.locator('[data-prop-row="size"] [data-prop-value="60"]').click();
   await expect(page.locator('[data-prop-field="door width"]')).toHaveValue(`2'-6"`);
   await expect(page.locator('[data-prop-field="window width"]')).toHaveValue(`2'-6"`);
-  // A bare number in a door box is inches: 36 is 3'-0", not 36 feet.
-  await page.locator('[data-prop-field="door width"]').fill('36');
+  // Feet first, as every other box (Movie, 20 Oct): 3-0 is 3'-0".
+  await page.locator('[data-prop-field="door width"]').fill('3-0');
   await page.locator('[data-prop-field="door width"]').press('Enter');
   await expect(note(page)).toContainText(`EXT – GARDEN 5'-6"`);
   const f = await h.planFrame(page);
@@ -183,11 +183,11 @@ test('on a door already drawn: style keeps the size, type resets it, flips flip'
   expect([o.doorType, o.doorStyle, o.hingeFlip]).toEqual(['int', 'french', true]);
   expect(o.width, 'a new type goes to its default').toBeCloseTo(4, 6);
 
-  // A bare number typed into a drawn door's WIDTH is inches too.
-  await panel.locator('[data-prop-field="width"]').fill('42');
+  // 0-42 typed into a drawn door's WIDTH is 3'-6", the same as 3-6.
+  await panel.locator('[data-prop-field="width"]').fill('0-42');
   await panel.locator('[data-prop-field="width"]').press('Enter');
   await page.waitForTimeout(150);
   await save(page);
   [o] = await survives(page);
-  expect(o.width, '42 typed is 3\'-6"').toBeCloseTo(3.5, 6);
+  expect(o.width, '0-42 typed is 3\'-6"').toBeCloseTo(3.5, 6);
 });

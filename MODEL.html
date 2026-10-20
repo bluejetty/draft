@@ -18689,18 +18689,19 @@
       // empty box would go through the parser on every blur and refuse,
       // putting an error on the strip for a drafter who typed nothing.
       if (valueFt == null && !input.value.trim()) return;
-      // A BARE NUMBER IN A DOOR OR WINDOW BOX IS INCHES (Movie, 1 Oct: "yes
-      // they do mean \" in the door thing.. same as in the windows"). Nobody
-      // sizes a door at 36 FEET, and the wall boxes' rule -- a bare number is
-      // feet -- gave exactly that. 3-0, 0-36, 3' and 36" still read as they
-      // always did; only the bare number changes, and only here.
+      // FEET FIRST, THE SAME AS EVERY OTHER BOX (Movie, 20 Oct: "make it the
+      // same format as th other ones where it 1-6 or 0-18 would be the same.
+      // (would need to type feet first before inches)"). Since 1 Oct a bare
+      // number in a door or window box had been inches; it is feet again, so
+      // 3 is 3'-0" here as in the LENGTH box, and 1-6, 0-18, 3' and 36" read
+      // as they always did.
       //
       // A METRIC BOX LEFT AS IT WAS SHOWN IS NOT AN EDIT. It shows the size
       // to the nearest 5 mm, so committing it back would move a 36" window to
       // 915 mm -- 36.02" -- on every blur, a change nobody made.
       if (metric && input.value.trim() === shown()) return;
       const parsed = (metric && parseMetricSize(input.value))
-        || (inches ? F.parseAssemblyInches : F.parseArchitecturalLength)(input.value);
+        || F.parseArchitecturalLength(input.value);
       if (!parsed.ok) {
         sayOnStrip(parsed.error);
         input.value = shown();

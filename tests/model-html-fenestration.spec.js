@@ -728,7 +728,7 @@ test('a head that is not above its sill is refused, and nothing changes',
     await pickType(page, 'window');
     const before = await fieldValue(page, 'head');
 
-    await typeInto(page, 'head', '12');   // 12 inches: below the 2'-6" sill
+    await typeInto(page, 'head', '0-12');   // 12 inches: below the 2'-6" sill
     await expect(page.locator('#strip-message')).toContainText('is not above the sill');
     // THE BOX GOES BACK TO WHAT IS IN FORCE. A field left holding a number the
     // page refused is a field lying about the state -- the next opening would
@@ -763,13 +763,29 @@ test('nonsense in a field is refused out loud and the box reverts',
   });
 
 test('the panel shows what is in force, not what was typed', async ({ page }) => {
-  // 42 is a legal entry and 3'-6" is what it means: a bare number in a door
-  // or window box is inches (Movie, 1 Oct). A panel echoing the keystrokes
-  // would show two different drawings the same number two ways.
+  // 0-42 is a legal entry and 3'-6" is what it means. A panel echoing the
+  // keystrokes would show two different drawings the same number two ways.
   await open(page);
   await armOpening(page);
   await pickType(page, 'window');
-  await typeInto(page, 'width', '42');
+  await typeInto(page, 'width', '0-42');
   expect(await fieldValue(page, 'width')).toBe("3'-6\"");
   await expect(page.locator('[data-opening-note]')).toContainText("3'-6\"");
+});
+
+// FEET FIRST, THE SAME AS EVERY OTHER BOX (Movie, 20 Oct: "make it the same
+// format as th other ones where it 1-6 or 0-18 would be the same. (would need
+// to type feet first before inches)"). A bare number is feet, as in the
+// LENGTH box; 1-6 and 0-18 are the same size.
+test('door and window boxes read feet first: 3 is 3\'-0", and 1-6 and 0-18 are the same', async ({ page }) => {
+  await open(page);
+  await armOpening(page);
+  await pickType(page, 'window');
+  await typeInto(page, 'width', '3');
+  expect(await fieldValue(page, 'width'), 'a bare 3 is three feet').toBe("3'-0\"");
+  await typeInto(page, 'width', '1-6');
+  expect(await fieldValue(page, 'width')).toBe("1'-6\"");
+  await typeInto(page, 'width', '4');
+  await typeInto(page, 'width', '0-18');
+  expect(await fieldValue(page, 'width'), '0-18 is the same 1\'-6"').toBe("1'-6\"");
 });
