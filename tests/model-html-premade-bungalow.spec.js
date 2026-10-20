@@ -1651,7 +1651,8 @@ test('ON GRADE / 2 STOREY builds the two-storey house on a ledger floor; the boa
   const one = await page.locator('[data-build-entry="bungalow-ongrade"]').boundingBox();
   const two = await page.locator('[data-build-entry="twoStorey-ongrade"]').boundingBox();
   expect(Math.abs(one.x - two.x), 'stacked, not side by side').toBeLessThan(2);
-  const tops = await page.locator('[data-build-entry]').evaluateAll(els =>
+  // THE OPEN FAMILY'S ROW: the SUITE's pair stands in the family row above.
+  const tops = await page.locator('#build-entries [data-build-entry]').evaluateAll(els =>
     els.map(el => el.getBoundingClientRect()).filter(r => r.width > 0).map(r => Math.round(r.top)));
   const firstTop = Math.min(...tops);
   expect(tops.every(t => t < firstTop + one.height * 2 + 8), 'one row of slots').toBe(true);

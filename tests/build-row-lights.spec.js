@@ -48,8 +48,9 @@ const TYPES = ['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel'];
 // somewhere else would be the bug"; this was that roster. Two other specs
 // already derive theirs (model-drivethru, model-html-topbar), which is why
 // they did not notice at all.
+// THE OLD PAGE'S ROW: the SUITE family (stacked, 20 Oct) is MODEL.html's.
 const familiesOf = page => page.evaluate(
-  () => window.DraftBuildMenu.BUILD_MENU.map(family => family.id));
+  () => window.DraftBuildMenu.BUILD_MENU.filter(family => !family.stack).map(family => family.id));
 const FAMILY_OF = { bungalow: 'bungalow', twoStorey: 'bungalow', bilevel: 'bilevel', modifiedBilevel: 'bilevel' };
 
 // Each lamp read as the pair that describes it: which art it wears (or, for

@@ -647,7 +647,9 @@ const undesignedTile = page => page.evaluate(() => {
       // `needsSize` entries are the detached garage's, which answer a
       // different prompt entirely -- they ask HOW BIG before the bone means
       // anything, so they are not "a tile with no design".
-      if (!entry.needsSize && !designed.has(entry.id)) {
+      // A SUITE is not a house either: it is started on the boneyard, not
+      // built (Movie, 20 Oct).
+      if (!entry.needsSize && !entry.suite && !designed.has(entry.id)) {
         return { family: family.id, entry: entry.id, label: entry.label };
       }
     }

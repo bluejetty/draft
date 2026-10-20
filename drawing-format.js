@@ -1825,6 +1825,13 @@ if (!window.DraftDrawingFormat) {
   const GARAGE_PLANS = Object.freeze(['none', 'attached', 'attachedRoomOver']);
   const garagePlan = raw => oneOf(raw, GARAGE_PLANS, null);
 
+  // A SUITE FILE SAYS WHICH KIND IT IS (Movie, 20 Oct: RESIDENTIAL SUITE and
+  // COMMERCIAL SUITE). Drawn on the boneyard and placed as a hologram on a
+  // floor of another drawing, which brings it in as a SUITE and names the
+  // kind. Null for every other drawing.
+  const SUITE_KINDS = Object.freeze(['residential', 'commercial']);
+  const suiteKind = raw => oneOf(raw, SUITE_KINDS, null);
+
   // ── the board ─────────────────────────────────────────────────────────────
   // WHICH BOARD THIS DRAWING IS ON, and it belongs to the DRAWING rather than
   // the browser. GILLIGAN-TOY-BONES-WORKORDER §7: "the same drafter meets it
@@ -2443,6 +2450,8 @@ if (!window.DraftDrawingFormat) {
     tour,
     roofIntent,
     buildType,
+    SUITE_KINDS,
+    suiteKind,
     BUILD_TYPES,
     CASEMENT_TYPES,
     DOOR_TYPES,
