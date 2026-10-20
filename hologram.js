@@ -725,7 +725,16 @@
   const isSuiteFile = holo => Boolean(window.DraftDrawingFormat?.suiteKind?.(holo?.source?.suiteKind));
 
   const paintCut = (ctx, w, h, cut, saved, frame, env = {}) => {
-    const list = drawn(saved);
+    // A HOLOGRAM'S OWN SUITES BEFORE ITS SHELL (Movie, 20 Oct: "the EXT
+    // WALL isn't showing ... only showing up on the HOLOGRAM that has a
+    // HOLOGRAM SHELL - phase 1 and also the SUITES within that shell" -- "it
+    // is working in the CURRENT PHASE 2"). Each elevation pass paints its own
+    // faces over what is under it, so the shell has to go on last, over its
+    // suites, the order this drawing's own shell takes over its suites: drawn
+    // shell-first, a suite's back and side walls painted over the shell's
+    // front face and left it a bare outline round its windows.
+    const all = drawn(saved);
+    const list = [...all.filter(holo => holo.nested), ...all.filter(holo => !holo.nested)];
     const CV = window.DraftCutView;
     const CE = window.DraftCutViewEnv;
     const F = window.DraftDrawingFormat;
