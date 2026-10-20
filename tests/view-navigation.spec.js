@@ -280,3 +280,20 @@ test('a finger finishes an outline with FINISH — no keyboard anywhere', async 
   expect(master.points).toHaveLength(4);
   await context.close();
 });
+
+// AND FOUR TIMES FURTHER IN THAN IT USED TO GO (Movie, 20 Oct: "it seems
+// like this is max zoom in ability, would it be possible to go about 4X even
+// further zoom"). The wheel stopped at 200 px a foot; it stops at 800 now,
+// where a sixteenth of an inch is four pixels.
+test('the wheel zooms in past the old 200 px a foot, to 800 and no further', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  const box = await page.locator('#plan').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let i = 0; i < 40; i++) await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(150);
+  const { scale } = await h.planFrame(page);
+  expect(scale, 'past where it used to stop').toBeGreaterThan(200);
+  expect(scale, 'and stopped at 800').toBeCloseTo(800, 3);
+});
