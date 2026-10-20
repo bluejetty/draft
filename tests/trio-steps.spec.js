@@ -30,7 +30,7 @@ test.describe('PROJECT: the arrows cycle the house types', () => {
     // until somebody presses (tests/project-page.spec.js asks for this
     // outright). So the first DOWN has to land on the FIRST stop rather than
     // doing nothing, which is what an arrow reading a -1 would otherwise do.
-    const lit = () => page.evaluate(() => [...document.querySelectorAll('.family-col .family-button')]
+    const lit = () => page.evaluate(() => [...document.querySelectorAll('.family-col:not(#suite-family-row) .family-button')]
       .map((button, index) => ({ index, label: button.textContent.trim(),
         on: button.getAttribute('aria-pressed') === 'true' }))
       .filter(entry => entry.on));
@@ -91,8 +91,9 @@ test.describe('PROJECT: the arrows cycle the house types', () => {
     await down(page).click();
     await expect(up(page), 'UP is live on the first stop').toBeDisabled();
     await expect(down(page)).toBeEnabled();
+    // THE ARROWS STEP THE HOUSE TYPES; the SUITE's two (20 Oct) are not one.
     const stops = await page.evaluate(() =>
-      document.querySelectorAll('.family-col .family-button').length);
+      document.querySelectorAll('.family-col:not(#suite-family-row) .family-button').length);
     for (let i = 1; i < stops; i += 1) await down(page).click();
     await expect(down(page), 'DOWN is live on the last stop').toBeDisabled();
     await expect(up(page)).toBeEnabled();
