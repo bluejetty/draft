@@ -14883,12 +14883,32 @@
   // RAW SNAPSHOTS, taken at COPY. Holding references to the live items would
   // let an edit -- or a DELETE -- between the copy and the paste reach back
   // into what the drafter thought he had taken.
+  // A BEAM COPIES WITH WHAT IT IS (Movie, 20 Oct: "i COPYed the BEAM - when
+  // this happens the COLUMNS ... and pad footing for the whole building
+  // should get coppied and pasted" -- a second row under the main floor's TJI
+  // in the middle of each suite). The whole row across the building, every
+  // piece of it, and every post standing on it, each post with its pad.
+  const copiedEntries = () => {
+    const out = selection.slice();
+    const has = item => out.some(entry => entry.item === item);
+    selection.filter(entry => entry.type === 'beam').forEach(({ item }) => {
+      beamRun(item).forEach(piece => {
+        if (!has(piece)) out.push({ type: 'beam', item: piece });
+        columnsOnBeam(piece).forEach(post => { if (!has(post)) out.push({ type: 'column', item: post }); });
+      });
+    });
+    return out;
+  };
   const copySelection = () => {
     if (!drawing || !selection.length) return 0;
-    held = selection
+    held = copiedEntries()
       .filter(entry => entry.type === 'wall'
         || (SELECTION_LISTS[entry.type] && !NOT_COPIED.has(entry.type)))
       .map(entry => ({ type: entry.type, raw: JSON.parse(JSON.stringify(entry.item)) }));
+    const posts = held.filter(h => h.type === 'column').length;
+    if (held.some(h => h.type === 'beam')) {
+      sayOnStrip(`COPIED the beam row${posts ? ` and its ${posts} post${posts === 1 ? '' : 's'} with their pads` : ''}. PASTE, then MOVE it where the new row goes.`);
+    }
     return held.length;
   };
 
@@ -14974,6 +14994,10 @@
       landed.push({ type, item: copy });
     });
     if (!landed.length) return 0;
+    // ONE UNDO TAKES THE PASTE BACK, every piece of it.
+    undoStack.push({ kind: 'built', walls: landed.filter(e => e.type === 'wall').map(e => e.item),
+      outlines: [], openings: [],
+      items: landed.filter(e => e.type !== 'wall').map(({ type, item }) => ({ list: drawing[SELECTION_LISTS[type]], item })) });
     markDirty();
     // SELECTED WHERE IT LANDED, so the drafter can see what he just put down
     // and move it without hunting for it.
