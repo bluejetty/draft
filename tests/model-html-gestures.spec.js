@@ -650,6 +650,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // one, rather than predict which would break.
           buttons: ['left-tab', 'build-tab', 'props-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
+            // THE SUITE'S TWO TILES (Movie, 20 Oct), standing in the family
+            // row close together: each starts a suite on the BONEYARD, a door
+            // the table's boneyard row already carries.
+            'RESIDENTIAL SUITE', 'COMMERCIAL SUITE',
             'copy', 'paste',
             // THE STOREY ARROWS (Movie, 12 Oct: "id like UP and DOWN arrows
             // and when they are pressed the LEVEL goes either to the next one
