@@ -89,6 +89,34 @@ test('the four keys are copied over the tabs, and the DRAFTING pane keeps its ow
   await expect(bar(page, 'dimension')).toHaveAttribute('aria-pressed', 'true');
 });
 
+// UNDER THE TOP BAR, FLUSH LEFT (Movie, 20 Oct: "the SELECT ASSEMBLY TRIM
+// DIMENSIONS - new buttons overlap the tab - we should push those so they are
+// right underneath the top bar and could also be pushed fully to the left (i
+// might add more buttons to it"). The bar stood with its foot on the tabs'
+// head; now it hangs 4px under the strip on the page's left edge, and a
+// fifth key goes beside the fourth rather than into a row that reaches the
+// tabs again.
+test('the bar hangs under the top bar on the left edge, clear of the tabs, and grows sideways', async ({ page }) => {
+  await open(page);
+  const box = await page.locator('#select-bar').boundingBox();
+  const tab = await page.locator('#left-tab').boundingBox();
+  const strip = await page.locator('#strip').boundingBox();
+  expect(box.x, 'flush left').toBe(0);
+  expect(box.y, 'right under the top bar').toBeGreaterThanOrEqual(strip.y + strip.height);
+  expect(box.y, 'and not far under it').toBeLessThan(strip.y + strip.height + 12);
+  expect(box.y + box.height, 'clear of the tabs').toBeLessThanOrEqual(tab.y - 8);
+  // A FIFTH KEY GOES BESIDE THE FOURTH.
+  await page.evaluate(() => {
+    const keys = document.querySelector('#select-bar .tool-keys');
+    const more = keys.lastElementChild.cloneNode(true);
+    more.dataset.barKey = 'probe';
+    keys.append(more);
+  });
+  const grown = await page.locator('#select-bar').boundingBox();
+  expect(grown.height, 'one row still').toBe(box.height);
+  expect(grown.width, 'wider by a key').toBeGreaterThan(box.width + 30);
+});
+
 test('SELECT, then FENESTRATION: the box takes only the windows, and DELETE takes them all', async ({ page }) => {
   const { at } = await open(page);
   await bar(page, 'select').click();
