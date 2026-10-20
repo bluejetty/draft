@@ -35,7 +35,7 @@ const MUTANTS = [
     find: "      canvas.parentElement.append(dimPop);\n",
     with: "", test: 'D arms it: HORIZ, VERT and DIAG in PROPERTIES and on the pop-up over the sheet, HORIZ lit' },
   { file: 'MODEL.html', name: "a tool change keeps the string in hand",
-    find: "    if (next !== 'dimension') { dimPoints = []; dimPlacing = false; }\n",
+    find: "    if (next !== 'dimension' || dimLastLine) { dimPoints = []; dimPlacing = false; dimLastLine = null; }\n",
     with: "", test: 'Esc puts the string down, one UNDO takes a placed one, and AUTO DIMS leaves hand strings alone' },
   { file: 'MODEL.html', name: "a hidden kind is still painted",
     find: "  const shownDimensions = () => dimensions().filter(d => !dimsHidden[dimKind(d)]);\n",
