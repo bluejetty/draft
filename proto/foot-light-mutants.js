@@ -31,8 +31,8 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the light governs drawing only -- the drag half of "one light, both" is gone',
-    find: '          if (!toy && footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }\n',
-    with: '          /* mutant */\n',
+    find: '            const Q = window.DraftToyConstraints;\n            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }',
+    with: '            /* mutant */',
     test: 'a DRAFTING drag moves a whole number of feet' },
 
   { file: 'MODEL.html',
@@ -67,8 +67,8 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the drag rounds ONE axis, so a two-axis drag lands off the foot',
-    find: '          if (!toy && footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }',
-    with: '          if (!toy && footOn && Q) { dx = Q.quantiseFeet(dx); }',
+    find: '            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }',
+    with: '            if (Q) { dx = Q.quantiseFeet(dx); }',
     test: 'a DRAFTING drag moves a whole number of feet' },
 
   { file: 'MODEL.html',
