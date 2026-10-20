@@ -25817,8 +25817,11 @@
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
     // have nowhere to put it.
-    // AND AFTER A MOVE, for the distance it went (moveTyped).
-    const moveTypable = moveTypedReady();
+    // AND AFTER A MOVE, for the distance it went (moveTyped); and with one
+    // dimension selected, for its length (driveDimension).
+    const moveReady = moveTypedReady();
+    const dimReady = !moveReady && dimTypedReady();
+    const moveTypable = moveReady || dimReady;
     const typable = !!(((drawsRun() && drawStart)
       || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable;
     if (lengthBox.disabled === typable) {
@@ -25861,7 +25864,10 @@
     } else if (!live && !typable && lengthBox.value) {
       lengthBox.value = '';
     }
-    if (moveTypable && document.activeElement !== lengthBox) {
+    if (dimReady && document.activeElement !== lengthBox) {
+      const dim = selection[0].item;
+      lengthBox.value = feetLabel(Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z));
+    } else if (moveReady && document.activeElement !== lengthBox) {
       lengthBox.value = feetLabel(moveTyped.opening
         ? Math.abs(moveTyped.opening.offset - moveTyped.was)
         : Math.hypot(moveTyped.dx, moveTyped.dz));
@@ -27873,8 +27879,166 @@
   };
   // ANOTHER TOOL PUT IN HAND ENDS IT: the box is that tool's from then on.
   toolListeners.push(() => { if (moveTyped) { moveTyped = null; stripRefresh(); } });
+
+  // ── A DIMENSION THAT DRIVES (Movie, 20 Oct) ───────────────────────────
+  //
+  // "if i click on that dimension and the type in 9-5 1/2" into the
+  // dimension instead, it would stetch the wall to that size ... in this one
+  // i have the door and its 2 sidewalls as an ASSEMBLY so it shouldn't
+  // stretch but the other 'LONE" line at the north / top side should stretch
+  // because it isn't in an ASSEMBLY" -- "i'd like to do this for the windows
+  // and door dimensions too" -- and, of a value that cannot be met, nothing
+  // changes and the strip says why.
+  //
+  // ONE DIMENSION SELECTED, the LENGTH box reads it and takes a number;
+  // ENTER makes the dimension that long by moving what stands at ONE of its
+  // ends, along the dimension's own line. What stands there is found by
+  // position -- a record keeps only its two points -- on the extension line
+  // through each end: a door or window (its dot or a jamb), a wall standing
+  // across the line (either face or its centre), or a wall's or line's end.
+  // Which end moves, best first: an OPENING (it slides along its wall; one
+  // whose wall is in an assembly moves the assembly instead), then an
+  // ASSEMBLY (it moves whole), then LONE geometry (it moves, and the walls
+  // joined to it stretch). A tie moves the far end. So the overall stays put
+  // unless the overall itself is what was typed into.
+  // A DECLARATION, not a const: the strip refreshes while the page is still
+  // loading, before this line has run.
+  function dimTypedReady() {
+    return !!(selection.length === 1 && selection[0].type === 'dimension'
+      && selection[0].item?.start && selection[0].item?.end && !moveDrag
+      && !(drawsRun() && drawStart) && !moveTypedReady());
+  }
+  // A dimension picked or let go opens or shuts the box at once.
+  selectionWatchers.push(() => stripRefresh());
+  const DIM_FEATURE_TOL_FT = 0.03;
+  const dimEndFeatures = (dim, which) => {
+    const G = window.DraftGeometry2D;
+    const L = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+    const u = { x: (dim.end.x - dim.start.x) / L, z: (dim.end.z - dim.start.z) / L };
+    const along = p => (p.x - dim.start.x) * u.x + (p.z - dim.start.z) * u.z;
+    const at = which === 'start' ? 0 : L;
+    const near = a => Math.abs(a - at) <= DIM_FEATURE_TOL_FT;
+    const thick = openingThicknessFt();
+    const found = { openings: [], walls: [], points: [] };
+    openingsOn(walls()).forEach(({ opening }) => {
+      const c = openingCentre(opening);
+      const host = (drawing?.walls || []).find(w => String(w.id) === String(opening.wallId));
+      if (!c || !host) return;
+      const len = Math.hypot(host.end.x - host.start.x, host.end.z - host.start.z) || 1;
+      const w = { x: (host.end.x - host.start.x) / len, z: (host.end.z - host.start.z) / len };
+      const half = (Number(opening.width) || 0) / 2;
+      if ([c, { x: c.x + w.x * half, z: c.z + w.z * half }, { x: c.x - w.x * half, z: c.z - w.z * half }]
+        .some(p => near(along(p)))) found.openings.push({ opening, host, w });
+    });
+    walls().forEach(wall => {
+      if (!wall.start || !wall.end) return;
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z) || 1;
+      const dot = ((wall.end.x - wall.start.x) * u.x + (wall.end.z - wall.start.z) * u.z) / len;
+      const t = thick(wall);
+      if (Math.abs(dot) < 0.02) {
+        // ACROSS THE LINE: its centre, either face, or the far face of a
+        // wall drawn on one of its faces.
+        const a = along(wall.start);
+        if ([0, t / 2, -t / 2, t, -t].some(off => near(a + off))) found.walls.push({ wall, pts: [wall.start, wall.end] });
+      } else {
+        ['start', 'end'].forEach(key => {
+          const a = along(wall[key]);
+          if ([0, t / 2, -t / 2, t, -t].some(off => near(a + off))) found.points.push({ wall, pts: [wall[key]] });
+        });
+      }
+    });
+    lines().forEach(line => ['start', 'end'].forEach(key => {
+      if (line[key] && near(along(line[key]))) found.points.push({ line, pts: [line[key]] });
+    }));
+    return { found, u, L };
+  };
+  // What one end would move, and how good a choice it is.
+  const dimEndPlan = (found) => {
+    const inGroup = wall => groupOf({ type: 'wall', item: wall });
+    const opening = found.openings[0];
+    if (opening) {
+      const group = inGroup(opening.host);
+      return group ? { kind: 'assembly', group, score: 3 } : { kind: 'opening', ...opening, score: 3 };
+    }
+    const runs = [...found.walls, ...found.points];
+    const grouped = runs.map(r => r.wall && inGroup(r.wall)).find(Boolean);
+    if (grouped) return { kind: 'assembly', group: grouped, score: 2 };
+    const pts = [...new Set(runs.flatMap(r => r.pts))];
+    return pts.length ? { kind: 'lone', pts, score: 1 } : null;
+  };
+  const driveDimension = feet => {
+    const dim = selection[0].item;
+    const G = window.DraftGeometry2D;
+    if (!(feet > 0)) { sayOnStrip('Type a length over zero.'); return; }
+    const S = dimEndFeatures(dim, 'start'), E = dimEndFeatures(dim, 'end');
+    const delta = feet - S.L;
+    if (Math.abs(delta) < 1e-6) { lengthBox.blur(); sayOnStrip(`Already ${feetLabel(feet)}.`); return; }
+    const plans = [['end', dimEndPlan(E.found)], ['start', dimEndPlan(S.found)]].filter(([, p]) => p);
+    if (!plans.length) { sayOnStrip('Nothing stands at either end of that dimension to move -- it stays as it is.'); return; }
+    plans.sort((a, b) => b[1].score - a[1].score);
+    const [which, plan] = plans[0];
+    const sign = which === 'end' ? 1 : -1;
+    const shift = { x: S.u.x * delta * sign, z: S.u.z * delta * sign };
+    let step;
+    if (plan.kind === 'opening') {
+      const by = (shift.x * plan.w.x + shift.z * plan.w.z);
+      const want = Number(plan.opening.offset) + by;
+      const clamped = G.clampOpeningToWall(plan.host, want, plan.opening.width,
+        { walls: walls(), thicknessFt: openingThicknessFt() });
+      if (!clamped || Math.abs(clamped.offset - want) > 1e-4) {
+        sayOnStrip(`The ${String(plan.opening.type || 'opening').toLowerCase()} can't go there -- it would run past the end of its wall. Nothing changed.`);
+        return;
+      }
+      const was = plan.opening.offset;
+      plan.opening.offset = clamped.offset;
+      step = foldRedim({ kind: 'move-opening', opening: plan.opening, was });
+    } else {
+      const pts = plan.kind === 'assembly'
+        ? [...new Set(itemsOfGroup(plan.group).flatMap(rotatePointsOf))]
+        : plan.pts;
+      const before = pts.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+        ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
+      const lens = new Map(walls().map(w => [w, { x: w.end.x - w.start.x, z: w.end.z - w.start.z }]));
+      pts.forEach(v => { v.x += shift.x; v.z += shift.z; });
+      // A WALL SQUEEZED TO NOTHING, OR TURNED INSIDE OUT, is a value the
+      // drawing cannot meet: everything goes back and the strip says so.
+      const crushed = walls().find(w => {
+        const was = lens.get(w);
+        const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z;
+        return was && (Math.hypot(dx, dz) < 0.25 || dx * was.x + dz * was.z < 0);
+      });
+      if (crushed) {
+        before.forEach(b => { b.vtx.x = b.x; b.vtx.z = b.z; });
+        sayOnStrip(`That would squeeze a wall to nothing -- ${feetLabel(feet)} doesn't fit. Nothing changed.`);
+        return;
+      }
+      pts.forEach(relinkVertex);
+      step = foldRedim({ kind: 'move', before });
+    }
+    // A HAND DIMENSION NOT LINKED TO WHAT MOVED says the new length too.
+    const ref = dim[`${which}Ref`];
+    const steps = [step];
+    if (dim.auto !== true && !ref) {
+      steps.unshift({ kind: 'props', edits: [{ item: dim, before: { ...dim } }] });
+      dim[which] = { ...dim[which], x: dim[which].x + shift.x, z: dim[which].z + shift.z };
+    }
+    undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : step);
+    setSelection(selection.filter(entry => (drawing.dimensions || []).includes(entry.item)));
+    lengthBox.blur();
+    markDirty();
+    const what = plan.kind === 'opening' ? `The ${String(plan.opening.type || 'opening').toLowerCase()} slid`
+      : plan.kind === 'assembly' ? 'The assembly moved' : 'It moved';
+    sayOnStrip(`${what} ${feetLabel(Math.abs(delta))} -- the dimension is ${feetLabel(feet)}. UNDO puts it back.`);
+    paint();
+  };
   const commitTypedLength = () => {
     if (moveTypedReady()) { moveByTyped(); return; }
+    if (dimTypedReady()) {
+      const parsed = F.parseArchitecturalLength(lengthBox.value);
+      if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+      driveDimension(parsed.inches / 12);
+      return;
+    }
     if (activeTool === 'outline') {
       if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
       const feet = typedOutlineFeet();
