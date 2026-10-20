@@ -15406,7 +15406,8 @@
       const lone = selection.length === 1 && selection[0].type === 'fenestration' ? selection[0].item : null;
       const host = lone && walls().find(wall => String(wall.id) === String(lone.wallId));
       if (host) {
-        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false };
+        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false,
+          live: liveRedimBegin() };
         canvas.setPointerCapture(event.pointerId);
         return;
       }
@@ -15452,7 +15453,10 @@
       const clamped = window.DraftGeometry2D.clampOpeningToWall(wall, along, d.opening.width, {
         walls: walls(), thicknessFt: openingThicknessFt(),
       });
-      if (clamped) d.opening.offset = clamped.offset;
+      if (clamped && clamped.offset !== d.opening.offset) {
+        d.opening.offset = clamped.offset;
+        liveRedimStep(d.live);
+      }
       paint();
       return;
     }
@@ -15552,7 +15556,7 @@
       // One slide, one UNDO, with the strings that measure it re-laid in the
       // same step; nothing pushed when the clamp held it where it was.
       if (d.opening.offset !== d.was) {
-        undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));
+        undoStack.push(liveRedimFold({ kind: 'move-opening', opening: d.opening, was: d.was }, d.live));
         // AND A TYPED DISTANCE MAY FINISH IT, as it does a wall (moveTyped):
         // the slide gives the way along the wall, the box how far.
         moveTyped = { opening: d.opening, host: d.host, was: d.was,
@@ -21005,6 +21009,35 @@
   // before this runs, and a step that took the list over would hand undo the
   // dimensions and keep the piles -- one Ctrl+Z leaving concrete in the
   // ground under an overhang that is no longer there.
+  // AND WHILE AN OPENING SLIDES, THE STRINGS FOLLOW IT LIVE (Movie, 20 Oct:
+  // "it would be really nice to autoupdate those fenstration dimensions
+  // immediately if possible (so the user can see what they move the opening
+  // too in REAL time"). The strings on the level are noted as the drag
+  // begins and asked again on every move; on the release the step takes back
+  // what the last ask put down and restores what was there BEFORE the drag
+  // -- not the in-between strings the hand passed through -- so one UNDO
+  // still puts the plan back as it was. Null where there are no auto strings
+  // to follow, for redimAfterMove's reason.
+  const liveRedimBegin = () => {
+    if (!drawing) return null;
+    const levelId = activeLevelId();
+    const view = activeViewId() || 'plan';
+    const here = (drawing.dimensions || []).filter(dim => dim.auto === true
+      && Number(dim.levelId) === Number(levelId) && (dim.view || 'plan') === view);
+    return here.length ? { levelId, view, before: here } : null;
+  };
+  const liveRedimStep = live => { if (live) placeAutoDims(live.levelId, live.view); };
+  const liveRedimFold = (step, live) => {
+    if (!live) return foldRedim(step);
+    liveRedimStep(live);
+    const list = drawing.dimensions || [];
+    const placed = list.filter(dim => dim.auto === true && Number(dim.levelId) === Number(live.levelId)
+      && (dim.view || 'plan') === live.view && !live.before.includes(dim));
+    const removed = live.before.filter(dim => !list.includes(dim));
+    (step.items = step.items || []).push(...placed.map(item => ({ list: drawing.dimensions, item })));
+    if (removed.length) (step.restored = step.restored || []).push({ list: drawing.dimensions, items: removed });
+    return step;
+  };
   const foldRedim = step => {
     const redim = redimAfterMove();
     if (!redim) return step;
@@ -30458,7 +30491,34 @@
   };
   // A point as the string takes it: on a node, on a cross line, on a corner,
   // or where it was pressed. TOY has no SNAP or TRACK; its corners still take.
+  // THE DOT IN THE MIDDLE OF A DOOR OR WINDOW IS A DIMENSION POINT (Movie,
+  // 20 Oct: "can you make that round dot in the middle SNAPABLE point ORANGE
+  // for the dimensions to link onto and if i move that can the dimension
+  // move with it"). Its centre on the wall's centreline -- `offset` is the
+  // centre's distance from the host wall's start -- and it beats every other
+  // catch in its reach, because the drafter aimed at it.
+  const openingCentre = opening => {
+    const wall = opening && (drawing?.walls || []).find(w => String(w.id) === String(opening.wallId));
+    if (!wall?.start || !wall?.end) return null;
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    if (!(len > 1e-9) || !Number.isFinite(Number(opening.offset))) return null;
+    const t = Number(opening.offset) / len;
+    return { x: wall.start.x + (wall.end.x - wall.start.x) * t, z: wall.start.z + (wall.end.z - wall.start.z) * t };
+  };
+  const openingCentreAt = at => {
+    if (!at) return null;
+    const r = pullFt(NODE_PULL_PX);
+    let best = null;
+    openingsOn(walls()).forEach(({ opening }) => {
+      const c = openingCentre(opening);
+      const d = c && Math.hypot(c.x - at.x, c.z - at.z);
+      if (c && d <= r && (!best || d < best.d)) best = { d, c, opening };
+    });
+    return best;
+  };
   const dimPoint = at => {
+    const dot = openingCentreAt(at);
+    if (dot) return { x: dot.c.x, z: dot.c.z, ref: { openingId: String(dot.opening.id), x: dot.c.x, z: dot.c.z } };
     const snap = board !== 'toy' ? drawSnap(at) : {};
     const p = snap.pt || cornerSnap(at, []) || at;
     return { x: p.x, z: p.z, ...(snap.pt || cornerSnap(at, []) ? dimLinkAt(p) : {}) };
@@ -30486,13 +30546,19 @@
     const list = drawing?.dimensions;
     if (!Array.isArray(list) || !list.some(d => d.startRef || d.endRef)) return;
     const byId = new Map((drawing.walls || []).map(w => [String(w.id), w]));
+    const fenById = new Map((drawing.fenestrations || []).map(f => [String(f.id), f]));
+    // An end on an opening's dot reads the dot where the opening now is --
+    // every paint, so it follows the door while the door is being slid.
+    const refPoint = ref => (ref.openingId != null
+      ? openingCentre(fenById.get(String(ref.openingId)))
+      : byId.get(String(ref.wallId))?.[ref.end]);
     list.forEach(dim => {
       const len = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
       if (!(len > 1e-9)) return;
       const u = { x: (dim.end.x - dim.start.x) / len, z: (dim.end.z - dim.start.z) / len };
       [['startRef', 'start'], ['endRef', 'end']].forEach(([key, at]) => {
         const ref = dim[key];
-        const v = ref && byId.get(String(ref.wallId))?.[ref.end];
+        const v = ref && refPoint(ref);
         if (!v) return;
         const along = (v.x - ref.x) * u.x + (v.z - ref.z) * u.z;
         if (Math.abs(v.x - ref.x) < 1e-9 && Math.abs(v.z - ref.z) < 1e-9) return;
@@ -30608,7 +30674,22 @@
     // THE NODE IT WILL LOCK TO, LIT (Movie, 18 Oct: "light them NODES up for
     // the DIMENSION points so the user will know they are going to be locked
     // on the right spot"). Not while the string is being placed.
-    if (!dimPlacing) {
+    // THE DOORS' AND WINDOWS' DOTS, ORANGE while the tool is up, so the
+    // drafter sees they take a dimension; the one in reach gets the donut.
+    const dot = !dimPlacing ? openingCentreAt(cursorWorld) : null;
+    ctx.save();
+    ctx.fillStyle = DONUT.orange.ink;
+    ctx.shadowColor = DONUT.orange.glow;
+    ctx.shadowBlur = 6;
+    openingsOn(walls()).forEach(({ opening }) => {
+      const c = openingCentre(opening);
+      if (!c) return;
+      const s = toS(c);
+      ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+    if (dot) paintDonut(dot.c, 'orange');
+    if (!dimPlacing && !dot) {
       const snap = board !== 'toy' ? drawSnap(cursorWorld) : {};
       const lit = snap.pt || cornerSnap(cursorWorld, []);
       if (lit) {
@@ -31810,6 +31891,7 @@
           // is the whole of what a slide changes: an opening is a width and
           // an offset along a wall, and nothing else about it moves.
           was: slide.offset,
+          live: liveRedimBegin(),
           sx: e.clientX, sy: e.clientY, active: false,
         };
         canvas.setPointerCapture(e.pointerId);
@@ -32044,7 +32126,10 @@
             walls: walls(),
             thicknessFt: openingThicknessFt(),
           });
-          if (clamped) md.opening.offset = clamped.offset;
+          if (clamped && clamped.offset !== md.opening.offset) {
+            md.opening.offset = clamped.offset;
+            liveRedimStep(md.live);
+          }
           paint();
           return;
         }
@@ -32430,7 +32515,7 @@
             // own centres, so a window slid along its wall leaves its jamb
             // dimensions reading where it used to be. One gesture, one undo,
             // so the re-laid strings ride this step rather than a second one.
-            undoStack.push(foldRedim({ kind: 'move-opening', opening: md.opening, was: md.was }));
+            undoStack.push(liveRedimFold({ kind: 'move-opening', opening: md.opening, was: md.was }, md.live));
             markDirty();
           }
           moveDrag = null;
