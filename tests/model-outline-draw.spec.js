@@ -136,15 +136,16 @@ test('a crossed loop is still refused', async ({ page }) => {
 test('the drive-thru offers to draw it, for a house and for a garage', async ({ page }) => {
   await open(page);
   await h.openDriveThru(page);
-  const link = page.locator('#dt-outline');
+  // THE BANNER, since 20 Oct: the text lines it doubled are gone.
+  const link = page.locator('#dt-banner-outline');
   await expect(link, 'nothing picked, nothing to draw').toBeHidden();
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
-  // The old "PRESS BUTTON to build now -or-" note is gone: the build-now
-  // line under it said the same thing.
+  // The old "PRESS BUTTON to build now -or-" note is gone: the banner
+  // under the tiles says the same thing.
   await expect(page.locator('#dt-note')).toHaveText('');
-  await expect(page.locator('#dt-build-now')).toHaveText('PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE');
-  await expect(link).toHaveText('CLICK HERE to draw house OUTLINE');
+  await expect(page.locator('#dt-banner-build')).toHaveText('DRAW HOUSE');
+  await expect(link).toHaveText('DRAW HOUSE OUTLINE');
   await link.click();
   await expect(page.locator('#drivethru'), 'the sign goes down').toHaveAttribute('data-shut', '');
   // It takes a press until it has slid away -- the bone is under its path.
@@ -160,7 +161,7 @@ test('the drive-thru offers to draw it, for a house and for a garage', async ({ 
   await page.locator('[data-build-family="detachedGarage"]').click();
   // No size asked since 24 Sep: the default rides the order.
   await page.locator('[data-build-entry="detached-thickened"]').click();
-  await expect(link).toHaveText('CLICK HERE to draw garage OUTLINE');
+  await expect(link).toHaveText('DRAW GARAGE OUTLINE');
   await link.click();
   await expect(page.locator('#strip-message')).toContainText('Trace your garage');
   // THE PRESS SEEDS A CORNER ON THE BULLSEYE now; this garage is drawn off
@@ -187,19 +188,19 @@ test('the drive-thru offers to draw it, for a house and for a garage', async ({ 
 // Movie, 3 Oct: "above CLICK HERE to draw HOUSE OUTLINE... add another line
 // that says PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE (and will do the same
 // as pressing the 'BONE')".
-test('the line above it builds the house the way the bone does', async ({ page }) => {
+test('the left banner builds the house the way the bone does', async ({ page }) => {
   await open(page);
   await page.goto('/MODEL.html?theme=rough');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await h.openDriveThru(page);
-  const now = page.locator('#dt-build-now-shelf');
+  const now = page.locator('#dt-banner-build');
   await expect(now, 'nothing picked, nothing to build').toBeHidden();
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
-  await expect(now).toHaveText('PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE');
-  // ABOVE the outline line, not beside or under it.
-  const a = await now.boundingBox(), b = await page.locator('#dt-outline-shelf').boundingBox();
-  expect(a.y + a.height, 'it sits above the outline line').toBeLessThanOrEqual(b.y + 1);
+  await expect(now).toHaveText('DRAW HOUSE');
+  // ABOVE the PROJECT button, not beside or under it (Movie, 20 Oct).
+  const a = await now.boundingBox(), b = await page.locator('#dt-project-go-shelf').boundingBox();
+  expect(a.y + a.height, 'it sits above the PROJECT button').toBeLessThanOrEqual(b.y + 1);
   await now.click();
   await expect(page.locator('#drivethru'), 'the sign goes down').toHaveAttribute('data-shut', '');
   await page.locator('#save').click();
@@ -209,13 +210,14 @@ test('the line above it builds the house the way the bone does', async ({ page }
   expect(d.boneyardOutlines, 'and nothing was traced').toEqual([]);
 });
 
-test('on RUFF the screen says it too, over the outline line', async ({ page }) => {
+test('on RUFF the screen carries the PROJECT button; the shelf copy is ROUGH\'s', async ({ page }) => {
   await open(page);
   await h.openDriveThru(page);
   await page.locator('[data-build-family="detachedGarage"]').click();
   await page.locator('[data-build-entry="detached-thickened"]').click();
-  await expect(page.locator('#dt-build-now')).toHaveText('PRESS TO DRAW GARAGE WITHOUT drawing OUTLINE');
-  await expect(page.locator('#dt-build-now-shelf'), 'the shelf copy is ROUGH\'s').toBeHidden();
+  await expect(page.locator('#dt-banner-build')).toHaveText('DRAW GARAGE');
+  await expect(page.locator('#dt-project-go')).toBeVisible();
+  await expect(page.locator('#dt-project-go-shelf'), 'the shelf copy is ROUGH\'s').toBeHidden();
 });
 
 test('on ROUGH the sheet carries the same press under the selections', async ({ page }) => {
@@ -225,9 +227,9 @@ test('on ROUGH the sheet carries the same press under the selections', async ({ 
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
-  const shelf = page.locator('#dt-outline-shelf');
+  const shelf = page.locator('#dt-project-go-shelf');
   await expect(shelf).toBeVisible();
-  await shelf.click();
+  await page.locator('#dt-banner-outline').click();
   await expect(page.locator('#strip-message')).toContainText('Trace your 1 STOREY');
 });
 
