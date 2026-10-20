@@ -57,16 +57,26 @@ if (!window.DraftRender2D) {
       const first = ref === 'left' ? 0 : ref === 'right' ? -total : -mid;
       return { total, first, last: first + total };
     };
-    const otherOffset = (across, other) => {
+    // `flip` IS FOR TWO WALLS THAT BOTH START, OR BOTH END, AT THE CORNER
+    // (Movie, 20 Oct: "i trimed it and also tried to just attach the nodes and
+    // when it blends the corner it wraps it funny it should be a 90 black line
+    // corner on each corner not how it looks folded over"). A face's `first`
+    // and `last` are measured off each wall's own start-to-end normal, so the
+    // faces line up only when one wall runs INTO the corner and the other runs
+    // OUT of it -- the chain a drafter draws. Trim a corner, or join two loose
+    // ends, and both can point away from it (or both into it): then this wall's
+    // first face meets the other's LAST, and pairing them first-to-first folds
+    // the corner over itself.
+    const otherOffset = (across, other, flip = false) => {
       const metric = wallMetrics(other);
       // Match every layer edge from its nearest physical face, not from the
       // authored reference line. This carries an ICF's layer edge correctly
       // between left-, centre-, and right-referenced walls of any thickness.
       const distFromFirst = across - startOff;
       const distFromLast = endOff - across;
-      const mapped = distFromFirst <= distFromLast
-        ? metric.first + distFromFirst
-        : metric.last - distFromLast;
+      const mapped = flip
+        ? (distFromFirst <= distFromLast ? metric.last - distFromFirst : metric.first + distFromLast)
+        : (distFromFirst <= distFromLast ? metric.first + distFromFirst : metric.last - distFromLast);
       return Math.max(metric.first, Math.min(metric.last, mapped));
     };
     const pointOnWall = (wall, at, across) => {
@@ -131,7 +141,7 @@ if (!window.DraftRender2D) {
       const otherAt = otherEntry.at;
       const odxOut = (otherAt === 'start' ? other.end.x - other.start.x : other.start.x - other.end.x);
       const odzOut = (otherAt === 'start' ? other.end.z - other.start.z : other.start.z - other.end.z);
-      const otherOrigin = pointOnWall(other, otherAt, otherOffset(across, other));
+      const otherOrigin = pointOnWall(other, otherAt, otherOffset(across, other, otherAt === at));
       const ix = otherOrigin && lineIntersection(currentOrigin, dxOut, dzOut, otherOrigin, odxOut, odzOut);
       if (!ix) return { point: fallback, resolved: false };
       const miterLen = Math.sqrt((ix.x - pt.x) ** 2 + (ix.z - pt.z) ** 2);

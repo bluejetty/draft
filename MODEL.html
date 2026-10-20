@@ -15116,7 +15116,14 @@
   // last thing done -- `step` is its undo entry, and anything pushed after it
   // means the drawing has moved on.
   var moveTyped = null;
-  const moveTypedReady = () => !!(moveTyped && moveState.on && !moveState.drag
+  // A DRAG UNDER SELECT IS FINISHED THE SAME WAY (Movie, 20 Oct: "when i
+  // move the line it doesn't allow me to enter the LENGTH textbox to allow it
+  // to go a certain distance from initial point") -- `drag` marks one, and it
+  // needs no MOVE lit. Never while a run is being drawn: then the box is the
+  // run's length, as it always was.
+  const moveTypedReady = () => !!(moveTyped
+    && (moveTyped.drag ? !moveDrag || moveDrag.before === moveTyped.before : moveState.on && !moveState.drag)
+    && !(drawsRun() && drawStart) && !(activeTool === 'outline' && outlineCorners.length)
     && undoStack[undoStack.length - 1] === moveTyped.step);
   const moveRoofHeld = () => {
     if (selection.length && selection.every(entry => entry.type === 'roof')) return selection[0].item;
@@ -15502,7 +15509,8 @@
       const lone = selection.length === 1 && selection[0].type === 'fenestration' ? selection[0].item : null;
       const host = lone && walls().find(wall => String(wall.id) === String(lone.wallId));
       if (host) {
-        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false };
+        moveState.drag = { kind: 'opening', at, opening: lone, host, was: lone.offset, moved: false,
+          live: liveRedimBegin() };
         canvas.setPointerCapture(event.pointerId);
         return;
       }
@@ -15548,7 +15556,10 @@
       const clamped = window.DraftGeometry2D.clampOpeningToWall(wall, along, d.opening.width, {
         walls: walls(), thicknessFt: openingThicknessFt(),
       });
-      if (clamped) d.opening.offset = clamped.offset;
+      if (clamped && clamped.offset !== d.opening.offset) {
+        d.opening.offset = clamped.offset;
+        liveRedimStep(d.live);
+      }
       paint();
       return;
     }
@@ -15653,7 +15664,7 @@
       // One slide, one UNDO, with the strings that measure it re-laid in the
       // same step; nothing pushed when the clamp held it where it was.
       if (d.opening.offset !== d.was) {
-        undoStack.push(foldRedim({ kind: 'move-opening', opening: d.opening, was: d.was }));
+        undoStack.push(liveRedimFold({ kind: 'move-opening', opening: d.opening, was: d.was }, d.live));
         // AND A TYPED DISTANCE MAY FINISH IT, as it does a wall (moveTyped):
         // the slide gives the way along the wall, the box how far.
         moveTyped = { opening: d.opening, host: d.host, was: d.was,
@@ -18842,18 +18853,19 @@
       // empty box would go through the parser on every blur and refuse,
       // putting an error on the strip for a drafter who typed nothing.
       if (valueFt == null && !input.value.trim()) return;
-      // A BARE NUMBER IN A DOOR OR WINDOW BOX IS INCHES (Movie, 1 Oct: "yes
-      // they do mean \" in the door thing.. same as in the windows"). Nobody
-      // sizes a door at 36 FEET, and the wall boxes' rule -- a bare number is
-      // feet -- gave exactly that. 3-0, 0-36, 3' and 36" still read as they
-      // always did; only the bare number changes, and only here.
+      // FEET FIRST, THE SAME AS EVERY OTHER BOX (Movie, 20 Oct: "make it the
+      // same format as th other ones where it 1-6 or 0-18 would be the same.
+      // (would need to type feet first before inches)"). Since 1 Oct a bare
+      // number in a door or window box had been inches; it is feet again, so
+      // 3 is 3'-0" here as in the LENGTH box, and 1-6, 0-18, 3' and 36" read
+      // as they always did.
       //
       // A METRIC BOX LEFT AS IT WAS SHOWN IS NOT AN EDIT. It shows the size
       // to the nearest 5 mm, so committing it back would move a 36" window to
       // 915 mm -- 36.02" -- on every blur, a change nobody made.
       if (metric && input.value.trim() === shown()) return;
       const parsed = (metric && parseMetricSize(input.value))
-        || (inches ? F.parseAssemblyInches : F.parseArchitecturalLength)(input.value);
+        || F.parseArchitecturalLength(input.value);
       if (!parsed.ok) {
         sayOnStrip(parsed.error);
         input.value = shown();
@@ -21157,6 +21169,35 @@
   // before this runs, and a step that took the list over would hand undo the
   // dimensions and keep the piles -- one Ctrl+Z leaving concrete in the
   // ground under an overhang that is no longer there.
+  // AND WHILE AN OPENING SLIDES, THE STRINGS FOLLOW IT LIVE (Movie, 20 Oct:
+  // "it would be really nice to autoupdate those fenstration dimensions
+  // immediately if possible (so the user can see what they move the opening
+  // too in REAL time"). The strings on the level are noted as the drag
+  // begins and asked again on every move; on the release the step takes back
+  // what the last ask put down and restores what was there BEFORE the drag
+  // -- not the in-between strings the hand passed through -- so one UNDO
+  // still puts the plan back as it was. Null where there are no auto strings
+  // to follow, for redimAfterMove's reason.
+  const liveRedimBegin = () => {
+    if (!drawing) return null;
+    const levelId = activeLevelId();
+    const view = activeViewId() || 'plan';
+    const here = (drawing.dimensions || []).filter(dim => dim.auto === true
+      && Number(dim.levelId) === Number(levelId) && (dim.view || 'plan') === view);
+    return here.length ? { levelId, view, before: here } : null;
+  };
+  const liveRedimStep = live => { if (live) placeAutoDims(live.levelId, live.view); };
+  const liveRedimFold = (step, live) => {
+    if (!live) return foldRedim(step);
+    liveRedimStep(live);
+    const list = drawing.dimensions || [];
+    const placed = list.filter(dim => dim.auto === true && Number(dim.levelId) === Number(live.levelId)
+      && (dim.view || 'plan') === live.view && !live.before.includes(dim));
+    const removed = live.before.filter(dim => !list.includes(dim));
+    (step.items = step.items || []).push(...placed.map(item => ({ list: drawing.dimensions, item })));
+    if (removed.length) (step.restored = step.restored || []).push({ list: drawing.dimensions, items: removed });
+    return step;
+  };
   const foldRedim = step => {
     const redim = redimAfterMove();
     if (!redim) return step;
@@ -27761,6 +27802,7 @@
     const feet = parsed.inches / 12;
     const m = moveTyped;
     if (m.opening) return slideByTyped(m, feet);
+    if (m.drag) return dragByTyped(m, feet);
     const len = Math.hypot(m.dx, m.dz);
     if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
     const dx = m.dx / len * feet, dz = m.dz / len * feet;
@@ -27809,6 +27851,28 @@
       : `Slid ${feetLabel(feet)}. UNDO puts it back.`);
     paint();
   };
+  // A SELECT DRAG, MADE EXACT: the drag is taken back -- its strings with
+  // it -- and the same points are set the typed distance along the line it
+  // took, from where they started, in a step of their own that UNDO takes
+  // back in one.
+  const dragByTyped = (m, feet) => {
+    const len = Math.hypot(m.dx, m.dz);
+    if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
+    const dx = m.dx / len * feet, dz = m.dz / len * feet;
+    undoOnce();
+    m.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+    m.before.forEach(b => relinkVertex(b.vtx));
+    const step = { kind: 'move', before: m.before };
+    undoStack.push(step);
+    foldRedim(step);
+    m.step = step; m.dx = dx; m.dz = dz;
+    lengthBox.blur();
+    markDirty();
+    sayOnStrip(`Moved ${feetLabel(feet)}. UNDO puts it back.`);
+    paint();
+  };
+  // ANOTHER TOOL PUT IN HAND ENDS IT: the box is that tool's from then on.
+  toolListeners.push(() => { if (moveTyped) { moveTyped = null; stripRefresh(); } });
   const commitTypedLength = () => {
     if (moveTypedReady()) { moveByTyped(); return; }
     if (activeTool === 'outline') {
@@ -30610,7 +30674,34 @@
   };
   // A point as the string takes it: on a node, on a cross line, on a corner,
   // or where it was pressed. TOY has no SNAP or TRACK; its corners still take.
+  // THE DOT IN THE MIDDLE OF A DOOR OR WINDOW IS A DIMENSION POINT (Movie,
+  // 20 Oct: "can you make that round dot in the middle SNAPABLE point ORANGE
+  // for the dimensions to link onto and if i move that can the dimension
+  // move with it"). Its centre on the wall's centreline -- `offset` is the
+  // centre's distance from the host wall's start -- and it beats every other
+  // catch in its reach, because the drafter aimed at it.
+  const openingCentre = opening => {
+    const wall = opening && (drawing?.walls || []).find(w => String(w.id) === String(opening.wallId));
+    if (!wall?.start || !wall?.end) return null;
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    if (!(len > 1e-9) || !Number.isFinite(Number(opening.offset))) return null;
+    const t = Number(opening.offset) / len;
+    return { x: wall.start.x + (wall.end.x - wall.start.x) * t, z: wall.start.z + (wall.end.z - wall.start.z) * t };
+  };
+  const openingCentreAt = at => {
+    if (!at) return null;
+    const r = pullFt(NODE_PULL_PX);
+    let best = null;
+    openingsOn(walls()).forEach(({ opening }) => {
+      const c = openingCentre(opening);
+      const d = c && Math.hypot(c.x - at.x, c.z - at.z);
+      if (c && d <= r && (!best || d < best.d)) best = { d, c, opening };
+    });
+    return best;
+  };
   const dimPoint = at => {
+    const dot = openingCentreAt(at);
+    if (dot) return { x: dot.c.x, z: dot.c.z, ref: { openingId: String(dot.opening.id), x: dot.c.x, z: dot.c.z } };
     const snap = board !== 'toy' ? drawSnap(at) : {};
     const p = snap.pt || cornerSnap(at, []) || at;
     return { x: p.x, z: p.z, ...(snap.pt || cornerSnap(at, []) ? dimLinkAt(p) : {}) };
@@ -30638,13 +30729,19 @@
     const list = drawing?.dimensions;
     if (!Array.isArray(list) || !list.some(d => d.startRef || d.endRef)) return;
     const byId = new Map((drawing.walls || []).map(w => [String(w.id), w]));
+    const fenById = new Map((drawing.fenestrations || []).map(f => [String(f.id), f]));
+    // An end on an opening's dot reads the dot where the opening now is --
+    // every paint, so it follows the door while the door is being slid.
+    const refPoint = ref => (ref.openingId != null
+      ? openingCentre(fenById.get(String(ref.openingId)))
+      : byId.get(String(ref.wallId))?.[ref.end]);
     list.forEach(dim => {
       const len = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
       if (!(len > 1e-9)) return;
       const u = { x: (dim.end.x - dim.start.x) / len, z: (dim.end.z - dim.start.z) / len };
       [['startRef', 'start'], ['endRef', 'end']].forEach(([key, at]) => {
         const ref = dim[key];
-        const v = ref && byId.get(String(ref.wallId))?.[ref.end];
+        const v = ref && refPoint(ref);
         if (!v) return;
         const along = (v.x - ref.x) * u.x + (v.z - ref.z) * u.z;
         if (Math.abs(v.x - ref.x) < 1e-9 && Math.abs(v.z - ref.z) < 1e-9) return;
@@ -30760,7 +30857,22 @@
     // THE NODE IT WILL LOCK TO, LIT (Movie, 18 Oct: "light them NODES up for
     // the DIMENSION points so the user will know they are going to be locked
     // on the right spot"). Not while the string is being placed.
-    if (!dimPlacing) {
+    // THE DOORS' AND WINDOWS' DOTS, ORANGE while the tool is up, so the
+    // drafter sees they take a dimension; the one in reach gets the donut.
+    const dot = !dimPlacing ? openingCentreAt(cursorWorld) : null;
+    ctx.save();
+    ctx.fillStyle = DONUT.orange.ink;
+    ctx.shadowColor = DONUT.orange.glow;
+    ctx.shadowBlur = 6;
+    openingsOn(walls()).forEach(({ opening }) => {
+      const c = openingCentre(opening);
+      if (!c) return;
+      const s = toS(c);
+      ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+    if (dot) paintDonut(dot.c, 'orange');
+    if (!dimPlacing && !dot) {
       const snap = board !== 'toy' ? drawSnap(cursorWorld) : {};
       const lit = snap.pt || cornerSnap(cursorWorld, []);
       if (lit) {
@@ -31962,6 +32074,7 @@
           // is the whole of what a slide changes: an opening is a width and
           // an offset along a wall, and nothing else about it moves.
           was: slide.offset,
+          live: liveRedimBegin(),
           sx: e.clientX, sy: e.clientY, active: false,
         };
         canvas.setPointerCapture(e.pointerId);
@@ -32196,7 +32309,10 @@
             walls: walls(),
             thicknessFt: openingThicknessFt(),
           });
-          if (clamped) md.opening.offset = clamped.offset;
+          if (clamped && clamped.offset !== md.opening.offset) {
+            md.opening.offset = clamped.offset;
+            liveRedimStep(md.live);
+          }
           paint();
           return;
         }
@@ -32591,7 +32707,7 @@
             // own centres, so a window slid along its wall leaves its jamb
             // dimensions reading where it used to be. One gesture, one undo,
             // so the re-laid strings ride this step rather than a second one.
-            undoStack.push(foldRedim({ kind: 'move-opening', opening: md.opening, was: md.was }));
+            undoStack.push(liveRedimFold({ kind: 'move-opening', opening: md.opening, was: md.was }, md.live));
             markDirty();
           }
           moveDrag = null;
@@ -32652,7 +32768,23 @@
         // measure -- so stringing before it is answered would string a
         // drawing that does not exist yet. settleFootprint folds this same
         // step when it lands.
-        if (!offerFootprintChoice(md, moveStep)) foldRedim(moveStep);
+        const offered = offerFootprintChoice(md, moveStep);
+        if (!offered) foldRedim(moveStep);
+        // A TYPED LENGTH MAY FINISH IT, as it does a MOVE (moveTyped): a line
+        // or wall dragged by its body, an assembly, or an end NODE (Movie,
+        // 20 Oct: "when i grab an enpoint NODE, i'd like to move it over 1/16"
+        // by typing into the length box"). Not a drag that let go with SHIFT,
+        // carried locked siblings, moved a boneyard master's corner (its
+        // riders were propagated on the release), or is waiting on the
+        // footprint card: each of those did more than move points.
+        const a = md.before?.[0];
+        const ddx = a ? a.vtx.x - a.x : 0, ddz = a ? a.vtx.z - a.z : 0;
+        const master = md.kind === 'corner'
+          && (drawing?.boneyardOutlines || []).some(m => (m.points || []).includes(a?.vtx));
+        moveTyped = !offered && board !== 'toy' && !md.loose && !md.lockBefore && !master
+          && (md.kind === 'wall' || md.kind === 'group' || md.kind === 'corner') && Math.hypot(ddx, ddz) > 1e-6
+          ? { drag: true, before: md.before, dx: ddx, dz: ddz, step: moveStep } : null;
+        if (moveTyped) stripRefresh();
       } else if (board === 'toy' && md.kind === 'wall' && md.body
         && walls().includes(md.body)) {
         // §4's CLICK, and it costs no new gesture. `segmentBodyAt` only
@@ -32832,7 +32964,12 @@
     // Zoom about the cursor: the world point under it must not move.
     const before = toWorld(sx, sy);
     const factor = Math.exp(-e.deltaY * 0.0015);
-    view.scale = Math.max(0.25, Math.min(view.scale * factor, 200));
+    // IN TO 800 PX A FOOT (Movie, 20 Oct: "would it be possible to go about
+    // 4X even further zoom"): a sixteenth of an inch is four pixels there,
+    // which is what a 1/16" nudge needs to be seen. 200 was the old stop, and
+    // it stays the ceiling for 0-to-fit, so a tiny drawing still opens framed
+    // rather than magnified.
+    view.scale = Math.max(0.25, Math.min(view.scale * factor, 800));
     const after = toWorld(sx, sy);
     view.cx += before.x - after.x;
     view.cz += before.z - after.z;
