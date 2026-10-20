@@ -28980,7 +28980,8 @@
   // did, and arming one ends the picking.
   const PICK_KINDS = { wall: 'wall', line: 'line', fenestration: 'fenestration', floor: 'floor',
     roof: 'roof', dormer: 'roof', column: 'column', beam: 'beam', stair: 'stair',
-    fixture: 'fixture', dimension: 'dimension', shape: 'shape', annotation: 'note', roomtag: 'roomtag' };
+    fixture: 'fixture', dimension: 'dimension', shape: 'shape', annotation: 'note', roomtag: 'roomtag',
+    node: 'superNode' };
   const BAR_KEYS = ['select', 'assembly', 'dimension', 'trim'];
   function syncPickGlow() {
     document.querySelectorAll('[data-tool-key], [data-bar-key]').forEach(btn => {
@@ -28997,7 +28998,8 @@
   function pickName() {
     if (selectFixtureKind) return (window.DraftFixtureKinds?.kindFor(selectFixtureKind)?.label || selectFixtureKind).toUpperCase();
     return selectFilter === 'fenestration' ? 'DOORS AND WINDOWS'
-      : selectFilter === 'note' ? 'NOTES' : `${selectFilter.toUpperCase()}S`;
+      : selectFilter === 'superNode' ? 'SUPER NODES'
+        : selectFilter === 'note' ? 'NOTES' : `${selectFilter.toUpperCase()}S`;
   }
   function setSelectPicking(on) {
     selectPicking = on;
