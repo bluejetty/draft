@@ -175,7 +175,59 @@ if (!window.DraftFixtureGeometry) {
     };
   };
 
+  // ── A RUN, AN ISLAND, AND WHAT STOPS A SLIDE (Movie, 20 Oct) ────────────
+  //
+  // "i'd like to be able to move sink / dw in island back an forth / and
+  // they shouldn't overlap". Two fixtures are RUN MATES when they stand on
+  // the same wall, on the same face, the same distance off it: a counter's
+  // pieces, or the pieces an island holds. A piece whose centre lies within
+  // an island that is its run mate is IN that island; a slide keeps it
+  // there and off the others. The tub keeps its own geometry and is nobody's
+  // mate.
+  const RUN_TOL_FT = 0.01;
+  const runMates = (fixtures, piece) => fixtures.filter(other => other !== piece
+    && String(other.wallId) === String(piece.wallId)
+    && String(other.levelId) === String(piece.levelId)
+    && (other.side === -1 ? -1 : 1) === (piece.side === -1 ? -1 : 1)
+    && Math.abs((Number(other.standoff) || 0) - (Number(piece.standoff) || 0)) <= RUN_TOL_FT
+    && other.kind !== 'tub' && piece.kind !== 'tub');
+  const spanOf = f => [Number(f.offset) - Number(f.width) / 2, Number(f.offset) + Number(f.width) / 2];
+  const within = (f, piece) => spanOf(f)[0] - RUN_TOL_FT <= Number(piece.offset)
+    && Number(piece.offset) <= spanOf(f)[1] + RUN_TOL_FT;
+  const islandHolding = (fixtures, piece) => (piece.kind === 'island' ? null
+    : runMates(fixtures, piece).find(other => other.kind === 'island' && within(other, piece)) || null);
+  const islandPieces = (fixtures, island) => (island.kind !== 'island' ? []
+    : runMates(fixtures, island).filter(other => other.kind !== 'island' && within(island, other)));
+  // WHERE A SLIDE MAY PUT A CENTRE: the nearest point to `target` inside
+  // `bounds` that keeps the piece -- half its width each way -- off every
+  // block. Null when nothing fits.
+  const slideClamp = (target, half, bounds, blocks = []) => {
+    let free = [[bounds[0] + half, bounds[1] - half]];
+    blocks.forEach(([lo, hi]) => {
+      free = free.flatMap(([a, b]) => {
+        const cutLo = lo - half, cutHi = hi + half;   // the centres that would overlap
+        if (cutHi <= a || cutLo >= b) return [[a, b]];
+        const out = [];
+        if (cutLo > a) out.push([a, cutLo]);
+        if (cutHi < b) out.push([cutHi, b]);
+        return out;
+      });
+    });
+    free = free.filter(([a, b]) => b - a >= -1e-9);
+    if (!free.length) return null;
+    let best = null;
+    free.forEach(([a, b]) => {
+      const at = Math.min(Math.max(target, a), b);
+      if (best === null || Math.abs(at - target) < Math.abs(best - target)) best = at;
+    });
+    return best;
+  };
+
   window.DraftFixtureGeometry = Object.freeze({
+    runMates,
+    islandHolding,
+    islandPieces,
+    slideClamp,
     wallFrame,
     wallCross,
     fixtureGeometry,

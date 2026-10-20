@@ -1568,19 +1568,14 @@ if (!window.DraftRender2D) {
         ctx.fillText(kind === 'fridge' || kind === 'fridge30' ? 'REF' : kind === 'washer' ? 'W' : kind === 'dryer' ? 'D' : 'DW', c.x, c.y);
       }
     } else if (kind === 'island') {
-      // Freestanding island: counter overhang line on the seating side (away
-      // from the host wall) and a label when zoomed in.
-      const dir = cFront >= cBack ? 1 : -1;
-      const counter = cFront + dir * env.COUNTER_OVERHANG_FT;
-      const ca = P(a0, counter), cb = P(a1, counter);
-      ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
-      if (pxPerFt > 6) {
-        const c = toS(geo.center);
-        ctx.fillStyle = env.FIXTURE_COLOR;
-        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('ISLAND', c.x, c.y);
-      }
+      // Freestanding island: its countertop overhangs EVERY side, so the
+      // counter edge runs all the way round the box -- which is also what
+      // tells it from a cabinet's box and single counter edge. NO NAME ON
+      // IT (Movie, 20 Oct: "don't need the ISLAND mark on the island (no
+      // title) its obvious to a person looking of what it is"): the sink and
+      // the dishwasher it holds say what it is.
+      const o = env.COUNTER_OVERHANG_FT;
+      rect(a0 - o, a1 + o, cMin - o, cMax + o); ctx.stroke();
     } else if (kind === 'pantry') {
       // Corner walk-in pantry: shelves dashed along the back, and the classic
       // 45° angled door across the open front corner — the end away from the
