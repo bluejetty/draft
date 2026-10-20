@@ -1569,18 +1569,13 @@ if (!window.DraftRender2D) {
       }
     } else if (kind === 'island') {
       // Freestanding island: counter overhang line on the seating side (away
-      // from the host wall) and a label when zoomed in.
+      // from the host wall). NO NAME ON IT (Movie, 20 Oct: "don't need the
+      // ISLAND mark on the island (no title) its obvious to a person looking
+      // of what it is"): the sink and the dishwasher it holds say what it is.
       const dir = cFront >= cBack ? 1 : -1;
       const counter = cFront + dir * env.COUNTER_OVERHANG_FT;
       const ca = P(a0, counter), cb = P(a1, counter);
       ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
-      if (pxPerFt > 6) {
-        const c = toS(geo.center);
-        ctx.fillStyle = env.FIXTURE_COLOR;
-        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('ISLAND', c.x, c.y);
-      }
     } else if (kind === 'pantry') {
       // Corner walk-in pantry: shelves dashed along the back, and the classic
       // 45° angled door across the open front corner — the end away from the
