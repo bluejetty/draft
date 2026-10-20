@@ -63,6 +63,14 @@ const MUTANTS = [
     find: "    if (next !== RESTING_TOOL && selectPicking) setSelectPicking(false);\n",
     with: "",
     test: 'a key with no kind' },
+  { file: 'MODEL.html', name: 'the bar stands on the tabs\' head again',
+    find: "  #select-bar { position:fixed; z-index:30; left:0;\n    top: calc(var(--strip-h, 44px) + 4px); padding:3px;\n",
+    with: "  #select-bar { position:fixed; z-index:30; left:28px;\n    top: calc(var(--rail-top) - 48px); padding:3px;\n",
+    test: 'the bar hangs under the top bar on the left edge, clear of the tabs, and grows sideways' },
+  { file: 'MODEL.html', name: 'a fifth key starts a second row',
+    find: "  #select-bar .tool-keys { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:40px; }\n",
+    with: "",
+    test: 'the bar hangs under the top bar on the left edge, clear of the tabs, and grows sideways' },
 ];
 const run = name => {
   try {

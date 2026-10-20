@@ -841,11 +841,19 @@
   .sel-chip.assembled { color: var(--accent); border-color: var(--accent); }
   .sel-chip.assembled:hover { border-color: var(--accent); }
   .tool-keys { display:grid; grid-template-columns:repeat(4, 40px); gap:4px; }
-  /* THE BAR OVER THE TABS, in the gap between the strip and the rail's top. */
-  #select-bar { position:fixed; z-index:30; left:28px;
-    top: calc(var(--rail-top) - 48px); padding:3px;
-    border:1px solid var(--edge-panel); border-radius:3px;
+  /* THE BAR UNDER THE TOP BAR, FLUSH LEFT (Movie, 20 Oct: "the SELECT
+     ASSEMBLY TRIM DIMENSIONS - new buttons overlap the tab - we should push
+     those so they are right underneath the top bar and could also be pushed
+     fully to the left (i might add more buttons to it"). It stood at
+     rail-top - 48px, which put its foot on the tabs' head. Now 4px under
+     the 44px bar, on the page's left edge, and its keys run in ONE ROW that
+     grows to the right: a fifth key goes beside the fourth, never into a
+     second row that would reach the tabs again. */
+  #select-bar { position:fixed; z-index:30; left:0;
+    top: calc(var(--strip-h, 44px) + 4px); padding:3px;
+    border:1px solid var(--edge-panel); border-left:none; border-radius:0 3px 3px 0;
     background: var(--surface-panel); }
+  #select-bar .tool-keys { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:40px; }
   #select-bar:empty, #left-rail[hidden] + #select-bar { display:none; }
   /* PICKING GLOWS (Movie, 19 Oct: "they can see it glowing when its
      selected"): SELECT while it is picking a kind, and the one kind picked --
