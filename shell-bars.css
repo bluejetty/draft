@@ -826,17 +826,24 @@
      the selection, whatever is in it. It is on screen exactly while there is
      something to delete -- and the iPad has no Delete key, so this button is
      the only way to delete anything at all there. */
-  #delete, #model-undo, #model-rotate, #model-break, #model-move, #model-wall-off, #rotate-bar button { font-family: var(--font-ui); font-size:12px; font-weight:600;
+  #delete, #model-undo, #model-rotate, #model-flip, #model-break, #model-move, #model-wall-off, #rotate-bar button, #flip-bar button { font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
     color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
-  #delete:hover, #model-undo:hover, #model-rotate:hover, #model-break:hover, #model-move:hover, #model-wall-off:hover, #rotate-bar button:hover { color: var(--accent); border-color: var(--accent); }
-  #delete[hidden], #model-undo[hidden], #model-rotate[hidden], #model-break[hidden], #model-move[hidden], #model-wall-off[hidden], #rotate-bar[hidden] { display:none; }
+  #delete:hover, #model-undo:hover, #model-rotate:hover, #model-flip:hover, #model-break:hover, #model-move:hover, #model-wall-off:hover, #rotate-bar button:hover, #flip-bar button:hover { color: var(--accent); border-color: var(--accent); }
+  #delete[hidden], #model-undo[hidden], #model-rotate[hidden], #model-flip[hidden], #model-break[hidden], #model-move[hidden], #model-wall-off[hidden], #rotate-bar[hidden], #flip-bar[hidden] { display:none; }
+  /* CROWDED, THE VERBS DRAW IN: seatFootVerbs() puts data-tight on the row
+     when the verbs at full size do not fit between the pages and the trio,
+     so the row never lands on the BONE. Same words, less air. */
+  #dt-verbs[data-tight] { gap:4px; }
+  #dt-verbs[data-tight] > button { padding:6px 7px; letter-spacing:0.02em; }
+  #dt-verbs[data-tight="2"] { gap:3px; }
+  #dt-verbs[data-tight="2"] > button { padding:5px 6px; font-size:11px; }
   #model-break[aria-pressed="true"], #model-move[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
   /* ROTATE'S OWN ROW, standing over the verbs while it is up. */
-  #rotate-bar { display:inline-flex; gap:6px; align-items:center; }
-  #rotate-bar button { padding:6px 10px; border-color: var(--accent); }
+  #rotate-bar, #flip-bar { display:inline-flex; gap:6px; align-items:center; }
+  #rotate-bar button, #flip-bar button { padding:6px 10px; border-color: var(--accent); }
   #rotate-bar input { width:52px; font-family: var(--font-ui); font-size:12px; padding:5px 6px;
     color: var(--ink-primary); background: var(--surface-chip); border:1px solid var(--accent);
     border-radius:6px; text-align:center; }
