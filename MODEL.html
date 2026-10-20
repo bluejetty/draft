@@ -13513,6 +13513,17 @@
   //
   // `{ dx, dz, lit }`, lit being `{ seg, own, pt }` on a face or
   // `{ corner, node, own, pt }` on a point; null when nothing reaches.
+  // THE TRAVEL'S COMPONENT ALONG THE WALL'S RUN ROUNDED TO THE FOOT, the
+  // across component kept: what a caught face leaves to the light.
+  const footAlongRun = (body, dx, dz) => {
+    const Q = window.DraftToyConstraints;
+    if (!Q || !body?.start || !body?.end) return { dx, dz };
+    const ux0 = body.end.x - body.start.x, uz0 = body.end.z - body.start.z, len = Math.hypot(ux0, uz0);
+    if (len < 1e-6) return { dx, dz };
+    const ux = ux0 / len, uz = uz0 / len, nx = -uz, nz = ux;
+    const along = Q.quantiseFeet(dx * ux + dz * uz), across = dx * nx + dz * nz;
+    return { dx: ux * along + nx * across, dz: uz * along + nz * across };
+  };
   const wallFaceSeek = (md, dx, dz) => {
     const body = md.body;
     // FROM WHERE THE DRAG BEGAN, not from the wall's live ends: those are
@@ -15956,6 +15967,13 @@
   // last thing done -- `step` is its undo entry, and anything pushed after it
   // means the drawing has moved on.
   var moveTyped = null;
+  // A LENGTH TYPED WHILE THE BUTTON IS STILL DOWN (Movie, 20 Oct): "i move
+  // it in the direction i want to move ... then i press 'R' or 'L' and it
+  // takes me into the text box to type the length, and i press enter or the
+  // mouse button or the space bar to finish the length and make the MOVE".
+  // R and L open the box mid-drag (the handler by the digit opener); this
+  // remembers that they did, so the release knows to finish the length.
+  var typedMidDrag = false;
   // A DRAG UNDER SELECT IS FINISHED THE SAME WAY (Movie, 20 Oct: "when i
   // move the line it doesn't allow me to enter the LENGTH textbox to allow it
   // to go a certain distance from initial point") -- `drag` marks one, and it
@@ -15965,6 +15983,16 @@
     && (moveTyped.drag ? !moveDrag || moveDrag.before === moveTyped.before : moveState.on && !moveState.drag)
     && !(drawsRun() && drawStart) && !(activeTool === 'outline' && outlineCorners.length)
     && undoStack[undoStack.length - 1] === moveTyped.step);
+  // THE RELEASE FINISHES A LENGTH TYPED MID-DRAG: the drag gave the line,
+  // the box the distance, and the button coming up is the ENTER. Called by
+  // every release that arms moveTyped, after it has.
+  const finishTypedMidDrag = () => {
+    if (!typedMidDrag) return;
+    typedMidDrag = false;
+    if (moveTypedReady() && String(lengthBox.value).trim()) { moveByTyped(); return; }
+    lengthBox.blur();
+    stripRefresh();
+  };
   const moveRoofHeld = () => {
     if (selection.length && selection.every(entry => entry.type === 'roof')) return selection[0].item;
     return null;
@@ -16698,6 +16726,13 @@
       if (tsquareOn && board !== 'toy' && !d.set.across) {
         if (Math.abs(at.x - d.at.x) >= Math.abs(at.z - d.at.z)) { dz = 0; axis = 'x'; } else { dx = 0; axis = 'z'; }
       }
+      // BY THE FOOT WITH THE 1' LIGHT LIT (Movie, 20 Oct: "when i MOVE a group
+      // of items and i use the '1'' key (beside T SQUARE - which works) the
+      // '1'' key doesn't make it go 'by the foot'"). Each axis rounded to a
+      // whole foot, as a dragged wall or stair is -- after the T-square, so
+      // the axis is the hand's, and before the magnet, so a catch still wins.
+      const Q = window.DraftToyConstraints;
+      if (footOn && Q && !d.set.across) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
       if (!d.set.across && snapOn && board !== 'toy') {
         d.magnet ||= magnetExcluding(d.set.points);
         const seek = moveSeek(d, dx, dz, axis);
@@ -16788,11 +16823,12 @@
         markDirty();
         sayOnStrip('Slid along its wall. Type a distance for an exact one, or UNDO puts it back.');
       }
+      finishTypedMidDrag();
       paint();
       return;
     }
     if (d.kind === 'selection') {
-      if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); paint(); return; }
+      if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); finishTypedMidDrag(); paint(); return; }
       // SUITES MOVED ON THEIR OWN LINE UP WITH THE SHELL when let go near it,
       // as one does in hand (hologram.js suiteSnap) -- all of them by the
       // first suite's slide, so the set keeps its spacing.
@@ -16817,6 +16853,7 @@
       setSelection([...selection]);
       sayOnStrip(settled.said
         ? `Moved.${settled.said} UNDO puts it all back.` : 'Moved. UNDO puts it back.');
+      finishTypedMidDrag();
       paint();
       return;
     }
@@ -29683,6 +29720,15 @@
 
   lengthBox.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
+    // ONCE A SPACE, TWICE THE END (Movie, 20 Oct: "press enter or the mouse
+    // button or the space bar to finish the length"). "14 6" is a length
+    // with a space in it, so one space is typed; a second straight after it
+    // is ENTER, the way a second ENTER ends a run.
+    if (e.key === ' ' && / $/.test(lengthBox.value) && lengthBox.value.trim()) {
+      e.preventDefault();
+      lengthBox.value = lengthBox.value.trimEnd();
+      commitTypedLength();
+    }
     if (e.key === 'Escape') { e.preventDefault(); lengthBox.blur(); stripRefresh(); }
     // The page's own keys (0 to fit, Escape, Delete) must not fire while a
     // length is being typed -- a drafter typing 10' would otherwise refit the
@@ -29768,6 +29814,48 @@
     lengthBox.value = event.key;
     lengthBox.focus();
     lengthBox.setSelectionRange(lengthBox.value.length, lengthBox.value.length);
+  }, true);
+
+  // ── R AND L OPEN IT TOO, AND MID-DRAG (Movie, 20 Oct) ────────────────────
+  //
+  // "i click the ASSEMBLY to highlight it.. i move it in the direction i
+  // want to move (with T SQUARE ON it will be in a 90 direction... then i
+  // press 'R' or 'L' and it takes me into the text box to type the length,
+  // and i press enter or the mouse button or the space bar to finish the
+  // length and make the MOVE" -- "R = RADIUS (not right) L = LENGTH (not
+  // left)". Either letter puts the caret in the LENGTH box whenever a length
+  // is typable -- a run in hand, a move just made, a dimension picked -- and
+  // ALSO WHILE A MOVE IS STILL IN HAND, button down: the drag gives the line,
+  // the box takes the distance, and the release (finishTypedMidDrag) is the
+  // ENTER. At any other time L is the LINE key and R is whatever the profile
+  // says, exactly as before: this listener lets them through.
+  const dragInHand = () => !!((moveDrag && moveDrag.active && ['wall', 'group', 'corner'].includes(moveDrag.kind))
+    || (moveState?.drag && (moveState.drag.kind === 'selection' || moveState.drag.kind === 'opening')));
+  window.addEventListener('keydown', event => {
+    if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+    if (!/^[rl]$/i.test(event.key) || inAField(event.target) || modalUp()) return;
+    const mid = dragInHand();
+    if (lengthBox.disabled && !mid) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    dropLengthHint();
+    if (mid) { typedMidDrag = true; lengthBox.disabled = false; lengthBox.value = ''; }
+    lengthBox.focus();
+    lengthBox.select();
+  }, true);
+  // AND THE MOUSE BUTTON FINISHES IT: a press on the sheet while a typed
+  // length waits in the box after a move is the ENTER, not a new pick -- the
+  // drafter said "enter or the mouse button or the space bar". Captured so
+  // the press reaches no picker, and the selection stays in hand.
+  // ON THE WINDOW, as the hologram pick and the trace move are: a press
+  // that must beat every picker on the sheet is caught before the sheet
+  // sees it at all.
+  window.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target !== canvas || document.activeElement !== lengthBox) return;
+    if (!String(lengthBox.value).trim() || !moveTypedReady()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    moveByTyped();
   }, true);
 
   // ── the switches ──────────────────────────────────────────────────────────
@@ -34157,7 +34245,10 @@
         if (md.kind === 'items') {
           // New points each event from the ones each item started with, so
           // the undo step's copies keep the points they were taken with.
-          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          // BY THE FOOT with the 1' light lit, as an assembly goes.
+          const Q = window.DraftToyConstraints;
+          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
           const by = p => ({ ...p, x: p.x + dx, z: p.z + dz });
           md.items.forEach(({ type, item, before }) => {
             if (type === 'line') { item.start = by(before.start); item.end = by(before.end); }
@@ -34269,6 +34360,10 @@
           // HELD SQUARE BY THE T-SQUARE, the MOVE verb's rule: the larger
           // travel wins.
           if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+          // AND BY THE FOOT with the 1' light lit, the MOVE verb's rule
+          // (Movie, 20 Oct: "make it work for when i moved grouped stuff too").
+          const Q = window.DraftToyConstraints;
+          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
           md.before.forEach(b => relinkVertex(b.vtx));
           // THE LOCKED SIBLINGS DO NOT MOVE HERE. They move ONCE, on the
@@ -34388,7 +34483,17 @@
           md.cursor = raw;
           if (toy) { dx = toy.dx; dz = toy.dz; }
           else if (ends) { dx = ends.dx; dz = ends.dz; }
-          else if (seek) { dx = seek.dx; dz = seek.dz; }
+          else if (seek) {
+            dx = seek.dx; dz = seek.dz;
+            // AND THE OTHER AXIS STILL LANDS ON THE FOOT (Movie, 20 Oct: "the
+            // 1' thing works when i change the wall lengths though i just
+            // noticed but not moving walls side to side"). A face catches
+            // ACROSS the run and the travel ALONG it is the hand's -- and in
+            // a house a parallel face nearly always catches, so with the
+            // light lit the wall slid wherever the hand stopped along its
+            // run. The catch keeps the across it won; the along is rounded.
+            if (footOn) { const q = footAlongRun(md.body, dx, dz); dx = q.dx; dz = q.dz; }
+          }
           else if (footOn) {
             // THE FOOT LIGHT'S DRAG, and it is NOT the TOY path with a
             // different name. toyWallDelta discards the along-run component,
@@ -34723,10 +34828,15 @@
         const ddx = a ? a.vtx.x - a.x : 0, ddz = a ? a.vtx.z - a.z : 0;
         const master = md.kind === 'corner'
           && (drawing?.boneyardOutlines || []).some(m => (m.points || []).includes(a?.vtx));
-        moveTyped = !offered && board !== 'toy' && !md.loose && !md.lockBefore && !master
+        // AN ASSEMBLY TOO: lockBefore is an array on every rigid-group drag,
+        // empty when no level lock carries siblings, and `!md.lockBefore`
+        // refused the typed length to every one of them -- which is why L
+        // mid-drag under SELECT moved nothing until 20 Oct.
+        moveTyped = !offered && board !== 'toy' && !md.loose && !(md.lockBefore && md.lockBefore.length) && !master
           && (md.kind === 'wall' || md.kind === 'group' || md.kind === 'corner') && Math.hypot(ddx, ddz) > 1e-6
           ? { drag: true, before: md.before, dx: ddx, dz: ddz, step: moveStep } : null;
         if (moveTyped) stripRefresh();
+        finishTypedMidDrag();
       } else if (board === 'toy' && md.kind === 'wall' && md.body
         && walls().includes(md.body)) {
         // §4's CLICK, and it costs no new gesture. `segmentBodyAt` only
