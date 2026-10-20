@@ -29108,8 +29108,11 @@
   // length waits in the box after a move is the ENTER, not a new pick -- the
   // drafter said "enter or the mouse button or the space bar". Captured so
   // the press reaches no picker, and the selection stays in hand.
-  canvas.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || document.activeElement !== lengthBox) return;
+  // ON THE WINDOW, as the hologram pick and the trace move are: a press
+  // that must beat every picker on the sheet is caught before the sheet
+  // sees it at all.
+  window.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target !== canvas || document.activeElement !== lengthBox) return;
     if (!String(lengthBox.value).trim() || !moveTypedReady()) return;
     event.preventDefault();
     event.stopImmediatePropagation();

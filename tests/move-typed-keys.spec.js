@@ -128,10 +128,12 @@ test('a press on the sheet finishes it, and the assembly stays picked', async ({
   await page.locator('#model-move').click();
   await drag(page, at(4, 3), at(9, 3.6));
   await page.keyboard.press('l');
-  await page.keyboard.type('5');
-  await page.mouse.click(...at(-10, 12));
+  // SEVEN, NOT THE FIVE THE DRAG ALREADY WENT: a press that finished nothing
+  // would leave it at five and read as a pass.
+  await page.keyboard.type('7');
+  await page.mouse.click(...at(2, 4));   // empty sheet, on the canvas
   const d = await saved(page);
-  expect(wall(d, 'wc1').start.x, 'five feet across').toBeCloseTo(5, 6);
+  expect(wall(d, 'wc1').start.x, 'seven feet across').toBeCloseTo(7, 6);
   await expect(page.locator('#delete'), 'still picked').toBeVisible();
 });
 
