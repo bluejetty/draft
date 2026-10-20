@@ -25,7 +25,7 @@ const drawing = () => ({
     { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 },
     { id: 1, name: 'FOUNDATION', elev: -8 }],
   activeLevelIdx: 3, nextDrawingItemId: 20, nextGroupId: 2,
-  walls: [W('wc1', [0, 0], [8, 0]), W('wc2', [8, 0], [8, 6])],
+  walls: [W('wc1', [0, 0], [8, 0]), W('wc2', [8, 0], [8, 6]), W('solo', [14, -14], [22, -14])],
   lines: [L('la', [-20, -12], [-12, -12]), L('lb', [-20, -8], [-12, -8])],
   floors: [], roofs: [], fenestrations: [], dimensions: [],
   outlines: [], shapes: [], surfaceOpenings: [], notes: [], stairs: [],
@@ -110,6 +110,48 @@ test('and so do lines moved together', async ({ page }) => {
   expect(line(d, 'la').start.x, 'five feet across').toBeCloseTo(-15, 6);
   expect(line(d, 'la').start.z, 'two feet down').toBeCloseTo(-10, 6);
   expect(line(d, 'lb').end.z, 'both lines').toBeCloseTo(-6, 6);
+});
+
+// A LONE WALL, SIDE TO SIDE (Movie, 20 Oct: "the 1' thing works when i change
+// the wall lengths though i just noticed but not moving walls side to side").
+test('a lone wall carried by MOVE lands on the foot', async ({ page }) => {
+  const { at } = await open(page);
+  await page.mouse.click(...at(18, -14));
+  await expect(page.locator('#delete')).toBeVisible();
+  await lightFoot(page, true);
+  await page.locator('#model-move').click();
+  await drag(page, at(18, -11), at(23.4, -9.4));
+  const d = await saved(page);
+  expect(wall(d, 'solo').start.x, 'five feet across').toBeCloseTo(19, 6);
+  expect(wall(d, 'solo').start.z, 'two feet down').toBeCloseTo(-12, 6);
+});
+
+test('and a lone wall dragged by its body under SELECT', async ({ page }) => {
+  const { at } = await open(page);
+  await page.mouse.click(...at(18, -14));
+  await expect(page.locator('#delete')).toBeVisible();
+  await lightFoot(page, true);
+  await drag(page, at(18, -14), at(23.4, -15.6));
+  const d = await saved(page);
+  expect(wall(d, 'solo').start.x).toBeCloseTo(19, 6);
+  expect(wall(d, 'solo').start.z).toBeCloseTo(-16, 6);
+});
+
+// A FACE WITHIN REACH OF THE FOOT STILL CATCHES, ACROSS -- and the other axis
+// stays on the foot. The two lines run at z = -12: the wall rounded to -12
+// lands a face on one of them, a hair off its centreline; its travel along
+// the run is still the whole five feet. Before this it was the catch that
+// threw the foot away on both axes, which is the free slide Movie saw.
+test('a face that catches moves the wall across to it and leaves the other axis on the foot', async ({ page }) => {
+  const { at } = await open(page);
+  await page.mouse.click(...at(18, -14));
+  await expect(page.locator('#delete')).toBeVisible();
+  await lightFoot(page, true);
+  await drag(page, at(18, -14), at(23.4, -12.4));
+  const d = await saved(page);
+  expect(wall(d, 'solo').start.x, 'five feet along, on the foot').toBeCloseTo(19, 6);
+  expect(Math.abs(wall(d, 'solo').start.z + 12), 'a face on the line, half a 2x4 off its centre')
+    .toBeCloseTo(3.5 / 24, 3);
 });
 
 test('with the light off the move is free, as it was', async ({ page }) => {

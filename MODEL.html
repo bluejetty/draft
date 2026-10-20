@@ -33644,10 +33644,43 @@
           // allowedMove rounds it, welds the group, refuses what it must and
           // says why. DRAFTING keeps wallSnapDelta exactly as it was.
           const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;
-          // THE FACES SEEK, after the ends' own corner snap and before the
-          // foot: a face that catches beats the foot, the corner drag's own
-          // rule ("a snap that lands on a real corner is the one case where
-          // the foot gives way").
+          // THE FOOT LIGHT'S DRAG, and it is NOT the TOY path with a
+          // different name. toyWallDelta discards the along-run component,
+          // welds the group and refuses a move that would leave a
+          // neighbour on an angle -- all correct for TOY and all wrong
+          // here, because acceptance 6 says DRAFTING's other freedoms are
+          // untouched. The light rounds DISTANCE. That is the whole of it.
+          //
+          // quantiseFeet is toy-constraints.js's own `round(d/step)*step`,
+          // reached rather than copied: the order says if you find yourself
+          // writing rounding code you are in the wrong function.
+          //
+          // PER AXIS, because a free drag has two components and the wall
+          // must land a whole foot in each. Quantising the MAGNITUDE and
+          // keeping the bearing would move an axis-aligned wall a whole
+          // foot -- the same answer -- but leave a diagonal drag's ends on
+          // no foot at all, which is the opposite of what the light says.
+          //
+          // It replaces wallSnapDelta rather than running after it, the way
+          // the TOY arm replaces it: with the light lit the foot IS the
+          // snap, and rounding a corner snap afterwards would pull the wall
+          // back off the corner it had just caught.
+          //
+          // AND IT RUNS BEFORE THE FACE SEEK, NOT INSTEAD OF IT (Movie, 20 Oct:
+          // "the 1' thing works when i change the wall lengths though i just
+          // noticed but not moving walls side to side"). It used to be the
+          // last arm of the chain below, so the moment a parallel face caught
+          // across -- and in a house one nearly always does -- the foot was
+          // skipped on BOTH axes and the wall landed wherever the hand
+          // stopped along its run. Now the hand's travel is rounded first and
+          // the faces seek from the rounded spot: a face within reach of it
+          // still wins across (the corner drag's rule, "a snap that lands on
+          // a real corner is the one case where the foot gives way"), and
+          // the other axis stays on the foot.
+          const Q = window.DraftToyConstraints;
+          if (!toy && footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          // THE FACES SEEK, after the ends' own corner snap: a face that
+          // catches beats the foot it is measured from.
           const ends = !toy && !footOn ? wallSnapDelta(md.before, dx, dz) : null;
           const seek = !toy && !ends && snapOn ? wallFaceSeek(md, dx, dz) : null;
           md.lit = seek ? seek.lit : null;
@@ -33655,31 +33688,6 @@
           if (toy) { dx = toy.dx; dz = toy.dz; }
           else if (ends) { dx = ends.dx; dz = ends.dz; }
           else if (seek) { dx = seek.dx; dz = seek.dz; }
-          else if (footOn) {
-            // THE FOOT LIGHT'S DRAG, and it is NOT the TOY path with a
-            // different name. toyWallDelta discards the along-run component,
-            // welds the group and refuses a move that would leave a
-            // neighbour on an angle -- all correct for TOY and all wrong
-            // here, because acceptance 6 says DRAFTING's other freedoms are
-            // untouched. The light rounds DISTANCE. That is the whole of it.
-            //
-            // quantiseFeet is toy-constraints.js's own `round(d/step)*step`,
-            // reached rather than copied: the order says if you find yourself
-            // writing rounding code you are in the wrong function.
-            //
-            // PER AXIS, because a free drag has two components and the wall
-            // must land a whole foot in each. Quantising the MAGNITUDE and
-            // keeping the bearing would move an axis-aligned wall a whole
-            // foot -- the same answer -- but leave a diagonal drag's ends on
-            // no foot at all, which is the opposite of what the light says.
-            //
-            // It replaces wallSnapDelta rather than running after it, the way
-            // the TOY arm replaces it: with the light lit the foot IS the
-            // snap, and rounding a corner snap afterwards would pull the wall
-            // back off the corner it had just caught.
-            const Q = window.DraftToyConstraints;
-            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
-          }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
         }
         // Live, on every move, exactly where the old page relinks — not once
