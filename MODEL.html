@@ -28163,7 +28163,9 @@
     floor: ['thickness', 'thickenedEdge', 'slopeInPerFt'],
     // A line is two points, a level, a view and a layer. Three of those five
     // are where it is; the layer is the whole of what it is.
-    line: ['layer'],
+    // A LINE'S LOOK TOO (Movie, 20 Oct): the brush carries what the LINE
+    // tool draws with, so a pickup can become the tool's own defaults.
+    line: ['layer', 'weight', 'style', 'color'],
   };
 
   // WHAT THE BRUSH CANNOT REACH, AND WHY, said here rather than discovered.
@@ -28332,6 +28334,57 @@
     sayOnStrip(`${BRUSH_KIND_SAID[hit.type]} takes the brush's properties.`);
   };
 
+  // A PICKUP BECOMES THE TOOL'S DEFAULTS (Movie, 20 Oct): "when the user
+  // picks up the PROPERTIES - also change the PROPERTIES to match in the
+  // 'item' FENS / WALL / LINE area to match most recent BRUSH pickup of
+  // properties for each type, so when the user goes back to use that item,
+  // it will be the type they 'picked up' with the brush". The brush's load
+  // already drives the next press while it is held; this writes the same
+  // properties where each tool keeps its own, so the panel shows them and
+  // the tool draws with them after the brush is put down.
+  const brushSetsDefaults = (kind, props) => {
+    const G = window.DraftGeometry2D;
+    const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
+    if (kind === 'fenestration') {
+      const type = props.type === 'window' ? 'window' : 'door';
+      fenestrationType = type;
+      if (num(props.width) > 0) openingSizes[type] = num(props.width);
+      if (num(props.headHeight) > 0) openingHeads[type] = num(props.headHeight);
+      if (type === 'window') {
+        if (num(props.sillHeight) != null) openingSill = Math.max(0, num(props.sillHeight));
+        if (props.casement && CASEMENT_CHIPS.some(([id]) => id === props.casement)) fenestrationCasement = props.casement;
+      } else {
+        const entry = props.garage === true
+          ? G.DOOR_CATALOG.find(e => e.type === 'garage')
+          : G.DOOR_CATALOG.find(e => e.type === props.doorType && e.style === (props.doorStyle || 'single'));
+        if (entry) fenestrationDoor = entry.id;
+        doorHingeFlip = props.hingeFlip === true;
+        doorSwingFlip = props.swingFlip === true;
+        gardenWindowFt = props.doorStyle === 'garden' ? (num(props.gardenWindowWidth) ?? null) : null;
+      }
+      if (openingPanelUp) showOpeningProps();
+      return;
+    }
+    if (kind === 'wall') {
+      const WT = window.DraftWallTypes;
+      if (WT?.WALL_TYPES.some(t => t.id === props.wallType)) drawing.activeWallType = props.wallType;
+      if (['left', 'center', 'right'].includes(props.refLine)) drawing.wallRefLine = props.refLine;
+      if (num(props.baseHeight) != null) drawing.wallBaseHeight = num(props.baseHeight);
+      if (num(props.topHeight) > 0) drawing.wallTopHeight = num(props.topHeight);
+      markDirty();
+      if (wallPanelUp) showWallProps();
+      return;
+    }
+    if (kind === 'line') {
+      const LS = window.DraftLineStyles;
+      const patch = {};
+      if (LS?.WEIGHTS.some(w => w.id === props.weight)) patch.weight = props.weight;
+      if (LS?.STYLES.some(st => st.id === props.style)) patch.style = props.style;
+      if (typeof props.color === 'string' && props.color) patch.color = props.color;
+      if (Object.keys(patch).length) setLineDefaults(patch);
+    }
+  };
+
   // ── WITHIN A FOOT OF AN OPENING'S DOT, IT IS THE OPENING ──────────────
   //
   // Movie, 20 Oct: "i'm trying to GRAB properties from a int FRENCH door and
@@ -28378,6 +28431,7 @@
         return;
       }
       brushLoad = { kind, props: brushPick(hit.item, kind) };
+      brushSetsDefaults(kind, brushLoad.props);
       // AN OPENING LIFTED ARMS FENESTRATION (Movie, 20 Oct: "once the user
       // uses the BRUSH to get PROPERTIES can you also change the user to
       // the TOOL necessary to use the properties / item, in this case into
@@ -30861,6 +30915,11 @@
       const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
       localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [LINE_STYLE_KEY]: lineDefaults }));
     } catch { /* a browser refusing storage still keeps it for this tab */ }
+  };
+  // The defaults on their own, for a pickup that changed no line.
+  const setLineDefaults = patch => {
+    lineDefaults = { ...lineDefaults, ...patch };
+    keepLineDefaults();
   };
   const writeLineStyle = (lines, patch) => {
     const edits = lines.map(line => ({ item: line, before: { ...line } }));
