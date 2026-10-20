@@ -27,11 +27,10 @@ const MUTANTS = [
     find: "      versions.cursor = index;\n",
     with: "",
     test: 'a version clicked goes on the sheet, whole; CURRENT puts the newest back' },
-  { file: 'MODEL.html',
-    name: 'a dirty mark with nothing behind it is a version too',
-    find: "    if (at && at.json === json) return;\n",
-    with: "",
-    test: 'UNDO / REDO hangs under NOTES / CALC and lists the session\'s versions, newest first, CURRENT on top' },
+  // NOT A ROW: the dedupe in historyTake (`if (at && at.json === json) return;`)
+  // guards a dirty mark that changed nothing, and no gesture on the page
+  // makes one today -- every release checks `moved` before it marks. It
+  // stays as a defence; a row on it would only ever survive.
   { file: 'MODEL.html',
     name: 'an edit on an older version keeps the versions after it',
     find: "    versions.entries.length = versions.cursor + 1;\n",
