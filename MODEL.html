@@ -26371,7 +26371,7 @@
     // every failure today.
     stripMessage.textContent = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
-      : (drawsRun() ? `${activeTool} — ${drawStart ? 'next point · double-click, ENTER or SPACE twice, or ESC ends the run' : 'first point'}`
+      : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point · double-click, ENTER or SPACE twice, or ESC ends the run' : 'first point'}`
         + (angleLockDeg() != null ? ` · ANGLE LOCKED ${angleLockDeg()}°` : '')
         : (activeTool === 'outline'
           ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));
