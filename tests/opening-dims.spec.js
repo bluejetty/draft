@@ -93,9 +93,16 @@ test('a dimension put on the door\'s dot is linked to it, and follows the door w
   expect(d.dimensions[0][onDoor].x, 'and the dimension\'s end with it').toBeCloseTo(door(d).offset - 10, 6);
 
   // KEPT ON RELOAD: the link is in the file, and still follows.
+  // Read back through the loader, and written again from what it kept.
   await page.reload();
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  d = await h.savedDrawing(page);
+  await page.keyboard.press('0');
+  await page.waitForTimeout(150);
+  const f2 = await h.planFrame(page);
+  await click(page, f2.at, 0, 0);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  d = await saved(page);
   expect([d.dimensions[0].startRef, d.dimensions[0].endRef].some(r => r?.openingId === 'door-1')).toBe(true);
 });
 
@@ -118,7 +125,9 @@ test('with AUTO DIMS on the plan, the strings follow the door while it is being 
   await page.mouse.up();
   await page.waitForTimeout(150);
   const labels = live.join(' | ');
-  expect(labels, 'the strings read the door where the hand has it, before the release').toMatch(/15'-0"/);
+  // TWICE: the opening's own pair follows it as it is drawn, and the auto
+  // string beside it is the one asked again on every move.
+  expect((labels.match(/15'-0"/g) || []).length, 'the strings read the door where the hand has it, before the release').toBe(2);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(150);
   const undone = await saved(page);

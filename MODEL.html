@@ -15031,7 +15031,14 @@
   // last thing done -- `step` is its undo entry, and anything pushed after it
   // means the drawing has moved on.
   var moveTyped = null;
-  const moveTypedReady = () => !!(moveTyped && moveState.on && !moveState.drag
+  // A DRAG UNDER SELECT IS FINISHED THE SAME WAY (Movie, 20 Oct: "when i
+  // move the line it doesn't allow me to enter the LENGTH textbox to allow it
+  // to go a certain distance from initial point") -- `drag` marks one, and it
+  // needs no MOVE lit. Never while a run is being drawn: then the box is the
+  // run's length, as it always was.
+  const moveTypedReady = () => !!(moveTyped
+    && (moveTyped.drag ? !moveDrag || moveDrag.before === moveTyped.before : moveState.on && !moveState.drag)
+    && !(drawsRun() && drawStart) && !(activeTool === 'outline' && outlineCorners.length)
     && undoStack[undoStack.length - 1] === moveTyped.step);
   const moveRoofHeld = () => {
     if (selection.length && selection.every(entry => entry.type === 'roof')) return selection[0].item;
@@ -27642,6 +27649,7 @@
     const feet = parsed.inches / 12;
     const m = moveTyped;
     if (m.opening) return slideByTyped(m, feet);
+    if (m.drag) return dragByTyped(m, feet);
     const len = Math.hypot(m.dx, m.dz);
     if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
     const dx = m.dx / len * feet, dz = m.dz / len * feet;
@@ -27690,6 +27698,28 @@
       : `Slid ${feetLabel(feet)}. UNDO puts it back.`);
     paint();
   };
+  // A SELECT DRAG, MADE EXACT: the drag is taken back -- its strings with
+  // it -- and the same points are set the typed distance along the line it
+  // took, from where they started, in a step of their own that UNDO takes
+  // back in one.
+  const dragByTyped = (m, feet) => {
+    const len = Math.hypot(m.dx, m.dz);
+    if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
+    const dx = m.dx / len * feet, dz = m.dz / len * feet;
+    undoOnce();
+    m.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+    m.before.forEach(b => relinkVertex(b.vtx));
+    const step = { kind: 'move', before: m.before };
+    undoStack.push(step);
+    foldRedim(step);
+    m.step = step; m.dx = dx; m.dz = dz;
+    lengthBox.blur();
+    markDirty();
+    sayOnStrip(`Moved ${feetLabel(feet)}. UNDO puts it back.`);
+    paint();
+  };
+  // ANOTHER TOOL PUT IN HAND ENDS IT: the box is that tool's from then on.
+  toolListeners.push(() => { if (moveTyped) { moveTyped = null; stripRefresh(); } });
   const commitTypedLength = () => {
     if (moveTypedReady()) { moveByTyped(); return; }
     if (activeTool === 'outline') {
@@ -32576,7 +32606,23 @@
         // measure -- so stringing before it is answered would string a
         // drawing that does not exist yet. settleFootprint folds this same
         // step when it lands.
-        if (!offerFootprintChoice(md, moveStep)) foldRedim(moveStep);
+        const offered = offerFootprintChoice(md, moveStep);
+        if (!offered) foldRedim(moveStep);
+        // A TYPED LENGTH MAY FINISH IT, as it does a MOVE (moveTyped): a line
+        // or wall dragged by its body, an assembly, or an end NODE (Movie,
+        // 20 Oct: "when i grab an enpoint NODE, i'd like to move it over 1/16"
+        // by typing into the length box"). Not a drag that let go with SHIFT,
+        // carried locked siblings, moved a boneyard master's corner (its
+        // riders were propagated on the release), or is waiting on the
+        // footprint card: each of those did more than move points.
+        const a = md.before?.[0];
+        const ddx = a ? a.vtx.x - a.x : 0, ddz = a ? a.vtx.z - a.z : 0;
+        const master = md.kind === 'corner'
+          && (drawing?.boneyardOutlines || []).some(m => (m.points || []).includes(a?.vtx));
+        moveTyped = !offered && board !== 'toy' && !md.loose && !md.lockBefore && !master
+          && (md.kind === 'wall' || md.kind === 'group' || md.kind === 'corner') && Math.hypot(ddx, ddz) > 1e-6
+          ? { drag: true, before: md.before, dx: ddx, dz: ddz, step: moveStep } : null;
+        if (moveTyped) stripRefresh();
       } else if (board === 'toy' && md.kind === 'wall' && md.body
         && walls().includes(md.body)) {
         // §4's CLICK, and it costs no new gesture. `segmentBodyAt` only

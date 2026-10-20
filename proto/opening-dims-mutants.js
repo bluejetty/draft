@@ -8,15 +8,33 @@
 // ORANGE for the dimensions to link onto and if i move that can the dimension
 // move with it ... autoupdate those fenstration dimensions immediately" --
 // "make it the same format as th other ones where it 1-6 or 0-18 would be the
-// same. (would need to type feet first before inches)".
+// same. (would need to type feet first before inches)" -- "when i move the
+// line it doesn't allow me to enter the LENGTH textbox" -- "when i grab an
+// enpoint NODE, i'd like to move it over 1/16" by typing into the length box".
 //
 // Run: node proto/opening-dims-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPEC = 'tests/opening-dims.spec.js tests/model-html-fenestration.spec.js';
+const SPEC = 'tests/opening-dims.spec.js tests/model-html-fenestration.spec.js tests/typed-drag.spec.js';
 const MUTANTS = [
+  { file: 'MODEL.html', name: 'a SELECT drag takes no typed length',
+    find: "        moveTyped = !offered && board !== 'toy' && !md.loose && !md.lockBefore && !master\n",
+    with: "        moveTyped = false && !md.loose && !md.lockBefore && !master\n",
+    test: 'a line dragged by its body, then a typed length' },
+  { file: 'MODEL.html', name: 'an end node takes no typed length',
+    find: "          && (md.kind === 'wall' || md.kind === 'group' || md.kind === 'corner') && Math.hypot(ddx, ddz) > 1e-6\n",
+    with: "          && (md.kind === 'wall' || md.kind === 'group') && Math.hypot(ddx, ddz) > 1e-6\n",
+    test: 'an end NODE dragged a hair' },
+  { file: 'MODEL.html', name: 'the typed length stacks a second step on the drag',
+    find: "    undoOnce();\n    m.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n    m.before.forEach(b => relinkVertex(b.vtx));\n",
+    with: "    m.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n    m.before.forEach(b => relinkVertex(b.vtx));\n",
+    test: 'a line dragged by its body, then a typed length' },
+  { file: 'MODEL.html', name: 'another tool leaves the box on the last drag',
+    find: "  toolListeners.push(() => { if (moveTyped) { moveTyped = null; stripRefresh(); } });\n",
+    with: "",
+    test: 'another tool put in hand ends it' },
   { file: 'MODEL.html', name: 'the dot takes no dimension',
     find: "    if (dot) return { x: dot.c.x, z: dot.c.z, ref: { openingId: String(dot.opening.id), x: dot.c.x, z: dot.c.z } };\n",
     with: "",
