@@ -28004,8 +28004,16 @@
   // hologram's floor mapping puts it on whichever floor of the house it is
   // stood on. Only a file that says it is a suite; anything else parks
   // work on its shelves that is not meant to come with it.
+  // AND A DRAWING WITH NOTHING BUT SHELVES -- walls only on the BONEYARD,
+  // none on a floor -- is the same thing saved before SAVE AS SUITE existed
+  // (Movie, 20 Oct: "i saved the 2BD on the SHELF and when i brought it in as
+  // a HOLOGRAM - it loaded it into the SHELF").
+  const onlyOnShelves = parsed => {
+    const list = Array.isArray(parsed?.walls) ? parsed.walls : [];
+    return list.length > 0 && list.every(w => Number(w?.levelId) < 0);
+  };
   const suiteOnFloor = parsed => {
-    if (!window.DraftDrawingFormat.suiteKind(parsed?.suiteKind)) return parsed;
+    if (!window.DraftDrawingFormat.suiteKind(parsed?.suiteKind) && !onlyOnShelves(parsed)) return parsed;
     const floor = floorsOf(parsed.levels)[0];
     const target = floor ? Number(floor.id) : 3;
     const out = { ...parsed, levels: floor ? parsed.levels
@@ -28366,6 +28374,14 @@
       sayOnStrip(`${file.name} is not a drawing this page can read.`);
       return;
     }
+    // ON THE FLOOR THE DRAFTER IS STANDING ON (Movie, 20 Oct: "can we load
+    // them in the CURRENT PLAN LEVEL.. so if i'm in MAIN FLOOR PLAN - it
+    // would align into that floor, or 2nd floor --- same thing"). Its lowest
+    // floor goes on this one; on the BONEYARD, or with no room above for all
+    // its floors, it stands where its own file has it.
+    const here = boneyardActive ? -1 : floorsOf(drawing.levels).findIndex(l => Number(l.id) === Number(activeLevelId()));
+    const map = here >= 0 ? suiteMapFor(holo, here) : null;
+    if (map && !sameMap(holo, map)) holo.levelMap = map;
     if (!Array.isArray(drawing.holograms)) drawing.holograms = [];
     addItem(drawing.holograms, holo);
     // ── AND IT ARRIVES IN HAND ────────────────────────────────────────────
