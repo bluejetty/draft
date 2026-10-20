@@ -136,7 +136,11 @@ test('a suite draws in the normal colours, not the hologram blue', async ({ page
     const c = document.getElementById('plan');
     const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let n = 0;
-    for (let i = 0; i < data.length; i += 4) if (data[i + 2] > 150 && data[i + 2] - data[i] > 50) n += 1;
+    // THE HOLOGRAM'S BLUE, not the turquoise of a super node ring (a suite's
+    // corners carry them since 20 Oct): blue well above green.
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 2] > 150 && data[i + 2] - data[i] > 50 && data[i + 2] - data[i + 1] > 30) n += 1;
+    }
     return n;
   });
   // Light pixels: the suite's walls in the night page's light ink.
