@@ -141,7 +141,7 @@ test('a point on an AUTO dimension is not offered; the hand piece sharing the co
   const dim = (id, a, b, extra) => ({ id, start: { x: a, y: 0, z: -2 }, end: { x: b, y: 0, z: -2 },
     levelId: 3, view: 'plan', ...extra });
   f.dimensions = [
-    dim('auto-1', 0, 10, { auto: true, layer: 'A-DIMS-EXT' }),
+    dim(5, 0, 10, { auto: true, layer: 'A-DIMS-EXT' }),
     dim(7, 0, 4, { auto: false, layer: 'A-DIMS-HAND', startRef: { wallId: 'w1', end: 'start', x: 0, z: 0 } }),
     dim(8, 4, 10, { auto: false, layer: 'A-DIMS-HAND', endRef: { wallId: 'w2', end: 'end', x: 10, z: 0 } }),
   ];

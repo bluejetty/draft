@@ -14630,12 +14630,13 @@
     const at = dim[point];
     const next = dimRow(dim).find(d => d !== dim && !d.auto
       && (dimPointsMeet(d.start, at) || dimPointsMeet(d.end, at))) || null;
-    const mark = undoStack.length;
     if (!next) {
       const index = list.indexOf(dim);
       list.splice(index, 1);
       undoStack.push({ kind: 'remove-item', list, index, item: dim });
     } else {
+      // Two steps -- the stretch and the removal -- and deleteSelection
+      // batches whatever a DELETE pushed, so they are one UNDO from there.
       const farEnd = dimPointsMeet(next.start, at) ? 'end' : 'start';
       const far = next[farEnd], farRef = next[`${farEnd}Ref`];
       const before = { ...dim };
@@ -14646,7 +14647,6 @@
       const index = list.indexOf(next);
       list.splice(index, 1);
       undoStack.push({ kind: 'remove-item', list, index, item: next });
-      undoStack.push({ kind: 'batch', steps: undoStack.splice(mark) });
     }
     markDirty();
     return true;
