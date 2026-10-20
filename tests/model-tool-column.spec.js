@@ -39,7 +39,8 @@ const ROSTER = [
   ['draw', 'extend', 'Extend', 'X'],
   ['draw', 'copy', 'Copy', 'K'],
   ['draw', 'trim', 'Trim', 'Q'],
-  ['draw', 'node', 'NODE / ARC', 'N'],
+  // SUPERNODE (Movie, 20 Oct) in the old NODE / ARC slot, on its N.
+  ['draw', 'node', 'SUPERNODE', 'N'],
   ['draw', 'line', 'LINE', 'L'],
   ['draw', 'shape', 'SHAPE', 'A'],
   ['draw', 'dimension', 'DIMENSION', 'D'],

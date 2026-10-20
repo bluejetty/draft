@@ -46,7 +46,7 @@ const MUTANTS = [
     with: "    if (false) {\n",
     test: "a suite dragged within 6\" of lining up snaps onto the shell, both ways in a corner" },
   { file: 'MODEL.html', name: "a dragged suite does not snap",
-    find: "    if (m.hologram && m.underlay.mode === 'suite' && H()?.suiteSnap) {",
+    find: "    if (m.hologram && m.underlay.mode === 'suite' && !m.superLock && H()?.suiteSnap) {",
     with: "    if (false) {",
     test: "a suite dragged within 6\" of lining up snaps onto the shell, both ways in a corner" },
   { file: 'MODEL.html', name: "a SUITE row still offers DEMO",

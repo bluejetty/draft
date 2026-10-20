@@ -38,7 +38,12 @@
     { id: 'extend',       name: 'Extend',       group: 'draw',  kind: 'standard',   command: 'extend' },
     { id: 'copy',         name: 'Copy',         group: 'draw',  kind: 'standard',   command: 'copy' },
     { id: 'trim',         name: 'Trim',         group: 'draw',  kind: 'standard',   command: 'trim' },
-    { id: 'node',         name: 'NODE / ARC',   group: 'draw',  kind: 'contextual', command: 'node' },
+    // SUPERNODE (Movie, 20 Oct: "make a NODE command in the drafting menu,
+    // and those will be super high power nodes very SNAP Magnetic" -- one
+    // word, SUPERNODE, his spelling) takes the old page's NODE / ARC slot
+    // and its N: that key armed nothing on this page, and a thirteenth
+    // DRAFTING key put the column a row past the rail at 1366x768.
+    { id: 'node',         name: 'SUPERNODE',    group: 'draw',  kind: 'contextual', command: 'node' },
     { id: 'line',         name: 'LINE',         group: 'draw',  kind: 'contextual', command: 'line' },
     { id: 'shape',        name: 'SHAPE',        group: 'draw',  kind: 'contextual', command: 'shape' },
     { id: 'dimension',    name: 'DIMENSION',    group: 'draw',  kind: 'contextual', command: 'dimension' },
