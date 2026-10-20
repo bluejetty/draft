@@ -2144,8 +2144,17 @@ suite('drawWetFloors2D', 'a crooked weld does not turn the grid; neither does a 
   const m = calls(ctx, 'moveTo').slice(1), l = calls(ctx, 'lineTo').slice(-m.length);
   expect('and still square once turned',
     m.length > 4 && m.every(([x, y], i) => Math.abs(x - l[i][0]) < 1e-6 || Math.abs(y - l[i][1]) < 1e-6), true);
-  expect('the voted side is a true wall',
-    R.squareSideOf([{ x: 2, z: 2 }, { x: 8, z: 2 }, { x: 8, z: 11 }, { x: 2.5, z: 11 }]) !== 3, true);
+});
+
+// THE VOTE ITSELF: the room's four square sides out-vote one long crooked one.
+suite('squareSideOf', 'the side the tile lies square to is a true wall, not the longest weld', R => {
+  // (2.5, 11) -> (2, 2) is the longest edge, and 3 degrees off square.
+  const room = [{ x: 2, z: 2 }, { x: 8, z: 2 }, { x: 8, z: 11 }, { x: 2.5, z: 11 }];
+  expect('not the crooked edge', R.squareSideOf(room) !== 3, true);
+  expect('the 9 ft wall, the longest square one', R.squareSideOf(room), 1);
+  // A PLAIN RECTANGLE: its longest side, as before.
+  expect('a rectangle lies to its long side',
+    [0, 2].includes(R.squareSideOf([{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 4 }, { x: 0, z: 4 }])), true);
 });
 
 // ── Kitchen pieces that touch read as one counter (Movie, 9 Oct) ──
