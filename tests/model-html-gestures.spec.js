@@ -773,6 +773,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // notepad is words for the drafter, never geometry, so no absence
             // row moves.
             'notes-tab',
+            // UNDO / REDO (Movie, 20 Oct): `history-tab` opens the session's
+            // versions under NOTES / CALC. Its rows are options, not buttons,
+            // and a version put back on the sheet is a drawing the drafter
+            // already made -- nothing new, so no absence row moves.
+            'history-tab',
             // ROTATE (Movie, 18 Oct: "i also need a ROTATE command"): it turns
             // what is already drawn about its own middle and makes nothing,
             // so no absence row moves -- the same verdict COPY and DELETE got.
