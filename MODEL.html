@@ -14369,6 +14369,11 @@
   // id and a stair owns the hole cut for it in the floor, so a pasted copy
   // of either would come down bound to things on the level it left. They
   // delete and undo like the rest; they are not carried.
+  // A FIXTURE IS CARRIED NOW (Movie, 20 Oct, the suites drawn on MAIN FL:
+  // "can i select ALL on the floor and then paste ALL in the boneyard"): it
+  // is bound to its wall by id, and the paste re-points it at the wall's
+  // copy, as it does a door or a window -- see pasteHeld. One whose wall is
+  // not in the paste stays behind.
   // A ROOM TAG IS NOT CARRIED EITHER: its id is a whole number the format
   // insists on, and a paste re-ids with a string.
   // A NOTE's id is a whole number for the same reason.
@@ -14377,7 +14382,7 @@
   // inward so i can delete some of the dimensions on it for new dimension
   // line"): its id is a whole number too, so the paste gives it one of its own
   // (newDimensionId) rather than the string every other copy takes.
-  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag', 'note']);
+  const NOT_COPIED = new Set(['stair', 'roof', 'roomtag', 'note']);
 
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
@@ -14462,9 +14467,22 @@
     if (!drawing || !held.length) return 0;
     const owner = activeLevelId();
     const landed = [];
-    held.forEach(({ type, raw }) => {
+    // THE WALLS LAND FIRST, AND WHAT HANGS ON THEM FOLLOWS (Movie, 20 Oct:
+    // the suites copied down to the boneyard came without their windows).
+    // A door, a window or a fixture names its wall by id; the wall's copy
+    // takes a new id, so the copy of what hangs on it is re-pointed at that,
+    // or it would stand on the wall it left, on a level it is no longer on,
+    // and show nowhere. One whose wall is not in the paste is not pasted.
+    const wallIds = new Map();
+    const onWall = type => type === 'fenestration' || type === 'fixture';
+    const ordered = [...held.filter(h => h.type === 'wall'), ...held.filter(h => h.type !== 'wall')];
+    ordered.forEach(({ type, raw }) => {
       const key = type === 'wall' ? 'walls' : SELECTION_LISTS[type];
       if (!key) return;
+      if (onWall(type)) {
+        if (!wallIds.has(String(raw.wallId))) return;
+        if (raw.endWallId != null && !wallIds.has(String(raw.endWallId))) return;
+      }
       // EVERY LINK TO WHERE IT CAME FROM IS CUT, and each strip is its own
       // rule rather than one tidy-up:
       //
@@ -14489,6 +14507,11 @@
       //             copy around.
       const { id: _id, groupId: _g, ...rest } = raw;
       const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };
+      if (type === 'wall') wallIds.set(String(raw.id), copy.id);
+      if (onWall(type)) {
+        copy.wallId = wallIds.get(String(raw.wallId));
+        if (raw.endWallId != null) copy.endWallId = wallIds.get(String(raw.endWallId));
+      }
       // A PASTED DIMENSION IS THE DRAFTER'S: a whole-number id, on the hand
       // layer, not auto -- an AUTO DIMS re-lay would otherwise sweep the copy
       // he put down to keep -- and no slid-row record of the string it left.
