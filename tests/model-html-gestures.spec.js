@@ -407,7 +407,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         const inPanel = el => el.closest('#levels-panel') !== null;
         const inRail = el => el.closest('#view-rail') !== null;
         const inTools = el => el.closest('#tool-slot') !== null;
-        const outside = el => !inPanel(el) && !inRail(el) && !inTools(el);
+        // THE FOUR KEYS OVER THE TABS (19 Oct) are copies of four column keys,
+        // counted by kind below like the column, and asserted against the
+        // roster in select-picking.spec.js.
+        const inBar = el => el.closest('#select-bar') !== null;
+        const outside = el => !inPanel(el) && !inRail(el) && !inTools(el) && !inBar(el);
         const toolKind = el => (el.dataset.toolKey !== undefined ? 'tool-key'
           : el.dataset.selMode !== undefined ? 'sel-mode'
             : el.dataset.selFilter !== undefined ? 'sel-filter'
@@ -467,6 +471,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           toolKinds: [...new Set([...document.querySelectorAll('#tool-slot *')]
             .filter(el => ['BUTTON', 'INPUT', 'SELECT'].includes(el.tagName))
             .map(toolKind))].sort(),
+          // THE BAR OVER THE TABS holds bar keys and nothing else.
+          barKinds: [...new Set([...document.querySelectorAll('#select-bar *')]
+            .filter(el => ['BUTTON', 'INPUT', 'SELECT'].includes(el.tagName))
+            .map(el => (el.dataset.barKey !== undefined ? 'bar-key' : el.tagName.toLowerCase())))].sort(),
           // AND THE PANEL, counted rather than named: every control inside it
           // must be one of the four kinds it is allowed to hold. A context
           // menu host or a file input smuggled in there would fail this.
@@ -1074,6 +1082,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'sel-filter', 'sel-mode', 'tool-key',
             // BATH A and BATH B, one control kind (see toolKind).
             'washroom'].sort(),
+          barKinds: ['bar-key'],
         });
     });
 

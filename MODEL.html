@@ -841,15 +841,16 @@
   .sel-chip.assembled { color: var(--accent); border-color: var(--accent); }
   .sel-chip.assembled:hover { border-color: var(--accent); }
   .tool-keys { display:grid; grid-template-columns:repeat(4, 40px); gap:4px; }
-  /* THE BAR OVER THE TABS stays put while the pane under it scrolls. */
-  #select-bar { position:sticky; top:0; z-index:1; padding-bottom:8px;
-    margin-bottom:8px; border-bottom:1px solid var(--edge-panel);
+  /* THE BAR OVER THE TABS, in the gap between the strip and the rail's top. */
+  #select-bar { position:fixed; z-index:30; left:28px;
+    top: calc(var(--rail-top) - 48px); padding:3px;
+    border:1px solid var(--edge-panel); border-radius:3px;
     background: var(--surface-panel); }
-  #select-bar:empty { display:none; }
+  #select-bar:empty, #left-rail[hidden] + #select-bar { display:none; }
   /* PICKING GLOWS (Movie, 19 Oct: "they can see it glowing when its
      selected"): SELECT while it is picking a kind, and the one kind picked --
      a glow, so it never reads as a tool armed to draw. */
-  .tool-key[data-picking], .tool-key[data-picked], .sel-chip[data-picked] {
+  .tool-key.tool-key[data-picking], .tool-key.tool-key[data-picked], .sel-chip.sel-chip[data-picked] {
     border-color: var(--pick-glow, #5fd4ff); color: var(--pick-glow, #5fd4ff);
     box-shadow: 0 0 6px 1px var(--pick-glow, #5fd4ff), inset 0 0 0 1px var(--pick-glow, #5fd4ff); }
   .tool-key { position:relative; width:40px; height:40px; padding:0;
@@ -1610,11 +1611,6 @@
 <button id="props-tab" class="rail-tab" type="button"
   data-left-pane-tab="properties" hidden>PROPERTIES</button>
 <aside id="left-rail" data-left-rail hidden>
-  <!-- THE FOUR MAIN KEYS OVER THE TABS (Movie, 19 Oct): "i'd like the 4
-       buttons SELECT / ASSEMBLY / TRIM / DIMENSION up in that little space
-       over the regular open tab area" -- copies, the DRAFTING pane keeps its
-       own ("don't move them, copy them have both"). Built by buildSelectBar. -->
-  <div id="select-bar" data-select-bar></div>
   <div id="tool-slot" data-tool-slot>
     <div data-left-pane="drafting"></div>
     <div data-left-pane="build"></div>
@@ -1647,6 +1643,13 @@
     </div>
   </div>
 </aside>
+<!-- THE FOUR MAIN KEYS OVER THE TABS (Movie, 19 Oct): "i'd like the 4
+     buttons SELECT / ASSEMBLY / TRIM / DIMENSION up in that little space over
+     the regular open tab area" -- copies, the DRAFTING pane keeps its own
+     ("don't move them, copy them have both"). In the gap ABOVE the rail, not
+     inside it: inside, the rail grew past what fits at 1366x768. It shows
+     while the rail is open, whichever tab. Built by buildSelectBar. -->
+<div id="select-bar" data-select-bar></div>
 
 <!-- TWO TABS ON THE RIGHT EDGE (Movie, 15 Sep): "2 seperate tabs top will be
      LEVELS / LAYERS, and then next down LAYOUT PREVIEWS".
@@ -29012,7 +29015,7 @@
     syncSelectionPanel();
     syncPickGlow();
     sayOnStrip(same ? 'SELECT — no kind picked: everything responds. Press a kind, or Esc to stop.'
-      : `SELECT — only ${pickName()} respond. Box them, then DELETE. Esc, S or SELECT again to stop.`);
+      : `SELECT — picking ${pickName()} only. Box them, then DELETE. Esc, S or SELECT again to stop.`);
   }
   // EVERY KEY PRESS COMES HERE -- the column, the bar and the letters -- so
   // they cannot disagree about what a press means.
