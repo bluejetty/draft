@@ -26406,7 +26406,7 @@
     // every failure today.
     stripMessage.textContent = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
-      : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point' : 'first point'}`
+      : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point · double-click, ENTER or SPACE twice, or ESC ends the run' : 'first point'}`
         + (angleLockDeg() != null ? ` · ANGLE LOCKED ${angleLockDeg()}°` : '')
         : (activeTool === 'outline'
           ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));
@@ -28371,10 +28371,47 @@
   // walls the click choose direction and length and then click again or
   // ENTER"). With nothing typed, Enter on a run in hand is the click it
   // stands for; a typed LENGTH still takes its own Enter, in its own box.
+  // ONCE A NODE, TWICE THE END (Movie, 20 Oct): "when drawing a series of
+  // LINE, DIMENSION WALL, if the user esc, end the series of items being
+  // drawn (as it does now) also make the DOUBLE CLICK on mouse close it off
+  // in the same way. If the user presses one click on mouse it makes a NODE,
+  // if DOUBLE click it closes.. also make the ENTER and SPACE act in the
+  // same way where 1 click makes a NODE but a double click for ENTER or
+  // SPACE closes the series".
+  //
+  // For a WALL or LINE run: ENTER or SPACE once puts a corner where the
+  // cursor stands (and starts the run there when none is in hand); the same
+  // key again inside SERIES_TWICE_MS, WITH THE CURSOR WHERE IT WAS, ends the
+  // run, so the corner the first press put down is the run's last -- the
+  // same shape as the double-click below, whose first click is a corner and
+  // whose second lands on it. A quick second press after the cursor has
+  // moved on is the next corner, not the end: a drafter who presses, moves,
+  // presses is drawing, however fast.
+  // DIMENSION keeps its own rule (dim chains, #822): one ENTER, SPACE or
+  // double-click ends its points. SPACE in a box is a space: typed lengths
+  // carry them ("4 6"), which the target guard keeps.
+  const SERIES_TWICE_MS = 450;
+  let seriesKeyLast = { key: null, at: 0, where: null };
+  const endDrawRun = () => {
+    drawStart = null;
+    seriesKeyLast = { key: null, at: 0, where: null };
+    sayOnStrip(`${activeTool.toUpperCase()} — run ended. Press, ENTER or SPACE to start another.`);
+  };
+  const seriesKeyPress = (key, place) => {
+    const now = Date.now();
+    const still = seriesKeyLast.where && cursorWorld
+      && Math.hypot(cursorWorld.x - seriesKeyLast.where.x, cursorWorld.z - seriesKeyLast.where.z) < 0.01;
+    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;
+    seriesKeyLast = { key, at: now, where: cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : null };
+    if (twice && drawsRun() && drawStart) { endDrawRun(); return true; }
+    return place();
+  };
   const enterPlaces = () => {
     if (!cursorWorld) return false;
     if (activeTool === 'outline' && outlineCorners.length) { outlinePress(cursorWorld); return true; }
-    if (drawsRun() && drawStart) { drawPress(cursorWorld); return true; }
+    // With or without a run in hand: a first press starts one at the cursor.
+    const run = drawsRun();
+    if (run) { drawPress(cursorWorld); return true; }
     if (activeTool === 'dimension' && dimPoints.length) return endDimString();
     return false;
   };
@@ -28382,7 +28419,26 @@
     if (e.key !== 'Enter' || e.repeat || modalUp()) return;
     const t = e.target;
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
-    if (enterPlaces()) { e.preventDefault(); stripRefresh(); paint(); }
+    if (seriesKeyPress('Enter', enterPlaces)) { e.preventDefault(); stripRefresh(); paint(); }
+  });
+  window.addEventListener('keydown', e => {
+    if (e.key !== ' ' || e.repeat || !drawsRun() || modalUp()) return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
+    if (!cursorWorld) return;
+    e.preventDefault();
+    if (seriesKeyPress(' ', enterPlaces)) { stripRefresh(); paint(); }
+  });
+  // A DOUBLE-CLICK ENDS THE RUN. Its first click is an ordinary press -- a
+  // corner, committed by the run's own pointerup -- and its second lands on
+  // the same spot, which drawPress reads as no move; what is left to do is
+  // put the run down.
+  canvas.addEventListener('dblclick', e => {
+    if (!drawsRun() || !drawStart || modalUp()) return;
+    e.preventDefault();
+    endDrawRun();
+    stripRefresh();
+    paint();
   });
   // THE MOVE, MADE EXACT: the same points, from where the drag found them,
   // the typed distance along the line the drag took. The drag's own undo
