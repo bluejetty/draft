@@ -55,7 +55,7 @@ async function drawType(page) {
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
-  await page.locator('#dt-outline').click();
+  await page.locator('#dt-banner-outline').click();
   await expect(page.locator('#drivethru')).toBeHidden();
   // THE PRESS SEEDS A CORNER ON THE BULLSEYE. These two traces are a
   // rectangle ABOUT the origin -- which is what makes "towards the middle"

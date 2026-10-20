@@ -76,7 +76,7 @@ async function traceHouse(page, entry, corners) {
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator(`[data-build-entry="${entry}"]`).click();
-  await page.locator('#dt-outline').click();
+  await page.locator('#dt-banner-outline').click();
   await expect(page.locator('#drivethru')).toBeHidden();
   await h.dropSeededCorner(page);
   const { at } = await h.planFrame(page);
