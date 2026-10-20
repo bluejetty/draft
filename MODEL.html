@@ -811,10 +811,13 @@
     font-family: var(--font-ui); font-size:9px; letter-spacing:0.1em;
     color: var(--ink-quiet); opacity:0.5; }
   [data-props-empty][hidden] { display:none; }
-  [data-tool-group] + [data-tool-group] { margin-top:10px; }
+  /* 5px AND 3px, not 10 and 5: MOVE and STRETCH (Movie, 20 Oct) put a
+     fourth row in DRAW / EDIT, and the rail with PROPERTIES up has to fit
+     at 1366x768 without a fold. The spacing gave the 19px, no text did. */
+  [data-tool-group] + [data-tool-group] { margin-top:5px; }
   [data-tool-group-name] { font-family: var(--font-ui); font-size:9px;
     font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
-    color: var(--ink-quiet); margin-bottom:5px; }
+    color: var(--ink-quiet); margin-bottom:3px; }
   /* ── THE ASSEMBLED ONES, UP BESIDE THE TITLE ────────────────────────────
      Movie, 14 Oct: "bring those ASSEMBLED units for BATH and KITCHEN up
      beside the title (to the right)", and for the colour, "give them GOLD or
@@ -857,7 +860,8 @@
   /* PICKING GLOWS (Movie, 19 Oct: "they can see it glowing when its
      selected"): SELECT while it is picking a kind, and the one kind picked --
      a glow, so it never reads as a tool armed to draw. */
-  .tool-key.tool-key[data-picking], .tool-key.tool-key[data-picked], .sel-chip.sel-chip[data-picked] {
+  .tool-key.tool-key[data-picking], .tool-key.tool-key[data-picked], .sel-chip.sel-chip[data-picked],
+  .tool-key.tool-key[data-stretch-glow] {
     border-color: var(--pick-glow, #5fd4ff); color: var(--pick-glow, #5fd4ff);
     box-shadow: 0 0 6px 1px var(--pick-glow, #5fd4ff), inset 0 0 0 1px var(--pick-glow, #5fd4ff); }
   .tool-key { position:relative; width:40px; height:40px; padding:0;
@@ -2646,6 +2650,8 @@
   let brushWarned = null;   // { opening } or { wall } a TOO BIG glows on, until the next press
   let rulerFrom = null;     // the ruler's first press, in world feet
   let cursorWorld = null;   // where the cursor last was, for the live readouts
+  // STRETCH's presses so far: the box's two corners, then the base point.
+  let stretchState = { a: null, b: null, base: null };
   // THE CORNER UNDER THE CURSOR, or null. Painted, not just cursored -- see
   // paintHoverCorner. Held as the POOLED VERTEX OBJECT rather than a copy of
   // its numbers, so a corner that moves under the cursor keeps its highlight
@@ -6871,6 +6877,7 @@
         // the ring over its own handle rather than under it.
         paintHoverCorner();
         paintBand();
+        paintStretch();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
         // reason (MODEL.dc.html:7432, after every piece of linework and just
@@ -15711,6 +15718,8 @@
     if (moveState.node && roof !== moveState.node.roof) moveState.node = null;
     moveButton.hidden = !able || !!rotateState?.open || !!flipState?.open;
     moveButton.setAttribute('aria-pressed', String(!!moveState.on));
+    document.querySelectorAll('[data-tool-key="move"]').forEach(btn =>
+      btn.setAttribute('aria-pressed', String(!!moveState.on)));
   }
   const roofRings = roof => {
     const n = roof.points.length;
@@ -16060,6 +16069,258 @@
       said: `${stepped.said.length ? ` ${stepped.said.join('. ')}.` : ''}${framedSaid}`,
     };
   };
+  // ── STRETCH (Movie, 20 Oct) ──────────────────────────────────────────
+  //
+  // "use it with the RECTAGULAR SELECT, so if they choose STRETCH
+  // automatically also glow the SELECT button and bring up the rectagle
+  // select ... let him just press for each corner" -- then "click on the edge
+  // node of the existing suite and pull it up to te line, and all the
+  // ASSEMBLED units with even a small part withint the rectabgle should be
+  // FULLY dragged along 'in tact'". And his answers: doors and windows on a
+  // stretched wall "keep em put", measured from the end that stays; a suite
+  // hologram the box touches moves whole.
+  //
+  // FOUR PRESSES: two corners of a crossing box, a base point, and where the
+  // base point goes (the magnet, the T-square and a typed length all work on
+  // that last one, as on a wall). Then:
+  //   - every point INSIDE the box moves, once -- a wall corner is one point
+  //     shared by the walls that meet there, so the walls crossing the box
+  //     edge stretch and the ones wholly inside move;
+  //   - an ASSEMBLY any part of which the box touches moves whole, and so do
+  //     a stair, a column, a tag and a note;
+  //   - a SUITE hologram the box touches moves whole;
+  //   - a door, window or fixture on a stretched wall keeps its distance from
+  //     the end that stays -- one inside the box rides the end that moves;
+  //   - one UNDO puts it all back.
+  const STRETCH_WHOLE = new Set(['stair', 'column', 'roomtag', 'note', 'superNode']);
+  const stretchBox = () => {
+    const { a, b } = stretchState;
+    if (!a || !b) return null;
+    return { minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z) };
+  };
+  const inBox = (box, pt) => !!pt && pt.x >= box.minX && pt.x <= box.maxX && pt.z >= box.minZ && pt.z <= box.maxZ;
+  // A SHAPE THE BOX TOUCHES: a corner inside, or an edge across one of its own.
+  const boxTouches = (box, parts, open) => {
+    const corners = [{ x: box.minX, z: box.minZ }, { x: box.maxX, z: box.minZ }, { x: box.maxX, z: box.maxZ }, { x: box.minX, z: box.maxZ }];
+    const d = (u, v, w) => (v.x - u.x) * (w.z - u.z) - (v.z - u.z) * (w.x - u.x);
+    const cross = (p, q, r, t) => ((d(r, t, p) > 0) !== (d(r, t, q) > 0)) && ((d(p, q, r) > 0) !== (d(p, q, t) > 0));
+    return parts.some(pts => {
+      const ring = (pts || []).filter(Boolean);
+      if (ring.some(p => inBox(box, p))) return true;
+      const n = open ? ring.length - 1 : ring.length;
+      for (let i = 0; i < n; i += 1) {
+        const u = ring[i], v = ring[(i + 1) % ring.length];
+        if (corners.some((r, k) => cross(u, v, r, corners[(k + 1) % 4]))) return true;
+      }
+      return false;
+    });
+  };
+  // WHAT A BOX WILL MOVE, worked out without moving anything -- read by the
+  // ghost while the destination is chosen and by the stretch itself.
+  const stretchPlan = box => {
+    const was = selectFilter;
+    let shapesHere;
+    try { selectFilter = 'all'; shapesHere = boxShapes(false); } finally { selectFilter = was; }
+    const points = new Set();
+    const whole = new Set();
+    const addAll = entry => rotatePointsOf(entry).forEach(p => points.add(p));
+    const doneGroups = new Set();
+    shapesHere.forEach(({ type, item, parts, open }) => {
+      if (type === 'fenestration' || type === 'fixture') return;
+      const entry = { type, item };
+      const unit = groupOf(entry);
+      if (unit) {
+        if (doneGroups.has(unit)) return;
+        const members = itemsOfGroup(unit);
+        const touched = members.some(m => {
+          const shape = shapesHere.find(sh => sh.item === m.item);
+          return shape && boxTouches(box, shape.parts, shape.open);
+        });
+        if (!touched) return;
+        doneGroups.add(unit);
+        members.forEach(m => { whole.add(m.item); addAll(m); });
+        return;
+      }
+      if (STRETCH_WHOLE.has(type)) {
+        if (boxTouches(box, parts, open)) { whole.add(item); addAll(entry); }
+        return;
+      }
+      rotatePointsOf(entry).forEach(p => { if (inBox(box, p)) points.add(p); });
+    });
+    // A HAND DIMENSION's ends inside the box go with what they measure.
+    dimensions().filter(dim => dim.auto !== true).forEach(dim => {
+      [dim.start, dim.end].forEach(p => { if (p && inBox(box, p)) points.add(p); });
+    });
+    const valid = [...points].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    const holos = holograms().filter(holo => !holo.hidden && H()
+      && boxTouches(box, H().placed(holo, H().parts(holo).existing.walls || [])
+        .filter(w => w?.start && w?.end && Number(w.levelId) === Number(activeLevelId()))
+        .map(w => [w.start, w.end]), true));
+    return { points: new Set(valid), whole, holos };
+  };
+  // Where the base point goes: the magnet's catch, then square to the base
+  // under the T-square.
+  const stretchDestination = at => {
+    const base = stretchState.base;
+    let to = drawSnap(at).pt || at;
+    if (base && tsquareOn && board !== 'toy') {
+      to = Math.abs(to.x - base.x) >= Math.abs(to.z - base.z) ? { x: to.x, z: base.z } : { x: base.x, z: to.z };
+    }
+    return { x: to.x, z: to.z };
+  };
+  // A DOOR, WINDOW OR FIXTURE ON A WALL ONE END OF WHICH MOVED keeps its
+  // distance from the end it belongs to: the end that stays, or the end that
+  // moves when the opening itself is inside the box.
+  const stretchOffsets = (box, points, dx, dz) => {
+    const edits = [];
+    const G = window.DraftGeometry2D;
+    (drawing.walls || []).forEach(wall => {
+      const sMoves = points.has(wall.start), eMoves = points.has(wall.end);
+      if (sMoves === eMoves) return;
+      const oldLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      const s2 = sMoves ? { x: wall.start.x + dx, z: wall.start.z + dz } : wall.start;
+      const e2 = eMoves ? { x: wall.end.x + dx, z: wall.end.z + dz } : wall.end;
+      const newLen = Math.hypot(e2.x - s2.x, e2.z - s2.z);
+      const centreOf = offset => ({ x: wall.start.x + (wall.end.x - wall.start.x) * (offset / (oldLen || 1)),
+        z: wall.start.z + (wall.end.z - wall.start.z) * (offset / (oldLen || 1)) });
+      const onIt = [...(drawing.fenestrations || []), ...(drawing.fixtures || [])]
+        .filter(o => String(o.wallId) === String(wall.id) && Number.isFinite(Number(o.offset)));
+      onIt.forEach(o => {
+        const offset = Number(o.offset);
+        const rides = inBox(box, centreOf(offset)) ? (sMoves ? 'start' : 'end') : (sMoves ? 'end' : 'start');
+        const next = rides === 'end' ? newLen - (oldLen - offset) : offset;
+        if (Math.abs(next - offset) > 1e-9) edits.push({ item: o, before: { ...o }, offset: next });
+      });
+    });
+    return edits;
+  };
+  const stretchApply = (dx, dz) => {
+    const box = stretchBox();
+    stretchState = { a: null, b: null, base: null };
+    if (!box || Math.hypot(dx, dz) < 1e-6) { paint(); return; }
+    const plan = stretchPlan(box);
+    if (!plan.points.size && !plan.holos.length) {
+      sayOnStrip('STRETCH: nothing in that box to stretch.');
+      setTool(RESTING_TOOL);
+      paint();
+      return;
+    }
+    const offsets = stretchOffsets(box, plan.points, dx, dz);
+    const points = [...plan.points];
+    const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+      ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
+    const stairsMoved = (drawing.stairs || []).filter(st => plan.whole.has(st));
+    const wells = stairsMoved.map(stairWellOf).filter(w => w.hole && !w.shared)
+      .map(w => ({ hole: w.hole, points: w.hole.points }));
+    points.forEach(p => { p.x += dx; p.z += dz; });
+    wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
+    points.forEach(relinkVertex);
+    const props = [];
+    offsets.forEach(({ item, before: was, offset }) => { props.push({ item, before: was }); item.offset = offset; });
+    plan.holos.forEach(holo => {
+      props.push({ item: holo, before: { ...holo } });
+      holo.x = (Number(holo.x) || 0) + dx;
+      holo.z = (Number(holo.z) || 0) + dz;
+    });
+    const settled = settleSelectionMove({ run: null, stairs: stairsMoved });
+    const steps = [{ kind: 'rotate', before, detached: [], wells },
+      ...(props.length ? [{ kind: 'props', edits: props }] : []), ...settled.steps];
+    undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : steps[0]);
+    markDirty();
+    setTool(RESTING_TOOL);
+    const stretched = (drawing.walls || []).filter(w => plan.points.has(w.start) !== plan.points.has(w.end)).length;
+    const parts = [stretched && `${stretched} wall${stretched === 1 ? '' : 's'} stretched`,
+      plan.holos.length && `${plan.holos.length} suite${plan.holos.length === 1 ? '' : 's'} moved`].filter(Boolean);
+    sayOnStrip(`STRETCHED ${feetLabel(Math.hypot(dx, dz))}${parts.length ? ` -- ${parts.join(', ')}` : ''}.${settled.said} UNDO puts it back.`);
+    paint();
+  };
+  // The press, in its four steps.
+  const stretchPress = at => {
+    const st = stretchState;
+    if (!st.a) {
+      stretchState = { a: { x: at.x, z: at.z }, b: null, base: null };
+      sayOnStrip('STRETCH: now press the opposite corner of the box.');
+    } else if (!st.b) {
+      if (Math.abs(at.x - st.a.x) * view.scale < 4 || Math.abs(at.z - st.a.z) * view.scale < 4) {
+        sayOnStrip('STRETCH: that box has no size -- press the opposite corner.');
+        return;
+      }
+      st.b = { x: at.x, z: at.z };
+      const plan = stretchPlan(stretchBox());
+      sayOnStrip(plan.points.size || plan.holos.length
+        ? 'STRETCH: press the BASE POINT -- a corner it should pull by.'
+        : 'STRETCH: nothing in that box yet. Press the base point anyway, or Esc to start over.');
+    } else if (!st.base) {
+      const p = drawSnap(at).pt || at;
+      st.base = { x: p.x, z: p.z };
+      sayOnStrip('STRETCH: press where it goes -- or type a length and ENTER. Esc starts over.');
+    } else {
+      const to = stretchDestination(at);
+      stretchApply(to.x - st.base.x, to.z - st.base.z);
+      return;
+    }
+    stripRefresh();
+    paint();
+  };
+  // A TYPED LENGTH FINISHES IT, along the way the cursor points from the base.
+  function stretchTypable() {
+    return activeTool === 'stretch' && !!stretchState?.base && !!cursorWorld;
+  }
+  const stretchByTyped = () => {
+    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+    const base = stretchState.base;
+    const to = stretchDestination(cursorWorld);
+    const ux = to.x - base.x, uz = to.z - base.z, len = Math.hypot(ux, uz);
+    if (len < 1e-9) { sayOnStrip('STRETCH: point the cursor the way it goes, then type the length.'); return; }
+    const feet = parsed.inches / 12;
+    lengthBox.value = '';
+    lengthBox.blur();
+    stretchApply(ux / len * feet, uz / len * feet);
+  };
+  // THE BOX, THE BASE POINT AND A GHOST OF WHERE IT ALL GOES.
+  function paintStretch() {
+    if (activeTool !== 'stretch' || !stretchState?.a) return;
+    const st = stretchState;
+    const far = st.b || cursorWorld;
+    if (!far) return;
+    ctx.save();
+    const a = toS(st.a), b = toS(far);
+    ctx.strokeStyle = skin['draw-selected-cross'];
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    ctx.setLineDash([]);
+    if (st.b) {
+      const box = stretchBox();
+      const plan = stretchPlan(box);
+      const to = st.base && cursorWorld ? stretchDestination(cursorWorld) : null;
+      const dx = to ? to.x - st.base.x : 0, dz = to ? to.z - st.base.z : 0;
+      const at = p => toS({ x: p.x + (plan.points.has(p) ? dx : 0), y: 0, z: p.z + (plan.points.has(p) ? dz : 0) });
+      ctx.strokeStyle = skin['draw-selected'];
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.8;
+      // WHAT MOVES, lit; and once the base is down, where it lands.
+      [...walls(), ...lines(), ...beams()].forEach(seg => {
+        if (!seg.start || !seg.end || !(plan.points.has(seg.start) || plan.points.has(seg.end))) return;
+        const s1 = at(seg.start), e1 = at(seg.end);
+        ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(e1.x, e1.y); ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+      if (st.base) {
+        const bs = toS(st.base);
+        ctx.fillStyle = skin['draw-selected'];
+        ctx.beginPath(); ctx.arc(bs.x, bs.y, 4, 0, Math.PI * 2); ctx.fill();
+        if (to) {
+          const ts = toS(to);
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(bs.x, bs.y); ctx.lineTo(ts.x, ts.y); ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
   canvas.addEventListener('pointerdown', event => {
     if (!moveState.on || event.button !== 0) return;
     const roof = moveState.roof;
@@ -16538,6 +16799,7 @@
     // BEAM finish under COLUMN.
     drawStart = null;
     beamStart = null;
+    stretchState = { a: null, b: null, base: null };
     canvas.style.cursor = next === RESTING_TOOL ? '' : 'crosshair';
     // The instrument strip is a third reader of the same fact, added by #398
     // against the boolean this replaced. It reads the register now like
@@ -26318,7 +26580,10 @@
     || (rulerOn && !!rulerFrom)
     || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset))
     // DIMENSION from its first point too: the node it will lock to lights up.
-    || activeTool === 'dimension';
+    || activeTool === 'dimension'
+    // STRETCH's box follows the cursor from its first corner, and the ghost
+    // from the base point.
+    || (activeTool === 'stretch' && !!stretchState.a);
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
@@ -26429,8 +26694,10 @@
     // AND AFTER A MOVE, for the distance it went (moveTyped); and with one
     // dimension selected, for its length (driveDimension).
     const moveReady = moveTypedReady();
-    const dimReady = !moveReady && dimTypedReady();
-    const moveTypable = moveReady || dimReady;
+    // STRETCH from its base point: the box reads how far the cursor pulls.
+    const stretchReady = !moveReady && stretchTypable();
+    const dimReady = !moveReady && !stretchReady && dimTypedReady();
+    const moveTypable = moveReady || dimReady || stretchReady;
     const typable = !!(((drawsRun() && drawStart)
       || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable;
     if (lengthBox.disabled === typable) {
@@ -26476,6 +26743,9 @@
     if (dimReady && document.activeElement !== lengthBox) {
       const dim = selection[0].item;
       lengthBox.value = feetLabel(Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z));
+    } else if (stretchReady && document.activeElement !== lengthBox) {
+      const to = stretchDestination(cursorWorld);
+      lengthBox.value = feetLabel(Math.hypot(to.x - stretchState.base.x, to.z - stretchState.base.z));
     } else if (moveReady && document.activeElement !== lengthBox) {
       lengthBox.value = feetLabel(moveTyped.opening
         ? Math.abs(moveTyped.opening.offset - moveTyped.was)
@@ -28856,6 +29126,7 @@
     paint();
   };
   const commitTypedLength = () => {
+    if (stretchTypable()) { stretchByTyped(); return; }
     if (moveTypedReady()) { moveByTyped(); return; }
     if (dimTypedReady()) {
       const parsed = F.parseArchitecturalLength(lengthBox.value);
@@ -29606,8 +29877,26 @@
       return;
     }
     if (selectPicking && PICK_KINDS[id]) { pickKind(PICK_KINDS[id]); return; }
+    // MOVE IS THE FOOT'S MOVE, pressed from the column or by M ("keep move
+    // bottom too"): it acts on what is picked, so with nothing picked it says
+    // to pick first rather than arming a tool that has nothing to carry.
+    if (id === 'move') {
+      if (!selection.length && !moveState.on) {
+        sayOnStrip('MOVE: pick what to move first -- click it, or box it -- then press M or MOVE.');
+        return;
+      }
+      pressMove();
+      return;
+    }
     setTool(id === activeTool ? RESTING_TOOL : id);
   }
+  // SELECT GLOWS WHILE STRETCH IS UP -- the box is the rectangle select's.
+  toolListeners.push(next => {
+    document.querySelectorAll('[data-tool-key="select"], [data-bar-key="select"]').forEach(btn => {
+      if (next === 'stretch') btn.setAttribute('data-stretch-glow', ''); else btn.removeAttribute('data-stretch-glow');
+    });
+    if (next === 'stretch') sayOnStrip('STRETCH: press one corner of the box, then the opposite corner.');
+  });
   toolListeners.push(next => {
     if (next !== RESTING_TOOL && selectPicking) setSelectPicking(false);
     document.querySelectorAll('[data-bar-key]').forEach(btn => {
@@ -32767,8 +33056,10 @@
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || elevLineStart
-      || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length);
+      || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
+      || stretchState.a);
     drawStart = null;
+    stretchState = { a: null, b: null, base: null };
     dimPoints = [];
     dimPlacing = false;
     rulerFrom = null;
@@ -33086,6 +33377,7 @@
     }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'node') { superNodePress(at); return; }
+    if (activeTool === 'stretch') { stretchPress(at); return; }
     if (activeTool === 'dimension') { dimPress(at); return; }
     if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
     if (drawsRun()) {

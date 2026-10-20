@@ -112,6 +112,8 @@ if (!window.DraftProfileManager) {
     roof: 'O',
     dimension: 'D',
     trim: 'Q',
+    move: 'M',
+    stretch: 'H',
     tsquare: 'T',
     compass: 'P',
     cut: 'C',

@@ -38,6 +38,13 @@
     { id: 'extend',       name: 'Extend',       group: 'draw',  kind: 'standard',   command: 'extend' },
     { id: 'copy',         name: 'Copy',         group: 'draw',  kind: 'standard',   command: 'copy' },
     { id: 'trim',         name: 'Trim',         group: 'draw',  kind: 'standard',   command: 'trim' },
+    // MOVE AND STRETCH (Movie, 20 Oct: "add another command- 2 more - for the
+    // DRAFTING area - MOVE "M" and also STRETCH" -- "HHHHHH" for STRETCH, "YES
+    // in drafting keys and keep move bottom too"). MOVE is the foot's MOVE
+    // pressed from the column; STRETCH is a crossing box, a base point and a
+    // destination.
+    { id: 'move',         name: 'MOVE',         group: 'draw',  kind: 'contextual', command: 'move' },
+    { id: 'stretch',      name: 'STRETCH',      group: 'draw',  kind: 'contextual', command: 'stretch' },
     // SUPERNODE (Movie, 20 Oct: "make a NODE command in the drafting menu,
     // and those will be super high power nodes very SNAP Magnetic" -- one
     // word, SUPERNODE, his spelling) takes the old page's NODE / ARC slot

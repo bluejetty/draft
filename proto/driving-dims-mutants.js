@@ -16,7 +16,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/driving-dims.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html', name: 'the box never opens for a dimension',
-    find: "    const dimReady = !moveReady && dimTypedReady();\n",
+    find: "    const dimReady = !moveReady && !stretchReady && dimTypedReady();\n",
     with: "    const dimReady = false;\n",
     test: 'a lone wall moves to make the dimension so' },
   { file: 'MODEL.html', name: 'picking a dimension leaves the box as it was',
