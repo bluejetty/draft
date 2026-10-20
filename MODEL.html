@@ -14521,7 +14521,12 @@
   // A ROOM TAG IS NOT CARRIED EITHER: its id is a whole number the format
   // insists on, and a paste re-ids with a string.
   // A NOTE's id is a whole number for the same reason.
-  const NOT_COPIED = new Set(['stair', 'roof', 'roomtag', 'note', 'dimension']);
+  // A DIMENSION IS CARRIED NOW (Movie, 20 Oct: "i'd also like to be able to
+  // copy and paste and existing dimension line a little further outward or
+  // inward so i can delete some of the dimensions on it for new dimension
+  // line"): its id is a whole number too, so the paste gives it one of its own
+  // (newDimensionId) rather than the string every other copy takes.
+  const NOT_COPIED = new Set(['stair', 'roof', 'roomtag', 'note']);
 
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
@@ -14650,6 +14655,23 @@
       if (onWall(type)) {
         copy.wallId = wallIds.get(String(raw.wallId));
         if (raw.endWallId != null) copy.endWallId = wallIds.get(String(raw.endWallId));
+      }
+      // A PASTED DIMENSION IS THE DRAFTER'S: a whole-number id, on the hand
+      // layer, not auto -- an AUTO DIMS re-lay would otherwise sweep the copy
+      // he put down to keep -- and no slid-row record of the string it left.
+      if (type === 'dimension') {
+        copy.id = newDimensionId();
+        copy.auto = false;
+        copy.layer = DIM_HAND_LAYER;
+        delete copy.moved;
+        // AND 2 FT FURTHER OUT, on the side its line already stands off: a
+        // copy laid exactly on the original would be the same row, and
+        // sliding one would carry both. From here he slides it in or out.
+        const dx = copy.end.x - copy.start.x, dz = copy.end.z - copy.start.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const out = { x: -dz / len * 2, z: dx / len * 2 };
+        copy.start = { ...copy.start, x: copy.start.x + out.x, z: copy.start.z + out.z };
+        copy.end = { ...copy.end, x: copy.end.x + out.x, z: copy.end.z + out.z };
       }
       ['start', 'end', 'point', 'anchor'].forEach(field => {
         if (!copy[field] || typeof copy[field] !== 'object') return;
@@ -31122,10 +31144,14 @@
     const n = { x: -u.z, z: u.x };
     const o = points[0];
     const off = (at.x - o.x) * n.x + (at.z - o.z) * n.z;
+    // IN WHATEVER ORDER THEY WERE PRESSED (Movie, 20 Oct: "i'd like it if it
+    // doesn't matter what order they are placed, the closest together ones
+    // will create a dimention between"): the points are taken in order ALONG
+    // the string, so each piece measures between neighbours.
     const q = points.map(p => {
       const along = (p.x - o.x) * u.x + (p.z - o.z) * u.z;
-      return { x: o.x + u.x * along + n.x * off, z: o.z + u.z * along + n.z * off, from: p };
-    });
+      return { x: o.x + u.x * along + n.x * off, z: o.z + u.z * along + n.z * off, from: p, along };
+    }).sort((p1, p2) => p1.along - p2.along);
     const out = [];
     for (let i = 0; i + 1 < q.length; i += 1) {
       const a = q[i], b = q[i + 1];
@@ -31138,8 +31164,34 @@
     }
     return out;
   };
+  // ANOTHER LINE OF THE SAME POINTS, AND ANOTHER (Movie, 20 Oct: "after the
+  // first line is placed can you also allow the user to place a SECOND line in
+  // another position and another until the user double clicks the mouse,
+  // enter key or keyboard (click again after the last one twice) to stop").
+  // Placing stays up after each line; ENTER, a double-click, or a click on
+  // the line just placed puts the string down. The pieces he does not want
+  // on the outer lines he deletes like any dimension.
+  let dimLastLine = null;
+  const finishDimString = () => {
+    const placed = dimLastLine?.count || 0;
+    dimPoints = [];
+    dimPlacing = false;
+    dimLastLine = null;
+    sayOnStrip(placed ? 'DIMENSION — done. Press the next string\'s first point.' : 'DIMENSION — press the first point.');
+    paint();
+    return true;
+  };
+  // AN UNDO OF THE LINE JUST PLACED -- or anything done after it -- ends the
+  // lines: the string is over once its last line is no longer the last thing
+  // done, and the next press starts a fresh one.
+  const dimLinesStale = () => {
+    if (!dimLastLine || undoStack[undoStack.length - 1] === dimLastLine.step) return false;
+    dimPoints = []; dimPlacing = false; dimLastLine = null;
+    return true;
+  };
   const endDimString = () => {
-    if (dimPlacing) return false;
+    dimLinesStale();
+    if (dimPlacing) return dimLastLine ? finishDimString() : false;
     if (dimPoints.length < 2) {
       sayOnStrip('DIMENSION — press two points at least, then ENTER or double-click.');
       return false;
@@ -31148,25 +31200,57 @@
     sayOnStrip(`DIMENSION — ${dimPoints.length - 1} to place: click where the string goes.`);
     return true;
   };
+  // SPACEBAR ENDS THE POINTS AS ENTER DOES (Movie, 20 Oct: "can you also add
+  // PRESS SPACEBAR to also end the cycle and go to placing the line"), and
+  // finishes the lines once they are being placed. Never while a box has the
+  // keyboard: a length is typed with spaces in it.
+  window.addEventListener('keydown', e => {
+    if (e.key !== ' ' || e.repeat || activeTool !== 'dimension' || modalUp()) return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
+    if (!dimPoints.length) return;
+    e.preventDefault();
+    if (endDimString()) paint();
+  });
+  // A DOUBLE-CLICK'S FIRST PRESS lays a line before its second says stop:
+  // that line is taken back, so stopping leaves nothing extra. Only a line
+  // laid a moment ago, past the first, and still the last thing done.
+  const takeBackDoubleClickLine = () => {
+    const last = dimLastLine;
+    if (!last || Date.now() - last.when >= 700 || last.count < 2
+      || undoStack[undoStack.length - 1] !== last.step) return;
+    undoStack.pop();
+    last.made.forEach(item => { const i = drawing.dimensions.indexOf(item); if (i >= 0) drawing.dimensions.splice(i, 1); });
+    last.count -= 1;
+  };
   const dimPress = at => {
+    dimLinesStale();
     if (dimPlacing) {
+      // A CLICK ON THE LINE JUST PLACED puts the string down: the same spot,
+      // twice, is how he says he is done.
+      if (dimLastLine) {
+        const u = dimDirection(dimPoints);
+        const n = u ? { x: -u.z, z: u.x } : null;
+        const off = n ? (at.x - dimLastLine.at.x) * n.x + (at.z - dimLastLine.at.z) * n.z : Infinity;
+        if (Math.abs(off) * view.scale < 8) { takeBackDoubleClickLine(); finishDimString(); return; }
+      }
       const pieces = dimString(dimPoints, at);
       if (!pieces.length) { sayOnStrip('DIMENSION — those points measure nothing that way.'); return; }
       const { levelId } = onActiveLevel();
-      const view = activeViewId() || 'plan';
+      const viewId = activeViewId() || 'plan';
       if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
       const made = pieces.map(piece => {
-        const record = { id: newDimensionId(), start: piece.start, end: piece.end, levelId, view,
+        const record = { id: newDimensionId(), start: piece.start, end: piece.end, levelId, view: viewId,
           layer: DIM_HAND_LAYER, auto: false,
           ...(piece.startRef ? { startRef: piece.startRef } : {}), ...(piece.endRef ? { endRef: piece.endRef } : {}) };
         drawing.dimensions.push(record);
         return record;
       });
-      undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
-        items: made.map(item => ({ list: drawing.dimensions, item })) });
-      dimPoints = [];
-      dimPlacing = false;
-      sayOnStrip(`DIMENSION — ${made.length} placed. Press the next string's first point.`);
+      const step = { kind: 'built', walls: [], outlines: [], list: null,
+        items: made.map(item => ({ list: drawing.dimensions, item })) };
+      undoStack.push(step);
+      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1 };
+      sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or ENTER, SPACE or double-click to finish.`);
       markDirty();
       paint();
       return;
@@ -31183,16 +31267,27 @@
   };
   // A DOUBLE-CLICK ENDS THE STRING, as ENTER does. Its two presses landed on
   // one point, which dimPress took once.
+  //
+  // AND, WHILE LINES ARE BEING PLACED, IT FINISHES THEM -- taking back the
+  // line its own first press just put down, so a double-click to stop leaves
+  // no extra line behind.
   canvas.addEventListener('dblclick', e => {
-    if (activeTool !== 'dimension' || dimPlacing || !dimPoints.length) return;
+    if (activeTool !== 'dimension' || !dimPoints.length) return;
     e.preventDefault();
+    if (dimPlacing) {
+      takeBackDoubleClickLine();
+      if (dimLastLine) finishDimString();
+      return;
+    }
     if (endDimString()) paint();
   });
   // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
   // through the register's listeners, because setTool runs at load, before
   // this block has declared anything.
   toolListeners.push(next => {
-    if (next !== 'dimension') { dimPoints = []; dimPlacing = false; }
+    // DIMENSION TAKEN UP AGAIN while its lines are being placed is a fresh
+    // start too: the lines are finished.
+    if (next !== 'dimension' || dimLastLine) { dimPoints = []; dimPlacing = false; dimLastLine = null; }
     syncDimPop();
     seatNorthDock();
   });
@@ -31202,6 +31297,7 @@
   const paintDimPreview = () => {
     const R = window.DraftRender2D;
     if (!R || !cursorWorld || activeTool !== 'dimension') return;
+    dimLinesStale();
     const pieces = dimPlacing ? dimString(dimPoints, cursorWorld)
       : dimPoints.length ? dimString(dimPoints.concat([dimPoint(cursorWorld)]), dimPoints[0]) : [];
     const env = dimensionEnv();
