@@ -39,8 +39,8 @@ const MUTANTS = [
     with: "",
     test: 'a stair flipped end for end turns the other way' },
   { file: 'MODEL.html', name: 'UNDO forgets the swaps',
-    find: "    const steps = [turn, ...(edits.length ? [{ kind: 'props', edits }] : []), ...reframed.flatMap(r => r.steps)];\n",
-    with: "    const steps = [turn, ...reframed.flatMap(r => r.steps)];\n",
+    find: "    const steps = [flipped, ...(edits.length ? [{ kind: 'props', edits }] : []), ...reframed.flatMap(r => r.steps)];\n",
+    with: "    const steps = [flipped, ...reframed.flatMap(r => r.steps)];\n",
     test: 'top for bottom, and one UNDO puts the lot back' },
 ];
 
