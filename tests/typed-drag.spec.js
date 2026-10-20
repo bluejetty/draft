@@ -55,7 +55,12 @@ async function drag(page, from, to) {
 
 test('a line dragged by its body, then a typed length: exactly that far, one UNDO', async ({ page }) => {
   const { at } = await open(page);
+  // AN EARLIER EDIT, for the second UNDO to reach: the wall dragged down 2 ft.
+  await page.mouse.click(...at(-5, 0));
+  await page.waitForTimeout(120);
+  await drag(page, at(-5, 0), at(-5, -2));
   // PICKED, THEN GRABBED: the page's own two-step.
+  await page.keyboard.press('Escape');
   await page.mouse.click(...at(-5, 6));
   await page.waitForTimeout(120);
   await drag(page, at(-5, 6), at(-5, 8));
@@ -72,6 +77,12 @@ test('a line dragged by its body, then a typed length: exactly that far, one UND
   await page.keyboard.press('Control+z');
   d = await saved(page);
   expect(d.lines.find(l => l.id === 'l1').start.z, 'one UNDO').toBeCloseTo(6, 6);
+  // AND NOTHING LEFT BEHIND: the next UNDO is the wall's, not a dead step.
+  const wallZ = d.walls.find(w => w.id === 'w1').start.z;
+  expect(wallZ, 'the earlier drag stands').toBeLessThan(-1);
+  await page.keyboard.press('Control+z');
+  d = await saved(page);
+  expect(d.walls.find(w => w.id === 'w1').start.z, 'the second UNDO takes the wall back').toBeCloseTo(0, 6);
 });
 
 test('an end NODE dragged a hair, then 1/16" typed: it sits a sixteenth from where it was', async ({ page }) => {
