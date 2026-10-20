@@ -453,6 +453,13 @@ jobs:
     # config comment was written around. THE REAL NUMBER IS THE NEXT RUN OF
     # THIS FILE -- if the worst shard comes back near 30 again, the answer is
     # eight, or finding what shard 1 is actually doing.
+    #
+    # IT CAME BACK NEAR 30, SO EIGHT (20 Oct). Shard 1 of six ran 31m on #836
+    # and 35m on #834 (green, with nothing to spare), and on #838 it hit the
+    # 35-minute globalTimeout with 446 passed and ONE TEST NEVER RUN -- a red
+    # that named no failing test, which is the "adding specs ate it" case
+    # playwright.config.js describes. 445 spec files over eight shards is
+    # about 56 a shard; the two timeouts are untouched.
     # 45, AND IT SITS ABOVE playwright.config.js's 35-MINUTE globalTimeout.
     # The two numbers are one mechanism and must not be edited apart.
     #
@@ -479,7 +486,7 @@ jobs:
       # cancelled is a mystery.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
