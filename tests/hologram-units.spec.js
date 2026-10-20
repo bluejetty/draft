@@ -155,3 +155,79 @@ test('a double-click on a suite still opens the HOLOGRAM card', async ({ page })
   await page.mouse.dblclick(...at(20, 7));
   await expect(page.locator('#hologram-ask')).toBeVisible();
 });
+
+// ── THE LIST: ONE CARD PER FILE, A NUMBERED ROW PER COPY ───────────────
+// Movie, 20 Oct: "can we do 1 per file (and 1 color per file) and then a
+// list within that of each copy, with a number assigned and when they click
+// it or scroll past it it will light up and its' suite will also light up"
+// -- "and it would need to update the HOLOGRAM list with the new ones".
+const OTHER = { ...SUITE, walls: SUITE.walls.map(w => ({ ...w })) };
+const twoFiles = () => ({ ...shell(), holograms: [holo('h1', 0), holo('h2', 30),
+  { id: 'h3', name: 'suite-b', mode: 'suite', x: 0, z: 15, angleDeg: 0, pivotX: 10, pivotZ: 7.5, source: OTHER }] });
+const openList = async page => {
+  await page.locator('[data-mode-hologram]').click();
+  await expect(page.locator('#hologram-ask')).toBeVisible();
+};
+
+test('the list: one card per file in its own colour, a numbered row per copy', async ({ page }) => {
+  await open(page, twoFiles());
+  await openList(page);
+  const cards = page.locator('#hologram-ask [data-hologram-file-card]');
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0).locator('[data-hologram-name]')).toHaveText('suite-a');
+  await expect(cards.nth(0).locator('[data-hologram-copies]')).toHaveText('2 copies');
+  await expect(cards.nth(0).locator('[data-hologram-number]')).toHaveText(['#1', '#2']);
+  await expect(cards.nth(1).locator('[data-hologram-number]')).toHaveText(['#1']);
+  const swatches = await page.locator('#hologram-ask [data-hologram-swatch]').evaluateAll(els => els.map(e => e.dataset.hologramSwatch));
+  expect(swatches[0], 'the first file keeps the blue').toBe('rgb(82,151,218)');
+  expect(swatches[1], 'the second file has a colour of its own').not.toBe(swatches[0]);
+});
+
+test('a row clicked picks its suite on the plan; a suite picked on the plan lights its row', async ({ page }) => {
+  const { at } = await open(page, twoFiles());
+  await openList(page);
+  await page.locator('#hologram-ask [data-hologram-row="h2"] [data-hologram-number]').click();
+  await expect(page.locator('#hologram-ask [data-hologram-row="h2"]')).toHaveAttribute('data-lit', '');
+  // PICKED: DELETE takes that one.
+  await page.locator('#hologram-ask [data-hologram-close]').click();
+  await page.locator('#delete').click();
+  let d = await saved(page);
+  expect(d.holograms.map(x => x.id).sort()).toEqual(['h1', 'h3']);
+  // AND THE OTHER WAY: picked on the plan, its row lights.
+  await click(page, at, 20, 7);
+  await openList(page);
+  await expect(page.locator('#hologram-ask [data-hologram-row="h1"]')).toHaveAttribute('data-lit', '');
+  await expect(page.locator('#hologram-ask [data-hologram-row="h3"]')).not.toHaveAttribute('data-lit', '');
+});
+
+test('the pointer passing a row lights its suite on the plan', async ({ page }) => {
+  await open(page, twoFiles());
+  await openList(page);
+  const before = await page.locator('#plan').screenshot();
+  await page.locator('#hologram-ask [data-hologram-row="h2"] [data-hologram-number]').hover();
+  await page.waitForTimeout(150);
+  const after = await page.locator('#plan').screenshot();
+  expect(Buffer.compare(before, after), 'the plan changed: the suite lit').not.toBe(0);
+});
+
+test('a paste on the plan shows in the list as the next copy', async ({ page }) => {
+  const { at } = await open(page, twoFiles());
+  await click(page, at, 20, 7);
+  await page.locator('#copy').click();
+  await page.locator('#paste').click();
+  await openList(page);
+  await expect(page.locator('#hologram-ask [data-hologram-file-card="suite-a"] [data-hologram-number]'))
+    .toHaveText(['#1', '#2', '#3']);
+});
+
+test('a new file brought in takes a colour no file here has, and keeps it', async ({ page }) => {
+  await open(page, twoFiles());
+  await page.locator('[data-mode-trace]').click();
+  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-hologram-file]').setInputFiles(
+    { name: 'suite-c.draft', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(SUITE)) });
+  await page.keyboard.press('Escape');
+  const d = await saved(page);
+  const c = d.holograms.find(x => x.name === 'suite-c');
+  expect(c.colour, 'blue and the second colour are taken').toBe(2);
+});

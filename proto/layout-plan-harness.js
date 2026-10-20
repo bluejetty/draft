@@ -605,6 +605,14 @@ function run(label) {
     F.holograms([{ id: 'h', source: SAVED, flip: true }])[0].flip === true
     && F.holograms([{ id: 'h', source: SAVED, flip: 'yes' }])[0].flip === false
     && F.holograms([{ id: 'h', source: SAVED }])[0].flip === false);
+  // ITS FILE'S COLOUR (Movie, 20 Oct: "1 color per file"): a whole number
+  // from 0 is kept; anything else reads as no colour given.
+  check('a file colour is kept, and only a whole number from 0',
+    F.holograms([{ id: 'h', source: SAVED, colour: 2 }])[0].colour === 2
+    && F.holograms([{ id: 'h', source: SAVED, colour: 0 }])[0].colour === 0
+    && !('colour' in F.holograms([{ id: 'h', source: SAVED, colour: 'red' }])[0])
+    && !('colour' in F.holograms([{ id: 'h', source: SAVED, colour: -1 }])[0])
+    && !('colour' in F.holograms([{ id: 'h', source: SAVED }])[0]));
   // SUITE (Movie, 18 Oct): "shaded the normal colors but NOT editable" --
   // and on which floor of this drawing ("the same suite on different
   // floors"). Kept, and only in the shapes they mean.
@@ -1125,6 +1133,10 @@ const MUTATIONS = [
       'return { x: pivot.x + (dx * cos + dz * sin), z: pivot.z - dx * sin + dz * cos };')],
   ['a mirror is never read back',
     'drawing-format.js', c => c.replace('flip: holo?.flip === true,', 'flip: false,')],
+  ['a file colour is never read back',
+    'drawing-format.js', c => c.replace("        ...(Number.isInteger(holo?.colour) && holo.colour >= 0 ? { colour: holo.colour } : {}),\n", '')],
+  ['a negative colour is read back',
+    'drawing-format.js', c => c.replace('Number.isInteger(holo?.colour) && holo.colour >= 0 ?', 'Number.isInteger(holo?.colour) ?')],
   ['a SUITE is never read back',
     'drawing-format.js', c => c.replace("        ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),\n", '')],
   ['any mode at all is read back',

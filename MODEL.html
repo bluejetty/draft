@@ -1263,6 +1263,15 @@
      it -- squeezed into one row the name stood a letter wide ("S U I T E"). */
   .trace-row[data-hologram-row] { flex-wrap:wrap; }
   .trace-row[data-hologram-row] [data-hologram-name] { flex-basis:100%; }
+  /* ONE CARD PER FILE, in its colour; a numbered row per copy (Movie, 20 Oct). */
+  .hologram-file { border-left:4px solid var(--holo-ink); padding-left:6px; margin:6px 0; }
+  .hologram-file-head [data-hologram-name] { flex:1 1 auto; color: var(--holo-ink); }
+  .hologram-file-head [data-hologram-swatch] { width:12px; height:12px; border-radius:2px;
+    background: var(--holo-ink); flex:0 0 auto; }
+  .hologram-file-head [data-hologram-copies] { opacity:0.7; }
+  .hologram-copy [data-hologram-number] { min-width:2.2em; font-weight:600; color: var(--holo-ink); }
+  .hologram-copy { cursor:pointer; border-radius:3px; }
+  .hologram-copy:hover, .hologram-copy[data-lit] { box-shadow: 0 0 0 1px var(--holo-ink), 0 0 8px var(--holo-ink); }
   .trace-row button { cursor:pointer; padding:3px 8px; border-radius:3px; border:1px solid var(--edge-panel);
     background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui);
     font-size:10px; font-weight:600; letter-spacing:0.04em; }
@@ -4360,6 +4369,7 @@
   // they are how the drafter is LOOKING, not something the file says.
   // DEMO PART's state, up here because the painter shows its first click.
   let hologramPartMode = false;
+  let hologramHover = null;        // the hologram a list row the pointer is over lights
   let hologramPartStart = null;    // { wallId, along, at } -- the first click
   const HOLOGRAM_SHOW_KEY = 'draft.hologram.show';
   const hologramShow = (() => {
@@ -6905,6 +6915,7 @@
         paintHoverCorner();
         paintBand();
         paintStretch();
+        paintHologramHover();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
         // reason (MODEL.dc.html:7432, after every piece of linework and just
@@ -16398,6 +16409,20 @@
     lengthBox.blur();
     stretchApply(ux / len * feet, uz / len * feet);
   };
+  // A HOLOGRAM LIT FROM ITS LIST ROW, as one picked is lit, a little lighter.
+  function paintHologramHover() {
+    if (!hologramHover || !holograms().includes(hologramHover)) return;
+    ctx.save();
+    ctx.strokeStyle = selectInk();
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    hologramWallsHere(hologramHover).forEach(w => {
+      const a = toS(w.start), b = toS(w.end);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+    ctx.restore();
+  }
   // THE BOX, THE BASE POINT AND A GHOST OF WHERE IT ALL GOES.
   function paintStretch() {
     if (activeTool !== 'stretch' || !stretchState?.a) return;
@@ -27789,6 +27814,16 @@
     });
     setHologramChip();
   }
+  // THE LIST FOLLOWS THE PLAN: a hologram picked there lights its row (and
+  // brings it into view), and a COPY / PASTE or DELETE there shows in the
+  // list -- whenever a card with the list is up.
+  selectionWatchers.push(() => {
+    const up = (hologramAsk && !hologramAsk.hidden) || (traceAsk && !traceAsk.hidden);
+    if (!up) return;
+    renderHologramList();
+    const litRow = document.querySelector('.hologram-copy[data-lit]');
+    if (litRow?.scrollIntoView) litRow.scrollIntoView({ block: 'nearest' });
+  });
   function renderHologramListInto(card) {
     const all = holograms();
     const suites = all.filter(holo => holo.mode === 'suite').length;
@@ -27816,15 +27851,64 @@
       });
       list.appendChild(row);
     }
+    // ONE CARD PER FILE, A NUMBERED ROW PER COPY (Movie, 20 Oct: "can we do
+    // 1 per file (and 1 color per file) and then a list within that of each
+    // copy, with a number assigned and when they click it or scroll past it
+    // it will light up and its' suite will also light up"). The card wears
+    // the file's colour; a row lit is its hologram lit on the plan, and a
+    // hologram picked on the plan lights its row.
+    const files = new Map();
     all.forEach(holo => {
-      const row = document.createElement('div');
-      row.className = 'trace-row';
-      row.dataset.hologramRow = holo.id;
+      const key = H().fileOf(holo);
+      if (!files.has(key)) files.set(key, []);
+      files.get(key).push(holo);
+    });
+    files.forEach((copies, key) => {
+      const first = copies[0];
+      const fileCard = document.createElement('div');
+      fileCard.className = 'hologram-file';
+      fileCard.dataset.hologramFileCard = key;
+      const colour = H().colourOf(first, drawing);
+      fileCard.style.setProperty('--holo-ink', colour.ink);
+      const head = document.createElement('div');
+      head.className = 'trace-row hologram-file-head';
+      const swatch = document.createElement('span');
+      swatch.dataset.hologramSwatch = colour.ink;
       const name = document.createElement('span');
       name.dataset.hologramName = '';
       // A SUITE FILE SAYS WHICH KIND IT IS, on its card (Movie, 20 Oct).
-      const kind = window.DraftDrawingFormat.suiteKind(holo.source?.suiteKind);
-      name.textContent = kind ? `${suiteLabel(kind)} · ${holo.name || holo.id}` : (holo.name || holo.id);
+      const kind = window.DraftDrawingFormat.suiteKind(first.source?.suiteKind);
+      name.textContent = kind ? `${suiteLabel(kind)} · ${first.name || first.id}` : (first.name || first.id);
+      const count = document.createElement('span');
+      count.dataset.hologramCopies = String(copies.length);
+      count.textContent = copies.length === 1 ? '1 copy' : `${copies.length} copies`;
+      // REFRESH IS THE FILE'S: every copy takes the newer one.
+      const refresh = document.createElement('button');
+      refresh.type = 'button';
+      refresh.textContent = 'REFRESH';
+      refresh.dataset.hologramRefresh = first.id;
+      refresh.title = 'Pick the newer copy of its .draft; every copy of the same file takes it';
+      refresh.addEventListener('click', () => { hologramRefreshing = first; hologramFile.click(); });
+      head.append(swatch, name, count, refresh);
+      fileCard.appendChild(head);
+      copies.forEach((holo, index) => {
+      const row = document.createElement('div');
+      row.className = 'trace-row hologram-copy';
+      row.dataset.hologramRow = holo.id;
+      const number = document.createElement('span');
+      number.dataset.hologramNumber = String(index + 1);
+      number.textContent = `#${index + 1}`;
+      const lit = selection.some(entry => entry.type === 'hologram' && entry.item === holo);
+      if (lit) row.dataset.lit = '';
+      // LIT BY A PASS OF THE POINTER (scrolling past it) and PICKED BY A
+      // CLICK on the row, which is the same as picking it on the plan.
+      row.addEventListener('mouseenter', () => { hologramHover = holo; paint(); });
+      row.addEventListener('mouseleave', () => { if (hologramHover === holo) { hologramHover = null; paint(); } });
+      row.addEventListener('click', event => {
+        if (event.target.closest('button')) return;
+        setSelection([{ type: 'hologram', item: holo }]);
+        paint();
+      });
       const button = (label, key, title, onClick) => {
         const b = document.createElement('button');
         b.type = 'button';
@@ -27852,7 +27936,7 @@
           renderHologramList();
         });
       mode.setAttribute('aria-pressed', suite ? 'true' : 'false');
-      row.append(name, mode,
+      row.append(number, mode,
         button(holo.hidden ? 'SHOW' : 'HIDE', 'hologramShow', '', () => {
           hologramEdit(holo, { hidden: !holo.hidden });
           renderHologramList();
@@ -27916,10 +28000,6 @@
           sayOnStrip(`A copy of ${hologramNoun(holo)} is in \u2014 ${traceMoveWord(traceMoving)}`);
           paint();
         }),
-        button('REFRESH', 'hologramRefresh', 'Pick the newer copy of its .draft; every copy of the same file takes it', () => {
-          hologramRefreshing = holo;
-          hologramFile.click();
-        }),
         button('DELETE', 'hologramDelete', '', () => {
           const at = drawing.holograms.indexOf(holo);
           if (at < 0) return;
@@ -27930,7 +28010,9 @@
           sayOnStrip(`${hologramNoun(holo)} is gone \u2014 UNDO brings it back.`);
           renderHologramList();
         }));
-      list.appendChild(row);
+      fileCard.appendChild(row);
+      });
+      list.appendChild(fileCard);
     });
   }
   const readHologramFile = async file => {
@@ -27983,8 +28065,12 @@
       return;
     }
     const pivot = hologramPivot(parsed);
+    // A NEW FILE TAKES THE FIRST COLOUR NO FILE HERE HAS; the same file
+    // brought in again is that file, and wears its colour.
+    const sameFile = holograms().some(h => H()?.fileOf(h) === name);
     const [holo] = F.holograms([{ id: newDrawingItemId('hologram'), name, source: parsed,
-      x: 0, z: 0, angleDeg: 0, pivotX: pivot.x, pivotZ: pivot.z }]);
+      x: 0, z: 0, angleDeg: 0, pivotX: pivot.x, pivotZ: pivot.z,
+      ...(!sameFile && H()?.nextColour ? { colour: H().nextColour(drawing) } : {}) }]);
     if (!holo) {
       sayOnStrip(`${file.name} is not a drawing this page can read.`);
       return;

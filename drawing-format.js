@@ -1685,6 +1685,10 @@ if (!window.DraftDrawingFormat) {
         pivotZ: num(holo?.pivotZ) ?? 0,
         hidden: holo?.hidden === true,
         flip: holo?.flip === true,
+        // ITS FILE'S COLOUR (Movie, 20 Oct: "1 color per file"), an index into
+        // hologram.js's COLOURS, given when the file came in. Absent reads as
+        // its place among the drawing's files.
+        ...(Number.isInteger(holo?.colour) && holo.colour >= 0 ? { colour: holo.colour } : {}),
         // SUITE (Movie, 18 Oct): "shaded the normal colors but NOT editable
         // from the 'SHELL BUILDING' file except to MOVE, COPY or FLIP etc",
         // and its exterior walls' windows cut into the shell's where the two
