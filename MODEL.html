@@ -992,9 +992,16 @@
   :root { --pad: #d6e9f8; --pad-gum: #a9cdea; --pad-ink: #2b2f33;
     --pad-rule: rgba(43, 47, 51, 0.10); }
   html[data-theme="ruff"] { --pad: #fbeea0; --pad-gum: #efd65c; }
+  /* ONE LINE, LIKE THE TAB ABOVE IT (Movie, 20 Oct: "i'd like the NOTES /
+     CALC tab to be wider (taller in this position) so the words all fit on
+     one line like the LEVELS / LAYER one above"). 14vh was 107px at a 768
+     window and NOTES / CALC runs to about 125px, so the label broke into
+     two columns. The same 32vh cap #right-tab has; the tab's height is its
+     text's, so the cap only stops it on a short window. */
   #notes-tab { right:0; top: calc(var(--rail-top) + 32vh + 8px);
     border:1px solid var(--pad-gum); border-right:none;
-    border-radius:4px 0 0 4px; writing-mode:vertical-lr; max-height:14vh;
+    border-radius:4px 0 0 4px; writing-mode:vertical-lr; max-height:32vh;
+    white-space:nowrap;
     background: linear-gradient(to right, var(--pad-gum) 0 6px, var(--pad) 6px);
     color: var(--pad-ink); }
   #notes-tab:hover, #notes-tab[aria-selected="true"] { color:#000;

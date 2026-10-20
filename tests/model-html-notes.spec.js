@@ -68,6 +68,21 @@ test('NOTES hangs under LEVELS / LAYERS on the right edge: a blue sticky pad, da
   expect(Math.max(...ink), `NOTES is dark grey or black, not ${look.color}`).toBeLessThan(80);
 });
 
+// ONE LINE, LIKE THE TAB ABOVE IT (Movie, 20 Oct: "i'd like the NOTES / CALC
+// tab to be wider (taller in this position) so the words all fit on one line
+// like the LEVELS / LAYER one above"). At his 1366x768 the old 14vh cap was
+// 107px and the label broke into two columns, which read as a wider tab.
+test('at a 768 window the tab reads on one line, as wide as LEVELS / LAYERS', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await open(page);
+  await expect(tab(page)).toBeVisible();
+  const [levels, notes] = await Promise.all([
+    page.locator('#right-tab').boundingBox(), tab(page).boundingBox()]);
+  expect(Math.round(notes.width), 'one column of text, like LEVELS / LAYERS').toBe(Math.round(levels.width));
+  expect(notes.height, 'tall enough for the whole label').toBeGreaterThan(110);
+  expect(notes.y, 'still under LEVELS / LAYERS').toBeGreaterThanOrEqual(levels.y + levels.height);
+});
+
 test('it opens and shuts like the LEVELS tab, and swaps with it on the same rail', async ({ page }) => {
   await open(page);
   // LEVELS / LAYERS opens by default; NOTES swaps the pane without shutting.
