@@ -201,13 +201,25 @@ test('a row clicked picks its suite on the plan; a suite picked on the plan ligh
 });
 
 test('the pointer passing a row lights its suite on the plan', async ({ page }) => {
-  await open(page, twoFiles());
+  const { at } = await open(page, twoFiles());
   await openList(page);
-  const before = await page.locator('#plan').screenshot();
+  // ON h2's OWN RIGHT WALL (x = 50), clear of the card: its ink there, before
+  // and after the pointer passes its row.
+  const [px, py] = at(50, 4);
+  const ink = () => page.evaluate(({ x, y }) => {
+    const c = document.getElementById('plan');
+    const r = c.getBoundingClientRect();
+    const k = c.width / r.width;
+    const d = c.getContext('2d').getImageData(Math.round((x - r.left) * k), Math.round((y - r.top) * k), 1, 1).data;
+    return [d[0], d[1], d[2]];
+  }, { x: px, y: py });
+  const before = await ink();
   await page.locator('#hologram-ask [data-hologram-row="h2"] [data-hologram-number]').hover();
   await page.waitForTimeout(150);
-  const after = await page.locator('#plan').screenshot();
-  expect(Buffer.compare(before, after), 'the plan changed: the suite lit').not.toBe(0);
+  expect(await ink(), 'its wall lit').not.toEqual(before);
+  await page.mouse.move(5, 300);
+  await page.waitForTimeout(150);
+  expect(await ink(), 'and dark again when the pointer leaves').toEqual(before);
 });
 
 test('a paste on the plan shows in the list as the next copy', async ({ page }) => {
