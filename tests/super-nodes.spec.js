@@ -80,8 +80,8 @@ const hostOpenings = (page, d) => page.evaluate(d => window.DraftHologram.hostOp
 
 test('SUPERNODE armed: a press by a corner lands the node on it exactly, and a reload keeps it', async ({ page }) => {
   const { at } = await open(page, shell({ superNodes: [], holograms: false }));
-  await page.locator('[data-tool-key="superNode"]').click();
-  await expect(page.locator('[data-tool-key="superNode"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-tool-key="node"]').click();
+  await expect(page.locator('[data-tool-key="node"]')).toHaveAttribute('aria-pressed', 'true');
   // Two pixels off the shell's corner node: the node.
   const [nx, ny] = at(60, 0);
   await page.mouse.click(nx + 2, ny - 1);

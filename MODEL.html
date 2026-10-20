@@ -4334,9 +4334,9 @@
   //
   // A super node is a marker on a level: it never prints (plan-composition
   // knows nothing of it, and PRINTSCREEN shoots with `presenting` up). The
-  // SUPERNODE key places one where the magnet would put a drawn point -- a
-  // node, a face corner, a line end, a cross line -- so it lands on the wall
-  // line exactly. A suite hologram's super nodes, moved by its placement,
+  // SUPERNODE key (N, the old NODE / ARC slot) places one where the magnet
+  // would put a drawn point -- a node, a face corner, a line end, a cross
+  // line -- so it lands on the wall line exactly. A suite hologram's super nodes, moved by its placement,
   // click onto the house's: within SUPER_NODE_PULL_FT the nearest pair
   // coincides, and the face slide is not asked.
   const SUPER_NODE_PULL_FT = 1;
@@ -17063,7 +17063,7 @@
     const tracesLoop = activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape'
       // A SUPER NODE BEING PLACED reads the magnet the same way: it lands on
       // a node, a face corner or a line end exactly ("to place the first one").
-      || activeTool === 'superNode';
+      || activeTool === 'node';
     if (!cursorWorld || !(drawsRun() || tracesLoop)) { markMagnet(null); return; }
     // A RUN HELD SQUARE asks the squared magnet, as drawPoint does; the
     // locked bearing and the protractor take no magnet at all.
@@ -31930,7 +31930,7 @@
       return;
     }
     if (activeTool === 'cut') { cutPress(at); return; }
-    if (activeTool === 'superNode') { superNodePress(at); return; }
+    if (activeTool === 'node') { superNodePress(at); return; }
     if (activeTool === 'dimension') { dimPress(at); return; }
     if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
     if (drawsRun()) {
@@ -32551,7 +32551,7 @@
       // AND WHEN THE SNAP UNDER THE CURSOR CHANGES, with no run in hand yet:
       // the orange donut has to come and go over a node before the first
       // press, and nothing else repaints there.
-      else if (drawsRun() || activeTool === 'outline' || activeTool === 'superNode') {
+      else if (drawsRun() || activeTool === 'outline' || activeTool === 'node') {
         const snap = drawSnap(at);
         const key = snap.pt ? `${snap.pt.x},${snap.pt.z},${snap.node ? 'n' : snap.bullseye ? 'b' : 'r'}` : '';
         if (key !== lastSnapKey) { lastSnapKey = key; paint(); }
