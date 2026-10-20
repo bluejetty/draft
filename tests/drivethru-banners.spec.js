@@ -84,9 +84,10 @@ test('on the sign the banners rise with the order, say the short words, and the 
     await expect(row).toBeVisible();
     await expect(page.locator('#dt-banner-build')).toHaveText('DRAW HOUSE');
     await expect(page.locator('#dt-banner-outline')).toHaveText('DRAW HOUSE OUTLINE');
-    // "leave the other links up top beside the dog too"
-    await expect(page.locator('#dt-build-now')).toHaveText('PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE');
-    await expect(page.locator('#dt-outline')).toHaveText('CLICK HERE to draw house OUTLINE');
+    // THE THIRD BUTTON stands where the two text lines stood (Movie, 20 Oct).
+    await expect(page.locator('#dt-project-go')).toHaveText('SPECIFY FRAMING DETAILS, HEIGHTS in PROJECT AREA');
+    await expect(page.locator('#dt-build-now')).toHaveCount(0);
+    await expect(page.locator('#dt-outline')).toHaveCount(0);
     await expectRowAroundPress(page, '#dt-bone');
     // The garage says garage.
     await pick(page, 'detachedGarage', 'detached-thickened');
@@ -146,9 +147,9 @@ test('on ROUGH the house press stands between the banners, under the tiles, wear
     const tiles = await box(page, '#dt-tiles');
     const row = await box(page, '#dt-banners');
     expect(tiles.y + tiles.height, 'the row sits under the tiles').toBeLessThanOrEqual(row.y + 1);
-    // The sheet's text links keep their place under the row.
-    const now = await box(page, '#dt-build-now-shelf');
-    expect(now.y, 'the text links are below the row').toBeGreaterThanOrEqual(row.y + row.height - 1);
+    // The sheet's PROJECT button keeps its place under the row.
+    const go = await box(page, '#dt-project-go-shelf');
+    expect(go.y, 'the PROJECT button is below the row').toBeGreaterThanOrEqual(row.y + row.height - 1);
     await expect(page.locator('#dt-bone-balance')).toHaveText(await page.locator('#bone-balance').textContent());
     // AND THE LEFT ARROW BUILDS, the way the press between them does.
     await page.locator('#dt-banners button.dt-arrow[data-drivethru-build-now]').click();

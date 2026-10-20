@@ -62,7 +62,7 @@ async function buildHisHouse(page) {
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bilevel"]').click();
   await page.locator('[data-build-entry="modifiedBilevel"]').click();
-  await page.locator('#dt-outline').click();
+  await page.locator('#dt-banner-outline').click();
   await expect(page.locator('#drivethru')).toBeHidden();
   await h.dropSeededCorner(page);
   // Zoomed out until the 60 ft plan fits the canvas, read back off the view.

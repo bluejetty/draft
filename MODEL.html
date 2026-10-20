@@ -422,21 +422,20 @@
     font-size:clamp(7px, 1vw, 10px); opacity:0.55; letter-spacing:0.06em;
     color:inherit; text-decoration:none; line-height:1.25; }
   #dt-project:hover { opacity:0.95; text-decoration:underline; }
-  #dt-build-now, #dt-build-now-shelf,
-  #dt-outline, #dt-outline-shelf { pointer-events:auto; align-self:flex-start;
-    appearance:none; background:none; border:none; padding:0; cursor:pointer;
-    font:inherit; font-size:clamp(9px, 1.4vw, 14px); color:inherit;
-    text-decoration:underline; letter-spacing:0.03em; }
-  #dt-build-now[hidden], #dt-build-now-shelf[hidden],
-  #dt-outline[hidden], #dt-outline-shelf[hidden] { display:none; }
-  /* THE SHELF COPY IS ROUGH'S: the ruff sign says it on its screen. */
-  html:not([data-theme="rough"]) #dt-outline-shelf,
-  html:not([data-theme="rough"]) #dt-build-now-shelf { display:none; }
-  /* AND THE BUILD-NOW PRESS SITS ON THE LINE ABOVE IT (Movie, 3 Oct). */
-  html[data-theme="rough"] #dt-build-now-shelf { position:absolute; left:6%; width:88%;
-    top:85%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
-  html[data-theme="rough"] #dt-outline-shelf { position:absolute; left:6%; width:88%;
-    top:90.5%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
+  /* THE THIRD BUTTON (Movie, 20 Oct), dressed like the two banners so the
+     three read as one set: build, trace, or go and set the numbers. */
+  .dt-project-go { pointer-events:auto; align-self:stretch; appearance:none; cursor:pointer;
+    border:2px solid #fff; border-radius:5px; background:#d7262f; color:#fff; padding:4px 6px;
+    margin-top:4px; font-family: var(--font-ui); font-weight:800; letter-spacing:0.06em;
+    text-transform:uppercase; font-size:clamp(9px, 1.25vw, 14px); line-height:1.1;
+    box-shadow:0 2px 6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25); }
+  .dt-project-go:hover, .dt-project-go:focus-visible { background:#ff4033; }
+  .dt-project-go[hidden] { display:none; }
+  /* THE SHELF COPY IS ROUGH'S: the ruff sign says it on its screen. On the
+     sheet it is the row under the banners, the same width they span. */
+  html:not([data-theme="rough"]) #dt-project-go-shelf { display:none; }
+  html[data-theme="rough"] #dt-project-go-shelf { position:absolute; left:6%; width:88%;
+    top:89.5%; height:8.2%; margin:0; padding:0 1.5%; }
   /* ── THE BANNERS, ONE ROW UNDER THE SHELF, EITHER SIDE OF THE PRESS ─────
      Movie, 16 Oct: "those 2 banners and arrows (red and white) to pop up
      down below". On the sign the row straddles the bone's post (the bone
@@ -1789,18 +1788,20 @@
     <div id="dt-screen" aria-live="polite">
       <div id="dt-line" data-drivethru-line></div>
       <div id="dt-note" data-drivethru-note></div>
-      <!-- THE OTHER WAY TO GET THE HOUSE (Movie, 3 Oct): "PRESS BUTTON to
-           build now -or- CLICK HERE to draw house OUTLINE". Shown once a type
-           is picked, for every type. The ROUGH sheet has no screen, so the
-           same press stands on its shelf as well (#dt-outline-shelf). -->
-      <!-- AND THE BUILT ONE, SAID IN WORDS (Movie, 3 Oct): "above CLICK HERE
-           to draw HOUSE OUTLINE... add another line that says PRESS TO DRAW
-           HOUSE WITHOUT drawing OUTLINE (and will do the same as pressing the
-           'BONE')". It is the bone's press, not a copy of what it does. -->
-      <button id="dt-build-now" type="button" data-drivethru-build-now hidden
-        >PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE</button>
-      <button id="dt-outline" type="button" data-drivethru-outline hidden
-        >CLICK HERE to draw house OUTLINE</button>
+      <!-- THE THIRD WAY, TO THE NUMBERS (Movie, 20 Oct): "lets replace the 2
+           lines of text at the very bottom (which already have nice buttons
+           above) 'PRESS TO DRAW HOUSE.... etc' lines.... in their place i'd
+           like a 3rd button option - 'SPECIFY FRAMING DETAILS, HEIGHTS in
+           PROJECT AREA' --- this will take them over to the PROJECT AREA with
+           whatever they selected so far". The two text lines (3 Oct's "PRESS
+           TO DRAW HOUSE WITHOUT drawing OUTLINE" and "CLICK HERE to draw
+           house OUTLINE") said what the banners under the tiles now press, so
+           they are gone; this stands where they stood, shown once a type is
+           picked, and carries the type and its garage to PROJECT.html. The
+           ROUGH sheet has no screen, so the same press stands on its shelf
+           (#dt-project-go-shelf). -->
+      <button id="dt-project-go" class="dt-project-go" type="button" data-drivethru-project-go hidden
+        >SPECIFY FRAMING DETAILS, HEIGHTS in PROJECT AREA</button>
       <!-- THE WAY OUT FOR THE DRAFTER WHO WANTS THE NUMBERS. Movie, 19 Sep:
            "on the bottom of the drivethru menu area (where display area is)
            we should put a button to the PROJECT area that says 'CLICK HERE
@@ -1852,12 +1853,10 @@
         </div>
       </div>
     </div>
-    <!-- ROUGH'S COPY OF THE OUTLINE PRESS, under the selections: the sheet
-         has no screen to say it on. Outside #dt-tiles, which holds tiles. -->
-    <button id="dt-build-now-shelf" type="button" data-drivethru-build-now hidden
-      >PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE</button>
-    <button id="dt-outline-shelf" type="button" data-drivethru-outline hidden
-      >CLICK HERE to draw house OUTLINE</button>
+    <!-- ROUGH'S COPY OF THE PROJECT PRESS, under the banners: the sheet has
+         no screen to say it on. Outside #dt-tiles, which holds tiles. -->
+    <button id="dt-project-go-shelf" class="dt-project-go" type="button" data-drivethru-project-go hidden
+      >SPECIFY FRAMING DETAILS, HEIGHTS in PROJECT AREA</button>
     <!-- THE TWO BANNERS AND THEIR ARROWS (Movie, 16 Oct): "i'd like to make
          the options more obvious by adding them once the user selects the
          house type, for those 2 banners and arrows (red and white) to pop up
@@ -8641,6 +8640,7 @@
   const signShut = () => sign.hasAttribute('data-shut');
   const outlinePresses = [...document.querySelectorAll('[data-drivethru-outline]')];
   const buildNowPresses = [...document.querySelectorAll('[data-drivethru-build-now]')];
+  const projectGoPresses = [...document.querySelectorAll('[data-drivethru-project-go]')];
   const isGarageOrder = picked =>
     picked?.family?.id === 'detachedGarage' || Boolean(picked?.entry?.foundation);
   // THE SIGN GOES DOWN AND THE TRACE IS ARMED, with the type on it.
@@ -8681,6 +8681,7 @@
     });
     // AND THE ROW THEY STAND IN rises and goes with them.
     document.querySelectorAll('[data-drivethru-banners]').forEach(row => { row.hidden = !canTrace; });
+    projectGoPresses.forEach(press => { press.hidden = !canTrace; });
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
     if (signRefusal) {
       signLine.textContent = signRefusal.line;
@@ -8736,6 +8737,30 @@
   // not a reason to make this conditional. The rule is "the press that called
   // the board is lit while the board is up", the same rule on both finishes,
   // and RUFF's sign already carries its own lit copy of the press on its post.
+  // THE THIRD BUTTON GOES TO PROJECT WITH THE ORDER SO FAR (Movie, 20 Oct:
+  // "this will take them over to the PROJECT AREA with whatever they
+  // selected so far"). The type is stamped on the drawing at the pick
+  // (stampBuildType); the garage half of the entry is written here as the
+  // garagePlan PROJECT's family row reads (planForEntry's own three words),
+  // the drawing is saved so PROJECT's re-read finds both, and the card the
+  // order came from is named on the way over -- which is what carries a
+  // DETACHED GARAGE, whose entry has no type to stamp.
+  const PROJECT_CARD = { bungalow: 'bungalow', bilevel: 'bilevel', detachedGarage: 'detached' };
+  const goToProjectWithOrder = () => {
+    const picked = chosen();
+    if (!picked?.entry || !drawing) return;
+    const entry = picked.entry;
+    const plan = !entry.garage ? 'none' : (entry.overGarage ? 'attachedRoomOver' : 'attached');
+    if (entry.type && drawing.garagePlan !== plan) { drawing.garagePlan = plan; markDirty(); }
+    const card = PROJECT_CARD[picked.family?.id] || null;
+    Promise.resolve(save()).catch(() => false).then(() => {
+      const url = new URL('./PROJECT.html', location.href);
+      if (card) url.searchParams.set('type', card);
+      location.href = url.pathname + url.search;
+    });
+  };
+  projectGoPresses.forEach(press => press.addEventListener('click', goToProjectWithOrder));
+
   const setSign = show => {
     sign.toggleAttribute('data-shut', !show);
     boneFoot.setAttribute('aria-expanded', String(show));

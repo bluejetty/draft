@@ -55,7 +55,7 @@ async function buildIt(page) {
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow-garage"]').click();
-  await page.locator('#dt-outline').click();
+  await page.locator('#dt-banner-outline').click();
   await expect(page.locator('#drivethru')).toBeHidden();
   // The press seeds a corner on the bullseye; this house and garage are
   // traced about the origin, not from it, so it comes back off first.

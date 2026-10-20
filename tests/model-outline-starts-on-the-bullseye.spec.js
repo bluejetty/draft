@@ -51,8 +51,8 @@ async function pressDrawOutline(page) {
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
-  const link = page.locator('#dt-outline');
-  await expect(link).toHaveText('CLICK HERE to draw house OUTLINE');
+  const link = page.locator('#dt-banner-outline');
+  await expect(link).toHaveText('DRAW HOUSE OUTLINE');
   await link.click();
   await expect(page.locator('#drivethru')).toBeHidden();
 }
