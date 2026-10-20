@@ -991,7 +991,31 @@
      style. */
   #right-rail #levels-panel[hidden],
   #right-rail #view-rail[hidden],
-  #right-rail #notes-panel[hidden] { display:none; }
+  #right-rail #notes-panel[hidden],
+  #right-rail #history-panel[hidden] { display:none; }
+  /* UNDO / REDO (Movie, 20 Oct): the third tab on the right edge, under
+     NOTES / CALC, and its pane -- the session's versions, newest at the top,
+     the one on the sheet marked. Seated under the notes tab by the same
+     hand that seats that tab under LEVELS / LAYERS. */
+  #history-tab { right:0; top: calc(var(--rail-top) + 64vh + 16px);
+    writing-mode:vertical-lr; max-height:32vh; white-space:nowrap;
+    border-radius:4px 0 0 4px; }
+  #history-panel { display:flex; flex-direction:column; height:100%; min-height:0;
+    font-family: var(--font-ui); }
+  .hp-head { display:flex; align-items:center; gap:6px; padding:5px 6px;
+    font-size:10px; font-weight:700; letter-spacing:0.12em;
+    border-bottom:1px solid rgba(128, 128, 128, 0.35); }
+  .hp-title { flex:1; }
+  .hp-count { font-size:8px; font-weight:600; letter-spacing:0.04em; opacity:0.75; white-space:nowrap; }
+  .hp-list { flex:1; min-height:0; overflow:auto; }
+  .hp-row { display:flex; gap:8px; align-items:baseline; padding:4px 8px;
+    font-size:10px; letter-spacing:0.04em; cursor:pointer;
+    border-left:3px solid transparent; }
+  .hp-row:hover, .hp-row:focus-visible { background: rgba(128, 128, 128, 0.18); outline:none; }
+  .hp-row[aria-selected="true"] { border-left-color: currentColor; font-weight:700; }
+  .hp-row[data-side="redo"] { opacity:0.55; }
+  .hp-when { font-variant-numeric: tabular-nums; opacity:0.8; white-space:nowrap; }
+  .hp-what { flex:1; }
   /* THE NOTES PAD (Movie, 16 Oct): "a 'notepad' that can open up as a tab
      under the LEVELS/LAYERS tab ... that blue sticky pad look and put the
      text dark grey or black that says NOTES ... when it opens up make it a
@@ -1710,12 +1734,24 @@
      it opens and shuts the way that tab does, and swaps with it. -->
 <button id="notes-tab" class="rail-tab" type="button" data-notes-tab
   data-pane-tab="notes" hidden>NOTES / CALC</button>
+<!-- UNDO / REDO (Movie, 20 Oct), under NOTES / CALC on the same edge: the
+     session's versions, one per edit, click one to put it on the sheet. -->
+<button id="history-tab" class="rail-tab" type="button" data-history-tab
+  data-pane-tab="history" hidden>UNDO / REDO</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
   <div id="view-rail" data-pane="levels"></div>
   <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
+  <!-- UNDO / REDO: the versions this session has seen, newest first, the one
+       on the sheet marked; CURRENT is the newest. Rows are options, not
+       buttons: they come and go with every edit. -->
+  <div id="history-panel" data-history-panel data-pane="history" hidden>
+    <div class="hp-head"><span class="hp-title">UNDO / REDO</span>
+      <span class="hp-count" data-history-count></span></div>
+    <div class="hp-list" data-history-list role="listbox" aria-label="Versions this session"></div>
+  </div>
   <div id="notes-panel" data-notes-panel data-pane="notes" hidden>
     <div class="np-head">
       <!-- NOTES | CALC (Movie, 18 Oct: "can we add a construction calculator
@@ -7622,7 +7658,7 @@
   // -- the pane is a second, independent fact, not a repacking of the first.
   // ONE PANE NOW (Movie, 10 Oct), so an old `pane=previews` link -- a
   // bookmark, a shared URL -- falls back to it and still shows the previews.
-  const PANES = ['levels', 'notes'];
+  const PANES = ['levels', 'notes', 'history'];
   const paneShowing = () =>
     PANES.includes(params.get('pane')) ? params.get('pane') : 'levels';
   const setPane = pane => {
@@ -7742,14 +7778,21 @@
   // can only place it under the tab's 32vh CAP, which left a hand's width of
   // empty edge between the two at every window height.
   const notesTab = document.getElementById('notes-tab');
+  const historyTab = document.getElementById('history-tab');
   const seatNotesTab = () => {
     const above = document.getElementById('right-tab').getBoundingClientRect();
     if (above.height) notesTab.style.top = `${Math.round(above.bottom + 8)}px`;
+    // AND UNDO / REDO UNDER THAT (Movie, 20 Oct), the same way.
+    const notes = notesTab.getBoundingClientRect();
+    if (historyTab && notes.height) historyTab.style.top = `${Math.round(notes.bottom + 8)}px`;
   };
   // AND AGAIN WHEN THAT TAB CHANGES SIZE -- the webfont landing after the
   // first seat makes its word a few pixels longer.
   window.addEventListener('resize', seatNotesTab);
-  if (window.ResizeObserver) new ResizeObserver(seatNotesTab).observe(document.getElementById('right-tab'));
+  if (window.ResizeObserver) {
+    new ResizeObserver(seatNotesTab).observe(document.getElementById('right-tab'));
+    new ResizeObserver(seatNotesTab).observe(notesTab);
+  }
   notesText.addEventListener('input', () => {
     syncNotesCount();
     storeNotes(notesText.value);
@@ -35311,11 +35354,178 @@
     // THE KEY AND THE BUTTON ARE THE SAME VERB, as DELETE's are: both call
     // undoOnce, so neither can learn something the other does not.
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
-      if (!undoStack.length && !pendingCornerList()) return;
+      if (!undoStack.length && !pendingCornerList()) {
+        // NOTHING FINE-GRAINED LEFT -- after a jump, or on a drawing just
+        // opened -- so the key steps back through the versions instead.
+        if (versions.cursor > 0) { e.preventDefault(); historyStep(-1); }
+        return;
+      }
       e.preventDefault();
       undoOnce();
+      return;
+    }
+    // REDO (Movie, 20 Oct): Ctrl+Y, or Ctrl+Shift+Z, steps forward through
+    // the versions -- the entries a jump back left ahead of the cursor.
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+      if (versions.cursor < versions.entries.length - 1) { e.preventDefault(); historyStep(1); }
     }
   });
+
+  // ── UNDO / REDO: THE HISTORY TAB (Movie, 20 Oct) ───────────────────────
+  //
+  // "i need a better UNDO/REDO functionality in model space. can we put a
+  // UNDO / REDO tab under the NOTES / CALC. and in there have the last 100
+  // UNDO ... and then 100 REDO ... list with the DATE/TIME style stamps ...
+  // click on each one and see what the changes are and it will change the
+  // model to that version whichever they end up on, or if they want the
+  // current version they select the CURRENT". Per session, not in the file
+  // ("do it per session"), and a jump puts the WHOLE drawing back.
+  //
+  // HOW. Every edit ends in markDirty, so markDirty asks for a version and
+  // the version is taken once the gesture's turn is over: the drawing as a
+  // save would write it, kept as a string. Each entry says when, and what
+  // changed -- the counts that moved, else the kinds whose contents did.
+  // The CURSOR is the entry on the sheet: the entries before it are the
+  // UNDO side, the ones after it the REDO side; CURRENT is the newest. A
+  // jump adopts the entry's drawing through the door a file comes in by
+  // (adoptFile, muted so it is not itself a version) and moves the cursor;
+  // an edit made standing on an older entry drops the entries after it,
+  // as Photoshop's history does. Ctrl+Z keeps the fine-grained undo while
+  // there is one and steps back here when there is none; Ctrl+Y or
+  // Ctrl+Shift+Z steps forward.
+  const HISTORY_BACK = 100;
+  const HISTORY_BYTES = 80 * 1024 * 1024;
+  const HISTORY_COUNTED = [['walls', 'wall'], ['lines', 'line'], ['fenestrations', 'opening'],
+    ['dimensions', 'dimension'], ['floors', 'floor'], ['roofs', 'roof'], ['fixtures', 'fixture'],
+    ['notes', 'note'], ['stairs', 'stair'], ['columns', 'column'], ['beams', 'beam'],
+    ['shapes', 'shape'], ['outlines', 'outline'], ['roomTags', 'room tag'], ['groups', 'assembly'],
+    ['levels', 'level'], ['holograms', 'hologram'], ['underlays', 'picture'],
+    ['superNodes', 'super node'], ['cuts', 'section']];
+  // NAMED versions, NOT history: window.history is the URL bar's, and a
+  // local by that name shadowed it (syncUrl's replaceState went missing).
+  const versions = { entries: [], cursor: -1, muted: false, pending: false };
+  const historyHash = text => {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i += 1) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  };
+  const historyShape = saved => {
+    const counts = {}, sigs = {};
+    HISTORY_COUNTED.forEach(([key]) => {
+      const list = Array.isArray(saved[key]) ? saved[key] : [];
+      counts[key] = list.length;
+      sigs[key] = historyHash(JSON.stringify(list));
+    });
+    return { counts, sigs };
+  };
+  const historyLabel = (prev, next) => {
+    if (!prev) return 'OPENED';
+    const noun = (word, n) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    const moved = HISTORY_COUNTED.filter(([key]) => next.counts[key] !== prev.counts[key])
+      .map(([key, word]) => {
+        const d = next.counts[key] - prev.counts[key];
+        return `${d > 0 ? '+' : '\u2212'}${noun(word, Math.abs(d))}`;
+      });
+    if (moved.length) return moved.join(', ');
+    const changed = HISTORY_COUNTED.filter(([key]) => next.sigs[key] !== prev.sigs[key]).map(([, word]) => `${word}s`);
+    return changed.length ? `changed ${changed.join(', ')}` : 'settings';
+  };
+  const historyTime = at => {
+    const d = new Date(at);
+    const two = n => String(n).padStart(2, '0');
+    return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+  };
+  const historyList = document.querySelector('[data-history-list]');
+  const historyCountEl = document.querySelector('[data-history-count]');
+  const renderHistory = () => {
+    if (!historyList) return;
+    historyList.textContent = '';
+    const n = versions.entries.length;
+    if (historyCountEl) {
+      historyCountEl.textContent = n
+        ? `${versions.cursor} BACK \u00B7 ${n - 1 - versions.cursor} FORWARD` : '';
+    }
+    for (let i = n - 1; i >= 0; i -= 1) {
+      const entry = versions.entries[i];
+      const row = document.createElement('div');
+      row.className = 'hp-row';
+      row.dataset.historyRow = String(i);
+      row.setAttribute('role', 'option');
+      row.tabIndex = 0;
+      row.setAttribute('aria-selected', String(i === versions.cursor));
+      if (i > versions.cursor) row.dataset.side = 'redo';
+      else if (i < versions.cursor) row.dataset.side = 'undo';
+      const when = document.createElement('span');
+      when.className = 'hp-when';
+      when.textContent = historyTime(entry.at);
+      const what = document.createElement('span');
+      what.className = 'hp-what';
+      what.textContent = i === n - 1 ? `CURRENT \u00B7 ${entry.label}` : entry.label;
+      row.append(when, what);
+      row.addEventListener('click', () => { historyJump(i); });
+      row.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); historyJump(i); }
+      });
+      historyList.append(row);
+    }
+  };
+  const historyTake = () => {
+    versions.pending = false;
+    if (!drawing || versions.muted) return;
+    const saved = serializeDrawing({ trim: false });
+    const json = JSON.stringify(saved);
+    const at = versions.entries[versions.cursor] || null;
+    // NOTHING CHANGED, NO VERSION: a dirty mark with nothing behind it.
+    if (at && at.json === json) return;
+    const shape = historyShape(saved);
+    // AN EDIT ON AN OLDER VERSION DROPS THE VERSIONS AFTER IT.
+    versions.entries.length = versions.cursor + 1;
+    versions.entries.push({ at: Date.now(), json, ...shape, label: historyLabel(at, shape) });
+    while (versions.entries.length > HISTORY_BACK + 1) versions.entries.shift();
+    let bytes = versions.entries.reduce((sum, e) => sum + e.json.length, 0);
+    while (bytes > HISTORY_BYTES && versions.entries.length > 2) bytes -= versions.entries.shift().json.length;
+    versions.cursor = versions.entries.length - 1;
+    renderHistory();
+  };
+  // markDirty's hook: one version per gesture, taken when its turn is over.
+  const historyNoteEdit = () => {
+    if (versions.muted || versions.pending) return;
+    versions.pending = true;
+    window.setTimeout(historyTake, 0);
+  };
+  // A NEW DRAWING, A NEW HISTORY (adoptFile's hook): close the file and the
+  // history goes, as Photoshop's does. A jump adopts too, muted, and keeps.
+  const historyReset = () => {
+    if (versions.muted) return;
+    versions.entries.length = 0;
+    versions.cursor = -1;
+    renderHistory();
+    historyNoteEdit();
+  };
+  const historyJump = async index => {
+    const entry = versions.entries[index];
+    if (!entry || index === versions.cursor || versions.muted) return false;
+    versions.muted = true;
+    try {
+      const ok = await adoptFile(new File([entry.json], 'history.json', { type: 'application/json' }));
+      if (!ok) return false;
+      versions.cursor = index;
+      bumpModelEpoch();
+      paint();
+      syncShell();
+      syncBuildBar();
+      buildChrome();
+      loadUnderlayImages();
+      // UNSAVED: what is on the sheet is not what the store holds.
+      markDirty();
+    } finally { versions.muted = false; }
+    renderHistory();
+    const tip = index === versions.entries.length - 1;
+    sayOnStrip(tip ? 'CURRENT version back on the sheet.'
+      : `The version from ${historyTime(entry.at)} is on the sheet. Draw on it and the versions after it go; CURRENT puts the newest back.`);
+    return true;
+  };
+  const historyStep = by => historyJump(versions.cursor + by);
 
   // ONE UNDO, whichever control did the pressing. Until audit C4 the only
   // control was Ctrl+Z, and an iPad has no Ctrl key: a drafter there had no
@@ -35850,6 +36060,9 @@
     // been replaced. Kept, an undo would splice a wall from the previous
     // drawing back into this one, or move a corner nothing is joined to.
     undoStack.length = 0;
+    // AND THE VERSIONS GO WITH IT (Movie, 20 Oct: "do it per session"): a
+    // new drawing starts a new history. A jump adopts too, muted, and keeps.
+    historyReset();
     setSelection([]);
     drawStart = null;
 
@@ -36070,6 +36283,10 @@
     // freeze the six thumbnails on the FIRST change after a save and leave
     // them stale for every change after it -- a wall drawn, no seat updated.
     bumpModelEpoch();
+    // AND THE HISTORY TAB HEARS EVERY EDIT (Movie, 20 Oct), ahead of the
+    // guard for the epoch's reason: the first edit after a save is not the
+    // only one worth a version.
+    historyNoteEdit();
     if (dirty) return;
     dirty = true;
     document.body.dataset.saveDirty = '1';
@@ -36192,8 +36409,10 @@
     }
     return trimmed;
   }
-  const serializeDrawing = () => {
-    trimSlivers();
+  const serializeDrawing = ({ trim = true } = {}) => {
+    // THE HISTORY TAB ASKS WITHOUT THE TRIM: a version is the drawing as it
+    // stands, and a snapshot that tidied the sheet would be an edit.
+    if (trim) trimSlivers();
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
     // Destructured out of the spread rather than overwritten with `undefined`,
     // so the key is genuinely absent from the OBJECT and not merely absent from
