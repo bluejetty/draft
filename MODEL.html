@@ -5064,9 +5064,25 @@
         + 'did not load. Check the script order in the page head.');
     }
     const env = dimensionEnv();
-    const lit = new Set(selection.filter(entry => entry.type === 'dimension').map(entry => entry.item));
-    shownDimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
+    const lit = new Set(selection.filter(entry => entry.type === 'dimension' && !entry.point).map(entry => entry.item));
+    const shown = shownDimensions();
+    shown.forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
       lit.has(dimension) ? { selected: true } : {}, env));
+    // A PICKED POINT IS LIT AS A POINT -- a ring on the arrow tip -- and its
+    // line stays as it was, so what DELETE will take reads at a glance.
+    selection.filter(entry => entry.type === 'dimension' && entry.point && shown.includes(entry.item))
+      .forEach(({ item, point }) => {
+        const line = dimDrawnLine(item);
+        if (!line) return;
+        const q = point === 'start' ? line[0] : line[1];
+        ctx.save();
+        ctx.strokeStyle = env.colors.selectedHalo;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(q.x, q.y, 8, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = env.colors.selected;
+        ctx.beginPath(); ctx.arc(q.x, q.y, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      });
   };
 
   // LEADER NOTES. Two env keys, and until #302 there was no colour to put in
@@ -11702,6 +11718,27 @@
     const len = Math.hypot(dx, dz) || 1;
     return { x: -dz / len, z: dx / len };
   };
+  // THE POINT A DIMENSION IS MEASURED TO (Movie, 20 Oct: "i'd like to be
+  // able to select that 'point' arrows, etc where they meet"): the spot
+  // where two pieces of a hand string meet, or a string's end -- the arrow
+  // tips on the drawn line. Hand dimensions only: AUTO DIMS lay themselves
+  // out again from the walls, so a point taken off one would be back on the
+  // next re-lay. Nearest tip within the grab, and it wins over the line it
+  // stands on (hitAt asks here first).
+  const dimPointAt = worldPt => {
+    const s = toS(worldPt);
+    let best = null, bestD = SELECT_GRAB_PX;
+    shownDimensions().forEach(d => {
+      if (d.auto) return;
+      const line = dimDrawnLine(d);
+      if (!line) return;
+      [['start', line[0]], ['end', line[1]]].forEach(([point, q]) => {
+        const dist = Math.hypot(s.x - q.x, s.y - q.y);
+        if (dist < bestD) { bestD = dist; best = { type: 'dimension', item: d, point }; }
+      });
+    });
+    return best;
+  };
   const dimRow = grabbed => {
     const n = dimNormal(grabbed);
     const at = p => p.x * n.x + p.z * n.z;
@@ -11745,6 +11782,8 @@
     // A DIMENSION IS ANNOTATION, painted over the plan, and its line stands
     // off what it measures -- so it is asked before the walls it sits beside.
     if (filterAllows('dimension')) {
+      const point = dimPointAt(worldPt);
+      if (point) return point;
       const dimension = dimensionAt(worldPt);
       if (dimension) return { type: 'dimension', item: dimension };
     }
@@ -14607,8 +14646,50 @@
   // (newDimensionId) rather than the string every other copy takes.
   const NOT_COPIED = new Set(['stair', 'roof', 'roomtag', 'note']);
 
+  // DELETE A POINT, NOT THE LINE (Movie, 20 Oct): "rather than the dimension
+  // line disappearing only that 'point' will no longer be measured and the
+  // measurements will change to measure the now longer 2 points that still
+  // exist ... if an end 'point' is deleted from a dimension line, the entire
+  // line to the next point will be deleted".
+  //
+  // A hand string is one record per piece, the pieces sharing their points
+  // (dimString), so a point in the middle of the string is where two
+  // records meet: the one picked is stretched to the neighbour's far end,
+  // takes the neighbour's far ref (a corner or an opening it was put on, so
+  // it keeps following that), and the neighbour goes. A point at the end of
+  // the string meets nothing: its piece goes, and the string now ends at
+  // the next point. One UNDO puts the two pieces back as they were.
+  const dimPointsMeet = (a, b) => !!a && !!b && Math.abs(a.x - b.x) < 0.01 && Math.abs(a.z - b.z) < 0.01;
+  const deleteDimPoint = (dim, point) => {
+    const list = drawing?.dimensions;
+    if (!Array.isArray(list) || !list.includes(dim) || !dim[point]) return false;
+    const at = dim[point];
+    const next = dimRow(dim).find(d => d !== dim && !d.auto
+      && (dimPointsMeet(d.start, at) || dimPointsMeet(d.end, at))) || null;
+    if (!next) {
+      const index = list.indexOf(dim);
+      list.splice(index, 1);
+      undoStack.push({ kind: 'remove-item', list, index, item: dim });
+    } else {
+      // Two steps -- the stretch and the removal -- and deleteSelection
+      // batches whatever a DELETE pushed, so they are one UNDO from there.
+      const farEnd = dimPointsMeet(next.start, at) ? 'end' : 'start';
+      const far = next[farEnd], farRef = next[`${farEnd}Ref`];
+      const before = { ...dim };
+      dim[point] = { ...dim[point], x: far.x, z: far.z };
+      const refKey = `${point}Ref`;
+      if (farRef) dim[refKey] = { ...farRef }; else delete dim[refKey];
+      undoStack.push({ kind: 'props', edits: [{ item: dim, before }] });
+      const index = list.indexOf(next);
+      list.splice(index, 1);
+      undoStack.push({ kind: 'remove-item', list, index, item: next });
+    }
+    markDirty();
+    return true;
+  };
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
+    if (entry.type === 'dimension' && entry.point) return deleteDimPoint(entry.item, entry.point);
     if (entry.type === 'wall') return !!deleteWall(entry.item);
     // A STAIR TAKES ITS STAIRWELL WITH IT. AUTO STAIR cuts a surface opening
     // in the floor above and tags it with the stair's id; deleting the stair
@@ -28373,7 +28454,7 @@
   // A DECLARATION, not a const: the strip refreshes while the page is still
   // loading, before this line has run.
   function dimTypedReady() {
-    return !!(selection.length === 1 && selection[0].type === 'dimension'
+    return !!(selection.length === 1 && selection[0].type === 'dimension' && !selection[0].point
       && selection[0].item?.start && selection[0].item?.end && !moveDrag
       && !(drawsRun() && drawStart) && !moveTypedReady());
   }
@@ -32584,6 +32665,7 @@
     }
     if (hit.type === 'fixture') return `FIXTURE ${String(it.kind || it.fixture || '').toUpperCase()}`.trim();
     if (hit.type === 'dimension') {
+      if (hit.point) return 'DIM POINT';
       const dx = (it.end?.x ?? 0) - (it.start?.x ?? 0);
       const dz = (it.end?.z ?? 0) - (it.start?.z ?? 0);
       return `DIM ${ftIn(Math.hypot(dx, dz))}`;
