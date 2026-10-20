@@ -63,7 +63,7 @@ const MUTANTS = [
     test: 'a mouse press-drag-release places no wall; click, choose, click does' },
   { file: 'MODEL.html',
     name: "ENTER does not place the run's point",
-    find: "    if (drawsRun() && drawStart) { drawPress(cursorWorld); return true; }\n",
+    find: "    if (run) { drawPress(cursorWorld); return true; }\n",
     with: "",
     test: 'ENTER places the point the cursor shows, as a click would' },
   { file: 'MODEL.html',

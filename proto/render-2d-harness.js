@@ -2122,6 +2122,41 @@ suite('drawWetFloors2D', 'the first joint is a tile off the finished face', R =>
   expect('and the other', along.length > 3 && along.every(f => f === 0.25), true);
 });
 
+// SQUARE TO THE ROOM, NOT TO ITS LONGEST WELD (Movie, 20 Oct: "the flooring
+// in the washroom changed to not being straight after i rotated 90 degrees"
+// -- "its lik 87"). b3 stops 6" short of b4, so the welded corner leaves the
+// west side of the loop running (2.5, 11) to (2, 2): 9'-0 1/8", a hair longer
+// than the true 9' wall, and 3 degrees off square. The grid used to take it.
+suite('drawWetFloors2D', 'a crooked weld does not turn the grid; neither does a quarter turn', R => {
+  const crooked = [W('b1', 2, 2, 8, 2), W('b2', 8, 2, 8, 11), W('b3', 8, 11, 2.5, 11), W('b4', 2, 11, 2, 2)];
+  const square = (walls, at0) => {
+    const ctx = recordingCtx();
+    R.drawWetFloors2D(ctx, toS, tileEnv({ walls: [...HOUSE, ...walls], fixtureGeometry: at0 }));
+    const m = calls(ctx, 'moveTo').slice(1), l = calls(ctx, 'lineTo').slice(-m.length);
+    return m.length > 4 && m.every(([x, y], i) => Math.abs(x - l[i][0]) < 1e-6 || Math.abs(y - l[i][1]) < 1e-6);
+  };
+  expect('every joint square to the sheet', square(crooked, at(5, 6)), true);
+  // A QUARTER TURN, (x, z) -> (-z, x): the same room lying the other way.
+  const turn = w => ({ ...w, start: { x: -w.start.z, z: w.start.x }, end: { x: -w.end.z, z: w.end.x } });
+  const turnedHouse = HOUSE.map(turn);
+  const ctx = recordingCtx();
+  R.drawWetFloors2D(ctx, toS, tileEnv({ walls: [...turnedHouse, ...crooked.map(turn)], fixtureGeometry: at(-6, 5) }));
+  const m = calls(ctx, 'moveTo').slice(1), l = calls(ctx, 'lineTo').slice(-m.length);
+  expect('and still square once turned',
+    m.length > 4 && m.every(([x, y], i) => Math.abs(x - l[i][0]) < 1e-6 || Math.abs(y - l[i][1]) < 1e-6), true);
+});
+
+// THE VOTE ITSELF: the room's four square sides out-vote one long crooked one.
+suite('squareSideOf', 'the side the tile lies square to is a true wall, not the longest weld', R => {
+  // (2.5, 11) -> (2, 2) is the longest edge, and 3 degrees off square.
+  const room = [{ x: 2, z: 2 }, { x: 8, z: 2 }, { x: 8, z: 11 }, { x: 2.5, z: 11 }];
+  expect('not the crooked edge', R.squareSideOf(room) !== 3, true);
+  expect('the 9 ft wall, the longest square one', R.squareSideOf(room), 1);
+  // A PLAIN RECTANGLE: its longest side, as before.
+  expect('a rectangle lies to its long side',
+    [0, 2].includes(R.squareSideOf([{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 4 }, { x: 0, z: 4 }])), true);
+});
+
 // ── Kitchen pieces that touch read as one counter (Movie, 9 Oct) ──
 // Two DOOR BASEs side by side on one face of one wall: the end they share is
 // drawn light, every other edge at full weight. Alone, a piece is all full.
@@ -3934,6 +3969,9 @@ function coverage() {
     ['drawFixture2D joints across both faces of a wall', src => src.replace(
       "if (other.wallId !== fixture.wallId || (other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return;",
       'if (other.wallId !== fixture.wallId) return;')],
+    ['squareSideOf takes the single longest edge again', src => src.replace(
+      'const vote = sides.reduce((sum, other) => sum + (apart(side.a, other.a) <= SQUARE_TOL ? other.len : 0), 0);',
+      'const vote = side.len;')],
     ['drawWetFloors2D joints from the centreline', src => src.replace(
       'const uStart = halfOf(prev, o)', 'const uStart = 0 * halfOf(prev, o)')],
     // THE DOTTED LINE UNDER A HIGHER ROOF (Movie, 16 Oct), wrong both ways:

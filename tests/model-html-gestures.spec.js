@@ -827,6 +827,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
             // one answer.
             'OK',
+            // TOO BIG (Movie, 20 Oct: "a popup warning good idea"): the
+            // brush's refusal said where he is looking, and its one answer.
+            // It changes nothing in the drawing, so no absence row moves.
+            'OK',
             // AUTO DIMS / HAND DIMS beside the north arrow (Movie, 18 Oct):
             // each kind of string shown or hidden on the sheet.
             'AUTO DIMS', 'HAND DIMS',

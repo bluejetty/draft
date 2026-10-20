@@ -17,6 +17,14 @@ const MUTANTS = [
   // THE FORMAT'S MUTANTS (mode, levelMap) live in proto/layout-plan-harness.js:
   // MODEL never reads holograms back through drawing-format, so here they
   // were equivalent.
+  { file: 'hologram.js', name: "past the corner by an inch hands over nothing again",
+    find: "  const SIDE_TOL_FT = 1;",
+    with: "  const SIDE_TOL_FT = FACE_TOL_FT;",
+    test: "a suite wall running up to a foot past the shell corner" },
+  { file: 'hologram.js', name: "any distance past the corner still cuts",
+    find: "  const SIDE_TOL_FT = 1;",
+    with: "  const SIDE_TOL_FT = 100;",
+    test: "a suite wall running up to a foot past the shell corner" },
   { file: 'hologram.js', name: "only one face has to line up",
     find: "          && faceGaps(sf, h).every(g => Math.abs(g) < FACE_TOL_FT)",
     with: "          && faceGaps(sf, h).some(g => Math.abs(g) < FACE_TOL_FT)",

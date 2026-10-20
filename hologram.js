@@ -173,6 +173,12 @@
   // drawn and the clash is reported ("Show both + warn").
   const isSuite = holo => holo?.mode === 'suite';
   const FACE_TOL_FT = 0.02;        // a quarter inch: faces "line up"
+  // AND A FOOT AT THE ENDS (Movie, 20 Oct: "if i go past the corner a bit it
+  // doesn't allow to switch the windows, can we allow it to change the
+  // windows even if its up to 1ft off (not alligned) at the sides"). The faces
+  // must still line up to the quarter inch; along the shell wall, the suite's
+  // wall may run up to a foot past either end of it.
+  const SIDE_TOL_FT = 1;
   const wallFrame = wall => {
     const G = window.DraftGeometry2D;
     if (!wall?.start || !wall?.end) return null;
@@ -216,7 +222,7 @@
         if (!sf) return;
         const hf = hosts.find(h => h.wall.levelId === wall.levelId && parallel(sf, h)
           && faceGaps(sf, h).every(g => Math.abs(g) < FACE_TOL_FT)
-          && (() => { const r = alongHost(sf, h); return r.lo > -FACE_TOL_FT && r.hi < h.len + FACE_TOL_FT; })());
+          && (() => { const r = alongHost(sf, h); return r.lo > -SIDE_TOL_FT && r.hi < h.len + SIDE_TOL_FT; })());
         if (!hf) return;
         hidden.add(wall.id);
         const { a, dir } = alongHost(sf, hf);
@@ -311,8 +317,29 @@
   // to the other SUPER NODES"), on this level. Any hologram's, in fact: a
   // blue one's are read too, so the page can say it would have caught.
   const suiteSuperNodes = (holo, levelId) => {
-    const own = (parts(holo).existing.superNodes || []).filter(n => n?.point && Number(n.levelId) === Number(levelId));
-    return own.length ? placed(holo, { superNodes: own }).superNodes : [];
+    const existing = parts(holo).existing;
+    const own = (existing.superNodes || []).filter(n => n?.point && Number(n.levelId) === Number(levelId));
+    if (own.length) return placed(holo, { superNodes: own }).superNodes;
+    const auto = (isSuite(holo) || isSuiteFile(holo)) ? cornerSuperNodes(existing.walls, levelId) : [];
+    return auto.length ? placed(holo, { superNodes: auto }).superNodes : [];
+  };
+  // A SUITE'S CORNERS ARE ITS SUPER NODES UNTIL HE PLACES HIS OWN (Movie, 20
+  // Oct: "auto place those on the SUITES at the furthest corners of the
+  // 'SUITE how the user draws it make a RECTAGLE shape that contains it" --
+  // "but we wil maybe need the to be placed manually or moved too afterwards
+  // by the user for unique suite situations"). The rectangle that holds every
+  // wall of the floor, out to the walls' outside faces, in the suite's own
+  // frame -- so it turns and mirrors with the hologram. Any super node drawn
+  // in the suite's own file replaces all four.
+  const cornerSuperNodes = (walls, levelId) => {
+    const pts = (walls || []).filter(w => Number(w?.levelId) === Number(levelId))
+      .flatMap(w => wallCorners(w) || []);
+    if (pts.length < 2) return [];
+    const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+    const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+    if (x1 - x0 < 1e-6 || z1 - z0 < 1e-6) return [];
+    return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z], i) => ({
+      id: `corner-${i + 1}`, levelId: Number(levelId), view: 'plan', point: { x, y: 0, z }, auto: true }));
   };
   // A suite's own plan less the walls the shell has taken, and their openings.
   const suiteExisting = (holo, existing, info) => {
