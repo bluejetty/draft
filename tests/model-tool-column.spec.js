@@ -51,6 +51,9 @@ const ROSTER = [
   // ASSEMBLY (Movie, 18 Oct): "put it up in with the other main letters" --
   // Y, the binding the old page carried for `group`.
   ['draw', 'assembly', 'ASSEMBLY', 'Y'],
+  // SUPERNODE (Movie, 20 Oct): the super-magnetic marker a suite clicks in
+  // by. No letter yet.
+  ['draw', 'superNode', 'SUPERNODE', ''],
   ['build', 'wall', 'WALL', 'W'],
   ['build', 'fenestration', 'FENESTRATION', 'E'],
   ['build', 'floor', 'FLOOR', 'F'],
@@ -121,7 +124,7 @@ test('twenty keys, in the old page\'s order and grouping', async ({ page }) => {
     .toHaveText('BUILD');
 });
 
-test('fourteen keys carry a letter and seven are deliberately bare',
+test('fourteen keys carry a letter and eight are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -133,7 +136,7 @@ test('fourteen keys carry a letter and seven are deliberately bare',
     // letters were ever loosened to ''.
     expect(got.filter(k => k.key !== '')).toHaveLength(14);
     expect(got.filter(k => k.key === '').map(k => k.id))
-      .toEqual(['annotation', 'roomtag', 'dormer', 'column', 'beam', 'stair', 'fixture']);
+      .toEqual(['annotation', 'roomtag', 'superNode', 'dormer', 'column', 'beam', 'stair', 'fixture']);
   });
 
 test('a SETTINGS remap moves the letter on the key face', async ({ page }) => {

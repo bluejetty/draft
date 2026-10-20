@@ -58,6 +58,11 @@
     // ENTER or DOUBLE CLICK or press Y again to close the assembly as one new
     // unit". Y is the binding the old page already carried for `group`.
     { id: 'assembly',     name: 'ASSEMBLY',     group: 'draw',  kind: 'contextual', command: 'group' },
+    // SUPERNODE (Movie, 20 Oct): "make a NODE command in the drafting menu,
+    // and those will be super high power nodes very SNAP Magnetic" -- one
+    // word, SUPERNODE, his spelling, because N = NODE / ARC is taken. No
+    // letter yet, like ANNOTATION beside it.
+    { id: 'superNode',    name: 'SUPERNODE',    group: 'draw',  kind: 'contextual', command: null },
     { id: 'wall',         name: 'WALL',         group: 'build', kind: 'contextual', command: 'wall' },
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },

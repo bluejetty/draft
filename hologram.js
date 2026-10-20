@@ -306,6 +306,14 @@
     }));
     return out;
   };
+  // A SUITE'S SUPER NODES, where the hologram's placement puts them (Movie,
+  // 20 Oct: "place them on the corners of the suites where they will attach
+  // to the other SUPER NODES"), on this level. Any hologram's, in fact: a
+  // blue one's are read too, so the page can say it would have caught.
+  const suiteSuperNodes = (holo, levelId) => {
+    const own = (parts(holo).existing.superNodes || []).filter(n => n?.point && Number(n.levelId) === Number(levelId));
+    return own.length ? placed(holo, { superNodes: own }).superNodes : [];
+  };
   // A suite's own plan less the walls the shell has taken, and their openings.
   const suiteExisting = (holo, existing, info) => {
     const gone = info?.hidden.get(holo.id);
@@ -723,6 +731,6 @@
   window.DraftHologram = Object.freeze({
     BLUE, PALE, ALPHA, VIEWS, planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
-    drawn,
+    drawn, suiteSuperNodes,
   });
 })();
