@@ -805,6 +805,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'NOTES', 'CALC', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.',
             '(', ')', '+', '\u2212', '\u00D7', '\u00F7', '=', 'C', '\u232B', '\u2423',
             'FT', 'IN', 'M', 'MM', 'a/b', 'FT-IN', '\u2192 NOTES',
+            // THE ROOT AND THE SQUARE (Movie, 20 Oct), for Pythagoras.
+            '\u221A', 'x\u00B2',
             // ROTATE's own row: two quarter turns, a half, and DONE.
             '\u27F2 90', '\u27F3 90', '180', 'DONE',
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's

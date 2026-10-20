@@ -9,8 +9,17 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPECS = ['tests/model-html-calc.spec.js'];
+const SPECS = ['tests/model-html-calc.spec.js', 'tests/calc-sqrt.spec.js'];
 const MUTANTS = [
+  // THE ROOT AND THE SQUARE (Movie, 20 Oct), and the tab's name.
+  { file: 'MODEL.html', name: "no root key on the pad", spec: 'tests/calc-sqrt.spec.js',
+    find: '        <button type="button" data-calc-key="&#x221A;(" class="op" title="Square root: &#x221A;(3\'&#xB2; + 4\'&#xB2;)">&#x221A;</button>\n',
+    with: '',
+    test: 'Pythagoras on the keys' },
+  { file: 'MODEL.html', name: "the tab still reads NOTES", spec: 'tests/calc-sqrt.spec.js',
+    find: '  data-pane-tab="notes" hidden>NOTES / CALC</button>',
+    with: '  data-pane-tab="notes" hidden>NOTES</button>',
+    test: 'the tab reads NOTES / CALC' },
   { file: 'MODEL.html', name: "CALC leaves the NOTES page showing", spec: 'tests/model-html-calc.spec.js',
     find: "    notesText.hidden = which !== 'notes';\n",
     with: "",

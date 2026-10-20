@@ -1657,7 +1657,7 @@
 <!-- THE NOTES PAD, under LEVELS / LAYERS on the same edge and the same rail:
      it opens and shuts the way that tab does, and swaps with it. -->
 <button id="notes-tab" class="rail-tab" type="button" data-notes-tab
-  data-pane-tab="notes" hidden>NOTES</button>
+  data-pane-tab="notes" hidden>NOTES / CALC</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
   <div id="view-rail" data-pane="levels"></div>
   <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
@@ -1705,6 +1705,10 @@
         <button type="button" data-calc-do="back" title="Take off the last">&#9003;</button>
         <button type="button" data-calc-do="clear" title="Clear the line">C</button>
         <button type="button" data-calc-key="mm" class="unit">MM</button>
+        <!-- THE ROOT AND THE SQUARE (Movie, 20 Oct): "put a SQUARE ROOT calc
+             button on here ... for a SQ bSQ = c SQ pythag". -->
+        <button type="button" data-calc-key="&#x221A;(" class="op" title="Square root: &#x221A;(3'&#xB2; + 4'&#xB2;)">&#x221A;</button>
+        <button type="button" data-calc-key="&#xB2;" class="op" title="Squared: 3'&#xB2; is 9 sq ft">x&#xB2;</button>
         <button type="button" data-calc-do="units" class="wide" title="Answers first in ft-in, or in metric">FT-IN</button>
         <button type="button" data-calc-do="notes" class="wide" title="Put this line and its answer on the NOTES pad">&rarr; NOTES</button>
         <button type="button" data-calc-do="equals" class="eq">=</button>
