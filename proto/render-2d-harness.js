@@ -3344,6 +3344,32 @@ suite('drawWallSeg2D', 'a tee resolves for the host and clips the stem to its fa
     stemGeom.join(' ') === endGeometry(R, a, null).join(' '), false);
 });
 
+// A CORNER IS A CORNER WHICHEVER WAY ITS WALLS WERE DRAWN (Movie, 20 Oct:
+// "when it blends the corner it wraps it funny it should be a 90 black line
+// corner on each corner not how it looks folded over"). A trim or a joined
+// pair of loose ends leaves both walls ending at the corner -- or both
+// starting there -- and the faces have to be paired the other way round.
+const cornerBothWays = (R, refLine) => {
+  const P0 = { x: 0, z: 0 }, P1 = { x: 10, z: 0 }, P2 = { x: 10, z: 10 };
+  const a = { start: P0, end: P1, wallType: 'stud_2x6', refLine };
+  const chained = { start: P1, end: P2, wallType: 'stud_2x6', refLine };
+  // The same wall drawn the other way: the same faces, its normal flipped,
+  // so a left-referenced wall becomes a right-referenced one.
+  const flip = { left: 'right', right: 'left', center: 'center' }[refLine];
+  const reversed = { start: P2, end: P1, wallType: 'stud_2x6', refLine: flip };
+  const one = endGeometry(R, a, new Map([[P1, { type: 'miter', entries: [{ seg: a, at: 'end' }, { seg: chained, at: 'start' }] }]]));
+  const two = endGeometry(R, a, new Map([[P1, { type: 'miter', entries: [{ seg: a, at: 'end' }, { seg: reversed, at: 'end' }] }]]));
+  return { one, two };
+};
+suite('drawWallSeg2D', 'both walls ending at a corner mitre it as a chain does: centred walls', R => {
+  const { one, two } = cornerBothWays(R, 'center');
+  expect('the same square corner', two.join(' '), one.join(' '));
+});
+suite('drawWallSeg2D', 'both walls ending at a corner mitre it as a chain does: walls drawn on a face', R => {
+  const { one, two } = cornerBothWays(R, 'left');
+  expect('the same square corner', two.join(' '), one.join(' '));
+});
+
 suite('drawWallSeg2D', 'a mitre longer than the limit falls back to a square cap', R => {
   // Two nearly collinear walls: the mitre spike runs away, and the painter
   // refuses it past 8x the thicker assembly rather than drawing a spear.
