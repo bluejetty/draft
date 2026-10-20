@@ -1234,6 +1234,12 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
+  /* WHERE THE BONE GOES FROM AN ELEVATION OR A SECTION (syncBoneGoes). */
+  #bone[data-bone-goes] { position:relative; }
+  #bone[data-bone-goes]::after { content:attr(data-bone-goes); position:absolute; left:50%; bottom:100%;
+    transform:translate(-50%, -2px); white-space:nowrap; font:600 9px/1 var(--font-mono, monospace);
+    letter-spacing:0.06em; padding:2px 4px; border-radius:3px;
+    background:var(--surface-chip); color:var(--accent); border:1px solid var(--accent); pointer-events:none; }
   #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #hologram-ask, #trace-insert,
   #footprint-ask, #stair-fit { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
@@ -6772,6 +6778,7 @@
     // elevation or a section shows neither a click over nothing nor a turn
     // button beside an arrow that is not there.
     if (northDock) northDock.hidden = true;
+    if (typeof syncBoneGoes === 'function') syncBoneGoes();
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
@@ -8960,6 +8967,30 @@
   //
   // The seam still hears every press either way -- what an empty press
   // means to the geometry side stays the geometry side's call.
+  // ON AN ELEVATION THE BONE IS A DOOR, NOT A BUILD. Movie, 20 Oct: "maybe
+  // pressing the BONE in elevations should take them over to the EXT FINISH
+  // area ... the autohouse BONE in the ELEVATIONS doesn't seem right", and
+  // for a section: "take them over to PROJECT fom SECTIONS if they press the
+  // bone in the sections area". An empty file still gets the drive-thru --
+  // "good idea" -- there is nothing to finish yet. EXT FINISH opens on the
+  // same elevation (its ?elev=). No bone is spent: it is a walk, not a build.
+  function boneGoesTo() {
+    const cut = activeCut();
+    if (!cut || !(drawing?.walls || []).length) return null;
+    return autoElevationCuts().some(c => String(c.id) === String(cut.id))
+      ? { label: 'EXT. FINISH', href: `./EXTFINISH.html?elev=${encodeURIComponent(cut.id)}` }
+      : { label: 'PROJECT', href: './PROJECT.html' };
+  }
+  // THE PRESS SAYS WHERE IT GOES, in a tag over it (the title is the bone
+  // wallet's), so the walk is never a surprise. Read off the element each
+  // paint, which can run before boneFoot is declared.
+  function syncBoneGoes() {
+    const bone = document.getElementById('bone');
+    if (!bone) return;
+    const goes = boneGoesTo();
+    if (goes) bone.dataset.boneGoes = goes.label;
+    else delete bone.dataset.boneGoes;
+  }
   boneFoot.addEventListener('click', () => {
     // BUILT IS AN ANSWER. Movie, 18 Sep: "when they draw the U outline, they
     // should still press the BONE or blue house to cause the house to be
@@ -8972,6 +9003,8 @@
     // he never gets here because the board covers this press; on ROUGH it
     // does not, and this is the press he actually reaches for.
     if (!signShut()) { orderAtWindow(); return; }
+    const goes = boneGoesTo();
+    if (goes) { guardUnsaved(`leaving for ${goes.label}`, () => { window.location.href = goes.href; }); return; }
     // THE SECOND PRESS ASKS. A type is picked and the board is down, so the
     // drafter has already been through the window once.
     if (chosen()) { openBuildChoice(); return; }

@@ -492,7 +492,11 @@
 
       const ELEV_NAMES = { E1: 'FRONT', E2: 'LEFT', E3: 'BACK', E4: 'RIGHT' };
       let picked = null;   // { wallId }
-      let currentElev = 'E1';
+      // THE MODEL'S BONE SENDS THE ELEVATION IT WAS PRESSED ON (Movie, 20 Oct:
+      // the BONE on an elevation "take them over to the EXT FINISH area").
+      // rebuild() falls back to the first one when this file has no such cut.
+      const askedElev = new URLSearchParams(location.search).get('elev');
+      let currentElev = askedElev || 'E1';
 
       // ── THE FOUR ELEVATIONS, STOOD THE WAY THE MODEL'S E MARKS STAND THEM
       // Lifted from LAYOUT's _standardElevationCuts, which is the same four:
