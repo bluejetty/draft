@@ -5,6 +5,10 @@
 // notice, and restores the file from HEAD.
 //
 //   node proto/series-close-mutants.js
+//
+// NOT A ROW: SPACE typed in the LENGTH box. The box keeps its keys to
+// itself, so the handler's own INPUT guard never sees one -- the spec pins
+// the behaviour, but no mutation here could reach it.
 const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
@@ -37,11 +41,6 @@ const MUTANTS = [
     find: "    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;\n",
     with: "    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS;\n",
     test: 'a second press after a pause, or after the cursor moved on, is not an end' },
-  { file: 'MODEL.html',
-    name: 'SPACE in a box lands a corner',
-    find: "    if (e.key !== ' ' || e.repeat || !drawsRun() || modalUp()) return;\n    const t = e.target;\n    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;\n",
-    with: "    if (e.key !== ' ' || e.repeat || !drawsRun() || modalUp()) return;\n",
-    test: 'SPACE typed in the LENGTH box is a space, not a corner' },
 ];
 
 const run = name => {
