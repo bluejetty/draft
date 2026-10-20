@@ -13714,6 +13714,16 @@
     };
   };
 
+  // A SUITE'S WALLS ARE DRAWN AT A STAND-IN HEIGHT on the boneyard (Movie,
+  // 20 Oct: "the HEIGHTS won't really need to be determined until it is
+  // place onto a plan"). 8'-0" for a residential suite and 10'-0" for a
+  // commercial one, so the plan, the cuts and the 3D read sensibly while it
+  // is drawn; placed on a floor, it takes that floor's floor-to-ceiling
+  // height and this number is not used. Null off the boneyard or in any
+  // other drawing.
+  const SUITE_STAND_IN_FT = { residential: 8, commercial: 10 };
+  const suiteStandIn = levelId => (drawing?.suiteKind && Number(levelId) < 0
+    ? SUITE_STAND_IN_FT[drawing.suiteKind] ?? null : null);
   const commitWall = (startPt, endPt,
     { bone = true, refLine, levelId: onLevel, view: onView, wallType,
       baseHeight, topHeight, body } = {}) => {
@@ -13734,7 +13744,7 @@
       // a band of concrete hanging off grade -- its base and top are derived
       // from the foundation datum, not from a setting.
       baseHeight: baseHeight ?? wallSetting('wallBaseHeight', 0),
-      topHeight: topHeight ?? wallSetting('wallTopHeight', 8),
+      topHeight: topHeight ?? suiteStandIn(levelId) ?? wallSetting('wallTopHeight', 8),
       // 'center', not 'centre'. drawing-format.js:400 folds the British
       // spelling on LOAD, but this page has no serializer — a record written
       // with 'centre' reaches the file unvalidated and only the next load
@@ -30098,6 +30108,18 @@
         return null;
       }, showSelectionProps);
     box.append(height('base', 'BASE'), height('top', 'TOP'));
+    // A SUITE'S HEIGHT IS SET WHERE IT IS PLACED, and PROPERTIES says so over
+    // the stand-in it is drawn at (Movie, 20 Oct).
+    const standIn = drawing?.suiteKind && walls.every(wall => Number(wall.levelId) < 0)
+      ? SUITE_STAND_IN_FT[drawing.suiteKind] : null;
+    if (standIn != null) {
+      const note = document.createElement('div');
+      note.className = 'sel-help';
+      note.dataset.suiteHeightNote = '';
+      note.textContent = `HEIGHT — SET WHEN PLACED: the suite fits the floor-to-ceiling height `
+        + `of the floor it stands on (${ftIn(standIn)} shown here).`;
+      box.append(note);
+    }
 
     // ── GUARDRAIL ─────────────────────────────────────────────────────────
     //
