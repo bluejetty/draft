@@ -768,6 +768,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // what is already drawn about its own middle and makes nothing,
             // so no absence row moves -- the same verdict COPY and DELETE got.
             'model-rotate',
+            // FLIP (Movie, 20 Oct: "another option down there for FLIP
+            // beside rotate and move"): a mirror of what is already drawn,
+            // about its own middle; it makes nothing, as ROTATE makes nothing.
+            'model-flip',
             // BREAK (Movie, 18 Oct) cuts a roof in two along a flush gable, or
             // breaks an assembly into its pieces. It divides what is drawn and
             // starts nothing new, so no absence row moves.
@@ -807,6 +811,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'FT', 'IN', 'M', 'MM', 'a/b', 'FT-IN', '\u2192 NOTES',
             // ROTATE's own row: two quarter turns, a half, and DONE.
             '\u27F2 90', '\u27F3 90', '180', 'DONE',
+            // FLIP's own row: left for right, top for bottom, and DONE.
+            '\u21C6 L/R', '\u21C5 U/D', 'DONE',
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
             // one answer.
             'OK',

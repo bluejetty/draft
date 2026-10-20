@@ -6992,6 +6992,7 @@
       pasteButton.hidden = !held.length || !!activeCut() || modalUp();
     }
     syncRotateVerbs();
+    syncFlipVerbs();
     syncBreakVerb();
     syncMoveVerb();
     syncWallOffVerb();
@@ -14728,6 +14729,122 @@
     const shown = Math.round(((degrees % 360) + 360) % 360 * 100) / 100;
     sayOnStrip(`Turned ${shown}° clockwise about its middle.${stairFramingSaid(reframed)} UNDO turns it back.`);
   };
+
+  // ── FLIP (Movie, 20 Oct) ─────────────────────────────────────────────
+  //
+  // "i need another option down there for FLIP beside rotate and move". A
+  // mirror of what is selected about its own middle -- left for right
+  // (across x) or top for bottom (across z) -- with ROTATE's own rules: a
+  // FIXED assembly flips whole, a corner shared with a wall that stays is
+  // let go first, a stair's well is cut again and its framing laid again,
+  // and one UNDO takes it all back.
+  //
+  // A MIRROR REVERSES THE HAND. A wall's direction still runs start to end,
+  // and the end is where its mirror image is -- but the side that was its
+  // left is now its right (the hologram's own MIRROR, placed(), has the same
+  // three swaps). So a wall drawn by its left or right line swaps lines, a
+  // fixture crosses to the other face, a door swings the other way, and a
+  // stair that turned left turns right. A door's hinge is measured from the
+  // wall's start, which mirrored with it, so it keeps its jamb.
+  var flipState = { open: false };
+  const flipButton = document.getElementById('model-flip');
+  const flipBar = document.getElementById('flip-bar');
+  const flipSelection = axis => {
+    if (!selection.length || (axis !== 'x' && axis !== 'z')) return;
+    const entries = selection.slice();
+    selection.forEach(entry => {
+      const owner = groupOf(entry);
+      if (!owner || owner.fixed !== true) return;
+      itemsOfGroup(owner).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
+    });
+    const chosen = new Set(entries.map(entry => entry.item));
+    const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
+    const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
+    const detached = [];
+    entries.forEach(({ type, item }) => {
+      if (type !== 'wall') return;
+      ['start', 'end'].forEach(key => {
+        if (!held.has(item[key])) return;
+        detached.push({ wall: item, key, orig: item[key] });
+        item[key] = { ...item[key] };
+      });
+    });
+    const points = [...new Set(entries.flatMap(rotatePointsOf))]
+      .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    if (!points.length) {
+      detached.forEach(d => { d.wall[d.key] = d.orig; });
+      sayOnStrip('Nothing in the selection can be flipped on its own -- doors, windows and fixtures flip with their walls.');
+      return;
+    }
+    const vals = points.map(pt => pt[axis]);
+    const mid = (Math.min(...vals) + Math.max(...vals)) / 2;
+    const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+      ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
+    const mirror = pt => { pt[axis] = 2 * mid - pt[axis]; };
+    points.forEach(mirror);
+    const framing = entries.filter(entry => entry.type === 'stair').flatMap(({ item }) => {
+      const f = stairFramingOf(item);
+      return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
+    }).filter(pt => !points.includes(pt));
+    framing.forEach(vtx => before.push({ vtx, x: vtx.x, z: vtx.z }));
+    framing.forEach(mirror);
+    const wells = [];
+    entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
+      const hole = stairWellOf(item).hole;
+      const ring = hole && stairOpeningFootprint(item);
+      if (!ring || ring.length < 3) return;
+      wells.push({ hole, points: hole.points });
+      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
+    });
+    points.forEach(relinkVertex);
+    // THE SIDES SWAP.
+    const edits = [];
+    const flippedWalls = entries.filter(e => e.type === 'wall').map(e => e.item);
+    const wallIds = new Set(flippedWalls.map(w => String(w.id)));
+    flippedWalls.forEach(w => {
+      if (w.refLine !== 'left' && w.refLine !== 'right') return;
+      edits.push({ item: w, before: { ...w } });
+      w.refLine = w.refLine === 'left' ? 'right' : 'left';
+    });
+    (drawing.fixtures || []).filter(f => wallIds.has(String(f.wallId))).forEach(f => {
+      edits.push({ item: f, before: { ...f } });
+      f.side = f.side === -1 ? 1 : -1;
+    });
+    (drawing.fenestrations || []).filter(o => wallIds.has(String(o.wallId)) && o.type === 'door').forEach(o => {
+      edits.push({ item: o, before: { ...o } });
+      o.swingFlip = o.swingFlip !== true;
+    });
+    entries.filter(e => e.type === 'stair').forEach(({ item }) => {
+      if (item.turn !== 'left' && item.turn !== 'right') return;
+      edits.push({ item, before: { ...item } });
+      item.turn = item.turn === 'left' ? 'right' : 'left';
+    });
+    const turn = { kind: 'rotate', before, detached, wells };
+    const reframed = entries.filter(entry => entry.type === 'stair').map(({ item }) => reframeStair(item));
+    const steps = [turn, ...(edits.length ? [{ kind: 'props', edits }] : []), ...reframed.flatMap(r => r.steps)];
+    undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : turn);
+    markDirty();
+    paint();
+    sayOnStrip(`Flipped ${axis === 'x' ? 'left for right' : 'top for bottom'} about its middle.${stairFramingSaid(reframed)} UNDO flips it back.`);
+  };
+  const setFlipOpen = open => { flipState.open = !!open; paint(); };
+  function syncFlipVerbs() {
+    if (!flipState || !flipButton || !flipBar) return;
+    const able = selection.length && !activeCut() && !modalUp();
+    if (!able) flipState.open = false;
+    flipButton.hidden = !able || flipState.open || !!rotateState?.open;
+    flipBar.hidden = !flipState.open;
+    // OVER THE OTHER VERBS while it is up, as ROTATE's row is.
+    if (flipState.open) {
+      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; });
+    }
+  }
+  if (flipButton) flipButton.addEventListener('click', () => setFlipOpen(true));
+  if (flipBar) {
+    flipBar.querySelectorAll('[data-flip-axis]').forEach(btn => btn.addEventListener('click', () =>
+      flipSelection(btn.dataset.flipAxis)));
+    flipBar.querySelector('[data-flip-done]')?.addEventListener('click', () => setFlipOpen(false));
+  }
   const setRotateOpen = open => {
     rotateState.open = !!open;
     if (rotateBar) {
@@ -14740,7 +14857,7 @@
     if (!rotateState || !rotateButton || !rotateBar) return;
     const able = (selection.length || photoInHand()) && !activeCut() && !modalUp();
     if (!able) rotateState.open = false;
-    rotateButton.hidden = !able || rotateState.open;
+    rotateButton.hidden = !able || rotateState.open || !!flipState?.open;
     rotateBar.hidden = !rotateState.open;
     // OVER THE OTHER VERBS while it is up.
     if (rotateState.open) {
@@ -14799,7 +14916,7 @@
     const one = breakHeld();
     const able = !activeCut() && !modalUp() && (!!one || selectedGroups().length > 0);
     if (!able || (breakState.held && one?.item !== breakState.held.item)) breakState.held = null;
-    breakButton.hidden = !able || !!rotateState?.open;
+    breakButton.hidden = !able || !!rotateState?.open || !!flipState?.open;
     breakButton.setAttribute('aria-pressed', String(!!breakState.held));
     // AN ITEM IS BROKEN, AN ASSEMBLY IS BUST (Movie, 18 Oct: "ASSEMBLY BREAK
     // is different from ROOF EDGE BREAK" -- "lets go ASSEMBLY GROUP /
@@ -14868,7 +14985,7 @@
     if (!wallOffButton) return;
     const wall = wallPicked && selection.some(e => e.item === wallPicked) && walls().includes(wallPicked) ? wallPicked : null;
     const able = !activeCut() && !modalUp() && !!wall && !!wallOffHost(wall);
-    wallOffButton.hidden = !able || !!rotateState?.open;
+    wallOffButton.hidden = !able || !!rotateState?.open || !!flipState?.open;
   }
   const wallOff = () => {
     const wall = wallPicked;
@@ -15140,7 +15257,7 @@
       moveState.on = false; moveState.roof = null; moveState.node = null;
     }
     if (moveState.node && roof !== moveState.node.roof) moveState.node = null;
-    moveButton.hidden = !able || !!rotateState?.open;
+    moveButton.hidden = !able || !!rotateState?.open || !!flipState?.open;
     moveButton.setAttribute('aria-pressed', String(!!moveState.on));
   }
   const roofRings = roof => {

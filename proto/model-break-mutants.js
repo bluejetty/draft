@@ -15,7 +15,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-html-break.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html', name: "BREAK never shows",
-    find: "    breakButton.hidden = !able || !!rotateState?.open;\n",
+    find: "    breakButton.hidden = !able || !!rotateState?.open || !!flipState?.open;\n",
     with: "    breakButton.hidden = true;\n",
     test: "a roof: BREAK adds nodes on the edge clicked, each half keeps its kind and overhang, and the wall line gains them too" },
   { file: 'MODEL.html', name: "a roof node's new edge is an eave whatever the edge was",

@@ -727,6 +727,17 @@ ${trio(true)}
     <input id="rotate-angle" type="text" data-rotate-angle inputmode="decimal" placeholder="DEG" aria-label="Turn by degrees, clockwise">
     <button type="button" data-rotate-done title="Put ROTATE down">DONE</button>
   </span>
+  <!-- FLIP (Movie, 20 Oct): "i need another option down there for FLIP
+       beside rotate and move". What is selected is mirrored about its own
+       middle, left for right or top for bottom; its row stands over the
+       verbs while it is up, as ROTATE's does. -->
+  <button id="model-flip" type="button" data-flip hidden
+    title="Mirror what is selected about its middle">FLIP</button>
+  <span id="flip-bar" data-flip-bar hidden>
+    <button type="button" data-flip-axis="x" title="Left for right">&#x21C6; L/R</button>
+    <button type="button" data-flip-axis="z" title="Top for bottom">&#x21C5; U/D</button>
+    <button type="button" data-flip-done title="Put FLIP down">DONE</button>
+  </span>
     </div>
   </div>
   <div class="grow"></div>`;
