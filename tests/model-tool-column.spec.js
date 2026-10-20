@@ -39,6 +39,9 @@ const ROSTER = [
   ['draw', 'extend', 'Extend', 'X'],
   ['draw', 'copy', 'Copy', 'K'],
   ['draw', 'trim', 'Trim', 'Q'],
+  // MOVE and STRETCH (Movie, 20 Oct: "MOVE "M" and also STRETCH" -- "HHHHHH").
+  ['draw', 'move', 'MOVE', 'M'],
+  ['draw', 'stretch', 'STRETCH', 'H'],
   // SUPERNODE (Movie, 20 Oct) in the old NODE / ARC slot, on its N.
   ['draw', 'node', 'SUPERNODE', 'N'],
   ['draw', 'line', 'LINE', 'L'],
@@ -106,7 +109,7 @@ const keys = page => page.locator('[data-tool-key]').evaluateAll(els => els.map(
   armed: el.getAttribute('aria-pressed') === 'true',
 })));
 
-test('twenty keys, in the old page\'s order and grouping', async ({ page }) => {
+test('twenty-two keys, in the old page\'s order and grouping', async ({ page }) => {
   await openColumn(page);
   const got = await keys(page);
 
@@ -122,7 +125,7 @@ test('twenty keys, in the old page\'s order and grouping', async ({ page }) => {
     .toHaveText('BUILD');
 });
 
-test('fourteen keys carry a letter and seven are deliberately bare',
+test('sixteen keys carry a letter and seven are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -132,7 +135,7 @@ test('fourteen keys carry a letter and seven are deliberately bare',
     // Stated as a count as well as a table, because the table above would also
     // be satisfied by a build that prints nothing on ANY face if the expected
     // letters were ever loosened to ''.
-    expect(got.filter(k => k.key !== '')).toHaveLength(14);
+    expect(got.filter(k => k.key !== '')).toHaveLength(16);
     expect(got.filter(k => k.key === '').map(k => k.id))
       .toEqual(['annotation', 'roomtag', 'dormer', 'column', 'beam', 'stair', 'fixture']);
   });
