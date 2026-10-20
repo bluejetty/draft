@@ -144,8 +144,9 @@ test('SPACE typed in the LENGTH box is a space, not a corner', async ({ page }) 
   await box.press(' ');
   await page.keyboard.press('Escape');   // out of the box, the run still in hand
   await page.evaluate(() => document.activeElement?.blur?.());
-  await tapWorld(page, 8, 2);
+  // THE RUN IS STILL FROM THE FIRST PRESS: no corner landed at (8, 2).
+  await tapWorld(page, 8, 6);
   await page.keyboard.press('Escape');
   const d = await save(page);
-  expect(d.walls.map(seg), 'one wall, from the first press').toEqual([[2, 2, 8, 2]]);
+  expect(d.walls.map(seg), 'one wall, from the first press to this one').toEqual([[2, 2, 8, 6]]);
 });

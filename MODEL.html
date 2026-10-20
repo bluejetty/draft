@@ -28392,7 +28392,7 @@
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
     if (!cursorWorld) return;
     e.preventDefault();
-    if (seriesKeyPress(' ', () => { drawPress(cursorWorld); return true; })) { stripRefresh(); paint(); }
+    if (seriesKeyPress(' ', enterPlaces)) { stripRefresh(); paint(); }
   });
   // A DOUBLE-CLICK ENDS THE RUN. Its first click is an ordinary press -- a
   // corner, committed by the run's own pointerup -- and its second lands on
