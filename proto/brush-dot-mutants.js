@@ -22,7 +22,7 @@ const MUTANTS = [
   { file: 'MODEL.html', name: 'the dot reaches two feet, not one',
     find: 'const BRUSH_DOT_FT = 1;',
     with: 'const BRUSH_DOT_FT = 2;',
-    test: 'beyond a foot' },
+    test: 'a bare wall too short' },
   { file: 'MODEL.html', name: 'a brush holding a wall asks the dot too',
     find: "    if (!brushLoad || brushLoad.kind === 'fenestration') {\n      const opening = openingByDot(at);",
     with: "    if (true) {\n      const opening = openingByDot(at);",
@@ -56,8 +56,8 @@ const MUTANTS = [
     with: "      sayOnStrip(`TOO BIG — that wall is too short",
     test: 'a bare wall too short' },
   { file: 'MODEL.html', name: 'the next press leaves the popup up',
-    find: "  const brushPress = at => {\n    brushWarnClear();\n",
-    with: "  const brushPress = at => {\n",
+    find: "      brushWarnClear();\n      if (brushHas('fenestration')) {",
+    with: "      if (brushHas('fenestration')) {",
     test: 'a bare wall too short' },
 ];
 const run = name => {
