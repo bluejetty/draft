@@ -5357,7 +5357,9 @@
         const ctx = mini.getContext('2d');
         const w = mini.width, h = mini.height;
         ctx.clearRect(0, 0, w, h);
-        const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink-primary').trim() || '#ddd';
+        // THE PAGE'S OWN INK, read off the skin: the card's text colour.
+        const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink-primary').trim()
+          || getComputedStyle(mini).color;
         ctx.strokeStyle = ink;
         ctx.lineWidth = 6;
         const x0 = w * 0.2, y0 = h * 0.2, x1 = w * 0.8, y1 = h * 0.8, gap = w * 0.12;
