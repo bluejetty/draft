@@ -165,6 +165,27 @@ if (!window.DraftBuildMenu) {
         // in the whole menu that makes a HALF-LEVEL.
         Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL', type: 'modifiedBilevel', garage: 'attached', overGarage: true }),
       ]),
+    }),
+    // SUITE (Movie, 20 Oct): "make the TYPE (the firt card like BUNGALOW /
+    // BILEVEL / "SUITE") call it SUITE at the 1st CARD level, then
+    // RESIDENTIAL SUITE as option 1, COMMERCIAL SUITE as option 2" -- "both
+    // those 'SUITES will be built in the BONE'YARD" and placed "as HOLOGRAM in
+    // another DRAFT file". No `type`: a suite is not a house, it is drawn on
+    // the boneyard and stood on a house's floor. `suite` is what reaches the
+    // file (drawing-format.js SUITE_KINDS); `short` is the PROJECT button's
+    // word. `stack: true` is the drive-thru's: its two tiles stand close
+    // together in the top row, the ON GRADE pair's way ("put in 1 cards
+    // (like the ON GRADE) ... a RESIDENTIAL SUITE card and a COMMERCIAL SUITE
+    // card (close together)"), rather than behind a family tile.
+    Object.freeze({
+      id: 'suite',
+      label: 'SUITE',
+      title: 'SUITE — drawn on the BONEYARD, then placed as a hologram on a floor of another .draft',
+      stack: true,
+      entries: Object.freeze([
+        Object.freeze({ id: 'suite-residential', label: 'RESIDENTIAL SUITE', short: 'RESIDENTIAL', suite: 'residential' }),
+        Object.freeze({ id: 'suite-commercial', label: 'COMMERCIAL SUITE', short: 'COMMERCIAL', suite: 'commercial' }),
+      ]),
     }),]);
 
   // ── HOW BIG THE GARAGE IS ────────────────────────────────────────────

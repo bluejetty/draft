@@ -44,8 +44,10 @@ test('the families are the module\'s, not a copy of them', async ({ page }) => {
   // hardcoded expectation would pass just as well if the bar held its own
   // copy of the data — which is the thing the lift out of MODEL.dc.html
   // existed to prevent, and how the level lookup came to have four homes.
-  const fromModule = await page.evaluate(() =>
-    window.DraftBuildMenu.BUILD_MENU.map(f => f.label));
+  // A STACKED FAMILY (the SUITE's, 20 Oct) stands in the row as its own
+  // tiles rather than a family tile.
+  const fromModule = await page.evaluate(() => window.DraftBuildMenu.BUILD_MENU
+    .flatMap(f => (f.stack ? f.entries.map(e => e.label) : [f.label])));
   expect(await page.locator('#build-families button').allTextContents()).toEqual(fromModule);
 
   // And the submenu is that family's own entries, in its own order.

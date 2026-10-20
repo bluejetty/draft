@@ -2671,7 +2671,10 @@ const migrateStoredLevels = rawLevels => {
 //
 // Destructured rather than referenced through the global, so every use below
 // is the identifier it always was and this lift changes no behaviour here.
-const { BUILD_TYPE_BUTTONS, BUILD_MENU } = window.DraftBuildMenu;
+const { BUILD_TYPE_BUTTONS } = window.DraftBuildMenu;
+// THE SUITE FAMILY IS MODEL.html's (Movie, 20 Oct): a suite is started on the
+// boneyard there, which this page has no door for, so its row leaves it out.
+const BUILD_MENU = window.DraftBuildMenu.BUILD_MENU.filter(family => !family.stack);
 
 // THE HALF-LEVEL SLOTS (Movie, 6 Sep; RD-DOCUMENTS/ORDER-inbetween-levels.md).
 // A bilevel's ENTRY and a modified bilevel's OVER GARAGE are LEVELS, not cards:

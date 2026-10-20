@@ -520,8 +520,14 @@ test('the board carries the office\'s house types and its own bone',
     // The sign is the build bar with a face; if it ever holds its own copy
     // of the menu, the two pages start disagreeing about what the office
     // builds, which is the duplication the module was lifted out to end.
+    // A STACKED FAMILY (the SUITE's, 20 Oct) has no family tile: its own
+    // tiles stand in the row, close together.
     const fromModule = await page.evaluate(() =>
-      window.DraftBuildMenu.BUILD_MENU.map(f => f.label));
+      window.DraftBuildMenu.BUILD_MENU.filter(f => !f.stack).map(f => f.label));
+    const stacked = await page.evaluate(() =>
+      window.DraftBuildMenu.BUILD_MENU.filter(f => f.stack).flatMap(f => f.entries.map(e => e.label)));
+    expect(await page.locator('#build-families [data-build-entry]').allTextContents(),
+      'the stacked family\'s tiles stand in the row').toEqual(stacked);
     expect(await page.locator('#dt-tiles [data-build-family]').allTextContents(),
       'the board\'s tiles are not the module\'s families')
       .toEqual(fromModule);
@@ -738,7 +744,7 @@ test('the cards are square, every row the same size, and all of them on the shel
     expect(await families.count(), 'the board went empty').toBe(3);
 
     await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
-    await expect(page.locator('#dt-tiles [data-build-entry]').first()).toBeVisible();
+    await expect(page.locator('#dt-tiles #build-entries [data-build-entry]').first()).toBeVisible();
 
     const shelf = await page.locator('#dt-tiles').boundingBox();
     const art = async locator => {
@@ -746,7 +752,9 @@ test('the cards are square, every row the same size, and all of them on the shel
       return box;
     };
     const top = await art(families.first());
-    const bottom = await art(page.locator('#dt-tiles [data-build-entry]').first());
+    // THE OPEN FAMILY'S ROW: the SUITE's lettered pair stands in the top row
+    // (20 Oct) and wears no card.
+    const bottom = await art(page.locator('#dt-tiles #build-entries [data-build-entry]').first());
 
     // SQUARE, which is the ask a stretched card would fail while still being
     // the right height.
@@ -1170,8 +1178,9 @@ test('no tile on the board is wearing a card that does not load',
     // a tile that has never existed -- it is an ENTRY under bungalow. Asking
     // build-menu.js means the sweep covers whatever the board actually has,
     // including the families added after this was written.
+    // A STACKED FAMILY (the SUITE's) has no tile to open and no card.
     const families = await page.evaluate(() =>
-      window.DraftBuildMenu.BUILD_MENU.map(f => f.id));
+      window.DraftBuildMenu.BUILD_MENU.filter(f => !f.stack).map(f => f.id));
     expect(families.length, 'the board has no families to sweep')
       .toBeGreaterThan(0);
     for (const family of families) {

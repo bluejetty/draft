@@ -30,8 +30,9 @@ test('strip starts as the four house types · BONE · DETACHED; ATTACHED waits f
   // turned a working strip red. That file's comment says the array is the one
   // place the order is said and "a hardcoded roster somewhere else would be
   // the bug"; this was the fourth such roster found, and the last.
+  // THE OLD PAGE'S ROW: the SUITE family (stacked, 20 Oct) is MODEL.html's.
   const families = await page.evaluate(
-    () => window.DraftBuildMenu.BUILD_MENU.map(family => family.label));
+    () => window.DraftBuildMenu.BUILD_MENU.filter(family => !family.stack).map(family => family.label));
   expect(families.length, 'the menu went empty').toBe(3);
   await expect(cluster.locator('[data-build-menu]')).toHaveText(families);
   await expect(cluster.locator('[data-select-build]')).toHaveCount(0);

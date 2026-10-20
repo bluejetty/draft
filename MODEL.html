@@ -692,9 +692,9 @@
   /* TILES WITH NO CARD SHARE ONE CARD'S SLOT, stacked (Movie, 18 Oct: ON
      GRADE / ONE STOREY and ON GRADE / 2 STOREY side by side wrapped the row
      and spilled the board). Each takes half the square, its words wrapped. */
-  #build-entries .dt-stack { display:flex; flex-direction:column; gap:4px;
+  #build-entries .dt-stack, #build-families .dt-stack { display:flex; flex-direction:column; gap:4px;
     width:clamp(48px, calc(var(--dt-w) * 0.14), 134px); }
-  #build-entries .dt-stack button { flex:1 1 0; white-space:normal;
+  #build-entries .dt-stack button, #build-families .dt-stack button { flex:1 1 0; white-space:normal;
     line-height:1.15; padding:3px 4px; }
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
@@ -8193,6 +8193,24 @@
   const syncBuildBar = () => {
     if (!drawing) return;
     familyRow.replaceChildren(...BM.BUILD_MENU.map(family => {
+      // A STACKED FAMILY SHOWS ITS TILES IN THE ROW ITSELF, close together in
+      // one slot the ON GRADE pair's way -- the SUITE's two (Movie, 20 Oct).
+      if (family.stack) {
+        const stack = document.createElement('span');
+        stack.className = 'dt-stack';
+        stack.dataset.buildStack = family.id;
+        stack.append(...family.entries.map(entry => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.buildEntry = entry.id;
+          button.textContent = entry.label;
+          button.title = family.title;
+          button.classList.toggle('chosen', entry.id === chosenEntryId);
+          button.onclick = () => { openFamilyId = null; pressEntry(entry.id); };
+          return button;
+        }));
+        return stack;
+      }
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.buildFamily = family.id;
@@ -8907,6 +8925,9 @@
   // its way to a clean file has placed no order yet, and may never place one.
   const orderAtWindow = () => {
     const picked = chosen();
+    // A SUITE COSTS NOTHING AND RAISES NOTHING: it is started on the
+    // boneyard, so neither the wallet nor the one-building cap is asked.
+    if (picked?.entry?.suite) { fireOrder(); return true; }
     if (picked?.entry?.needsSize && !chosenSize()) {
       signRefusal = {
         line: 'HOW BIG, THOUGH?',
@@ -25246,7 +25267,7 @@
   // runs first, builds, and spends the order; this one recognises the same
   // tile through the same predicate and stands off.
   window.ModelBuild.onOrder(order => {
-    if (!order?.entry || isGarageChoice(order)) return;
+    if (!order?.entry || isGarageChoice(order) || order.entry.suite) return;
     const design = window.DraftPremadePlans.planFor(order.entry.id);
     withGarageAlign(order.entry, Boolean(design?.garage), () => {
       if (builtFrontDown(buildPremadePlan)(order)) {
@@ -25264,6 +25285,42 @@
       };
       paintSign();
     });
+  });
+
+  // ── A SUITE IS STARTED ON THE BONEYARD ────────────────────────────────────
+  //
+  // Movie, 20 Oct: "both those 'SUITES will be built in the BONE'YARD" --
+  // the minus level, "like normal MODEL space" -- "and will be to place as
+  // HOLOGRAM in another DRAFT file". Nothing is built: the order opens the
+  // boneyard on a drawing that knows it is a suite, and the drafter draws
+  // it there, one floor. Its heights are the floor's it is placed on, so it
+  // is not charged as a build and does not go through the grow.
+  //
+  // A SHEET THAT ALREADY HOLDS A DRAWING asks to save and start fresh, NEW's
+  // way, keeping the PROJECT page's numbers.
+  const suiteLabel = kind => (kind === 'commercial' ? 'COMMERCIAL SUITE' : 'RESIDENTIAL SUITE');
+  const startSuite = kind => {
+    const begin = () => {
+      drawing.suiteKind = window.DraftDrawingFormat.suiteKind(kind);
+      goToBoneyard();
+      setSign(false);
+      chosenEntryId = null;
+      chosenSizeId = null;
+      openFamilyId = null;
+      syncBuildBar();
+      markDirty();
+      sayOnStrip(`${suiteLabel(kind)} — draw it here on the BONEYARD, one floor. SAVE AS to keep it, `
+        + 'then INSERT it as a hologram on a floor of a house .draft.');
+    };
+    const drawn = (drawing?.walls || []).length > 0 || window.DraftBuildingBodies.hasBuilding(drawing);
+    if (!drawn) { begin(); return; }
+    askToSave(`This plan already has a drawing. Save it, then start a new ${suiteLabel(kind)}?`, async () => {
+      if (!(await adoptAndShow(blankDrawingFile(projectNumbersOf(drawing))))) return;
+      begin();
+    });
+  };
+  window.ModelBuild.onOrder(order => {
+    if (order?.entry?.suite) startSuite(order.entry.suite);
   });
 
   // ── THE CUT TOOL: a section line and the way it looks ─────────────────────
@@ -27041,6 +27098,29 @@
     return map;
   };
   const sameMap = (holo, map) => Object.keys(map).every(k => Number(k) === map[k]);
+  // A SUITE DRAWN ON THE BONEYARD COMES IN STANDING ON A FLOOR (Movie, 20
+  // Oct: "built in the BONE'YARD" and placed "as HOLOGRAM in another DRAFT
+  // file"). Its walls are on a shelf -- a negative level id, which no floor
+  // of any drawing carries -- so what it drew there is moved onto its own
+  // lowest floor (MAIN FL in the usual template), and from there the
+  // hologram's floor mapping puts it on whichever floor of the house it is
+  // stood on. Only a file that says it is a suite; anything else parks
+  // work on its shelves that is not meant to come with it.
+  const suiteOnFloor = parsed => {
+    if (!window.DraftDrawingFormat.suiteKind(parsed?.suiteKind)) return parsed;
+    const floor = floorsOf(parsed.levels)[0];
+    const target = floor ? Number(floor.id) : 3;
+    const out = { ...parsed, levels: floor ? parsed.levels
+      : [...(Array.isArray(parsed.levels) ? parsed.levels : []), { id: 3, name: 'MAIN FL', elev: 0 }] };
+    const KEEP = new Set(['levels', 'holograms', 'boneyardOutlines', 'boneyardShelves']);
+    Object.keys(parsed).forEach(key => {
+      const list = parsed[key];
+      if (KEEP.has(key) || !Array.isArray(list)) return;
+      if (!list.some(item => item && Number(item.levelId) < 0)) return;
+      out[key] = list.map(item => (item && Number(item.levelId) < 0 ? { ...item, levelId: target } : item));
+    });
+    return out;
+  };
   const suiteFloorName = holo => {
     const at = suiteFloorAt(holo);
     const l = floorsOf(drawing?.levels)[at];
@@ -27124,7 +27204,9 @@
       row.dataset.hologramRow = holo.id;
       const name = document.createElement('span');
       name.dataset.hologramName = '';
-      name.textContent = holo.name || holo.id;
+      // A SUITE FILE SAYS WHICH KIND IT IS, on its card (Movie, 20 Oct).
+      const kind = window.DraftDrawingFormat.suiteKind(holo.source?.suiteKind);
+      name.textContent = kind ? `${suiteLabel(kind)} · ${holo.name || holo.id}` : (holo.name || holo.id);
       const button = (label, key, title, onClick) => {
         const b = document.createElement('button');
         b.type = 'button';
@@ -27249,7 +27331,7 @@
         : `${file.name} is not a drawing this page can read.`);
       return null;
     }
-    return parsed;
+    return suiteOnFloor(parsed);
   };
   hologramFile.addEventListener('change', async () => {
     const file = hologramFile.files && hologramFile.files[0];
@@ -34174,6 +34256,9 @@
       // Another .draft shown under this one (HOLOGRAM). Same only-when-present
       // rule, so a file that never had one comes back without the key.
       ...(parsed.holograms !== undefined ? { holograms: F.holograms(parsed.holograms) } : {}),
+      // A SUITE FILE'S KIND, normalised; dropped when it is not one.
+      ...(parsed.suiteKind !== undefined && F.suiteKind(parsed.suiteKind)
+        ? { suiteKind: F.suiteKind(parsed.suiteKind) } : { suiteKind: undefined }),
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: WT.WALL_TYPES,
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
@@ -34315,6 +34400,8 @@
     // No markDirty: adopting what the file already says is not a change to it.
     board = boardOfDrawing();
     applyBoard();
+    // A SUITE OPENS ON THE BONEYARD, where it is drawn (Movie, 20 Oct).
+    if (drawing.suiteKind) boneyardActive = true;
     return true;
   };
 

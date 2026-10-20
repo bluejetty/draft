@@ -262,12 +262,16 @@
        deep foundations each beside a + ROOM OVER. What takes a whole line is
        what has no partner -- the room-over house, the modified bilevel, and
        the thickened edge, which cannot carry a storey at all. */
-    #family-row, #bilevel-family-row, #detached-family-row {
+    #family-row, #bilevel-family-row, #detached-family-row, #suite-family-row {
       display:grid; grid-template-columns:repeat(2, minmax(0,1fr));
       gap:4px; align-content:start; }
     #family-row > .family-button.wide,
     #bilevel-family-row > .family-button.wide,
-    #detached-family-row > .family-button.wide { grid-column:1 / -1; }
+    #detached-family-row > .family-button.wide,
+    #suite-family-row > .family-button.wide { grid-column:1 / -1; }
+    .suite-note { margin:0; padding:14px 16px; font-family:'Barlow Condensed',system-ui,sans-serif;
+      font-size:13px; letter-spacing:.04em; line-height:1.45; color:var(--ink-secondary); }
+    .suite-note b { color:var(--ink-primary); }
     .type-card { display:block; width:100%; padding:0; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-secondary); font:inherit; text-align:left; cursor:pointer; }
     .type-card:hover { border-color:var(--accent); }
     /* The selected card is marked TWICE -- the border and an inset ring --
@@ -726,6 +730,16 @@
           </button>
           <div class="family-col" id="bilevel-family-row" aria-label="Bilevel family"></div>
         </div>
+        <!-- SUITE, THE 4TH CARD (Movie, 20 Oct): "on PROJECT area will be a 4th
+             mainn card "SUITE" after BILEVEL, and offer 2 choices in are to the
+             right "RESIDENTIAL" & "COMMERCIAL"". -->
+        <div class="type-row" role="presentation">
+          <button class="type-card" role="tab" data-type="suite" aria-controls="stage-suite">
+            <canvas class="type-mini" width="300" height="220" aria-hidden="true"></canvas>
+            <span class="type-name">Suite</span>
+          </button>
+          <div class="family-col" id="suite-family-row" aria-label="Suite kinds"></div>
+        </div>
       </div>
       <div class="type-stage">
 
@@ -806,6 +820,21 @@
           </div>
           <div class="sched" id="sched-detached-right"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- A SUITE HAS NO SECTION OF ITS OWN: it is drawn on the boneyard and
+         fits the floor it is stood on (Movie, 20 Oct: "the HEIGHTS won't
+         really need to be determined until it is place onto a plan and it
+         will take the floor and ceiling height and fit itself into that
+         height"). -->
+    <section id="stage-suite" data-stage="suite" class="card stack-card" aria-label="Suite">
+      <div class="card-body">
+        <p class="suite-note" data-suite-note>
+          <b>RESIDENTIAL</b> or <b>COMMERCIAL</b>, then the <b>BONE</b>: the suite is drawn on the
+          <b>BONEYARD</b>, one floor. SAVE AS keeps it as its own .draft; INSERT it as a hologram on a
+          floor of a house drawing, and it takes that floor's floor-to-ceiling height.
+        </p>
       </div>
     </section>
       </div>
@@ -1060,6 +1089,10 @@
       // it was never told to change.
       let garagePlan = format.garagePlan(drawing?.garagePlan);
       let garagePlanPressedHere = false;
+      // WHICH SUITE, on the same once-pressed contract (Movie, 20 Oct): the
+      // SUITE card's RESIDENTIAL / COMMERCIAL.
+      let suiteKind = format.suiteKind(drawing?.suiteKind);
+      let suitePressedHere = false;
       const roomOver = () => garagePlan === 'attachedRoomOver';
       // Set once the family row exists; called from the method radios, which
       // are built first and change the same key the row glows on.
@@ -1300,6 +1333,7 @@
         foundationLadderIn,
         ...(methodPressedHere ? { buildType } : {}),
         ...(garagePlanPressedHere ? { garagePlan } : {}),
+        ...(suitePressedHere ? { suiteKind } : {}),
       });
 
       // This page used to write `drawing` — the whole file as it read it when
@@ -1472,8 +1506,10 @@
       // since the tab opened stops being shown stale.
       refreshMethodRow = () => {
         const stored = format.buildType(drawing?.buildType);
-        if (stored === buildType) return;
+        const storedSuite = format.suiteKind(drawing?.suiteKind);
+        if (stored === buildType && storedSuite === suiteKind) return;
         buildType = stored;
+        suiteKind = storedSuite;
         syncFamilyRow();
         repaint();
       };
@@ -3731,6 +3767,31 @@
       if (bilevelFamilyRow) {
         familyButtons.push(...buildFamilyColumn(bilevelFamilyRow, BILEVEL_FAMILY));
       }
+      // AND THE SUITE'S TWO (Movie, 20 Oct): "RESIDENTIAL" & "COMMERCIAL".
+      // A press names which suite this file is; the BONE starts it on the
+      // boneyard. No type, no garage, no framing -- a suite is not a house.
+      const suiteFamilyRow = document.querySelector('#suite-family-row');
+      const SUITE_FAMILY = (window.DraftBuildMenu.BUILD_MENU
+        .find(family => family.id === 'suite') || {}).entries || [];
+      const suiteButtons = suiteFamilyRow ? SUITE_FAMILY.map(entry => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'family-button wide';
+        button.textContent = entry.short || entry.label;
+        button.title = entry.label;
+        button.dataset.familyEntry = entry.id;
+        button.disabled = readOnly;
+        button.addEventListener('click', () => {
+          if (readOnly) return;
+          suiteKind = format.suiteKind(entry.suite);
+          suitePressedHere = true;
+          syncFamilyRow();
+          repaint();
+          save(`${entry.label} — press the BONE to start it on the BONEYARD.`);
+        });
+        suiteFamilyRow.appendChild(button);
+        return { entry, button };
+      }) : [];
       // AND THE DETACHED GARAGE'S THREE, which are FOUNDATIONS rather than
       // houses -- thickened edge, grade beam, frost wall. Movie named them
       // with the others on 24 Sep, so the column shows the whole menu the way
@@ -3878,6 +3939,8 @@
         trioStops.push({ button, press: () => button.click() }));
 
       syncFamilyRow = () => {
+        suiteButtons.forEach(({ entry, button }) =>
+          button.setAttribute('aria-pressed', suiteKind === entry.suite ? 'true' : 'false'));
         // WHICH BUNGALOW, NOT JUST WHICH TYPE. ON-GRADE and 1 STOREY share a
         // `type` and a garage plan, so those two tests alone would light the
         // first of them whatever the drawing is. The third test is the floor
@@ -5163,7 +5226,7 @@
       // drafter who opens BILEVEL and reloads gets BILEVEL back. Absent
       // parameter means the first card, which is Movie's own order --
       // DETACHED GARAGE / BUNGALOW / BILEVEL, 22 Sep.
-      const TYPE_STAGES = ['detached', 'bungalow', 'bilevel'];
+      const TYPE_STAGES = ['detached', 'bungalow', 'bilevel', 'suite'];
       const typeCards = [...document.querySelectorAll('.type-card')];
       const stageEls = new Map(
         [...document.querySelectorAll('[data-stage]')].map(el => [el.dataset.stage, el]));
@@ -5189,6 +5252,8 @@
       const CARD_FOR_TYPE = { bungalow: 'bungalow', twoStorey: 'bungalow',
         bilevel: 'bilevel', modifiedBilevel: 'bilevel' };
       const homeType = () => {
+        // A SUITE FILE IS THE SUITE CARD'S, whatever else it says.
+        if (suiteKind) return 'suite';
         if (CARD_FOR_TYPE[buildType]) return CARD_FOR_TYPE[buildType];
         const detached = (drawing?.outlines || []).some(outline => outline?.detached === true);
         if (detached) return 'detached';
@@ -5200,6 +5265,7 @@
         detached: document.querySelector('#detached-family-row'),
         bungalow: document.querySelector('#family-row'),
         bilevel: document.querySelector('#bilevel-family-row'),
+        suite: document.querySelector('#suite-family-row'),
       };
       const homeLabel = home => {
         const lit = document.querySelector(`${familyCols[home] ? `#${familyCols[home].id}` : ''} [aria-pressed="true"]`);
@@ -5285,6 +5351,27 @@
         ];
       };
 
+      // THE SUITE'S THUMBNAIL IS A PLAN, not a section: a box of walls with a
+      // door in it, which is what is drawn on the boneyard.
+      const paintSuiteMini = mini => {
+        const ctx = mini.getContext('2d');
+        const w = mini.width, h = mini.height;
+        ctx.clearRect(0, 0, w, h);
+        const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink-primary').trim() || '#ddd';
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = 6;
+        const x0 = w * 0.2, y0 = h * 0.2, x1 = w * 0.8, y1 = h * 0.8, gap = w * 0.12;
+        ctx.beginPath();
+        ctx.moveTo(x0 + gap + w * 0.08, y1); ctx.lineTo(x1, y1); ctx.lineTo(x1, y0);
+        ctx.lineTo(x0, y0); ctx.lineTo(x0, y1); ctx.lineTo(x0 + w * 0.08, y1);
+        ctx.moveTo((x0 + x1) / 2, y0); ctx.lineTo((x0 + x1) / 2, y0 + (y1 - y0) * 0.55);
+        ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x0 + w * 0.08, y1, gap, -Math.PI / 2, 0);
+        ctx.stroke();
+      };
+
       // Called at the end of every repaint, so the three thumbnails carry the
       // same numbers as whichever section is open.
       function paintTypeMinis() {
@@ -5299,6 +5386,7 @@
           // to a thumbnail would be this feature breaking the page it was
           // added to.
           try {
+            if (card.dataset.type === 'suite') { paintSuiteMini(mini); return; }
             projectPage.paintSections(mini, miniSections(card.dataset.type));
           } catch (err) {
             mini.getContext('2d').clearRect(0, 0, mini.width, mini.height);
@@ -5611,6 +5699,9 @@
               : 'Pick a type on a card first, then the bone builds it.';
             return;
           }
+          // A SUITE IS NOT BUILT, it is started on the boneyard: no outline to
+          // ask about.
+          if (entry.suite) { sendOrder('menu'); return; }
           const family = window.DraftBuildMenu.BUILD_MENU
             .find(item => (item.entries || []).includes(entry));
           const name = entry.foundation
