@@ -19,9 +19,12 @@ const ring = (prefix, opts) => LOOP.map((a, i) => wall(`${prefix}${i + 1}`, a, L
 
 // A BUNGALOW DRAWN BEFORE THE PROJECT PAGE WAS FILLED IN: the WALL tool's
 // 8'-0" 2x6 shell on a traced outline, an interior wall, 8" concrete under
-// it, the roof at the tool's 4/12 and 2'.
-const drawn = ({ top = 8, fdnTop = 8, pitch = 4 } = {}) => ({
+// it, the roof cut at the tool's 4/12 and 2' -- and a 6/12 typed on the
+// PROJECT page since, which no save-time follow ever applied to a roof
+// that was not standing at the old number.
+const drawn = ({ top = 8, fdnTop = 8, pitch = 4, roofPitch = 6 } = {}) => ({
   version: 1, board: 'drafting', planTurn: 0, buildType: 'bungalow', garagePlan: 'none',
+  roofPitch,
   levels: [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0 },
     { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 },
     { id: 1, name: 'FOUNDATION', elev: -8 }],
@@ -65,14 +68,16 @@ const r3 = n => Math.round(n * 1000) / 1000;
 test('the BONE on a standing house reloads it to the PROJECT numbers', async ({ page }) => {
   await openProject(page, drawn());
   // The page says ICF at 9' on MAIN FL, ICF under it, a 6/12 roof -- and the
-  // drawn walls stand at the tool's 8' 2x6, which no save follows.
+  // drawn walls stand at the tool's 8' 2x6 and the roof at 4/12, which no
+  // save follows.
   await page.locator('[data-detail-input="wallType-3"]').selectOption('icf');
   await typeIn(page, 'wallHeight-3', `9'-0"`);
   await page.locator('[data-detail-input="fdnWallType"]').selectOption('icf');
-  await typeIn(page, 'pitch', '6');
-  await expect.poll(async () => (await stored(page)).roofPitch).toBe(6);
+  await expect(page.locator('[data-detail-input="pitch"]')).toHaveValue('6');
+  await expect.poll(async () => (await stored(page)).levelAssemblies?.[1]?.wallType).toBe('icf');
   let d = await stored(page);
   expect(d.walls.find(w => w.id === 'w1').topHeight).toBe(8);
+  expect(d.roofs.find(r => r.id === 'r1').pitch).toBe(4);
 
   await page.locator('#bone').click();
   await expect(page.locator('#project-reload-ask')).toBeVisible();
@@ -120,8 +125,9 @@ test('CANCEL reloads nothing, and a house already at its numbers says so and sta
   let d = await stored(page);
   expect(d.walls.find(w => w.id === 'w1').topHeight).toBe(8);
 
-  // At the office numbers already: 8'-1 1/8" on MAIN FL, 8'-1 1/2" under it.
-  await openProject(page, drawn({ top: 8 + 1.125 / 12, fdnTop: 8.125 }));
+  // At the office numbers already: 8'-1 1/8" on MAIN FL, 8'-1 1/2" under
+  // it, the roof at the 4/12 the page holds.
+  await openProject(page, drawn({ top: 8 + 1.125 / 12, fdnTop: 8.125, roofPitch: 4 }));
   await page.locator('#bone').click();
   await page.locator('[data-reload-ask="go"]').click();
   await expect(page.locator('#status')).toContainText(/nothing to reload/i);
