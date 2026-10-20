@@ -13323,7 +13323,16 @@
     return [...own, ...rest];
   };
   const contextWallType = viewId => {
-    const choices = contextWallTypes(viewId);
+    // THE DEFAULT IS THE CONTEXT'S OWN KIND, as it always was: the list a
+    // selected wall's TYPE row offers is everything, but a wall DRAWN with
+    // the stored default is still 8" concrete in the foundation and 2x6 on a
+    // floor -- a 2x6 left active on a floor must not pour the foundation
+    // in studs. The other kind is reached by picking it: on a selected wall
+    // (contextWallTypes), or on the WALL panel for ICF on a floor (below).
+    const WT = window.DraftWallTypes;
+    const isFdn = id => WT.FOUNDATION_WALL_TYPE_IDS.includes(id);
+    const choices = contextWallTypes(viewId)
+      .filter(t => viewId == null || isFdn(t.id) === (viewId === 'foundation'));
     const active = wallSetting('activeWallType', null);
     if (choices.some(t => t.id === active)) return active;
     // ICF AND CONCRETE PICKED ON THE WALL PANEL ARE DRAWN ON A FLOOR TOO:
