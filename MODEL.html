@@ -14646,23 +14646,20 @@
     paint();
     return true;
   };
-  const rotateSelection = degrees => {
-    const photo = photoInHand();
-    if (photo) {
-      if (turnPhoto(photo, degrees / 90)) sayOnStrip(`${photo.name || 'The picture'} turned. UNDO turns it back.`);
-      return;
-    }
-    if (!selection.length || !Number.isFinite(degrees) || Math.abs(degrees % 360) < 1e-9) return;
-    // A FIXED ASSEMBLY TURNS WHOLE (Movie: "the full WC to move and rotate
-    // ... as one unit"): one wall of a WC picked is the WC picked, the same
-    // as a drag of it takes the lot.
+  // ── THE SET A TURN OR A FLIP WORKS ON ──────────────────────────────────
+  //
+  // A FIXED ASSEMBLY TURNS WHOLE (Movie: "the full WC to move and rotate
+  // ... as one unit"): one wall of a WC picked is the WC picked, the same
+  // as a drag of it takes the lot. CORNERS SHARED WITH WALLS THAT STAY ARE
+  // LET GO: the WC's wall gets its own copy of that corner, and UNDO hands
+  // the shared one back. Then every point the set owns, once.
+  const turnSet = () => {
     const entries = selection.slice();
     selection.forEach(entry => {
       const owner = groupOf(entry);
       if (!owner || owner.fixed !== true) return;
       itemsOfGroup(owner).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
     });
-    // LET GO OF CORNERS SHARED WITH WALLS THAT STAY.
     const chosen = new Set(entries.map(entry => entry.item));
     const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
     const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
@@ -14677,6 +14674,39 @@
     });
     const points = [...new Set(entries.flatMap(rotatePointsOf))]
       .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    return { entries, detached, points };
+  };
+  // A STAIR'S FRAMING RIDES THE TURN, the points of it the set does not
+  // already own.
+  const turnFraming = (entries, points) => entries.filter(entry => entry.type === 'stair').flatMap(({ item }) => {
+    const f = stairFramingOf(item);
+    return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
+  }).filter(pt => !points.includes(pt));
+  // A STAIR'S WELL IS CUT AGAIN WHERE IT NOW STANDS (Movie, 18 Oct: "when
+  // i rotated the main floor stairs the foundation outline didn't show
+  // rotated" -- "floor layout too"). Re-cut, not turned with it: a well
+  // already left behind by an earlier turn comes back around its flight.
+  // A NEW ring is written so the undo keeps the old one. A shared well (two
+  // flights through one hole) stays, as a drag leaves it.
+  const recutWells = entries => {
+    const wells = [];
+    entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
+      const hole = stairWellOf(item).hole;
+      const ring = hole && stairOpeningFootprint(item);
+      if (!ring || ring.length < 3) return;
+      wells.push({ hole, points: hole.points });
+      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
+    });
+    return wells;
+  };
+  const rotateSelection = degrees => {
+    const photo = photoInHand();
+    if (photo) {
+      if (turnPhoto(photo, degrees / 90)) sayOnStrip(`${photo.name || 'The picture'} turned. UNDO turns it back.`);
+      return;
+    }
+    if (!selection.length || !Number.isFinite(degrees) || Math.abs(degrees % 360) < 1e-9) return;
+    const { entries, detached, points } = turnSet();
     if (!points.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
       sayOnStrip('Nothing in the selection can be turned on its own -- doors, windows and fixtures turn with their walls.');
@@ -14693,28 +14723,12 @@
       pt.z = cz + dx * sin + dz * cos;
     };
     points.forEach(turnPoint);
-    // A STAIR'S WELL IS CUT AGAIN WHERE IT NOW STANDS (Movie, 18 Oct: "when
-    // i rotated the main floor stairs the foundation outline didn't show
-    // rotated" -- "floor layout too"). Re-cut, not turned with it: a well
-    // already left behind by an earlier turn comes back around its flight.
-    // A NEW ring is written so the undo keeps the old one. A shared well (two
-    // flights through one hole) stays, as a drag leaves it.
     // ITS FRAMING TURNS WITH IT, about the same middle -- and is then laid
     // again below where there is a house to measure it against.
-    const framing = entries.filter(entry => entry.type === 'stair').flatMap(({ item }) => {
-      const f = stairFramingOf(item);
-      return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
-    }).filter(pt => !points.includes(pt));
+    const framing = turnFraming(entries, points);
     framing.forEach(vtx => before.push({ vtx, x: vtx.x, z: vtx.z }));
     framing.forEach(turnPoint);
-    const wells = [];
-    entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
-      const hole = stairWellOf(item).hole;
-      const ring = hole && stairOpeningFootprint(item);
-      if (!ring || ring.length < 3) return;
-      wells.push({ hole, points: hole.points });
-      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
-    });
+    const wells = recutWells(entries);
     points.forEach(relinkVertex);
     // AND ITS FRAMING IS LAID AGAIN (reframeStair), not left as it turned: a
     // run turned to lie with the joists needs no side beam, and one turned
@@ -14751,26 +14765,7 @@
   const flipBar = document.getElementById('flip-bar');
   const flipSelection = axis => {
     if (!selection.length || (axis !== 'x' && axis !== 'z')) return;
-    const entries = selection.slice();
-    selection.forEach(entry => {
-      const owner = groupOf(entry);
-      if (!owner || owner.fixed !== true) return;
-      itemsOfGroup(owner).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
-    });
-    const chosen = new Set(entries.map(entry => entry.item));
-    const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
-    const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
-    const detached = [];
-    entries.forEach(({ type, item }) => {
-      if (type !== 'wall') return;
-      ['start', 'end'].forEach(key => {
-        if (!held.has(item[key])) return;
-        detached.push({ wall: item, key, orig: item[key] });
-        item[key] = { ...item[key] };
-      });
-    });
-    const points = [...new Set(entries.flatMap(rotatePointsOf))]
-      .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    const { entries, detached, points } = turnSet();
     if (!points.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
       sayOnStrip('Nothing in the selection can be flipped on its own -- doors, windows and fixtures flip with their walls.');
@@ -14782,20 +14777,10 @@
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
     const mirror = pt => { pt[axis] = 2 * mid - pt[axis]; };
     points.forEach(mirror);
-    const framing = entries.filter(entry => entry.type === 'stair').flatMap(({ item }) => {
-      const f = stairFramingOf(item);
-      return [...f.beams.flatMap(b => [b.start, b.end]), ...f.columns.map(c => c.point)];
-    }).filter(pt => !points.includes(pt));
+    const framing = turnFraming(entries, points);
     framing.forEach(vtx => before.push({ vtx, x: vtx.x, z: vtx.z }));
     framing.forEach(mirror);
-    const wells = [];
-    entries.filter(entry => entry.type === 'stair').forEach(({ item }) => {
-      const hole = stairWellOf(item).hole;
-      const ring = hole && stairOpeningFootprint(item);
-      if (!ring || ring.length < 3) return;
-      wells.push({ hole, points: hole.points });
-      hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
-    });
+    const wells = recutWells(entries);
     points.forEach(relinkVertex);
     // THE SIDES SWAP.
     const edits = [];
@@ -14819,10 +14804,11 @@
       edits.push({ item, before: { ...item } });
       item.turn = item.turn === 'left' ? 'right' : 'left';
     });
-    const turn = { kind: 'rotate', before, detached, wells };
-    const reframed = entries.filter(entry => entry.type === 'stair').map(({ item }) => reframeStair(item));
-    const steps = [turn, ...(edits.length ? [{ kind: 'props', edits }] : []), ...reframed.flatMap(r => r.steps)];
-    undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : turn);
+    // THE SAME UNDO RECORD AS A TURN: the points back, the corners joined.
+    const flipped = { kind: 'rotate', before, detached, wells };
+    const reframed = entries.filter(e => e.type === 'stair').map(({ item }) => reframeStair(item));
+    const steps = [flipped, ...(edits.length ? [{ kind: 'props', edits }] : []), ...reframed.flatMap(r => r.steps)];
+    undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : flipped);
     markDirty();
     paint();
     sayOnStrip(`Flipped ${axis === 'x' ? 'left for right' : 'top for bottom'} about its middle.${stairFramingSaid(reframed)} UNDO flips it back.`);
@@ -14836,7 +14822,7 @@
     flipBar.hidden = !flipState.open;
     // OVER THE OTHER VERBS while it is up, as ROTATE's row is.
     if (flipState.open) {
-      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; });
+      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; }); // FLIP's row
     }
   }
   if (flipButton) flipButton.addEventListener('click', () => setFlipOpen(true));
