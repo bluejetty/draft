@@ -932,6 +932,13 @@
     background:none; line-height:0; cursor:pointer; }
   #bone img { display:block; height:var(--foot-press-h, 34px); width:auto; }
   #bone:hover img { filter:brightness(1.12); }
+  /* WHERE THE BONE GOES FROM AN ELEVATION OR A SECTION (MODEL's syncBoneGoes):
+     a tag over the press naming the page it walks to. */
+  #bone[data-bone-goes] { position:relative; }
+  #bone[data-bone-goes]::after { content:attr(data-bone-goes); position:absolute; left:50%; bottom:100%;
+    transform:translate(-50%, -2px); white-space:nowrap; font:600 9px/1 var(--font-mono, monospace);
+    letter-spacing:0.06em; padding:2px 4px; border-radius:3px;
+    background:var(--surface-chip); color:var(--accent); border:1px solid var(--accent); pointer-events:none; }
   /* THE BONE LIGHTS BEFORE THE BOARD RISES, which was the house button's job
      until the house button came off the strip. One artwork, so the glow is a
      filter rather than a second file -- and it is the same two seconds. */

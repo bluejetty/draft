@@ -1234,12 +1234,6 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  /* WHERE THE BONE GOES FROM AN ELEVATION OR A SECTION (syncBoneGoes). */
-  #bone[data-bone-goes] { position:relative; }
-  #bone[data-bone-goes]::after { content:attr(data-bone-goes); position:absolute; left:50%; bottom:100%;
-    transform:translate(-50%, -2px); white-space:nowrap; font:600 9px/1 var(--font-mono, monospace);
-    letter-spacing:0.06em; padding:2px 4px; border-radius:3px;
-    background:var(--surface-chip); color:var(--accent); border:1px solid var(--accent); pointer-events:none; }
   #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #hologram-ask, #trace-insert,
   #footprint-ask, #stair-fit { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
