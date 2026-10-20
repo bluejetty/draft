@@ -61,3 +61,10 @@ test('a drawing with its suite only on a shelf comes onto the floor, not the she
   expect(holo.source.walls.map(w => w.levelId), 'off the shelf, onto its MAIN FL').toEqual([3, 3]);
   expect(holo.levelMap, 'and that on the 2ND FL he is on').toEqual({ 3: 5 });
 });
+
+test('a drawing with walls on its floors keeps what it parked on a shelf on the shelf', async ({ page }) => {
+  const mixed = { ...SHELF_ONLY, walls: [W('m1', [0, 0], [20, 0], 3), W('p1', [0, 5], [10, 5], -1)] };
+  const d = await bringIn(page, 3, mixed);
+  expect(d.holograms[0].source.walls.map(w => w.levelId), 'only a shelf-only drawing comes off the shelf')
+    .toEqual([3, -1]);
+});
