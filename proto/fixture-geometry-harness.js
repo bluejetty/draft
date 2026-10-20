@@ -197,6 +197,27 @@ check('a fixture on a wall that does not exist has no geometry',
 check('a fixture on a degenerate wall has no geometry',
   G => [G.fixtureGeometry([W('tiny', 0, 0, 0.005, 0)], sink({ wallId: 'tiny' })), null]);
 
+// ── runMates, islandHolding, islandPieces, slideClamp: a run, an island, a slide ──
+//
+// Movie, 20 Oct: "move sink / dw in island back an forth / and they shouldn't
+// overlap". An island on the 20' wall, 7' wide centred at 10, standing 5'
+// off; a sink and a dish in it; and a dish against the wall itself.
+const island = { kind: 'island', wallId: 'w1', levelId: 'L1', offset: 10, width: 7, depth: 3, side: 1, standoff: 5 };
+const inIsland = over => ({ kind: 'sink', wallId: 'w1', levelId: 'L1', offset: 8, width: 2.5, depth: 2, side: 1, standoff: 5, ...over });
+const dish = inIsland({ kind: 'dish', offset: 12.5, width: 2 });
+const onWall = inIsland({ kind: 'dish', offset: 12.5, width: 2, standoff: undefined });
+const kitchen = [island, inIsland(), dish, onWall];
+check('a piece in the island is held by it', G => [G.islandHolding(kitchen, dish), island]);
+check('a piece on the wall itself is held by no island', G => [G.islandHolding(kitchen, onWall), null]);
+check('the island holds its sink and dish, not the wall piece', G => [G.islandPieces(kitchen, island).length, 2]);
+check('run mates share the wall, the face and the standoff',
+  G => [G.runMates(kitchen, dish).map(f => f.kind).sort().join(','), 'island,sink']);
+// The sink spans 6.75..9.25; a 2' dish sent to 9 stops with its edge on the sink.
+check('a slide stops at the next piece', G => [G.slideClamp(9, 1, [6.5, 13.5], [[6.75, 9.25]]), 10.25]);
+check('a slide stops at the island\'s end', G => [G.slideClamp(20, 1, [6.5, 13.5], []), 12.5]);
+check('a slide with room goes where it is sent', G => [G.slideClamp(11, 1, [6.5, 13.5], [[6.75, 9.25]]), 11]);
+check('a piece that fits nowhere stays', G => [G.slideClamp(10, 5, [6.5, 13.5], [[6.75, 9.25]]), null]);
+
 // ── tubGeometry: the alcove ──
 // A tub is the one fixture whose drawn length is not the length it was placed
 // at: it stretches to fill the alcove between its faucet wall and whatever
@@ -329,6 +350,12 @@ console.log(`\n${CHECKS.length - baseline.length}/${CHECKS.length} checks passed
 
 // ── Mutations ──
 const MUTATIONS = [
+  ['a slide ignores the pieces in its way',
+    s => s.replace('        if (cutHi <= a || cutLo >= b) return [[a, b]];', '        return [[a, b]];')],
+  ['the island holds nothing',
+    s => s.replace("  const islandPieces = (fixtures, island) => (island.kind !== 'island' ? []", "  const islandPieces = (fixtures, island) => (true ? []")],
+  ['a run mate may stand off the wall by any amount',
+    s => s.replace("    && Math.abs((Number(other.standoff) || 0) - (Number(piece.standoff) || 0)) <= RUN_TOL_FT\n", '\n')],
   ['the along-vector is left unnormalised',
     s => s.replace('const ux = dx / len, uz = dz / len;', 'const ux = dx, uz = dz;')],
   ['the across-vector points along instead of across',

@@ -11735,6 +11735,12 @@
   // A FIXTURE IS ITS BOX ALONG THE WALL, decks included for a tub: the old
   // page's _findFixtureAt tests the same span. Latest first, so of two
   // fixtures overlapping on screen the one painted on top wins.
+  // AN ALREADY-SELECTED FIXTURE IS A GRAB, the opening's rule: press it to
+  // choose it, press it again and drag.
+  const fixtureBodyAt = worldPt => {
+    const fixture = fixtureAt(worldPt);
+    return fixture && selection.some(entry => entry.item === fixture) ? fixture : null;
+  };
   const fixtureAt = worldPt => {
     const FG = window.DraftFixtureGeometry;
     if (!FG) return null;
@@ -20778,6 +20784,77 @@
   // seven fixtures at once. Both are their own gesture on the old page and
   // neither is ported here. They are refused BY NAME below, so pressing one
   // says what is missing instead of placing the wrong thing or nothing.
+  // ── A FIXTURE'S SLIDE, AN ISLAND'S MOVE (Movie, 20 Oct) ───────────────
+  //
+  // "i'd like to be able to move sink / dw in island back an forth / and
+  // they shouldn't overlap like in the photo ... also would like to move
+  // the island independantly from the wall and other cabinets". A piece
+  // slides along its wall -- inside its island when it has one -- and stops
+  // at a run mate, so the sink and the dishwasher touch and never overlap;
+  // an island goes anywhere, along its wall and off it, its pieces riding.
+  // The host wall is kept: an island is still a fixture OF a wall, its
+  // aisle (standoff) now whatever the drag leaves. One 'props' step for the
+  // lot on the release.
+  const fixtureLabel = fixture => String(window.DraftFixtureKinds?.kindFor(fixture.kind)?.label
+    || fixture.kind || 'FIXTURE').toUpperCase();
+  const fixtureMoveBegin = (fixture, at) => {
+    const FG = window.DraftFixtureGeometry;
+    const host = walls().find(wall => String(wall.id) === String(fixture.wallId));
+    const frame = host && FG?.wallFrame(host);
+    if (!frame) return null;
+    const local = p => ({
+      along: (p.x - host.start.x) * frame.ux + (p.z - host.start.z) * frame.uz,
+      across: (p.x - host.start.x) * frame.nx + (p.z - host.start.z) * frame.nz,
+    });
+    const all = fixtures();
+    const island = fixture.kind === 'island' ? null : FG.islandHolding(all, fixture);
+    const riders = fixture.kind === 'island' ? FG.islandPieces(all, fixture) : [];
+    return {
+      fixture, host, frame, local, grab: local(at), island,
+      was: { offset: Number(fixture.offset) || 0, standoff: Number(fixture.standoff) || 0 },
+      riders: riders.map(item => ({ item, offset: Number(item.offset) || 0 })),
+      edits: [fixture, ...riders].map(item => ({ item, before: { ...item } })),
+      moved: false,
+    };
+  };
+  const setStandoff = (item, standoff) => { if (standoff > 0) item.standoff = standoff; else delete item.standoff; };
+  const fixtureMoveTo = (md, raw) => {
+    const FG = window.DraftFixtureGeometry;
+    const K = window.DraftFixtureKinds;
+    const { fixture, frame } = md;
+    const here = md.local(raw);
+    let dAlong = here.along - md.grab.along, dAcross = here.across - md.grab.across;
+    const half = Math.min(Number(fixture.width) || 0, frame.len) / 2;
+    if (fixture.kind === 'island') {
+      // ANYWHERE: along the wall and off it, held square by the T-SQUARE as
+      // the MOVE verb is -- the larger travel wins.
+      if (tsquareOn && board !== 'toy') { if (Math.abs(dAlong) >= Math.abs(dAcross)) dAcross = 0; else dAlong = 0; }
+      const offset = Math.min(Math.max(md.was.offset + dAlong, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
+      const side = fixture.side === -1 ? -1 : 1;
+      const standoff = Math.max(0, md.was.standoff + side * dAcross);
+      fixture.offset = offset;
+      setStandoff(fixture, standoff);
+      md.riders.forEach(r => { r.item.offset = r.offset + (offset - md.was.offset); setStandoff(r.item, standoff); });
+    } else if (fixture.kind === 'tub' && fixture.endWallId) {
+      const geo = FG.tubGeometry(walls(), fixture, md.host, frame);
+      if (geo) fixture.offset = Math.min(Math.max(geo.dir * (here.along - geo.face) - geo.tubLen / 2, 0), geo.gap);
+    } else {
+      // ALONG ITS WALL ONLY, inside its island when it has one, and never
+      // over a run mate. A counter run (cabinet, vanity) is what pieces sit
+      // in, so it neither blocks nor is blocked.
+      const runs = item => !!K?.kindFor(item.kind)?.run;
+      const bounds = md.island
+        ? [Number(md.island.offset) - Number(md.island.width) / 2, Number(md.island.offset) + Number(md.island.width) / 2]
+        : [0, frame.len];
+      const blocks = runs(fixture) ? []
+        : FG.runMates(fixtures(), fixture).filter(o => o.kind !== 'island' && !runs(o))
+          .map(o => [Number(o.offset) - Number(o.width) / 2, Number(o.offset) + Number(o.width) / 2]);
+      const at = FG.slideClamp(md.was.offset + dAlong, half, bounds, blocks);
+      if (at != null) fixture.offset = at;
+    }
+    md.moved = md.edits.some(({ item, before }) => item.offset !== before.offset
+      || (Number(item.standoff) || 0) !== (Number(before.standoff) || 0));
+  };
   const fixturePress = at => {
     if (washroomPreset) return dropWashroom(at);
     if (kitchenPreset) return dropKitchen(at);
@@ -32298,6 +32375,68 @@
     return box;
   };
 
+  // ── FIXTURE PROPERTIES (Movie, 20 Oct) ────────────────────────────────
+  //
+  // "click on the island and change the dimensions size". WIDTH and DEPTH
+  // for any fixture in hand, and AISLE -- the clear run from the wall's
+  // face -- for an island, typed like every other box; one UNDO per change.
+  // An island narrowed pulls its pieces back inside its ends; its aisle
+  // retyped takes them with it.
+  const fixturePanelTitle = items => (items.every(f => f.kind === 'island') ? 'ISLAND'
+    : items.every(f => f.kind === items[0].kind) ? fixtureLabel(items[0]) : 'FIXTURE');
+  const commitFixtureEdits = pairs => {
+    const edits = pairs.map(({ item }) => ({ item, before: { ...item } }));
+    pairs.forEach(({ item, patch }) => Object.entries(patch).forEach(([key, value]) => {
+      if (value == null) delete item[key]; else item[key] = value;
+    }));
+    undoStack.push({ kind: 'props', edits });
+    markDirty();
+    showSelectionProps();
+    paint();
+  };
+  const islandPiecePatches = (island, offset, width) => {
+    const FG = window.DraftFixtureGeometry;
+    const lo = offset - width / 2, hi = offset + width / 2;
+    return FG.islandPieces(fixtures(), island).map(item => {
+      const half = (Number(item.width) || 0) / 2;
+      if (hi - lo < half * 2) return null;
+      const at = Math.min(Math.max(Number(item.offset) || 0, lo + half), hi - half);
+      return at === item.offset ? null : { item, patch: { offset: at } };
+    }).filter(Boolean);
+  };
+  const fixturePropsNode = items => {
+    const FG = window.DraftFixtureGeometry;
+    const box = document.createElement('div');
+    const hostLen = f => {
+      const host = walls().find(w => String(w.id) === String(f.wallId));
+      const frame = host && FG?.wallFrame(host);
+      return frame ? frame.len : Infinity;
+    };
+    const field = (label, read, commit) =>
+      propField(label, agreedOn(items, read), commit, showSelectionProps, { inches: true });
+    box.append(field('WIDTH', f => Number(f.width) || 0, feet => {
+      if (!(feet > 0)) return 'A fixture needs a width greater than zero.';
+      if (items.some(f => feet > hostLen(f) - 0.02)) return `${sizeText(feet)} is longer than the wall it rides.`;
+      commitFixtureEdits(items.flatMap(f => [{ item: f, patch: { width: feet } },
+        ...(f.kind === 'island' ? islandPiecePatches(f, Number(f.offset) || 0, feet) : [])]));
+      return null;
+    }));
+    box.append(field('DEPTH', f => Number(f.depth) || 0, feet => {
+      if (!(feet > 0)) return 'A fixture needs a depth greater than zero.';
+      commitFixtureEdits(items.map(f => ({ item: f, patch: { depth: feet } })));
+      return null;
+    }));
+    if (items.every(f => f.kind === 'island')) {
+      box.append(field('AISLE', f => Number(f.standoff) || 0, feet => {
+        if (!(feet >= 0)) return 'The aisle is the clear run from the wall: zero or more.';
+        const standoff = feet > 0 ? feet : null;
+        commitFixtureEdits(items.flatMap(f => [{ item: f, patch: { standoff } },
+          ...FG.islandPieces(fixtures(), f).map(item => ({ item, patch: { standoff } }))]));
+        return null;
+      }));
+    }
+    return box;
+  };
   const SELECTION_PANELS = {
     roomtag: items => (items.length === 1
       ? { title: 'ROOM TAG', node: roomTagPropsNode(items[0]) } : null),
@@ -32305,6 +32444,8 @@
       ? { title: 'SHAPE', node: shapePropsNode(items[0]) } : null),
     wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
     fenestration: items => ({ title: 'OPENING', node: openingPropsNode(items) }),
+    // A FIXTURE'S SIZE, and an island's aisle (Movie, 20 Oct).
+    fixture: items => ({ title: fixturePanelTitle(items), node: fixturePropsNode(items) }),
     floor: items => ({ title: 'FLOOR', node: floorPropsNode(items) }),
     line: items => ({ title: 'LINE', node: linePropsNode(items) }),
     // ONE AT A TIME. The shape of two flights at once is two questions --
@@ -34111,6 +34252,19 @@
         return;
       }
     }
+    // ── SLIDING A FIXTURE, MOVING AN ISLAND (Movie, 20 Oct) ──────────────
+    // After the opening, before the wall body, for the opening's reason: a
+    // fixture already in the selection is a grab, and it beats the wall it
+    // stands against. fixtureMoveBegin / fixtureMoveTo say what moves.
+    const fixtureGrab = corner || slide ? null : fixtureBodyAt(at);
+    if (fixtureGrab) {
+      const held = fixtureMoveBegin(fixtureGrab, at);
+      if (held) {
+        moveDrag = { kind: 'fixture', ...held, sx: e.clientX, sy: e.clientY, active: false };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     const body = corner ? null : segmentBodyAt(at);
     if (corner || body) {
       // A grabbed corner or wall takes the gesture whole: no pan starts, so
@@ -34321,6 +34475,7 @@
           paint();
           return;
         }
+        if (md.kind === 'fixture') { fixtureMoveTo(md, raw); paint(); return; }
         if (md.kind === 'opening') {
           const G = window.DraftGeometry2D;
           const wall = md.host;
@@ -34732,6 +34887,21 @@
             if (md.shared) said.push('the shared well stayed put — two flights climb through it');
             if (md.well && wellOffItsFloor(md.well)) said.push('the well now runs off its floor');
             sayOnStrip(`${said.join(' · ')}.${stairFramingSaid(reframed)}`);
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
+        if (md.kind === 'fixture') {
+          // ONE GESTURE, ONE UNDO: a 'props' step restores each record in
+          // place, the island's aisle key coming or going with it.
+          if (md.moved) {
+            undoStack.push({ kind: 'props', edits: md.edits });
+            markDirty();
+            sayOnStrip(md.fixture.kind === 'island'
+              ? `ISLAND moved${md.riders.length ? ', its pieces with it' : ''}. UNDO puts it back.`
+              : `${fixtureLabel(md.fixture)} slid ${md.island ? 'inside its island' : 'along its wall'}. UNDO puts it back.`);
           }
           moveDrag = null;
           if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
