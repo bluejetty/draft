@@ -128,3 +128,28 @@ test('a stair flipped end for end turns the other way', async ({ page }) => {
   expect([r3(s.start.x), r3(s.end.x)], 'mirrored about x = -1').toEqual([4, -6]);
   expect(s.turn, 'a right turn is a left turn in the mirror').toBe('left');
 });
+
+// CROWDED, THE VERBS DRAW IN. CI's 1280-wide window: six verbs at the full
+// padding (UNDO DELETE BREAK MOVE ROTATE FLIP) are 389px against the 301px
+// between the pages and the trio, and the centred row landed on the BONE,
+// which then took the press meant for it (model-one-building, "Save writes
+// the drawing that is being replaced"). seatFootVerbs() puts the row in its
+// tight styling when the full one does not fit, and the row stays its margin
+// clear of the trio on the right and the pages on the left.
+test('crowded, the verbs draw in and leave the BONE clear', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const { at } = await open(page);
+  await click(page, at, 6, 0);
+  await expect(page.locator('#model-flip')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const r = sel => document.querySelector(sel).getBoundingClientRect();
+    const box = document.querySelector('#dt-verbs');
+    const v = r('#dt-verbs'), t = r('#dt-trio'), p = r('#page-row');
+    const shown = [...box.querySelectorAll(':scope > button')].filter(b => !b.hidden).length;
+    return { verbs: shown >= 5, tight: !!box.dataset.tight,
+      clear: v.right + 10 <= t.left + 0.5 && v.left >= p.right + 10 - 0.5 };
+  })).toEqual({ verbs: true, tight: true, clear: true });
+  // And the BONE takes its press.
+  await page.locator('#bone').click({ timeout: 5000 });
+  await expect(page.locator('#drivethru')).not.toHaveAttribute('data-shut', '');
+});

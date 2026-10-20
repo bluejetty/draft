@@ -953,13 +953,33 @@ ${trio(true)}
     const barBox = bar.getBoundingClientRect();
     const trioBox = trio.getBoundingClientRect();
     const pageBox = pages.getBoundingClientRect();
-    const width = box.getBoundingClientRect().width;
+    // CROWDED, THE VERBS DRAW IN. Six of them (DELETE COPY BREAK MOVE ROTATE
+    // FLIP) at the full padding are near 390px wide against the 301px gap
+    // at 1280, and the centring below then laid the row over the BONE,
+    // which took the press meant for it. Measured at the full size first;
+    // when that does not fit between the pages and the trio, the tight
+    // styling (shell-bars.css) goes on in two stages -- less air, then a
+    // smaller face -- and the row is measured again after each. The
+    // attribute is this function's alone, and the observer that calls it
+    // watches `hidden`, not this, so there is nothing to loop.
+    const room = trioBox.left - pageBox.right - 2 * FOOT_VERB_MARGIN;
+    delete box.dataset.tight;
+    let width = box.getBoundingClientRect().width;
+    for (const stage of ['1', '2']) {
+      if (width <= room) break;
+      box.dataset.tight = stage;
+      width = box.getBoundingClientRect().width;
+    }
     if (!width || !trioBox.width || !pageBox.width) return;
     const half = width / 2;
     const left = pageBox.right + FOOT_VERB_MARGIN + half;
     const right = trioBox.left - FOOT_VERB_MARGIN - half;
     const middle = (pageBox.right + trioBox.left) / 2;
-    const x = left > right ? middle : Math.min(Math.max(middle, left), right);
+    // AND WHEN EVEN THAT DOES NOT FIT, THE TRIO WINS: the row sits clear of
+    // the BONE and runs over the pages' end instead. Centring it split the
+    // overflow between the two, and half of it on the bone was the whole
+    // of the press.
+    const x = left > right ? right : Math.min(Math.max(middle, left), right);
     box.style.left = `${x - barBox.left}px`;
   };
   // THE BOX CHANGES WIDTH WITHOUT THE WINDOW MOVING: MODEL unhides DELETE the
