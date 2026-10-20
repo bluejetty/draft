@@ -4729,8 +4729,11 @@
     // and the elevation cannot answer differently about one layer: a layer
     // the table does not carry DRAWS.
     // AND THE DOORS, by A-DIMS-DOOR's own tick (Movie, 1 Oct: "all
-    // window/door/equipe sizes on floor plans"). Only the window's tag takes
-    // a press; a door's is read, and its size is changed in PROPERTIES.
+    // window/door/equipe sizes on floor plans"). A door's tag takes a press
+    // too now (Movie, 20 Oct: "when they click on the D48 - if they change
+    // that to D60 the door width would also change to 5ft wide ... 2 ways to
+    // change the width") -- all but a garage door's, whose G 16W x 8H is
+    // feet and a height, and is changed in PROPERTIES.
     const showWin = layerStandardOf('A-DIMS-WIN')?.visible !== false;
     const showDoor = layerStandardOf('A-DIMS-DOOR')?.visible !== false;
     if (!showWin && !showDoor) return;
@@ -4779,7 +4782,7 @@
       //
       // MEASURED HERE RATHER THAN IN THE HELPER: a width costs a measureText
       // per label, and of this page's labels only these take a click.
-      if (live && placed && isWindow) {
+      if (live && placed && (isWindow || opening.garage !== true)) {
         windowTagHits.push({
           opening, label, cx: placed.cx, cy: placed.cy, angle: placed.angle,
           halfW: ctx.measureText(label).width / 2 + TAG_HIT_PAD,
@@ -4891,6 +4894,26 @@
   // THE HEAD IS THE DATUM for the same reason the placers are head-anchored:
   // heads line up across a wall and sills do not, so height is spent
   // downwards.
+  // THE WIDEST THIS WALL CAN CARRY, said with a refusal (Movie, 20 Oct, on a
+  // French pair that would not go to 5'-0" in a 5'-3" closet wall: "ok
+  // that's why"). clampOpeningToWall is the one rule; this only asks it, to
+  // the half inch, from the top down.
+  const widestOpeningFt = wall => {
+    const G = window.DraftGeometry2D;
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    const opts = { walls: walls(), thicknessFt: openingThicknessFt() };
+    let lo = 0, hi = Math.floor(len * 24);
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (G.clampOpeningToWall(wall, len / 2, mid / 24, opts)) lo = mid; else hi = mid - 1;
+    }
+    return lo / 24;
+  };
+  const widestSaid = (wall, say) => {
+    const most = widestOpeningFt(wall);
+    return most > 0 ? ` The most it can take is ${say(most)}.` : ' It cannot take an opening at all.';
+  };
+
   const commitWindowSize = (opening, text) => {
     const FL = window.DraftFenLabels;
     const G = window.DraftGeometry2D;
@@ -4898,14 +4921,25 @@
     // IN THE DRAWING'S UNITS: the box opened on the tag as painted, so a metric
     // drawing hands back millimetres.
     const metric = drawing?.units === 'metric';
-    const size = FL.parseWindowSize(text, { units: drawing?.units });
+    const isDoor = opening.type === 'door';
+    // A DOOR'S TAG IS ITS WIDTH ALONE -- D60 is sixty inches -- so it reads
+    // one number, and its height stays what PROPERTIES says (Movie: "only
+    // change height in properties").
+    const doorWidth = () => {
+      const nums = String(text ?? '').match(/\d+(?:\.\d+)?/g);
+      if (!nums || nums.length !== 1 || !(Number(nums[0]) > 0)) return null;
+      const widthFt = Number(nums[0]) / (metric ? FL.MM_PER_FT : 12);
+      return { widthFt, heightFt: (Number(opening.headHeight) || 0) - (Number(opening.sillHeight) || 0) };
+    };
+    const size = isDoor ? doorWidth() : FL.parseWindowSize(text, { units: drawing?.units });
     const say = ft => (metric ? `${FL.mmTo(ft, 5)} mm` : `${Math.round(ft * 12)}"`);
     // REFUSE, DO NOT GUESS -- the numberField above keeps the same rule. A
     // size that cannot be read must never become a size nobody typed: this is
     // a drawing someone builds from.
     if (!size) {
       sayOnStrip(`${String(text).trim() || 'That'} is not a size — type it as `
-        + `${metric ? '915 X 1065, in millimetres' : '36 X 42, in inches'}.`);
+        + (isDoor ? `${metric ? 'D 915, in millimetres' : 'D60, in inches'}.`
+          : `${metric ? '915 X 1065, in millimetres' : '36 X 42, in inches'}.`));
       return;
     }
     const host = walls().find(wall => String(wall.id) === String(opening.wallId));
@@ -4917,7 +4951,8 @@
     const fits = G.clampOpeningToWall(host, opening.offset, size.widthFt,
       { walls: walls(), thicknessFt: openingThicknessFt() });
     if (!fits) {
-      sayOnStrip(`${say(size.widthFt)} is wider than this wall can carry.`);
+      brushWarn(`TOO BIG — ${say(size.widthFt)} is wider than this wall can carry.`
+        + widestSaid(host, say), { opening });
       return;
     }
     const head = Number(opening.headHeight) || 0;
@@ -30395,8 +30430,11 @@
         clamped.set(opening, fit.offset);
       });
       if (refused.length) {
-        return `That wall is too short to carry a `
-          + `${sizeText(feet)} opening.`;
+        const wall = openingHostWall(refused[0]);
+        const said = `TOO BIG — that wall is too short to carry a ${sizeText(feet)} opening.`
+          + (wall ? widestSaid(wall, sizeText) : '');
+        brushWarn(said, { opening: refused[0] });
+        return said;
       }
       applyToOpenings(openings, opening =>
         ({ width: feet, offset: clamped.get(opening), ...extra(opening) }));
