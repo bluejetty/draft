@@ -173,6 +173,12 @@
   // drawn and the clash is reported ("Show both + warn").
   const isSuite = holo => holo?.mode === 'suite';
   const FACE_TOL_FT = 0.02;        // a quarter inch: faces "line up"
+  // AND A FOOT AT THE ENDS (Movie, 20 Oct: "if i go past the corner a bit it
+  // doesn't allow to switch the windows, can we allow it to change the
+  // windows even if its up to 1ft off (not alligned) at the sides"). The faces
+  // must still line up to the quarter inch; along the shell wall, the suite's
+  // wall may run up to a foot past either end of it.
+  const SIDE_TOL_FT = 1;
   const wallFrame = wall => {
     const G = window.DraftGeometry2D;
     if (!wall?.start || !wall?.end) return null;
@@ -216,7 +222,7 @@
         if (!sf) return;
         const hf = hosts.find(h => h.wall.levelId === wall.levelId && parallel(sf, h)
           && faceGaps(sf, h).every(g => Math.abs(g) < FACE_TOL_FT)
-          && (() => { const r = alongHost(sf, h); return r.lo > -FACE_TOL_FT && r.hi < h.len + FACE_TOL_FT; })());
+          && (() => { const r = alongHost(sf, h); return r.lo > -SIDE_TOL_FT && r.hi < h.len + SIDE_TOL_FT; })());
         if (!hf) return;
         hidden.add(wall.id);
         const { a, dir } = alongHost(sf, hf);

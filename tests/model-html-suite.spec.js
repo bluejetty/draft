@@ -74,6 +74,23 @@ test('moved, turned over, the window follows: a mirrored suite in the far corner
   expect(await hostOpenings(page, { ...d, holograms: [{ ...d.holograms[0], angleDeg: 45 }] })).toEqual([]);
 });
 
+// A FOOT PAST THE CORNER STILL CUTS (Movie, 20 Oct: "if i go past the corner
+// a bit it doesn't allow to switch the windows, can we allow it to change the
+// windows even if its up to 1ft off (not alligned) at the sides"). Slid 7"
+// left, the suite's bottom wall runs 7" past the shell's corner, faces still
+// lined up: the window still goes into the shell wall, 7" further along.
+// Past a foot, it does not.
+test('a suite wall running up to a foot past the shell corner still hands over its window', async ({ page }) => {
+  await open(page, shell({ x: -0.6 }));
+  const d = await saved(page);
+  expect(await hostOpenings(page, d)).toEqual([['a', 7.4, 4, 'h1:w1']]);
+  expect(await hostOpenings(page, { ...d, holograms: [{ ...d.holograms[0], x: -1.5 }] }), 'a foot and a half is too far')
+    .toEqual([]);
+  // AND THE FAR END TOO: 9" past the shell's right corner.
+  expect(await hostOpenings(page, { ...d, holograms: [{ ...d.holograms[0], x: 40.75 }] }))
+    .toEqual([['a', 48.75, 4, 'h1:w1']]);
+});
+
 test('a suite wall that does not line up face for face shares nothing', async ({ page }) => {
   await open(page, shell({ z: 0.25 }));
   const d = await saved(page);
