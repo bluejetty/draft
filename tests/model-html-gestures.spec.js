@@ -827,6 +827,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
             // one answer.
             'OK',
+            // SAVE AS SUITE's question (Movie, 20 Oct: "SAVE whatever is in
+            // there as a SUITE. (but a draft file)"): which kind, or not now.
+            // A file written out, nothing in the drawing changed: no absence
+            // row moves.
+            'RESIDENTIAL SUITE', 'COMMERCIAL SUITE', 'CANCEL',
             // TOO BIG (Movie, 20 Oct: "a popup warning good idea"): the
             // brush's refusal said where he is looking, and its one answer.
             // It changes nothing in the drawing, so no absence row moves.

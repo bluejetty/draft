@@ -1247,6 +1247,8 @@
   #beam-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #beam-ask[hidden] { display:none; }
   #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #shelf-suite { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #shelf-suite[hidden] { display:none; }
   #brush-warn[hidden] { display:none; }
   #brush-warn .promote-card { border-color: var(--ink-warn); box-shadow: 0 0 14px var(--ink-warn); }
   #brush-warn b { color: var(--ink-warn); }
@@ -2313,6 +2315,17 @@
   <div class="promote-card">
     <p><b data-brush-warn-text></b></p>
     <div class="promote-row"><button type="button" data-brush-warn-ok>OK</button></div>
+  </div>
+</div>
+<!-- SAVE AS SUITE (Movie, 20 Oct): which kind the shelf is saved as. -->
+<div id="shelf-suite" data-shelf-suite hidden role="dialog" aria-label="Save this shelf as a suite">
+  <div class="promote-card">
+    <p><b>SAVE <span data-shelf-suite-name></span> AS A SUITE</b><br>Only what is on this shelf goes in the file.</p>
+    <div class="promote-row">
+      <button type="button" data-shelf-suite-kind="residential">RESIDENTIAL SUITE</button>
+      <button type="button" data-shelf-suite-kind="commercial">COMMERCIAL SUITE</button>
+      <button type="button" data-shelf-suite-cancel>CANCEL</button>
+    </div>
   </div>
 </div>
 <div id="footprint-ask" data-footprint-ask hidden role="dialog" aria-label="The wall left its footprint">
@@ -10013,7 +10026,19 @@
     plus.title = 'Add a shelf — park geometry at the same spot on different '
       + 'shelves without overlap';
     plus.addEventListener('click', event => { event.stopPropagation(); addShelf(); });
-    boneHead.append(boneName, plus);
+    // SAVE AS SUITE (Movie, 20 Oct: "ALLOW users to use the BONEYARD - as a
+    // little mini model area and they can independanatly SAVE whatever is in
+    // there as a SUITE. (but a draft file)"). The shelf the drafter is on,
+    // and only it, written as a suite .draft named for the shelf.
+    const saveShelf = document.createElement('button');
+    saveShelf.type = 'button';
+    saveShelf.className = 'lv-add';
+    saveShelf.dataset.saveShelf = '';
+    saveShelf.textContent = 'SAVE AS SUITE';
+    saveShelf.hidden = !boneyardActive;
+    saveShelf.title = 'Save what is on this shelf, and only it, as its own SUITE .draft';
+    saveShelf.addEventListener('click', event => { event.stopPropagation(); askShelfSuite(); });
+    boneHead.append(boneName, plus, saveShelf);
     bone.append(boneHead);
     bone.addEventListener('click', () => goToBoneyard());
     levelsPanel.append(bone);
@@ -10031,7 +10056,19 @@
         + 'keeps its own geometry';
       row.addEventListener('click', event => {
         event.stopPropagation();
+        // THE SECOND CLICK OF A DOUBLE-CLICK IS THE RENAME'S, not a second
+        // trip: going there again would rebuild this row under the pointer
+        // and the double-click would land on nothing.
+        if (event.detail > 1 || row.querySelector('input')) return;
+        if (boneyardActive && Number(shelf.id) === activeShelfId()) return;
         goToBoneyard(Number(shelf.id));
+      });
+      // A DOUBLE-CLICK RENAMES IT (Movie, 20 Oct: "if i double click on
+      // SHELF1 name it will allow me to rename it (2 BEDROOM in this case)").
+      row.addEventListener('dblclick', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        renameShelf(row, Number(shelf.id));
       });
       levelsPanel.append(row);
     });
@@ -10100,6 +10137,109 @@
     buildChrome();
     paint();
   };
+
+  // A SHELF RENAMED IN PLACE: the row becomes a box holding its name, ENTER
+  // or leaving it keeps the new one, Esc keeps the old. One UNDO.
+  const renameShelf = (row, shelfId) => {
+    if (!drawing || row.querySelector('input')) return;
+    // THE STORED LIST, so the record renamed is the one the file keeps.
+    drawing.boneyardShelves = shelves();
+    const shelf = drawing.boneyardShelves.find(sh => Number(sh.id) === shelfId);
+    if (!shelf) return;
+    const box = document.createElement('input');
+    box.type = 'text';
+    box.dataset.shelfName = String(shelfId);
+    box.value = shelf.name || `SHELF ${shelfId}`;
+    row.textContent = '';
+    row.append(box);
+    box.focus();
+    box.select();
+    let done = false;
+    const finish = keep => {
+      if (done) return;
+      done = true;
+      const name = box.value.trim().toUpperCase();
+      if (keep && name && name !== shelf.name) {
+        undoStack.push({ kind: 'props', edits: [{ item: shelf, before: { ...shelf } }] });
+        shelf.name = name;
+        markDirty();
+        sayOnStrip(`The shelf is ${name} now.`);
+      }
+      buildChrome();
+    };
+    box.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Enter') finish(true);
+      if (event.key === 'Escape') finish(false);
+    });
+    box.addEventListener('click', event => event.stopPropagation());
+    box.addEventListener('blur', () => finish(true));
+  };
+
+  // ── A SHELF SAVED AS A SUITE (Movie, 20 Oct) ───────────────────────────
+  //
+  // "they can independanatly SAVE whatever is in there as a SUITE. (but a
+  // draft file) and will only ever be in the SHELVES, so a user can build
+  // them in any BONEYARD in any draft file, and save them as a DRAFT file".
+  // The file is this drawing's levels and settings with only what stands on
+  // the shelf, filed on that shelf, marked a suite of the kind asked: brought
+  // in elsewhere it comes in as a suite, standing on a floor (suiteOnFloor).
+  const shelfSuiteFile = (shelfId, kind) => {
+    const full = serializeDrawing();
+    const owner = -Number(shelfId);
+    const out = {};
+    Object.keys(full).forEach(key => {
+      const value = full[key];
+      if (Array.isArray(value) && value.some(item => item && typeof item === 'object' && 'levelId' in item)) {
+        out[key] = value.filter(item => item && Number(item.levelId) === owner);
+      } else {
+        out[key] = value;
+      }
+    });
+    // WHAT DOES NOT COME: other drawings shown here, the other shelves'
+    // parked outlines, locks between floors, and assemblies whose pieces are
+    // not on this shelf.
+    const ids = new Set(Object.entries(out).flatMap(([key, list]) => (Array.isArray(list)
+      ? list.filter(item => item && item.id != null).map(item => `${key}:${item.id}`) : [])));
+    const KEY_OF = { ...SELECTION_LISTS, wall: 'walls' };
+    out.groups = (Array.isArray(full.groups) ? full.groups : []).filter(group => (group.members || []).length
+      && (group.members || []).every(m => ids.has(`${KEY_OF[m.type]}:${m.id}`)));
+    out.holograms = [];
+    out.boneyardOutlines = [];
+    out.levelLocks = [];
+    const shelf = shelves().find(sh => Number(sh.id) === Number(shelfId));
+    out.boneyardShelves = [{ id: Number(shelfId), name: shelf?.name || `SHELF ${shelfId}` }];
+    out.activeBoneyardShelfId = Number(shelfId);
+    out.suiteKind = kind;
+    return out;
+  };
+  const shelfSuiteAsk = document.getElementById('shelf-suite');
+  const askShelfSuite = () => {
+    if (!drawing || !shelfSuiteAsk) return;
+    const shelf = shelves().find(sh => Number(sh.id) === activeShelfId());
+    const name = shelf?.name || `SHELF ${activeShelfId()}`;
+    shelfSuiteAsk.querySelector('[data-shelf-suite-name]').textContent = name;
+    shelfSuiteAsk.hidden = false;
+  };
+  const saveShelfSuite = async kind => {
+    if (!shelfSuiteAsk) return;
+    const shelfId = activeShelfId();
+    const shelf = shelves().find(sh => Number(sh.id) === shelfId);
+    const name = `${shelf?.name || `SHELF ${shelfId}`}.draft`;
+    // The picker first, from the press: the gesture is spent by the first await.
+    const handle = await pickSaveTarget(name);
+    if (handle === 'cancelled') return;
+    shelfSuiteAsk.hidden = true;
+    const file = shelfSuiteFile(shelfId, kind);
+    const count = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors']
+      .reduce((n, key) => n + (Array.isArray(file[key]) ? file[key].length : 0), 0);
+    if (!count) { sayOnStrip(`${shelf?.name || 'This shelf'} is empty -- draw the suite on it first.`); return; }
+    await downloadDrawing(JSON.stringify(file), name, handle);
+    sayOnStrip(`${name} saved as a ${suiteLabel(kind)} -- BRING IN .DRAFT puts it in a plan; saved again, REFRESH updates every copy.`);
+  };
+  shelfSuiteAsk?.querySelectorAll('[data-shelf-suite-kind]').forEach(b => b.addEventListener('click', () =>
+    saveShelfSuite(b.dataset.shelfSuiteKind)));
+  shelfSuiteAsk?.querySelector('[data-shelf-suite-cancel]')?.addEventListener('click', () => { shelfSuiteAsk.hidden = true; });
 
   // DECLARED HERE, FILLED IN WITH THE REST OF THE LOT CARD further down --
   // PROJECT's syncFamilyRow pattern, and for its reason: goToLevel is the
@@ -27794,6 +27934,33 @@
     paint();
     sayOnStrip(`A copy of ${hologramNoun(holo)} is on ${suiteFloorName(copy)}, right over this one \u2014 UNDO takes it off.`);
   };
+  // ITS DRAWING ON A NEW SHELF: its lowest floor's walls, doors, windows,
+  // fixtures and the rest, pasted the way PASTE puts a copy down (fresh ids,
+  // each opening on its wall's copy), on a shelf named for the file.
+  const editOnShelf = holo => {
+    const src = holo?.source;
+    if (!drawing || !src) return;
+    const floor = floorsOf(src.levels)[0];
+    const floorId = floor ? Number(floor.id) : null;
+    const TYPE_OF = { walls: 'wall', lines: 'line', floors: 'floor', fenestrations: 'fenestration',
+      fixtures: 'fixture', roomTags: 'roomtag', notes: 'note', columns: 'column', beams: 'beam',
+      shapes: 'shape', outlines: 'outline' };
+    const items = Object.entries(TYPE_OF).flatMap(([key, type]) => (Array.isArray(src[key]) ? src[key] : [])
+      .filter(item => item && (floorId == null || Number(item.levelId) === floorId))
+      .map(item => ({ type, raw: JSON.parse(JSON.stringify(item)) })));
+    if (!items.length) { sayOnStrip(`${hologramNoun(holo)} has nothing on its floor to put on a shelf.`); return; }
+    addShelf();
+    drawing.boneyardShelves = shelves();
+    const shelf = drawing.boneyardShelves.find(sh => Number(sh.id) === activeShelfId());
+    if (shelf) shelf.name = String(holo.name || 'SUITE').toUpperCase();
+    const was = held;
+    held = items;
+    pasteHeld();
+    held = was;
+    buildChrome();
+    paint();
+    sayOnStrip(`${hologramNoun(holo)} is on the shelf ${shelf?.name || ''} to change. SAVE AS SUITE writes it back out; REFRESH on its card updates every copy.`);
+  };
   const mirrorHologram = holo => {
     const flip = holo.flip !== true;
     hologramEdit(holo, { flip }, flip
@@ -27889,7 +28056,16 @@
       refresh.dataset.hologramRefresh = first.id;
       refresh.title = 'Pick the newer copy of its .draft; every copy of the same file takes it';
       refresh.addEventListener('click', () => { hologramRefreshing = first; hologramFile.click(); });
-      head.append(swatch, name, count, refresh);
+      // EDIT ON SHELF (Movie, 20 Oct: "they can also use that area to modify
+      // the SUITES for the existing SHELL"): the file's own drawing put on a
+      // new shelf here to change, then SAVE AS SUITE and REFRESH.
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = 'EDIT ON SHELF';
+      edit.dataset.hologramEditShelf = first.id;
+      edit.title = 'Put a copy of its drawing on a new BONEYARD shelf to change; SAVE AS SUITE, then REFRESH';
+      edit.addEventListener('click', () => { closeHologramCards(); editOnShelf(first); });
+      head.append(swatch, name, count, edit, refresh);
       fileCard.appendChild(head);
       copies.forEach((holo, index) => {
       const row = document.createElement('div');
