@@ -27621,9 +27621,27 @@
         return;
       }
       brushLoad = { kind, props: brushPick(hit.item, kind) };
+      // AN OPENING LIFTED ARMS FENESTRATION (Movie, 20 Oct: "once the user
+      // uses the BRUSH to get PROPERTIES can you also change the user to
+      // the TOOL necessary to use the properties / item, in this case into
+      // the BUILD DOOR command with those properties so the user can click
+      // on a wall or additionally to paste the properties of that door to
+      // another existing door"). The tool comes up wearing the load -- its
+      // OPENING row says DOOR or WINDOW as the load does -- and under it a
+      // press on bare wall puts one in (placeOpening reads the brush) and a
+      // press on an opening gives it these properties (the dispatch below
+      // asks the brush first). A WALL lifted keeps the brush up instead:
+      // "a WALL will only change another WALL", and the next press is that.
+      const arms = kind === 'fenestration' && window.DraftToolRoster?.availableOn('fenestration', board);
+      if (arms) {
+        fenestrationType = brushLoad.props.type === 'window' ? 'window' : 'door';
+        setTool('fenestration');
+      }
       stripRefresh();
       paint();
-      sayOnStrip(`Brush loaded: ${brushSays().long}. Escape puts it down.`);
+      sayOnStrip(arms
+        ? `Brush loaded: ${brushSays().long}. FENESTRATION is armed with it: press a wall to put one in, or press a door or window to give it these properties. Escape puts the brush down.`
+        : `Brush loaded: ${brushSays().long}. Escape puts it down.`);
       return;
     }
     // ── LOADED: A MATCHING KIND TAKES THEM ───────────────────────────────
@@ -32042,7 +32060,17 @@
     if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'floor') { floorPress(at); return; }
     if (activeTool === 'shape') { shapePress(at); return; }
-    if (activeTool === 'fenestration') { placeOpening(at); return; }
+    if (activeTool === 'fenestration') {
+      // THE BRUSH'S LOAD GOES ONTO AN OPENING PRESSED, not beside it (Movie,
+      // 20 Oct: "paste the properties of that door to another existing door
+      // which the user would like to change"); bare wall takes a new one.
+      if (brushHas('fenestration')) {
+        const hit = hitAt(at);
+        if (hit?.type === 'fenestration') { brushDust(hit); return; }
+      }
+      placeOpening(at);
+      return;
+    }
     if (activeTool === 'fixture') { fixturePress(at); return; }
     // preventDefault, or the press's own focus change lands after the handler
     // and takes the NAME box's focus straight back off it.
