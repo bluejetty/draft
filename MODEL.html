@@ -16151,6 +16151,13 @@
       if (tsquareOn && board !== 'toy' && !d.set.across) {
         if (Math.abs(at.x - d.at.x) >= Math.abs(at.z - d.at.z)) { dz = 0; axis = 'x'; } else { dx = 0; axis = 'z'; }
       }
+      // BY THE FOOT WITH THE 1' LIGHT LIT (Movie, 20 Oct: "when i MOVE a group
+      // of items and i use the '1'' key (beside T SQUARE - which works) the
+      // '1'' key doesn't make it go 'by the foot'"). Each axis rounded to a
+      // whole foot, as a dragged wall or stair is -- after the T-square, so
+      // the axis is the hand's, and before the magnet, so a catch still wins.
+      const Q = window.DraftToyConstraints;
+      if (footOn && Q && !d.set.across) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
       if (!d.set.across && snapOn && board !== 'toy') {
         d.magnet ||= magnetExcluding(d.set.points);
         const seek = moveSeek(d, dx, dz, axis);
@@ -33409,7 +33416,10 @@
         if (md.kind === 'items') {
           // New points each event from the ones each item started with, so
           // the undo step's copies keep the points they were taken with.
-          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          // BY THE FOOT with the 1' light lit, as an assembly goes.
+          const Q = window.DraftToyConstraints;
+          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
           const by = p => ({ ...p, x: p.x + dx, z: p.z + dz });
           md.items.forEach(({ type, item, before }) => {
             if (type === 'line') { item.start = by(before.start); item.end = by(before.end); }
@@ -33521,6 +33531,10 @@
           // HELD SQUARE BY THE T-SQUARE, the MOVE verb's rule: the larger
           // travel wins.
           if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+          // AND BY THE FOOT with the 1' light lit, the MOVE verb's rule
+          // (Movie, 20 Oct: "make it work for when i moved grouped stuff too").
+          const Q = window.DraftToyConstraints;
+          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
           md.before.forEach(b => relinkVertex(b.vtx));
           // THE LOCKED SIBLINGS DO NOT MOVE HERE. They move ONCE, on the
