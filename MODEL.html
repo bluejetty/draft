@@ -13303,18 +13303,24 @@
     (drawing && drawing[key] !== undefined && drawing[key] !== null) ? drawing[key] : fallback;
 
   // MODEL.dc.html:9010 `_contextWallTypes` and :9016 `_contextWallType`,
-  // ported rather than re-decided. THE TWO LISTS ARE DISJOINT — foundation
-  // assemblies on one side, stud/insul on the other — so picking the wrong
-  // default is not a near miss, it is a wall of the wrong kind, silently.
-  // (No BONEYARD on this page, so that arm of the original is not ported; a
-  // level with no layer views returns every type, as viewId == null does there.)
+  // ported -- and then OPENED UP (Movie, 20 Oct: "i need ALL the walltypes
+  // on ALL floors (the 2x4 and 2x6 in the foundation and the ICF walls 11.25
+  // 6\"core and 13.25: 8\" core and the regular 8\" conc. just put ALL walls
+  // available for all floors"). The old page kept the foundation assemblies
+  // and the framed ones apart; a suite drawn in 2x6 on MAIN FL has to meet
+  // an ICF shell of the same type to click onto it, and a walk-out
+  // basement's framed wall is a basement wall. So every context offers the
+  // whole table, ITS OWN KIND FIRST: the foundation leads with concrete and
+  // ICF, a floor with the studs. Only the DEFAULT still follows the context
+  // (contextWallType): a wall drawn with nothing picked is still 8" concrete
+  // in the foundation and 2x6 on a floor.
   const contextWallTypes = viewId => {
     const WT = window.DraftWallTypes;
     if (viewId == null) return WT.WALL_TYPES;
     const isFdn = id => WT.FOUNDATION_WALL_TYPE_IDS.includes(id);
-    return viewId === 'foundation'
-      ? WT.WALL_TYPES.filter(t => isFdn(t.id))
-      : WT.WALL_TYPES.filter(t => !isFdn(t.id));
+    const own = WT.WALL_TYPES.filter(t => isFdn(t.id) === (viewId === 'foundation'));
+    const rest = WT.WALL_TYPES.filter(t => !own.includes(t));
+    return [...own, ...rest];
   };
   const contextWallType = viewId => {
     const choices = contextWallTypes(viewId);
