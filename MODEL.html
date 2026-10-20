@@ -1247,6 +1247,8 @@
   #beam-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #beam-ask[hidden] { display:none; }
   #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #shelf-suite { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #shelf-suite[hidden] { display:none; }
   #brush-warn[hidden] { display:none; }
   #brush-warn .promote-card { border-color: var(--ink-warn); box-shadow: 0 0 14px var(--ink-warn); }
   #brush-warn b { color: var(--ink-warn); }
@@ -1263,6 +1265,15 @@
      it -- squeezed into one row the name stood a letter wide ("S U I T E"). */
   .trace-row[data-hologram-row] { flex-wrap:wrap; }
   .trace-row[data-hologram-row] [data-hologram-name] { flex-basis:100%; }
+  /* ONE CARD PER FILE, in its colour; a numbered row per copy (Movie, 20 Oct). */
+  .hologram-file { border-left:4px solid var(--holo-ink); padding-left:6px; margin:6px 0; }
+  .hologram-file-head [data-hologram-name] { flex:1 1 auto; color: var(--holo-ink); }
+  .hologram-file-head [data-hologram-swatch] { width:12px; height:12px; border-radius:2px;
+    background: var(--holo-ink); flex:0 0 auto; }
+  .hologram-file-head [data-hologram-copies] { opacity:0.7; }
+  .hologram-copy [data-hologram-number] { min-width:2.2em; font-weight:600; color: var(--holo-ink); }
+  .hologram-copy { cursor:pointer; border-radius:3px; }
+  .hologram-copy:hover, .hologram-copy[data-lit] { box-shadow: 0 0 0 1px var(--holo-ink), 0 0 8px var(--holo-ink); }
   .trace-row button { cursor:pointer; padding:3px 8px; border-radius:3px; border:1px solid var(--edge-panel);
     background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui);
     font-size:10px; font-weight:600; letter-spacing:0.04em; }
@@ -2304,6 +2315,17 @@
   <div class="promote-card">
     <p><b data-brush-warn-text></b></p>
     <div class="promote-row"><button type="button" data-brush-warn-ok>OK</button></div>
+  </div>
+</div>
+<!-- SAVE AS SUITE (Movie, 20 Oct): which kind the shelf is saved as. -->
+<div id="shelf-suite" data-shelf-suite hidden role="dialog" aria-label="Save this shelf as a suite">
+  <div class="promote-card">
+    <p><b>SAVE <span data-shelf-suite-name></span> AS A SUITE</b><br>Only what is on this shelf goes in the file.</p>
+    <div class="promote-row">
+      <button type="button" data-shelf-suite-kind="residential">RESIDENTIAL SUITE</button>
+      <button type="button" data-shelf-suite-kind="commercial">COMMERCIAL SUITE</button>
+      <button type="button" data-shelf-suite-cancel>CANCEL</button>
+    </div>
   </div>
 </div>
 <div id="footprint-ask" data-footprint-ask hidden role="dialog" aria-label="The wall left its footprint">
@@ -4360,6 +4382,7 @@
   // they are how the drafter is LOOKING, not something the file says.
   // DEMO PART's state, up here because the painter shows its first click.
   let hologramPartMode = false;
+  let hologramHover = null;        // the hologram a list row the pointer is over lights
   let hologramPartStart = null;    // { wallId, along, at } -- the first click
   const HOLOGRAM_SHOW_KEY = 'draft.hologram.show';
   const hologramShow = (() => {
@@ -4373,6 +4396,33 @@
   const hologramShapes = (holo, items, levelId, view) => H().shapes(holo, items, levelId, view);
   const hologramWallsPlaced = () => (H() ? holograms().filter(holo => !holo.hidden)
     .flatMap(holo => H().placed(holo, H().parts(holo).existing.walls || [])) : []);
+  // ── A HOLOGRAM PICKED LIKE AN ASSEMBLY (Movie, 20 Oct) ─────────────────
+  //
+  // "would it be possible to SELECT the HOLOGRAM UNITS as like selecting a
+  // ASSEMBLY unit - and allow the user to copy, flip rotate etc in the way
+  // they can do it with a selected ASSEMBLY unit (or units) id like to pick
+  // all 4 of these suites with a rectagular select and then copy / flip
+  // them". Its walls on this level, where they stand on the plan: a click on
+  // one picks the whole hologram, and the box catches it by them.
+  const hologramWallsHere = holo => (H() && !holo?.hidden
+    ? H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === activeLevelId()))
+      .filter(w => w?.start && w?.end) : []);
+  const hologramPickAt = worldPt => {
+    const G = window.DraftGeometry2D;
+    if (!G) return null;
+    const reach = SELECT_GRAB_PX / view.scale;
+    let best = null, bestD = reach;
+    holograms().forEach(holo => hologramWallsHere(holo).forEach(wall => {
+      const { d } = G.pointToSegment(worldPt, wall);
+      if (d < bestD) { bestD = d; best = holo; }
+    }));
+    return best;
+  };
+  // ITS PLACED PIVOT -- where its own middle stands on this drawing -- and
+  // every corner of its walls here, for the middle a turn or a flip goes about.
+  const hologramPivotPlaced = holo => ({ x: (Number(holo.pivotX) || 0) + (Number(holo.x) || 0),
+    z: (Number(holo.pivotZ) || 0) + (Number(holo.z) || 0) });
+  const hologramCorners = holo => hologramWallsHere(holo).flatMap(w => [w.start, w.end]);
 
   // ── SUPER NODES (Movie, 20 Oct) ───────────────────────────────────────
   //
@@ -6878,6 +6928,7 @@
         paintHoverCorner();
         paintBand();
         paintStretch();
+        paintHologramHover();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
         // reason (MODEL.dc.html:7432, after every piece of linework and just
@@ -9975,7 +10026,19 @@
     plus.title = 'Add a shelf — park geometry at the same spot on different '
       + 'shelves without overlap';
     plus.addEventListener('click', event => { event.stopPropagation(); addShelf(); });
-    boneHead.append(boneName, plus);
+    // SAVE AS SUITE (Movie, 20 Oct: "ALLOW users to use the BONEYARD - as a
+    // little mini model area and they can independanatly SAVE whatever is in
+    // there as a SUITE. (but a draft file)"). The shelf the drafter is on,
+    // and only it, written as a suite .draft named for the shelf.
+    const saveShelf = document.createElement('button');
+    saveShelf.type = 'button';
+    saveShelf.className = 'lv-add';
+    saveShelf.dataset.saveShelf = '';
+    saveShelf.textContent = 'SAVE AS SUITE';
+    saveShelf.hidden = !boneyardActive;
+    saveShelf.title = 'Save what is on this shelf, and only it, as its own SUITE .draft';
+    saveShelf.addEventListener('click', event => { event.stopPropagation(); askShelfSuite(); });
+    boneHead.append(boneName, plus, saveShelf);
     bone.append(boneHead);
     bone.addEventListener('click', () => goToBoneyard());
     levelsPanel.append(bone);
@@ -9993,7 +10056,20 @@
         + 'keeps its own geometry';
       row.addEventListener('click', event => {
         event.stopPropagation();
+        // A CLICK ON THE SHELF ALREADY OPEN STAYS PUT -- and so does the
+        // second click of a double-click, which is the rename's: going there
+        // again would rebuild this row under the pointer and the double-click
+        // would land on nothing.
+        if (row.querySelector('input')) return;
+        if (boneyardActive && Number(shelf.id) === activeShelfId()) return;
         goToBoneyard(Number(shelf.id));
+      });
+      // A DOUBLE-CLICK RENAMES IT (Movie, 20 Oct: "if i double click on
+      // SHELF1 name it will allow me to rename it (2 BEDROOM in this case)").
+      row.addEventListener('dblclick', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        renameShelf(row, Number(shelf.id));
       });
       levelsPanel.append(row);
     });
@@ -10062,6 +10138,109 @@
     buildChrome();
     paint();
   };
+
+  // A SHELF RENAMED IN PLACE: the row becomes a box holding its name, ENTER
+  // or leaving it keeps the new one, Esc keeps the old. One UNDO.
+  const renameShelf = (row, shelfId) => {
+    if (!drawing || row.querySelector('input')) return;
+    // THE STORED LIST, so the record renamed is the one the file keeps.
+    drawing.boneyardShelves = shelves();
+    const shelf = drawing.boneyardShelves.find(sh => Number(sh.id) === shelfId);
+    if (!shelf) return;
+    const box = document.createElement('input');
+    box.type = 'text';
+    box.dataset.shelfName = String(shelfId);
+    box.value = shelf.name || `SHELF ${shelfId}`;
+    row.textContent = '';
+    row.append(box);
+    box.focus();
+    box.select();
+    let done = false;
+    const finish = keep => {
+      if (done) return;
+      done = true;
+      const name = box.value.trim().toUpperCase();
+      if (keep && name && name !== shelf.name) {
+        undoStack.push({ kind: 'props', edits: [{ item: shelf, before: { ...shelf } }] });
+        shelf.name = name;
+        markDirty();
+        sayOnStrip(`The shelf is ${name} now.`);
+      }
+      buildChrome();
+    };
+    box.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Enter') finish(true);
+      if (event.key === 'Escape') finish(false);
+    });
+    box.addEventListener('click', event => event.stopPropagation());
+    box.addEventListener('blur', () => finish(true));
+  };
+
+  // ── A SHELF SAVED AS A SUITE (Movie, 20 Oct) ───────────────────────────
+  //
+  // "they can independanatly SAVE whatever is in there as a SUITE. (but a
+  // draft file) and will only ever be in the SHELVES, so a user can build
+  // them in any BONEYARD in any draft file, and save them as a DRAFT file".
+  // The file is this drawing's levels and settings with only what stands on
+  // the shelf, filed on that shelf, marked a suite of the kind asked: brought
+  // in elsewhere it comes in as a suite, standing on a floor (suiteOnFloor).
+  const shelfSuiteFile = (shelfId, kind) => {
+    const full = serializeDrawing();
+    const owner = -Number(shelfId);
+    const out = Object.create(Object.prototype);
+    Object.keys(full).forEach(key => {
+      const value = full[key];
+      if (Array.isArray(value) && value.some(item => item && typeof item === 'object' && 'levelId' in item)) {
+        out[key] = value.filter(item => item && Number(item.levelId) === owner);
+      } else {
+        out[key] = value;
+      }
+    });
+    // WHAT DOES NOT COME: other drawings shown here, the other shelves'
+    // parked outlines, locks between floors, and assemblies whose pieces are
+    // not on this shelf.
+    const ids = new Set(Object.entries(out).flatMap(([key, list]) => (Array.isArray(list)
+      ? list.filter(item => item && item.id != null).map(item => `${key}:${item.id}`) : [])));
+    const KEY_OF = { ...SELECTION_LISTS, wall: 'walls' };
+    out.groups = (Array.isArray(full.groups) ? full.groups : []).filter(group => (group.members || []).length
+      && (group.members || []).every(m => ids.has(`${KEY_OF[m.type]}:${m.id}`)));
+    out.holograms = [];
+    out.boneyardOutlines = [];
+    out.levelLocks = [];
+    const shelf = shelves().find(sh => Number(sh.id) === Number(shelfId));
+    out.boneyardShelves = [{ id: Number(shelfId), name: shelf?.name || `SHELF ${shelfId}` }];
+    out.activeBoneyardShelfId = Number(shelfId);
+    out.suiteKind = kind;
+    return out;
+  };
+  const shelfSuiteAsk = document.getElementById('shelf-suite');
+  const askShelfSuite = () => {
+    if (!drawing || !shelfSuiteAsk) return;
+    const shelf = shelves().find(sh => Number(sh.id) === activeShelfId());
+    const name = shelf?.name || `SHELF ${activeShelfId()}`;
+    shelfSuiteAsk.querySelector('[data-shelf-suite-name]').textContent = name;
+    shelfSuiteAsk.hidden = false;
+  };
+  const saveShelfSuite = async kind => {
+    if (!shelfSuiteAsk) return;
+    const shelfId = activeShelfId();
+    const shelf = shelves().find(sh => Number(sh.id) === shelfId);
+    const name = `${shelf?.name || `SHELF ${shelfId}`}.draft`;
+    // The picker first, from the press: the gesture is spent by the first await.
+    const handle = await pickSaveTarget(name);
+    if (handle === 'cancelled') return;
+    shelfSuiteAsk.hidden = true;
+    const file = shelfSuiteFile(shelfId, kind);
+    const count = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors']
+      .reduce((n, key) => n + (Array.isArray(file[key]) ? file[key].length : 0), 0);
+    if (!count) { sayOnStrip(`${shelf?.name || 'This shelf'} is empty -- draw the suite on it first.`); return; }
+    await downloadDrawing(JSON.stringify(file), name, handle);
+    sayOnStrip(`${name} saved as a ${suiteLabel(kind)} -- BRING IN .DRAFT puts it in a plan; saved again, REFRESH updates every copy.`);
+  };
+  shelfSuiteAsk?.querySelectorAll('[data-shelf-suite-kind]').forEach(b => b.addEventListener('click', () =>
+    saveShelfSuite(b.dataset.shelfSuiteKind)));
+  shelfSuiteAsk?.querySelector('[data-shelf-suite-cancel]')?.addEventListener('click', () => { shelfSuiteAsk.hidden = true; });
 
   // DECLARED HERE, FILLED IN WITH THE REST OF THE LOT CARD further down --
   // PROJECT's syncFamilyRow pattern, and for its reason: goToLevel is the
@@ -11248,6 +11427,14 @@
         if (line) out.push({ type: 'dimension', item, parts: [line.map(p => toWorld(p.x, p.y))], open: true });
       });
     }
+    // A HOLOGRAM by its walls on this level: inside the blue box when all of
+    // them are, caught by the green one when the box touches any.
+    if (filterAllows('hologram')) {
+      holograms().forEach(item => {
+        const segs = hologramWallsHere(item).map(w => [w.start, w.end]);
+        if (segs.length) out.push({ type: 'hologram', item, parts: segs, open: true });
+      });
+    }
     // A NOTE IS IN THE WINDOW when its text block and the tip of its leader are.
     if (filterAllows('note')) {
       notes().forEach(item => {
@@ -11961,6 +12148,12 @@
       const roof = roofAt(worldPt);
       if (roof) return { type: 'roof', item: roof };
     }
+    // A HOLOGRAM LAST: it is under the drawing, so anything of this drawing's
+    // own at the press is what the press means.
+    if (filterAllows('hologram')) {
+      const holo = hologramPickAt(worldPt);
+      if (holo) return { type: 'hologram', item: holo };
+    }
     return null;
   };
 
@@ -12007,7 +12200,8 @@
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
       fixture: fixtures(), stair: stairs(), roof: pickRoofs(), roomtag: roomTags(), shape: shapes(),
-      dimension: shownDimensions(), note: notes(), beam: beams(), column: columns(), superNode: superNodes() };
+      dimension: shownDimensions(), note: notes(), beam: beams(), column: columns(), superNode: superNodes(),
+      hologram: holograms() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -12038,6 +12232,13 @@
         ctx.lineWidth = 3;
         ctx.strokeRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
         ctx.restore();
+        return;
+      }
+      if (type === 'hologram') {
+        hologramWallsHere(item).forEach(w => {
+          const a = toS(w.start), b = toS(w.end);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
         return;
       }
       if (type === 'column' || type === 'superNode') {
@@ -13293,6 +13494,7 @@
     if (own) return by(hand, own);
     let best = null;
     d.set.before.forEach(b => {
+      if (b.holo) return;
       const at = { x: b.x + dx, z: b.z + dz };
       const hit = catchAt(at);
       if (hit && (!best || hit.share < best.hit.share)) best = { hit, at };
@@ -14762,6 +14964,8 @@
     roomtag: 'roomTags',
     // A NOTE (Movie, 10 Oct): deletes and undoes like a tag.
     note: 'notes',
+    // A HOLOGRAM (Movie, 20 Oct): picked, copied, deleted like an assembly.
+    hologram: 'holograms',
     shape: 'shapes',
     // A DIMENSION, picked off its line (Movie, 6 Oct: "with the DIMENSION
     // lines, can they be selectable so i can move some if there is a better
@@ -14973,6 +15177,14 @@
       //             copy around.
       const { id: _id, groupId: _g, ...rest } = raw;
       const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };
+      // A HOLOGRAM IS THE SAME FILE AGAIN, as its card's COPY makes it: where
+      // it stood, on no level of this drawing's (its own levels say where it
+      // stands), with none of the first one's DEMO marks.
+      if (type === 'hologram') {
+        delete copy.levelId;
+        delete copy.demo;
+        while (holograms().some(h => h.id === copy.id)) copy.id = newDrawingItemId('hologram');
+      }
       if (type === 'wall') wallIds.set(String(raw.id), copy.id);
       if (onWall(type)) {
         copy.wallId = wallIds.get(String(raw.wallId));
@@ -15221,12 +15433,14 @@
     }
     if (!selection.length || !Number.isFinite(degrees) || Math.abs(degrees % 360) < 1e-9) return;
     const { entries, detached, points } = turnSet();
-    if (!points.length) {
+    const holos = entries.filter(e => e.type === 'hologram').map(e => e.item);
+    if (!points.length && !holos.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
       sayOnStrip('Nothing in the selection can be turned on its own -- doors, windows and fixtures turn with their walls.');
       return;
     }
-    const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
+    const spread = [...points, ...holos.flatMap(hologramCorners)];
+    const xs = spread.map(pt => pt.x), zs = spread.map(pt => pt.z);
     const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
     const a = degrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
     const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
@@ -15249,8 +15463,19 @@
     // end for end has its open side where the wall was. One UNDO takes the
     // turn and the new framing back together.
     const turn = { kind: 'rotate', before, detached, wells };
+    // A HOLOGRAM TURNS ABOUT THE SAME MIDDLE: its placed pivot goes round,
+    // and it turns on it by as much.
+    const holoEdits = holos.map(holo => {
+      const was = { ...holo };
+      const p = hologramPivotPlaced(holo);
+      turnPoint(p);
+      holo.x = p.x - (Number(holo.pivotX) || 0);
+      holo.z = p.z - (Number(holo.pivotZ) || 0);
+      holo.angleDeg = ((((Number(holo.angleDeg) || 0) + degrees) % 360) + 360) % 360;
+      return { item: holo, before: was };
+    });
     const reframed = entries.filter(entry => entry.type === 'stair').map(({ item }) => reframeStair(item));
-    const steps = reframed.flatMap(r => r.steps);
+    const steps = [...(holoEdits.length ? [{ kind: 'props', edits: holoEdits }] : []), ...reframed.flatMap(r => r.steps)];
     undoStack.push(steps.length ? { kind: 'batch', steps: [turn, ...steps] } : turn);
     markDirty();
     paint();
@@ -15280,12 +15505,13 @@
   const flipSelection = axis => {
     if (!selection.length || (axis !== 'x' && axis !== 'z')) return;
     const { entries, detached, points } = turnSet();
-    if (!points.length) {
+    const holos = entries.filter(e => e.type === 'hologram').map(e => e.item);
+    if (!points.length && !holos.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
       sayOnStrip('Nothing in the selection can be flipped on its own -- doors, windows and fixtures flip with their walls.');
       return;
     }
-    const vals = points.map(pt => pt[axis]);
+    const vals = [...points, ...holos.flatMap(hologramCorners)].map(pt => pt[axis]);
     const mid = (Math.min(...vals) + Math.max(...vals)) / 2;
     const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
@@ -15317,6 +15543,20 @@
       if (item.turn !== 'left' && item.turn !== 'right') return;
       edits.push({ item, before: { ...item } });
       item.turn = item.turn === 'left' ? 'right' : 'left';
+    });
+    // A HOLOGRAM IS TURNED OVER: its placed pivot mirrors across the middle,
+    // it is mirrored, and its turn runs the other way -- left for right is
+    // -angle, top for bottom is 180 - angle (a mirror across z is one across
+    // x and a half turn).
+    holos.forEach(holo => {
+      edits.push({ item: holo, before: { ...holo } });
+      const p = hologramPivotPlaced(holo);
+      mirror(p);
+      holo.x = p.x - (Number(holo.pivotX) || 0);
+      holo.z = p.z - (Number(holo.pivotZ) || 0);
+      if (holo.flip === true) delete holo.flip; else holo.flip = true;
+      const a = Number(holo.angleDeg) || 0;
+      holo.angleDeg = ((((axis === 'x' ? -a : 180 - a) % 360) + 360) % 360);
     });
     // THE SAME UNDO RECORD AS A TURN: the points back, the corners joined.
     const flipped = { kind: 'rotate', before, detached, wells };
@@ -16106,8 +16346,16 @@
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
     return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across,
       stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
-      before: points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
-        ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })) };
+      holos: entries.filter(e => e.type === 'hologram').map(e => e.item),
+      before: [...points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+        ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })),
+        // A HOLOGRAM MOVES BY ITS OWN x AND z -- its offset on this drawing,
+        // not a point on it -- so it rides the move and its undo, and the
+        // magnet, which reads this list for corners to catch, passes it by.
+        ...entries.filter(e => e.type === 'hologram').map(({ item }) => {
+          item.x = Number(item.x) || 0; item.z = Number(item.z) || 0;
+          return { vtx: item, x: item.x, z: item.z, holo: true };
+        })] };
   };
   // WHAT A MOVE'S RELEASE WORKS OUT AGAIN for where the pieces now are: a
   // moved beam row re-asks its floor's span (stepUpJoists -- the deeper floor
@@ -16336,6 +16584,20 @@
     lengthBox.blur();
     stretchApply(ux / len * feet, uz / len * feet);
   };
+  // A HOLOGRAM LIT FROM ITS LIST ROW, as one picked is lit, a little lighter.
+  function paintHologramHover() {
+    if (!hologramHover || !holograms().includes(hologramHover)) return;
+    ctx.save();
+    ctx.strokeStyle = selectInk();
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    hologramWallsHere(hologramHover).forEach(w => {
+      const a = toS(w.start), b = toS(w.end);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+    ctx.restore();
+  }
   // THE BOX, THE BASE POINT AND A GHOST OF WHERE IT ALL GOES.
   function paintStretch() {
     if (activeTool !== 'stretch' || !stretchState?.a) return;
@@ -16573,6 +16835,18 @@
     }
     if (d.kind === 'selection') {
       if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); finishTypedMidDrag(); paint(); return; }
+      // SUITES MOVED ON THEIR OWN LINE UP WITH THE SHELL when let go near it,
+      // as one does in hand (hologram.js suiteSnap) -- all of them by the
+      // first suite's slide, so the set keeps its spacing.
+      const holos = d.set.holos || [];
+      const suite = !d.set.points.length && holos.find(holo => holo.mode === 'suite');
+      if (suite && H()?.suiteSnap) {
+        const slide = H().suiteSnap(drawing, suite, activeLevelId());
+        if (slide.x || slide.z) {
+          holos.forEach(holo => { holo.x += slide.x; holo.z += slide.z; });
+          d.dx = (d.dx || 0) + slide.x; d.dz = (d.dz || 0) + slide.z;
+        }
+      }
       d.set.points.forEach(relinkVertex);
       const moveStep = { kind: 'rotate', before: d.set.before, detached: d.set.detached, wells: d.set.wells };
       const settled = settleSelectionMove(d.set);
@@ -27650,7 +27924,8 @@
     if (!drawing || !hologramAsk || activeTool !== RESTING_TOOL || activeCut()) return;
     const r = canvas.getBoundingClientRect();
     const world = toWorld(e.clientX - r.left, e.clientY - r.top);
-    if (hitAt(world) || !hologramUnder(world)) return;
+    const own = hitAt(world);
+    if ((own && own.type !== 'hologram') || !hologramUnder(world)) return;
     e.preventDefault();
     traceAsk.hidden = true;
     hologramAsk.hidden = false;
@@ -27774,6 +28049,33 @@
     paint();
     sayOnStrip(`A copy of ${hologramNoun(holo)} is on ${suiteFloorName(copy)}, right over this one \u2014 UNDO takes it off.`);
   };
+  // ITS DRAWING ON A NEW SHELF: its lowest floor's walls, doors, windows,
+  // fixtures and the rest, pasted the way PASTE puts a copy down (fresh ids,
+  // each opening on its wall's copy), on a shelf named for the file.
+  const editOnShelf = holo => {
+    const src = holo?.source;
+    if (!drawing || !src) return;
+    const floor = floorsOf(src.levels)[0];
+    const floorId = floor ? Number(floor.id) : null;
+    const TYPE_OF = { walls: 'wall', lines: 'line', floors: 'floor', fenestrations: 'fenestration',
+      fixtures: 'fixture', roomTags: 'roomtag', notes: 'note', columns: 'column', beams: 'beam',
+      shapes: 'shape', outlines: 'outline' };
+    const items = Object.entries(TYPE_OF).flatMap(([key, type]) => (Array.isArray(src[key]) ? src[key] : [])
+      .filter(item => item && (floorId == null || Number(item.levelId) === floorId))
+      .map(item => ({ type, raw: JSON.parse(JSON.stringify(item)) })));
+    if (!items.length) { sayOnStrip(`${hologramNoun(holo)} has nothing on its floor to put on a shelf.`); return; }
+    addShelf();
+    drawing.boneyardShelves = shelves();
+    const shelf = drawing.boneyardShelves.find(sh => Number(sh.id) === activeShelfId());
+    if (shelf) shelf.name = String(holo.name || 'SUITE').toUpperCase();
+    const was = held;
+    held = items;
+    pasteHeld();
+    held = was;
+    buildChrome();
+    paint();
+    sayOnStrip(`${hologramNoun(holo)} is on the shelf ${shelf?.name || ''} to change. SAVE AS SUITE writes it back out; REFRESH on its card updates every copy.`);
+  };
   const mirrorHologram = holo => {
     const flip = holo.flip !== true;
     hologramEdit(holo, { flip }, flip
@@ -27794,6 +28096,16 @@
     });
     setHologramChip();
   }
+  // THE LIST FOLLOWS THE PLAN: a hologram picked there lights its row (and
+  // brings it into view), and a COPY / PASTE or DELETE there shows in the
+  // list -- whenever a card with the list is up.
+  selectionWatchers.push(() => {
+    const up = (hologramAsk && !hologramAsk.hidden) || (traceAsk && !traceAsk.hidden);
+    if (!up) return;
+    renderHologramList();
+    const litRow = document.querySelector('.hologram-copy[data-lit]');
+    if (litRow?.scrollIntoView) litRow.scrollIntoView({ block: 'nearest' });
+  });
   function renderHologramListInto(card) {
     const all = holograms();
     const suites = all.filter(holo => holo.mode === 'suite').length;
@@ -27821,15 +28133,73 @@
       });
       list.appendChild(row);
     }
+    // ONE CARD PER FILE, A NUMBERED ROW PER COPY (Movie, 20 Oct: "can we do
+    // 1 per file (and 1 color per file) and then a list within that of each
+    // copy, with a number assigned and when they click it or scroll past it
+    // it will light up and its' suite will also light up"). The card wears
+    // the file's colour; a row lit is its hologram lit on the plan, and a
+    // hologram picked on the plan lights its row.
+    const files = new Map();
     all.forEach(holo => {
-      const row = document.createElement('div');
-      row.className = 'trace-row';
-      row.dataset.hologramRow = holo.id;
+      const key = H().fileOf(holo);
+      if (!files.has(key)) files.set(key, []);
+      files.get(key).push(holo);
+    });
+    files.forEach((copies, key) => {
+      const first = copies[0];
+      const fileCard = document.createElement('div');
+      fileCard.className = 'hologram-file';
+      fileCard.dataset.hologramFileCard = key;
+      const colour = H().colourOf(first, drawing);
+      fileCard.style.setProperty('--holo-ink', colour.ink);
+      const head = document.createElement('div');
+      head.className = 'trace-row hologram-file-head';
+      const swatch = document.createElement('span');
+      swatch.dataset.hologramSwatch = colour.ink;
       const name = document.createElement('span');
       name.dataset.hologramName = '';
       // A SUITE FILE SAYS WHICH KIND IT IS, on its card (Movie, 20 Oct).
-      const kind = window.DraftDrawingFormat.suiteKind(holo.source?.suiteKind);
-      name.textContent = kind ? `${suiteLabel(kind)} · ${holo.name || holo.id}` : (holo.name || holo.id);
+      const kind = window.DraftDrawingFormat.suiteKind(first.source?.suiteKind);
+      name.textContent = kind ? `${suiteLabel(kind)} · ${first.name || first.id}` : (first.name || first.id);
+      const count = document.createElement('span');
+      count.dataset.hologramCopies = String(copies.length);
+      count.textContent = copies.length === 1 ? '1 copy' : `${copies.length} copies`;
+      // REFRESH IS THE FILE'S: every copy takes the newer one.
+      const refresh = document.createElement('button');
+      refresh.type = 'button';
+      refresh.textContent = 'REFRESH';
+      refresh.dataset.hologramRefresh = first.id;
+      refresh.title = 'Pick the newer copy of its .draft; every copy of the same file takes it';
+      refresh.addEventListener('click', () => { hologramRefreshing = first; hologramFile.click(); });
+      // EDIT ON SHELF (Movie, 20 Oct: "they can also use that area to modify
+      // the SUITES for the existing SHELL"): the file's own drawing put on a
+      // new shelf here to change, then SAVE AS SUITE and REFRESH.
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = 'EDIT ON SHELF';
+      edit.dataset.hologramEditShelf = first.id;
+      edit.title = 'Put a copy of its drawing on a new BONEYARD shelf to change; SAVE AS SUITE, then REFRESH';
+      edit.addEventListener('click', () => { closeHologramCards(); editOnShelf(first); });
+      head.append(swatch, name, count, edit, refresh);
+      fileCard.appendChild(head);
+      copies.forEach((holo, index) => {
+      const row = document.createElement('div');
+      row.className = 'trace-row hologram-copy';
+      row.dataset.hologramRow = holo.id;
+      const number = document.createElement('span');
+      number.dataset.hologramNumber = String(index + 1);
+      number.textContent = `#${index + 1}`;
+      const lit = selection.some(entry => entry.type === 'hologram' && entry.item === holo);
+      if (lit) row.dataset.lit = '';
+      // LIT BY A PASS OF THE POINTER (scrolling past it) and PICKED BY A
+      // CLICK on the row, which is the same as picking it on the plan.
+      row.addEventListener('mouseenter', () => { hologramHover = holo; paint(); });
+      row.addEventListener('mouseleave', () => { if (hologramHover === holo) { hologramHover = null; paint(); } });
+      row.addEventListener('click', event => {
+        if (event.target.closest('button')) return;
+        setSelection([{ type: 'hologram', item: holo }]);
+        paint();
+      });
       const button = (label, key, title, onClick) => {
         const b = document.createElement('button');
         b.type = 'button';
@@ -27857,7 +28227,7 @@
           renderHologramList();
         });
       mode.setAttribute('aria-pressed', suite ? 'true' : 'false');
-      row.append(name, mode,
+      row.append(number, mode,
         button(holo.hidden ? 'SHOW' : 'HIDE', 'hologramShow', '', () => {
           hologramEdit(holo, { hidden: !holo.hidden });
           renderHologramList();
@@ -27921,10 +28291,6 @@
           sayOnStrip(`A copy of ${hologramNoun(holo)} is in \u2014 ${traceMoveWord(traceMoving)}`);
           paint();
         }),
-        button('REFRESH', 'hologramRefresh', 'Pick the newer copy of its .draft; every copy of the same file takes it', () => {
-          hologramRefreshing = holo;
-          hologramFile.click();
-        }),
         button('DELETE', 'hologramDelete', '', () => {
           const at = drawing.holograms.indexOf(holo);
           if (at < 0) return;
@@ -27935,7 +28301,9 @@
           sayOnStrip(`${hologramNoun(holo)} is gone \u2014 UNDO brings it back.`);
           renderHologramList();
         }));
-      list.appendChild(row);
+      fileCard.appendChild(row);
+      });
+      list.appendChild(fileCard);
     });
   }
   const readHologramFile = async file => {
@@ -27988,8 +28356,12 @@
       return;
     }
     const pivot = hologramPivot(parsed);
+    // A NEW FILE TAKES THE FIRST COLOUR NO FILE HERE HAS; the same file
+    // brought in again is that file, and wears its colour.
+    const sameFile = holograms().some(h => H()?.fileOf(h) === name);
     const [holo] = F.holograms([{ id: newDrawingItemId('hologram'), name, source: parsed,
-      x: 0, z: 0, angleDeg: 0, pivotX: pivot.x, pivotZ: pivot.z }]);
+      x: 0, z: 0, angleDeg: 0, pivotX: pivot.x, pivotZ: pivot.z,
+      ...(!sameFile && H()?.nextColour ? { colour: H().nextColour(drawing) } : {}) }]);
     if (!holo) {
       sayOnStrip(`${file.name} is not a drawing this page can read.`);
       return;
@@ -33550,6 +33922,7 @@
     const it = hit.item;
     const shared = shortName(hit.type, it);
     if (shared) return shared;
+    if (hit.type === 'hologram') return `${it.mode === 'suite' ? 'SUITE' : 'HOLOGRAM'} ${it.name || ''}`.trim();
     if (hit.type === 'roomtag') return `ROOM TAG ${String(it.text || it.name || '').trim()}`.trim();
     if (hit.type === 'note') {
       const words = String(it.text?.body || it.body || it.text || '').trim().split(/\s+/);

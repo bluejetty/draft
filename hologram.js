@@ -21,6 +21,43 @@
   const PALE = 'rgb(186,214,242)';
   const ALPHA = 0.75;
   const VIEWS = new Set(['plan', 'floor', 'foundation']);
+  // ONE COLOUR PER FILE (Movie, 20 Oct: "i'd like a different color for each
+  // new 'HOLOGRAM'" -- "1 per file (and 1 color per file)"). The blue first,
+  // so a drawing with one file looks as it always did; each pair is the ink a
+  // line turns and the pale a wall's body turns (see PAINTING below). A copy
+  // is the same file, so it is the same colour. Shown on a blue HOLOGRAM; a
+  // SUITE draws in the drawing's own inks.
+  const COLOURS = Object.freeze([
+    Object.freeze({ ink: BLUE, pale: PALE }),
+    Object.freeze({ ink: 'rgb(222,140,60)', pale: 'rgb(244,214,184)' }),
+    Object.freeze({ ink: 'rgb(84,178,104)', pale: 'rgb(196,232,204)' }),
+    Object.freeze({ ink: 'rgb(186,96,196)', pale: 'rgb(232,204,238)' }),
+    Object.freeze({ ink: 'rgb(206,182,48)', pale: 'rgb(240,232,184)' }),
+    Object.freeze({ ink: 'rgb(56,176,176)', pale: 'rgb(188,232,232)' }),
+    Object.freeze({ ink: 'rgb(214,92,92)', pale: 'rgb(242,200,200)' }),
+  ]);
+  // A FILE IS ITS NAME: the copies are named for the file they came from,
+  // which is what REFRESH already reads as one block.
+  const fileOf = holo => String(holo?.name || holo?.id || '');
+  // Its colour: the one any of its copies was given when it came in, else
+  // its place among the drawing's files, in the order they first appear.
+  const colourIndex = (holo, saved) => {
+    const all = Array.isArray(saved?.holograms) ? saved.holograms : [];
+    const key = fileOf(holo);
+    const given = [holo, ...all.filter(h => fileOf(h) === key)]
+      .find(h => Number.isInteger(h?.colour) && h.colour >= 0);
+    if (given) return given.colour % COLOURS.length;
+    const files = [];
+    all.forEach(h => { const k = fileOf(h); if (!files.includes(k)) files.push(k); });
+    return Math.max(0, files.indexOf(key)) % COLOURS.length;
+  };
+  const colourOf = (holo, saved) => COLOURS[colourIndex(holo, saved)];
+  // The colour a file coming in takes: the first no file here has.
+  const nextColour = saved => {
+    const taken = new Set((Array.isArray(saved?.holograms) ? saved.holograms : []).map(h => colourIndex(h, saved)));
+    for (let i = 0; i < COLOURS.length; i += 1) if (!taken.has(i)) return i;
+    return taken.size % COLOURS.length;
+  };
 
   // The drawing of a level a hologram shows under a given one: the same view
   // where it has one, the PLAN for any other (electrical, stair), and the
@@ -536,40 +573,57 @@
     // THE SUITES FIRST, straight onto the target in the drawing's own inks.
     const suiteDrew = list.some(isSuite) && show.existing
       ? paintSuites(ctx, toS, list.filter(isSuite), info, levelId, view, env) : false;
-    let drew = false;
+    // ONE PASS PER COLOUR: each file's holograms drawn, tinted its colour
+    // through the mask, laid on, and the scratch cleared for the next.
+    const groups = new Map();
     list.filter(holo => !isSuite(holo)).forEach(holo => {
-      try {
-        const place = pt => toS(F.hologramPoint(holo, pt));
-        const split = parts(holo);
-        if (show.existing) {
-          drew = LP.drawPlan(ink, place, split.existing, levelId,
-            { view, hologram: true, paperColor: env.paperColor || '#ffffff' }) || drew;
-        }
-        if (show.demo) drew = paintDemo(ink, place, holo, split, levelId, view || 'plan') || drew;
-      } catch (error) {
-        console.warn(`hologram ${holo.name || holo.id} could not be drawn`, error);
-      }
+      const i = colourIndex(holo, saved);
+      if (!groups.has(i)) groups.set(i, []);
+      groups.get(i).push(holo);
     });
-    if (!drew) return suiteDrew;
-    ink.setTransform(1, 0, 0, 1, 0, 0);
-    const mask = maskCanvas.getContext('2d');
-    mask.globalCompositeOperation = 'copy';
-    mask.drawImage(inkCanvas, 0, 0);
-    ink.globalCompositeOperation = 'screen';
-    ink.fillStyle = BLUE;
-    ink.fillRect(0, 0, w, h);
-    ink.globalCompositeOperation = 'multiply';
-    ink.fillStyle = PALE;
-    ink.fillRect(0, 0, w, h);
-    ink.globalCompositeOperation = 'destination-in';
-    ink.drawImage(maskCanvas, 0, 0);
-    ink.globalCompositeOperation = 'source-over';
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha *= ALPHA;
-    ctx.drawImage(inkCanvas, 0, 0);
-    ctx.restore();
-    return true;
+    let any = false;
+    groups.forEach((group, i) => {
+      const colour = COLOURS[i];
+      let drew = false;
+      ink.setTransform(1, 0, 0, 1, 0, 0);
+      ink.globalCompositeOperation = 'source-over';
+      ink.clearRect(0, 0, w, h);
+      ink.setTransform(ctx.getTransform());
+      group.forEach(holo => {
+        try {
+          const place = pt => toS(F.hologramPoint(holo, pt));
+          const split = parts(holo);
+          if (show.existing) {
+            drew = LP.drawPlan(ink, place, split.existing, levelId,
+              { view, hologram: true, paperColor: env.paperColor || '#ffffff' }) || drew;
+          }
+          if (show.demo) drew = paintDemo(ink, place, holo, split, levelId, view || 'plan') || drew;
+        } catch (error) {
+          console.warn(`hologram ${holo.name || holo.id} could not be drawn`, error);
+        }
+      });
+      if (!drew) return;
+      any = true;
+      ink.setTransform(1, 0, 0, 1, 0, 0);
+      const mask = maskCanvas.getContext('2d');
+      mask.globalCompositeOperation = 'copy';
+      mask.drawImage(inkCanvas, 0, 0);
+      ink.globalCompositeOperation = 'screen';
+      ink.fillStyle = colour.ink;
+      ink.fillRect(0, 0, w, h);
+      ink.globalCompositeOperation = 'multiply';
+      ink.fillStyle = colour.pale;
+      ink.fillRect(0, 0, w, h);
+      ink.globalCompositeOperation = 'destination-in';
+      ink.drawImage(maskCanvas, 0, 0);
+      ink.globalCompositeOperation = 'source-over';
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha *= ALPHA;
+      ctx.drawImage(inkCanvas, 0, 0);
+      ctx.restore();
+    });
+    return any || suiteDrew;
   };
 
   // The shown holograms' walls where they are placed, for a caller framing
@@ -786,7 +840,8 @@
   };
 
   window.DraftHologram = Object.freeze({
-    BLUE, PALE, ALPHA, VIEWS, planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
+    BLUE, PALE, ALPHA, VIEWS, COLOURS, colourOf, colourIndex, nextColour, fileOf,
+    planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
     drawn, suiteSuperNodes,
   });

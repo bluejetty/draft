@@ -136,7 +136,10 @@ test('the HOLOGRAM chip lists what is loaded; a SUITE row has no DEMO and switch
   await chip.click();
   const card = page.locator('#hologram-ask');
   await expect(card).toBeVisible();
-  await expect(card.locator('[data-hologram-row="h1"]')).toContainText('suite-a');
+  // ONE CARD PER FILE (Movie, 20 Oct): the file's name on its card, the copy
+  // a numbered row under it.
+  await expect(card.locator('[data-hologram-file-card="suite-a"] [data-hologram-name]')).toHaveText('suite-a');
+  await expect(card.locator('[data-hologram-row="h1"]')).toContainText('#1');
   await expect(card.locator('[data-hologram-mode="h1"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(card.locator('[data-hologram-demo="h1"]')).toHaveCount(0);
   await expect(card.locator('[data-hologram-move="h1"]')).toBeVisible();
