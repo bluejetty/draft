@@ -4373,6 +4373,33 @@
   const hologramShapes = (holo, items, levelId, view) => H().shapes(holo, items, levelId, view);
   const hologramWallsPlaced = () => (H() ? holograms().filter(holo => !holo.hidden)
     .flatMap(holo => H().placed(holo, H().parts(holo).existing.walls || [])) : []);
+  // ── A HOLOGRAM PICKED LIKE AN ASSEMBLY (Movie, 20 Oct) ─────────────────
+  //
+  // "would it be possible to SELECT the HOLOGRAM UNITS as like selecting a
+  // ASSEMBLY unit - and allow the user to copy, flip rotate etc in the way
+  // they can do it with a selected ASSEMBLY unit (or units) id like to pick
+  // all 4 of these suites with a rectagular select and then copy / flip
+  // them". Its walls on this level, where they stand on the plan: a click on
+  // one picks the whole hologram, and the box catches it by them.
+  const hologramWallsHere = holo => (H() && !holo?.hidden
+    ? H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === activeLevelId()))
+      .filter(w => w?.start && w?.end) : []);
+  const hologramPickAt = worldPt => {
+    const G = window.DraftGeometry2D;
+    if (!G) return null;
+    const reach = SELECT_GRAB_PX / view.scale;
+    let best = null, bestD = reach;
+    holograms().forEach(holo => hologramWallsHere(holo).forEach(wall => {
+      const { d } = G.pointToSegment(worldPt, wall);
+      if (d < bestD) { bestD = d; best = holo; }
+    }));
+    return best;
+  };
+  // ITS PLACED PIVOT -- where its own middle stands on this drawing -- and
+  // every corner of its walls here, for the middle a turn or a flip goes about.
+  const hologramPivotPlaced = holo => ({ x: (Number(holo.pivotX) || 0) + (Number(holo.x) || 0),
+    z: (Number(holo.pivotZ) || 0) + (Number(holo.z) || 0) });
+  const hologramCorners = holo => hologramWallsHere(holo).flatMap(w => [w.start, w.end]);
 
   // ── SUPER NODES (Movie, 20 Oct) ───────────────────────────────────────
   //
@@ -11248,6 +11275,14 @@
         if (line) out.push({ type: 'dimension', item, parts: [line.map(p => toWorld(p.x, p.y))], open: true });
       });
     }
+    // A HOLOGRAM by its walls on this level: inside the blue box when all of
+    // them are, caught by the green one when the box touches any.
+    if (filterAllows('hologram')) {
+      holograms().forEach(item => {
+        const segs = hologramWallsHere(item).map(w => [w.start, w.end]);
+        if (segs.length) out.push({ type: 'hologram', item, parts: segs, open: true });
+      });
+    }
     // A NOTE IS IN THE WINDOW when its text block and the tip of its leader are.
     if (filterAllows('note')) {
       notes().forEach(item => {
@@ -11955,6 +11990,12 @@
       const roof = roofAt(worldPt);
       if (roof) return { type: 'roof', item: roof };
     }
+    // A HOLOGRAM LAST: it is under the drawing, so anything of this drawing's
+    // own at the press is what the press means.
+    if (filterAllows('hologram')) {
+      const holo = hologramPickAt(worldPt);
+      if (holo) return { type: 'hologram', item: holo };
+    }
     return null;
   };
 
@@ -12001,7 +12042,8 @@
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
       fixture: fixtures(), stair: stairs(), roof: pickRoofs(), roomtag: roomTags(), shape: shapes(),
-      dimension: shownDimensions(), note: notes(), beam: beams(), column: columns(), superNode: superNodes() };
+      dimension: shownDimensions(), note: notes(), beam: beams(), column: columns(), superNode: superNodes(),
+      hologram: holograms() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -12032,6 +12074,13 @@
         ctx.lineWidth = 3;
         ctx.strokeRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
         ctx.restore();
+        return;
+      }
+      if (type === 'hologram') {
+        hologramWallsHere(item).forEach(w => {
+          const a = toS(w.start), b = toS(w.end);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
         return;
       }
       if (type === 'column' || type === 'superNode') {
@@ -13287,6 +13336,7 @@
     if (own) return by(hand, own);
     let best = null;
     d.set.before.forEach(b => {
+      if (b.holo) return;
       const at = { x: b.x + dx, z: b.z + dz };
       const hit = catchAt(at);
       if (hit && (!best || hit.share < best.hit.share)) best = { hit, at };
@@ -14745,6 +14795,8 @@
     roomtag: 'roomTags',
     // A NOTE (Movie, 10 Oct): deletes and undoes like a tag.
     note: 'notes',
+    // A HOLOGRAM (Movie, 20 Oct): picked, copied, deleted like an assembly.
+    hologram: 'holograms',
     shape: 'shapes',
     // A DIMENSION, picked off its line (Movie, 6 Oct: "with the DIMENSION
     // lines, can they be selectable so i can move some if there is a better
@@ -14956,6 +15008,14 @@
       //             copy around.
       const { id: _id, groupId: _g, ...rest } = raw;
       const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };
+      // A HOLOGRAM IS THE SAME FILE AGAIN, as its card's COPY makes it: where
+      // it stood, on no level of this drawing's (its own levels say where it
+      // stands), with none of the first one's DEMO marks.
+      if (type === 'hologram') {
+        delete copy.levelId;
+        delete copy.demo;
+        while (holograms().some(h => h.id === copy.id)) copy.id = newDrawingItemId('hologram');
+      }
       if (type === 'wall') wallIds.set(String(raw.id), copy.id);
       if (onWall(type)) {
         copy.wallId = wallIds.get(String(raw.wallId));
@@ -15204,12 +15264,14 @@
     }
     if (!selection.length || !Number.isFinite(degrees) || Math.abs(degrees % 360) < 1e-9) return;
     const { entries, detached, points } = turnSet();
-    if (!points.length) {
+    const holos = entries.filter(e => e.type === 'hologram').map(e => e.item);
+    if (!points.length && !holos.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
       sayOnStrip('Nothing in the selection can be turned on its own -- doors, windows and fixtures turn with their walls.');
       return;
     }
-    const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
+    const spread = [...points, ...holos.flatMap(hologramCorners)];
+    const xs = spread.map(pt => pt.x), zs = spread.map(pt => pt.z);
     const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
     const a = degrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
     const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
@@ -15232,8 +15294,19 @@
     // end for end has its open side where the wall was. One UNDO takes the
     // turn and the new framing back together.
     const turn = { kind: 'rotate', before, detached, wells };
+    // A HOLOGRAM TURNS ABOUT THE SAME MIDDLE: its placed pivot goes round,
+    // and it turns on it by as much.
+    const holoEdits = holos.map(holo => {
+      const was = { ...holo };
+      const p = hologramPivotPlaced(holo);
+      turnPoint(p);
+      holo.x = p.x - (Number(holo.pivotX) || 0);
+      holo.z = p.z - (Number(holo.pivotZ) || 0);
+      holo.angleDeg = ((((Number(holo.angleDeg) || 0) + degrees) % 360) + 360) % 360;
+      return { item: holo, before: was };
+    });
     const reframed = entries.filter(entry => entry.type === 'stair').map(({ item }) => reframeStair(item));
-    const steps = reframed.flatMap(r => r.steps);
+    const steps = [...(holoEdits.length ? [{ kind: 'props', edits: holoEdits }] : []), ...reframed.flatMap(r => r.steps)];
     undoStack.push(steps.length ? { kind: 'batch', steps: [turn, ...steps] } : turn);
     markDirty();
     paint();
@@ -15263,12 +15336,13 @@
   const flipSelection = axis => {
     if (!selection.length || (axis !== 'x' && axis !== 'z')) return;
     const { entries, detached, points } = turnSet();
-    if (!points.length) {
+    const holos = entries.filter(e => e.type === 'hologram').map(e => e.item);
+    if (!points.length && !holos.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
       sayOnStrip('Nothing in the selection can be flipped on its own -- doors, windows and fixtures flip with their walls.');
       return;
     }
-    const vals = points.map(pt => pt[axis]);
+    const vals = [...points, ...holos.flatMap(hologramCorners)].map(pt => pt[axis]);
     const mid = (Math.min(...vals) + Math.max(...vals)) / 2;
     const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
@@ -15300,6 +15374,20 @@
       if (item.turn !== 'left' && item.turn !== 'right') return;
       edits.push({ item, before: { ...item } });
       item.turn = item.turn === 'left' ? 'right' : 'left';
+    });
+    // A HOLOGRAM IS TURNED OVER: its placed pivot mirrors across the middle,
+    // it is mirrored, and its turn runs the other way -- left for right is
+    // -angle, top for bottom is 180 - angle (a mirror across z is one across
+    // x and a half turn).
+    holos.forEach(holo => {
+      edits.push({ item: holo, before: { ...holo } });
+      const p = hologramPivotPlaced(holo);
+      mirror(p);
+      holo.x = p.x - (Number(holo.pivotX) || 0);
+      holo.z = p.z - (Number(holo.pivotZ) || 0);
+      if (holo.flip === true) delete holo.flip; else holo.flip = true;
+      const a = Number(holo.angleDeg) || 0;
+      holo.angleDeg = ((((axis === 'x' ? -a : 180 - a) % 360) + 360) % 360);
     });
     // THE SAME UNDO RECORD AS A TURN: the points back, the corners joined.
     const flipped = { kind: 'rotate', before, detached, wells };
@@ -16072,8 +16160,16 @@
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
     return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across,
       stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
-      before: points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
-        ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })) };
+      holos: entries.filter(e => e.type === 'hologram').map(e => e.item),
+      before: [...points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
+        ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })),
+        // A HOLOGRAM MOVES BY ITS OWN x AND z -- its offset on this drawing,
+        // not a point on it -- so it rides the move and its undo, and the
+        // magnet, which reads this list for corners to catch, passes it by.
+        ...entries.filter(e => e.type === 'hologram').map(({ item }) => {
+          item.x = Number(item.x) || 0; item.z = Number(item.z) || 0;
+          return { vtx: item, x: item.x, z: item.z, holo: true };
+        })] };
   };
   // WHAT A MOVE'S RELEASE WORKS OUT AGAIN for where the pieces now are: a
   // moved beam row re-asks its floor's span (stepUpJoists -- the deeper floor
@@ -16531,6 +16627,18 @@
     }
     if (d.kind === 'selection') {
       if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); paint(); return; }
+      // SUITES MOVED ON THEIR OWN LINE UP WITH THE SHELL when let go near it,
+      // as one does in hand (hologram.js suiteSnap) -- all of them by the
+      // first suite's slide, so the set keeps its spacing.
+      const holos = d.set.holos || [];
+      const suite = !d.set.points.length && holos.find(holo => holo.mode === 'suite');
+      if (suite && H()?.suiteSnap) {
+        const slide = H().suiteSnap(drawing, suite, activeLevelId());
+        if (slide.x || slide.z) {
+          holos.forEach(holo => { holo.x += slide.x; holo.z += slide.z; });
+          d.dx = (d.dx || 0) + slide.x; d.dz = (d.dz || 0) + slide.z;
+        }
+      }
       d.set.points.forEach(relinkVertex);
       const moveStep = { kind: 'rotate', before: d.set.before, detached: d.set.detached, wells: d.set.wells };
       const settled = settleSelectionMove(d.set);
@@ -27536,7 +27644,8 @@
     if (!drawing || !hologramAsk || activeTool !== RESTING_TOOL || activeCut()) return;
     const r = canvas.getBoundingClientRect();
     const world = toWorld(e.clientX - r.left, e.clientY - r.top);
-    if (hitAt(world) || !hologramUnder(world)) return;
+    const own = hitAt(world);
+    if ((own && own.type !== 'hologram') || !hologramUnder(world)) return;
     e.preventDefault();
     traceAsk.hidden = true;
     hologramAsk.hidden = false;
@@ -33321,6 +33430,7 @@
     const it = hit.item;
     const shared = shortName(hit.type, it);
     if (shared) return shared;
+    if (hit.type === 'hologram') return `${it.mode === 'suite' ? 'SUITE' : 'HOLOGRAM'} ${it.name || ''}`.trim();
     if (hit.type === 'roomtag') return `ROOM TAG ${String(it.text || it.name || '').trim()}`.trim();
     if (hit.type === 'note') {
       const words = String(it.text?.body || it.body || it.text || '').trim().split(/\s+/);
