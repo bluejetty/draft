@@ -73,6 +73,13 @@
       const c = s[i];
       if ('+-*/'.includes(c)) { out.push({ t: 'op', v: c }); i += 1; continue; }
       if (c === '(' || c === ')') { out.push({ t: c }); i += 1; continue; }
+      // THE ROOT AND THE SQUARE (Movie, 20 Oct: "put a SQUARE ROOT calc
+      // button on here ... needed that function to calculate for a SQ bSQ =
+      // c SQ pythag"): √ before what it takes the root of, ² after what is
+      // squared. `sqrt` typed is the root too.
+      if (c === '\u221a') { out.push({ t: 'op', v: 'sqrt' }); i += 1; continue; }
+      if (c === '\u00b2') { out.push({ t: 'op', v: 'sq' }); i += 1; continue; }
+      if (s.slice(i, i + 4).toLowerCase() === 'sqrt') { out.push({ t: 'op', v: 'sqrt' }); i += 4; continue; }
       if (!peekNum(i)) throw new Error(`can't read "${s.slice(i, i + 6)}"`);
       const start = i;
       // A FRACTION FIRST: "3/8" is inches.
@@ -157,19 +164,34 @@
       const dim = A.dim - (b.bare ? 0 : b.dim);
       return { v: A.v / b.v, dim, ...(dim === 0 ? { bare: true } : {}) };
     };
+    // A SQUARE CARRIES ITS UNITS: a length squared is an area (mul's own
+    // rule, so two bare numbers squared are a room in sq ft, as "12 x 10"
+    // is), and the root takes them back: an area's root is a length, a bare
+    // number's a bare number. A length's root is nothing a drafter means.
+    const square = x => mul(x, x);
+    const root = x => {
+      if (x.v < 0) throw new Error("can't take the root of a minus");
+      if (x.bare) return { v: Math.sqrt(x.v), dim: 0, bare: true };
+      if (x.dim === 2) return { v: Math.sqrt(x.v), dim: 1 };
+      if (x.dim === 1) throw new Error("can't take the root of a length -- square it first");
+      throw new Error("can't take the root of that");
+    };
     const unary = () => {
       const t = take();
       if (!t) throw new Error('the line ends too soon');
-      if (t.t === 'op' && t.v === '-') { const x = unary(); return { ...x, v: -x.v }; }
-      if (t.t === 'op' && t.v === '+') return unary();
-      if (t.t === '(') {
-        const x = sum();
+      let x;
+      if (t.t === 'op' && t.v === '-') { const y = unary(); return { ...y, v: -y.v }; }
+      else if (t.t === 'op' && t.v === '+') return unary();
+      else if (t.t === 'op' && t.v === 'sqrt') x = root(unary());
+      else if (t.t === '(') {
+        x = sum();
         if (!peek() || peek().t !== ')') throw new Error('a bracket is not closed');
         take();
-        return x;
-      }
-      if (t.t === 'num') return { v: t.v, dim: t.dim, ...(t.bare ? { bare: true } : {}) };
-      throw new Error('two signs in a row');
+      } else if (t.t === 'num') x = { v: t.v, dim: t.dim, ...(t.bare ? { bare: true } : {}) };
+      else throw new Error('two signs in a row');
+      // AND THE SQUARE BINDS TIGHTEST, after what it squares: 3'² + 4'².
+      while (peek() && peek().t === 'op' && peek().v === 'sq') { take(); x = square(x); }
+      return x;
     };
     const term = () => {
       let x = unary();

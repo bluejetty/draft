@@ -64,6 +64,15 @@ check('three lengths multiplied are a volume, which waits for the concrete estim
 check('dividing by nothing is refused', C => [main(C, `10' / 0`), "!! can't divide by zero"]);
 check('a line that stops short says so', C => [main(C, `10' +`), '!! the line ends too soon']);
 
+// ── THE ROOT AND THE SQUARE (Movie, 20 Oct) ──────────────────────────────
+check('Pythagoras: the root of three squared and four squared is five feet', C => [main(C, "\u221a(3'\u00b2 + 4'\u00b2)"), `5'-0"`]);
+check('two bare sides squared are a room each, and their root a length', C => [main(C, '\u221a(3\u00b2 + 4\u00b2)'), `5'-0"`]);
+check('the root of an area is a length', C => [main(C, '\u221a(144 sqft)'), `12'-0"`]);
+check('a length squared is an area', C => [main(C, "(10' + 2')\u00b2"), '144 sq ft']);
+check('sqrt typed is the root too', C => [main(C, 'sqrt(144 sqft)'), `12'-0"`]);
+check('the root of a length is refused', C => [main(C, "\u221a(10')"), "!! can't take the root of a length -- square it first"]);
+check('the root of a minus is refused', C => [main(C, '\u221a(-4)'), "!! can't take the root of a minus"]);
+
 // ── WRITING THE ANSWER ───────────────────────────────────────────────────
 check('to the sixteenth, in lowest terms', C => [C.feetInches(1 + 2 / 12 + 0.125 / 12), `1'-2 1/8"`]);
 check('rounding up to the next inch carries', C => [C.feetInches(1 + 11.99 / 12), `2'-0"`]);
@@ -88,7 +97,10 @@ const MUTATIONS = [
     s => s.replace("mm: [FT_PER_M / 1000, 1]", "mm: [FT_PER_M, 1]")],
   ['metric makes no difference to a bare number',
     s => s.replace("const lengthOfBare = v => v * (metric ? FT_PER_M : 1);", "const lengthOfBare = v => v;")],
-  ['brackets are ignored', s => s.replace("      if (t.t === '(') {\n        const x = sum();", "      if (false) {\n        const x = sum();")],
+  ['brackets are ignored', s => s.replace("      else if (t.t === '(') {\n        x = sum();", "      else if (false) {\n        x = sum();")],
+  ['the root is not taken', s => s.replace("      if (x.dim === 2) return { v: Math.sqrt(x.v), dim: 1 };", "      if (x.dim === 2) return { v: x.v, dim: 1 };")],
+  ['the square is not squared', s => s.replace("    const square = x => mul(x, x);", "    const square = x => x;")],
+  ["a length's root goes through", s => s.replace("      if (x.dim === 1) throw new Error(\"can't take the root of a length -- square it first\");", "      if (x.dim === 1) return { v: Math.sqrt(x.v), dim: 1 };")],
 ];
 
 const runChecks = C => CHECKS.map(({ label, fn }) => {

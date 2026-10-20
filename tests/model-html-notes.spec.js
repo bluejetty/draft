@@ -50,7 +50,8 @@ async function saved(page) {
 test('NOTES hangs under LEVELS / LAYERS on the right edge: a blue sticky pad, dark lettering', async ({ page }) => {
   await open(page);
   await expect(tab(page)).toBeVisible();
-  await expect(tab(page)).toHaveText('NOTES');
+  // NOTES / CALC (Movie, 20 Oct: "make the title for the tab NOTES / CALC").
+  await expect(tab(page)).toHaveText('NOTES / CALC');
   const [levels, notes] = await Promise.all([
     page.locator('#right-tab').boundingBox(), tab(page).boundingBox()]);
   expect(notes.y, 'below LEVELS / LAYERS, not over it').toBeGreaterThanOrEqual(levels.y + levels.height);
