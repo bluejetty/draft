@@ -35,8 +35,8 @@ const MUTANTS = [
     test: 'a wall joined to the moving one offers no face' },
   { file: 'MODEL.html',
     name: 'the own face is not told',
-    find: '      ...(lit.own ? { own: [[r4(lit.own.a.x), r4(lit.own.a.z)], [r4(lit.own.b.x), r4(lit.own.b.z)]] } : {}) }));\n',
-    with: '    }));\n',
+    find: '      ...(lit.own ? { own: [[r4(lit.own.a.x), r4(lit.own.a.z)], [r4(lit.own.b.x), r4(lit.own.b.z)]] } : {}),\n',
+    with: '',
     test: 'a dragged wall slides across its run until its face lines up with another wall\'s, and both faces glow' },
 ];
 

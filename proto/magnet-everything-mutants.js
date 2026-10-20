@@ -37,7 +37,7 @@ const MUTANTS = [
     test: 'a floor traced by hand lands a corner on the outline\'s, and a shape\'s corner on the floor\'s' },
   { file: 'MODEL.html',
     name: 'a moved selection seeks nothing',
-    find: '        const seek = pointsSeek(d.set.before, dx, dz, (d.magnet ||= magnetExcluding(d.set.points)));\n',
+    find: '        const seek = moveSeek(d, dx, dz, axis);\n',
     with: '        const seek = null;\n',
     test: 'MOVE carries a floor onto the outline\'s corner by whichever corner comes nearest' },
   { file: 'MODEL.html',
