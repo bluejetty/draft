@@ -841,6 +841,18 @@
   .sel-chip.assembled { color: var(--accent); border-color: var(--accent); }
   .sel-chip.assembled:hover { border-color: var(--accent); }
   .tool-keys { display:grid; grid-template-columns:repeat(4, 40px); gap:4px; }
+  /* THE BAR OVER THE TABS, in the gap between the strip and the rail's top. */
+  #select-bar { position:fixed; z-index:30; left:28px;
+    top: calc(var(--rail-top) - 48px); padding:3px;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background: var(--surface-panel); }
+  #select-bar:empty, #left-rail[hidden] + #select-bar { display:none; }
+  /* PICKING GLOWS (Movie, 19 Oct: "they can see it glowing when its
+     selected"): SELECT while it is picking a kind, and the one kind picked --
+     a glow, so it never reads as a tool armed to draw. */
+  .tool-key.tool-key[data-picking], .tool-key.tool-key[data-picked], .sel-chip.sel-chip[data-picked] {
+    border-color: var(--pick-glow, #5fd4ff); color: var(--pick-glow, #5fd4ff);
+    box-shadow: 0 0 6px 1px var(--pick-glow, #5fd4ff), inset 0 0 0 1px var(--pick-glow, #5fd4ff); }
   .tool-key { position:relative; width:40px; height:40px; padding:0;
     display:block; cursor:pointer; border-radius:3px;
     border:1px solid var(--edge-panel);
@@ -1631,6 +1643,13 @@
     </div>
   </div>
 </aside>
+<!-- THE FOUR MAIN KEYS OVER THE TABS (Movie, 19 Oct): "i'd like the 4
+     buttons SELECT / ASSEMBLY / TRIM / DIMENSION up in that little space over
+     the regular open tab area" -- copies, the DRAFTING pane keeps its own
+     ("don't move them, copy them have both"). In the gap ABOVE the rail, not
+     inside it: inside, the rail grew past what fits at 1366x768. It shows
+     while the rail is open, whichever tab. Built by buildSelectBar. -->
+<div id="select-bar" data-select-bar></div>
 
 <!-- TWO TABS ON THE RIGHT EDGE (Movie, 15 Sep): "2 seperate tabs top will be
      LEVELS / LAYERS, and then next down LAYOUT PREVIEWS".
@@ -10796,6 +10815,15 @@
   // over every level, and they are mutually exclusive.
   let selectionMode = 'click';        // 'click' | 'window' | 'window-all'
   let selectFilter = 'all';           // 'all', or one of hitAt's types (FILTERS)
+  // AND WITH 'fixture', ONE KIND OF IT (Movie, 19 Oct: TUB picks only tubs),
+  // or null for every fixture.
+  let selectFixtureKind = null;
+  // SELECT PICKING A KIND (Movie, 19 Oct): pressed from the bar over the
+  // tabs, SELECT lights and the tool keys stop drawing -- each one picks its
+  // kind for SELECT instead, one kind at a time. Esc, S, or SELECT again ends
+  // it.
+  let selectPicking = false;
+  const fixtureKindAllowed = item => !selectFixtureKind || item?.kind === selectFixtureKind;
 
   const selectedWall = () => (selection.length === 1 && selection[0].type === 'wall'
     ? selection[0].item : null);
@@ -11027,7 +11055,7 @@
     }
     if (filterAllows('fixture') && window.DraftFixtureGeometry) {
       const host = drawing?.walls || [];
-      fixtures().forEach(item => {
+      fixtures().filter(fixtureKindAllowed).forEach(item => {
         const geo = window.DraftFixtureGeometry.fixtureGeometry(host, item);
         if (geo) out.push({ type: 'fixture', item, parts: [geo.corners, ...(geo.decks || [])] });
       });
@@ -11041,6 +11069,16 @@
         const b = roomTagBox(item);
         out.push({ type: 'roomtag', item, parts: [[toWorld(b.left, b.top), toWorld(b.right, b.top),
           toWorld(b.right, b.bottom), toWorld(b.left, b.bottom)]] });
+      });
+    }
+    // DIMENSIONS ONLY WHEN DIMENSION IS PICKED (Movie, 19 Oct: "the SELECT
+    // rectangle will be able to select dimensions to delete"). A plain box
+    // leaves them, so boxing walls to delete them keeps the strings. Each is
+    // the line as drawn, where the drafter sees it.
+    if (selectFilter === 'dimension') {
+      shownDimensions().forEach(item => {
+        const line = dimDrawnLine(item);
+        if (line) out.push({ type: 'dimension', item, parts: [line.map(p => toWorld(p.x, p.y))], open: true });
       });
     }
     // A NOTE IS IN THE WINDOW when its text block and the tip of its leader are.
@@ -11666,7 +11704,7 @@
     // them unselectable.
     if (filterAllows('fixture')) {
       const fixture = fixtureAt(worldPt);
-      if (fixture) return { type: 'fixture', item: fixture };
+      if (fixture && fixtureKindAllowed(fixture)) return { type: 'fixture', item: fixture };
     }
     // A DIMENSION IS ANNOTATION, painted over the plan, and its line stands
     // off what it measures -- so it is asked before the walls it sits beside.
@@ -28756,8 +28794,7 @@
         // PRESSING THE ARMED KEY RETURNS TO SELECT rather than to nothing --
         // see the register's comment. Pressing SELECT while select is armed is
         // therefore a no-op, which is right: it is the resting state.
-        btn.addEventListener('click',
-          () => setTool(tool.id === activeTool ? RESTING_TOOL : tool.id));
+        btn.addEventListener('click', () => pressToolKey(tool.id));
         return btn;
       }));
       box.append(name, keys);
@@ -28871,7 +28908,7 @@
     // never going to work.
     if (!roster.availableOn(tool.id, board)) return;
     event.preventDefault();
-    setTool(tool.id === activeTool ? RESTING_TOOL : tool.id);
+    pressToolKey(tool.id);
   });
 
   // A BOARD CHANGE PUTS DOWN A TOOL THE NEW BOARD DOES NOT OFFER, and ONLY
@@ -28962,8 +28999,10 @@
   // when nothing else is selected"). Nothing lit IS all, so pressing the lit
   // type again lets it go -- and 'all' stays the state's own word for that.
   const setSelectFilter = id => {
-    selectFilter = id === selectFilter ? 'all' : id;
+    selectFilter = id === selectFilter && !selectFixtureKind ? 'all' : id;
+    selectFixtureKind = null;
     syncSelectionPanel();
+    syncPickGlow();
   };
 
   let syncSelectionPanel = () => {};
@@ -29050,6 +29089,107 @@
   };
 
   buildSelectionPanel();
+
+  // ── SELECT PICKING A KIND, and the bar over the tabs ─────────────────────
+  //
+  // Movie, 19 Oct: "have the SELECT button chosen, and also choose the
+  // FENETRATION (for this example) and instead of doing the TOOLS FUNCTION
+  // the SELECTION will take over and if a user make a rectangular window it
+  // will SELECT all the FENSTRATIONS in the rectangle so the user can delete
+  // them all at once" -- "same with WALLS and LINES", DIMENSIONS too; "ONLY 1
+  // at a time"; ended by "escape or press S or SELECT again".
+  //
+  // The kind a key picks is the OBJECT TYPE filter's own word, so the chip
+  // and the key light together and the pick and the box read one filter.
+  // Keys with no kind (EXTEND, COPY, TRIM, ASSEMBLY ...) do what they always
+  // did, and arming one ends the picking.
+  const PICK_KINDS = { wall: 'wall', line: 'line', fenestration: 'fenestration', floor: 'floor',
+    roof: 'roof', dormer: 'roof', column: 'column', beam: 'beam', stair: 'stair',
+    fixture: 'fixture', dimension: 'dimension', shape: 'shape', annotation: 'note', roomtag: 'roomtag',
+    node: 'superNode' };
+  const BAR_KEYS = ['select', 'assembly', 'dimension', 'trim'];
+  function syncPickGlow() {
+    document.querySelectorAll('[data-tool-key], [data-bar-key]').forEach(btn => {
+      const id = btn.dataset.toolKey || btn.dataset.barKey;
+      btn.toggleAttribute('data-picking', selectPicking && id === 'select');
+      btn.toggleAttribute('data-picked', selectPicking && PICK_KINDS[id] === selectFilter
+        && !(id === 'fixture' && selectFixtureKind));
+    });
+    document.querySelectorAll('[data-fixture-kind]').forEach(btn => {
+      btn.toggleAttribute('data-picked', selectPicking && selectFilter === 'fixture'
+        && btn.dataset.fixtureKind === selectFixtureKind);
+    });
+  }
+  function pickName() {
+    if (selectFixtureKind) return (window.DraftFixtureKinds?.kindFor(selectFixtureKind)?.label || selectFixtureKind).toUpperCase();
+    return selectFilter === 'fenestration' ? 'DOORS AND WINDOWS'
+      : selectFilter === 'superNode' ? 'SUPER NODES'
+        : selectFilter === 'note' ? 'NOTES' : `${selectFilter.toUpperCase()}S`;
+  }
+  function setSelectPicking(on) {
+    selectPicking = on;
+    if (!on) { selectFilter = 'all'; selectFixtureKind = null; }
+    syncSelectionPanel();
+    syncPickGlow();
+    sayOnStrip(on ? 'SELECT — press a kind (WALL, LINE, FENESTRATION, DIMENSION ...) and box them. Esc, S or SELECT again to stop.'
+      : 'SELECT — picks everything again.');
+  }
+  // ONE KIND AT A TIME: another key swaps to its kind, the lit one lets go.
+  function pickKind(kind, fixtureKind = null) {
+    const same = selectFilter === kind && selectFixtureKind === fixtureKind;
+    selectFilter = same ? 'all' : kind;
+    selectFixtureKind = same ? null : fixtureKind;
+    syncSelectionPanel();
+    syncPickGlow();
+    sayOnStrip(same ? 'SELECT — no kind picked: everything responds. Press a kind, or Esc to stop.'
+      : `SELECT — picking ${pickName()} only. Box them, then DELETE. Esc, S or SELECT again to stop.`);
+  }
+  // EVERY KEY PRESS COMES HERE -- the column, the bar and the letters -- so
+  // they cannot disagree about what a press means.
+  function pressToolKey(id, fromBar = false) {
+    if (id === RESTING_TOOL) {
+      if (selectPicking) { setSelectPicking(false); return; }
+      setTool(RESTING_TOOL);
+      if (fromBar) setSelectPicking(true);
+      return;
+    }
+    if (selectPicking && PICK_KINDS[id]) { pickKind(PICK_KINDS[id]); return; }
+    setTool(id === activeTool ? RESTING_TOOL : id);
+  }
+  toolListeners.push(next => {
+    if (next !== RESTING_TOOL && selectPicking) setSelectPicking(false);
+    document.querySelectorAll('[data-bar-key]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.barKey === next));
+    });
+  });
+  const buildSelectBar = () => {
+    const bar = document.getElementById('select-bar');
+    const roster = window.DraftToolRoster;
+    if (!bar || !roster) return;
+    const resolved = roster.bindings();
+    const keys = document.createElement('div');
+    keys.className = 'tool-keys';
+    keys.append(...BAR_KEYS.map(id => {
+      const tool = roster.get(id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tool-key';
+      btn.dataset.barKey = id;
+      btn.title = id === 'select' ? 'SELECT — then press a kind to pick only that kind' : tool.name;
+      btn.setAttribute('aria-pressed', String(id === activeTool));
+      const letter = document.createElement('span');
+      letter.dataset.toolLetter = '';
+      letter.textContent = roster.keyFor(id, resolved);
+      const label = document.createElement('span');
+      label.dataset.toolName = '';
+      label.textContent = tool.name;
+      btn.append(letter, label);
+      btn.addEventListener('click', () => pressToolKey(id, true));
+      return btn;
+    }));
+    bar.replaceChildren(keys);
+  };
+  buildSelectBar();
 
   // ── ASSEMBLY and UNGROUP ──────────────────────────────────────────────────
   // WHAT AN ASSEMBLY IS, in the file: a named set of members recorded by TYPE
@@ -29274,6 +29414,7 @@
         btn.textContent = kind.label;
         btn.title = kind.note;
         btn.addEventListener('click', () => {
+          if (selectPicking) { pickKind('fixture', kind.id); return; }
           fixtureKindId = kind.id;
           washroomPreset = null;
           kitchenPreset = null;
@@ -33607,6 +33748,7 @@
       // something selected Esc clears the selection first, so a drafter never
       // loses both in one press.
       if (!selection.length && selectFilter !== 'all') setSelectFilter('all');
+      if (!selection.length && selectPicking) setSelectPicking(false);
       elevSelected = null;
       setSelection([]);
       stripRefresh();
