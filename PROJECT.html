@@ -63,6 +63,7 @@
   <script src="./level-assembly.js"></script>
   <script src="./traced-plans.js"></script>
   <script src="./garage-roofs.js"></script>
+  <script src="./project-reload.js"></script>
   <script src="./project-page.js"></script>
   <script src="./build-menu.js"></script>
   <script src="./design-notices.js"></script>
@@ -287,6 +288,7 @@
     .stack-card.view-only .view-only-note { display:block; }
     .build-ask-card { min-width:280px; max-width:calc(100vw - 32px); padding:16px; border:1px solid var(--accent); background:var(--surface-panel); box-shadow:0 0 12px 2px var(--accent); }
     .build-ask-title { margin:0 0 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-primary); }
+    .build-ask-note { margin:0 0 12px; max-width:320px; color:var(--ink-secondary); font-size:13px; line-height:1.35; }
     .build-ask-row { display:flex; gap:8px; }
     .build-ask button { flex:1; padding:8px 10px; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-primary); font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; letter-spacing:.07em; text-transform:uppercase; cursor:pointer; }
     .build-ask button:hover, .build-ask button:focus-visible { border-color:var(--accent); }
@@ -823,6 +825,21 @@
         <button type="button" class="build-ask-cancel" data-build-ask="cancel">Cancel</button>
       </div>
     </div>
+    <!-- THE BONE ON A STANDING HOUSE RELOADS IT (Movie, 20 Oct): "to reload
+         press the bone in project area once you pick your numbers and kinds
+         of stuff youd like". The walls' heights and the shell's wall type,
+         the roofs' pitch and overhang, all brought to this page's numbers;
+         the type of house is locked while walls stand (project-reload.js). -->
+    <div id="project-reload-ask" class="build-ask" role="dialog" aria-modal="true" aria-labelledby="reload-ask-title" hidden>
+      <div class="build-ask-card">
+        <p id="reload-ask-title" class="build-ask-title">Reload the house to these numbers</p>
+        <p class="build-ask-note">Wall heights and the shell&rsquo;s wall type on every level, and the roofs&rsquo; pitch and overhang, follow what this page says now. Interior walls and a wall cut short keep theirs.</p>
+        <div class="build-ask-row">
+          <button type="button" data-reload-ask="go">Reload</button>
+        </div>
+        <button type="button" class="build-ask-cancel" data-reload-ask="cancel">Cancel</button>
+      </div>
+    </div>
     <!-- NEW ASKS ABOUT THE NUMBERS (Movie, 7 Oct: option C, "ask each time"):
          keep the typed PROJECT heights, pitch and overhang for the next house,
          or put the office defaults back. The house, the name and the owner go
@@ -1297,7 +1314,10 @@
       // actually stored now, and write it guarded by the revision we just
       // read. If someone saved in between, the write is REFUSED and we go
       // round again against the newer file rather than flattening it.
-      const writeProjectToStore = async (triesLeft = 3) => {
+      // What the last RELOAD changed -- read by the BONE's status line once
+      // the write has landed. Null is "nothing to reload".
+      let lastReload = null;
+      const writeProjectToStore = async (triesLeft = 3, { reload = false } = {}) => {
         const store = window.SharedFileStore;
         const at = await store.loadSharedFileAt(BUCKET);
         let base = null;
@@ -1363,12 +1383,29 @@
           const regrouped = GR.regroupRoofs(merged);
           if (regrouped) merged.roofs = regrouped;
         }
+        // ── THE BONE RELOADS A STANDING HOUSE (Movie, 20 Oct) ─────────────
+        //
+        // "i forgot to enter the PROJECT info first. i would like to tranform
+        // the existing outline wall and roof to the new contstuction type and
+        // heights". PRESSED ON PURPOSE, not on every save: the follows above
+        // move a wall standing at an OLD number, and a hand-drawn wall never
+        // stood at one -- it stands at the WALL tool's 8'-0" with the tool's
+        // 2x6 -- so no change ever catches it. project-reload.js says what
+        // follows and what is left alone; it works on `merged`, the freshly
+        // re-read file with this page's keys already on it, for the same
+        // reason the follows do.
+        if (reload) {
+          const out = window.DraftProjectReload.reloadHouse(merged,
+            { offsetVariable: window.DraftGeometry2D.offsetOutlineVariable });
+          if (out) { merged.walls = out.walls; merged.roofs = out.roofs; }
+          lastReload = out;
+        }
         const file = new File([JSON.stringify(merged)], fileName, { type: 'application/json' });
         try {
           await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });
         } catch (error) {
           if (!error?.stale || triesLeft <= 0) throw error;
-          return writeProjectToStore(triesLeft - 1);
+          return writeProjectToStore(triesLeft - 1, { reload });
         }
         // Keep the page's copy current: the readouts that derive from the
         // drawing (foundation thickness, ICF) read it, and it is the base a
@@ -1384,12 +1421,14 @@
       // it is also this page's chance to notice a method chosen elsewhere
       // since the tab opened and stop showing the stale one.
       let refreshMethodRow = null;
-      const save = note => {
+      // `note` may be a function, read AFTER the write: the RELOAD's line
+      // counts what the write changed.
+      const save = (note, { reload = false } = {}) => {
         if (readOnly) return Promise.resolve();
         return saveQueue = saveQueue.catch(() => {})
-          .then(() => writeProjectToStore())
+          .then(() => writeProjectToStore(3, { reload }))
           .then(() => { refreshMethodRow?.(); })
-          .then(() => showStatus(note || 'Saved with the drawing.'))
+          .then(() => showStatus((typeof note === 'function' ? note() : note) || 'Saved with the drawing.'))
           .catch(error => {
             console.warn('Unable to save the project information:', error);
             showStatus('Could not save — is browser storage available?');
@@ -5176,8 +5215,22 @@
       // be undone by the next one and would undo theirs on the way out. inert
       // is its own attribute: nothing inside takes a click, a key or focus,
       // and nothing else on the page writes it.
+      // THE TYPE IS LOCKED WHILE THE HOUSE STANDS (Movie, 20 Oct): "certain
+      // things need to be locked - BUNGALOW / number of stories etc ...
+      // heights and attachement methods should all be able to change easily
+      // i hope, but the changing storeys of building type would be too hard
+      // cause problems". Walls on the sheet lock the home card's own row --
+      // every number on it stays live, and the BONE reloads the house to
+      // them (project-reload.js). NEW is the way to another type.
       const applyHome = () => {
         const home = homeType();
+        const standing = window.DraftProjectReload?.houseStands(drawing) === true;
+        const boneEl = document.getElementById('bone');
+        if (boneEl) {
+          boneEl.title = standing
+            ? 'Reload the house to the numbers on this page'
+            : "Gruff's drive-thru: pick a house type, then build it";
+        }
         typeCards.forEach(card => card.classList.toggle('home', card.dataset.type === home));
         stageEls.forEach((el, key) => {
           const locked = home != null && key !== home;
@@ -5192,10 +5245,13 @@
             el.prepend(note);
           }
           note.textContent = locked
-            ? `Viewing only — this project is ${homeLabel(home)}. Edit on the glowing card.` : '';
+            ? `Viewing only — this project is ${homeLabel(home)}. Edit on the glowing card.`
+            : (key === home && standing
+              ? `${homeLabel(home)} is drawn, so its type is locked — change the numbers, then the BONE reloads the house. NEW starts another type.`
+              : '');
         });
         Object.entries(familyCols).forEach(([key, col]) => {
-          if (col) col.inert = home != null && key !== home;
+          if (col) col.inert = home != null && (key !== home || standing);
         });
       };
 
@@ -5510,8 +5566,43 @@
           if (event.key === 'Escape' && !buildAsk.hidden) closeAsk();
         });
       }
+      // THE BONE ON A STANDING HOUSE RELOADS IT (Movie, 20 Oct). The ask
+      // stands in for the undo a PROJECT write cannot offer: MODEL's stack
+      // never sees it. RELOAD saves with the pass switched on, says what
+      // moved, and goes to MODEL to show it; nothing to move stays here and
+      // says so.
+      const reloadAsk = document.querySelector('#project-reload-ask');
+      const closeReload = () => { if (reloadAsk) reloadAsk.hidden = true; };
+      const reloadSaid = () => {
+        const out = lastReload;
+        if (!out) return 'Nothing to reload — the house already stands at these numbers.';
+        const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+        const bits = [];
+        if (out.moved) bits.push(plural(out.moved, 'wall height'));
+        if (out.retyped) bits.push(plural(out.retyped, 'shell wall type'));
+        if (out.reshaped) bits.push(plural(out.reshaped, 'roof'));
+        return `Reloaded: ${bits.join(', ')}.`;
+      };
+      const reloadHouse = () => {
+        closeReload();
+        Promise.resolve(save(reloadSaid, { reload: true })).then(() => {
+          if (lastReload) location.href = './MODEL.html';
+        });
+      };
+      if (reloadAsk) {
+        reloadAsk.querySelector('[data-reload-ask="go"]').addEventListener('click', reloadHouse);
+        reloadAsk.querySelector('[data-reload-ask="cancel"]').addEventListener('click', closeReload);
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && !reloadAsk.hidden) closeReload();
+        });
+      }
       if (bone) {
         bone.addEventListener('click', () => {
+          if (!readOnly && reloadAsk && window.DraftProjectReload?.houseStands(drawing)) {
+            reloadAsk.hidden = false;
+            reloadAsk.querySelector('[data-reload-ask="go"]').focus();
+            return;
+          }
           const entry = chosenEntry();
           if (!entry || readOnly) {
             const el = document.querySelector('#status');
