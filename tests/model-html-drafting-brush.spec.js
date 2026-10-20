@@ -323,6 +323,11 @@ test.describe('MODEL.html drafting brush', () => {
   test('a loaded opening on bare wall puts a new one there', async ({ page }) => {
     await brush(page).click();
     await pressWorld(page, ...ON_A_DOOR);
+    // THE LIFT ARMED FENESTRATION (Movie, 20 Oct; tests/brush-arms-tool);
+    // the chip pressed again brings the brush's own press back up with the
+    // load kept, which is the press this test is about.
+    await brush(page).click();
+    await expect(brush(page)).toHaveClass(/armed/);
     // ON WALL d, WHICH CARRIES NOTHING — the press lands on plain wall, which
     // Movie says is the case that places rather than repaints: "if there is a
     // window in the drafting brush cursor area it will change it, but if a
