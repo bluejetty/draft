@@ -1304,6 +1304,13 @@ if (!window.DraftCutView) {
     // ON A SPLIT, A ROOF RAISED FROM A LEVEL BEARS ON THAT LEVEL'S CEILING. The
     // MOD BILEVEL's room over the garage sits 6'-3" over MAIN FL and carries
     // its own roof; at the house's bearing it would stand inside the room.
+    // A ROOF DRAWN BY HAND ON A STOREY BEARS ON ITS `sourceLevelId`, the
+    // storey under the one it was drawn on (Movie, 21 Oct: the lower roof
+    // over the main floor, drawn on the 2nd floor beside the taller wall).
+    if (roof.drawnOn != null && roof.sourceLevelId != null) {
+      const own = stack.floors.find(level => Number(level.id) === Number(roof.sourceLevelId));
+      if (own) return own.wallTop;
+    }
     if (stack.split && roof.sourceLevelId != null) {
       const own = stack.floors.find(level => Number(level.id) === Number(roof.sourceLevelId));
       if (own) return own.wallTop;

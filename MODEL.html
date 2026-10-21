@@ -1273,6 +1273,10 @@
   #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #shelf-suite { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #shelf-suite[hidden] { display:none; }
+  /* BESIDE THE ROOF KEY, over the BUILD panel, not over the plan the ROOF
+     tool's own edge flip is pressed on. */
+  #roof-pick { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
+  #roof-pick[hidden] { display:none; }
   #brush-warn[hidden] { display:none; }
   #brush-warn .promote-card { border-color: var(--ink-warn); box-shadow: 0 0 14px var(--ink-warn); }
   #brush-warn b { color: var(--ink-warn); }
@@ -2353,6 +2357,17 @@
     <div class="promote-row"><button type="button" data-brush-warn-ok>OK</button></div>
   </div>
 </div>
+<!-- SPECIAL ROOFS (Movie, 21 Oct): ROOF on a storey asks which roof to draw
+     by hand. One option for now; "i will probably need to add more options". -->
+<div id="roof-pick" data-roof-pick hidden role="dialog" aria-label="Draw a roof by hand">
+  <div class="promote-card">
+    <p><b>DRAW A ROOF</b><br>Drawn here, it sits on the walls of the storey below.</p>
+    <div class="promote-row">
+      <button type="button" data-roof-kind="shed">1 · SINGLE SLOPE ROOF</button>
+      <button type="button" data-roof-pick-cancel>CANCEL</button>
+    </div>
+  </div>
+</div>
 <!-- SAVE AS SUITE (Movie, 20 Oct): which kind the shelf is saved as. -->
 <div id="shelf-suite" data-shelf-suite hidden role="dialog" aria-label="Save this shelf as a suite">
   <div class="promote-card">
@@ -3066,8 +3081,12 @@
   // Rules four and five: LEVEL ONLY. A roof footprint and a reference shape are
   // level-wide -- every drawing of the level shows them -- so they take no view
   // filter at all. Copying the walls line here would hide both on FOUNDATION.
+  // AND ON THE STOREY IT WAS DRAWN ON (Movie, 21 Oct: draw the lower roof on
+  // the 2nd floor "but for it to also show on the 2nd FLoor PLAN and on the
+  // ROOF plan"), where it is picked and edited too.
   const roofs = () => (drawing?.roofs || [])
-    .filter(r => onActiveLevel().byLevel(r));
+    .filter(r => onActiveLevel().byLevel(r)
+      || (r.drawnOn != null && Number(r.drawnOn) === onActiveLevel().levelId));
   // DIMENSIONS TAKE NO FALLBACK, and that is not an oversight -- it is the
   // one collection whose invariant is guaranteed upstream. MODEL.dc.html:8929
   // filters `dimension.view === view` with no `|| 'plan'`, because
@@ -7262,6 +7281,7 @@
           }
           ctx.restore();
         }
+        paintShedRoof();
         paintRoomPick();
         // THE RULER'S OWN LINE, dashed so it cannot be mistaken for geometry.
         // It is the only mark on this canvas that is not in the drawing and
@@ -14938,6 +14958,236 @@
     return hit;
   };
 
+  // ── A SINGLE SLOPE ROOF, DRAWN BY HAND (Movie, 21 Oct) ───────────────────
+  //
+  // "lets make a POPUP and we can put different ROOF options in there fo
+  // SPECIAL roofs" -- "option 1 - simple 1 slope roof". Drawn on a storey
+  // (his PHASE 2: the 10 ft of main floor beside PHASE 1, the 2nd floor set
+  // back from it), in three steps: "first ... the edge line ... where of the
+  // ext wall bearing line ... a line that follows the main floor ext wall";
+  // then "the DIRECTION OF SLOPE - mark the EAVE side"; then "the ROOF shape"
+  // -- "the user will need to draw their eave overhang, shape of the roof
+  // (looking down from above)". The pitch is the PROJECT's to start ("they
+  // can change it"). It sits on the storey BELOW the one it is drawn on, and
+  // shows on that one and on the ROOF plan (`drawnOn`).
+  // `var`: the painter reads it from the first paint, before this line runs.
+  var shedRoof = null;   // { stage: 'bearing'|'slope'|'shape', a, b, down, corners }
+  const roofPickCard = document.querySelector('[data-roof-pick]');
+  const storeyHere = () => !boneyardActive
+    && floorsOf(drawing?.levels).some(l => Number(l.id) === Number(activeLevelId()));
+  // THE STOREY IT BEARS ON: the one under this, or this one on the lowest.
+  const shedBearsOn = () => {
+    const list = floorsOf(drawing?.levels);
+    const i = list.findIndex(l => Number(l.id) === Number(activeLevelId()));
+    return i > 0 ? Number(list[i - 1].id) : Number(activeLevelId());
+  };
+  const shedWallsBelow = () => (drawing?.walls || []).filter(w => Number(w.levelId) === shedBearsOn()
+    && (w.view || 'plan') !== 'foundation' && w.start && w.end);
+  // THE BEARING LINE SNAPS TO THE WALLS UNDER IT: an end in reach, else the
+  // nearest point along one, else the page's own snap.
+  const shedSnap = at => {
+    const G = window.DraftGeometry2D;
+    const reach = SELECT_GRAB_PX / view.scale;
+    let best = null, bestD = reach;
+    shedWallsBelow().forEach(w => [w.start, w.end].forEach(p => {
+      const d = Math.hypot(p.x - at.x, p.z - at.z);
+      if (d < bestD) { bestD = d; best = { x: p.x, z: p.z }; }
+    }));
+    if (best) return best;
+    bestD = reach;
+    shedWallsBelow().forEach(w => {
+      const { d, point } = G.pointToSegment(at, w);
+      if (d < bestD && point) { bestD = d; best = { x: point.x, z: point.z }; }
+    });
+    return best || loopPoint(at);
+  };
+  const SHED_SAYS = {
+    bearing: 'SINGLE SLOPE 1/3: click two points along the wall the roof sits on.',
+    slope: 'SINGLE SLOPE 2/3: click the EAVE side -- the way the roof slopes down.',
+    shape: 'SINGLE SLOPE 3/3: click the roof’s outline from above, overhang and all; close on the first corner or ENTER.',
+  };
+  const startShedRoof = () => {
+    if (roofPickCard) roofPickCard.hidden = true;
+    shedRoof = { stage: 'bearing', a: null, b: null, down: null, corners: [] };
+    sayOnStrip(SHED_SAYS.bearing);
+    paint();
+  };
+  const endShedRoof = () => { shedRoof = null; paint(); };
+  // DOWNHILL: the unit normal of the bearing line on the side pressed.
+  const shedDownAt = (s, at) => {
+    const dx = s.b.x - s.a.x, dz = s.b.z - s.a.z, len = Math.hypot(dx, dz);
+    let n = { x: -dz / len, z: dx / len };
+    if ((at.x - s.a.x) * n.x + (at.z - s.a.z) * n.z < 0) n = { x: -n.x, z: -n.z };
+    return n;
+  };
+  const shedPress = at => {
+    const s = shedRoof;
+    if (s.stage === 'bearing') {
+      const p = shedSnap(at);
+      if (!s.a) { s.a = p; paint(); return; }
+      if (Math.hypot(p.x - s.a.x, p.z - s.a.z) < 0.5) { sayOnStrip('Click the far end of the wall, not the same point.'); return; }
+      s.b = p;
+      s.stage = 'slope';
+      sayOnStrip(SHED_SAYS.slope);
+      paint();
+      return;
+    }
+    if (s.stage === 'slope') {
+      s.down = shedDownAt(s, at);
+      s.stage = 'shape';
+      sayOnStrip(SHED_SAYS.shape);
+      paint();
+      return;
+    }
+    const here = loopPoint(at);
+    if (s.corners.length >= 3) {
+      const first = s.corners[0];
+      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) { commitShedRoof(); return; }
+    }
+    s.corners.push(here);
+    paint();
+  };
+  // EACH EDGE OF THE OUTLINE, read against the bearing line: one running
+  // along it on the downhill side (or on it) is the EAVE, its overhang the
+  // distance out from the wall; one along it uphill stands against the taller
+  // wall, a gable cut FLUSH; the rest are the sloping ends, RAKES, overhanging
+  // the end wall under them where one runs within 4 ft, else flush.
+  const shedEdges = (ring, s) => {
+    const G = window.DraftGeometry2D;
+    const ax = s.b.x - s.a.x, az = s.b.z - s.a.z, al = Math.hypot(ax, az);
+    const along = { x: ax / al, z: az / al };
+    const below = shedWallsBelow();
+    return ring.map((p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      const ex = q.x - p.x, ez = q.z - p.z, el = Math.hypot(ex, ez) || 1;
+      const u = { x: ex / el, z: ez / el };
+      const mid = { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 };
+      if (Math.abs(u.x * along.z - u.z * along.x) < Math.sin(10 * Math.PI / 180)) {
+        const off = (mid.x - s.a.x) * s.down.x + (mid.z - s.a.z) * s.down.z;
+        return off >= -0.5 ? { kind: 'eave', over: Math.max(0, off) } : { kind: 'gable', over: 0 };
+      }
+      let over = 0, bestD = 4;
+      below.forEach(w => {
+        const wx = w.end.x - w.start.x, wz = w.end.z - w.start.z, wl = Math.hypot(wx, wz) || 1;
+        if (Math.abs((wx / wl) * u.z - (wz / wl) * u.x) > Math.sin(10 * Math.PI / 180)) return;
+        const { d } = G.pointToSegment(mid, w);
+        if (d < bestD) { bestD = d; over = d; }
+      });
+      return { kind: 'gable', over };
+    });
+  };
+  const commitShedRoof = () => {
+    const G = window.DraftGeometry2D;
+    const s = shedRoof;
+    const ring = s.corners.map(p => ({ x: p.x, z: p.z }));
+    if (ring.length < 3) { sayOnStrip('A roof needs at least three corners.'); return null; }
+    if (G.selfIntersects(ring)) { sayOnStrip('That outline crosses itself, so it encloses no roof.'); return null; }
+    const read = shedEdges(ring, s);
+    if (!read.some(e => e.kind === 'eave')) {
+      sayOnStrip('No edge of that outline runs along the eave side. Draw the eave along the wall line.');
+      return null;
+    }
+    const overs = read.map(e => Number(e.over.toFixed(4)));
+    const foot = G.offsetOutlineVariable(ring, overs.map(v => -v));
+    const footOk = foot.length === ring.length && foot.every(p => Number.isFinite(p.x) && Number.isFinite(p.z));
+    const eave = read.find(e => e.kind === 'eave');
+    const { pitch } = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
+    drawing.roofs = drawing.roofs || [];
+    const roof = addItem(drawing.roofs, {
+      id: newDrawingItemId('roof'),
+      points: ring.map(p => ({ x: p.x, y: 0, z: p.z })),
+      levelId: ROOF_LEVEL_ID,
+      sourceLevelId: shedBearsOn(),
+      drawnOn: Number(activeLevelId()),
+      sourceShapeId: null,
+      edges: read.map(e => e.kind),
+      overhang: Number(eave.over.toFixed(4)),
+      edgeOverhang: overs,
+      ...(footOk ? { footprint: foot.map(p => ({ x: p.x, y: 0, z: p.z })) } : {}),
+      pitch,
+      fascia: ROOF_FASCIA_IN,
+      garage: false,
+      follows: 'none',
+      layer: 'A-ROOF',
+    });
+    shedRoof = null;
+    markDirty();
+    setTool(RESTING_TOOL);
+    selectPlaced('roof', roof);
+    sayOnStrip(`SINGLE SLOPE ROOF made at ${pitch}/12. Change its pitch or overhangs in PROPERTIES.`);
+    return roof;
+  };
+  // THE STEPS IN HAND: the walls it can bear on, faint; the bearing line;
+  // the slope arrow; the outline with a band to the cursor.
+  function paintShedRoof() {
+    const s = shedRoof;
+    if (!s || activeTool !== 'roof') return;
+    ctx.save();
+    ctx.strokeStyle = skin['draw-note'];
+    ctx.fillStyle = skin['draw-note'];
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 3;
+    shedWallsBelow().forEach(w => {
+      const a = toS(w.start), b = toS(w.end);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
+    const tip = s.stage === 'bearing' && s.a && cursorWorld ? shedSnap(cursorWorld) : s.b;
+    if (s.a && tip) {
+      const a = toS(s.a), b = toS(tip);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    const down = s.down || (s.stage === 'slope' && cursorWorld ? shedDownAt(s, cursorWorld) : null);
+    if (s.a && s.b && down) {
+      const m = { x: (s.a.x + s.b.x) / 2, z: (s.a.z + s.b.z) / 2 };
+      const len = 30 / view.scale;
+      const t = { x: m.x + down.x * len, z: m.z + down.z * len };
+      const pm = toS(m), pt = toS(t);
+      ctx.beginPath(); ctx.moveTo(pm.x, pm.y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
+      const ang = Math.atan2(pt.y - pm.y, pt.x - pm.x);
+      ctx.beginPath();
+      ctx.moveTo(pt.x, pt.y);
+      ctx.lineTo(pt.x - 9 * Math.cos(ang - 0.45), pt.y - 9 * Math.sin(ang - 0.45));
+      ctx.lineTo(pt.x - 9 * Math.cos(ang + 0.45), pt.y - 9 * Math.sin(ang + 0.45));
+      ctx.closePath(); ctx.fill();
+    }
+    if (s.corners.length) {
+      const trace = cursorWorld ? s.corners.concat([cursorWorld]) : s.corners;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      trace.forEach((pt, i) => { const p = toS(pt); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (s.corners.length >= 3) {
+        const f = toS(s.corners[0]);
+        ctx.beginPath(); ctx.arc(f.x, f.y, 7, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+  roofPickCard?.querySelector('[data-roof-kind="shed"]')?.addEventListener('click', startShedRoof);
+  // A PRESS ON THE PLAN IS AN ANSWER TOO: the ROOF tool's own edge flip, not
+  // a hand-drawn roof, so the question goes away.
+  canvas.addEventListener('pointerdown', () => {
+    if (roofPickCard && !roofPickCard.hidden && !shedRoof) roofPickCard.hidden = true;
+  }, true);
+  roofPickCard?.querySelector('[data-roof-pick-cancel]')?.addEventListener('click', () => {
+    roofPickCard.hidden = true;
+  });
+  // ENTER CLOSES THE OUTLINE; ESCAPE STEPS OUT, the popup with it.
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && roofPickCard && !roofPickCard.hidden) { roofPickCard.hidden = true; return; }
+    if (!shedRoof) return;
+    if (event.key === 'Enter' && shedRoof.stage === 'shape' && shedRoof.corners.length >= 3) {
+      event.preventDefault();
+      commitShedRoof();
+    } else if (event.key === 'Escape') {
+      endShedRoof();
+      sayOnStrip('SINGLE SLOPE ROOF put down.');
+    }
+  }, true);
+
   // DELETE CASCADES, IT DOES NOT REFUSE — MODEL.dc.html:22225-22251 does, and
   // the round-trip proof is about the two pages agreeing on what delete MEANS.
   // A refusal here would also need a message surface this page does not have
@@ -17176,6 +17426,17 @@
   // the run. Read by the pointerup that places the line; see its comment.
   let wallPress = null;
   const toolListeners = [];
+  // ROOF ON A STOREY ASKS WHICH ROOF TO DRAW (Movie, 21 Oct: "when i click
+  // on the ROOF command now, nothing really happens, instead, lets make a
+  // POPUP"). Any other tool puts a half-drawn one down.
+  toolListeners.push(next => {
+    if (next !== 'roof') {
+      if (roofPickCard) roofPickCard.hidden = true;
+      shedRoof = null;
+      return;
+    }
+    if (roofPickCard && storeyHere()) roofPickCard.hidden = false;
+  });
   // THE BOARD'S LISTENERS ARE DECLARED HERE, beside the tool's, for one dull
   // reason: `applyBoard` runs at load and the tool column builder is a `const`
   // defined several hundred lines further down, so applyBoard cannot name it
@@ -27056,6 +27317,7 @@
     || (activeTool === 'cut' && !!cutStart)
     || (activeTool === 'floor' && floorCorners.length > 0)
     || (activeTool === 'shape' && shapeCorners.length > 0)
+    || (activeTool === 'roof' && !!shedRoof)
     || (activeTool === 'outline' && outlineCorners.length > 0)
     // The house's rays light under the cursor before the garage's first corner.
     || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
@@ -34117,7 +34379,7 @@
     // that one line with the press/lift split. Neither claim is about the other.
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
-    if (activeTool === 'roof') { roofPress(at); return; }
+    if (activeTool === 'roof') { if (shedRoof) { shedPress(at); return; } roofPress(at); return; }
     if (activeTool === 'dormer') { dormerPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'floor') { floorPress(at); return; }

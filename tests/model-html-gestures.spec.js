@@ -841,6 +841,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // brush's refusal said where he is looking, and its one answer.
             // It changes nothing in the drawing, so no absence row moves.
             'OK',
+            // ROOF ON A STOREY ASKS WHICH ROOF (Movie, 21 Oct: "lets make a
+            // POPUP ... option 1 - simple 1 slope roof"), or not now. The
+            // roof it starts is the ROOF tool's own verb, already counted.
+            '1 \u00B7 SINGLE SLOPE ROOF', 'CANCEL',
             // AUTO DIMS / HAND DIMS beside the north arrow (Movie, 18 Oct):
             // each kind of string shown or hidden on the sheet.
             'AUTO DIMS', 'HAND DIMS',
