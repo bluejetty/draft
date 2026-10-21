@@ -1699,6 +1699,14 @@ if (!window.DraftDrawingFormat) {
         // and its exterior walls' windows cut into the shell's where the two
         // walls' faces line up. Absent is the blue existing-house hologram.
         ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),
+        // THE HOLOGRAMS INSIDE IT SWITCHED OFF (Movie, 21 Oct: "allow the user
+        // to turn on and off the other holograms within a file they bring it
+        // as a hologram"), by their ids in its own file. Absent is all on.
+        ...(() => {
+          const off = (Array.isArray(holo?.hiddenInside) ? holo.hiddenInside : [])
+            .map(v => String(v ?? '').trim()).filter(Boolean);
+          return off.length ? { hiddenInside: [...new Set(off)] } : {};
+        })(),
         // WHICH FLOOR OF THIS DRAWING each of its levels stands on (18 Oct:
         // "the same suite on different floors"): { its id: this drawing's
         // id, or null for not shown }. Absent is every level as itself.

@@ -484,8 +484,17 @@
   // walls that are the shell's own left out, exactly as PHASE 1 drew them.
   // In PHASE 1's own colours here: what came in with it is existing work.
   // As deep as the files go: a suite holding a hologram brings that too.
-  const drawn = (saved, depth = 0) => shown(saved).flatMap(holo => {
+  // ITS OWN HOLOGRAMS, less the ones switched off on it (`hiddenInside`,
+  // Movie, 21 Oct) -- off is HIDDEN all the way down: not drawn, and no
+  // windows cut by them.
+  const insideShown = holo => {
     const src = holo?.source || {};
+    const off = new Set((Array.isArray(holo?.hiddenInside) ? holo.hiddenInside : []).map(String));
+    if (!off.size || !Array.isArray(src.holograms)) return src;
+    return { ...src, holograms: src.holograms.map(child => (off.has(String(child.id)) ? { ...child, hidden: true } : child)) };
+  };
+  const drawn = (saved, depth = 0) => shown(saved).flatMap(holo => {
+    const src = insideShown(holo);
     if (depth > 4 || !shown(src).length) return [holo];
     const own = shared(src);
     const outer = { ...holo, source: { ...src, holograms: [],
