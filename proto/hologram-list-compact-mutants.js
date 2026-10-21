@@ -17,7 +17,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/hologram-list-compact.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html', name: 'every copy opens its buttons',
-    find: "      const open = lit || all.length === 1;",
+    find: "      const open = lit || all.length === 1 || (hologramOpenId === holo.id && !selection.some(e => e.type === 'hologram'));",
     with: "      const open = true;",
     test: 'only the picked one' },
   { file: 'MODEL.html', name: 'the file cards stacked, one column',

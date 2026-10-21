@@ -28587,6 +28587,8 @@
   });
   // WHICH FILES' INSIDE LISTS ARE OPEN, by file.
   const hologramInsideOpen = new Set();
+  // AND THE COPY WHOSE BUTTONS A PRESS LAST USED, kept open while nothing is picked.
+  let hologramOpenId = null;
   function renderHologramListInto(card) {
     const all = holograms();
     const suites = all.filter(holo => holo.mode === 'suite').length;
@@ -28734,7 +28736,7 @@
       if (lit) row.dataset.lit = '';
       // ITS BUTTONS ONLY WHEN IT IS THE ONE PICKED -- or the only copy there
       // is, which has nothing to be picked from.
-      const open = lit || all.length === 1;
+      const open = lit || all.length === 1 || (hologramOpenId === holo.id && !selection.some(e => e.type === 'hologram'));
       if (open) row.dataset.hologramOpen = '';
       // WHERE IT STANDS, on the line itself: its floor, and HIDDEN if so.
       const where = document.createElement('span');
@@ -28747,6 +28749,7 @@
       row.addEventListener('mouseleave', () => { if (hologramHover === holo) { hologramHover = null; paint(); } });
       row.addEventListener('click', event => {
         if (event.target.closest('button')) return;
+        hologramOpenId = holo.id;
         setSelection([{ type: 'hologram', item: holo }]);
         paint();
       });
@@ -28756,10 +28759,10 @@
         b.textContent = label;
         b.dataset[key] = holo.id;
         if (title) b.title = title;
-        // A PRESS PICKS THE COPY TOO, so its buttons stay open after a COPY
-        // has made it one of several.
+        // A PRESS KEEPS ITS BUTTONS OPEN, after a COPY has made it one of
+        // several -- without picking it on the plan, which would glow it.
         b.addEventListener('click', event => {
-          if (!lit && holograms().includes(holo)) setSelection([{ type: 'hologram', item: holo }]);
+          hologramOpenId = holo.id;
           onClick(event);
         });
         return b;
