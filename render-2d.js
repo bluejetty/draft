@@ -3409,7 +3409,6 @@ if (!window.DraftRender2D) {
   window.DraftRender2D = Object.freeze({
     snapCounterOffset,
     drawCounters2D,
-    outlineSegments,
     drawWallSeg2D,
     drawRoof2D,
     drawWallTops2D,
