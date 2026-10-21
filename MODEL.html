@@ -2267,8 +2267,6 @@
   </div>
 </div>
 <input id="hologram-file" type="file" data-hologram-file hidden accept=".draft,.json,application/json">
-<!-- OPEN SUITE (Movie, 21 Oct): a suite .draft opened onto a new shelf. -->
-<input id="shelf-suite-file" type="file" data-shelf-suite-file hidden accept=".draft,.json,application/json">
 <input id="trace-file" type="file" data-trace-file hidden
   accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp,.dxf,.dwg">
 <div id="trace-insert" data-trace-insert hidden role="dialog" aria-label="Insert a photo">
@@ -10209,7 +10207,7 @@
     // OPEN SUITE (Movie, 21 Oct: "where a suite will open in the shelf and i
     // can put all the SUITES in the same file as the SHELL and go into the
     // SHELFS if i need to edit them"): a suite .draft onto a new shelf of its
-    // own, named for the file. The input's reader is EDIT ON SHELF's.
+    // own, named for the file, read by openShelfSuite below.
     const openShelf = document.createElement('button');
     openShelf.type = 'button';
     openShelf.className = 'lv-add';
@@ -10218,7 +10216,7 @@
     openShelf.title = 'Open a SUITE .draft onto a new shelf, kept in this file to change';
     openShelf.addEventListener('click', event => {
       event.stopPropagation();
-      document.querySelector('[data-shelf-suite-file]')?.click();
+      openShelfSuite();
     });
     boneHead.append(boneName, plus, saveShelf);
     // ON A LINE OF ITS OWN, always there: in the head it would wrap the
@@ -28681,14 +28679,20 @@
     paint();
     sayOnStrip(`${hologramNoun(holo)} is on the shelf ${shelf?.name || ''} to change. SAVE AS SUITE writes it back out; REFRESH on its card updates every copy.`);
   };
-  const shelfOpenInput = document.querySelector('[data-shelf-suite-file]');
-  shelfOpenInput?.addEventListener('change', async () => {
-    const file = shelfOpenInput.files && shelfOpenInput.files[0];
-    shelfOpenInput.value = '';
-    if (!file || !drawing) return;
-    const source = await readHologramFile(file);
-    if (source) editOnShelf({ name: file.name.replace(/\.[^.]+$/, ''), source });
-  });
+  // THE PICKER IS MADE AT THE PRESS AND NEVER PUT IN THE PAGE: the page's
+  // own controls stay the ones the gesture census counts.
+  function openShelfSuite() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.draft,.json,application/json';
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      if (!file || !drawing) return;
+      const source = await readHologramFile(file);
+      if (source) editOnShelf({ name: file.name.replace(/\.[^.]+$/, ''), source });
+    });
+    input.click();
+  }
   const mirrorHologram = holo => {
     const flip = holo.flip !== true;
     hologramEdit(holo, { flip }, flip
