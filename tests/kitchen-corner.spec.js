@@ -145,6 +145,7 @@ test('one counter: it turns the corner with no joint across it, and nothing runs
   const uppers = (await counterLines(page, d)).filter(s => s.dashed);
   expect(uppers.length).toBeGreaterThan(0);
   expect(uppers.filter(s => across(s, 0, LEG_END) && Math.min(s.a[1], s.b[1]) < 1.5), 'no joint in the uppers').toEqual([]);
+  expect(uppers.filter(s => across(s, 1, LEG_END) && Math.min(s.a[0], s.b[0]) < 1.5), 'nor where they turn onto the side wall').toEqual([]);
 });
 
 test('an island landing on a wall: its overhang stops at the wall face', async ({ page }) => {
