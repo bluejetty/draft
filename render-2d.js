@@ -1115,6 +1115,8 @@ if (!window.DraftRender2D) {
   // uppers sit exactly over it on either face of the wall.
   const UPPER_CABINET_DEPTH_FT = 1;
   function drawUpperCabinets2D(ctx, toS, fixture, wall, env) {
+    // MELDED, drawCounters2D draws every run of uppers as one.
+    if (env.meldCounters === true) return;
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo || geo.tub) return;
     const dirC = geo.frontOff >= geo.backOff ? 1 : -1;
@@ -1389,7 +1391,7 @@ if (!window.DraftRender2D) {
   const BACKSPLASH_IN = 0.8;
 
   // THE PIECES A COUNTER RUNS OVER, which meld where they touch.
-  const COUNTER_KINDS = Object.freeze(['cabinet', 'sinkbase', 'drawerbase', 'doorbase', 'dish', 'stove']);
+  const COUNTER_KINDS = Object.freeze(['cabinet', 'sinkbase', 'drawerbase', 'doorbase', 'cornerbase', 'dish', 'stove']);
   const JOINT_FT = 0.05;
 
   // Which ends of this counter piece stand against another one: the same
@@ -1439,6 +1441,134 @@ if (!window.DraftRender2D) {
       });
     });
     return best;
+  }
+
+  // ── ONE COUNTER (Movie, 21 Oct) ─────────────────────────────────────────
+  //
+  // "when you draw the counter can make it all join up (and not hang in to
+  // the wall... and make the cabinet lines very lightweight but visible, meld
+  // the COUNTER". Each piece under a countertop gives its counter's ring --
+  // its box and the overhang past the front, all round for an island, both
+  // legs for the CORNER -- and the outline of all of them together is drawn
+  // at full weight; the boxes underneath go light. The counter runs over the
+  // dishwasher and the sink base and stops at the stove and the fridge.
+  const MELD_KINDS = Object.freeze(['cabinet', 'sinkbase', 'drawerbase', 'doorbase', 'cornerbase', 'dish', 'island']);
+  const MELD_EPS_FT = 0.03;
+  const insideRing = (p, ring) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+      const a = ring[i], b = ring[j];
+      if ((a.z > p.z) !== (b.z > p.z) && p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+  // THE EDGES OF A UNION, without building it: every edge of every ring, cut
+  // where any other ring or blocker crosses or touches it, and a piece kept
+  // only where one side is covered and the other is not. An edge shared by
+  // two pieces (a joint) is covered both sides and goes; so is one against a
+  // wall (a blocker), and one running into a wall -- nothing hangs into it.
+  function outlineSegments(rings, blockers = []) {
+    const all = rings.concat(blockers);
+    const covered = p => all.some(r => insideRing(p, r));
+    const out = [];
+    rings.forEach(ring => ring.forEach((a, i) => {
+      const b = ring[(i + 1) % ring.length];
+      const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+      if (len < 1e-6) return;
+      const ts = [0, 1];
+      all.forEach(other => other.forEach((c, k) => {
+        const d = other[(k + 1) % other.length];
+        const ex = d.x - c.x, ez = d.z - c.z;
+        const den = dx * ez - dz * ex;
+        if (Math.abs(den) > 1e-12) {
+          const t = ((c.x - a.x) * ez - (c.z - a.z) * ex) / den;
+          const u = ((c.x - a.x) * dz - (c.z - a.z) * dx) / den;
+          if (t > 0 && t < 1 && u >= -1e-9 && u <= 1 + 1e-9) ts.push(t);
+        }
+        const tv = ((c.x - a.x) * dx + (c.z - a.z) * dz) / (len * len);
+        if (tv > 0 && tv < 1 && Math.hypot(a.x + dx * tv - c.x, a.z + dz * tv - c.z) < 1e-4) ts.push(tv);
+      }));
+      ts.sort((x, y) => x - y);
+      const nx = (-dz / len) * MELD_EPS_FT, nz = (dx / len) * MELD_EPS_FT;
+      for (let k = 0; k < ts.length - 1; k += 1) {
+        const t0 = ts[k], t1 = ts[k + 1];
+        if (t1 - t0 < 1e-6) continue;
+        const tm = (t0 + t1) / 2;
+        const m = { x: a.x + dx * tm, z: a.z + dz * tm };
+        if (covered({ x: m.x + nx, z: m.z + nz }) !== covered({ x: m.x - nx, z: m.z - nz })) {
+          out.push([{ x: a.x + dx * t0, z: a.z + dz * t0 }, { x: a.x + dx * t1, z: a.z + dz * t1 }]);
+        }
+      }
+    }));
+    return out;
+  }
+  const geoRect = (geo, a0, a1, c0, c1) => [geo.frame.at(a0, c0), geo.frame.at(a1, c0), geo.frame.at(a1, c1), geo.frame.at(a0, c1)];
+  // A PIECE'S COUNTER, as rings in plan feet: none for a piece not under one.
+  function counterRings(fixture, geo, overhang) {
+    if (!geo || geo.tub || !MELD_KINDS.includes(fixture.kind)) return [];
+    const dir = geo.frontOff >= geo.backOff ? 1 : -1;
+    const o = overhang || 0;
+    if (fixture.kind === 'island') {
+      const c0 = Math.min(geo.backOff, geo.frontOff), c1 = Math.max(geo.backOff, geo.frontOff);
+      return [geoRect(geo, geo.alongStart - o, geo.alongEnd + o, c0 - o, c1 + o)];
+    }
+    const front = geo.frontOff + dir * o;
+    const rings = [geoRect(geo, geo.alongStart, geo.alongEnd, geo.backOff, front)];
+    if (fixture.kind === 'cornerbase' && geo.cornerAlong != null) {
+      const c = geo.cornerAlong > geo.legAlong ? 1 : -1;
+      rings.push(geoRect(geo, geo.cornerAlong, geo.legAlong - c * o, geo.backOff, geo.legOff));
+    }
+    return rings;
+  }
+  // THE UPPERS OVER A PIECE: 12" off the wall, both legs for the CORNER.
+  function upperRings(fixture, geo) {
+    if (!geo || geo.tub) return [];
+    const dir = geo.frontOff >= geo.backOff ? 1 : -1;
+    const deep = Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
+    const rings = [geoRect(geo, geo.alongStart, geo.alongEnd, geo.backOff, geo.backOff + dir * deep)];
+    if (fixture.kind === 'cornerbase' && geo.cornerAlong != null) {
+      const c = geo.cornerAlong > geo.legAlong ? 1 : -1;
+      rings.push(geoRect(geo, geo.cornerAlong, geo.cornerAlong - c * deep, geo.backOff, geo.legOff));
+    }
+    return rings;
+  }
+  // THE WALLS A COUNTER STANDS AGAINST, as rings: what nothing hangs into.
+  const wallRings = (walls, levelId, wallFrame) => (walls || [])
+    .filter(w => w && w.start && w.end && String(w.levelId) === String(levelId) && (w.view || 'plan') === 'plan')
+    .map(w => { const f = wallFrame(w); return f ? [f.at(0, f.startOff), f.at(f.len, f.startOff), f.at(f.len, f.endOff), f.at(0, f.endOff)] : null; })
+    .filter(Boolean);
+  // EVERY COUNTER AND EVERY RUN OF UPPERS ON THESE FIXTURES, each level by
+  // itself: the counters at full weight, the uppers dashed and light.
+  function drawCounters2D(ctx, toS, fixtures, env) {
+    if (typeof env.fixtureGeometry !== 'function' || typeof env.wallFrame !== 'function') return;
+    const byLevel = new Map();
+    (fixtures || []).forEach(fx => {
+      if (!fx) return;
+      const key = String(fx.levelId);
+      if (!byLevel.has(key)) byLevel.set(key, []);
+      byLevel.get(key).push(fx);
+    });
+    const stroke = (segs, dashed) => {
+      if (!segs.length) return;
+      ctx.save();
+      ctx.strokeStyle = env.FIXTURE_COLOR;
+      if (dashed) { ctx.lineWidth = 1; ctx.globalAlpha *= OVERHEAD_ALPHA; ctx.setLineDash([...OVERHEAD_DASH]); } else ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      segs.forEach(([a, b]) => { const A = toS(a), B = toS(b); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); });
+      ctx.stroke();
+      ctx.restore();
+    };
+    byLevel.forEach((list, levelId) => {
+      const blockers = wallRings(env.walls, levelId, env.wallFrame);
+      const counters = [], uppers = [];
+      list.forEach(fx => {
+        const geo = env.fixtureGeometry(fx);
+        counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT));
+        if (typeof env.hasUppers === 'function' && env.hasUppers(fx)) uppers.push(...upperRings(fx, geo));
+      });
+      stroke(outlineSegments(counters, blockers), false);
+      stroke(outlineSegments(uppers, blockers), true);
+    });
   }
 
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
@@ -1504,8 +1634,20 @@ if (!window.DraftRender2D) {
     // "a lightweight line at the joint to distinguish"): the end standing
     // against another counter piece on the same face of the same wall is
     // drawn light, the rest of the box at full weight.
-    const joined = COUNTER_KINDS.includes(kind) ? counterJoints(fixture, geo, a0, a1, env) : null;
-    if (kind !== 'toilet' && !joined) { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
+    // MELDED (env.meldCounters): a piece under the counter is its box filled
+    // and stroked light, and drawCounters2D draws the counter over the lot.
+    const melded = env.meldCounters === true && MELD_KINDS.includes(kind);
+    const joined = !melded && COUNTER_KINDS.includes(kind) ? counterJoints(fixture, geo, a0, a1, env) : null;
+    if (melded) {
+      const c = kind === 'cornerbase' && geo.cornerAlong != null ? (geo.cornerAlong > geo.legAlong ? 1 : -1) : 0;
+      const far = c > 0 ? a0 : a1;
+      if (c) {
+        poly([P(geo.cornerAlong, cBack), P(far, cBack), P(far, cFront), P(geo.legAlong, cFront),
+          P(geo.legAlong, geo.legOff), P(geo.cornerAlong, geo.legOff)]);
+      } else rect(a0, a1, cBack, cFront);
+      ctx.fill();
+      ctx.save(); ctx.lineWidth = 0.5; ctx.globalAlpha *= 0.45; ctx.stroke(); ctx.restore();
+    } else if (kind !== 'toilet' && !joined) { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
     if (joined) {
       rect(a0, a1, cBack, cFront); ctx.fill();
       const seg = (p, q) => { const A = P(p[0], p[1]), B = P(q[0], q[1]); ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); };
@@ -1532,11 +1674,14 @@ if (!window.DraftRender2D) {
       // The silhouette (tank and bowl, closed) takes the body fill.
       tracePath(TOILET[2], along, out); ctx.closePath(); ctx.fill();
       TOILET.forEach(flat => { tracePath(flat, along, out); ctx.stroke(); });
-    } else if (kind === 'cabinet' || kind === 'drawerbase' || kind === 'doorbase' || kind === 'sinkbase') {
-      // Countertop edge — a parallel line just past the cabinet face.
-      const counter = cFront + (cFront >= cBack ? 1 : -1) * env.COUNTER_OVERHANG_FT;
-      const ca = P(a0, counter), cb = P(a1, counter);
-      ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
+    } else if (kind === 'cabinet' || kind === 'drawerbase' || kind === 'doorbase' || kind === 'sinkbase' || kind === 'cornerbase') {
+      // Countertop edge — a parallel line just past the cabinet face; the
+      // melded counter draws its own.
+      if (!melded) {
+        const counter = cFront + (cFront >= cBack ? 1 : -1) * env.COUNTER_OVERHANG_FT;
+        const ca = P(a0, counter), cb = P(a1, counter);
+        ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
+      }
       if (kind === 'sinkbase') {
         // The double bowl, centred, with the faucet's dot at the back.
         const mid2 = (a0 + a1) / 2, half = Math.min(0.75, (a1 - a0) / 4 - 0.05);
@@ -1580,7 +1725,7 @@ if (!window.DraftRender2D) {
       // title) its obvious to a person looking of what it is"): the sink and
       // the dishwasher it holds say what it is.
       const o = env.COUNTER_OVERHANG_FT;
-      rect(a0 - o, a1 + o, cMin - o, cMax + o); ctx.stroke();
+      if (!melded) { rect(a0 - o, a1 + o, cMin - o, cMax + o); ctx.stroke(); }
     } else if (kind === 'pantry') {
       // Corner walk-in pantry: shelves dashed along the back, and the classic
       // 45° angled door across the open front corner — the end away from the
@@ -3261,6 +3406,8 @@ if (!window.DraftRender2D) {
 
   window.DraftRender2D = Object.freeze({
     snapCounterOffset,
+    drawCounters2D,
+    outlineSegments,
     drawWallSeg2D,
     drawRoof2D,
     drawWallTops2D,

@@ -1165,6 +1165,17 @@ if (!window.DraftFixtureProfiles) {
       ] },
       stretch: true, tile: 24,
     },
+    // THE CORNER (Movie, 21 Oct): 28" of plain panel under the counter --
+    // the corner behind it is dead space, no door to open on it.
+    cornerbase: {
+      front: { w: 28, sil: [[-14,0,14,0,14,35.5,-14,35.5]], polys: [
+        [-14,0,14,0],
+        [-14,0,-14,3.5],
+        [14,0,14,3.5],
+        [-14,3.5,14,3.5],
+        [-14,33.5,14,33.5],
+      ] },
+    },
   };
 
   // The face a section sees, or null for a kind with no elevation yet.

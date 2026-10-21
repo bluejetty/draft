@@ -1388,6 +1388,8 @@ if (!window.DraftLayoutPlan) {
         // listing, which is the furniture plan and not the construction
         // document -- the same line planPosts and beamsAbove draw.
         hasUppers: fixture => !listing && !!(window.DraftFixtureKinds && window.DraftFixtureKinds.hasUppers(fixture)),
+        // ONE COUNTER (Movie, 21 Oct: "meld the COUNTER"), as on the plan.
+        meldCounters: true,
       } : null,
       fixtures: only(of('fixtures')),
 

@@ -229,19 +229,24 @@ if (!window.DraftPlanComposition) {
     // drawn appeared because its view happened to match.
     if (env.fixtureEnv) {
       const wallById = new Map(walls.map(wall => [wall.id, wall]));
-      list(env.fixtures)
+      const drawn = list(env.fixtures)
         .filter(fixture => fixture.levelId === levelId
-          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer))
-        .forEach(fixture => {
-          onLayer(ctx, fixture.layer || 'A-FIXT');
-          render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
-          // THE UPPERS OVER A KITCHEN PIECE, dashed and lighter (the overhead
-          // convention, Movie 16 Oct). Which pieces is the caller's answer.
-          if (typeof env.fixtureEnv.hasUppers === 'function' && env.fixtureEnv.hasUppers(fixture)
-            && typeof render.drawUpperCabinets2D === 'function') {
-            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
-          }
-        });
+          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer));
+      drawn.forEach(fixture => {
+        onLayer(ctx, fixture.layer || 'A-FIXT');
+        render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
+        // THE UPPERS OVER A KITCHEN PIECE, dashed and lighter (the overhead
+        // convention, Movie 16 Oct). Which pieces is the caller's answer.
+        if (typeof env.fixtureEnv.hasUppers === 'function' && env.fixtureEnv.hasUppers(fixture)
+          && typeof render.drawUpperCabinets2D === 'function') {
+          render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
+        }
+      });
+      // ONE COUNTER over the pieces under it, and the uppers as one run.
+      if (env.fixtureEnv.meldCounters === true && typeof render.drawCounters2D === 'function') {
+        onLayer(ctx, 'A-FIXT');
+        render.drawCounters2D(ctx, toS, drawn, env.fixtureEnv);
+      }
     }
 
     // ELECTRIC IS ITS OWN SHEET'S WORTH OF MARKS and electric-symbols.js owns

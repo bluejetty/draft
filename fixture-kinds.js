@@ -68,6 +68,13 @@ if (!window.DraftFixtureKinds) {
       note: '24" drawer base, four drawers — click it onto a wall.' },
     { id: 'doorbase', label: 'DOOR BASE', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false, uppers: true,
       note: '24" door base, a drawer over a door — click it onto a wall.' },
+    // THE CORNER (Movie, 21 Oct: "a 'corner peice that is 28" x 28" - 24"
+    // deep counter that will allow 4" space in the corner before the first
+    // drawers or doors start (not a lazy suzan or anything in the corner just
+    // dead space"): an L, each leg 28" along its wall and 24" deep, pressed
+    // into a corner. The PANTRY is the other way to take a corner.
+    { id: 'cornerbase', label: 'CORNER', group: 'KITCHEN', widthFt: 28 / 12, depthFt: 2, casework: false, run: false, uppers: true,
+      note: 'Corner base, 28" x 28" with a 24" deep counter: dead space in the corner, the next drawers or doors start 28" out on either wall — press it into a corner.' },
     { id: 'tallcab', label: 'FULL HT CAB', group: 'KITCHEN', widthFt: 17.75 / 12, depthFt: 2, casework: false, run: false,
       note: 'FULL HEIGHT CAB, the pantry piece: 17 3/4" wide, 6\'-10 3/4" tall — click it onto a wall.' },
     { id: 'fridge30', label: 'FRIDGE 30', group: 'KITCHEN', widthFt: 2.5, depthFt: 2, casework: false, run: false, uppers: true,
