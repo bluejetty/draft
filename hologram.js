@@ -724,6 +724,34 @@
   // even while it is still a blue hologram.
   const isSuiteFile = holo => Boolean(window.DraftDrawingFormat?.suiteKind?.(holo?.source?.suiteKind));
 
+  // IN FRONT OR BEHIND, FROM WHERE THIS ELEVATION STANDS (Movie, 21 Oct: the
+  // PHASE 1 hologram's roof "doesn't show in the E1 top layer position").
+  // A hologram goes down under the drawing, which is right while it stands
+  // behind; from E1 PHASE 1 is the NEARER building, and the PHASE 2 gable
+  // painted over it left only its eaves and a sliver of hip. So each hologram
+  // is weighed whole: every point of it at least as near the viewer (the
+  // +dirVec side) as the drawing's nearest wall, give or take a wall's
+  // thickness where the two meet, and it goes on OVER the building. A suite
+  // inside the shell is never wholly in front of it, so it stays under.
+  const FRONT_TOL_FT = 2;
+  const nearSpan = (walls, cut) => {
+    const d = cut.dirVec, o = cut.startPt;
+    let lo = Infinity, hi = -Infinity;
+    walls.forEach(wall => [wall?.start, wall?.end].forEach(p => {
+      if (!p) return;
+      const v = (p.x - o.x) * d.x + (p.z - o.z) * d.z;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }));
+    return lo <= hi ? { lo, hi } : null;
+  };
+  const standsInFront = (holo, saved, cut) => {
+    if (!cut?.dirVec || !cut?.startPt) return false;
+    const own = nearSpan((saved?.walls || []).filter(wall => Number(wall?.levelId) >= 0), cut);
+    const it = nearSpan(placed(holo, parts(holo).existing.walls || []), cut);
+    return Boolean(own && it && it.lo >= own.hi - FRONT_TOL_FT);
+  };
+
   const paintCut = (ctx, w, h, cut, saved, frame, env = {}) => {
     // A HOLOGRAM'S OWN SUITES BEFORE ITS SHELL (Movie, 20 Oct: "the EXT
     // WALL isn't showing ... only showing up on the HOLOGRAM that has a
@@ -733,7 +761,11 @@
     // suites, the order this drawing's own shell takes over its suites: drawn
     // shell-first, a suite's back and side walls painted over the shell's
     // front face and left it a bare outline round its windows.
-    const all = drawn(saved);
+    // `env.front`: true paints only the holograms standing in front, false
+    // only those behind; a nested one goes with the hologram it came in.
+    const front = new Set(shown(saved).filter(holo => standsInFront(holo, saved, cut)).map(holo => String(holo.id)));
+    const top = holo => String(holo.id).split('/')[0];
+    const all = drawn(saved).filter(holo => env.front == null || front.has(top(holo)) === env.front);
     const list = [...all.filter(holo => holo.nested), ...all.filter(holo => !holo.nested)];
     const CV = window.DraftCutView;
     const CE = window.DraftCutViewEnv;
@@ -843,7 +875,8 @@
     if (!drawn(saved).length) return {};
     const show = { existing: true, demo: true, new: true, ...(env.show || {}) };
     return {
-      underlay: frame => paintCut(ctx, w, h, cut, saved, frame, { ...env, show }),
+      underlay: frame => paintCut(ctx, w, h, cut, saved, frame, { ...env, show, front: frame?.section ? null : false }),
+      overlay: frame => paintCut(ctx, w, h, cut, saved, frame, { ...env, show, front: true }),
       ...(show.new ? {} : { underlayOnly: true }),
     };
   };
@@ -851,7 +884,7 @@
   window.DraftHologram = Object.freeze({
     BLUE, PALE, ALPHA, VIEWS, COLOURS, colourOf, colourIndex, nextColour, fileOf,
     planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
-    placed, paintCut, cutOptions, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
+    placed, paintCut, cutOptions, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
     drawn, suiteSuperNodes,
   });
 })();

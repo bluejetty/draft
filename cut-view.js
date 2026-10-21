@@ -2090,6 +2090,14 @@ if (!window.DraftCutView) {
     opts.underlay(frame);
     return Boolean(opts.underlayOnly);
   };
+  // AND A HOLOGRAM STANDING IN FRONT goes on OVER the building, after its
+  // last face and before the grade line and the marks (Movie, 21 Oct: the
+  // PHASE 1 roof "doesn't show in the E1 top layer position" -- PHASE 1 is the
+  // nearer building from E1, and under the PHASE 2 gable it was hidden).
+  const runOverlay = (opts, frame) => {
+    if (!opts || typeof opts.overlay !== 'function' || hologramPass(opts)) return;
+    opts.overlay(frame);
+  };
 
   function drawCutView(env, ctx, w, h, cut, opts) {
     // 1 unless the caller is drawing to a sheet at some zoom other than print.
@@ -2182,7 +2190,8 @@ if (!window.DraftCutView) {
       : marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
     const X = u => x0 + (u - uMin) * pxPerFt;
     const Y = e => y0 + (yTop - e) * pxPerFt;
-    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop })) return;
+    // A SECTION HAS NO OVERLAY: every hologram goes under it, as it always has.
+    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop, section: true })) return;
 
     const INK = C.line;
     header(`${cut.name} — GENERATED SECTION · ${env.ftIn(uMax - uMin)} CUT`);
@@ -7413,6 +7422,7 @@ if (!window.DraftCutView) {
     // Grade, heavy, straight across the sheet — the exposed concrete stands
     // on it and everything below it reads dashed.
     if (hologramPass(opts)) return true;
+    runOverlay(opts, { x0, y0, pxPerFt, uMin, yTop });
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(marginL - 18, Y(fdn.grade));
