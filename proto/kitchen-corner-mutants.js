@@ -46,7 +46,7 @@ const MUTANTS = [
   { file: 'drawing-format.js', name: 'the file forgets which end is the corner',
     find: "        ...(kind === 'cornerbase' ? { corner: fixture?.corner === -1 ? -1 : 1 } : {}),\n",
     with: "",
-    test: 'sits tight in the corner' },
+    test: 'one counter' },
 ];
 const run = name => {
   try {
