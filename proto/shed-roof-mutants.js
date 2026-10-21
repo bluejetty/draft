@@ -59,6 +59,10 @@ const MUTANTS = [
     find: "    } else if (event.key === 'Escape') {\n      endShedRoof();",
     with: "    } else if (event.key === 'Escape') {\n      void endShedRoof;",
     test: 'Escape' },
+  { file: 'MODEL.html', name: 'a press on the plan leaves the popup up',
+    find: "    if (roofPickCard && !roofPickCard.hidden && !shedRoof) roofPickCard.hidden = true;",
+    with: "    void shedRoof;",
+    test: 'puts the popup away' },
 ];
 const run = name => {
   try {

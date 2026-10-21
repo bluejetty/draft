@@ -1273,7 +1273,9 @@
   #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #shelf-suite { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #shelf-suite[hidden] { display:none; }
-  #roof-pick { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  /* BESIDE THE ROOF KEY, over the BUILD panel, not over the plan the ROOF
+     tool's own edge flip is pressed on. */
+  #roof-pick { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
   #roof-pick[hidden] { display:none; }
   #brush-warn[hidden] { display:none; }
   #brush-warn .promote-card { border-color: var(--ink-warn); box-shadow: 0 0 14px var(--ink-warn); }
@@ -15165,6 +15167,11 @@
     ctx.restore();
   }
   roofPickCard?.querySelector('[data-roof-kind="shed"]')?.addEventListener('click', startShedRoof);
+  // A PRESS ON THE PLAN IS AN ANSWER TOO: the ROOF tool's own edge flip, not
+  // a hand-drawn roof, so the question goes away.
+  canvas.addEventListener('pointerdown', () => {
+    if (roofPickCard && !roofPickCard.hidden && !shedRoof) roofPickCard.hidden = true;
+  }, true);
   roofPickCard?.querySelector('[data-roof-pick-cancel]')?.addEventListener('click', () => {
     roofPickCard.hidden = true;
   });

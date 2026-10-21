@@ -78,6 +78,14 @@ test('ROOF on the 2nd floor asks which roof; CANCEL puts the popup away', async 
   await expect(page.locator('#roof-pick')).toBeHidden();
 });
 
+test('a press on the plan instead puts the popup away -- it is the ROOF tool\'s edge flip', async ({ page }) => {
+  const { at } = await open(page);
+  await page.locator('[data-tool-key="roof"]').click();
+  await expect(page.locator('#roof-pick')).toBeVisible();
+  await press(page, at, 15, 5);
+  await expect(page.locator('#roof-pick')).toBeHidden();
+});
+
 test('the three steps make a single slope roof: eave out from the wall, flush at the taller wall, rakes at the ends', async ({ page }) => {
   const { at } = await open(page);
   await drawShed(page, at);
