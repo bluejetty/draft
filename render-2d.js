@@ -1396,13 +1396,18 @@ if (!window.DraftRender2D) {
   // wall, the same face, an end within 5/8" of this one's. Null when the
   // env names no neighbours to look at -- a painter handed only the fixture
   // draws it whole, as before.
+  // ON THE SAME HOST: one wall, or one kept wall line (a fixture kept when
+  // its wall was deleted carries `host`; two kept off the same wall share it).
+  const sameHost = (a, b) => (a.wallId != null || b.wallId != null
+    ? a.wallId != null && a.wallId === b.wallId
+    : !!a.host && !!b.host && String(a.host.id) === String(b.host.id));
   function counterJoints(fixture, geo, a0, a1, env) {
     const others = Array.isArray(env.fixtures) ? env.fixtures : null;
     if (!others || typeof env.fixtureGeometry !== 'function') return null;
     let start = false, end = false;
     others.forEach(other => {
       if (other === fixture || !COUNTER_KINDS.includes(other.kind)) return;
-      if (other.wallId !== fixture.wallId || (other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return;
+      if (!sameHost(other, fixture) || (other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return;
       const g = env.fixtureGeometry(other);
       if (!g) return;
       if (Math.abs(g.alongEnd - a0) < JOINT_FT) start = true;
@@ -1423,7 +1428,7 @@ if (!window.DraftRender2D) {
     const side = piece.side === -1 ? -1 : 1;
     const half = piece.width / 2;
     const near = (fixtures || []).filter(o => o && o !== piece && COUNTER_KINDS.includes(o.kind)
-      && o.wallId === piece.wallId && (o.side === -1 ? -1 : 1) === side);
+      && sameHost(o, piece) && (o.side === -1 ? -1 : 1) === side);
     const overlaps = at => near.some(o => Math.min(at + half, o.offset + o.width / 2)
       - Math.max(at - half, o.offset - o.width / 2) > JOINT_FT);
     let best = piece.offset, gap = snapFt;
@@ -1756,7 +1761,7 @@ if (!window.DraftRender2D) {
     const byId = new Map(walls.map(wall => [wall.id, wall]));
     const picked = new Set();
     wet.forEach(fx => {
-      const geo = fixtureGeometry(fx, byId.get(fx.wallId));
+      const geo = fixtureGeometry(fx, byId.get(fx.wallId) || undefined);
       if (!geo || !geo.center) return;
       // The SMALLEST loop round the fixture: the bathroom, not the house.
       let best = null;

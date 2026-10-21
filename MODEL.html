@@ -1133,6 +1133,9 @@
     padding:0 6px 3px 12px; }
   .lv-add, .lv-del { font-family: var(--font-ui); background:none; cursor:pointer;
     color: var(--ink-quiet); }
+  .lv-card[data-boneyard] { flex-wrap:wrap; }
+  .lv-card[data-boneyard] > .lv-head { flex:1 1 100%; }
+  .lv-open-suite { flex:1 1 100%; display:flex; justify-content:flex-end; padding:0 0 4px; }
   .lv-add { border:1px solid var(--rule); font-size:9px; font-weight:700;
     letter-spacing:0.06em; padding:2px 5px; }
   .lv-del { border:0; font-size:12px; line-height:1; padding:2px 6px; }
@@ -3272,7 +3275,8 @@
   const fixtures = () => {
     const shown = new Set(walls().map(w => w.id));
     return (drawing?.fixtures || [])
-      .filter(fx => onActiveLevel().byLevel(fx) && shown.has(fx.wallId));
+      // A FIXTURE KEPT WHEN ITS WALL WENT (`host`) shows on its own level.
+      .filter(fx => onActiveLevel().byLevel(fx) && (fx.wallId == null ? !!fx.host : shown.has(fx.wallId)));
   };
   // CUTS TAKE NO LEVEL FILTER, and that is the bone's rule rather than an
   // omission here. _drawCuts2D (MODEL.dc.html:7432) is called ungated -- no
@@ -10200,8 +10204,28 @@
     saveShelf.hidden = !boneyardActive;
     saveShelf.title = 'Save what is on this shelf, and only it, as its own SUITE .draft';
     saveShelf.addEventListener('click', event => { event.stopPropagation(); askShelfSuite(); });
+    // OPEN SUITE (Movie, 21 Oct: "where a suite will open in the shelf and i
+    // can put all the SUITES in the same file as the SHELL and go into the
+    // SHELFS if i need to edit them"): a suite .draft onto a new shelf of its
+    // own, named for the file, read by openShelfSuite below.
+    const openShelf = document.createElement('button');
+    openShelf.type = 'button';
+    openShelf.className = 'lv-add';
+    openShelf.dataset.openShelfSuite = '';
+    openShelf.textContent = 'OPEN SUITE';
+    openShelf.title = 'Open a SUITE .draft onto a new shelf, kept in this file to change';
+    openShelf.addEventListener('click', event => {
+      event.stopPropagation();
+      openShelfSuite();
+    });
     boneHead.append(boneName, plus, saveShelf);
-    bone.append(boneHead);
+    // ON A LINE OF ITS OWN, always there: in the head it would wrap the
+    // moment SAVE AS SUITE shows, and the shelves under it would jump between
+    // the two clicks of a rename's double-click.
+    const openRow = document.createElement('div');
+    openRow.className = 'lv-open-suite';
+    openRow.append(openShelf);
+    bone.append(boneHead, openRow);
     bone.addEventListener('click', () => goToBoneyard());
     levelsPanel.append(bone);
 
@@ -15351,8 +15375,29 @@
     };
     // A door or window whose host is gone.
     cut(drawing.fenestrations, f => f && f.wallId === gone);
-    // A fixture by either anchor: the tub needs its faucet-END wall too.
-    cut(drawing.fixtures, f => f && (f.wallId === gone || f.endWallId === gone));
+    // A FIXTURE IS KEPT, WHERE IT STANDS (Movie, 21 Oct: "leave the item and
+    // i can either leave it in position or move to attach to a wall in new
+    // location"): it keeps the line this wall stood on as its `host`, and a
+    // tub that loses an alcove wall is a plain tub of the length it had.
+    // Each change is a before for the undo.
+    const freed = [];
+    const FGk = window.DraftFixtureGeometry;
+    (drawing.fixtures || []).forEach(fx => {
+      if (!fx || (fx.wallId !== gone && fx.endWallId !== gone)) return;
+      // MEASURED AS IT STOOD, the wall still in the list.
+      const geo = FGk && FGk.fixtureGeometry([...drawing.walls, wall], fx);
+      freed.push({ item: fx, before: { ...fx } });
+      if (geo && geo.tub) {
+        fx.width = Number(geo.tubLen.toFixed(4));
+        fx.offset = Number(geo.along.toFixed(4));
+      }
+      if (fx.kind === 'tub') { delete fx.endWallId; delete fx.dir; }
+      if (fx.wallId === gone) {
+        fx.host = { id: `free:${gone}`, start: { x: wall.start.x, y: 0, z: wall.start.z },
+          end: { x: wall.end.x, y: 0, z: wall.end.z }, wallType: wall.wallType, refLine: wall.refLine || 'center' };
+        fx.wallId = null;
+      }
+    });
     // AND THE REFUSED ONES, or refusing a record makes it IMMORTAL. Since the
     // load block started normalising fixtures (tier 3j), a fixture the format
     // turns down is held in `refusedItems` and put back by withRefused() on
@@ -15382,7 +15427,7 @@
     deps.reverse();
     const retired = retirePoolCorners([wall.start, wall.end]);
     setSelection(selection.filter(entry => entry.item !== wall));
-    undoStack.push({ kind: 'remove', wall, index, deps, retired });
+    undoStack.push({ kind: 'remove', wall, index, deps, retired, freed });
     markDirty();
     return wall;
   };
@@ -15605,7 +15650,10 @@
     ordered.forEach(({ type, raw }) => {
       const key = type === 'wall' ? 'walls' : SELECTION_LISTS[type];
       if (!key) return;
-      if (onWall(type)) {
+      // A FREE FIXTURE (its wall deleted, Movie: "leave the item") has no
+      // wall to wait for: it comes with its own wall line.
+      const free = type === 'fixture' && raw.wallId == null && raw.host;
+      if (onWall(type) && !free) {
         if (!wallIds.has(String(raw.wallId))) return;
         if (raw.endWallId != null && !wallIds.has(String(raw.endWallId))) return;
       }
@@ -15642,7 +15690,13 @@
         while (holograms().some(h => h.id === copy.id)) copy.id = newDrawingItemId('hologram');
       }
       if (type === 'wall') wallIds.set(String(raw.id), copy.id);
-      if (onWall(type)) {
+      if (free) {
+        // ITS OWN LINE, shared with the free pieces pasted beside it but not
+        // with the ones it was copied from -- they are not run mates.
+        const was = `host:${raw.host.id}`;
+        if (!wallIds.has(was)) wallIds.set(was, `free:${copy.id}`);
+        copy.host = { ...raw.host, id: wallIds.get(was) };
+      } else if (onWall(type)) {
         copy.wallId = wallIds.get(String(raw.wallId));
         if (raw.endWallId != null) copy.endWallId = wallIds.get(String(raw.endWallId));
       }
@@ -21264,8 +21318,23 @@
   // lot on the release.
   const fixtureLabel = fixture => String(window.DraftFixtureKinds?.kindFor(fixture.kind)?.label
     || fixture.kind || 'FIXTURE').toUpperCase();
+  // A FIXTURE KEPT WHEN ITS WALL WENT moves free, its kept line with it, and
+  // let go against a wall it goes onto that wall (freeFixtureLand).
+  const hostCopy = h => ({ ...h, start: { ...h.start }, end: { ...h.end } });
   const fixtureMoveBegin = (fixture, at) => {
     const FG = window.DraftFixtureGeometry;
+    if (fixture.wallId == null && fixture.host) {
+      const all = fixtures();
+      const riders = fixture.kind === 'island' ? FG.islandPieces(all, fixture) : [];
+      const moving = [fixture, ...riders];
+      return {
+        fixture, free: true, grabWorld: { x: at.x, z: at.z }, island: null,
+        hostsWas: new Map(moving.map(item => [item, hostCopy(item.host)])),
+        riders: riders.map(item => ({ item, offset: Number(item.offset) || 0 })),
+        edits: moving.map(item => ({ item, before: { ...item } })),
+        moved: false,
+      };
+    }
     const host = walls().find(wall => String(wall.id) === String(fixture.wallId));
     const frame = host && FG?.wallFrame(host);
     if (!frame) return null;
@@ -21288,6 +21357,20 @@
   const fixtureMoveTo = (md, raw) => {
     const FG = window.DraftFixtureGeometry;
     const K = window.DraftFixtureKinds;
+    if (md.free) {
+      let dx = raw.x - md.grabWorld.x, dz = raw.z - md.grabWorld.z;
+      if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+      // A PIECE LEAVES ITS RUN when it moves on its own; an island takes its
+      // pieces. A new line object each time, so the undo's before keeps the old.
+      const own = md.fixture.kind === 'island' || !md.riders.length ? null : `free:${md.fixture.id}`;
+      md.hostsWas.forEach((was, item) => {
+        item.host = { ...was, ...(own && item === md.fixture ? { id: own } : {}),
+          start: { x: was.start.x + dx, y: 0, z: was.start.z + dz },
+          end: { x: was.end.x + dx, y: 0, z: was.end.z + dz } };
+      });
+      md.moved = Math.hypot(dx, dz) > 1e-6;
+      return;
+    }
     const { fixture, frame } = md;
     const here = md.local(raw);
     let dAlong = here.along - md.grab.along, dAcross = here.across - md.grab.across;
@@ -21321,6 +21404,47 @@
     }
     md.moved = md.edits.some(({ item, before }) => item.offset !== before.offset
       || (Number(item.standoff) || 0) !== (Number(before.standoff) || 0));
+  };
+  // LET GO AGAINST A WALL, A KEPT FIXTURE GOES ONTO IT: the wall its back
+  // face lands on (within 9"), its middle along that wall, the side it stands
+  // on -- the WALL OFF projection. An island's pieces go with it.
+  const FREE_LAND_FT = 0.75;
+  const freeFixtureLand = md => {
+    const FG = window.DraftFixtureGeometry;
+    const G = window.DraftGeometry2D;
+    const geo = FG.fixtureGeometry(drawing.walls, md.fixture);
+    if (!geo || !G) return null;
+    // ITS BACK OR ITS FRONT: brought up front first, it turns round and
+    // hangs with its back on that wall, facing the room.
+    const mid = (a, b) => ({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+    const edges = [mid(geo.corners[0], geo.corners[1]), mid(geo.corners[2], geo.corners[3])];
+    let best = null, bestD = Infinity;
+    walls().forEach(wall => {
+      const frame = wall.start && wall.end && FG.wallFrame(wall);
+      if (!frame) return;
+      edges.forEach(edge => {
+        const { d } = G.pointToSegment(edge, wall);
+        // THE FACE, not the centre line: half the wall's thickness counts.
+        const face = Math.max(0, d - Math.max(Math.abs(frame.startOff), Math.abs(frame.endOff)));
+        if (face < bestD) { bestD = face; best = { wall, frame }; }
+      });
+    });
+    if (!best || bestD > FREE_LAND_FT) return null;
+    const { wall, frame } = best;
+    [md.fixture, ...md.riders.map(r => r.item)].forEach(item => {
+      const g = FG.fixtureGeometry(drawing.walls, item);
+      if (!g?.center) return;
+      const rx = g.center.x - wall.start.x, rz = g.center.z - wall.start.z;
+      const along = rx * frame.ux + rz * frame.uz;
+      const across = rx * frame.nx + rz * frame.nz;
+      item.wallId = wall.id;
+      item.offset = Math.max(0, Math.min(frame.len, along));
+      item.side = across >= (frame.startOff + frame.endOff) / 2 ? 1 : -1;
+      delete item.host;
+      // AGAINST THE FACE: an island keeps the aisle it stood off at.
+      if (item.kind !== 'island' && !md.riders.some(r => r.item === item)) delete item.standoff;
+    });
+    return wall;
   };
   const fixturePress = at => {
     if (washroomPreset) return dropWashroom(at);
@@ -28555,6 +28679,20 @@
     paint();
     sayOnStrip(`${hologramNoun(holo)} is on the shelf ${shelf?.name || ''} to change. SAVE AS SUITE writes it back out; REFRESH on its card updates every copy.`);
   };
+  // THE PICKER IS MADE AT THE PRESS AND NEVER PUT IN THE PAGE: the page's
+  // own controls stay the ones the gesture census counts.
+  function openShelfSuite() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.draft,.json,application/json';
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      if (!file || !drawing) return;
+      const source = await readHologramFile(file);
+      if (source) editOnShelf({ name: file.name.replace(/\.[^.]+$/, ''), source });
+    });
+    input.click();
+  }
   const mirrorHologram = holo => {
     const flip = holo.flip !== true;
     hologramEdit(holo, { flip }, flip
@@ -32988,6 +33126,7 @@
     const FG = window.DraftFixtureGeometry;
     const box = document.createElement('div');
     const hostLen = f => {
+      if (f.wallId == null) return Infinity;
       const host = walls().find(w => String(w.id) === String(f.wallId));
       const frame = host && FG?.wallFrame(host);
       return frame ? frame.len : Infinity;
@@ -35476,7 +35615,13 @@
         if (md.kind === 'fixture') {
           // ONE GESTURE, ONE UNDO: a 'props' step restores each record in
           // place, the island's aisle key coming or going with it.
-          if (md.moved) {
+          if (md.moved && md.free) {
+            const onto = freeFixtureLand(md);
+            undoStack.push({ kind: 'props', edits: [...md.edits] });
+            markDirty();
+            sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now. UNDO puts it back.`
+              : `${fixtureLabel(md.fixture)} moved, on no wall -- let it go against one to put it on it. UNDO puts it back.`);
+          } else if (md.moved) {
             undoStack.push({ kind: 'props', edits: md.edits });
             markDirty();
             sayOnStrip(md.fixture.kind === 'island'
@@ -36249,6 +36394,11 @@
       // (this page rides them through on the ...parsed spread), so putting
       // the same objects back is the only restoration that is exact.
       step.deps.forEach(d => { if (Array.isArray(d.list)) d.list.splice(Math.min(d.index, d.list.length), 0, d.item); });
+      // AND THE FIXTURES IT KEPT GO BACK ON IT.
+      (step.freed || []).forEach(({ item, before }) => {
+        Object.keys(item).forEach(key => { if (!(key in before)) delete item[key]; });
+        Object.assign(item, before);
+      });
       // AND THE CORNERS GO BACK IN THE POOL. The restored wall already holds
       // these objects — identity on the wall survives the round trip — but
       // the pool is what the NEXT drawn endpoint searches. Leave them out

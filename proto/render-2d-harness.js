@@ -3955,7 +3955,7 @@ function coverage() {
     ['snapCounterOffset slides into a neighbour', src => src.replace(
       'if (d < gap && !overlaps(at)) {', 'if (d < gap) {')],
     ['snapCounterOffset snaps across the wall', src => src.replace(
-      '&& o.wallId === piece.wallId && (o.side === -1 ? -1 : 1) === side);', '&& o.wallId === piece.wallId);')],
+      '&& sameHost(o, piece) && (o.side === -1 ? -1 : 1) === side);', '&& sameHost(o, piece));')],
     ['drawUnderlays2D a DXF ignores its switched-off layers', src => src.replace(
       'if (hidden.has(p.layer) || !onScreen(p.box)) return;', 'if (!onScreen(p.box)) return;')],
     ['drawUnderlays2D a DXF colour 7 in a fixed grey', src => src.replace(
@@ -3967,8 +3967,8 @@ function coverage() {
     ['drawFixture2D a joint end drawn at full weight', src => src.replace(
       'if (light) { ctx.lineWidth = 0.5; ctx.globalAlpha *= 0.45; }', 'if (false) { ctx.lineWidth = 0.5; }')],
     ['drawFixture2D joints across both faces of a wall', src => src.replace(
-      "if (other.wallId !== fixture.wallId || (other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return;",
-      'if (other.wallId !== fixture.wallId) return;')],
+      "if (!sameHost(other, fixture) || (other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return;",
+      'if (!sameHost(other, fixture)) return;')],
     ['squareSideOf takes the single longest edge again', src => src.replace(
       'const vote = sides.reduce((sum, other) => sum + (apart(side.a, other.a) <= SQUARE_TOL ? other.len : 0), 0);',
       'const vote = side.len;')],
