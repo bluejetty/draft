@@ -1557,6 +1557,7 @@ if (!window.DraftRender2D) {
       ctx.beginPath();
       segs.forEach(([a, b]) => { const A = toS(a), B = toS(b); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); });
       ctx.stroke();
+      if (dashed) ctx.setLineDash([]);
       ctx.restore();
     };
     byLevel.forEach((list, levelId) => {
