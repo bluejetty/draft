@@ -490,7 +490,7 @@ const MUTATIONS = [
   ['a fixture is filtered by view instead of by its host wall',
     s => s.replace(`      list(env.fixtures)
         .filter(fixture => fixture.levelId === levelId
-          && wallById.has(fixture.wallId) && shows(fixture.layer))`,
+          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer))`,
     '      pick(env.fixtures).filter(fixture => shows(fixture.layer))')],
   ['a layer the view does not carry is drawn anyway',
     s => s.replace("      if (carried && layerId != null && layerId !== '' && !carried.has(layerId)) return false;", '')],

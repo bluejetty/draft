@@ -35580,7 +35580,7 @@
           // place, the island's aisle key coming or going with it.
           if (md.moved && md.free) {
             const onto = freeFixtureLand(md);
-            undoStack.push({ kind: 'props', edits: md.edits });
+            undoStack.push({ kind: 'props', edits: [...md.edits] });
             markDirty();
             sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now. UNDO puts it back.`
               : `${fixtureLabel(md.fixture)} moved, on no wall -- let it go against one to put it on it. UNDO puts it back.`);
