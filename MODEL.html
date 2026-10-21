@@ -1133,6 +1133,9 @@
     padding:0 6px 3px 12px; }
   .lv-add, .lv-del { font-family: var(--font-ui); background:none; cursor:pointer;
     color: var(--ink-quiet); }
+  .lv-card[data-boneyard] { flex-wrap:wrap; }
+  .lv-card[data-boneyard] > .lv-head { flex:1 1 100%; }
+  .lv-open-suite { flex:1 1 100%; display:flex; justify-content:flex-end; padding:0 0 4px; }
   .lv-add { border:1px solid var(--rule); font-size:9px; font-weight:700;
     letter-spacing:0.06em; padding:2px 5px; }
   .lv-del { border:0; font-size:12px; line-height:1; padding:2px 6px; }
@@ -2264,6 +2267,8 @@
   </div>
 </div>
 <input id="hologram-file" type="file" data-hologram-file hidden accept=".draft,.json,application/json">
+<!-- OPEN SUITE (Movie, 21 Oct): a suite .draft opened onto a new shelf. -->
+<input id="shelf-suite-file" type="file" data-shelf-suite-file hidden accept=".draft,.json,application/json">
 <input id="trace-file" type="file" data-trace-file hidden
   accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp,.dxf,.dwg">
 <div id="trace-insert" data-trace-insert hidden role="dialog" aria-label="Insert a photo">
@@ -10201,8 +10206,28 @@
     saveShelf.hidden = !boneyardActive;
     saveShelf.title = 'Save what is on this shelf, and only it, as its own SUITE .draft';
     saveShelf.addEventListener('click', event => { event.stopPropagation(); askShelfSuite(); });
+    // OPEN SUITE (Movie, 21 Oct: "where a suite will open in the shelf and i
+    // can put all the SUITES in the same file as the SHELL and go into the
+    // SHELFS if i need to edit them"): a suite .draft onto a new shelf of its
+    // own, named for the file. The input's reader is EDIT ON SHELF's.
+    const openShelf = document.createElement('button');
+    openShelf.type = 'button';
+    openShelf.className = 'lv-add';
+    openShelf.dataset.openShelfSuite = '';
+    openShelf.textContent = 'OPEN SUITE';
+    openShelf.title = 'Open a SUITE .draft onto a new shelf, kept in this file to change';
+    openShelf.addEventListener('click', event => {
+      event.stopPropagation();
+      document.querySelector('[data-shelf-suite-file]')?.click();
+    });
     boneHead.append(boneName, plus, saveShelf);
-    bone.append(boneHead);
+    // ON A LINE OF ITS OWN, always there: in the head it would wrap the
+    // moment SAVE AS SUITE shows, and the shelves under it would jump between
+    // the two clicks of a rename's double-click.
+    const openRow = document.createElement('div');
+    openRow.className = 'lv-open-suite';
+    openRow.append(openShelf);
+    bone.append(boneHead, openRow);
     bone.addEventListener('click', () => goToBoneyard());
     levelsPanel.append(bone);
 
@@ -28656,6 +28681,14 @@
     paint();
     sayOnStrip(`${hologramNoun(holo)} is on the shelf ${shelf?.name || ''} to change. SAVE AS SUITE writes it back out; REFRESH on its card updates every copy.`);
   };
+  const shelfOpenInput = document.querySelector('[data-shelf-suite-file]');
+  shelfOpenInput?.addEventListener('change', async () => {
+    const file = shelfOpenInput.files && shelfOpenInput.files[0];
+    shelfOpenInput.value = '';
+    if (!file || !drawing) return;
+    const source = await readHologramFile(file);
+    if (source) editOnShelf({ name: file.name.replace(/\.[^.]+$/, ''), source });
+  });
   const mirrorHologram = holo => {
     const flip = holo.flip !== true;
     hologramEdit(holo, { flip }, flip

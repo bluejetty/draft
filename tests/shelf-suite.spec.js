@@ -134,3 +134,26 @@ test('EDIT ON SHELF puts a suite\'s drawing on a new shelf named for it, its win
   expect(onShelf.map(w => String(w.id)), 'on its own wall\'s copy').toContain(String(win.wallId));
   expect(d.holograms, 'the hologram stays as it was').toHaveLength(1);
 });
+
+// OPEN SUITE (Movie, 21 Oct: "where a suite will open in the shelf and i can
+// put all the SUITES in the same file as the SHELL and go into the SHELFS if i
+// need to edit them").
+test('OPEN SUITE opens a suite file onto a new shelf named for it, kept in this drawing', async ({ page }) => {
+  const SUITE = { version: 1, levels: LEVELS, activeLevelIdx: 2, ...EMPTY, suiteKind: 'residential',
+    walls: [W('s1', [0, 0], [20, 0], 3), W('s2', [20, 0], [20, 15], 3)],
+    fenestrations: [{ id: 'w1', wallId: 's1', levelId: 3, view: 'plan', type: 'window', offset: 8, width: 4, sillHeight: 3, headHeight: 6.67 }] };
+  await open(page);
+  const button = page.locator('[data-open-shelf-suite]');
+  await expect(button, 'beside SAVE AS SUITE, even off the BONEYARD').toBeVisible();
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), button.click()]);
+  await chooser.setFiles({ name: '3 bedroom.draft', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(SUITE)) });
+  await expect(page.locator('[data-shelf="3"]')).toHaveText('3 BEDROOM');
+  await expect(page.locator('[data-shelf="3"]')).toHaveAttribute('data-active', '');
+  const d = await saved(page);
+  const onShelf = d.walls.filter(w => w.levelId === -3);
+  expect(onShelf).toHaveLength(2);
+  const win = d.fenestrations.find(o => o.levelId === -3);
+  expect(onShelf.map(w => String(w.id)), 'its window on its own wall\'s copy').toContain(String(win && win.wallId));
+  expect(d.walls.filter(w => w.levelId === 3), 'the shell untouched').toHaveLength(2);
+  expect(d.holograms || [], 'no hologram made').toHaveLength(0);
+});
