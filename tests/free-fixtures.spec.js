@@ -54,6 +54,18 @@ async function deleteBack(page, at) {
   await page.waitForTimeout(150);
 }
 
+// A FIXTURE IN THE SELECTION IS A GRAB: pressed once, then dragged.
+async function drag(page, at, from, to) {
+  await page.mouse.click(...at(...from));
+  await page.waitForTimeout(100);
+  await page.mouse.move(...at(...from));
+  await page.mouse.down();
+  await page.waitForTimeout(120);
+  await page.mouse.move(...at(...to), { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+}
+
 test('deleting the wall behind them leaves the toilet and the tub where they stood', async ({ page }) => {
   const { at } = await open(page);
   const before = await footprints(page, await saved(page));
@@ -72,10 +84,15 @@ test('deleting the wall behind them leaves the toilet and the tub where they sto
   const same = (a, b, what) => a.forEach((p, i) => p.forEach((v, k) => expect(v, what).toBeCloseTo(b[i][k], 1)));
   same(after.loo, before.loo, 'the toilet exactly where it stood');
   same(after.tb, before.tb, 'the tub exactly where it stood');
-  // AND A RELOAD KEEPS THEM.
+  // AND A RELOAD KEEPS THEM: read back in, still there to pick and move.
   await page.reload();
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  expect((await saved(page)).fixtures.find(f => f.id === 'loo').host).toBeTruthy();
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  await drag(page, at, [3, 1.4], [5, 1.4]);
+  const back = (await saved(page)).fixtures.find(f => f.id === 'loo');
+  expect(back && back.host, 'free after the reload').toBeTruthy();
+  expect(back.host.start.x, 'and it moved').toBeCloseTo(2, 1);
 });
 
 test('UNDO puts the wall back and hangs them on it again', async ({ page }) => {
@@ -90,18 +107,6 @@ test('UNDO puts the wall back and hangs them on it again', async ({ page }) => {
   expect(loo.host).toBeUndefined();
   expect(d.fixtures.find(f => f.id === 'tb').endWallId).toBe('end');
 });
-
-// A FIXTURE IN THE SELECTION IS A GRAB: pressed once, then dragged.
-async function drag(page, at, from, to) {
-  await page.mouse.click(...at(...from));
-  await page.waitForTimeout(100);
-  await page.mouse.move(...at(...from));
-  await page.mouse.down();
-  await page.waitForTimeout(120);
-  await page.mouse.move(...at(...to), { steps: 10 });
-  await page.mouse.up();
-  await page.waitForTimeout(150);
-}
 
 test('a free toilet drags anywhere, and let go by a wall it hangs on that wall', async ({ page }) => {
   const { at } = await open(page);
