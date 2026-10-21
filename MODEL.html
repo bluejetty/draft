@@ -15107,6 +15107,34 @@
     const last = s.corners[s.corners.length - 1];
     return last ? squareTo(last, loopPoint(at)) : loopPoint(at);
   };
+  // THE EDGE IN HAND, for the LENGTH box (Movie, 21 Oct: "i need the LENGTH
+  // input box to work when I press "R" or "L" or just go into the box and
+  // start typeing"): the bearing line from its first point, or the outline
+  // from its last corner, to where the next press would land.
+  function shedRun() {
+    const s = shedRoof;
+    if (!s || activeTool !== 'roof' || !cursorWorld) return null;
+    const from = s.stage === 'bearing' ? s.a : s.stage === 'shape' ? s.corners[s.corners.length - 1] : null;
+    return from ? { from, to: shedPoint(s, cursorWorld) } : null;
+  }
+  // A TYPED LENGTH PUTS THE POINT DOWN that far along the way the cursor
+  // points (squared, if the T-square is lit), as a press would.
+  function shedByTyped(feet) {
+    const s = shedRoof, run = shedRun();
+    if (!run) return false;
+    const dx = run.to.x - run.from.x, dz = run.to.z - run.from.z, len = Math.hypot(dx, dz);
+    if (len < 1e-6) { sayOnStrip('Point the cursor the way it goes first.'); return true; }
+    const p = { x: run.from.x + dx / len * feet, z: run.from.z + dz / len * feet };
+    if (s.stage === 'bearing') {
+      s.b = p;
+      s.stage = 'slope';
+      sayOnStrip(SHED_SAYS.slope);
+    } else {
+      s.corners.push(p);
+    }
+    paint();
+    return true;
+  }
   const SHED_SAYS = {
     bearing: 'SINGLE SLOPE 1/3: click two points along the wall the roof sits on.',
     slope: 'SINGLE SLOPE 2/3: click the EAVE side -- the way the roof slopes down.',
@@ -15285,6 +15313,8 @@
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && roofPickCard && !roofPickCard.hidden) { roofPickCard.hidden = true; return; }
     if (!shedRoof) return;
+    // TYPING IN A BOX IS THE BOX'S: ENTER there is a typed length.
+    if (event.target instanceof HTMLInputElement) return;
     if (event.key === 'Enter' && shedRoof.stage === 'shape' && shedRoof.corners.length >= 3) {
       event.preventDefault();
       commitShedRoof();
@@ -27387,6 +27417,8 @@
     // FLOOR AND SHAPE TOO, for the strip's readout only (Movie, 12 Oct: "area
     // and shapes like roof and floor too"): the edge from the last corner to
     // the cursor. Their LENGTH box still takes no typing.
+    // AND THE SINGLE SLOPE ROOF'S EDGE IN HAND, which the box can type.
+    if (shedRun()) return shedRun();
     const corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : null;
     if (corners && corners.length) return { from: corners[corners.length - 1], to: loopPoint(cursorWorld) };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
@@ -27549,7 +27581,8 @@
     const dimReady = !moveReady && !stretchReady && dimTypedReady();
     const moveTypable = moveReady || dimReady || stretchReady;
     const typable = !!(((drawsRun() && drawStart)
-      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable;
+      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable
+      || !!shedRun();
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
@@ -30230,6 +30263,16 @@
       const parsed = F.parseArchitecturalLength(lengthBox.value);
       if (!parsed.ok) { sayOnStrip(parsed.error); return; }
       driveDimension(parsed.inches / 12);
+      return;
+    }
+    if (shedRun()) {
+      const parsed = F.parseArchitecturalLength(lengthBox.value);
+      if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+      if (!(parsed.inches > 0)) { sayOnStrip('Type a length over zero.'); return; }
+      shedByTyped(parsed.inches / 12);
+      lengthBox.value = '';
+      lengthBox.blur();
+      stripRefresh();
       return;
     }
     if (activeTool === 'outline') {
