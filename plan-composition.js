@@ -231,15 +231,15 @@ if (!window.DraftPlanComposition) {
       const wallById = new Map(walls.map(wall => [wall.id, wall]));
       list(env.fixtures)
         .filter(fixture => fixture.levelId === levelId
-          && wallById.has(fixture.wallId) && shows(fixture.layer))
+          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer))
         .forEach(fixture => {
           onLayer(ctx, fixture.layer || 'A-FIXT');
-          render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId), env.fixtureEnv);
+          render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
           // THE UPPERS OVER A KITCHEN PIECE, dashed and lighter (the overhead
           // convention, Movie 16 Oct). Which pieces is the caller's answer.
           if (typeof env.fixtureEnv.hasUppers === 'function' && env.fixtureEnv.hasUppers(fixture)
             && typeof render.drawUpperCabinets2D === 'function') {
-            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId), env.fixtureEnv);
+            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
           }
         });
     }

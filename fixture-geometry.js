@@ -150,7 +150,12 @@ if (!window.DraftFixtureGeometry) {
     };
   };
 
-  const fixtureGeometry = (walls, fixture, wall = walls.find(w => w.id === fixture.wallId)) => {
+  // ITS WALL, or the line it was kept on when that wall was deleted (`host`,
+  // Movie, 21 Oct): every drawing of it reads the one frame either way.
+  const hostOf = (walls, fixture) => (fixture?.wallId == null && fixture?.host
+    ? { levelId: fixture.levelId, view: 'plan', ...fixture.host }
+    : walls.find(w => w.id === fixture.wallId));
+  const fixtureGeometry = (walls, fixture, wall = hostOf(walls, fixture)) => {
     if (!wall) return null;
     const frame = wallFrame(wall);
     if (!frame) return null;
@@ -185,8 +190,9 @@ if (!window.DraftFixtureGeometry) {
   // there and off the others. The tub keeps its own geometry and is nobody's
   // mate.
   const RUN_TOL_FT = 0.01;
+  const hostKey = f => (f.wallId != null ? `w:${f.wallId}` : `h:${f.host?.id ?? ''}`);
   const runMates = (fixtures, piece) => fixtures.filter(other => other !== piece
-    && String(other.wallId) === String(piece.wallId)
+    && hostKey(other) === hostKey(piece)
     && String(other.levelId) === String(piece.levelId)
     && (other.side === -1 ? -1 : 1) === (piece.side === -1 ? -1 : 1)
     && Math.abs((Number(other.standoff) || 0) - (Number(piece.standoff) || 0)) <= RUN_TOL_FT
@@ -231,6 +237,8 @@ if (!window.DraftFixtureGeometry) {
     wallFrame,
     wallCross,
     fixtureGeometry,
+    hostOf,
+    hostKey,
     tubGeometry,
     TUB_MIN_LENGTH_FT,
     TUB_STRETCH_MAX_FT,
