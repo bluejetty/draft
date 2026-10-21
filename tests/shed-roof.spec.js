@@ -151,3 +151,24 @@ test('an outline with no edge along the eave side is refused, and nothing is mad
   await expect(strip(page)).toContainText('No edge of that outline runs along the eave side');
   expect((await saved(page)).roofs || []).toEqual([]);
 });
+
+test('the T-square holds for the wall line and the outline\'s corners', async ({ page }) => {
+  const { at } = await open(page);
+  const chip = page.locator('[data-mode-tsquare]');
+  if (!/\blit\b/.test(await chip.getAttribute('class') || '')) await chip.click();
+  await expect(chip).toHaveClass(/lit/);
+  await page.locator('[data-tool-key="roof"]').click();
+  await page.locator('[data-roof-kind="shed"]').click();
+  // THE FAR END A FOOT AND A HALF OFF LEVEL, out of the walls' reach.
+  await press(page, at, 0.3, 0.2);
+  await press(page, at, 29.7, 1.5);
+  await press(page, at, 15, -1.2);
+  // EACH CORNER A LITTLE OFF SQUARE TO THE ONE BEFORE.
+  for (const [x, z] of [[-1, -2], [31, -1.6], [30.6, 12], [-1, 12.3]]) await press(page, at, x, z);
+  await page.keyboard.press('Enter');
+  await expect(strip(page)).toContainText('SINGLE SLOPE ROOF made');
+  const roof = (await saved(page)).roofs[0];
+  expect(roof.points.map(p => [Number(p.x.toFixed(3)), Number(p.z.toFixed(3))]), 'every corner square to the one before')
+    .toEqual([[-1, -2], [31, -2], [31, 12], [-1, 12]]);
+  expect(Number(roof.edgeOverhang[0].toFixed(3)), 'the eave 2 ft out from a level wall line').toBe(2);
+});

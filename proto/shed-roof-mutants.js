@@ -63,6 +63,14 @@ const MUTANTS = [
     find: "    if (roofPickCard && !roofPickCard.hidden && !shedRoof) roofPickCard.hidden = true;",
     with: "    void shedRoof;",
     test: 'puts the popup away' },
+  { file: 'MODEL.html', name: 'the T-square ignored on the wall line',
+    find: "    if (s.stage === 'bearing') return s.a ? squareTo(s.a, shedSnap(at)) : shedSnap(at);",
+    with: "    if (s.stage === 'bearing') return shedSnap(at);",
+    test: 'T-square holds' },
+  { file: 'MODEL.html', name: 'the T-square ignored on the outline',
+    find: "    return last ? squareTo(last, loopPoint(at)) : loopPoint(at);",
+    with: "    return loopPoint(at);",
+    test: 'T-square holds' },
 ];
 const run = name => {
   try {
