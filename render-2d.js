@@ -1492,7 +1492,8 @@ if (!window.DraftRender2D) {
       const nx = (-dz / len) * MELD_EPS_FT, nz = (dx / len) * MELD_EPS_FT;
       for (let k = 0; k < ts.length - 1; k += 1) {
         const t0 = ts[k], t1 = ts[k + 1];
-        if (t1 - t0 < 1e-6) continue;
+        // A SLIVER where two ends all but meet is nobody's edge.
+        if ((t1 - t0) * len < MELD_EPS_FT / 4) continue;
         const tm = (t0 + t1) / 2;
         const m = { x: a.x + dx * tm, z: a.z + dz * tm };
         if (covered({ x: m.x + nx, z: m.z + nz }) !== covered({ x: m.x - nx, z: m.z - nz })) {
