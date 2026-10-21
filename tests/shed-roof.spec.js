@@ -172,3 +172,34 @@ test('the T-square holds for the wall line and the outline\'s corners', async ({
     .toEqual([[-1, -2], [31, -2], [31, 12], [-1, 12]]);
   expect(Number(roof.edgeOverhang[0].toFixed(3)), 'the eave 2 ft out from a level wall line').toBe(2);
 });
+
+test('the LENGTH box types the wall line and each edge of the outline: R opens it, a digit too', async ({ page }) => {
+  const { at } = await open(page);
+  await page.locator('[data-tool-key="roof"]').click();
+  await page.locator('[data-roof-kind="shed"]').click();
+  const box = page.locator('#frozen-length');
+  await press(page, at, 0.3, 0.2);
+  // THE WALL LINE: 20 ft along the way the cursor points, by R then the number.
+  await page.mouse.move(...at(12, 0.4));
+  await page.waitForTimeout(80);
+  await expect(box).toBeEnabled();
+  await page.keyboard.press('r');
+  await expect(box).toBeFocused();
+  await page.keyboard.type("20'");
+  await page.keyboard.press('Enter');
+  await expect(strip(page)).toContainText('2/3');
+  await press(page, at, 10, -1.2);
+  // THE OUTLINE: the first corner pressed, then each edge typed by a digit.
+  await press(page, at, -1, -2);
+  for (const [toward, len] of [[[20, -2], "32'"], [[31, 8], "14'"], [[10, 12], "32'"]]) {
+    await page.mouse.move(...at(...toward));
+    await page.waitForTimeout(80);
+    await page.keyboard.type(len);
+    await page.keyboard.press('Enter');
+  }
+  await page.keyboard.press('Enter');
+  await expect(strip(page)).toContainText('SINGLE SLOPE ROOF made');
+  const roof = (await saved(page)).roofs[0];
+  expect(roof.points.map(p => [Number(p.x.toFixed(2)), Number(p.z.toFixed(2))]))
+    .toEqual([[-1, -2], [31, -2], [31, 12], [-1, 12]]);
+});

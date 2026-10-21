@@ -71,6 +71,22 @@ const MUTANTS = [
     find: "    return last ? squareTo(last, loopPoint(at)) : loopPoint(at);",
     with: "    return loopPoint(at);",
     test: 'T-square holds' },
+  { file: 'MODEL.html', name: 'the LENGTH box shut while the roof is drawn',
+    find: "      || !!shedRun();",
+    with: "      || false;",
+    test: 'LENGTH box types' },
+  { file: 'MODEL.html', name: 'a typed length ignored',
+    find: "    if (shedRun()) {\n      const parsed = F.parseArchitecturalLength(lengthBox.value);",
+    with: "    if (false) {\n      const parsed = F.parseArchitecturalLength(lengthBox.value);",
+    test: 'LENGTH box types' },
+  { file: 'MODEL.html', name: 'the typed length laid the wrong way',
+    find: "    const p = { x: run.from.x + dx / len * feet, z: run.from.z + dz / len * feet };",
+    with: "    const p = { x: run.from.x - dx / len * feet, z: run.from.z - dz / len * feet };",
+    test: 'LENGTH box types' },
+  { file: 'MODEL.html', name: 'ENTER in the box closes the roof instead',
+    find: "    if (event.target instanceof HTMLInputElement) return;\n",
+    with: "",
+    test: 'LENGTH box types' },
 ];
 const run = name => {
   try {

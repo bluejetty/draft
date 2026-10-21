@@ -1311,6 +1311,20 @@
   .hologram-copy [data-hologram-number] { min-width:2.2em; font-weight:600; color: var(--holo-ink); }
   .hologram-copy { cursor:pointer; border-radius:3px; }
   .hologram-copy:hover, .hologram-copy[data-lit] { box-shadow: 0 0 0 1px var(--holo-ink), 0 0 8px var(--holo-ink); }
+  /* A LIST, AND THE BUTTONS FOR THE ONE PICKED (Movie, 21 Oct: "can it just
+     LIST the items and show all the button for only the one the user has
+     selected so it won't be as tall, and this menu could also go to 2 or 3
+     columns and be wider too"). */
+  .hologram-copy [data-hologram-where] { opacity:0.75; }
+  .hologram-file-head [data-hologram-copies], .hologram-tools [data-hologram-floor] { flex:0 0 auto; white-space:nowrap; align-self:center; }
+  .hologram-inside { padding-left:14px; cursor:pointer; }
+  .hologram-inside input { margin:0 6px 0 0; }
+  .hologram-tools { display:flex; flex-wrap:wrap; gap:6px; flex-basis:100%; padding:4px 0 2px; }
+  #hologram-ask .promote-card { max-width:min(1100px, 94vw); width:min(1100px, 94vw); }
+  #hologram-ask [data-hologram-list] { display:grid; gap:8px 14px;
+    grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); max-height:62vh; overflow:auto; }
+  #hologram-ask [data-hologram-list] .hologram-show { grid-column:1 / -1; }
+  #hologram-ask .hologram-file { margin:0; }
   .trace-row button { cursor:pointer; padding:3px 8px; border-radius:3px; border:1px solid var(--edge-panel);
     background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui);
     font-size:10px; font-weight:600; letter-spacing:0.04em; }
@@ -15093,6 +15107,34 @@
     const last = s.corners[s.corners.length - 1];
     return last ? squareTo(last, loopPoint(at)) : loopPoint(at);
   };
+  // THE EDGE IN HAND, for the LENGTH box (Movie, 21 Oct: "i need the LENGTH
+  // input box to work when I press "R" or "L" or just go into the box and
+  // start typeing"): the bearing line from its first point, or the outline
+  // from its last corner, to where the next press would land.
+  function shedRun() {
+    const s = shedRoof;
+    if (!s || activeTool !== 'roof' || !cursorWorld) return null;
+    const from = s.stage === 'bearing' ? s.a : s.stage === 'shape' ? s.corners[s.corners.length - 1] : null;
+    return from ? { from, to: shedPoint(s, cursorWorld) } : null;
+  }
+  // A TYPED LENGTH PUTS THE POINT DOWN that far along the way the cursor
+  // points (squared, if the T-square is lit), as a press would.
+  function shedByTyped(feet) {
+    const s = shedRoof, run = shedRun();
+    if (!run) return false;
+    const dx = run.to.x - run.from.x, dz = run.to.z - run.from.z, len = Math.hypot(dx, dz);
+    if (len < 1e-6) { sayOnStrip('Point the cursor the way it goes first.'); return true; }
+    const p = { x: run.from.x + dx / len * feet, z: run.from.z + dz / len * feet };
+    if (s.stage === 'bearing') {
+      s.b = p;
+      s.stage = 'slope';
+      sayOnStrip(SHED_SAYS.slope);
+    } else {
+      s.corners.push(p);
+    }
+    paint();
+    return true;
+  }
   const SHED_SAYS = {
     bearing: 'SINGLE SLOPE 1/3: click two points along the wall the roof sits on.',
     slope: 'SINGLE SLOPE 2/3: click the EAVE side -- the way the roof slopes down.',
@@ -15271,6 +15313,8 @@
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && roofPickCard && !roofPickCard.hidden) { roofPickCard.hidden = true; return; }
     if (!shedRoof) return;
+    // TYPING IN A BOX IS THE BOX'S: ENTER there is a typed length.
+    if (event.target instanceof HTMLInputElement) return;
     if (event.key === 'Enter' && shedRoof.stage === 'shape' && shedRoof.corners.length >= 3) {
       event.preventDefault();
       commitShedRoof();
@@ -27373,6 +27417,8 @@
     // FLOOR AND SHAPE TOO, for the strip's readout only (Movie, 12 Oct: "area
     // and shapes like roof and floor too"): the edge from the last corner to
     // the cursor. Their LENGTH box still takes no typing.
+    // AND THE SINGLE SLOPE ROOF'S EDGE IN HAND, which the box can type.
+    if (shedRun()) return shedRun();
     const corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : null;
     if (corners && corners.length) return { from: corners[corners.length - 1], to: loopPoint(cursorWorld) };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
@@ -27535,7 +27581,8 @@
     const dimReady = !moveReady && !stretchReady && dimTypedReady();
     const moveTypable = moveReady || dimReady || stretchReady;
     const typable = !!(((drawsRun() && drawStart)
-      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable;
+      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable
+      || !!shedRun();
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
@@ -28538,6 +28585,10 @@
     const litRow = document.querySelector('.hologram-copy[data-lit]');
     if (litRow?.scrollIntoView) litRow.scrollIntoView({ block: 'nearest' });
   });
+  // WHICH FILES' INSIDE LISTS ARE OPEN, by file.
+  const hologramInsideOpen = new Set();
+  // AND THE COPY WHOSE BUTTONS A PRESS LAST USED, kept open while nothing is picked.
+  let hologramOpenId = null;
   function renderHologramListInto(card) {
     const all = holograms();
     const suites = all.filter(holo => holo.mode === 'suite').length;
@@ -28614,6 +28665,66 @@
       edit.addEventListener('click', () => { closeHologramCards(); editOnShelf(first); });
       head.append(swatch, name, count, edit, refresh);
       fileCard.appendChild(head);
+      // ITS OWN HOLOGRAMS, ON AND OFF (Movie, 21 Oct: "a little button to
+      // show a list of the HOLOGRAMS within a HOLOGRAM and a checkbox beside
+      // all of them and allow the user to turn on and off the other
+      // holograms within a file"; "also a button ... where ALL its attached
+      // HOLOGRAMS can be NOT SHOWN / SHOWN"). Set on every copy of the file,
+      // which share the one drawing.
+      const inside = Array.isArray(first.source?.holograms) ? first.source.holograms : [];
+      if (inside.length) {
+        const offOf = holo => new Set((holo.hiddenInside || []).map(String));
+        const setOff = next => {
+          const edits = copies.map(holo => ({ item: holo, before: { ...holo } }));
+          copies.forEach(holo => { if (next.size) holo.hiddenInside = [...next]; else delete holo.hiddenInside; });
+          undoStack.push({ kind: 'props', edits });
+          markDirty();
+          paint();
+          renderHologramList();
+        };
+        const off = offOf(first);
+        const allOff = inside.every(child => off.has(String(child.id)));
+        const insideRow = document.createElement('div');
+        insideRow.className = 'trace-row hologram-inside-head';
+        const open = hologramInsideOpen.has(key);
+        const list = document.createElement('button');
+        list.type = 'button';
+        list.dataset.hologramInside = key;
+        list.textContent = `INSIDE (${inside.length - [...off].filter(id => inside.some(c => String(c.id) === id)).length}/${inside.length}) ${open ? '\u25b4' : '\u25be'}`;
+        list.title = 'The holograms inside this file: tick to show, untick to hide';
+        list.setAttribute('aria-expanded', open ? 'true' : 'false');
+        list.addEventListener('click', () => {
+          if (hologramInsideOpen.has(key)) hologramInsideOpen.delete(key); else hologramInsideOpen.add(key);
+          renderHologramList();
+        });
+        const every = document.createElement('button');
+        every.type = 'button';
+        every.dataset.hologramInsideAll = key;
+        every.textContent = allOff ? 'SHOW ALL INSIDE' : 'HIDE ALL INSIDE';
+        every.addEventListener('click', () => setOff(allOff ? new Set() : new Set(inside.map(c => String(c.id)))));
+        insideRow.append(list, every);
+        fileCard.appendChild(insideRow);
+        if (open) {
+          inside.forEach(child => {
+            const r = document.createElement('label');
+            r.className = 'trace-row hologram-inside';
+            r.dataset.hologramInsideRow = String(child.id);
+            const tick = document.createElement('input');
+            tick.type = 'checkbox';
+            tick.checked = !off.has(String(child.id));
+            tick.addEventListener('change', () => {
+              const next = offOf(first);
+              if (tick.checked) next.delete(String(child.id)); else next.add(String(child.id));
+              setOff(next);
+            });
+            const word = document.createElement('span');
+            const kindOf = window.DraftDrawingFormat.suiteKind(child.source?.suiteKind);
+            word.textContent = kindOf ? `${suiteLabel(kindOf)} \u00b7 ${child.name || child.id}` : (child.name || child.id);
+            r.append(tick, word);
+            fileCard.appendChild(r);
+          });
+        }
+      }
       copies.forEach((holo, index) => {
       const row = document.createElement('div');
       row.className = 'trace-row hologram-copy';
@@ -28623,12 +28734,22 @@
       number.textContent = `#${index + 1}`;
       const lit = selection.some(entry => entry.type === 'hologram' && entry.item === holo);
       if (lit) row.dataset.lit = '';
+      // ITS BUTTONS ONLY WHEN IT IS THE ONE PICKED -- or the only copy there
+      // is, which has nothing to be picked from.
+      const open = lit || all.length === 1 || (hologramOpenId === holo.id && !selection.some(e => e.type === 'hologram'));
+      if (open) row.dataset.hologramOpen = '';
+      // WHERE IT STANDS, on the line itself: its floor, and HIDDEN if so.
+      const where = document.createElement('span');
+      where.dataset.hologramWhere = '';
+      where.textContent = [holo.mode === 'suite' ? suiteFloorName(holo) : 'HOLOGRAM', holo.hidden ? 'HIDDEN' : '']
+        .filter(Boolean).join(' \u00b7 ');
       // LIT BY A PASS OF THE POINTER (scrolling past it) and PICKED BY A
       // CLICK on the row, which is the same as picking it on the plan.
       row.addEventListener('mouseenter', () => { hologramHover = holo; paint(); });
       row.addEventListener('mouseleave', () => { if (hologramHover === holo) { hologramHover = null; paint(); } });
       row.addEventListener('click', event => {
         if (event.target.closest('button')) return;
+        hologramOpenId = holo.id;
         setSelection([{ type: 'hologram', item: holo }]);
         paint();
       });
@@ -28638,7 +28759,12 @@
         b.textContent = label;
         b.dataset[key] = holo.id;
         if (title) b.title = title;
-        b.addEventListener('click', onClick);
+        // A PRESS KEEPS ITS BUTTONS OPEN, after a COPY has made it one of
+        // several -- without picking it on the plan, which would glow it.
+        b.addEventListener('click', event => {
+          hologramOpenId = holo.id;
+          onClick(event);
+        });
         return b;
       };
       const suite = holo.mode === 'suite';
@@ -28659,7 +28785,11 @@
           renderHologramList();
         });
       mode.setAttribute('aria-pressed', suite ? 'true' : 'false');
-      row.append(number, mode,
+      const tools = document.createElement('div');
+      tools.className = 'hologram-tools';
+      row.append(number, where);
+      if (open) row.append(tools);
+      tools.append(mode,
         button(holo.hidden ? 'SHOW' : 'HIDE', 'hologramShow', '', () => {
           hologramEdit(holo, { hidden: !holo.hidden });
           renderHologramList();
@@ -30136,6 +30266,16 @@
       const parsed = F.parseArchitecturalLength(lengthBox.value);
       if (!parsed.ok) { sayOnStrip(parsed.error); return; }
       driveDimension(parsed.inches / 12);
+      return;
+    }
+    if (shedRun()) {
+      const parsed = F.parseArchitecturalLength(lengthBox.value);
+      if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+      if (!(parsed.inches > 0)) { sayOnStrip('Type a length over zero.'); return; }
+      shedByTyped(parsed.inches / 12);
+      lengthBox.value = '';
+      lengthBox.blur();
+      stripRefresh();
       return;
     }
     if (activeTool === 'outline') {
