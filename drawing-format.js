@@ -937,6 +937,11 @@ if (!window.DraftDrawingFormat) {
         levelId: roofLevelId,
         sourceLevelId: levelId(roof?.sourceLevelId, levelIds),
         sourceShapeId: String(roof?.sourceShapeId || '').trim() || null,
+        // THE STOREY A ROOF WAS DRAWN ON BY HAND (Movie, 21 Oct: a lower roof
+        // drawn on the 2nd floor that shows "on the 2nd FLoor PLAN and on the
+        // ROOF plan"). It bears on `sourceLevelId`, the storey under it.
+        // Absent on every roof the build cut.
+        ...(levelId(roof?.drawnOn, levelIds) != null ? { drawnOn: levelId(roof.drawnOn, levelIds) } : {}),
         edges: points.map((_, index) =>
           // SLOPED (18 Oct): the planes kept, cut off along the edge.
           (Array.isArray(roof?.edges) && (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')
