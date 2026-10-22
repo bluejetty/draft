@@ -28935,6 +28935,28 @@
     });
     return out;
   };
+  // A SUITE DROPS ONTO THE REGISTRATION POSITION (Movie, 22 Oct: "once they
+  // drop it onto a plan it will drop into the registration position and the
+  // user can move it to the correct location they want it in"). Its file's
+  // gold target -- cut-marks' siteDatum over its lowest floor, the corner the
+  // shelf's target sat on -- lands on this plan's gold target. Only a file
+  // saved as a suite: a PHASE plan is drawn on the house's own grid already,
+  // and stays where its file has it. The x and z that do it, or null when
+  // either target is missing.
+  const suiteRegistration = holo => {
+    const F = window.DraftDrawingFormat, CM = window.DraftCutMarks, WT = window.DraftWallTypes;
+    if (!F.suiteKind(holo?.source?.suiteKind) || !CM?.siteDatum) return null;
+    const target = gridDatum();
+    const floor = suiteFloors(holo)[0];
+    if (!target || !floor) return null;
+    const thicknessFt = w => (WT?.WALL_TYPES.find(t => t.id === w.wallType)?.totalIn || 0) / 12;
+    const walls = (holo.source.walls || []).filter(w => w && Number(w.levelId) === Number(floor.id))
+      .map(w => ({ ...w, levelId: 3 }));
+    const own = CM.siteDatum(walls, { turn: holo.source.planTurn || 0, thicknessFt });
+    if (!own) return null;
+    const at = F.hologramPoint({ ...holo, x: 0, z: 0 }, own);
+    return { x: target.x - at.x, z: target.z - at.z };
+  };
   const suiteFloorName = holo => {
     const at = suiteFloorAt(holo);
     const l = floorsOf(drawing?.levels)[at];
@@ -29387,6 +29409,8 @@
     const here = boneyardActive ? -1 : floorsOf(drawing.levels).findIndex(l => Number(l.id) === Number(activeLevelId()));
     const map = here >= 0 ? suiteMapFor(holo, here) : null;
     if (map && !sameMap(holo, map)) holo.levelMap = map;
+    const registeredAt = suiteRegistration(holo);
+    if (registeredAt) { holo.x = registeredAt.x; holo.z = registeredAt.z; }
     if (!Array.isArray(drawing.holograms)) drawing.holograms = [];
     addItem(drawing.holograms, holo);
     // ── AND IT ARRIVES IN HAND ────────────────────────────────────────────
@@ -29404,8 +29428,10 @@
     // it, Esc to leave it where the file had it. The card is still the way
     // back to it later.
     traceAsk.hidden = true;
+    // A SUITE COMES IN ON THE REGISTRATION POSITION (see suiteRegistration),
+    // still in hand, so the drag starts from there; Esc leaves it on it.
     traceMoving = { underlay: holo, from: null, before: null, hologram: true };
-    sayOnStrip(`${name} is in \u2014 ${traceMoveWord(traceMoving)}`);
+    sayOnStrip(`${name} is in${registeredAt ? ' on the gold target' : ''} \u2014 ${traceMoveWord(traceMoving)}`);
     paint();
   });
   [traceAsk.querySelector('[data-hologram-upload]'), hologramAsk?.querySelector('[data-hologram-ask-upload]')].forEach(b => b?.addEventListener('click', () => {
