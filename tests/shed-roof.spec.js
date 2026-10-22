@@ -173,6 +173,25 @@ test('the T-square holds for the wall line and the outline\'s corners', async ({
   expect(Number(roof.edgeOverhang[0].toFixed(3)), 'the eave 2 ft out from a level wall line').toBe(2);
 });
 
+test('Escape typed in the LENGTH box lets the box go and leaves the roof in hand', async ({ page }) => {
+  const { at } = await open(page);
+  await page.locator('[data-tool-key="roof"]').click();
+  await page.locator('[data-roof-kind="shed"]').click();
+  const box = page.locator('#frozen-length');
+  await press(page, at, 0.3, 0.2);
+  await page.mouse.move(...at(12, 0.4));
+  await page.waitForTimeout(80);
+  await page.keyboard.press('r');
+  await expect(box).toBeFocused();
+  await page.keyboard.type("20'");
+  // ESCAPE IN THE BOX IS THE BOX'S: it lets the typing go, not the roof.
+  await page.keyboard.press('Escape');
+  await expect(box).not.toBeFocused();
+  await expect(strip(page)).not.toContainText('put down');
+  await press(page, at, 29.7, -0.2);
+  await expect(strip(page), 'the wall line still being drawn').toContainText('2/3');
+});
+
 test('the LENGTH box types the wall line and each edge of the outline: R opens it, a digit too', async ({ page }) => {
   const { at } = await open(page);
   await page.locator('[data-tool-key="roof"]').click();
