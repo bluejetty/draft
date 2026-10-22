@@ -456,7 +456,7 @@ if (!window.DraftDrawingFormat) {
   // island records a standoff: the clear distance from the host wall face to
   // the island's near edge, so it stands free of the wall but still rides it.
   // The last five are Movie's kitchen pieces (KITCHENITEMS1/2.DXF, 9 Oct).
-  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'sinkbase', 'drawerbase', 'doorbase', 'tallcab', 'fridge30', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
+  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'sinkbase', 'drawerbase', 'doorbase', 'cornerbase', 'tallcab', 'fridge30', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
   // `env.drops` like walls, lines, floors and dimensions: a refused record is
   // REPORTED rather than silently gone. MODEL.html re-emits what it refused
   // on save (withRefused), so without this sink a caller that normalises
@@ -506,6 +506,8 @@ if (!window.DraftDrawingFormat) {
         side: fixture?.side === -1 ? -1 : 1,
         ...(standoff !== null && standoff > 0 ? { standoff } : {}),
         ...(endWallId ? { endWallId, dir: fixture?.dir === -1 ? -1 : 1 } : {}),
+        // THE CORNER PIECE'S CORNER: which end along its wall stands in it.
+        ...(kind === 'cornerbase' ? { corner: fixture?.corner === -1 ? -1 : 1 } : {}),
       };
     }), env.drops).filter(Boolean);
 

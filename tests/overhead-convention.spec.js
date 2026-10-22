@@ -76,8 +76,10 @@ test('MODEL: the walls plan draws the beam over it dash-dot and the uppers dashe
     .toHaveAttribute('data-beams-above', '4');
   const plan = await lastPaint(page, 'plan');
   expect(plan.dashDot, 'each piece stroked dash-dot').toBeGreaterThanOrEqual(4);
-  expect(plan.dashed, 'three pieces hang uppers, the island none').toBe(3);
-  expect(plan.lighter, 'all of it lighter').toBeGreaterThanOrEqual(7);
+  // THE UPPERS ARE ONE RUN (Movie, 21 Oct: "meld"), stroked once however
+  // many pieces hang them; which pieces is tests/kitchen-corner.spec.js's.
+  expect(plan.dashed, 'the uppers over the three pieces, one dashed run').toBe(1);
+  expect(plan.lighter, 'all of it lighter').toBeGreaterThanOrEqual(5);
   await h.pickModelLayer(page, 3, 'floor');
   await page.waitForTimeout(300);
   await expect(page.locator('#plan'), 'the floor layout owns that beam and borrows nothing').toHaveAttribute('data-beams-above', '0');
@@ -125,8 +127,7 @@ test('LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and t
   const plan = await sheetOf('MAIN FL PLAN');
   expect(plan.dashDot, 'the beam over the walls plan, dash-dot').toBeGreaterThanOrEqual(4);
   expect(plan.dashDot % 4, 'four pieces, however many paints').toBe(0);
-  expect(plan.dashed, 'the uppers over three pieces, dashed').toBeGreaterThanOrEqual(3);
-  expect(plan.dashed % 3, 'three pieces, however many paints').toBe(0);
+  expect(plan.dashed, 'the uppers, one dashed run each paint').toBeGreaterThanOrEqual(1);
   const floor = await sheetOf('MAIN FLOOR');
   expect(floor.dashDot, 'the floor layout draws that beam as its own, solid').toBe(0);
   expect(floor.dashed, 'and hangs no uppers').toBe(0);

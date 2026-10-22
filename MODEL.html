@@ -5446,6 +5446,10 @@
       fixtureFill: fixtureFill(),
       // The neighbours a counter piece melds with at a joint.
       fixtures: fixtures(),
+      // ONE COUNTER (Movie, 21 Oct: "meld the COUNTER"): the boxes light,
+      // the counter and the uppers drawn over them as one.
+      meldCounters: true,
+      hasUppers: fixture => !!window.DraftFixtureKinds?.hasUppers(fixture),
     };
     // options is {} for the same reason it is on notes: preview and selected
     // are states of the fixture TOOL, and this page has no tools.
@@ -5457,6 +5461,7 @@
       // Movie 16 Oct): which kinds carry them is the catalogue's answer.
       if (K && K.hasUppers(fixture) && R.drawUpperCabinets2D) R.drawUpperCabinets2D(ctx, toS, fixture, wall, env);
     });
+    if (R.drawCounters2D) R.drawCounters2D(ctx, toS, fixtures(), env);
   };
 
   // THE WC FLOOR -- 1'-0" tile in a room with a toilet, tub or shower in it
@@ -21514,6 +21519,7 @@
     // changes it: the old page is already inconsistent about it, because a
     // cabinet RUN (below) never goes through this clamp and so may reach the
     // corner; and changing it is a product decision, which is Movie's.
+    if (kind.id === 'cornerbase') return cornerPress(kind, placement);
     const G = window.DraftGeometry2D;
     const clamped = G.clampOpeningToWall(placement.wall, placement.along, kind.widthFt, {
       walls: walls(),
@@ -21524,14 +21530,73 @@
       return null;
     }
     // A KITCHEN PIECE PRESSED BESIDE ANOTHER lands flush against it, so the
-    // joint melds (render-2d snapCounterOffset; Movie, 9 Oct).
-    const offset = window.DraftRender2D.snapCounterOffset(fixtures(), {
+    // joint melds (render-2d snapCounterOffset; Movie, 9 Oct) -- or against
+    // the end of a CORNER's leg on the other wall.
+    const offset = snapToCornerLeg(placement, window.DraftRender2D.snapCounterOffset(fixtures(), {
       kind: kind.id, wallId: placement.wall.id, side: placement.side,
       offset: clamped.offset, width: kind.widthFt,
-    });
+    }), kind);
     return addFixture(kind, placement.wall, {
       offset, width: kind.widthFt, side: placement.side,
     });
+  };
+
+  // THE CORNER, PRESSED INTO A CORNER (Movie, 21 Oct): the crossing wall's
+  // face nearest the press, within 4 ft, is the corner, and the piece sits
+  // tight in it -- no header bearing held off this end, it is a cabinet in
+  // the corner. Its `corner` says which of its ends stands there.
+  const CORNER_REACH_FT = 4;
+  const cornerPress = (kind, placement) => {
+    const FG = window.DraftFixtureGeometry;
+    const { wall, frame, along } = placement;
+    let face = null;
+    walls().forEach(other => {
+      if (other === wall || !other.start || !other.end) return;
+      if (String(other.levelId) !== String(wall.levelId) || (other.view || 'plan') !== (wall.view || 'plan')) return;
+      const hit = FG.wallCross(wall, frame, other);
+      if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
+      // ITS FACE NEAREST THE PRESS: the one looking into the room pressed in.
+      FG.facesAlong(frame, other, hit.along).forEach(f => {
+        if (f < -0.05 || f > frame.len + 0.05 || Math.abs(along - f) > CORNER_REACH_FT) return;
+        if (face == null || Math.abs(along - f) < Math.abs(along - face)) face = f;
+      });
+    });
+    if (face == null) {
+      sayOnStrip('Press the CORNER near where two walls meet -- it sits tight in the corner.');
+      return null;
+    }
+    const corner = along < face ? 1 : -1;
+    const offset = face - corner * kind.widthFt / 2;
+    if (offset - kind.widthFt / 2 < -0.01 || offset + kind.widthFt / 2 > frame.len + 0.01) {
+      sayOnStrip('That wall is too short for the corner.');
+      return null;
+    }
+    return addFixture(kind, wall, { offset, width: kind.widthFt, side: placement.side, corner });
+  };
+  // A PIECE PRESSED BY A CORNER'S LEG ON THE OTHER WALL lands against its end,
+  // so the counter turns the corner whole: the leg's end edge, 28" out, is
+  // where the next drawers or doors start. Within 6", as a joint snaps.
+  const snapToCornerLeg = (placement, offset, kind) => {
+    const FG = window.DraftFixtureGeometry;
+    const half = kind.widthFt / 2;
+    let best = offset, gap = 0.5;
+    fixtures().forEach(fx => {
+      if (fx.kind !== 'cornerbase' || String(fx.wallId) === String(placement.wall.id)) return;
+      const geo = FG.fixtureGeometry(drawing.walls, fx);
+      if (!geo || geo.cornerAlong == null) return;
+      const m = geo.frame.at((geo.cornerAlong + geo.legAlong) / 2, geo.legOff);
+      const { frame, wall } = placement;
+      const rx = m.x - wall.start.x, rz = m.z - wall.start.z;
+      const t = rx * frame.ux + rz * frame.uz;
+      const across = rx * frame.nx + rz * frame.nz;
+      const faceOff = placement.side === -1 ? frame.startOff : frame.endOff;
+      // ON THIS FACE: the leg's middle stands half its depth off it.
+      if (Math.abs(placement.side * (across - faceOff) - fx.depth / 2) > 0.3) return;
+      [t + half, t - half].forEach(at => {
+        if (Math.abs(at - offset) < gap) { best = at; gap = Math.abs(at - offset); }
+      });
+    });
+    return best;
   };
 
   // A half-finished run belongs to the tool being put down, the way drawStart

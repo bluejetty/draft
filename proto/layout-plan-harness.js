@@ -954,7 +954,7 @@ const MUTATIONS = [
   ['a listing hangs the uppers too',
     'layout-plan.js', c => c.replace('hasUppers: fixture => !listing && !!(', 'hasUppers: fixture => !!(')],
   ['the composition paints no uppers',
-    'plan-composition.js', c => c.replace('            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);\n', '')],
+    'plan-composition.js', c => c.replace('        render.drawCounters2D(ctx, toS, drawn, env.fixtureEnv);\n', '')],
   // THE DOOR BUCKS (Movie, 16 Oct).
   ['the sheet cuts no bucks',
     'layout-plan.js', c => c.replace("      doorBucks: view === 'foundation' && !shell && window.DraftDoorBucks",

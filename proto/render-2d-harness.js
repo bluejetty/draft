@@ -2194,6 +2194,33 @@ suite('snapCounterOffset', 'a counter piece pressed near another lands flush', R
     R.snapCounterOffset(gap, { ...near, width: 2.5, offset: 7.4 }), 7.4);
 });
 
+// ── ONE COUNTER (Movie, 21 Oct: "make it all join up (and not hang in to
+// the wall... meld the COUNTER") ── Two DOOR BASEs side by side against a
+// wall along x: the counter is one outline -- no line at their joint, none
+// on the wall face -- and its front runs the 1" overhang past theirs.
+const meldFrame = { ux: 1, uz: 0, nx: 0, nz: 1, len: 10, startOff: -0.25, endOff: 0.25, at: (a, c) => ({ x: a, z: c }) };
+const meldEnv = fixtures => ({
+  fixtureGeometry: f => ({ frame: meldFrame, alongStart: f.offset - 1, alongEnd: f.offset + 1, backOff: 0.25, frontOff: 2.25 }),
+  wallFrame: () => meldFrame,
+  walls: [{ id: 'w', levelId: 3, view: 'plan', start: { x: 0, z: 0 }, end: { x: 10, z: 0 } }],
+  COUNTER_OVERHANG_FT: 1 / 12, FIXTURE_COLOR: '#000', hasUppers: () => false, fixtures,
+});
+suite('drawCounters2D', 'touching base pieces are one counter, nothing on the wall', R => {
+  const all = [{ ...piece('a', 2), levelId: 3 }, { ...piece('b', 4), levelId: 3 }];
+  const ctx = recordingCtx();
+  R.drawCounters2D(ctx, p => ({ x: p.x, y: p.z }), all, meldEnv(all));
+  const m = calls(ctx, 'moveTo'), l = calls(ctx, 'lineTo');
+  const segs = m.map((a, i) => [a, l[i]]);
+  expect('a counter was drawn', segs.length > 0, true);
+  expect('no line across it at the joint',
+    segs.some(([a, b]) => Math.abs(a[0] - 3) < 1e-6 && Math.abs(b[0] - 3) < 1e-6), false);
+  expect('nothing on the wall face',
+    segs.some(([a, b]) => Math.abs(a[1] - 0.25) < 1e-6 && Math.abs(b[1] - 0.25) < 1e-6), false);
+  expect('the front at the overhang, all the way along',
+    segs.filter(([a, b]) => Math.abs(a[1] - (2.25 + 1 / 12)) < 1e-6 && Math.abs(b[1] - a[1]) < 1e-6)
+      .reduce((s, [a, b]) => s + Math.abs(b[0] - a[0]), 0).toFixed(3), '4.000');
+});
+
 suite('drawFixture2D', 'a full height cab reads by its cross', R => {
   const ctx = recordingCtx();
   R.drawFixture2D(ctx, toS, { kind: 'tallcab' }, {}, null, fixtureEnv());
@@ -3950,6 +3977,8 @@ function coverage() {
       'const wet = (fixtures || []).filter(fx => WET_FIXTURE_KINDS.includes(fx.kind));', 'const wet = (fixtures || []);')],
     ['wetRoomLoops takes the biggest room, not the smallest', src => src.replace(
       'loop.area < best.area', 'loop.area > best.area')],
+    ['drawCounters2D keeps every edge, joints and all', src => src.replace(
+      'if (covered({ x: m.x + nx, z: m.z + nz }) !== covered({ x: m.x - nx, z: m.z - nz })) {', 'if (true) {')],
     ['snapCounterOffset never snaps', src => src.replace(
       'if (d < gap && !overlaps(at)) { best = at; gap = d; }', 'if (false) { best = at; gap = d; }')],
     ['snapCounterOffset slides into a neighbour', src => src.replace(

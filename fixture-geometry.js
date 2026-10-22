@@ -166,7 +166,7 @@ if (!window.DraftFixtureGeometry) {
     // A standoff floats the body clear of the wall face (the island's aisle).
     const backOff = (fixture.side === -1 ? frame.startOff : frame.endOff) + fixture.side * (fixture.standoff || 0);
     const frontOff = backOff + fixture.side * fixture.depth;
-    return {
+    const geo = {
       wall, frame,
       along, alongStart: along - half, alongEnd: along + half,
       backOff, frontOff, width, side: fixture.side,
@@ -178,6 +178,20 @@ if (!window.DraftFixtureGeometry) {
       ],
       center: frame.at(along, (backOff + frontOff) / 2),
     };
+    // THE CORNER PIECE'S OTHER LEG: out along the crossing wall to its own
+    // length off this wall, its depth deep off that one -- the box is the leg
+    // on this wall, the deck the 4" of the other leg past it, so a pick takes
+    // the whole L. `cornerAlong` is the corner end, `legAlong` the other
+    // leg's inside face, `legOff` its far end off this wall.
+    if (fixture.kind === 'cornerbase') {
+      const c = fixture.corner === -1 ? -1 : 1;
+      geo.cornerAlong = c > 0 ? along + half : along - half;
+      geo.legAlong = geo.cornerAlong - c * fixture.depth;
+      geo.legOff = backOff + fixture.side * width;
+      geo.decks = [[frame.at(geo.cornerAlong, frontOff), frame.at(geo.legAlong, frontOff),
+        frame.at(geo.legAlong, geo.legOff), frame.at(geo.cornerAlong, geo.legOff)]];
+    }
+    return geo;
   };
 
   // ── A RUN, AN ISLAND, AND WHAT STOPS A SLIDE (Movie, 20 Oct) ────────────
@@ -236,6 +250,7 @@ if (!window.DraftFixtureGeometry) {
     slideClamp,
     wallFrame,
     wallCross,
+    facesAlong,
     fixtureGeometry,
     hostOf,
     hostKey,

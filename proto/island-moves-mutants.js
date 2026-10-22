@@ -15,8 +15,8 @@ const SPEC = 'tests/island-moves.spec.js';
 const MUTANTS = [
   { file: 'render-2d.js',
     name: 'the island gets its name back',
-    find: "      rect(a0 - o, a1 + o, cMin - o, cMax + o); ctx.stroke();\n    } else if (kind === 'pantry') {",
-    with: "      rect(a0 - o, a1 + o, cMin - o, cMax + o); ctx.stroke();\n      if (pxPerFt > 6) { const c = toS(geo.center); ctx.fillStyle = env.FIXTURE_COLOR; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('ISLAND', c.x, c.y); }\n    } else if (kind === 'pantry') {",
+    find: "      if (!melded) { rect(a0 - o, a1 + o, cMin - o, cMax + o); ctx.stroke(); }\n    } else if (kind === 'pantry') {",
+    with: "      if (!melded) { rect(a0 - o, a1 + o, cMin - o, cMax + o); ctx.stroke(); }\n      if (pxPerFt > 6) { const c = toS(geo.center); ctx.fillStyle = env.FIXTURE_COLOR; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('ISLAND', c.x, c.y); }\n    } else if (kind === 'pantry') {",
     test: 'the island carries no name; its dishwasher still says DW' },
   { file: 'MODEL.html',
     name: 'a piece slides over its mates',
