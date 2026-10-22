@@ -71,7 +71,7 @@ async function layString(page) {
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  await page.keyboard.press('Enter');
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
   await press(page, at, [5, -1.5]);
   await page.keyboard.press('Enter');
   await page.keyboard.press('Escape');

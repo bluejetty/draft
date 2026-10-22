@@ -18,8 +18,8 @@ const SPEC = 'tests/series-close.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'a double-click leaves the run in hand',
-    find: "    if (!drawsRun() || !drawStart || modalUp()) return;\n    e.preventDefault();\n    endDrawRun();\n",
-    with: "    if (!drawsRun() || !drawStart || modalUp()) return;\n    e.preventDefault();\n",
+    find: "    if (!drawsRun() || !drawStart) return;\n    e.preventDefault();\n    endDrawRun();\n",
+    with: "    if (!drawsRun() || !drawStart) return;\n    e.preventDefault();\n",
     test: 'a double-click ends a WALL run with its point as the last corner' },
   { file: 'MODEL.html',
     name: 'a second press is one more corner, never the end',
