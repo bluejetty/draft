@@ -845,6 +845,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // POPUP ... option 1 - simple 1 slope roof"), or not now. The
             // roof it starts is the ROOF tool's own verb, already counted.
             '1 \u00B7 SINGLE SLOPE ROOF', 'CANCEL',
+            // OPTION 2, THE GABLE ROOF (Movie, 22 Oct), and its questions --
+            // "for this one ASK overhang (and pitch)": the ROOF tool's own
+            // verb again, so no absence row moves.
+            '2 \u00B7 GABLE ROOF', 'MAKE ROOF', 'CANCEL',
             // AUTO DIMS / HAND DIMS beside the north arrow (Movie, 18 Oct):
             // each kind of string shown or hidden on the sheet.
             'AUTO DIMS', 'HAND DIMS',
@@ -1050,7 +1054,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // INSERT UNDERLAY rests on is "one file input in the whole
             // page" and that only means something if every input is
             // accounted for.
-            'lot-w', 'lot-d'].sort(),
+            'lot-w', 'lot-d',
+            // THE GABLE ROOF'S TWO QUESTIONS (Movie, 22 Oct: "ASK overhang
+            // (and pitch)"): sizes for the roof the ROOF tool makes.
+            'gable-eave', 'gable-pitch'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
