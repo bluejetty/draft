@@ -3721,19 +3721,30 @@
   // is the gold target and the grid's origin both, so in TOY the one-foot
   // blocks line up from it (Movie, 1 Oct: "kindof like MINECRAFT, in the 1FT
   // block idea"). Cached on the model epoch like the elevation marks.
-  let siteDatumCache = { epoch: -1, point: null };
+  // ON A BONEYARD SHELF, THE SAME POINT OFF THE SHELF'S OWN WALLS (Movie,
+  // 22 Oct, on his 1BDEN suite: "also in the SHELF can the registration lower
+  // right corner auto place itself like it does for a house"). The shelf's
+  // walls are read as one storey -- siteDatum skips the boneyard's negative
+  // levels by design -- so the suite's front-and-left corner is its target,
+  // and it follows the suite when the suite moves. An empty shelf keeps the
+  // first-click datum.
+  let siteDatumCache = { epoch: -1, shelf: null, point: null };
   const siteDatumNow = () => {
-    if (siteDatumCache.epoch !== modelEpoch) {
+    const shelf = boneyardActive ? boneyardLevelId() : null;
+    if (siteDatumCache.epoch !== modelEpoch || siteDatumCache.shelf !== shelf) {
       const WT = window.DraftWallTypes;
       const thicknessFt = wall => {
         const def = WT && WT.WALL_TYPES.find(type => type.id === wall.wallType);
         return def ? def.totalIn / 12 : 0;
       };
+      const walls = shelf == null ? (drawing?.walls || [])
+        : (drawing?.walls || []).filter(w => w && Number(w.levelId) === shelf)
+          .map(w => ({ ...w, levelId: 3 }));
       siteDatumCache = {
         epoch: modelEpoch,
+        shelf,
         point: window.DraftCutMarks && window.DraftCutMarks.siteDatum
-          ? window.DraftCutMarks.siteDatum(drawing?.walls || [],
-            { turn: drawing?.planTurn || 0, thicknessFt })
+          ? window.DraftCutMarks.siteDatum(walls, { turn: drawing?.planTurn || 0, thicknessFt })
           : null,
       };
     }
@@ -4640,14 +4651,26 @@
     return { dx: best.house.point.x - best.mine.point.x, dz: best.house.point.z - best.mine.point.z,
       mine: best.mine, house: best.house };
   };
-  const superDot = (pt, { ring = false, bright = false, faint = false } = {}) => {
+  // GOLD ON THE REGISTRATION CORNER (Movie, 22 Oct: "make that SUPERNODE
+  // corner gold to match"): the super node standing on the gold target's
+  // corner wears the target's own ink, so the corner that lines up reads at
+  // a glance -- the plan's by the target, a suite hologram's by its file's.
+  const REGISTRATION_NODE_FT = 1;
+  const onRegistration = pt => {
+    const d = siteDatumNow();
+    return !!d && Math.hypot(pt.x - d.x, pt.z - d.z) <= REGISTRATION_NODE_FT;
+  };
+  let goldDots = 0;   // how many came out gold this paint, for the specs
+  const superDot = (pt, { ring = false, bright = false, faint = false, gold = false } = {}) => {
     const p = toS(pt);
+    if (gold) goldDots += 1;
+    const ink = gold ? (skin['draw-origin'] || SUPER_NODE_INK) : SUPER_NODE_INK;
     ctx.save();
-    ctx.shadowColor = SUPER_NODE_GLOW;
+    ctx.shadowColor = gold ? ink : SUPER_NODE_GLOW;
     ctx.shadowBlur = bright ? 16 : faint ? 6 : 10;
     ctx.globalAlpha = faint ? 0.55 : 1;
-    ctx.fillStyle = SUPER_NODE_INK;
-    ctx.strokeStyle = SUPER_NODE_INK;
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
     ctx.lineWidth = bright ? 3 : 2;
     if (ring || bright) { ctx.beginPath(); ctx.arc(p.x, p.y, bright ? 9 : 6, 0, Math.PI * 2); ctx.stroke(); }
     if (!ring || bright) { ctx.beginPath(); ctx.arc(p.x, p.y, bright ? 3 : 3.5, 0, Math.PI * 2); ctx.fill(); }
@@ -4659,11 +4682,17 @@
   const paintSuperNodes = () => {
     if (presenting || !drawing) return;
     const lock = traceMoving?.hologram ? traceMoving.superLock : null;
-    superNodes().forEach(n => superDot(n.point, { bright: !!lock && lock.house === n }));
+    goldDots = 0;
+    // THE ONE GOLD NODE ON THE PLAN: the nearest to the target, within reach.
+    const goldId = superNodes().filter(n => onRegistration(n.point))
+      .sort((a, b) => Math.hypot(a.point.x - siteDatumNow().x, a.point.z - siteDatumNow().z)
+        - Math.hypot(b.point.x - siteDatumNow().x, b.point.z - siteDatumNow().z))[0]?.id;
+    superNodes().forEach(n => superDot(n.point, { bright: !!lock && lock.house === n, gold: n.id === goldId }));
     holograms().filter(holo => !holo.hidden).forEach(holo => {
       const held = !!lock && traceMoving.underlay === holo;
-      hologramSuperNodes(holo).forEach(n => superDot(n.point, { ring: true, bright: held && lock.mine.id === n.id }));
+      hologramSuperNodes(holo).forEach(n => superDot(n.point, { ring: true, bright: held && lock.mine.id === n.id, gold: n.registration === true }));
     });
+    canvas.dataset.goldSuperNodes = String(goldDots);
     if (lock) canvas.dataset.superLock = JSON.stringify([Number(lock.house.point.x.toFixed(4)), Number(lock.house.point.z.toFixed(4))]);
     else delete canvas.dataset.superLock;
   };
@@ -7545,7 +7574,7 @@
     const d = gridDatum();
     if (!d) return 'none — no grid';
     const at = `${d.x.toFixed(2)},${d.z.toFixed(2)}`;
-    if (siteDatumNow()) return `${at} (front-left of foundation)`;
+    if (siteDatumNow()) return `${at} (front-left of ${boneyardActive ? 'the shelf' : 'foundation'})`;
     return (drawing && !('drawingOrigin' in drawing)) ? `${at} (world, back-filled)` : at;
   };
 
