@@ -79,13 +79,21 @@ const MUTATIONS = [
   ['the overhead door takes the longest run, not the street', 'traced-plans.js',
     c => c.replace('manDoorFaceIndex: joint ? joint.index : null,', 'manDoorFaceIndex: null,')],
   ['the entry\'s garage door stays where the premade puts it', 'traced-plans.js',
-    c => c.replace('entryOpenings: entryGarageDoor(entry, base.entryOpenings, Graw),', 'entryOpenings: base.entryOpenings,')],
+    c => c.replace('entryOpenings: entryGarageDoor(entry, cut.openings, Graw),', 'entryOpenings: cut.openings,')],
   ['the entry\'s garage door goes to the far end of the shared wall', 'traced-plans.js',
     c => c.replace('const offsetFt = nearB ? e.len - inset : inset;', 'const offsetFt = nearB ? inset : e.len - inset;')],
   ['no front door', 'traced-plans.js',
     c => c.replace('if (spot) {\n        const centre', 'if (false) {\n        const centre')],
   ['the shared stretch is not split out, so a wall is raised twice', 'traced-plans.js',
     c => c.replace('const Gr = Graw ? splitAt(Graw, H) : null;', 'const Gr = Graw;')],
+  ['the landing held to the front\'s forward stretch, off the garage wall', 'traced-plans.js',
+    c => c.replace('const clampLo = onPast(pt(lo, z), -1), clampHi = onPast(pt(hi, z), 1);', 'const clampLo = lo, clampHi = hi;')],
+  ['the landing a foot into the garage across the jog', 'traced-plans.js',
+    c => c.replace('const cut = cutToHouse(c.loop(base.entry), H, base.entryOpenings);', 'const cut = { loop: c.loop(base.entry), openings: base.entryOpenings };')],
+  ['the bite cut only out of the front edge it starts on', 'traced-plans.js',
+    c => c.replace('if (inside(after)) { push(c); entered = c; } else if (entered) {', 'if (inside(after)) { push(c); entered = c; } else if (false) {')],
+  ['a door cut back from under it hangs off its wall\'s end', 'traced-plans.js',
+    c => c.replace('offsetFt: Math.max(0, Math.min(back.n.len - o.widthFt, back.along)) } : o;', 'offsetFt: back.along } : o;')],
   ['the landing is not cut out of the house', 'traced-plans.js',
     c => c.replace('const house2 = notch(H, spot);', 'const house2 = H;')],
 ];
@@ -343,6 +351,41 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
       Math.abs((jamb + far) / 2 - 13) < 0.01], [true, true, true]);
   check('and the street half is at least 4\'-6" clear inside its walls',
     16 - 10 - 2 * (5.5 / 12) >= P.ENTRY_DOOR_CLEAR_FT, true);
+}
+
+// ── THE HOUSE FRONT STEPPING BACK A FOOT AT THE GARAGE (Movie, 22 Oct) ───
+// His 1118 trace: the house front stands a foot behind where the garage
+// meets it, so the front edge ended at the jog and the clamp held the
+// landing to it -- five feet off the garage's side wall, both doors on the
+// street. "the 2 EXT doors NEED to STRADDLE the GARAGE WALL"; "the little
+// jog confused you". The landing runs on across the jog, its garage half
+// stands back to the garage's wall, and the door into the garage is on it.
+{
+  const unturn = ([x, z]) => ({ x: -z, z: x });
+  const house = [[-1, 0], [-1, -38], [-23, -38], [-23, 30], [0, 30], [0, 0]].map(unturn);
+  const garage = [[0, 0], [0, 1], [14, 1], [14, -21], [-1, -21], [-1, 0]].map(unturn);
+  const spot = T.entrySpot(house, garage);
+  check('the landing straddles the garage wall across the house\'s jog', spot && spot.line, -1);
+  const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house, garage });
+  const r = p => [+p.x.toFixed(3), +p.z.toFixed(3)];
+  check('its garage half stands back to the garage\'s wall, its street half to the front',
+    (plan.entry || []).map(r), [[-7, -6], [5, -6], [5, -1], [0, -1], [0, 0], [-7, 0]]);
+  check('the house is cut across the jog, not a foot into the garage',
+    (plan.house || []).map(r), [[38, -1], [38, -23], [-30, -23], [-30, 0], [-7, 0], [-7, -6], [5, -6], [5, -1]]);
+  const edges = (plan.entry || []).map((a, i, all) => [a, all[(i + 1) % all.length]]);
+  const doors = (plan.entryOpenings || []).filter(o => o.type === 'door').map(o => {
+    const [a, b] = edges[o.edge];
+    const len = Math.hypot(b.x - a.x, b.z - a.z), ux = (b.x - a.x) / len, uz = (b.z - a.z) / len;
+    return { man: o.manDoor === true, z: a.z, x0: a.x + ux * o.offsetFt, x1: a.x + ux * (o.offsetFt + o.widthFt),
+      fits: o.offsetFt >= -1e-6 && o.offsetFt + o.widthFt <= len + 1e-6 };
+  });
+  const man = doors.find(o => o.man), street = doors.find(o => !o.man);
+  check('the door into the garage on the garage\'s wall, wholly on it, the garage side of the line',
+    man && [man.z, man.fits, Math.min(man.x0, man.x1) >= -1 - 1e-6], [-1, true, true]);
+  check('the street door on the front, wholly in the street half',
+    street && [street.z, street.fits, Math.max(street.x0, street.x1) <= -1 + 1e-6], [0, true, true]);
+  check('and the upper landing stands back to the garage\'s wall too',
+    Math.max(...(plan.upperLanding || []).filter(p => p.x > 0).map(p => p.z)), -1);
 }
 
 // AND A ROOM THE LANDING NEVER REACHES STILL GETS ONE: a garage on the side,

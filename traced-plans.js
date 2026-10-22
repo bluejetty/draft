@@ -551,8 +551,37 @@ if (!window.DraftTracedPlans) {
         else if (sideAt(hi)) { line = hi; mirror = false; }
       }
     }
+    // ACROSS A SHALLOW JOG IN THE FRONT, the landing may run on (Movie,
+    // 22 Oct, on his MOD BILEVEL whose house front steps back a foot where
+    // the garage meets it: "the 2 EXT doors NEED to STRADDLE the GARAGE
+    // WALL ... the little jog confused you"). The front's end there is not
+    // the house's: past a step back of no more than the tie jog, the front
+    // carries on a foot behind, and the landing's half on that side stands
+    // to it -- the clamp held the landing on the forward stretch alone and
+    // slid it five feet off the garage wall.
+    const ring = edgesOf(house);
+    const onPast = (from, dir) => {
+      let at = from, reach = from.x;
+      for (let k = 0; k < ring.length; k += 1) {
+        const step = ring.find(e => same(e.a, at) || same(e.b, at));
+        if (!step) break;
+        const steps = ring.filter(e => (same(e.a, at) || same(e.b, at)) && Math.abs(e.ux) < TOL);
+        const down = steps.find(e => Math.min(e.a.z, e.b.z) >= z - ENTRY_JOG_REACH_FT - TOL && e.len <= ENTRY_JOG_REACH_FT + TOL);
+        if (!down) break;
+        const foot = same(down.a, at) ? down.b : down.a;
+        const run = ring.find(e => e !== down && (same(e.a, foot) || same(e.b, foot))
+          && Math.abs(e.uz) < TOL && e.n.z > 0.5);
+        if (!run) break;
+        const far = same(run.a, foot) ? run.b : run.a;
+        if ((far.x - foot.x) * dir <= TOL) break;
+        reach = far.x;
+        at = far;
+      }
+      return reach;
+    };
+    const clampLo = onPast(pt(lo, z), -1), clampHi = onPast(pt(hi, z), 1);
     const half = ENTRY_HALF();
-    line = Math.min(hi - half, Math.max(lo + half, line));
+    line = Math.min(clampHi - half, Math.max(clampLo + half, line));
     return { edge: front.index, z, line, mirror, lo, hi };
   };
   // The premade bilevel's parts carried to this house: shifted so its garage
@@ -574,22 +603,124 @@ if (!window.DraftTracedPlans) {
       }),
     };
   };
-  // The house with the landing cut out of its front edge.
+  // The house with the landing cut out of its front: everything of the
+  // house over the landing's width, from the landing's back wall forward.
+  // Walked round the house, so a front with a jog in it is cut across the
+  // jog -- the boundary inside the bite is left out, and the bite's own
+  // sides and back stand in for it.
   const notch = (house, spot) => {
     const depth = P().ENTRY_DEPTH_FT;
     const half = ENTRY_HALF();
-    const l = spot.line - half, r = spot.line + half;
+    const l = spot.line - half, r = spot.line + half, back = spot.z - depth;
+    const inside = p => p.x > l + TOL && p.x < r - TOL && p.z > back + TOL;
+    // Along the bite's sides and back: up the left side, the back, up the right.
+    const s = p => (Math.abs(p.x - l) < TOL && p.z > back - TOL ? -(p.z - back)
+      : Math.abs(p.x - r) < TOL && p.z > back - TOL ? (r - l) + (p.z - back) : p.x - l);
+    const path = (a, b) => {
+      const corners = [[pt(l, back), 0], [pt(r, back), r - l]];
+      const [sa, sb] = [s(a), s(b)];
+      const lo = Math.min(sa, sb), hi = Math.max(sa, sb);
+      const mid = corners.filter(([, c]) => c > lo + TOL && c < hi - TOL).map(([c]) => c);
+      return sa <= sb ? mid : mid.reverse();
+    };
     const out = [];
-    house.forEach((p, i) => {
-      out.push(p);
-      if (i !== spot.edge) return;
-      const q = house[(i + 1) % house.length];
-      const ltr = q.x > p.x;
-      const [x1, x2] = ltr ? [l, r] : [r, l];
-      [pt(x1, spot.z), pt(x1, spot.z - depth), pt(x2, spot.z - depth), pt(x2, spot.z)]
-        .forEach(c => { if (!same(c, out[out.length - 1]) && !same(c, q)) out.push(c); });
+    let entered = null;
+    const push = c => { if (!out.length || !same(c, out[out.length - 1])) out.push(c); };
+    // FROM A CORNER OUTSIDE THE BITE, so every way in is met before its way out.
+    const first = house.findIndex(p => !inside(p));
+    const walk = first > 0 ? [...house.slice(first), ...house.slice(0, first)] : house;
+    walk.forEach((p, i) => {
+      const q = walk[(i + 1) % walk.length];
+      const dx = q.x - p.x, dz = q.z - p.z;
+      if (!inside(p)) {
+        // OUT AT A CORNER standing on the bite's edge.
+        if (entered) { path(entered, p).forEach(push); entered = null; }
+        push(p);
+        // AND IN AT ONE: the landing flush with the house's own corner.
+        if (inside(pt(p.x + dx * 1e-4, p.z + dz * 1e-4))) entered = p;
+      }
+      // Where this edge crosses the bite's sides and back, in order along it.
+      const hits = [];
+      [l, r].forEach(x => {
+        if (Math.abs(dx) < 1e-9) return;
+        const t = (x - p.x) / dx;
+        if (t > 1e-9 && t < 1 - 1e-9 && p.z + dz * t > back + TOL) hits.push(t);
+      });
+      if (Math.abs(dz) > 1e-9) {
+        const t = (back - p.z) / dz;
+        const x = p.x + dx * t;
+        if (t > 1e-9 && t < 1 - 1e-9 && x > l + TOL && x < r - TOL) hits.push(t);
+      }
+      hits.sort((a, b) => a - b).forEach(t => {
+        const c = pt(p.x + dx * t, p.z + dz * t);
+        const after = pt(c.x + dx * 1e-4, c.z + dz * 1e-4);
+        if (inside(after)) { push(c); entered = c; } else if (entered) {
+          path(entered, c).forEach(push);
+          push(c);
+          entered = null;
+        }
+      });
     });
+    while (out.length > 1 && same(out[0], out[out.length - 1])) out.pop();
     return out;
+  };
+  // A PART OF THE LANDING CUT BACK TO THE HOUSE: a carried rectangle that
+  // crosses a jog in the front stands, on the jog's side, to the house's
+  // stepped-back line (the garage's back wall there), not a foot into the
+  // garage. Openings stay where they stood, re-read on the edge now under
+  // them. Untouched when the house covers the whole rectangle.
+  const cutToHouse = (loop, house, openings = null) => {
+    if (!loop) return { loop, openings };
+    const xs = loop.map(p => p.x), zs = loop.map(p => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    // The house clipped to the rectangle, one side at a time.
+    let ring = house.slice();
+    [[p => p.x >= x0 - TOL, (a, b) => (x0 - a.x) / (b.x - a.x)],
+      [p => p.x <= x1 + TOL, (a, b) => (x1 - a.x) / (b.x - a.x)],
+      [p => p.z >= z0 - TOL, (a, b) => (z0 - a.z) / (b.z - a.z)],
+      [p => p.z <= z1 + TOL, (a, b) => (z1 - a.z) / (b.z - a.z)]].forEach(([keep, cut]) => {
+      const next = [];
+      ring.forEach((a, i) => {
+        const b = ring[(i + 1) % ring.length];
+        if (keep(a)) next.push(a);
+        if (keep(a) !== keep(b)) {
+          const t = cut(a, b);
+          next.push(pt(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t));
+        }
+      });
+      ring = next;
+    });
+    ring = clean(ring);
+    if (ring.length < 3 || areaOf(ring) > (x1 - x0) * (z1 - z0) - 1e-4) return { loop, openings };
+    // THE CARRIED LOOP'S WAY ROUND.
+    const turn = l => l.reduce((s, a, i) => { const b = l[(i + 1) % l.length]; return s + a.x * b.z - b.x * a.z; }, 0);
+    if (Math.sign(turn(ring)) !== Math.sign(turn(loop))) ring = ring.reverse();
+    // FROM WHERE THE CARRIED LOOP STARTS, so its walls keep their order.
+    const start = ring.findIndex(p => same(p, loop[0]));
+    if (start > 0) ring = [...ring.slice(start), ...ring.slice(0, start)];
+    const was = edgesOf(loop), now = edgesOf(ring);
+    const moved = (openings || []).map(o => {
+      const e = was[o.edge];
+      if (!e) return o;
+      const c = pt(e.a.x + e.ux * o.offsetFt, e.a.z + e.uz * o.offsetFt);
+      const under = now.find(n => Math.abs((c.x - n.a.x) * n.uz - (c.z - n.a.z) * n.ux) < 1e-4
+        && (c.x - n.a.x) * n.ux + (c.z - n.a.z) * n.uz > -TOL
+        && (c.x - n.a.x) * n.ux + (c.z - n.a.z) * n.uz < n.len + TOL);
+      if (under) {
+        return { ...o, edge: under.index,
+          offsetFt: (c.x - under.a.x) * under.ux + (c.z - under.a.z) * under.uz };
+      }
+      // CUT BACK FROM UNDER IT: onto the stepped-back wall running the same
+      // way nearest behind, still wholly on that wall.
+      const back = now.filter(n => n.ux * e.ux + n.uz * e.uz > 1 - 1e-6)
+        .map(n => ({ n, along: (c.x - n.a.x) * n.ux + (c.z - n.a.z) * n.uz,
+          off: Math.abs((c.x - n.a.x) * n.uz - (c.z - n.a.z) * n.ux) }))
+        .filter(h => h.off > TOL && h.n.len >= o.widthFt - TOL && h.along > -o.widthFt && h.along < h.n.len + TOL)
+        .sort((p, q) => p.off - q.off)[0];
+      return back ? { ...o, edge: back.n.index,
+        offsetFt: Math.max(0, Math.min(back.n.len - o.widthFt, back.along)) } : o;
+    });
+    return { loop: ring, openings: openings ? moved : openings };
   };
 
   // ── WHICH TYPES HANG A GARAGE ON THE HOUSE ─────────────────────────────
@@ -615,7 +746,8 @@ if (!window.DraftTracedPlans) {
       if (!spot) return { error: 'NO_FRONT' };
       const c = carry(spot);
       const house2 = notch(H, spot);
-      const entry = c.loop(base.entry);
+      const cut = cutToHouse(c.loop(base.entry), H, base.entryOpenings);
+      const entry = cut.loop;
       const over = base.overGarage ? roomOverGarage(Graw, H, roomDepthFt) : null;
       if (base.overGarage && !over) return { error: 'ROOM_NEEDS_RECTANGLE' };
       const garageLoop = Gr;
@@ -628,10 +760,10 @@ if (!window.DraftTracedPlans) {
         upperOpenings: null,
         entry,
         entryDeck: c.loop(base.entryDeck),
-        entryOpenings: entryGarageDoor(entry, base.entryOpenings, Graw),
+        entryOpenings: entryGarageDoor(entry, cut.openings, Graw),
         stairs: c.stairs(base.stairs),
         framing: c.framing(base.framing),
-        upperLanding: c.loop(base.upperLanding),
+        upperLanding: cutToHouse(c.loop(base.upperLanding), H).loop,
         garage: garageLoop,
         garageOpenings: garageLoop ? garageDoors(garageLoop, H) : null,
         garageTieRoof: null,
