@@ -13817,6 +13817,11 @@
     loopCorners().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND THE TRACE IN HAND'S FIRST CORNER, once it can be closed on (Movie,
+    // 21 Oct): the last corner finds the first as it finds any node.
+    traceHome().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
@@ -18409,6 +18414,18 @@
         : activeTool === 'shape' ? shapeCorners : null;
     return list && list.length ? list : null;
   };
+  // THE TRACE IN HAND, whichever tool holds it: an outline's, a floor's or a
+  // shape's corners, or the single slope roof's outline once it is at that
+  // stage. Its corners send rays and its first corner is a node (Movie, 21
+  // Oct, closing a roof: "having a hard time to complete the roof, can we
+  // make the CROSS LINES (perpendicular locations) and the NODE SNAP on the
+  // first point so the last point can find first point easily").
+  const shedTracing = () => activeTool === 'roof' && !!shedRoof && shedRoof.stage === 'shape';
+  const traceCorners = () => (shedTracing() ? shedRoof.corners : (pendingCornerList() || []));
+  // THE FIRST CORNER IS A NODE ONCE THE LOOP CAN CLOSE ON IT -- three corners
+  // down. Below three a press near it is a corner placed there, the rule every
+  // loop tool keeps, and a node there would pull the hand onto it.
+  const traceHome = () => { const c = traceCorners(); return c.length >= 3 ? [c[0]] : []; };
   // ── THE ORANGE TRACKING RAYS ───────────────────────────────────────────
   //
   // Movie, 1 Oct: *"at this point when i'm drawing a wall past the first point
@@ -18445,6 +18462,10 @@
       return [...outlineCorners, ...house];
     }
     if (activeTool === 'outline') return outlineCorners;
+    // A FLOOR'S, A SHAPE'S OR THE SINGLE SLOPE ROOF'S OUTLINE IN HAND tracks
+    // from every corner too, as the house outline always has (Movie, 21 Oct).
+    const trace = traceCorners();
+    if (trace.length) return trace;
     if (!drawsRun() || !drawStart) { wallRunNodes = []; return wallRunNodes; }
     const last = wallRunNodes[wallRunNodes.length - 1];
     if (!last || Math.hypot(last.x - drawStart.x, last.z - drawStart.z) > 1e-6) {
@@ -18638,7 +18659,10 @@
     const tracesLoop = activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape'
       // A SUPER NODE BEING PLACED reads the magnet the same way: it lands on
       // a node, a face corner or a line end exactly ("to place the first one").
-      || activeTool === 'node';
+      || activeTool === 'node'
+      // AND THE SINGLE SLOPE ROOF'S OUTLINE (Movie, 21 Oct), so its first
+      // corner glows under the hand as the house outline's does.
+      || shedTracing();
     if (!cursorWorld || !(drawsRun() || tracesLoop)) { markMagnet(null); return; }
     // A RUN HELD SQUARE asks the squared magnet, as drawPoint does; the
     // locked bearing and the protractor take no magnet at all.
