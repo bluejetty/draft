@@ -1289,6 +1289,10 @@
      tool's own edge flip is pressed on. */
   #roof-pick { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
   #roof-pick[hidden] { display:none; }
+  #gable-ask { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
+  #gable-ask[hidden] { display:none; }
+  .gable-ask-row { display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0; font-size:10px; }
+  .gable-ask-row input { width:72px; }
   #brush-warn[hidden] { display:none; }
   #brush-warn .promote-card { border-color: var(--ink-warn); box-shadow: 0 0 14px var(--ink-warn); }
   #brush-warn b { color: var(--ink-warn); }
@@ -2390,7 +2394,21 @@
     <p><b>DRAW A ROOF</b><br>Drawn here, it sits on the walls of the storey below.</p>
     <div class="promote-row">
       <button type="button" data-roof-kind="shed">1 · SINGLE SLOPE ROOF</button>
+      <button type="button" data-roof-kind="gable">2 · GABLE ROOF</button>
       <button type="button" data-roof-pick-cancel>CANCEL</button>
+    </div>
+  </div>
+</div>
+<!-- THE GABLE ROOF'S QUESTIONS (Movie, 22 Oct: "for this one ASK overhang
+     (and pitch)"), once its two bearing lines are down. -->
+<div id="gable-ask" data-gable-ask hidden role="dialog" aria-label="Gable roof overhangs and pitch">
+  <div class="promote-card">
+    <p><b>GABLE ROOF</b><br>The eaves out past the two lines drawn, the peak between them, the ends where the lines end.</p>
+    <label class="gable-ask-row">EAVE OVERHANG <input type="text" id="gable-eave" data-gable-eave spellcheck="false"></label>
+    <label class="gable-ask-row">PITCH <input type="text" id="gable-pitch" data-gable-pitch spellcheck="false"> /12</label>
+    <div class="promote-row">
+      <button type="button" data-gable-make>MAKE ROOF</button>
+      <button type="button" data-gable-cancel>CANCEL</button>
     </div>
   </div>
 </div>
@@ -15101,7 +15119,13 @@
   // can change it"). It sits on the storey BELOW the one it is drawn on, and
   // shows on that one and on the ROOF plan (`drawnOn`).
   // `var`: the painter reads it from the first paint, before this line runs.
-  var shedRoof = null;   // { stage: 'bearing'|'slope'|'shape', a, b, down, corners }
+  // A GABLE ROOF (Movie, 22 Oct: "a 2-sided ... gable roof with 2 edges
+  // specified (opposite edges PEAK will be in the middle and eaves on
+  // outside (the 2nd 'eave direction' q from the 1 slope would be answered
+  // when they place 2nd edge"; "for this one ASK overhang (and pitch)") is the
+  // same steps' `kind: 'gable'`: a second bearing line c-d where the shed
+  // marks its slope, then the questions instead of an outline.
+  var shedRoof = null;   // { kind, stage: 'bearing'|'slope'|'shape'|'bearing2'|'ask', a, b, c, d, down, corners }
   const roofPickCard = document.querySelector('[data-roof-pick]');
   const storeyHere = () => !boneyardActive
     && floorsOf(drawing?.levels).some(l => Number(l.id) === Number(activeLevelId()));
@@ -15138,6 +15162,7 @@
   // may only slide it along the axis, the wall's own order.
   const shedPoint = (s, at) => {
     if (s.stage === 'bearing') return s.a ? squareTo(s.a, shedSnap(at)) : shedSnap(at);
+    if (s.stage === 'bearing2') return s.c ? squareTo(s.c, shedSnap(at)) : shedSnap(at);
     const last = s.corners[s.corners.length - 1];
     return last ? squareTo(last, loopPoint(at)) : loopPoint(at);
   };
@@ -15148,7 +15173,8 @@
   function shedRun() {
     const s = shedRoof;
     if (!s || activeTool !== 'roof' || !cursorWorld) return null;
-    const from = s.stage === 'bearing' ? s.a : s.stage === 'shape' ? s.corners[s.corners.length - 1] : null;
+    const from = s.stage === 'bearing' ? s.a : s.stage === 'bearing2' ? s.c
+      : s.stage === 'shape' ? s.corners[s.corners.length - 1] : null;
     return from ? { from, to: shedPoint(s, cursorWorld) } : null;
   }
   // A TYPED LENGTH PUTS THE POINT DOWN that far along the way the cursor
@@ -15161,8 +15187,9 @@
     const p = { x: run.from.x + dx / len * feet, z: run.from.z + dz / len * feet };
     if (s.stage === 'bearing') {
       s.b = p;
-      s.stage = 'slope';
-      sayOnStrip(SHED_SAYS.slope);
+      shedFirstLineDone(s);
+    } else if (s.stage === 'bearing2') {
+      gableSecondLine(s, p);
     } else {
       s.corners.push(p);
     }
@@ -15174,13 +15201,58 @@
     slope: 'SINGLE SLOPE 2/3: click the EAVE side -- the way the roof slopes down.',
     shape: 'SINGLE SLOPE 3/3: click the roof’s outline from above, overhang and all; close on the first corner or ENTER.',
   };
+  const GABLE_SAYS = {
+    bearing: 'GABLE ROOF 1/3: click two points along the wall one eave sits on.',
+    bearing2: 'GABLE ROOF 2/3: click two points along the opposite wall -- the other eave. The peak runs between them.',
+    ask: 'GABLE ROOF 3/3: the overhangs and the pitch, then MAKE ROOF.',
+  };
   const startShedRoof = () => {
     if (roofPickCard) roofPickCard.hidden = true;
-    shedRoof = { stage: 'bearing', a: null, b: null, down: null, corners: [] };
+    shedRoof = { kind: 'shed', stage: 'bearing', a: null, b: null, down: null, corners: [] };
     sayOnStrip(SHED_SAYS.bearing);
     paint();
   };
-  const endShedRoof = () => { shedRoof = null; paint(); };
+  const startGableRoof = () => {
+    if (roofPickCard) roofPickCard.hidden = true;
+    shedRoof = { kind: 'gable', stage: 'bearing', a: null, b: null, c: null, d: null, down: null, corners: [] };
+    sayOnStrip(GABLE_SAYS.bearing);
+    paint();
+  };
+  const gableAsk = document.querySelector('[data-gable-ask]');
+  const endShedRoof = () => { shedRoof = null; if (gableAsk) gableAsk.hidden = true; paint(); };
+  // THE FIRST LINE DOWN: the shed asks its slope next, the gable its other wall.
+  function shedFirstLineDone(s) {
+    s.stage = s.kind === 'gable' ? 'bearing2' : 'slope';
+    sayOnStrip(s.kind === 'gable' ? GABLE_SAYS.bearing2 : SHED_SAYS.slope);
+  }
+  // THE SECOND LINE: parallel to the first and apart from it, or refused.
+  function gableSecondLine(s, p) {
+    const ax = s.b.x - s.a.x, az = s.b.z - s.a.z, al = Math.hypot(ax, az);
+    const cx = p.x - s.c.x, cz = p.z - s.c.z, cl = Math.hypot(cx, cz);
+    if (Math.abs(ax * cz - az * cx) / (al * cl) > Math.sin(5 * Math.PI / 180)) {
+      sayOnStrip('The two eave lines must run the same way -- click two points along the opposite wall.');
+      s.c = null;
+      return;
+    }
+    const across = Math.abs(((s.c.x - s.a.x) * -az + (s.c.z - s.a.z) * ax) / al);
+    if (across < 2) {
+      sayOnStrip('That is the same wall -- click the wall across from the first.');
+      s.c = null;
+      return;
+    }
+    s.d = p;
+    s.stage = 'ask';
+    sayOnStrip(GABLE_SAYS.ask);
+    if (gableAsk) {
+      const ft = window.DraftFormatters.formatArchitecturalInches;
+      const project = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
+      gableAsk.querySelector('[data-gable-eave]').value = ft(project.overhangFt * 12);
+      gableAsk.querySelector('[data-gable-pitch]').value = String(project.pitch);
+      gableAsk.hidden = false;
+      gableAsk.querySelector('[data-gable-eave]').focus();
+      gableAsk.querySelector('[data-gable-eave]').select();
+    }
+  }
   // DOWNHILL: the unit normal of the bearing line on the side pressed.
   const shedDownAt = (s, at) => {
     const dx = s.b.x - s.a.x, dz = s.b.z - s.a.z, len = Math.hypot(dx, dz);
@@ -15190,13 +15262,21 @@
   };
   const shedPress = at => {
     const s = shedRoof;
+    if (s.stage === 'ask') return;
     if (s.stage === 'bearing') {
       const p = shedPoint(s, at);
       if (!s.a) { s.a = p; paint(); return; }
       if (Math.hypot(p.x - s.a.x, p.z - s.a.z) < 0.5) { sayOnStrip('Click the far end of the wall, not the same point.'); return; }
       s.b = p;
-      s.stage = 'slope';
-      sayOnStrip(SHED_SAYS.slope);
+      shedFirstLineDone(s);
+      paint();
+      return;
+    }
+    if (s.stage === 'bearing2') {
+      const p = shedPoint(s, at);
+      if (!s.c) { s.c = p; paint(); return; }
+      if (Math.hypot(p.x - s.c.x, p.z - s.c.z) < 0.5) { sayOnStrip('Click the far end of the wall, not the same point.'); return; }
+      gableSecondLine(s, p);
       paint();
       return;
     }
@@ -15289,6 +15369,78 @@
     sayOnStrip(`SINGLE SLOPE ROOF made at ${pitch}/12. Change its pitch or overhangs in PROPERTIES.`);
     return roof;
   };
+  // THE GABLE ROOF ITSELF: each eave out past its own line by the eave
+  // overhang, and its ends WHERE THE LINES END (Movie, 22 Oct: "maybe the
+  // first draw of it place the edges of the roof where the user places the
+  // ends of his EDGE marks"; "and then allow him to change its shape
+  // afterwards" -- it is an ordinary roof from then on, its nodes and edges
+  // the ROOF tool's to move). The long edges are EAVES, the ends GABLES
+  // flush at the marks, so the peak runs down the middle between them.
+  const commitGableRoof = () => {
+    const G = window.DraftGeometry2D, F = window.DraftFormatters;
+    const s = shedRoof;
+    if (!s || s.kind !== 'gable' || !s.d) return null;
+    const read = sel => F.parseArchitecturalLength(gableAsk.querySelector(sel).value);
+    const eaveIn = read('[data-gable-eave]');
+    const pitch = Number(gableAsk.querySelector('[data-gable-pitch]').value);
+    if (!eaveIn.ok || eaveIn.inches < 0 || eaveIn.inches > 120) {
+      sayOnStrip('Type the overhang as a length up to 10 ft, like 2\' or 1\'-6".');
+      return null;
+    }
+    if (!Number.isFinite(pitch) || pitch <= 0 || pitch > 24) {
+      sayOnStrip('Type the pitch as the rise in 12, like 6.');
+      return null;
+    }
+    const eave = eaveIn.inches / 12;
+    const ax = s.b.x - s.a.x, az = s.b.z - s.a.z, al = Math.hypot(ax, az);
+    const u = { x: ax / al, z: az / al };
+    let n = { x: -u.z, z: u.x };
+    if ((s.c.x - s.a.x) * n.x + (s.c.z - s.a.z) * n.z < 0) n = { x: -n.x, z: -n.z };
+    const t = p => (p.x - s.a.x) * u.x + (p.z - s.a.z) * u.z;
+    // EACH END OF THE FIRST LINE MEETS THE END OF THE SECOND ON ITS SIDE.
+    const [c, d] = t(s.c) <= t(s.d) ? [s.c, s.d] : [s.d, s.c];
+    const out = (p, k) => ({ x: p.x + n.x * k, z: p.z + n.z * k });
+    // ONE EAVE, AN END, THE OTHER EAVE, THE OTHER END.
+    const ring = [out(s.a, -eave), out(s.b, -eave), out(d, eave), out(c, eave)];
+    const edges = ['eave', 'gable', 'eave', 'gable'];
+    const overs = edges.map(e => Number((e === 'eave' ? eave : 0).toFixed(4)));
+    const foot = G.offsetOutlineVariable(ring, overs.map(v => -v));
+    const footOk = foot.length === ring.length && foot.every(p => Number.isFinite(p.x) && Number.isFinite(p.z));
+    drawing.roofs = drawing.roofs || [];
+    const roof = addItem(drawing.roofs, {
+      id: newDrawingItemId('roof'),
+      points: ring.map(p => ({ x: p.x, y: 0, z: p.z })),
+      levelId: ROOF_LEVEL_ID,
+      sourceLevelId: shedBearsOn(),
+      drawnOn: Number(activeLevelId()),
+      sourceShapeId: null,
+      edges,
+      overhang: Number(eave.toFixed(4)),
+      edgeOverhang: overs,
+      ...(footOk ? { footprint: foot.map(p => ({ x: p.x, y: 0, z: p.z })) } : {}),
+      pitch,
+      fascia: ROOF_FASCIA_IN,
+      garage: false,
+      follows: 'none',
+      layer: 'A-ROOF',
+    });
+    shedRoof = null;
+    gableAsk.hidden = true;
+    markDirty();
+    setTool(RESTING_TOOL);
+    selectPlaced('roof', roof);
+    sayOnStrip(`GABLE ROOF made at ${pitch}/12. Change its pitch or overhangs in PROPERTIES.`);
+    return roof;
+  };
+  gableAsk?.querySelector('[data-gable-make]')?.addEventListener('click', () => commitGableRoof());
+  gableAsk?.querySelector('[data-gable-cancel]')?.addEventListener('click', () => {
+    endShedRoof();
+    sayOnStrip('GABLE ROOF put down.');
+  });
+  gableAsk?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); commitGableRoof(); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); endShedRoof(); sayOnStrip('GABLE ROOF put down.'); }
+  });
   // THE STEPS IN HAND: the walls it can bear on, faint; the bearing line;
   // the slope arrow; the outline with a band to the cursor.
   function paintShedRoof() {
@@ -15309,6 +15461,12 @@
     if (s.a && tip) {
       const a = toS(s.a), b = toS(tip);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    // THE GABLE'S OTHER EAVE LINE.
+    const tip2 = s.stage === 'bearing2' && s.c && cursorWorld ? shedPoint(s, cursorWorld) : s.d;
+    if (s.c && tip2) {
+      const c = toS(s.c), d = toS(tip2);
+      ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.stroke();
     }
     const down = s.down || (s.stage === 'slope' && cursorWorld ? shedDownAt(s, cursorWorld) : null);
     if (s.a && s.b && down) {
@@ -15339,6 +15497,7 @@
     ctx.restore();
   }
   roofPickCard?.querySelector('[data-roof-kind="shed"]')?.addEventListener('click', startShedRoof);
+  roofPickCard?.querySelector('[data-roof-kind="gable"]')?.addEventListener('click', startGableRoof);
   // A PRESS ON THE PLAN IS AN ANSWER TOO: the ROOF tool's own edge flip, not
   // a hand-drawn roof, so the question goes away.
   canvas.addEventListener('pointerdown', () => {
@@ -15356,8 +15515,9 @@
     // TYPING IN A BOX IS THE BOX'S.
     if (event.target instanceof HTMLInputElement) return;
     if (event.key === 'Escape') {
+      const kind = shedRoof.kind;
       endShedRoof();
-      sayOnStrip('SINGLE SLOPE ROOF put down.');
+      sayOnStrip(kind === 'gable' ? 'GABLE ROOF put down.' : 'SINGLE SLOPE ROOF put down.');
     }
   }, true);
 
