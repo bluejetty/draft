@@ -5753,6 +5753,13 @@
   // offering a view the lookup cannot resolve is a dead option; a rail seating
   // one is a dead card.
   const allCuts = () => [...autoElevationCuts(), ...cuts()];
+  // THE E MARKS AS DRAWN: a ring round the LOT on the site level, round the
+  // house elsewhere -- and NONE ON THE SHELF (Movie, 22 Oct: "lets take off
+  // the E1-E4 from the SHELF don't think its needed there"). The record
+  // (autoElevationCuts) stands: it is the house's, cut round the house's
+  // walls, and the shelf's own suite is not the house. It is only not drawn
+  // round a sheet that shows the suite and not the house.
+  const eMarksDrawn = () => (boneyardActive ? [] : (siteMarkRing() || autoElevationCuts()));
 
   // ── THE RISING REVEAL (board #283) ────────────────────────────────────
   // "Every bone press that grows the house jumps to the E1 front elevation
@@ -5942,7 +5949,7 @@
     R.drawCutMarks2D(ctx, toS, {
       bubbleStyle: standards.cutBubbleStyle,
       lineSpan: (start, end) => CM.cutLineSpan(all, start, end, cutMarkGapFt()),
-      autoCuts: siteMarkRing() || autoElevationCuts(),
+      autoCuts: eMarksDrawn(),
       cuts: cuts(),
       cutColor: skin['draw-cut'],
       // The bubble interior is the page's own ground, so the lettering inside
@@ -7538,7 +7545,7 @@
     // on every other level; published separately because "what the file says"
     // and "what the drafter is looking at" are two questions, and this feature
     // is the one place they differ.
-    publishMarks('data-e-marks-drawn', siteMarkRing() || autoElevationCuts());
+    publishMarks('data-e-marks-drawn', eMarksDrawn());
     // AFTER the canvas timing and BEFORE the readout. After, because `paint`
     // in the readout means the main canvas and folding six thumbnails into it
     // would make one frame an edit read like a slow one. Before, because the
