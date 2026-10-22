@@ -356,9 +356,30 @@
   const suiteSuperNodes = (holo, levelId) => {
     const existing = parts(holo).existing;
     const own = (existing.superNodes || []).filter(n => n?.point && Number(n.levelId) === Number(levelId));
-    if (own.length) return placed(holo, { superNodes: own }).superNodes;
-    const auto = (isSuite(holo) || isSuiteFile(holo)) ? cornerSuperNodes(existing.walls, levelId) : [];
-    return auto.length ? placed(holo, { superNodes: auto }).superNodes : [];
+    const auto = own.length ? [] : (isSuite(holo) || isSuiteFile(holo)) ? cornerSuperNodes(existing.walls, levelId) : [];
+    const mine = own.length ? own : auto;
+    if (!mine.length) return [];
+    return placed(holo, { superNodes: registered(mine, existing.walls, levelId, holo?.source?.planTurn || 0) }).superNodes;
+  };
+  // THE ONE ON THE SUITE'S REGISTRATION CORNER, marked (Movie, 22 Oct: "it
+  // will probably be one of the SUPERNODE corners"; "make that SUPERNODE
+  // corner gold to match"): the node nearest the front-and-left corner the
+  // suite's file reads as its gold target -- cut-marks' siteDatum over its
+  // walls on this level, read as one storey -- within a foot.
+  const REGISTRATION_REACH_FT = 1;
+  const registered = (nodes, walls, levelId, turn) => {
+    const CM = window.DraftCutMarks, WT = window.DraftWallTypes;
+    if (!CM?.siteDatum) return nodes;
+    const thicknessFt = w => (WT?.WALL_TYPES.find(t => t.id === w.wallType)?.totalIn || 0) / 12;
+    const own = (walls || []).filter(w => Number(w?.levelId) === Number(levelId)).map(w => ({ ...w, levelId: 3 }));
+    const datum = CM.siteDatum(own, { turn, thicknessFt });
+    if (!datum) return nodes;
+    let best = null, bestD = REGISTRATION_REACH_FT;
+    nodes.forEach(n => {
+      const d = Math.hypot(n.point.x - datum.x, n.point.z - datum.z);
+      if (d <= bestD) { best = n; bestD = d; }
+    });
+    return nodes.map(n => (n === best ? { ...n, registration: true } : n));
   };
   // A SUITE'S CORNERS ARE ITS SUPER NODES UNTIL HE PLACES HIS OWN (Movie, 20
   // Oct: "auto place those on the SUITES at the furthest corners of the
