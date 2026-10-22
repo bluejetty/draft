@@ -11707,6 +11707,23 @@
   };
   // The WINDOW modes' own rule, unchanged: fully enclosed.
   const enclosedBy = (a, b) => boxCatch(a, b, { all: selectionMode === 'window-all' });
+  // EVERYTHING THE BOX COULD CATCH, with no box drawn -- CTRL+A (Movie, 22
+  // Oct: "lets do the CTRL-A (select all) i just had a use for it"). Through
+  // the box's own list, so the key and the box cannot disagree: the kind
+  // picked under OBJECT TYPE if one is, this level's items, or every level's
+  // walls, lines and floors under ALL LEVELS. Assemblies come whole, as a
+  // box brings them.
+  const selectAll = () => {
+    if (activeTool !== RESTING_TOOL) setTool(RESTING_TOOL);
+    const caught = [];
+    boxShapes(selectionMode === 'window-all').forEach(({ type, item }) =>
+      withGroup({ type, item }).forEach(w => { if (!caught.some(c => c.item === w.item)) caught.push(w); }));
+    setSelection(caught);
+    const n = caught.length;
+    sayOnStrip(n ? `SELECT ALL — ${n} selected${selectFilter === 'all' ? '' : ` (${pickName()} only)`}. DELETE, MOVE, or Esc.`
+      : 'SELECT ALL — nothing here to select.');
+    paint();
+  };
 
   // Blue for the current level, red for every level -- the two colours the
   // mode help promises in words, so the box a drafter sees matches the
@@ -36245,6 +36262,13 @@
       && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
     if (typing) return;
     if (e.key === '0') { fit(); paint(); }
+    // CTRL+A SELECTS ALL (selectAll, above). A plain A is the SHAPE key.
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a') {
+      if (!drawing || modalUp() || activeCut()) return;
+      e.preventDefault();
+      selectAll();
+      return;
+    }
     // ESCAPE IS THE OLD PAGE'S ESCAPE, measured rather than invented.
     // MODEL.dc.html:22165-22172 does two things in ONE press: it cancels every
     // in-progress gesture (_cancelWall among a dozen siblings) AND clears the
