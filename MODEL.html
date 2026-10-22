@@ -15207,7 +15207,11 @@
       const first = s.corners[0];
       if (Math.hypot(raw.x - first.x, raw.z - first.z) <= OUTLINE_CLOSE_FT) { commitShedRoof(); return; }
     }
-    s.corners.push(shedPoint(s, at));
+    const here = shedPoint(s, at);
+    // A PRESS ON THE LAST CORNER IS NO CORNER: the second click of a double
+    // lands where its first did (see the loop rule at seriesKeyPress).
+    if (loopTailIs(s.corners, here)) return;
+    s.corners.push(here);
     paint();
   };
   // EACH EDGE OF THE OUTLINE, read against the bearing line: one running
@@ -15338,16 +15342,15 @@
   roofPickCard?.querySelector('[data-roof-pick-cancel]')?.addEventListener('click', () => {
     roofPickCard.hidden = true;
   });
-  // ENTER CLOSES THE OUTLINE; ESCAPE STEPS OUT, the popup with it.
+  // ESCAPE STEPS OUT, the popup with it. ENTER and SPACE are the loop rule's
+  // (seriesKeyPress, below): once is a corner at the cursor, twice quickly
+  // closes the outline on its first corner, as a double-click does.
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && roofPickCard && !roofPickCard.hidden) { roofPickCard.hidden = true; return; }
     if (!shedRoof) return;
-    // TYPING IN A BOX IS THE BOX'S: ENTER there is a typed length.
+    // TYPING IN A BOX IS THE BOX'S.
     if (event.target instanceof HTMLInputElement) return;
-    if (event.key === 'Enter' && shedRoof.stage === 'shape' && shedRoof.corners.length >= 3) {
-      event.preventDefault();
-      commitShedRoof();
-    } else if (event.key === 'Escape') {
+    if (event.key === 'Escape') {
       endShedRoof();
       sayOnStrip('SINGLE SLOPE ROOF put down.');
     }
@@ -20261,6 +20264,12 @@
   // "the lines / walls / areas / floors/ roofs etc to all act in this way"):
   // a node in reach, else a face, else where it was pressed. TOY keeps its
   // raw press, as it keeps its own law everywhere.
+  // THE LOOP'S LAST CORNER, PRESSED AGAIN, is the second click of a double
+  // (the loop rule at seriesKeyPress), not a corner on top of a corner.
+  const loopTailIs = (corners, pt) => {
+    const tail = corners[corners.length - 1];
+    return !!tail && Math.abs(tail.x - pt.x) < 1e-6 && Math.abs(tail.z - pt.z) < 1e-6;
+  };
   const loopPoint = at => {
     if (board === 'toy') return { x: at.x, z: at.z };
     const corner = cornerSnap(at, []);
@@ -20280,6 +20289,7 @@
         return;
       }
     }
+    if (loopTailIs(floorCorners, here)) return;
     floorCorners.push(here);
     paint();
   };
@@ -20299,6 +20309,7 @@
         return;
       }
     }
+    if (loopTailIs(shapeCorners, here)) return;
     shapeCorners.push(here);
     paint();
   };
@@ -30136,9 +30147,22 @@
   // whose second lands on it. A quick second press after the cursor has
   // moved on is the next corner, not the end: a drafter who presses, moves,
   // presses is drawing, however fast.
-  // DIMENSION keeps its own rule (dim chains, #822): one ENTER, SPACE or
-  // double-click ends its points. SPACE in a box is a space: typed lengths
-  // carry them ("4 6"), which the target guard keeps.
+  // AND THE SAME RULE CLOSES A LOOP -- a FLOOR, a SHAPE, an OUTLINE or the
+  // single slope ROOF's outline (Movie, 22 Oct: "for when a user is
+  // completing a shape like FLOOR, ROOF or SHAPE once the user is ready to
+  // make the LAST / at FIRST point location by DOUBLE clicking, or pressing
+  // ENTER or SPACEBAR twice quickly"). Once is a corner at the cursor; the
+  // same key again, quickly, with the cursor where it was, closes the loop
+  // on its first corner, and a double-click closes it the same way: its first
+  // click is the last corner, its second lands on it (no corner: loopTailIs),
+  // and the dblclick that follows closes. Below three corners nothing closes
+  // -- two enclose no area -- and the strip says so.
+  // DIMENSION TOO (Movie, 22 Oct: "and dimensions and lines too should work
+  // that way too"): ENTER or SPACE once is a press at the cursor -- a point
+  // while the points go down, a line while the lines are placed -- and twice
+  // quickly is the double-click, which ends the points or finishes the lines
+  // (dimDoubleEnds). SPACE in a box is a space: typed lengths carry them
+  // ("4 6"), which the target guard keeps.
   const SERIES_TWICE_MS = 450;
   let seriesKeyLast = { key: null, at: 0, where: null };
   const endDrawRun = () => {
@@ -30146,22 +30170,55 @@
     seriesKeyLast = { key: null, at: 0, where: null };
     sayOnStrip(`${activeTool.toUpperCase()} — run ended. Press, ENTER or SPACE to start another.`);
   };
+  // THE LOOP IN HAND: a corner or more on one of the loop tools.
+  const loopInHand = () => traceCorners().length > 0;
+  const dimInHand = () => activeTool === 'dimension' && dimPoints.length > 0;
+  // ONE PRESS ON THE LOOP TOOL ARMED, from the pointer or from a key at the
+  // cursor. A double-click ON THE FIRST CORNER closes on its first click, and
+  // every close puts the tool down (setTool(RESTING_TOOL) in each commit), so
+  // its second click is a resting press, not the start of a new loop.
+  const loopPress = at => {
+    if (activeTool === 'roof') shedPress(at);
+    else if (activeTool === 'outline') outlinePress(at);
+    else if (activeTool === 'floor') floorPress(at);
+    else if (activeTool === 'shape') shapePress(at);
+  };
+  // CLOSE THE LOOP IN HAND ON ITS FIRST CORNER.
+  const closeLoop = () => {
+    const corners = traceCorners();
+    if (!corners.length) return false;
+    seriesKeyLast = { key: null, at: 0, where: null };
+    if (corners.length < 3) {
+      sayOnStrip(`A ${activeTool.toUpperCase()} needs three corners before it can close on the first.`);
+      return true;
+    }
+    const first = { x: corners[0].x, z: corners[0].z };
+    // THE OUTLINE CLOSES AS A PRESS ON ITS FIRST CORNER DOES, through its own
+    // home rule (homeTail), which may refuse and say why.
+    if (activeTool === 'outline') outlineAdd(first, first);
+    else if (activeTool === 'floor') commitFloor();
+    else if (activeTool === 'shape') commitShape();
+    else if (activeTool === 'roof') commitShedRoof();
+    return true;
+  };
   const seriesKeyPress = (key, place) => {
     const now = Date.now();
     const still = seriesKeyLast.where && cursorWorld
       && Math.hypot(cursorWorld.x - seriesKeyLast.where.x, cursorWorld.z - seriesKeyLast.where.z) < 0.01;
     const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;
     seriesKeyLast = { key, at: now, where: cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : null };
+    if (twice && loopInHand()) return closeLoop();
+    if (twice && dimInHand()) { seriesKeyLast = { key: null, at: 0, where: null }; dimDoubleEnds(); return true; }
     if (twice && drawsRun() && drawStart) { endDrawRun(); return true; }
     return place();
   };
   const enterPlaces = () => {
     if (!cursorWorld) return false;
-    if (activeTool === 'outline' && outlineCorners.length) { outlinePress(cursorWorld); return true; }
+    if (loopInHand()) { loopPress(cursorWorld); return true; }
     // With or without a run in hand: a first press starts one at the cursor.
     const run = drawsRun();
     if (run) { drawPress(cursorWorld); return true; }
-    if (activeTool === 'dimension' && dimPoints.length) return endDimString();
+    if (dimInHand()) { dimKeyPress(cursorWorld); return true; }
     return false;
   };
   window.addEventListener('keydown', e => {
@@ -30171,7 +30228,7 @@
     if (seriesKeyPress('Enter', enterPlaces)) { e.preventDefault(); stripRefresh(); paint(); }
   });
   window.addEventListener('keydown', e => {
-    if (e.key !== ' ' || e.repeat || !drawsRun() || modalUp()) return;
+    if (e.key !== ' ' || e.repeat || !(drawsRun() || loopInHand() || dimInHand()) || modalUp()) return;
     const t = e.target;
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
     if (!cursorWorld) return;
@@ -30181,9 +30238,11 @@
   // A DOUBLE-CLICK ENDS THE RUN. Its first click is an ordinary press -- a
   // corner, committed by the run's own pointerup -- and its second lands on
   // the same spot, which drawPress reads as no move; what is left to do is
-  // put the run down.
+  // put the run down. On a loop tool it closes the loop the same way.
   canvas.addEventListener('dblclick', e => {
-    if (!drawsRun() || !drawStart || modalUp()) return;
+    if (modalUp()) return;
+    if (loopInHand()) { e.preventDefault(); closeLoop(); stripRefresh(); paint(); return; }
+    if (!drawsRun() || !drawStart) return;
     e.preventDefault();
     endDrawRun();
     stripRefresh();
@@ -33642,25 +33701,17 @@
     dimLinesStale();
     if (dimPlacing) return dimLastLine ? finishDimString() : false;
     if (dimPoints.length < 2) {
-      sayOnStrip('DIMENSION — press two points at least, then ENTER or double-click.');
+      sayOnStrip('DIMENSION — press two points at least, then ENTER or SPACE twice, or double-click.');
       return false;
     }
     dimPlacing = true;
     sayOnStrip(`DIMENSION — ${dimPoints.length - 1} to place: click where the string goes.`);
     return true;
   };
-  // SPACEBAR ENDS THE POINTS AS ENTER DOES (Movie, 20 Oct: "can you also add
-  // PRESS SPACEBAR to also end the cycle and go to placing the line"), and
-  // finishes the lines once they are being placed. Never while a box has the
-  // keyboard: a length is typed with spaces in it.
-  window.addEventListener('keydown', e => {
-    if (e.key !== ' ' || e.repeat || activeTool !== 'dimension' || modalUp()) return;
-    const t = e.target;
-    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
-    if (!dimPoints.length) return;
-    e.preventDefault();
-    if (endDimString()) paint();
-  });
+  // SPACEBAR AND ENTER are the series rule's (seriesKeyPress): once a press
+  // at the cursor, twice quickly the double-click below (Movie, 20 Oct: "can
+  // you also add PRESS SPACEBAR to also end the cycle and go to placing the
+  // line"; 22 Oct: "dimensions and lines too should work that way too").
   // A DOUBLE-CLICK'S FIRST PRESS lays a line before its second says stop:
   // that line is taken back, so stopping leaves nothing extra. Only a line
   // laid a moment ago, past the first, and still the last thing done.
@@ -33672,17 +33723,28 @@
     last.made.forEach(item => { const i = drawing.dimensions.indexOf(item); if (i >= 0) drawing.dimensions.splice(i, 1); });
     last.count -= 1;
   };
+  // ON THE LINE JUST PLACED: within 8 px of it, across the string.
+  const dimOnLastLine = at => {
+    if (!dimLastLine) return false;
+    const u = dimDirection(dimPoints);
+    const n = u ? { x: -u.z, z: u.x } : null;
+    const off = n ? (at.x - dimLastLine.at.x) * n.x + (at.z - dimLastLine.at.z) * n.z : Infinity;
+    return Math.abs(off) * view.scale < 8;
+  };
+  // ENTER OR SPACE ONCE IS A PRESS AT THE CURSOR -- a point, or a line --
+  // except on the line just placed, where it is done with nothing taken
+  // back: the key laid no line of its own.
+  const dimKeyPress = at => {
+    dimLinesStale();
+    if (dimPlacing && dimOnLastLine(at)) { finishDimString(); return; }
+    dimPress(at);
+  };
   const dimPress = at => {
     dimLinesStale();
     if (dimPlacing) {
       // A CLICK ON THE LINE JUST PLACED puts the string down: the same spot,
       // twice, is how he says he is done.
-      if (dimLastLine) {
-        const u = dimDirection(dimPoints);
-        const n = u ? { x: -u.z, z: u.x } : null;
-        const off = n ? (at.x - dimLastLine.at.x) * n.x + (at.z - dimLastLine.at.z) * n.z : Infinity;
-        if (Math.abs(off) * view.scale < 8) { takeBackDoubleClickLine(); finishDimString(); return; }
-      }
+      if (dimOnLastLine(at)) { takeBackDoubleClickLine(); finishDimString(); return; }
       const pieces = dimString(dimPoints, at);
       if (!pieces.length) { sayOnStrip('DIMENSION — those points measure nothing that way.'); return; }
       const { levelId } = onActiveLevel();
@@ -33699,7 +33761,7 @@
         items: made.map(item => ({ list: drawing.dimensions, item })) };
       undoStack.push(step);
       dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1 };
-      sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or ENTER, SPACE or double-click to finish.`);
+      sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or ENTER or SPACE twice, or double-click, to finish.`);
       markDirty();
       paint();
       return;
@@ -33711,7 +33773,7 @@
     if (last && Math.hypot(p.x - last.x, p.z - last.z) < 1e-6) return;
     dimPoints.push(p);
     sayOnStrip(dimPoints.length === 1 ? 'DIMENSION — the next point'
-      : `DIMENSION — ${dimPoints.length} points: the next, or ENTER / double-click to end the string`);
+      : `DIMENSION — ${dimPoints.length} points: the next, or ENTER or SPACE twice, or double-click, to end the string`);
     paint();
   };
   // A DOUBLE-CLICK ENDS THE STRING, as ENTER does. Its two presses landed on
@@ -33720,15 +33782,18 @@
   // AND, WHILE LINES ARE BEING PLACED, IT FINISHES THEM -- taking back the
   // line its own first press just put down, so a double-click to stop leaves
   // no extra line behind.
-  canvas.addEventListener('dblclick', e => {
-    if (activeTool !== 'dimension' || !dimPoints.length) return;
-    e.preventDefault();
+  const dimDoubleEnds = () => {
     if (dimPlacing) {
       takeBackDoubleClickLine();
       if (dimLastLine) finishDimString();
       return;
     }
     if (endDimString()) paint();
+  };
+  canvas.addEventListener('dblclick', e => {
+    if (activeTool !== 'dimension' || !dimPoints.length) return;
+    e.preventDefault();
+    dimDoubleEnds();
   });
   // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
   // through the register's listeners, because setTool runs at load, before
@@ -34774,11 +34839,9 @@
     // that one line with the press/lift split. Neither claim is about the other.
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
-    if (activeTool === 'roof') { if (shedRoof) { shedPress(at); return; } roofPress(at); return; }
+    if (activeTool === 'roof') { if (shedRoof) { loopPress(at); return; } roofPress(at); return; }
     if (activeTool === 'dormer') { dormerPress(at); return; }
-    if (activeTool === 'outline') { outlinePress(at); return; }
-    if (activeTool === 'floor') { floorPress(at); return; }
-    if (activeTool === 'shape') { shapePress(at); return; }
+    if (activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape') { loopPress(at); return; }
     if (activeTool === 'fenestration') {
       // THE BRUSH'S LOAD GOES ONTO AN OPENING PRESSED, not beside it (Movie,
       // 20 Oct: "paste the properties of that door to another existing door

@@ -69,7 +69,7 @@ test('a dimension put on the door\'s dot is linked to it, and follows the door w
   // four feet inside the wall.
   await click(page, at, -10, -10);
   await click(page, at, 0.15, -10.1);
-  await page.keyboard.press('Enter');
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
   await click(page, at, -3, -6);
   let d = await saved(page);
   const [dim] = d.dimensions;

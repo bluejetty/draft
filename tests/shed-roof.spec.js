@@ -147,7 +147,7 @@ test('an outline with no edge along the eave side is refused, and nothing is mad
   await press(page, at, 15, -1.2);
   // A TRIANGLE POINTING DOWNHILL: no edge runs along the wall line.
   for (const [x, z] of [[0, 10], [30, 10], [15, -1.5]]) await press(page, at, x, z);
-  await page.keyboard.press('Enter');
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
   await expect(strip(page)).toContainText('No edge of that outline runs along the eave side');
   expect((await saved(page)).roofs || []).toEqual([]);
 });
@@ -165,7 +165,7 @@ test('the T-square holds for the wall line and the outline\'s corners', async ({
   await press(page, at, 15, -1.2);
   // EACH CORNER A LITTLE OFF SQUARE TO THE ONE BEFORE.
   for (const [x, z] of [[-1, -2], [31, -1.6], [30.6, 12], [-1, 12.3]]) await press(page, at, x, z);
-  await page.keyboard.press('Enter');
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
   await expect(strip(page)).toContainText('SINGLE SLOPE ROOF made');
   const roof = (await saved(page)).roofs[0];
   expect(roof.points.map(p => [Number(p.x.toFixed(3)), Number(p.z.toFixed(3))]), 'every corner square to the one before')
@@ -186,7 +186,7 @@ test('the LENGTH box types the wall line and each edge of the outline: R opens i
   await page.keyboard.press('r');
   await expect(box).toBeFocused();
   await page.keyboard.type("20'");
-  await page.keyboard.press('Enter');
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
   await expect(strip(page)).toContainText('2/3');
   await press(page, at, 10, -1.2);
   // THE OUTLINE: the first corner pressed, then each edge typed by a digit.
@@ -197,6 +197,9 @@ test('the LENGTH box types the wall line and each edge of the outline: R opens i
     await page.keyboard.type(len);
     await page.keyboard.press('Enter');
   }
+  // CLOSED ON THE FIRST CORNER: the cursor taken there, one ENTER is a press on it.
+  await page.mouse.move(...at(-1, -2));
+  await page.waitForTimeout(80);
   await page.keyboard.press('Enter');
   await expect(strip(page)).toContainText('SINGLE SLOPE ROOF made');
   const roof = (await saved(page)).roofs[0];
