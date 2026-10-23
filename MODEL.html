@@ -1292,6 +1292,17 @@
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
   #shelf-tab:hover { color: var(--accent); border-color: var(--accent); }
+  /* OPEN SUITE AND SAVE AS SUITE EITHER SIDE OF THE TAB (Movie, 23 Oct),
+     the tab's own size, and only while the sheet shows a shelf. Equal
+     widths, so the tab between them stays centred on the bone. */
+  #shelf-tab-row { display:flex; align-items:flex-end; gap:6px; }
+  .shelf-tab-side { height:14px; width:88px; box-sizing:border-box; padding:0 4px; font-size:8px;
+    letter-spacing:.06em; cursor:pointer; line-height:12px; white-space:nowrap;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
+  .shelf-tab-side:hover { color: var(--accent); border-color: var(--accent); }
+  .shelf-tab-side[hidden] { display:none; }
   .seat-label { padding:3px 4px 4px; border-top:1px solid var(--edge-panel);
     font-family: var(--font-ui); font-size:8px; font-weight:600;
     letter-spacing:0.04em; text-transform:uppercase; color: var(--ink-quiet);
@@ -10569,6 +10580,52 @@
   // little extra space on the sides"): the page's own fit, with a roomier
   // margin than a floor's, once the shelf is the drafting context.
   const SHELF_FIT_MARGIN = 0.74;
+  // THE SQUARE IN HAND (see the drag in buildShelfStrip): where the press
+  // began and which shelf's, until the hand lets go anywhere.
+  let shelfPress = null;
+  const SHELF_DRAG_PX = 6;
+  // A FLOOR PLAN IS WHERE A SUITE CAN BE DROPPED (Movie: "the DRAG won't
+  // work unless they are in a FLOOR PLAN type main area"): one of the
+  // house's floors, on its plan or floor view, not a shelf, a cut or a site.
+  const onFloorPlanMain = () => {
+    if (!drawing) return false;
+    // ONE OF THE HOUSE'S FLOORS: a shelf's level is negative, the site's and
+    // the roof's are not floors.
+    if (!floorsOf(drawing.levels).some(l => Number(l.id) === Number(activeLevelId()))) return false;
+    // AND ITS PLAN OR FLOOR VIEW: an elevation or a section reports its own
+    // id here (activeViewId), which is no plan view, and ELECTRIC and STAIR
+    // are layer views of the floor, not the floor plan.
+    const v = activeViewId();
+    return v == null || !!H()?.VIEWS?.has(v);
+  };
+  // THE SHELF'S SUITE COMES IN UNDER THE HAND, carried by its registration
+  // corner (the gold one), and goes down where the hand lets go. One UNDO
+  // takes it off again; Esc while it is in hand does the same.
+  const dragShelfSuite = (shelfId, event) => {
+    const shelf = shelves().find(sh => Number(sh.id) === shelfId);
+    const name = shelf?.name || `SHELF ${shelfId}`;
+    if (!onFloorPlanMain()) {
+      sayOnStrip(`${name} drops onto a FLOOR PLAN: stand on one of the house's floors and drag the square again.`);
+      return;
+    }
+    const file = shelfSuiteFile(shelfId, shelf?.suiteKind || 'residential');
+    const count = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors']
+      .reduce((n, key) => n + (Array.isArray(file[key]) ? file[key].length : 0), 0);
+    if (!count) { sayOnStrip(`${name} is empty -- draw the suite on it first.`); return; }
+    const made = bringInHologram(suiteOnFloor(file), name);
+    if (!made) return;
+    const { holo } = made;
+    const at = tracePoint(event);
+    const nodes = H()?.suiteSuperNodes ? H().suiteSuperNodes(holo, activeLevelId()) : [];
+    const grip = nodes.find(n => n.registration)?.point
+      || (nodes.length ? { x: nodes.reduce((a, n) => a + n.point.x, 0) / nodes.length, z: nodes.reduce((a, n) => a + n.point.z, 0) / nodes.length }
+        : { x: holo.x, z: holo.z });
+    holo.x += at.x - grip.x;
+    holo.z += at.z - grip.z;
+    traceMoving = { underlay: holo, from: at, before: { ...holo }, hologram: true, shelfDrop: true };
+    sayOnStrip(`${name} is in hand by its gold corner — let go where it belongs; Esc puts it back on the shelf.`);
+    paint();
+  };
   const enterShelf = shelfId => {
     goToBoneyard(shelfId);
     fit(false, SHELF_FIT_MARGIN);
@@ -10605,9 +10662,37 @@
         keepLight('shelfStrip', shelfStripOpen);
         buildShelfStrip();
       });
-      strip.append(previews, tab);
+      // OPEN SUITE LEFT OF THE TAB, SAVE AS SUITE RIGHT OF IT (Movie, 23 Oct:
+      // "bring out 2 button on either side of the SHELF tab (about the same
+      // size) the left one says OPEN SUITE and right one SAVE AS SUITE" --
+      // "will only be on when they are in a SHELF view in the main area").
+      // The same two presses the LEVELS pane's BONEYARD head offers.
+      const row = document.createElement('div');
+      row.id = 'shelf-tab-row';
+      const side = (id, label, title, press) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.id = id;
+        b.className = 'shelf-tab-side';
+        b.textContent = label;
+        b.title = title;
+        b.hidden = true;
+        b.addEventListener('click', event => { event.stopPropagation(); press(); });
+        return b;
+      };
+      row.append(
+        side('shelf-open-suite', 'OPEN SUITE', 'Open a SUITE .draft onto a new shelf, kept in this file to change', () => openShelfSuite()),
+        tab,
+        side('shelf-save-suite', 'SAVE AS SUITE', 'Save what is on this shelf, and only it, as its own SUITE .draft', () => askShelfSuite()));
+      strip.append(previews, row);
       bar.append(strip);
+      // A DRAG THAT LEFT A SQUARE ENDS WHEREVER THE HAND LETS GO.
+      window.addEventListener('pointerup', () => { shelfPress = null; }, true);
     }
+    ['shelf-open-suite', 'shelf-save-suite'].forEach(id => {
+      const b = strip.querySelector(`#${id}`);
+      if (b) b.hidden = !boneyardActive;
+    });
     const list = drawing ? shelves() : [];
     strip.hidden = !list.length;
     const tab = strip.querySelector('#shelf-tab');
@@ -10632,6 +10717,24 @@
       label.textContent = name;
       square.append(screen, label);
       square.addEventListener('click', () => enterShelf(Number(shelf.id)));
+      // PRESS AND HOLD, THEN DRAG THE SQUARE ONTO A FLOOR PLAN (Movie, 23
+      // Oct: "if they click and hold to drag one a suite layout view, can we
+      // allow them to DRAG that suite (when they are on a FLOOR PLAN main
+      // view - not ELEVATIONS) DRAG the suite and position it on the plan
+      // they are viewing"). A press that does not move is still the press
+      // that enters the shelf; one that moves a few pixels is a drag, and no
+      // click follows it once the hand has left the square.
+      square.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        shelfPress = { shelfId: Number(shelf.id), x: event.clientX, y: event.clientY, dragging: false };
+      });
+      square.addEventListener('pointermove', event => {
+        const press = shelfPress;
+        if (!press || press.dragging || press.shelfId !== Number(shelf.id)) return;
+        if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < SHELF_DRAG_PX) return;
+        press.dragging = true;
+        dragShelfSuite(press.shelfId, event);
+      });
       previews.append(square);
     });
     paintShelfPreviews();
@@ -29934,6 +30037,13 @@
         : `${name} is refreshed \u2014 it stays where it sat.`);
       return;
     }
+    if (!bringInHologram(parsed, name)) sayOnStrip(`${file.name} is not a drawing this page can read.`);
+  });
+  // A PARSED FILE INTO A HOLOGRAM IN HAND -- the upload's own tail, shared
+  // since 23 Oct with a shelf square dragged onto the plan. Null when the
+  // file is not a drawing.
+  const bringInHologram = (parsed, name) => {
+    const F = window.DraftDrawingFormat;
     const pivot = hologramPivot(parsed);
     // A NEW FILE TAKES THE FIRST COLOUR NO FILE HERE HAS; the same file
     // brought in again is that file, and wears its colour.
@@ -29941,10 +30051,7 @@
     const [holo] = F.holograms([{ id: newDrawingItemId('hologram'), name, source: parsed,
       x: 0, z: 0, angleDeg: 0, pivotX: pivot.x, pivotZ: pivot.z,
       ...(!sameFile && H()?.nextColour ? { colour: H().nextColour(drawing) } : {}) }]);
-    if (!holo) {
-      sayOnStrip(`${file.name} is not a drawing this page can read.`);
-      return;
-    }
+    if (!holo) return null;
     // ON THE FLOOR THE DRAFTER IS STANDING ON (Movie, 20 Oct: "can we load
     // them in the CURRENT PLAN LEVEL.. so if i'm in MAIN FLOOR PLAN - it
     // would align into that floor, or 2nd floor --- same thing"). Its lowest
@@ -29977,7 +30084,8 @@
     traceMoving = { underlay: holo, from: null, before: null, hologram: true };
     sayOnStrip(`${name} is in${registeredAt ? ' on the gold target' : ''} \u2014 ${traceMoveWord(traceMoving)}`);
     paint();
-  });
+    return { holo, registeredAt };
+  };
   [traceAsk.querySelector('[data-hologram-upload]'), hologramAsk?.querySelector('[data-hologram-ask-upload]')].forEach(b => b?.addEventListener('click', () => {
     closeHologramCards();
     hologramRefreshing = null;
@@ -30152,6 +30260,22 @@
     const m = traceMoving;
     traceMoving = null;
     if (!m) return;
+    // A SHELF SQUARE'S SUITE: the drop IS its arrival, so there is no move
+    // step over the add -- one UNDO takes it off again -- and an Esc takes
+    // it straight back off the sheet rather than leaving it where the drag
+    // began.
+    if (m.shelfDrop) {
+      if (!commit) {
+        const at = (drawing?.holograms || []).indexOf(m.underlay);
+        if (at >= 0) drawing.holograms.splice(at, 1);
+        const top = undoStack[undoStack.length - 1];
+        if (top?.kind === 'add-item' && top.item === m.underlay) undoStack.pop();
+        markDirty();
+      }
+      sayOnStrip(commit ? `${hologramNoun(m.underlay)} is down \u2014 UNDO takes it off; its card has MOVE, turn and MIRROR.` : '');
+      paint();
+      return;
+    }
     if (m.before && !commit) Object.assign(m.underlay, m.before);
     if (m.before && commit && (m.before.x !== m.underlay.x || m.before.z !== m.underlay.z)) {
       undoStack.push({ kind: 'props', edits: [{ item: m.underlay, before: m.before }] });

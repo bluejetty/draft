@@ -676,6 +676,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // SHELVES tab that puts the row away. Entering a shelf is what
             // the LEVELS panel's shelf row already did; no absence row moves.
             'shelf-tab', 'SHELF 1',
+            // OPEN SUITE and SAVE AS SUITE beside the tab (23 Oct): a file
+            // picker and the kind question, nothing on the house.
+            'shelf-open-suite', 'shelf-save-suite',
             // UNDO ON SCREEN (audit C4) is the Ctrl+Z row's own verb with a
             // button on it: the parity table already has Undo **present**,
             // and a second way to press it makes nothing new.
