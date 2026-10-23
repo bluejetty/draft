@@ -1750,11 +1750,11 @@
      would have left those either broken or pointing at a tab that no longer
      opens anything. -->
 <button id="left-tab" class="rail-tab" type="button" data-left-tab
-  data-left-pane-tab="drafting" hidden>DRAFTING</button>
+  data-left-pane-tab="drafting" hidden><span class="rail-tab-text">DRAFTING</span></button>
 <button id="build-tab" class="rail-tab" type="button"
-  data-left-pane-tab="build" hidden>BUILD</button>
+  data-left-pane-tab="build" hidden><span class="rail-tab-text">BUILD</span></button>
 <button id="props-tab" class="rail-tab" type="button"
-  data-left-pane-tab="properties" hidden>PROPERTIES</button>
+  data-left-pane-tab="properties" hidden><span class="rail-tab-text">PROPERTIES</span></button>
 <aside id="left-rail" data-left-rail hidden>
   <div id="tool-slot" data-tool-slot>
     <div data-left-pane="drafting"></div>
@@ -1817,15 +1817,15 @@
      layers, elevations, sections and BONEYARD list follow; the rail scrolls
      as one, which is MODEL.dc.html's own arrangement (:1840). -->
 <button id="right-tab" class="rail-tab" type="button" data-right-tab
-  data-pane-tab="levels" hidden>LEVELS / LAYERS</button>
+  data-pane-tab="levels" hidden><span class="rail-tab-text">LEVELS / LAYERS</span></button>
 <!-- THE NOTES PAD, under LEVELS / LAYERS on the same edge and the same rail:
      it opens and shuts the way that tab does, and swaps with it. -->
 <button id="notes-tab" class="rail-tab" type="button" data-notes-tab
-  data-pane-tab="notes" hidden>NOTES / CALC</button>
+  data-pane-tab="notes" hidden><span class="rail-tab-text">NOTES / CALC</span></button>
 <!-- UNDO / REDO (Movie, 20 Oct), under NOTES / CALC on the same edge: the
      session's versions, one per edit, click one to put it on the sheet. -->
 <button id="history-tab" class="rail-tab" type="button" data-history-tab
-  data-pane-tab="history" hidden>UNDO / REDO</button>
+  data-pane-tab="history" hidden><span class="rail-tab-text">UNDO / REDO</span></button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
   <div id="view-rail" data-pane="levels"></div>
   <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
