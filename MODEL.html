@@ -18548,6 +18548,31 @@
       md.loose = null;
     }
   };
+  // ALT-DRAG LETS A CORNER GO (Movie, 22 Oct: "sometimes there is a corner
+  // where a node is connected, sometimes i'd like to disconnect them and
+  // extend one of the corner lines/walls"). A corner is one pooled point
+  // every run meeting there owns, so a plain drag moves them all. With ALT
+  // (or CTRL) held on the press, the SELECTED run's end takes a separate
+  // vertex at the same place (the pool's own rule: "two corners at the same
+  // place are still two corners if the pool never merged them") and the drag
+  // moves that one; the others keep the corner. Carried on the drag as
+  // `loose`, the shape the Shift body-drag already uses, so the one 'move'
+  // undo joins them again. A free end has nothing to let go of.
+  const detachCorner = (md, v) => {
+    const run = selectedSegment();
+    if (!run || (run.start !== v && run.end !== v)) return;
+    const others = [...walls(), ...lines()].filter(r => r !== run && (r.start === v || r.end === v));
+    if (!others.length) return;
+    const fresh = { x: v.x, y: v.y ?? 0, z: v.z, srcId: v.srcId ?? null, offX: v.offX ?? 0, offZ: v.offZ ?? 0 };
+    vertexPool.push(fresh);
+    if (run.start === v) run.start = fresh; else run.end = fresh;
+    md.body = run;
+    md.before = [{ vtx: fresh, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ }];
+    md.follow = anchorFollowers(md.before, null);
+    md.loose = { shared: [{ vtx: v, x: v.x, z: v.z }], fresh: [{ vtx: fresh, x: v.x, z: v.z }] };
+    md.detached = fresh;
+    sayOnStrip(`Corner let go — this ${walls().includes(run) ? 'wall' : 'line'}'s end moves alone; the other keeps the corner. UNDO joins them again.`);
+  };
   const splitRunCorners = md => {
     if (board !== 'toy' || md.kind !== 'wall' || !md.body) return;
     const wall = md.body;
@@ -19038,6 +19063,8 @@
       // so the hand sees which of its two faces lined up.
       if (moveDrag.lit?.own) paintFaceLit(moveDrag.lit.own);
       if (moveDrag.lit) paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
+      // THE END LET GO OF ITS CORNER glows orange in the hand (detachCorner).
+      if (moveDrag.detached) paintDonut(moveDrag.detached, 'orange');
       markMagnet(moveDrag.lit);
       return;
     }
@@ -35687,6 +35714,7 @@
         follow: anchorFollowers(before, corner ? null : body),
         sx: e.clientX, sy: e.clientY, active: false,
       };
+      if (corner && (e.altKey || e.ctrlKey) && board !== 'toy') detachCorner(moveDrag, corner);
       canvas.setPointerCapture(e.pointerId);
       return;
     }
