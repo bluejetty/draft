@@ -20,7 +20,7 @@ const MUTANTS = [
     find: "          layer: DIM_HAND_LAYER, auto: false,\n",
     with: "          layer: DIM_HAND_LAYER, auto: true,\n", test: 'a HORIZ string: three points, ENTER, a press above stands two dimensions there, on A-DIMS-HAND' },
   { file: 'MODEL.html', name: "ENTER does not end the string",
-    find: "    if (twice && dimInHand()) { seriesKeyLast = { key: null, at: 0, where: null }; dimDoubleEnds(); return true; }\n",
+    find: "    if (dimInHand()) return dimOnceEnds();\n",
     with: "", test: 'a HORIZ string: three points, ENTER, a press above stands two dimensions there, on A-DIMS-HAND' },
   { file: 'MODEL.html', name: "the ink stands toward what it measures",
     find: "      const [s0, s1] = away < 0 ? [b, a] : [a, b];\n",

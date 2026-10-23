@@ -95,7 +95,7 @@ test('a HORIZ string: three points, ENTER, a press above stands two dimensions t
   await armDimension(page);
   // A hair off each node: each lands on it.
   for (const pt of [[0.04, 0.03], [4.03, -0.02], [9.97, 0.04]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await expect(page.locator('#strip-message')).toContainText('click where the string goes');
   await press(page, at, [5, -1.5]);
   const made = hand(await saved(page));
@@ -129,7 +129,7 @@ test('DIAG runs along its first point to its last, its length the true distance'
   await page.locator('[data-dim-pop] [data-dim-mode="d"]').click();
   await press(page, at, [4.02, 0.03]);
   await press(page, at, [10.03, 5.97]);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, 4]);
   const [made] = hand(await saved(page));
   const len = Math.hypot(made.end.x - made.start.x, made.end.z - made.start.z);
@@ -158,7 +158,7 @@ test('Esc puts the string down, one UNDO takes a placed one, and AUTO DIMS leave
   await expect(page.locator('#strip-message')).not.toContainText('click where the string goes');
   // A whole string, then one undo.
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, -1.5]);
   expect(hand(await saved(page))).toHaveLength(2);
   await page.keyboard.press('Control+z');
@@ -166,7 +166,7 @@ test('Esc puts the string down, one UNDO takes a placed one, and AUTO DIMS leave
   // Placed again, and AUTO DIMS run over the level: both hand pieces stay.
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, -1.5]);
   await page.locator('[data-auto-dims]').click();
   const d = await saved(page);
@@ -241,7 +241,7 @@ test('a hand dimension follows the corner it was put on, along its own run; UNDO
   await armDimension(page);
   await press(page, at, [4, 0]);
   await press(page, at, [10, 0]);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [7, -1.5]);
   let d = await saved(page);
   expect(hand(d).map(span)).toEqual([[4, 10, -1.5, -1.5]]);
