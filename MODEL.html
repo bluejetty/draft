@@ -4784,6 +4784,15 @@
   };
   // A HOLOGRAM'S SUPER NODES, placed, on this level.
   const hologramSuperNodes = holo => (H()?.suiteSuperNodes ? H().suiteSuperNodes(holo, activeLevelId()) : []);
+  // THE COLOUR A SHELF'S SUITE WEARS ON THE PLAN: that of the hologram file
+  // named for the shelf (EDIT ON SHELF names the shelf for the file, and a
+  // shelf saved as a suite is filed under the shelf's name), or none.
+  const shelfColourOf = shelf => {
+    if (!shelf || !H()?.colourOf) return null;
+    const name = String(shelf.name || `SHELF ${shelf.id}`).trim().toUpperCase();
+    const twin = holograms().find(holo => String(H().fileOf(holo) || '').trim().toUpperCase() === name);
+    return twin ? H().colourOf(twin, drawing) : null;
+  };
   // THE PAIR THAT HAS A HOLOGRAM IN HAND: its nearest super node to a house
   // super node within pull, as `{ dx, dz, mine, house }` -- the slide that
   // puts them together -- or null.
@@ -4809,12 +4818,14 @@
     return !!d && Math.hypot(pt.x - d.x, pt.z - d.z) <= REGISTRATION_NODE_FT;
   };
   let goldDots = 0;   // how many came out gold this paint, for the specs
-  const superDot = (pt, { ring = false, bright = false, faint = false, gold = false } = {}) => {
+  // `ink` names a colour of the node's own -- a hologram's corners wear
+  // their file's colour (Movie, 23 Oct) -- and gold still wins.
+  const superDot = (pt, { ring = false, bright = false, faint = false, gold = false, ink: own = null } = {}) => {
     const p = toS(pt);
     if (gold) goldDots += 1;
-    const ink = gold ? (skin['draw-origin'] || SUPER_NODE_INK) : SUPER_NODE_INK;
+    const ink = gold ? (skin['draw-origin'] || SUPER_NODE_INK) : (own || SUPER_NODE_INK);
     ctx.save();
-    ctx.shadowColor = gold ? ink : SUPER_NODE_GLOW;
+    ctx.shadowColor = gold || own ? ink : SUPER_NODE_GLOW;
     ctx.shadowBlur = bright ? 16 : faint ? 6 : 10;
     ctx.globalAlpha = faint ? 0.55 : 1;
     ctx.fillStyle = ink;
@@ -4841,10 +4852,32 @@
       .sort((a, b) => Math.hypot(a.point.x - siteDatumNow().x, a.point.z - siteDatumNow().z)
         - Math.hypot(b.point.x - siteDatumNow().x, b.point.z - siteDatumNow().z))[0]?.id;
     superNodes().forEach(n => superDot(n.point, { bright: !!lock && lock.house === n, gold: n.id === goldId }));
+    // A HOLOGRAM'S CORNERS IN ITS FILE'S COLOUR (Movie, 23 Oct: "make the
+    // AQUA corner NODES on the imported suite/shelfs ... match the chart for
+    // each unit type" -- "will be easier for a user to identify them"). The
+    // same ink the HOLOGRAM panel's row and the tinted walls wear; the gold
+    // registration corner stays gold.
     holograms().filter(holo => !holo.hidden).forEach(holo => {
       const held = !!lock && traceMoving.underlay === holo;
-      hologramSuperNodes(holo).forEach(n => superDot(n.point, { ring: true, bright: held && lock.mine.id === n.id, gold: n.registration === true }));
+      const ink = H().colourOf?.(holo, drawing)?.ink || null;
+      hologramSuperNodes(holo).forEach(n => superDot(n.point, { ring: true, ink, bright: held && lock.mine.id === n.id, gold: n.registration === true }));
     });
+    // AND A SHELF'S OWN CORNERS, on the shelf and in its little square above
+    // the bone, in the colour its copies on the plan wear -- the hologram
+    // file named for the shelf -- so the square and the copies read as one
+    // unit type at a glance. A shelf no copy has come from yet keeps the
+    // plain aqua.
+    // AND NOT WHEN THE SHELF HAS SUPER NODES OF ITS OWN: those replace the
+    // four corners, as a suite's own do (suiteSuperNodes), and are drawn
+    // above as the house's are, the one on the target gold.
+    const shelfLevel = activeLevelId();
+    if (shelfLevel < 0 && !superNodes().length && H()?.shelfSuperNodes) {
+      const ink = shelfColourOf(shelves().find(sh => -Number(sh.id) === shelfLevel))?.ink || null;
+      H().shelfSuperNodes(walls(), shelfLevel).forEach(n => superDot(n.point, { ring: true, gold: n.registration === true, ink }));
+    }
+    // THE SHEET'S OWN COUNT, not a shelf square's: a thumb paint passes
+    // through here too now, and must not write over what the sheet said.
+    if (thumbTarget) return;
     canvas.dataset.goldSuperNodes = String(goldDots);
     if (lock) canvas.dataset.superLock = JSON.stringify([Number(lock.house.point.x.toFixed(4)), Number(lock.house.point.z.toFixed(4))]);
     else delete canvas.dataset.superLock;
@@ -11339,6 +11372,12 @@
       paintOutlines(); paintLines();
       paintHalfLevelGhost();
       paintWalls();
+      // A SHELF'S SQUARE ABOVE THE BONE SHOWS ITS CORNERS, in its unit's
+      // colour (Movie, 23 Oct: "in the little SHELF layout in the middle
+      // above the bone can you show the corner colors so they can easily
+      // identify each suite type (right now its just grey)"). Shelves only:
+      // a rail seat is a storey of the house, and stays geometry.
+      if (Number(levelId) < 0) paintSuperNodes();
       ctx.restore();
     } finally {
       ctx = savedCtx; cssW = savedW; cssH = savedH; dpr = savedDpr;
