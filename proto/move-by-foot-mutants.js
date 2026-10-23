@@ -24,7 +24,7 @@ const MUTANTS = [
     test: 'MOVE with the 1\' light lit carries the assembly a whole foot each way' },
   { file: 'MODEL.html',
     name: 'the assembly drag ignores the light',
-    find: "          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }\n          md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n",
+    find: "          if (footOn && Q && !md.slide) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }\n          md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n",
     with: "          md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });\n",
     test: 'an assembly dragged under SELECT lands on the foot too' },
   { file: 'MODEL.html',

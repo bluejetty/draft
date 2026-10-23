@@ -4676,6 +4676,11 @@
     if (!ring || bright) { ctx.beginPath(); ctx.arc(p.x, p.y, bright ? 3 : 3.5, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
   };
+  // THE ANCHORS' PAINT, filled in with the anchor helpers (whose consts
+  // come later in the file than this paint pass); the assembly whose
+  // anchors are being picked, while the ANCHOR verb is lit.
+  let paintAnchors = () => {};
+  let anchorPicking = null;
   // THE HOUSE'S AS DOTS, A HOLOGRAM'S AS RINGS, so the two kinds read
   // apart; the pair that has a hologram in hand, bright. For the specs,
   // `data-super-lock` names the house node holding it.
@@ -7096,6 +7101,7 @@
         // THE SUPER NODES, over the geometry they mark (desk furniture:
         // never on a sheet, never in a PRINTSCREEN).
         paintSuperNodes();
+        paintAnchors();
         // LAST, because dimensions are annotation: MODEL.dc.html paints them
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
@@ -11860,6 +11866,122 @@
     sweep('note', drawing?.notes);
     return out;
   };
+
+  // ── ANCHOR NODES (Movie, 22 Oct) ────────────────────────────────────────
+  //
+  // "once more than 2 items are 'Y'ed, i'd like to specify a point on the
+  // assembly and also sharing a node with a non - assebly node ... if that
+  // point moves the 'Y' object will moves according to how that point moves"
+  // -- in AQUA, apart from the suites' white and gold super nodes -- and, on
+  // a closet bumped into an outside wall, "make the top an bottom of the walls
+  // STRETCH where the nodes are connected so it allows the Y object to move
+  // back and forth within the other walls ... like it as if it was a window";
+  // "would only work if 2 nodes alone a similar walls that are aligned".
+  //
+  // An anchor is an END OF ONE OF THE ASSEMBLY'S OWN WALLS -- { wallId, end }
+  // on the group, so it survives a save -- standing on a corner a wall
+  // outside the assembly holds too (the pool makes that one object). Then:
+  //   - ONE anchor: the assembly FOLLOWS it. A corner or wall drag that moves
+  //     the shared corner carries the whole assembly by the same distance.
+  //   - TWO anchors on outside walls that line up: the assembly SLIDES along
+  //     that line like a window, and the two outside walls stretch and shrink
+  //     to stay joined, never below ANCHOR_MIN_FT.
+  const ANCHOR_MIN_FT = 0.5;
+  const ANCHOR_INK = '#40e0d0';
+  const groupWalls = group => itemsOfGroupAnywhere(group).filter(item => (drawing?.walls || []).includes(item));
+  const outsideWallsAt = (group, vtx) => {
+    const own = new Set(groupWalls(group));
+    return (drawing?.walls || []).filter(w => w && !own.has(w) && (w.start === vtx || w.end === vtx));
+  };
+  const anchorsOf = group => (Array.isArray(group?.anchors) ? group.anchors : []).map(a => {
+    const wall = groupWalls(group).find(w => String(w.id) === String(a?.wallId));
+    const vtx = wall ? (a.end === 'end' ? wall.end : wall.start) : null;
+    return vtx ? { wallId: a.wallId, end: a.end === 'end' ? 'end' : 'start', wall, vtx } : null;
+  }).filter(Boolean);
+  // THE WINDOW'S TRACK: the line the two anchors share, and how far either
+  // way the assembly may go before an outside wall would shrink past the
+  // minimum. Null when the two do not stand on lined-up outside walls.
+  const anchorSlide = group => {
+    const list = anchorsOf(group);
+    if (list.length !== 2) return null;
+    const [A, B] = list.map(a => a.vtx);
+    const len = Math.hypot(B.x - A.x, B.z - A.z);
+    if (len < 1e-6) return null;
+    const u = { x: (B.x - A.x) / len, z: (B.z - A.z) / len };
+    let lo = -Infinity, hi = Infinity;
+    const lined = list.every(({ vtx }) => {
+      const hosts = outsideWallsAt(group, vtx).map(w => (w.start === vtx ? w.end : w.start)).filter(o => {
+        const ox = o.x - vtx.x, oz = o.z - vtx.z, ol = Math.hypot(ox, oz);
+        return ol > 1e-6 && Math.abs(ox * u.z - oz * u.x) / ol < 0.01;
+      });
+      hosts.forEach(o => {
+        const s = (o.x - vtx.x) * u.x + (o.z - vtx.z) * u.z;
+        if (s > 0) hi = Math.min(hi, s - ANCHOR_MIN_FT); else lo = Math.max(lo, s + ANCHOR_MIN_FT);
+      });
+      return hosts.length > 0;
+    });
+    return lined ? { u, lo: Math.min(lo, 0), hi: Math.max(hi, 0) } : null;
+  };
+  // A DRAG'S TRAVEL ON THAT TRACK: along it only, held between its ends, by
+  // the foot with the 1' light lit.
+  const slideDelta = (slide, dx, dz) => {
+    let t = dx * slide.u.x + dz * slide.u.z;
+    const Q = window.DraftToyConstraints;
+    if (footOn && Q) t = Q.quantiseFeet(t);
+    t = Math.max(slide.lo, Math.min(slide.hi, t));
+    return { dx: slide.u.x * t, dz: slide.u.z * t };
+  };
+  // WHO FOLLOWS A CORNER OR WALL DRAG: every one-anchor assembly whose anchor
+  // is among the points in hand -- its other points, from where they start,
+  // each told which point it rides. Not an assembly whose own wall is the
+  // one being dragged: that is the assembly being reshaped, not followed.
+  const anchorFollowers = (before, body) => groups().flatMap(group => {
+    const list = anchorsOf(group);
+    if (list.length !== 1) return [];
+    const lead = before.find(b => b.vtx === list[0].vtx);
+    if (!lead || (body && groupWalls(group).includes(body))) return [];
+    if (!outsideWallsAt(group, lead.vtx).length) return [];
+    return window.DraftLevelLock.uniquePoints(itemsOfGroupAnywhere(group))
+      .filter(v => v !== lead.vtx && !before.some(b => b.vtx === v))
+      .map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ, follows: lead }));
+  });
+  // THE ANCHORS, AQUA (Movie, 22 Oct: "SUPERNODe color Aqua Turquoise"), on
+  // this level's assemblies; a ring round each of the assembly whose anchors
+  // are being picked, so the drafter sees which corners can take one.
+  paintAnchors = () => {
+    if (presenting || !drawing) return;
+    const here = new Set(walls());
+    let n = 0;
+    groups().forEach(group => anchorsOf(group).forEach(a => {
+      if (!here.has(a.wall)) return;
+      const p = toS(a.vtx);
+      ctx.save();
+      ctx.shadowColor = ANCHOR_INK;
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = ANCHOR_INK;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      n += 1;
+    }));
+    if (anchorPicking) {
+      groupWalls(anchorPicking).flatMap(w => [w.start, w.end])
+        .filter((v, i, all) => all.indexOf(v) === i && outsideWallsAt(anchorPicking, v).length)
+        .forEach(v => {
+          const p = toS(v);
+          ctx.save();
+          ctx.strokeStyle = ANCHOR_INK;
+          ctx.globalAlpha = 0.7;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+        });
+    }
+    canvas.dataset.anchors = String(n);
+  };
+  const followAnchors = follow => (follow || []).forEach(f => {
+    f.vtx.x = f.x + (f.follows.vtx.x - f.follows.x);
+    f.vtx.z = f.z + (f.follows.vtx.z - f.follows.z);
+  });
 
   const levelLockFor = group =>
     (group ? window.DraftLevelLock.lockFor(levelLocks(), group.id) : null);
@@ -17058,11 +17180,16 @@
     const chosen = new Set(entries.map(entry => entry.item));
     const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
     const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
+    // ONE ASSEMBLY ON ITS WINDOW TRACK (anchorSlide): its two anchors stay on
+    // the outside walls, which stretch, and the move runs along the track.
+    const owners = [...new Set(entries.map(entry => groupOf(entry)))];
+    const slide = owners.length === 1 && owners[0] ? anchorSlide(owners[0]) : null;
+    const pinned = new Set(slide ? anchorsOf(owners[0]).map(a => a.vtx) : []);
     const detached = [];
     entries.forEach(({ type, item }) => {
       if (type !== 'wall') return;
       ['start', 'end'].forEach(key => {
-        if (!held.has(item[key])) return;
+        if (!held.has(item[key]) || pinned.has(item[key])) return;
         const orig = item[key];
         detached.push({ wall: item, key, orig });
         item[key] = { ...orig };
@@ -17080,7 +17207,7 @@
     })() : null;
     const wells = entries.filter(e => e.type === 'stair').map(({ item }) => stairWellOf(item))
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
-    return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across,
+    return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across, slide,
       stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
       holos: entries.filter(e => e.type === 'hologram').map(e => e.item),
       before: [...points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
@@ -17446,6 +17573,13 @@
         d.opening.offset = clamped.offset;
         liveRedimStep(d.live);
       }
+      paint();
+      return;
+    }
+    if (d.kind === 'selection' && d.set.slide) {
+      ({ dx, dz } = slideDelta(d.set.slide, dx, dz));
+      d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+      d.dx = dx; d.dz = dz;
       paint();
       return;
     }
@@ -32039,6 +32173,66 @@
       if (lock && breakLevelLock(lock)) { syncAssembly(); paint(); }
     });
 
+    // ANCHOR (Movie, 22 Oct): lit, a click on a corner of the held assembly
+    // that a wall outside it shares turns it into an aqua anchor, or back.
+    const anchorBtn = document.createElement('button');
+    anchorBtn.type = 'button';
+    anchorBtn.className = 'sel-chip';
+    anchorBtn.dataset.assemblyAnchor = '';
+    anchorBtn.textContent = 'ANCHOR';
+    anchorBtn.title = 'ANCHOR — click a corner the assembly shares with another wall: one anchor, it follows that corner; two on a lined-up wall, it slides along it like a window';
+    anchorBtn.addEventListener('click', () => {
+      const group = selectedGroups()[0];
+      anchorPicking = anchorPicking || !group ? null : group;
+      anchorBtn.setAttribute('aria-pressed', String(!!anchorPicking));
+      sayOnStrip(anchorPicking ? `ANCHOR: click a corner of ${group.name} that it shares with a wall outside it. Esc or ANCHOR again ends.` : '');
+      paint();
+    });
+    const anchorSaid = group => {
+      const n = anchorsOf(group).length;
+      if (n === 0) return `${group.name} has no anchors.`;
+      if (n === 1) return `${group.name} is anchored: it follows that corner when the corner moves.`;
+      if (n === 2 && anchorSlide(group)) return `${group.name} slides along that wall like a window; the wall stretches to stay joined.`;
+      return `${group.name} has ${n} anchors that are not two on one lined-up wall, so it does not slide -- MOVE still moves it.`;
+    };
+    window.addEventListener('pointerdown', event => {
+      const group = anchorPicking;
+      if (!group || event.target !== canvas || event.button !== 0) return;
+      event.stopImmediatePropagation();
+      event.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      const px = event.clientX - r.left, py = event.clientY - r.top;
+      let best = null, bestD = 14;
+      groupWalls(group).forEach(wall => ['start', 'end'].forEach(end => {
+        const p = toS(wall[end]);
+        const d = Math.hypot(p.x - px, p.y - py);
+        if (d < bestD) { bestD = d; best = { wall, end, vtx: wall[end] }; }
+      }));
+      if (!best) { sayOnStrip(`No corner of ${group.name} there -- Esc or ANCHOR again ends.`); return; }
+      if (!outsideWallsAt(group, best.vtx).length) {
+        sayOnStrip('That corner is not shared with a wall outside the assembly, so there is nothing to anchor it to.');
+        return;
+      }
+      const before = { ...group };
+      const list = Array.isArray(group.anchors) ? group.anchors : [];
+      const on = anchorsOf(group).find(a => a.vtx === best.vtx);
+      group.anchors = on
+        ? list.filter(a => !(String(a.wallId) === String(on.wallId) && (a.end === 'end' ? 'end' : 'start') === on.end))
+        : [...list, { wallId: best.wall.id, end: best.end }];
+      if (!group.anchors.length) delete group.anchors;
+      undoStack.push({ kind: 'props', edits: [{ item: group, before }] });
+      markDirty();
+      sayOnStrip(anchorSaid(group));
+      paint();
+    }, true);
+    window.addEventListener('keydown', event => {
+      if (!anchorPicking || event.key !== 'Escape') return;
+      anchorPicking = null;
+      anchorBtn.setAttribute('aria-pressed', 'false');
+      sayOnStrip('');
+      paint();
+    }, true);
+
     const help = document.createElement('div');
     help.className = 'sel-help';
     help.dataset.assemblyHelp = '';
@@ -32087,7 +32281,7 @@
     // hidden until there is a lock to break.
     const actRow = document.createElement('div');
     actRow.className = 'sel-row';
-    actRow.append(unBtn, lockBtn, breakBtn);
+    actRow.append(unBtn, lockBtn, breakBtn, anchorBtn);
     box.append(title, asmBtn, actRow, help, dialog);
     // ONTO THE DRAFTING TAB, from the table: these verbs act on what Select
     // got hold of, so they sit with the key that got it.
@@ -32129,6 +32323,10 @@
       // nothing.
       lockBtn.disabled = !on || held.length === 0 || !!lockedNow;
       lockBtn.hidden = held.length === 0;
+      // ANCHOR for one assembly held; put down when it is not.
+      anchorBtn.hidden = !on || held.length !== 1;
+      if (anchorPicking && (held.length !== 1 || held[0] !== anchorPicking)) anchorPicking = null;
+      anchorBtn.setAttribute('aria-pressed', String(!!anchorPicking));
       breakBtn.textContent = lockedNow ? `BREAK ${lockedNow.name}` : 'BREAK LOCK';
       breakBtn.disabled = !on || !lockedNow;
       breakBtn.hidden = !lockedNow;
@@ -35408,7 +35606,7 @@
         const pts = window.DraftLevelLock.uniquePoints(
           itemsOfGroupAnywhere(rigidGroup));
         moveDrag = {
-          kind: 'group', body, group: rigidGroup, grab: at,
+          kind: 'group', body, group: rigidGroup, grab: at, slide: anchorSlide(rigidGroup),
           before: pts.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ })),
           // THE SIBLINGS GO IN THE UNDO SNAPSHOT TOO, taken here at arm time
           // while nothing has moved yet. Undo restores from `before`, and a
@@ -35425,13 +35623,16 @@
         return;
       }
       const ends = corner ? [corner] : movingEnds(body);
+      const before = ends.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ }));
       moveDrag = {
         kind: corner ? 'corner' : 'wall',
         // The wall itself, not just its moving ends: §3's constraint call
         // needs the run to know which way perpendicular is.
         body,
         grab: at,
-        before: ends.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ })),
+        before,
+        // A ONE-ANCHOR ASSEMBLY ON A CORNER IN HAND rides it (anchorFollowers).
+        follow: anchorFollowers(before, corner ? null : body),
         sx: e.clientX, sy: e.clientY, active: false,
       };
       canvas.setPointerCapture(e.pointerId);
@@ -35624,11 +35825,13 @@
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
           // HELD SQUARE BY THE T-SQUARE, the MOVE verb's rule: the larger
           // travel wins.
-          if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+          // TWO ANCHORS ON A LINE: along it only, like a window (anchorSlide).
+          if (md.slide) ({ dx, dz } = slideDelta(md.slide, dx, dz));
+          else if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
           // AND BY THE FOOT with the 1' light lit, the MOVE verb's rule
           // (Movie, 20 Oct: "make it work for when i moved grouped stuff too").
           const Q = window.DraftToyConstraints;
-          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          if (footOn && Q && !md.slide) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
           md.before.forEach(b => relinkVertex(b.vtx));
           // THE LOCKED SIBLINGS DO NOT MOVE HERE. They move ONCE, on the
@@ -35790,7 +35993,9 @@
         // on release. The two agree at the end of a completed drag; they part
         // company on a drag the browser cancels mid-gesture, and matching the
         // old page is the point.
+        followAnchors(md.follow);
         md.before.forEach(b => relinkVertex(b.vtx));
+        (md.follow || []).forEach(f => relinkVertex(f.vtx));
         paint();
       }
       return;
@@ -36049,7 +36254,7 @@
           return;
         }
         const moveStep = { kind: 'move',
-          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before,
+          before: [...md.before, ...(md.lockBefore || []), ...(md.follow || [])],
           // A WALL LET GO WITH SHIFT takes its old corners back on UNDO.
           ...(md.loose ? { loose: { wall: md.body, shared: md.loose.shared.map(b => b.vtx), fresh: md.loose.fresh.map(f => f.vtx) } } : {}) };
         undoStack.push(moveStep);

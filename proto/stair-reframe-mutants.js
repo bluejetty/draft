@@ -65,7 +65,7 @@ const MUTANTS = [
     with: "      if (false) {\n",
     test: 'MOVE with the T-square lit slides the assembly straight across, not with the hand' },
   { file: 'MODEL.html', name: 'an assembly dragged under SELECT goes free with the T-square lit',
-    find: "          if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }\n",
+    find: "          else if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }\n",
     with: "",
     test: 'an assembly dragged under SELECT is held square too' },
   { file: 'MODEL.html', name: 'a fixture reaches only the 30px grab zone',
