@@ -83,6 +83,29 @@ test('ZOOM TO FILL with no dimensions: the building fills the sheet with a fifth
   expect((left - box.x) / (right - left), 'and at least a fifth at the sides').toBeGreaterThanOrEqual(0.2);
 });
 
+// A SUITE ON ANOTHER LEVEL IS NOT ON THIS SHEET (Movie, 23 Oct: "when i
+// press the full zoom button in upper right ... they should be centered but
+// they come up like this off to the left"): a placed suite far off on the
+// FOUNDATION pulled MAIN FL's frame out to it, and the house sat small in a
+// corner. The frame is what this level draws: the house and its own suite.
+const suite = (id, levelId, x, z) => ({ id, name: id.toUpperCase(), x, z, angleDeg: 0, pivotX: 0, pivotZ: 0,
+  hidden: false, flip: false, colour: 0, layer: 'A-HOLO',
+  source: { version: 1, board: 'drafting', levels: LEVELS, activeLevelIdx: 2, ...EMPTY,
+    walls: [{ ...W(`${id}n`, [0, 0], [10, 0]), levelId }, { ...W(`${id}e`, [10, 0], [10, 8]), levelId },
+      { ...W(`${id}s`, [10, 8], [0, 8]), levelId }, { ...W(`${id}w`, [0, 8], [0, 0]), levelId }] } });
+test('ZOOM TO FILL frames this level\'s own suite and not one standing on another level', async ({ page }) => {
+  const f = drawing();
+  // One suite beside the house on MAIN FL; another 400 ft away on FOUNDATION.
+  f.holograms = [suite('here', 3, 45, 0), suite('below', 1, 400, 300)];
+  await open(page, f);
+  await page.locator('#strip-fill').click();
+  await page.waitForTimeout(200);
+  const { at, box } = await h.planFrame(page);
+  const [left] = at(0, 0), [right] = at(55, 0);
+  expect(Math.abs((left - box.x) - (box.x + box.width - right)), 'the house and its suite centred across').toBeLessThan(2);
+  expect((right - left) / box.width, 'and filling the sheet, not a corner of it').toBeGreaterThan(0.5);
+});
+
 test('with a dimension string showing, the frame is the string\'s and a tenth is clear round it', async ({ page }) => {
   await open(page, drawing(HOUSE, [NORTH_DIM]));
   await page.locator('#strip-fill').click();

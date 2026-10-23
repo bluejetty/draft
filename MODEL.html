@@ -3817,7 +3817,16 @@
 
   // A SHOWN HOLOGRAM IS ON THE SHEET TOO: its walls, where they are placed.
   // Main view only, like the marks below -- a rail thumbnail is this house.
-  const hologramFramePoints = () => (window.DraftHologram ? window.DraftHologram.framePoints(drawing) : []);
+  // THE SUITES STANDING ON THIS LEVEL, as they are drawn (Movie, 23 Oct:
+  // "when i press the full zoom button ... they should be centered but they
+  // come up like this off to the left"). hologram.js's framePoints frames
+  // EVERY placed suite on every level, so a suite on another storey, or
+  // far off on another floor, pulled the frame away from what is on the
+  // sheet and left this level's own suite small in a corner. The walls
+  // hologramWallsHere hands the painter are the walls this level shows.
+  const hologramFramePoints = () => holograms()
+    .flatMap(holo => hologramWallsHere(holo).flatMap(w => [w.start, w.end]))
+    .filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.z));
   const fit = (wide = false, margin = 0.86) => {
     const own = allPoints(wide);
     const pts = thumbTarget || shootingPaper ? own : own.concat(hologramFramePoints());
