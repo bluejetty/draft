@@ -152,17 +152,28 @@ test('the HOLOGRAM chip lists what is loaded; a SUITE row has no DEMO and switch
 });
 
 test('a suite draws in the normal colours, not the hologram blue', async ({ page }) => {
-  const blue = () => page.evaluate(() => {
+  const blue = () => page.evaluate(holo => {
     const c = document.getElementById('plan');
+    const r = c.getBoundingClientRect(), k = c.width / r.width;
     const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    // NOT THE CORNER RINGS. A suite's four corners carry super node rings
+    // since 20 Oct, and since 23 Oct the rings wear the file's own colour --
+    // this suite's is the blue -- so the pixels within a ring's reach of a
+    // corner are left out: the question here is the WALLS.
+    const [cx, cz, scale] = String(c.dataset.view || '').trim().split(/\s+/).map(Number);
+    const corners = (window.DraftHologram.suiteSuperNodes(holo, 3) || []).map(n => ({
+      x: (r.width / 2 + (n.point.x - cx) * scale) * k, y: (r.height / 2 + (n.point.z - cz) * scale) * k }));
+    const reach = 14 * k;
+    const onRing = (x, y) => corners.some(q => Math.hypot(q.x - x, q.y - y) <= reach);
     let n = 0;
-    // THE HOLOGRAM'S BLUE, not the turquoise of a super node ring (a suite's
-    // corners carry them since 20 Oct): blue well above green.
+    // THE HOLOGRAM'S BLUE, not the turquoise of a super node ring: blue well
+    // above green.
     for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 2] > 150 && data[i + 2] - data[i] > 50 && data[i + 2] - data[i + 1] > 30) n += 1;
+      if (data[i + 2] > 150 && data[i + 2] - data[i] > 50 && data[i + 2] - data[i + 1] > 30
+        && !onRing((i / 4) % c.width, Math.floor(i / 4 / c.width))) n += 1;
     }
     return n;
-  });
+  }, shell().holograms[0]);
   // Light pixels: the suite's walls in the night page's light ink.
   const light = () => page.evaluate(() => {
     const c = document.getElementById('plan');

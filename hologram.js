@@ -399,6 +399,12 @@
     return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z], i) => ({
       id: `corner-${i + 1}`, levelId: Number(levelId), view: 'plan', point: { x, y: 0, z }, auto: true }));
   };
+  // A SHELF'S OWN CORNERS (Movie, 23 Oct: "in the little SHELF layout in the
+  // middle above the bone can you show the corner colors so they can easily
+  // identify each suite type"): the same four corners a suite gets when it
+  // stands on a plan, read off the walls on the shelf's level as they are,
+  // with the registration corner marked. The shelf is unturned and unmoved.
+  const shelfSuperNodes = (walls, levelId) => registered(cornerSuperNodes(walls, levelId), walls, levelId, 0);
   // A suite's own plan less the walls the shell has taken, and their openings.
   const suiteExisting = (holo, existing, info) => {
     const gone = info?.hidden.get(holo.id);
@@ -915,6 +921,6 @@
     BLUE, PALE, ALPHA, VIEWS, COLOURS, colourOf, colourIndex, nextColour, fileOf,
     planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
-    drawn, suiteSuperNodes,
+    drawn, suiteSuperNodes, shelfSuperNodes,
   });
 })();
