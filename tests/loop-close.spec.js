@@ -5,8 +5,8 @@
 // too should work that way too". One click, ENTER or SPACE is a corner at the
 // cursor; a double-click, or the same key twice quickly with the cursor
 // still, closes the loop on its first corner. Below three corners nothing
-// closes and the strip says so. DIMENSION: once is a point, or a line while
-// the lines are placed; twice ends the points or finishes the lines.
+// closes and the strip says so. (DIMENSION keeps its own rule -- once ends;
+// tests/dim-once.spec.js.)
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -65,32 +65,6 @@ async function shedToThree(page, at) {
   await expect(strip(page)).toContainText('3/3');
   for (const [x, z] of [[-1, -2], [31, -2], [31, 10]]) await press(page, at, x, z);
 }
-// THE SHEET WHEELED OUT so rows 6 ft north of the house are still on the
-// canvas, clear of the DIMENSION pop-up docked at its north edge.
-async function roomAbove(page) {
-  const box = await page.locator('#plan').boundingBox();
-  for (let i = 0; i < 8; i += 1) {
-    const { scale } = await h.planFrame(page);
-    if (scale <= 12) break;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.wheel(0, 240);
-    await page.waitForTimeout(120);
-  }
-  return h.planFrame(page);
-}
-async function dimPointsEnded(page, at) {
-  await arm(page, 'dimension');
-  await press(page, at, 0, 0);
-  await press(page, at, 30, 0);
-  await hover(page, at, 15, 0);
-  await page.keyboard.press('Enter');
-  await expect(strip(page), 'one ENTER, a third point').toContainText('3 points');
-  await page.waitForTimeout(600);
-  await twice(page, 'Enter');
-  await expect(strip(page)).toContainText('click where the string goes');
-}
-const hand = d => d.dimensions.filter(x => x.auto === false);
-const rows = made => [...new Set(made.map(x => r2(x.start.z)))].sort((a, b) => a - b);
 
 test('a double-click on a FLOOR is its last corner and closes it on the first; the second click leaves no corner behind', async ({ page }) => {
   const { at } = await open(page, 3);
@@ -189,41 +163,4 @@ test('an OUTLINE closes by ENTER twice as a press on its first corner does', asy
   expect(master, 'the outline closed and the house was built from it').toBeTruthy();
   const o = master.points[0];
   expect(master.points.map(p => [r2(p.x - o.x), r2(p.z - o.z)])).toEqual([[0, 0], [30, 0], [30, 20], [0, 20]]);
-});
-
-test('DIMENSION: ENTER once is a point at the cursor, twice ends the points; SPACE once lays a line, and ENTER once on the line just laid is done', async ({ page }) => {
-  await open(page, 3);
-  const { at } = await roomAbove(page);
-  await dimPointsEnded(page, at);
-  // ONE SPACE LAYS A LINE where the cursor is, as a click would; another, another.
-  await hover(page, at, 15, -3);
-  await page.keyboard.press(' ');
-  await expect(strip(page)).toContainText('2 placed');
-  await hover(page, at, 15, -6);
-  await page.keyboard.press(' ');
-  // ENTER ONCE, STRAIGHT AWAY, ON THE LINE JUST LAID: done, and that line
-  // stays -- the key laid no line of its own to take back.
-  await page.keyboard.press('Enter');
-  await expect(strip(page)).toContainText('done');
-  const made = hand(await saved(page));
-  expect(made, 'two lines of two pieces').toHaveLength(4);
-  expect(rows(made)).toEqual([-6, -3]);
-  expect(made.map(x => [r2(x.start.x), r2(x.end.x)].sort((a, b) => a - b)).sort((a, b) => a[0] - b[0] || a[1] - b[1]))
-    .toEqual([[0, 15], [0, 15], [15, 30], [15, 30]]);
-});
-
-test('DIMENSION: SPACE twice elsewhere finishes the lines and takes back the line its own first press laid', async ({ page }) => {
-  await open(page, 3);
-  const { at } = await roomAbove(page);
-  await dimPointsEnded(page, at);
-  await hover(page, at, 15, -3);
-  await page.keyboard.press(' ');
-  await expect(strip(page)).toContainText('2 placed');
-  await page.waitForTimeout(800);
-  await hover(page, at, 15, -6);
-  await twice(page, ' ');
-  await expect(strip(page)).toContainText('done');
-  const made = hand(await saved(page));
-  expect(made, 'two pieces on the one line').toHaveLength(2);
-  expect(rows(made), 'on the row the single SPACE laid').toEqual([-3]);
 });

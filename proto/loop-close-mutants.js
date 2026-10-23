@@ -49,21 +49,6 @@ const MUTANTS = [
     find: "    if (activeTool === 'outline') outlineAdd(first, first);\n",
     with: "    if (activeTool === 'outline') return true;\n",
     test: 'an OUTLINE closes by ENTER twice as a press on its first corner does' },
-  { file: 'MODEL.html',
-    name: 'ENTER once ends the dimension points, the old rule',
-    find: "    if (dimInHand()) { dimKeyPress(cursorWorld); return true; }\n",
-    with: "    if (dimInHand()) return endDimString();\n",
-    test: 'DIMENSION: ENTER once is a point at the cursor, twice ends the points; SPACE once lays a line, and ENTER once on the line just laid is done' },
-  { file: 'MODEL.html',
-    name: 'ENTER on the line just laid takes it back as the double-click does',
-    find: "    if (dimPlacing && dimOnLastLine(at)) { finishDimString(); return; }\n",
-    with: "",
-    test: 'DIMENSION: ENTER once is a point at the cursor, twice ends the points; SPACE once lays a line, and ENTER once on the line just laid is done' },
-  { file: 'MODEL.html',
-    name: 'the key twice does not end the dimension points',
-    find: "    if (twice && dimInHand()) { seriesKeyLast = { key: null, at: 0, where: null }; dimDoubleEnds(); return true; }\n",
-    with: "",
-    test: 'DIMENSION: SPACE twice elsewhere finishes the lines and takes back the line its own first press laid' },
 ];
 
 const run = name => {

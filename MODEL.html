@@ -30728,12 +30728,13 @@
   // click is the last corner, its second lands on it (no corner: loopTailIs),
   // and the dblclick that follows closes. Below three corners nothing closes
   // -- two enclose no area -- and the strip says so.
-  // DIMENSION TOO (Movie, 22 Oct: "and dimensions and lines too should work
-  // that way too"): ENTER or SPACE once is a press at the cursor -- a point
-  // while the points go down, a line while the lines are placed -- and twice
-  // quickly is the double-click, which ends the points or finishes the lines
-  // (dimDoubleEnds). SPACE in a box is a space: typed lengths carry them
-  // ("4 6"), which the target guard keeps.
+  // DIMENSION KEEPS ITS OWN RULE, refined (Movie, 23 Oct: "to end a string
+  // and go to the Line placement part, press SPACE BAR once (or ENTER key)
+  // or the RIGHT mouse button ... right click / space / enter to end the
+  // line placement and finish the dimension string"): ONCE ends -- the
+  // points, or the lines (dimOnceEnds); the right button says the same. Esc
+  // alone abandons the string. SPACE in a box is a space: typed lengths
+  // carry them ("4 6"), which the target guard keeps.
   const SERIES_TWICE_MS = 450;
   let seriesKeyLast = { key: null, at: 0, where: null };
   const endDrawRun = () => {
@@ -30779,7 +30780,6 @@
     const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;
     seriesKeyLast = { key, at: now, where: cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : null };
     if (twice && loopInHand()) return closeLoop();
-    if (twice && dimInHand()) { seriesKeyLast = { key: null, at: 0, where: null }; dimDoubleEnds(); return true; }
     if (twice && drawsRun() && drawStart) { endDrawRun(); return true; }
     return place();
   };
@@ -30789,7 +30789,7 @@
     // With or without a run in hand: a first press starts one at the cursor.
     const run = drawsRun();
     if (run) { drawPress(cursorWorld); return true; }
-    if (dimInHand()) { dimKeyPress(cursorWorld); return true; }
+    if (dimInHand()) return dimOnceEnds();
     return false;
   };
   window.addEventListener('keydown', e => {
@@ -34336,7 +34336,7 @@
     dimLinesStale();
     if (dimPlacing) return dimLastLine ? finishDimString() : false;
     if (dimPoints.length < 2) {
-      sayOnStrip('DIMENSION — press two points at least, then ENTER or SPACE twice, or double-click.');
+      sayOnStrip('DIMENSION — press two points at least, then SPACE, ENTER or the right button.');
       return false;
     }
     dimPlacing = true;
@@ -34366,14 +34366,6 @@
     const off = n ? (at.x - dimLastLine.at.x) * n.x + (at.z - dimLastLine.at.z) * n.z : Infinity;
     return Math.abs(off) * view.scale < 8;
   };
-  // ENTER OR SPACE ONCE IS A PRESS AT THE CURSOR -- a point, or a line --
-  // except on the line just placed, where it is done with nothing taken
-  // back: the key laid no line of its own.
-  const dimKeyPress = at => {
-    dimLinesStale();
-    if (dimPlacing && dimOnLastLine(at)) { finishDimString(); return; }
-    dimPress(at);
-  };
   const dimPress = at => {
     dimLinesStale();
     if (dimPlacing) {
@@ -34396,7 +34388,7 @@
         items: made.map(item => ({ list: drawing.dimensions, item })) };
       undoStack.push(step);
       dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1 };
-      sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or ENTER or SPACE twice, or double-click, to finish.`);
+      sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or SPACE, ENTER or the right button to finish.`);
       markDirty();
       paint();
       return;
@@ -34408,7 +34400,7 @@
     if (last && Math.hypot(p.x - last.x, p.z - last.z) < 1e-6) return;
     dimPoints.push(p);
     sayOnStrip(dimPoints.length === 1 ? 'DIMENSION — the next point'
-      : `DIMENSION — ${dimPoints.length} points: the next, or ENTER or SPACE twice, or double-click, to end the string`);
+      : `DIMENSION — ${dimPoints.length} points: the next, or SPACE, ENTER or the right button to end the string`);
     paint();
   };
   // A DOUBLE-CLICK ENDS THE STRING, as ENTER does. Its two presses landed on
@@ -34424,6 +34416,17 @@
       return;
     }
     if (endDimString()) paint();
+  };
+  // ONCE ENDS (Movie, 23 Oct): SPACE, ENTER or the right button. While the
+  // points go down it ends them and the line placement begins; while the
+  // lines are placed it finishes the string, with nothing taken back -- the
+  // key or the button laid no line of its own. Finished with no line placed,
+  // the string is put down with none. Esc alone abandons it (cancelGestures).
+  const dimOnceEnds = () => {
+    dimLinesStale();
+    if (dimPlacing) return finishDimString();
+    if (endDimString()) paint();
+    return true;
   };
   canvas.addEventListener('dblclick', e => {
     if (activeTool !== 'dimension' || !dimPoints.length) return;
@@ -36512,7 +36515,13 @@
     // THE RIGHT BUTTON PANS; one that did not travel is the right CLICK, which
     // puts the gesture in hand down, as it did before the pan moved here.
     if (dragging.pan) {
-      if (dragging.moved <= 4 && cancelGestures()) { stripRefresh(); paint(); }
+      if (dragging.moved <= 4) {
+        // ON A DIMENSION THE RIGHT BUTTON ENDS, it does not cancel (Movie,
+        // 23 Oct: "for ESC where the string is abandoned and deleted don't
+        // use RIGHT mouse button, only use esc key").
+        if (dimInHand()) { dimOnceEnds(); stripRefresh(); paint(); }
+        else if (cancelGestures()) { stripRefresh(); paint(); }
+      }
       dragging = null;
       canvas.classList.remove('dragging');
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);

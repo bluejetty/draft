@@ -83,7 +83,7 @@ test('points pressed in any order measure between neighbours along the string', 
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [10, 0], [4, 0]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, -1.5]);
   const pieces = hand(await saved(page)).map(span).map(s => [s[0], s[1]]).sort((a, b) => a[0] - b[0]);
   expect(pieces, '0 to 4, then 4 to 10 -- not 0 to 10 and back').toEqual([[0, 4], [4, 10]]);
@@ -95,7 +95,7 @@ test('SPACE ends the points as ENTER does', async ({ page }) => {
   await armDimension(page);
   await press(page, at, [0, 0]);
   await press(page, at, [4, 0]);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press(' '); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press(' '); // once ends the points (Movie, 23 Oct)
   await expect(page.locator('#strip-message')).toContainText('click where the string goes');
   await press(page, at, [2, -1.5]);
   expect(hand(await saved(page))).toHaveLength(1);
@@ -106,7 +106,7 @@ test('after the first line, each click lays another line of the same points unti
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, 1.5]);
   await expect(page.locator('#strip-message')).toContainText('another line');
   await press(page, at, [5, 3]);
@@ -141,7 +141,7 @@ test('a click on the line just placed finishes; it lays no extra line', async ({
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, 1.5]);
   await press(page, at, [7, 1.5]);
   await expect(page.locator('#strip-message')).toContainText('done');
@@ -153,7 +153,7 @@ test('a double-click finishes too, and leaves no line from its own first press',
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, 1.5]);
   await page.mouse.dblclick(...at(5, 4));
   await page.waitForTimeout(100);
@@ -167,7 +167,7 @@ test('a dimension COPIED and PASTED lands as a row of its own, 2 ft out, to slid
   await armDimension(page);
   await press(page, at, [0, 0]);
   await press(page, at, [4, 0]);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [2, -1.5]);
   await page.keyboard.press('Enter');
   const [orig] = hand(await saved(page));
@@ -196,7 +196,7 @@ test('UNDO of the line just placed ends the lines: the next press is a fresh str
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  for (let i = 0; i < 2; i += 1) await page.keyboard.press('Enter'); // twice, quickly: once is a point at the cursor
+  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await press(page, at, [5, 1.5]);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(100);
