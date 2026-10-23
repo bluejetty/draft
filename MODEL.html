@@ -1327,11 +1327,11 @@
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
   #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #hologram-ask, #trace-insert,
-  #footprint-ask, #stair-fit { position:fixed; inset:0; z-index:7; display:flex;
+  #footprint-ask, #room-corner-ask, #stair-fit { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
   #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
-  #trace-ask[hidden], #hologram-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden], #stair-fit[hidden] { display:none; }
+  #trace-ask[hidden], #hologram-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden], #room-corner-ask[hidden], #stair-fit[hidden] { display:none; }
   /* A button the pull puts out of reach is HIDDEN, not greyed -- see the
      card's own note. The row is flex, so this has to beat its display. */
   #footprint-ask button[hidden] { display:none !important; }
@@ -2508,6 +2508,19 @@
   </div>
 </div>
 
+<!-- A ROOM SHAPE'S CORNER THAT IS A WALL'S NODE (Movie, 23 Oct: "when a user
+     clicks that node, a popup asks, 1. move wall and floor / 2. de-link and
+     move only floor"). -->
+<div id="room-corner-ask" data-room-corner-ask hidden role="dialog" aria-label="This corner is a wall's node">
+  <div class="promote-card">
+    <p><b>THIS CORNER IS A WALL'S NODE</b><br>The floor's corner is linked to it. What did you mean?</p>
+    <div class="promote-row">
+      <button type="button" data-room-corner-wall>MOVE WALL AND FLOOR</button>
+      <button type="button" data-room-corner-free>DE-LINK, MOVE ONLY THE FLOOR</button>
+    </div>
+  </div>
+</div>
+
 <!-- THE UNSAVED GUARD (§1). NEW and OPEN both throw away what is on screen,
      so both ask first -- and SAVE FIRST really saves: it goes through the same
      press SAVE does, lease and revision included, and if that write is refused
@@ -3295,29 +3308,90 @@
   // THE BOX IS MEASURED, not cached from the last paint: a hit test and the
   // highlight both need it, and the highlight paints BEFORE the tags do. The
   // fonts are the painter's own (render-2d.js drawRoomTag2D).
+  // THE PAINTER'S OWN ENV, so the lines the box covers are the lines drawn:
+  // the size as typed, and the AREA a shaped tag measures (Movie, 23 Oct).
+  const roomTagEnv = () => ({
+    color: skin['draw-note'],
+    areaFor: tag => tag.size || '',
+    areaLabel: sqFt => (metric()
+      ? `${(Math.round(sqFt * 0.09290304 * 10) / 10).toLocaleString('en-US')} m\u00b2`
+      : `${Math.round(sqFt).toLocaleString('en-US')} SQ FT`),
+  });
   const roomTagBox = tag => {
     const s = toS(tag.at);
+    const R = window.DraftRender2D;
+    const lines = R?.roomTagLines ? R.roomTagLines(tag, roomTagEnv()) : (tag.size ? [tag.size] : []);
     ctx.save();
     ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
     let w = ctx.measureText(String(tag.name || '')).width;
-    if (tag.size) {
-      ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
-      w = Math.max(w, ctx.measureText(String(tag.size)).width);
-    }
+    ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
+    lines.forEach(line => { w = Math.max(w, ctx.measureText(String(line)).width); });
     ctx.restore();
     const pad = 4;
     return {
       left: s.x - w / 2 - pad, right: s.x + w / 2 + pad,
-      top: s.y - (tag.size ? 14 : 8) - pad, bottom: s.y + (tag.size ? 12 : 8) + pad,
+      top: s.y - (lines.length ? 14 : 8) - pad, bottom: s.y + (lines.length ? 1 + 11 * lines.length : 8) + pad,
     };
+  };
+  // ── A ROOM TAG'S SHAPE (Movie, 23 Oct) ────────────────────────────────
+  // "the FLOOR shape and ROOM TAG shape can be the same thing": a tag placed
+  // by hand gets a small square to start ("i'll just make a small square for
+  // each room"), and its corners drag -- onto a wall's node to LINK there,
+  // so the floor follows the wall. A press on an edge's midpoint adds a
+  // corner; a corner dropped on its neighbour is let go.
+  const ROOM_TAG_SQUARE_FT = 3;
+  const ROOM_HANDLE_PX = 7;
+  const ROOM_EDGE_PICK_PX = 5;
+  const roomShapeOf = tag => (Array.isArray(tag?.points) && tag.points.length >= 3 ? tag.points : null);
+  // A corner is LINKED when a wall stands on the same point object: the
+  // pool's identity, not its coordinates.
+  const wallsOnCorner = pt => (drawing?.walls || []).filter(w => w.start === pt || w.end === pt);
+  const roomSquare = at => [
+    { x: at.x - ROOM_TAG_SQUARE_FT / 2, z: at.z - ROOM_TAG_SQUARE_FT / 2 },
+    { x: at.x + ROOM_TAG_SQUARE_FT / 2, z: at.z - ROOM_TAG_SQUARE_FT / 2 },
+    { x: at.x + ROOM_TAG_SQUARE_FT / 2, z: at.z + ROOM_TAG_SQUARE_FT / 2 },
+    { x: at.x - ROOM_TAG_SQUARE_FT / 2, z: at.z + ROOM_TAG_SQUARE_FT / 2 },
+  ];
+  const roomTagArea = tag => {
+    const pts = roomShapeOf(tag);
+    if (!pts || tag.areaShown === false) return 0;
+    return window.DraftDrawingFormat.loopAreaSqFt(pts);
+  };
+  // The handle under the hand on a picked shape: a corner, or an edge's
+  // midpoint. Corners first, so a short edge's midpoint never shadows one.
+  const roomHandleAt = (tag, worldPt) => {
+    const pts = roomShapeOf(tag);
+    if (!pts) return null;
+    const p = toS(worldPt);
+    const near = (q, r) => { const s2 = toS(q); return Math.hypot(s2.x - p.x, s2.y - p.y) <= r; };
+    const corner = pts.findIndex(q => near(q, ROOM_HANDLE_PX + 2));
+    if (corner >= 0) return { kind: 'corner', index: corner };
+    const mid = pts.findIndex((q, i) => {
+      const r = pts[(i + 1) % pts.length];
+      return near({ x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 }, ROOM_HANDLE_PX);
+    });
+    return mid >= 0 ? { kind: 'mid', index: mid } : null;
+  };
+  const roomEdgeNear = (tag, worldPt) => {
+    const pts = roomShapeOf(tag);
+    if (!pts) return false;
+    const p = toS(worldPt);
+    return pts.some((q, i) => {
+      const a = toS(q), b = toS(pts[(i + 1) % pts.length]);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+      return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) <= ROOM_EDGE_PICK_PX;
+    });
   };
   const roomTagAt = worldPt => {
     if (!roomTagsShown()) return null;
     const p = toS(worldPt);
-    return roomTags().slice().reverse().find(tag => {
+    const tags = roomTags().slice().reverse();
+    return tags.find(tag => {
       const b = roomTagBox(tag);
       return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom;
-    }) || null;
+    }) || tags.find(tag => roomEdgeNear(tag, worldPt)) || null;
   };
   // ── A NOTE IS PICKED BY ITS TEXT ──────────────────────────────────────────
   // Movie, 10 Oct ("looks good as you have it"): notes are selected, moved,
@@ -5630,8 +5704,16 @@
   const paintRoomTags = () => {
     const R = window.DraftRender2D;
     if (!R || !roomTagsShown()) return;
-    const env = { color: skin['draw-note'], areaFor: tag => tag.size || '' };
+    const env = roomTagEnv();
     roomTags().forEach(tag => R.drawRoomTag2D(ctx, toS, tag, {}, env));
+  };
+  // THE ROOM SHAPES AND THEIR FLOORING, under the walls so their fill stops
+  // the finish at the face -- the slot the WC tile has.
+  const paintRoomShapes = () => {
+    const R = window.DraftRender2D;
+    if (!R?.drawRoomShape2D || !roomTagsShown()) return;
+    const env = { ...roomTagEnv(), isPrinting: false };
+    roomTags().forEach(tag => { if (roomShapeOf(tag)) R.drawRoomShape2D(ctx, toS, tag, {}, env); });
   };
 
   // The fixture body is filled with the page's own ground so the wall hatch
@@ -5721,6 +5803,8 @@
     const ink = skin['draw-fixture'];
     R.drawWetFloors2D(ctx, toS, {
       walls: walls(),
+      // A room whose tag lays its own flooring is not tiled over it.
+      flooredAt: roomTags().filter(tag => roomShapeOf(tag) && tag.flooring).map(tag => tag.at),
       fixtures: fixtures(),
       fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
       wallFrame: wl => FG.wallFrame(wl),
@@ -6368,6 +6452,8 @@
       walls: () => drawing?.walls || [],
       roofs: () => drawing?.roofs || [],
       floors: () => drawing?.floors || [],
+      // EVERY LEVEL'S ROOM TAGS, for the flooring a shaped one lays.
+      roomTags: () => drawing?.roomTags || [],
       // THE WHOLE DRAWING'S COLUMNS, by the same rule as the four above: the
       // elevation draws the piles under a grade beam, and they are filed on
       // FOUNDATION while the drafter may be looking at any level.
@@ -7292,7 +7378,9 @@
         paintOutlines();
         paintHalfLevelGhost();
         paintBasementFoundationGhost();
-        // The WC tile under the walls, so their fill stops it at the face.
+        // The WC tile under the walls, so their fill stops it at the face,
+        // and the room shapes with the flooring they lay, in the same slot.
+        paintRoomShapes();
         paintWetFloors();
         paintLines(); paintWalls();
         // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct).
@@ -13054,6 +13142,31 @@
         ctx.save();
         ctx.lineWidth = 3;
         ctx.strokeRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
+        const pts = type === 'roomtag' ? roomShapeOf(item) : null;
+        if (pts) {
+          // THE SHAPE, and its handles: a square on each corner (filled
+          // where the corner is a wall's node, hollow where it is free) and
+          // a small ring on each edge's midpoint, where a corner can be added.
+          const screen = pts.map(toS);
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          screen.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+          ctx.closePath();
+          ctx.stroke();
+          ctx.fillStyle = selectInk();
+          const h = ROOM_HANDLE_PX;
+          screen.forEach((p, i) => {
+            if (wallsOnCorner(pts[i]).length) ctx.fillRect(p.x - h / 2, p.y - h / 2, h, h);
+            else { ctx.fillStyle = skin['surface-page']; ctx.fillRect(p.x - h / 2, p.y - h / 2, h, h); ctx.fillStyle = selectInk(); ctx.strokeRect(p.x - h / 2, p.y - h / 2, h, h); }
+          });
+          ctx.lineWidth = 1.5;
+          screen.forEach((p, i) => {
+            const q = screen[(i + 1) % screen.length];
+            ctx.beginPath();
+            ctx.arc((p.x + q.x) / 2, (p.y + q.y) / 2, h / 2 - 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+          });
+        }
         ctx.restore();
         return;
       }
@@ -13773,6 +13886,46 @@
   // is never a half-answered drag on the stack.
   const footprintCard = document.getElementById('footprint-ask');
   let footprintPending = null;
+  // ── THE ROOM CORNER CARD (Movie, 23 Oct) ─────────────────────────────
+  // A press on a shape's corner that is a wall's node. MOVE WALL AND FLOOR
+  // picks the wall standing on the node, so the next drag of that node
+  // takes both (the corner IS the node). DE-LINK gives the shape its own
+  // copy of the point, so the corner drags on its own; one UNDO relinks it.
+  const roomCornerCard = document.getElementById('room-corner-ask');
+  let roomCornerPending = null;
+  const askRoomCorner = (tag, index) => {
+    roomCornerPending = { tag, index };
+    if (!roomCornerCard) { settleRoomCorner('free'); return; }
+    roomCornerCard.hidden = false;
+    setTimeout(() => roomCornerCard.querySelector('[data-room-corner-wall]')?.focus(), 0);
+  };
+  const settleRoomCorner = choice => {
+    const pending = roomCornerPending;
+    roomCornerPending = null;
+    if (roomCornerCard) roomCornerCard.hidden = true;
+    if (!pending) return;
+    const { tag, index } = pending;
+    const pt = tag.points?.[index];
+    if (!pt) return;
+    if (choice === 'wall') {
+      const on = wallsOnCorner(pt);
+      if (on.length) setSelection(on.map(wall => ({ type: 'wall', item: wall })));
+      sayOnStrip('Drag the node: the wall and the floor move together.');
+    } else if (choice === 'free') {
+      const before = { ...tag, points: tag.points.slice() };
+      tag.points = tag.points.map((p, i) => (i === index ? { x: p.x, z: p.z } : p));
+      undoStack.push({ kind: 'props', edits: [{ item: tag, before }] });
+      markDirty();
+      sayOnStrip('The corner is free of the wall \u2014 drag it on its own. UNDO links it back.');
+    }
+    showSelectionProps();
+    paint();
+  };
+  if (roomCornerCard) {
+    roomCornerCard.querySelector('[data-room-corner-wall]').addEventListener('click', () => settleRoomCorner('wall'));
+    roomCornerCard.querySelector('[data-room-corner-free]').addEventListener('click', () => settleRoomCorner('free'));
+    roomCornerCard.addEventListener('click', e => { if (e.target === roomCornerCard) settleRoomCorner(null); });
+  }
   const ft2txt = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
 
   const settleFootprint = choice => {
@@ -15540,9 +15693,12 @@
     const ids = drawing.roomTags.map(t => Number(t.id)).filter(Number.isInteger);
     const id = Math.max(0, ...ids, (Number(drawing.nextRoomTagId) || 1) - 1) + 1;
     drawing.nextRoomTagId = id + 1;
+    // WITH A SMALL SQUARE FOR ITS SHAPE (Movie, 23 Oct): its corners drag
+    // out to the walls, or stay a square for a drafter who wants only a name.
     const tag = selectPlaced('roomtag', addItem(drawing.roomTags, {
       id, at: { x: at.x, z: at.z }, levelId, view: 'plan',
       name: 'ROOM', areaSqFt: 0, underMin: false, stamped: true, layer: ROOM_TAG_LAYER,
+      points: roomSquare(at),
     }));
     const name = document.querySelector('[data-prop-text="name"]');
     if (name) { name.focus(); name.select(); }
@@ -16666,7 +16822,7 @@
   const rotatePointsOf = ({ type, item }) => {
     if (!item) return [];
     if (type === 'fixture' || type === 'fenestration') return [];
-    if (type === 'roomtag') return item.at ? [item.at] : [];
+    if (type === 'roomtag') return [item.at, ...(roomShapeOf(item) || [])].filter(Boolean);
     if (type === 'note') return [item.anchor, item.text].filter(Boolean);
     if (type === 'column' || type === 'superNode') return item.point ? [item.point] : [];
     if (Array.isArray(item.points)) {
@@ -16713,6 +16869,16 @@
     const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
     const detached = [];
     entries.forEach(({ type, item }) => {
+      if (type === 'roomtag' && roomShapeOf(item)) {
+        // A ROOM SHAPE'S LINKED CORNERS LIKEWISE: the shape turns on its
+        // own copies, and the wall's node stays where the wall is.
+        item.points.forEach((pt, index) => {
+          if (!held.has(pt)) return;
+          detached.push({ wall: item.points, key: index, orig: pt });
+          item.points[index] = { x: pt.x, z: pt.z };
+        });
+        return;
+      }
       if (type !== 'wall') return;
       ['start', 'end'].forEach(key => {
         if (!held.has(item[key])) return;
@@ -22262,6 +22428,20 @@
     drawing.groups = groups();
     drawing.groups.push(group);
     drawing.nextGroupId = 1 + n;
+    // THE ROOM'S TAG, shaped to its inside faces and tiled (Movie, 23 Oct:
+    // "maybe when the bathroom is dropped in they will be linked"). Its
+    // corners are the inside corners, which these centre-line walls have no
+    // node at; the day the presets draw on the interior line, they link.
+    drawing.roomTags = drawing.roomTags || [];
+    const tagIds = drawing.roomTags.map(t => Number(t.id)).filter(Number.isInteger);
+    const tagId = Math.max(0, ...tagIds, (Number(drawing.nextRoomTagId) || 1) - 1) + 1;
+    drawing.nextRoomTagId = tagId + 1;
+    const inside = (room.inside || []).map(p => ({ x: p.x, z: p.z }));
+    const tag = inside.length >= 3 ? addItem(drawing.roomTags, {
+      id: tagId, at: { x: room.centre.x, z: room.centre.z }, levelId, view: 'plan',
+      name: room.name, areaSqFt: 0, underMin: false, stamped: true, layer: ROOM_TAG_LAYER,
+      points: inside, flooring: { type: 'tile' },
+    }) : null;
     // ONE STEP BACK TAKES THE ROOM: the walls' own 'add' steps give way to a
     // single 'built' carrying everything the press made.
     undoStack.length = mark;
@@ -22269,7 +22449,8 @@
       kind: 'built', walls: made, outlines: [], list: null,
       openings: doors,
       items: fixtures.map(item => ({ list: drawing.fixtures, item }))
-        .concat([{ list: drawing.groups, item: group }]),
+        .concat([{ list: drawing.groups, item: group }])
+        .concat(tag ? [{ list: drawing.roomTags, item: tag }] : []),
     });
     sayOnStrip(`${room.name} placed${room.ext ? ' against the exterior wall' : ''} — `
       + 'one assembly: ASSEMBLY BUST to break it into pieces.');
@@ -33700,6 +33881,54 @@
     note.dataset.propNote = '';
     note.textContent = 'SIZE IN FEET, WIDTH X HEIGHT: 12X10, 12-6X10. DRAG THE TAG TO MOVE IT.';
     box.append(note);
+    // ── THE ROOM'S SHAPE (Movie, 23 Oct) ─────────────────────────────────
+    // Its measured AREA, the switch that shows it under the name, and the
+    // FLOORING the shape lays when one is picked: "the FLOOR aspect doesn't
+    // always need to be turned on, (it can just be turned off and the AREA
+    // calculated, or the user can change the flooring type".
+    const pts = roomShapeOf(tag);
+    if (pts) {
+      const FMT = window.DraftDrawingFormat;
+      const area = document.createElement('div');
+      area.className = 'props-title';
+      area.dataset.propRoomArea = '';
+      area.textContent = `AREA ${roomTagEnv().areaLabel(FMT.loopAreaSqFt(pts))}`;
+      box.append(area);
+      const chips = document.createElement('div');
+      chips.className = 'chip-row';
+      const show = document.createElement('button');
+      show.type = 'button';
+      show.className = 'sel-chip';
+      show.dataset.roomAreaShown = '';
+      show.textContent = 'SHOW AREA';
+      show.setAttribute('aria-pressed', String(tag.areaShown !== false));
+      show.addEventListener('click', () => edit(() => {
+        if (tag.areaShown === false) delete tag.areaShown; else tag.areaShown = false;
+      }));
+      chips.append(show);
+      box.append(chips);
+      const floorRow = document.createElement('div');
+      floorRow.className = 'chip-row';
+      const finishes = [{ id: null, label: 'NO FLOORING' }, ...FMT.FLOORING_FINISHES];
+      finishes.forEach(finish => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'sel-chip';
+        chip.dataset.roomFlooring = finish.id || 'none';
+        chip.textContent = finish.label;
+        chip.setAttribute('aria-pressed', String((tag.flooring?.type || null) === finish.id));
+        chip.addEventListener('click', () => edit(() => {
+          if (finish.id) tag.flooring = { type: finish.id }; else delete tag.flooring;
+        }));
+        floorRow.append(chip);
+      });
+      box.append(floorRow);
+      const how = document.createElement('div');
+      how.className = 'props-title';
+      how.dataset.propNote = '';
+      how.textContent = 'DRAG A CORNER ONTO A WALL NODE TO LINK IT. PRESS AN EDGE\u2019S MIDPOINT TO ADD A CORNER.';
+      box.append(how);
+    }
     return box;
   };
 
@@ -36260,11 +36489,43 @@
       canvas.setPointerCapture(e.pointerId);
       return;
     }
+    // ── A ROOM SHAPE'S CORNER (Movie, 23 Oct) ──────────────────────────
+    // On the one picked tag: a corner drags; a corner that is a wall's node
+    // asks first (the card); an edge's midpoint grows a corner and drags it.
+    const shapedTag = selection.length === 1 && selection[0].type === 'roomtag'
+      && filterAllows('roomtag') && roomShapeOf(selection[0].item) ? selection[0].item : null;
+    const handle = shapedTag ? roomHandleAt(shapedTag, at) : null;
+    if (handle) {
+      const pts = shapedTag.points;
+      if (handle.kind === 'corner' && wallsOnCorner(pts[handle.index]).length) {
+        askRoomCorner(shapedTag, handle.index);
+        return;
+      }
+      const before = { ...shapedTag, points: pts.slice() };
+      let points = pts.slice();
+      let index = handle.index;
+      if (handle.kind === 'mid') {
+        const q = pts[index], r = pts[(index + 1) % pts.length];
+        points.splice(index + 1, 0, { x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 });
+        index += 1;
+        shapedTag.points = points;
+      }
+      moveDrag = {
+        kind: 'roomcorner', tag: shapedTag, before, points, index,
+        grab: at, sx: e.clientX, sy: e.clientY, active: false, moved: false,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      paint();
+      return;
+    }
     const tagGrab = roomTagAt(at);
     if (tagGrab && selection.some(entry => entry.item === tagGrab)) {
       moveDrag = {
         kind: 'roomtag', tag: tagGrab, before: { ...tagGrab },
         grab: at, from: { ...tagGrab.at },
+        // THE SHAPE COMES WITH THE NAME, but a corner that is a wall's node
+        // stays with the wall: the name is not a handle on the house.
+        points: roomShapeOf(tagGrab) ? tagGrab.points.map(pt => ({ pt, free: !wallsOnCorner(pt).length })) : null,
         sx: e.clientX, sy: e.clientY, active: false,
       };
       canvas.setPointerCapture(e.pointerId);
@@ -36508,10 +36769,28 @@
           paint();
           return;
         }
+        if (md.kind === 'roomcorner') {
+          // ONTO A WALL'S NODE when one is in reach -- the node's own object,
+          // which is what links the corner to it -- else to the hand, by the
+          // foot with the 1' light lit. A NEW ARRAY EACH EVENT, never the old
+          // one edited: the undo step holds the corners the drag began with.
+          const Q = window.DraftToyConstraints;
+          let x = raw.x, z = raw.z;
+          if (footOn && Q) { x = Q.quantiseFeet(x); z = Q.quantiseFeet(z); }
+          const caught = cornerSnap(raw, md.points[md.index]);
+          const pt = caught || { x, z };
+          md.points = md.points.map((p, i) => (i === md.index ? pt : p));
+          md.tag.points = md.points;
+          md.moved = true;
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // A NEW POINT EACH EVENT, never the old one edited: the undo step
           // holds the point the tag started at, and it must stay that point.
-          md.tag.at = { x: md.from.x + raw.x - md.grab.x, z: md.from.z + raw.z - md.grab.z };
+          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          md.tag.at = { x: md.from.x + dx, z: md.from.z + dz };
+          if (md.points) md.tag.points = md.points.map(({ pt, free }) => (free ? { x: pt.x + dx, z: pt.z + dz } : pt));
           paint();
           return;
         }
@@ -36958,6 +37237,37 @@
           paint();
           return;
         }
+        if (md.kind === 'roomcorner') {
+          const tag = md.tag;
+          if (md.moved) {
+            // A CORNER DROPPED ON ITS NEIGHBOUR IS LET GO: three must stay.
+            const pts = md.points.slice();
+            const i = md.index;
+            const same = (a, b) => a === b || (Math.abs(a.x - b.x) < 0.05 && Math.abs(a.z - b.z) < 0.05);
+            const next = pts[(i + 1) % pts.length], prev = pts[(i - 1 + pts.length) % pts.length];
+            if (pts.length > 3 && (same(pts[i], next) || same(pts[i], prev))) pts.splice(i, 1);
+            const crossed = window.DraftGeometry2D.selfIntersects(pts);
+            if (crossed) {
+              tag.points = md.before.points;
+              sayOnStrip('That corner would make the shape cross itself, so it goes back.');
+            } else {
+              tag.points = pts;
+              const linked = pts.includes(md.points[i]) && wallsOnCorner(md.points[i]).length > 0;
+              undoStack.push({ kind: 'props', edits: [{ item: tag, before: md.before }] });
+              markDirty();
+              sayOnStrip(linked
+                ? 'Corner linked to the wall\u2019s node \u2014 the floor follows the wall now. UNDO frees it.'
+                : `${tag.name || 'ROOM'} is ${roomTagEnv().areaLabel(window.DraftDrawingFormat.loopAreaSqFt(pts))}.`);
+            }
+          } else {
+            tag.points = md.before.points;
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          showSelectionProps();
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // The 'props' step puts the record back IN PLACE, the point with it.
           if (md.tag.at.x !== md.from.x || md.tag.at.z !== md.from.z) {
@@ -37359,6 +37669,7 @@
     // the other. The DRAW button is how this page puts the tool down, because
     // it is the affordance a drafter with no keyboard can reach.
     if (e.key === 'Escape') {
+      if (roomCornerCard && !roomCornerCard.hidden) { settleRoomCorner(null); return; }
       // THE BRUSH GETS THE FIRST STEP, and only when it is holding something.
       // Loaded becomes empty; the tool stays up, which is the one thing the
       // chip cannot do -- pressing that turns the brush off altogether. An
@@ -38111,6 +38422,14 @@
       wall.start = pooled(wall.start, wall, view, body);
       wall.end = pooled(wall.end, wall, view, body);
     });
+    // A ROOM SHAPE'S CORNERS GO INTO THE SAME POOL (Movie, 23 Oct): a corner
+    // saved at a wall's node comes back as that node, linked, and a wall
+    // later drawn to a free corner takes it up. The pool merges exact
+    // places only, so a corner a hair off a node stays its own.
+    (drawing.roomTags || []).forEach(tag => {
+      if (!Array.isArray(tag.points) || tag.points.length < 3) return;
+      tag.points = tag.points.map(p => G.mergeVertex(vertexPool, p, tag.levelId, 'plan', 'house'));
+    });
 
     // THE HISTORY GOES WITH THE DRAWING IT POINTS INTO. Undo entries hold
     // references to wall and corner OBJECTS, and every one of them has just
@@ -38496,6 +38815,11 @@
       columns: withRefused('columns', drawing.columns || []),
       shapes: withRefused('shapes', drawing.shapes || []),
       fixtures: withRefused('fixtures', drawing.fixtures || []),
+      // A SHAPED TAG'S CORNERS ARE POOLED OBJECTS, written as plain points;
+      // its area is the shape's as it stands, the figure the roll-ups read.
+      roomTags: (drawing.roomTags || []).map(tag => (roomShapeOf(tag)
+        ? { ...tag, points: tag.points.map(point), areaSqFt: roomTagArea(tag) }
+        : tag)),
     };
   };
 

@@ -550,6 +550,22 @@ if (!window.DraftDrawingFormat) {
   // may double as a flooring area: a finish type plus thickness laid over the
   // floor sheathing, saved on A-FL-FLOORING.
   const FLOORING_TYPES = ['hardwood', 'laminate', 'tile', 'carpet'];
+  // A ROOM'S FLOORING (Movie, 23 Oct: "it sits 3/8\" above the finished 3/4\"
+  // sheathing and is 1/8\" thick so hard to see on the section" -- "always
+  // like this"). The two numbers a section needs, in one place; a room tag's
+  // flooring stores its TYPE only, never a thickness of its own.
+  // The finishes with the word a chip or a label shows for each.
+  const FLOORING_FINISHES = Object.freeze(FLOORING_TYPES.map(id => Object.freeze({ id, label: id.toUpperCase() })));
+  const ROOM_FLOORING_LIFT_IN = 3 / 8;
+  const ROOM_FLOORING_THICK_IN = 1 / 8;
+  // Shoelace, in the drawing's own feet: the area a closed loop of {x, z}
+  // corners encloses. A crossed loop answers less than it looks; the pages
+  // refuse one before it is stored.
+  // To a hundredth of a foot, so a 3 ft square is 9 and not 9.000000000000004.
+  const loopAreaSqFt = points => Math.round(Math.abs((points || []).reduce((sum, p, i) => {
+    const q = points[(i + 1) % points.length];
+    return sum + (p.x * q.z - q.x * p.z) / 2;
+  }, 0)) * 100) / 100;
   const flooring = raw => {
     const type = oneOf(raw?.type, FLOORING_TYPES, null);
     if (type == null) return null;
@@ -1411,6 +1427,26 @@ if (!window.DraftDrawingFormat) {
       // never parsed or reformatted, because it is a label and not a length.
       // Absent when blank, so every tag saved before it reads the same.
       const size = String(tag?.size ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+      // THE ROOM'S SHAPE (Movie, 23 Oct: "the FLOOR shape and ROOM TAG shape
+      // can be the same thing"): a closed loop of corners, three or more, or
+      // none for a tag that is only a name at a point -- which every tag
+      // saved before this is. `flooring` is the shape standing as FLOORING
+      // too (a finish type; off when absent: "the FLOOR aspect doesn't
+      // always need to be turned on"). `areaShown: false` is the AREA line
+      // under the name switched off ("turn off the room size"); shown is
+      // the default and is not stored.
+      //
+      // THE AREA IS THE SHAPE'S, measured here on every load so what the
+      // Real Estate roll-up reads is the loop as it stands, not a number
+      // from before the corners last moved. A shape whose area is switched
+      // off counts NOTHING: Movie's own habit is a small square per room
+      // with the size off, and nine square feet per room in a floor-area
+      // total would be a wrong total on every listing.
+      const points = (Array.isArray(tag?.points) ? tag.points : [])
+        .map(point).filter(Boolean).map(p => ({ x: p.x, z: p.z }));
+      const shaped = points.length >= 3;
+      const areaShown = tag?.areaShown !== false;
+      const tagFlooring = oneOf(tag?.flooring?.type, FLOORING_TYPES, null);
       return {
         id,
         at,
@@ -1418,7 +1454,10 @@ if (!window.DraftDrawingFormat) {
         view: 'plan',
         name,
         ...(size ? { size } : {}),
-        areaSqFt: area > 0 ? area : 0,
+        ...(shaped ? { points } : {}),
+        ...(shaped && !areaShown ? { areaShown: false } : {}),
+        ...(shaped && tagFlooring ? { flooring: { type: tagFlooring } } : {}),
+        areaSqFt: shaped ? (areaShown ? loopAreaSqFt(points) : 0) : (area > 0 ? area : 0),
         underMin: tag?.underMin === true,
         // ── THE TWO FACTS BEHIND THE UNDER MIN VERDICT ──────────────────
         // underMin is a FINDING, and a finding in a file goes stale the
@@ -2448,6 +2487,11 @@ if (!window.DraftDrawingFormat) {
     stairs,
     notes,
     roomTags,
+    FLOORING_TYPES,
+    FLOORING_FINISHES,
+    ROOM_FLOORING_LIFT_IN,
+    ROOM_FLOORING_THICK_IN,
+    loopAreaSqFt,
     elevationMarks,
     electricDevices,
     fenestrations,

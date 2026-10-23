@@ -2613,6 +2613,25 @@ if (!window.DraftCutView) {
           + ` + ${formatInchesOnly(level.sheathingIn)} SHTG`,
           x + 4, Y((level.floorTop + level.floorBottom) / 2));
       });
+      // THE FLOORING (Movie, 23 Oct): where the cut passes a room whose tag
+      // lays a finish, a line 3/8" above the sheathing and 1/8" thick --
+      // "so hard to see on the section", which is the point. The two
+      // numbers are drawing-format's; a page without it draws no finish.
+      const FMT = window.DraftDrawingFormat;
+      const finished = typeof env.roomTags === 'function' && FMT
+        ? env.roomTags().filter(tag => Number(tag.levelId) === Number(level.id)
+          && tag.flooring && tag.flooring.type && (tag.points || []).length >= 3)
+        : [];
+      if (finished.length) {
+        const lift = FMT.ROOM_FLOORING_LIFT_IN / 12, thick = FMT.ROOM_FLOORING_THICK_IN / 12;
+        ctx.fillStyle = INK; ctx.strokeStyle = INK; ctx.lineWidth = 0.5;
+        floorRuns(cut, axis, finished).forEach(span => {
+          if (span.max - span.min <= 0.1) return;
+          const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
+          const top = Y(level.floorTop + lift + thick);
+          ctx.fillRect(x, top, wid, Math.max(1, thick * pxPerFt));
+        });
+      }
       crossings.filter(c => c.wall.levelId === level.id && (c.wall.view || 'plan') === 'plan')
         .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C, fdn));
     });
