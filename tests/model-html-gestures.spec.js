@@ -856,6 +856,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // A file written out, nothing in the drawing changed: no absence
             // row moves.
             'RESIDENTIAL SUITE', 'COMMERCIAL SUITE', 'CANCEL',
+            // CLOSING A SHELF (Movie, 23 Oct): the X asks "save first or
+            // close without save". Three answers about a shelf already
+            // there; none makes anything, so no absence row moves.
+            'SAVE AS SUITE FIRST', 'CLOSE WITHOUT SAVING', 'CANCEL',
             // TOO BIG (Movie, 20 Oct: "a popup warning good idea"): the
             // brush's refusal said where he is looking, and its one answer.
             // It changes nothing in the drawing, so no absence row moves.
