@@ -1472,7 +1472,7 @@ ${trio(true)}
       const label = opts.label || 'INFO';
       put(`<button class="rail-tab" id="${side}-tab" type="button"\n`
         + `  aria-expanded="false" aria-controls="${side}-rail"\n`
-        + `  title="${opts.title || label}">${label}</button>\n`
+        + `  title="${opts.title || label}"><span class="rail-tab-text">${label}</span></button>\n`
         + `<aside id="${side}-rail" hidden>${opts.html || ''}</aside>`);
       const tab = document.getElementById(`${side}-tab`);
       const panel = document.getElementById(`${side}-rail`);

@@ -1098,6 +1098,16 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:13px;
     font-weight:600; letter-spacing:0.14em; line-height:1;
     writing-mode:vertical-rl; text-transform:uppercase; }
+  /* THE WORD IN A BLOCK OF ITS OWN (Movie, 23 Oct, from a Windows 7
+     machine: "the text isn't turned 90, its typed left to right rather than
+     up down and the tabs stick kindof far onto the screen on each side"). A
+     <button> only honours a vertical writing-mode from Chromium 120 (late
+     2023); Windows 7's last Chromium is 109, where the tab laid its word out
+     flat and grew as wide as the word. A block inside the button turns on
+     every build, and the button wraps whatever its content is. The right
+     edge's run the other way, as their buttons already say. */
+  .rail-tab-text { display:block; writing-mode:vertical-rl; }
+  #right-tab .rail-tab-text, #notes-tab .rail-tab-text, #history-tab .rail-tab-text { writing-mode:vertical-lr; }
   .rail-tab:hover { color: var(--accent); border-color: var(--accent); }
   .rail-tab[hidden] { display:none; }
   /* THE LEFT EDGE CARRIES THREE (Movie, 29 Sep). Same sequence rule the right
