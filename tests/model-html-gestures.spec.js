@@ -671,6 +671,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // roster beside it, and the roster is what grows when the page
             // does.
             'trio-up', 'trio-down',
+            // THE SHELF PREVIEWS ABOVE THE BONE (Movie, 23 Oct): one square
+            // per shelf -- the seeded drawing's one, named for it -- and the
+            // SHELVES tab that puts the row away. Entering a shelf is what
+            // the LEVELS panel's shelf row already did; no absence row moves.
+            'shelf-tab', 'SHELF 1',
             // UNDO ON SCREEN (audit C4) is the Ctrl+Z row's own verb with a
             // button on it: the parity table already has Undo **present**,
             // and a second way to press it makes nothing new.
