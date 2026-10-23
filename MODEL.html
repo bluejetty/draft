@@ -6665,6 +6665,9 @@
       ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
       ctx.restore();
     }
+    // AND ITS HANDLES while RESCALE is up (the function is written with the
+    // verb, further down; by paint time it exists).
+    try { paintRescaleHandles(); } catch { /* not wired yet */ }
   };
 
   // ── THE TWO NORTHS, on the plan and on the button ───────────────────────
@@ -7707,6 +7710,7 @@
     }
     syncRotateVerbs();
     syncFlipVerbs();
+    syncRescaleVerbs();
     syncBreakVerb();
     syncMoveVerb();
     syncWallOffVerb();
@@ -11934,6 +11938,21 @@
 
   const floorAt = worldPt => floors()
     .find(floor => pointInRing(floor.points || [], worldPt)) || null;
+  // A PHOTO'S FOOTPRINT, in feet: centred at x, z, widthFt by heightFt (a
+  // turned one has its sides swapped already, by turnPhoto). Not a DXF,
+  // whose lines are the drawing's own kind of thing.
+  const underlayRect = u => (u && u.kind !== 'dxf' && Number.isFinite(u.widthFt) && Number.isFinite(u.heightFt)
+    ? { left: u.x - u.widthFt / 2, right: u.x + u.widthFt / 2, top: u.z - u.heightFt / 2, bottom: u.z + u.heightFt / 2 }
+    : null);
+  const underlayAt = worldPt => {
+    if (!traceOn) return null;
+    const mine = underlays();
+    for (let i = mine.length - 1; i >= 0; i -= 1) {
+      const r = underlayRect(mine[i]);
+      if (r && worldPt.x >= r.left && worldPt.x <= r.right && worldPt.z >= r.top && worldPt.z <= r.bottom) return mine[i];
+    }
+    return null;
+  };
 
   // An outline is selected WHOLE, from any of its edges or any of its corners.
   const outlineAt = worldPt => {
@@ -12943,6 +12962,13 @@
       const holo = hologramPickAt(worldPt);
       if (holo) return { type: 'hologram', item: holo };
     }
+    // A PHOTO LAST OF ALL (Movie, 23 Oct: "click on the bg photo"): it lies
+    // under everything drawn, so it is picked only where nothing else is,
+    // and only while TRACE shows it.
+    if (filterAllows('underlay')) {
+      const photo = underlayAt(worldPt);
+      if (photo) return { type: 'underlay', item: photo };
+    }
     return null;
   };
 
@@ -12990,7 +13016,7 @@
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
       fixture: fixtures(), stair: stairs(), roof: pickRoofs(), roomtag: roomTags(), shape: shapes(),
       dimension: shownDimensions(), note: notes(), beam: beams(), column: columns(), superNode: superNodes(),
-      hologram: holograms() };
+      hologram: holograms(), underlay: traceOn ? underlays() : [] };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -13015,6 +13041,14 @@
       // select just the NODE so it lights up and the rest of the roof
       // doesn't"): the nodes are lit by paintRoofMoveNode.
       if (type === 'roof' && moveState?.node?.roof === item) return;
+      // A PHOTO IS LIT ROUND ITS EDGE, as it glows in hand.
+      if (type === 'underlay') {
+        const r = underlayRect(item);
+        if (!r) return;
+        const a = toS({ x: r.left, y: 0, z: r.top }), b = toS({ x: r.right, y: 0, z: r.bottom });
+        ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+        return;
+      }
       if (type === 'roomtag' || type === 'note') {
         const b = type === 'note' ? noteBox(item) : roomTagBox(item);
         ctx.save();
@@ -16240,6 +16274,9 @@
     // A HOLOGRAM (Movie, 20 Oct): picked, copied, deleted like an assembly.
     hologram: 'holograms',
     shape: 'shapes',
+    // A PHOTO ON THE SHEET (Movie, 23 Oct): picked where it lies, deleted
+    // like the rest (the card's own DELETE does the same).
+    underlay: 'underlays',
     // A DIMENSION, picked off its line (Movie, 6 Oct: "with the DIMENSION
     // lines, can they be selectable so i can move some if there is a better
     // position"). It deletes like the rest; it is not copied.
@@ -16642,6 +16679,9 @@
   const photoInHand = () => {
     try { return traceMoving?.underlay && !traceMoving.hologram ? traceMoving.underlay : null; } catch { return null; }
   };
+  // THE PHOTO PICKED ON THE SHEET (Movie, 23 Oct), when it is the whole of
+  // the selection: ROTATE turns it, MOVE takes it in hand, RESCALE sizes it.
+  const selectedPhoto = () => (selection.length === 1 && selection[0].type === 'underlay' ? selection[0].item : null);
   const turnPhoto = (underlay, quarters) => {
     const q = ((Math.round(quarters) % 4) + 4) % 4;
     if (!q) return false;
@@ -16708,7 +16748,7 @@
     return wells;
   };
   const rotateSelection = degrees => {
-    const photo = photoInHand();
+    const photo = photoInHand() || selectedPhoto();
     if (photo) {
       if (turnPhoto(photo, degrees / 90)) sayOnStrip(`${photo.name || 'The picture'} turned. UNDO turns it back.`);
       return;
@@ -16861,6 +16901,136 @@
       [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; }); // FLIP's row
     }
   }
+  // ── RESCALE (Movie, 23 Oct) ─────────────────────────────────────────────
+  //
+  // "can we allow the user to click on the bg photo and 'resize' it with a
+  // resize button in bottom left menu area" -- "RESCALE might be a better
+  // term to use" -- "allow them to change it with proportions locked and
+  // also without proportions locked".
+  //
+  // With a photo picked and RESCALE up, eight handles stand on its edge.
+  // A CORNER keeps the proportions: it scales about the opposite corner,
+  // which stays put. A SIDE stretches that one way only, the opposite side
+  // staying put. Never under half a foot. One UNDO per drag.
+  var rescaleState = { open: false, drag: null };
+  const rescaleButton = document.getElementById('model-rescale');
+  const rescaleBar = document.getElementById('rescale-bar');
+  const RESCALE_HANDLE_PX = 7, RESCALE_GRAB_PX = 12, RESCALE_MIN_FT = 0.5;
+  // The eight, in feet: corners first, then the sides' middles.
+  const rescaleHandles = u => {
+    const r = underlayRect(u);
+    if (!r) return [];
+    const cx = (r.left + r.right) / 2, cz = (r.top + r.bottom) / 2;
+    return [
+      { id: 'nw', x: r.left, z: r.top, corner: true }, { id: 'ne', x: r.right, z: r.top, corner: true },
+      { id: 'se', x: r.right, z: r.bottom, corner: true }, { id: 'sw', x: r.left, z: r.bottom, corner: true },
+      { id: 'n', x: cx, z: r.top }, { id: 'e', x: r.right, z: cz }, { id: 's', x: cx, z: r.bottom }, { id: 'w', x: r.left, z: cz },
+    ];
+  };
+  const setRescaleOpen = open => {
+    rescaleState.open = !!open && !!selectedPhoto();
+    if (!rescaleState.open) rescaleState.drag = null;
+    stripRefresh();
+    paint();
+  };
+  function syncRescaleVerbs() {
+    if (!rescaleState || !rescaleButton || !rescaleBar) return;
+    const able = !!selectedPhoto() && !activeCut() && !modalUp();
+    if (!able) { rescaleState.open = false; rescaleState.drag = null; }
+    rescaleButton.hidden = !able || rescaleState.open || !!rotateState?.open || !!flipState?.open;
+    rescaleBar.hidden = !rescaleState.open;
+    if (rescaleState.open) {
+      [deleteButton, undoButton, copyButton, pasteButton, rotateButton, flipButton, moveButton].forEach(b => { if (b) b.hidden = true; });
+    }
+  }
+  if (rescaleButton) rescaleButton.addEventListener('click', () => setRescaleOpen(true));
+  rescaleBar?.querySelector('[data-rescale-done]')?.addEventListener('click', () => setRescaleOpen(false));
+  // THE HANDLES, painted over the picture while RESCALE is up.
+  const paintRescaleHandles = () => {
+    const photo = rescaleState.open ? selectedPhoto() : null;
+    if (!photo) return;
+    ctx.save();
+    ctx.fillStyle = selectHandle();
+    ctx.strokeStyle = skin['surface-page'] || '#000';
+    ctx.lineWidth = 1.5;
+    rescaleHandles(photo).forEach(hd => {
+      const p = toS({ x: hd.x, y: 0, z: hd.z });
+      const half = hd.corner ? RESCALE_HANDLE_PX / 2 + 1 : RESCALE_HANDLE_PX / 2;
+      ctx.beginPath();
+      ctx.rect(p.x - half, p.y - half, half * 2, half * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
+  };
+  // THE DRAG. On the window in the capture phase, ahead of the sheet's own
+  // press, and only while RESCALE is up and the press lands on a handle.
+  const rescaleHandleAt = (photo, sx, sy) => rescaleHandles(photo).find(hd => {
+    const p = toS({ x: hd.x, y: 0, z: hd.z });
+    return Math.hypot(p.x - sx, p.y - sy) <= RESCALE_GRAB_PX;
+  }) || null;
+  const rescaleTo = (drag, at) => {
+    const { before: b0, handle } = drag;
+    const r0 = { left: b0.x - b0.widthFt / 2, right: b0.x + b0.widthFt / 2, top: b0.z - b0.heightFt / 2, bottom: b0.z + b0.heightFt / 2 };
+    const u = drag.underlay;
+    if (handle.corner) {
+      // ABOUT THE OPPOSITE CORNER, by one factor: how far along the diagonal
+      // from that corner the hand has gone.
+      const ax = handle.id.includes('w') ? r0.right : r0.left, az = handle.id.includes('n') ? r0.bottom : r0.top;
+      const dx = handle.x - ax, dz = handle.z - az;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-9) return;
+      const minF = RESCALE_MIN_FT / Math.max(Math.min(b0.widthFt, b0.heightFt), 1e-6);
+      const f = Math.max(minF, ((at.x - ax) * dx + (at.z - az) * dz) / len2);
+      u.widthFt = b0.widthFt * f;
+      u.heightFt = b0.heightFt * f;
+      u.x = ax + (dx * f) / 2;
+      u.z = az + (dz * f) / 2;
+      return;
+    }
+    // A SIDE: that edge to the hand, the opposite edge where it was.
+    if (handle.id === 'e') { const w = Math.max(RESCALE_MIN_FT, at.x - r0.left); u.widthFt = w; u.x = r0.left + w / 2; }
+    if (handle.id === 'w') { const w = Math.max(RESCALE_MIN_FT, r0.right - at.x); u.widthFt = w; u.x = r0.right - w / 2; }
+    if (handle.id === 's') { const h = Math.max(RESCALE_MIN_FT, at.z - r0.top); u.heightFt = h; u.z = r0.top + h / 2; }
+    if (handle.id === 'n') { const h = Math.max(RESCALE_MIN_FT, r0.bottom - at.z); u.heightFt = h; u.z = r0.bottom - h / 2; }
+  };
+  window.addEventListener('pointerdown', event => {
+    if (!rescaleState.open || event.target !== canvas || event.button !== 0) return;
+    const photo = selectedPhoto();
+    if (!photo) return;
+    const rect = canvas.getBoundingClientRect();
+    const handle = rescaleHandleAt(photo, event.clientX - rect.left, event.clientY - rect.top);
+    if (!handle) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    rescaleState.drag = { underlay: photo, handle, before: { ...photo } };
+  }, true);
+  window.addEventListener('pointermove', event => {
+    const drag = rescaleState.drag;
+    if (!drag) return;
+    event.stopImmediatePropagation();
+    const rect = canvas.getBoundingClientRect();
+    rescaleTo(drag, toWorld(event.clientX - rect.left, event.clientY - rect.top));
+    paint();
+  }, true);
+  window.addEventListener('pointerup', event => {
+    const drag = rescaleState.drag;
+    if (!drag) return;
+    event.stopImmediatePropagation();
+    rescaleState.drag = null;
+    const u = drag.underlay, b = drag.before;
+    if (u.widthFt !== b.widthFt || u.heightFt !== b.heightFt || u.x !== b.x || u.z !== b.z) {
+      undoStack.push({ kind: 'props', edits: [{ item: u, before: b }] });
+      markDirty();
+      const F = window.DraftFormatters;
+      const label = ft => (F?.formatArchitecturalInches ? F.formatArchitecturalInches(ft * 12) : `${ft.toFixed(2)} ft`);
+      sayOnStrip(`${u.name || 'The image'} is ${label(u.widthFt)} by ${label(u.heightFt)}. UNDO puts it back; DONE puts RESCALE down.`);
+    }
+    paint();
+  }, true);
+  window.addEventListener('keydown', event => {
+    if (rescaleState.open && event.key === 'Escape') { event.stopImmediatePropagation(); setRescaleOpen(false); }
+  }, true);
   if (flipButton) flipButton.addEventListener('click', () => setFlipOpen(true));
   if (flipBar) {
     flipBar.querySelectorAll('[data-flip-axis]').forEach(btn => btn.addEventListener('click', () =>
@@ -17296,7 +17466,7 @@
       moveState.on = false; moveState.roof = null; moveState.node = null;
     }
     if (moveState.node && roof !== moveState.node.roof) moveState.node = null;
-    moveButton.hidden = !able || !!rotateState?.open || !!flipState?.open;
+    moveButton.hidden = !able || !!rotateState?.open || !!flipState?.open || !!rescaleState?.open;
     moveButton.setAttribute('aria-pressed', String(!!moveState.on));
     document.querySelectorAll('[data-tool-key="move"]').forEach(btn =>
       btn.setAttribute('aria-pressed', String(!!moveState.on)));
@@ -17390,6 +17560,15 @@
   };
   const pressMove = () => {
     if (moveState.on) { endMove(); return; }
+    // A PHOTO PICKED ON THE SHEET GOES IN HAND, the card's own MOVE.
+    const photo = selectedPhoto();
+    if (photo) {
+      setRescaleOpen(false);
+      traceMoving = { underlay: photo, from: null, before: null };
+      sayOnStrip(`Drag ${photo.name || 'the image'} to where it belongs \u2014 ROTATE turns it, Esc to leave it.`);
+      paint();
+      return;
+    }
     const roof = moveRoofHeld();
     if (!roof) {
       if (!selection.length) return;

@@ -799,6 +799,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // beside rotate and move"): a mirror of what is already drawn,
             // about its own middle; it makes nothing, as ROTATE makes nothing.
             'model-flip',
+            // RESCALE (Movie, 23 Oct): a picked photo's handles size what is
+            // already on the sheet; it makes nothing, as FLIP makes nothing.
+            'model-rescale',
             // BREAK (Movie, 18 Oct) cuts a roof in two along a flush gable, or
             // breaks an assembly into its pieces. It divides what is drawn and
             // starts nothing new, so no absence row moves.
@@ -842,6 +845,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             '\u27F2 90', '\u27F3 90', '180', 'DONE',
             // FLIP's own row: left for right, top for bottom, and DONE.
             '\u21C6 L/R', '\u21C5 U/D', 'DONE',
+            // RESCALE's own row (Movie, 23 Oct): its hint is words, its one
+            // press DONE.
+            'DONE',
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
             // one answer.
             'OK',
