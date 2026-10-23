@@ -1339,8 +1339,21 @@
   #beam-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #beam-ask[hidden] { display:none; }
   #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
-  #shelf-suite { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
-  #shelf-suite[hidden] { display:none; }
+  #shelf-suite, #shelf-close { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #shelf-suite[hidden], #shelf-close[hidden] { display:none; }
+  /* THE X THAT CLOSES A SHELF (Movie, 23 Oct): top right of its square
+     above the bone, and at the right end of its row in the LEVELS pane. A
+     span, not a button -- it sits inside the square's and the row's own
+     buttons -- drawn by CSS so the square's name reads as the name alone. */
+  .shelf-close-x { position:absolute; top:1px; right:1px; width:12px; height:12px; line-height:11px;
+    font-size:12px; text-align:center; border-radius:2px; cursor:pointer;
+    color: var(--ink-quiet); background-color: var(--surface-panel); }
+  .shelf-close-x::before { content:'\00d7'; }
+  .shelf-close-x:hover { color: var(--accent); }
+  .shelf-preview { position:relative; }
+  .lv-layer[data-shelf] { position:relative; padding-right:20px; }
+  .lv-layer[data-shelf] .shelf-close-x { top:2px; right:5px; background:none; }
+  .lv-layer[data-active] .shelf-close-x { color: var(--on-accent); }
   /* BESIDE THE ROOF KEY, over the BUILD panel, not over the plan the ROOF
      tool's own edge flip is pressed on. */
   #roof-pick { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
@@ -2488,6 +2501,18 @@
       <button type="button" data-shelf-suite-kind="residential">RESIDENTIAL SUITE</button>
       <button type="button" data-shelf-suite-kind="commercial">COMMERCIAL SUITE</button>
       <button type="button" data-shelf-suite-cancel>CANCEL</button>
+    </div>
+  </div>
+</div>
+<!-- CLOSE A SHELF (Movie, 23 Oct): "a little X ... if they close one ask
+     them if they want to save first or close without save". -->
+<div id="shelf-close" data-shelf-close-ask hidden role="dialog" aria-label="Close this shelf">
+  <div class="promote-card">
+    <p><b>CLOSE <span data-shelf-close-name></span>?</b><br>What is on the shelf goes with it. Suites already brought into a plan stay where they are.</p>
+    <div class="promote-row">
+      <button type="button" data-shelf-close-save>SAVE AS SUITE FIRST</button>
+      <button type="button" data-shelf-close-discard>CLOSE WITHOUT SAVING</button>
+      <button type="button" data-shelf-close-cancel>CANCEL</button>
     </div>
   </div>
 </div>
@@ -10512,7 +10537,7 @@
       if (boneyardActive && Number(shelf.id) === activeShelfId()) {
         row.toggleAttribute('data-active', true);
       }
-      row.textContent = shelf.name || `SHELF ${shelf.id}`;
+      row.append(document.createTextNode(shelf.name || `SHELF ${shelf.id}`), shelfCloseX(shelf));
       row.title = `Show only ${shelf.name || `SHELF ${shelf.id}`} — each shelf `
         + 'keeps its own geometry';
       row.addEventListener('click', event => {
@@ -10722,7 +10747,7 @@
       const label = document.createElement('span');
       label.className = 'shelf-preview-name';
       label.textContent = name;
-      square.append(screen, label);
+      square.append(screen, label, shelfCloseX(shelf));
       square.addEventListener('click', () => enterShelf(Number(shelf.id)));
       // PRESS AND HOLD, THEN DRAG THE SQUARE ONTO A FLOOR PLAN (Movie, 23
       // Oct: "if they click and hold to drag one a suite layout view, can we
@@ -10754,6 +10779,111 @@
       if (screen) paintPlanThumb(screen, boneyardLevelId(Number(square.dataset.shelfPreview)), null);
     });
   };
+  // ── CLOSING A SHELF (Movie, 23 Oct) ─────────────────────────────────────
+  //
+  // "on the SHELF layout views (and also in the layout level area on the
+  // left side where it says SHELF 1) can we have a little X (top right
+  // corner of the SHELF viewports) ... if they close one ask them if they
+  // want to save first or close without save". The X is the same span on a
+  // square and on a row; a press on it asks and does nothing else -- it
+  // neither enters the shelf nor begins the drag a press on a square can.
+  const shelfCloseX = shelf => {
+    const x = document.createElement('span');
+    x.className = 'shelf-close-x';
+    x.dataset.shelfClose = String(shelf.id);
+    x.setAttribute('role', 'button');
+    x.setAttribute('aria-label', `Close ${shelf.name || `SHELF ${shelf.id}`}`);
+    x.title = `Close ${shelf.name || `SHELF ${shelf.id}`}`;
+    const swallow = event => event.stopPropagation();
+    x.addEventListener('pointerdown', swallow);
+    x.addEventListener('dblclick', swallow);
+    x.addEventListener('click', event => { event.stopPropagation(); askShelfClose(Number(shelf.id)); });
+    return x;
+  };
+  const shelfCloseAsk = document.getElementById('shelf-close');
+  let shelfClosePending = null;
+  const askShelfClose = shelfId => {
+    const shelf = shelves().find(sh => Number(sh.id) === shelfId);
+    if (!shelf || !shelfCloseAsk) return;
+    shelfClosePending = shelfId;
+    shelfCloseAsk.querySelector('[data-shelf-close-name]').textContent = shelf.name || `SHELF ${shelfId}`;
+    shelfCloseAsk.hidden = false;
+    setTimeout(() => shelfCloseAsk.querySelector('[data-shelf-close-save]')?.focus(), 0);
+  };
+  const settleShelfClose = choice => {
+    const shelfId = shelfClosePending;
+    shelfClosePending = null;
+    if (shelfCloseAsk) shelfCloseAsk.hidden = true;
+    if (shelfId == null) return;
+    // SAVE FIRST MEANS SAVED: the shelf closes only once its suite file has
+    // been written; a cancelled picker or kind question closes nothing.
+    if (choice === 'save') askShelfSuite(shelfId, () => closeShelf(shelfId));
+    else if (choice === 'discard') closeShelf(shelfId);
+  };
+  if (shelfCloseAsk) {
+    shelfCloseAsk.querySelector('[data-shelf-close-save]').addEventListener('click', () => settleShelfClose('save'));
+    shelfCloseAsk.querySelector('[data-shelf-close-discard]').addEventListener('click', () => settleShelfClose('discard'));
+    shelfCloseAsk.querySelector('[data-shelf-close-cancel]').addEventListener('click', () => settleShelfClose(null));
+  }
+  // WHAT CLOSING TAKES: the shelf's own geometry (everything owned by
+  // -shelfId, deleteLevel's cascade), its masters, and the shelf itself.
+  // Suites brought into a plan are the plan's and stay. THE LAST SHELF IS
+  // EMPTIED, NOT CLOSED: the format always yields one shelf, so closing it
+  // would only bring an empty SHELF 1 straight back under another name.
+  const closeShelf = shelfId => {
+    if (!drawing) return false;
+    const list = shelves();
+    const shelf = list.find(sh => Number(sh.id) === shelfId);
+    if (!shelf) return false;
+    const name = shelf.name || `SHELF ${shelfId}`;
+    const owner = -shelfId;
+    const wasHere = boneyardActive && activeShelfId() === shelfId;
+    setTool(RESTING_TOOL);
+    selection = [];
+    const droppedUnderlays = (drawing.underlays || []).filter(u => u && u.levelId === owner);
+    const goneIds = new Set();
+    LEVEL_OWNED_COLLECTIONS.forEach(field => {
+      if (!Array.isArray(drawing[field])) return;
+      drawing[field].forEach(item => { if (item && item.levelId === owner) goneIds.add(String(item.id)); });
+      drawing[field] = drawing[field].filter(item => !item || item.levelId !== owner);
+    });
+    droppedUnderlays.forEach(underlay => {
+      window.SharedFileStore?.removeNamedFile?.(underlay.id, 'underlays')
+        ?.catch(error => console.warn('Underlay binary removal failed:', error));
+    });
+    if (Array.isArray(drawing.cuts)) drawing.cuts = drawing.cuts.filter(cut => cut && cut.levelId !== owner);
+    if (Array.isArray(drawing.groups)) {
+      drawing.groups.forEach(group => {
+        if (group && Array.isArray(group.members)) group.members = group.members.filter(m => m && !goneIds.has(String(m.id)));
+      });
+      drawing.groups = drawing.groups.filter(g => g && Array.isArray(g.members) && g.members.length >= 2);
+    }
+    if (Array.isArray(drawing.boneyardOutlines)) {
+      drawing.boneyardOutlines = drawing.boneyardOutlines.filter(m => Number(m?.shelfId) !== shelfId);
+    }
+    const rest = list.filter(sh => Number(sh.id) !== shelfId);
+    const emptied = !rest.length;
+    drawing.boneyardShelves = emptied ? [shelf] : rest;
+    if (!emptied && Number(drawing.activeBoneyardShelfId) === shelfId) {
+      drawing.activeBoneyardShelfId = Number(rest[0].id);
+    }
+    // THE HISTORY HOLDS WHAT WAS ON IT: the stack's references point into
+    // records that are gone, so it is cleared, and Ctrl+Z steps back
+    // through the versions, where the shelf still stands.
+    undoStack.length = 0;
+    markDirty();
+    // STANDING ON THE CLOSED SHELF, the drafter is on the next one now: the
+    // active shelf id moved above, and the rebuild reads it.
+    drawStart = null;
+    pendingBone = null;
+    buildChrome();
+    paint();
+    sayOnStrip(emptied
+      ? `${name} is the last shelf, so it is emptied rather than closed.`
+      : `${name} closed${wasHere ? ` \u2014 you are on ${rest[0].name || `SHELF ${rest[0].id}`}` : ''}.`);
+    return true;
+  };
+
   const addShelf = () => {
     if (!drawing) return;
     const list = shelves();
@@ -10849,16 +10979,23 @@
     return out;
   };
   const shelfSuiteAsk = document.getElementById('shelf-suite');
-  const askShelfSuite = () => {
+  // WHICH SHELF THE QUESTION IS ABOUT, and what follows the file being
+  // written: the shelf the drafter stands on, with nothing after, from the
+  // two SAVE AS SUITE presses; the shelf whose X was pressed, and its
+  // closing, from the close card.
+  let shelfSuitePending = null;
+  const askShelfSuite = (shelfId = activeShelfId(), after = null) => {
     if (!drawing || !shelfSuiteAsk) return;
-    const shelf = shelves().find(sh => Number(sh.id) === activeShelfId());
-    const name = shelf?.name || `SHELF ${activeShelfId()}`;
+    const shelf = shelves().find(sh => Number(sh.id) === Number(shelfId));
+    const name = shelf?.name || `SHELF ${shelfId}`;
+    shelfSuitePending = { shelfId: Number(shelfId), after };
     shelfSuiteAsk.querySelector('[data-shelf-suite-name]').textContent = name;
     shelfSuiteAsk.hidden = false;
   };
   const saveShelfSuite = async kind => {
     if (!shelfSuiteAsk) return;
-    const shelfId = activeShelfId();
+    const pending = shelfSuitePending || { shelfId: activeShelfId(), after: null };
+    const shelfId = pending.shelfId;
     const shelf = shelves().find(sh => Number(sh.id) === shelfId);
     const name = `${shelf?.name || `SHELF ${shelfId}`}.draft`;
     // The picker first, from the press: the gesture is spent by the first await.
@@ -10868,13 +11005,21 @@
     const file = shelfSuiteFile(shelfId, kind);
     const count = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors']
       .reduce((n, key) => n + (Array.isArray(file[key]) ? file[key].length : 0), 0);
-    if (!count) { sayOnStrip(`${shelf?.name || 'This shelf'} is empty -- draw the suite on it first.`); return; }
+    if (!count) {
+      // AN EMPTY SHELF HAS NOTHING TO SAVE: closing it is what was asked.
+      shelfSuitePending = null;
+      if (typeof pending.after === 'function') { pending.after(); return; }
+      sayOnStrip(`${shelf?.name || 'This shelf'} is empty -- draw the suite on it first.`);
+      return;
+    }
     await downloadDrawing(JSON.stringify(file), name, handle);
     sayOnStrip(`${name} saved as a ${suiteLabel(kind)} -- BRING IN .DRAFT puts it in a plan; saved again, REFRESH updates every copy.`);
+    shelfSuitePending = null;
+    if (typeof pending.after === 'function') pending.after();
   };
   shelfSuiteAsk?.querySelectorAll('[data-shelf-suite-kind]').forEach(b => b.addEventListener('click', () =>
     saveShelfSuite(b.dataset.shelfSuiteKind)));
-  shelfSuiteAsk?.querySelector('[data-shelf-suite-cancel]')?.addEventListener('click', () => { shelfSuiteAsk.hidden = true; });
+  shelfSuiteAsk?.querySelector('[data-shelf-suite-cancel]')?.addEventListener('click', () => { shelfSuiteAsk.hidden = true; shelfSuitePending = null; });
 
   // DECLARED HERE, FILLED IN WITH THE REST OF THE LOT CARD further down --
   // PROJECT's syncFamilyRow pattern, and for its reason: goToLevel is the
