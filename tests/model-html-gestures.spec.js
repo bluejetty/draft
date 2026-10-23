@@ -775,6 +775,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // NORTH button of 1 Oct before it): it opens the two norths'
             // popup and draws nothing on the house.
             'north-hit',
+            // AND ZOOM TO FILL (Movie, 23 Oct): it moves the camera to frame
+            // what is drawn, and draws nothing.
+            'strip-fill',
             // THE NOTES PAD (Movie, 16 Oct): `notes-tab` opens it under
             // LEVELS / LAYERS and its CLEAR wipes the drafter's own notes. A
             // notepad is words for the drafter, never geometry, so no absence
