@@ -171,6 +171,9 @@
     filter: drop-shadow(0 0 5px var(--draw-origin, #f0b429))
       drop-shadow(0 0 10px color-mix(in srgb, var(--draw-origin, #f0b429) 60%, transparent)); }
   #plan.dragging { cursor:grabbing; }
+  /* A FILE HELD OVER THE SHEET (Movie, 23 Oct): the sheet says it will take
+     it, in the accent, inside its own edge. */
+  #plan.drop-here { outline:3px dashed var(--accent); outline-offset:-6px; }
   /* Over a grabbable corner. Declared AFTER .dragging so it wins while a
      corner is actually being dragged -- equal specificity, later rule. */
   #plan.over-corner, #plan.over-wall { cursor:move; }
@@ -28845,6 +28848,7 @@
   const tq = sel => traceCard.querySelector(sel);
   const TRACE_OPACITY = 0.4;
   let traceScan = null;      // the file being inspected (pdf-scan's record)
+  let traceDropAt = null;    // where a dropped file was let go, in feet (23 Oct)
   let tracePage = 1;
   let traceCalOn = false;
 
@@ -29124,8 +29128,10 @@
     const underlay = {
       id, levelId: activeLevelId(), kind: keepVector ? 'pdf' : 'image', name: scan.file.name,
       page: scan.kind === 'pdf' ? tracePage : 1,
-      // Dropped where the drafter is looking.
-      x: view.cx, z: view.cz, widthFt: size.widthFt, heightFt: size.heightFt,
+      // Dropped where the drafter is looking -- or, since 23 Oct, where the
+      // hand let the file go on the sheet.
+      x: traceDropAt ? traceDropAt.x : view.cx, z: traceDropAt ? traceDropAt.z : view.cz,
+      widthFt: size.widthFt, heightFt: size.heightFt,
       opacity: TRACE_OPACITY,
       scaleRaw: scale ? scale.raw : null, scaleRatio: scale ? scale.ratio : null,
       scaleUnit: scale ? scale.unit : null, layer: 'UNDERLAY',
@@ -30420,7 +30426,49 @@
   traceFile.addEventListener('change', () => {
     const file = traceFile.files && traceFile.files[0];
     traceFile.value = '';
+    traceDropAt = null;
     if (file) inspectTraceFile(file);
+  });
+  // ── A FILE DROPPED ON THE SHEET (Movie, 23 Oct) ───────────────────────
+  //
+  // "if a user is in their file with pdfs or image and want to DRAG and DROP
+  // on onto the model space area, can we allow them to bring it in as a
+  // background image/pdf?" The drop is the picker's press: the file the hand
+  // lets go of over the sheet goes to inspectTraceFile, which asks the scale
+  // and inserts it under the level the way BRING IN does -- and it lands
+  // centred where it was let go (traceDropAt), not where the view happens to
+  // be looking. A PDF, a photo, a DXF (the picker's own kinds); anything
+  // else, the strip says what the sheet takes.
+  //
+  // THE WHOLE WINDOW REFUSES THE BROWSER'S OWN DROP: left to itself a
+  // browser opens a dropped file in place of the page, and a file let go an
+  // inch off the sheet, on a panel, would throw the drawing away.
+  const DROP_FILE_KINDS = /\.(pdf|png|jpe?g|webp|gif|bmp|dxf|dwg)$/i;
+  const dropCarriesFiles = event => Array.from(event.dataTransfer?.types || []).includes('Files');
+  const overSheet = event => event.target === canvas && !!drawing;
+  window.addEventListener('dragover', event => {
+    if (!dropCarriesFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = overSheet(event) ? 'copy' : 'none';
+    canvas.classList.toggle('drop-here', overSheet(event));
+  });
+  window.addEventListener('dragleave', event => {
+    if (event.target === canvas) canvas.classList.remove('drop-here');
+  });
+  window.addEventListener('drop', event => {
+    if (!dropCarriesFiles(event)) return;
+    event.preventDefault();
+    canvas.classList.remove('drop-here');
+    if (!overSheet(event)) return;
+    const files = Array.from(event.dataTransfer.files || []);
+    const file = files.find(f => DROP_FILE_KINDS.test(f.name) || /^(image\/|application\/pdf$)/.test(f.type));
+    if (!file) {
+      sayOnStrip('The sheet takes a PDF, a photo (PNG, JPG, WEBP, GIF, BMP) or a DXF to trace over; a .draft comes in through OPEN or BRING IN.');
+      return;
+    }
+    traceDropAt = tracePoint(event);
+    inspectTraceFile(file);
+    if (files.length > 1) sayOnStrip(`${file.name} first \u2014 one file at a time.`);
   });
   tq('[data-trace-cancel]').addEventListener('click', closeTraceCard);
   tq('[data-trace-other]').addEventListener('click', () => traceFile.click());
