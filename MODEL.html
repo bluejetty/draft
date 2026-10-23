@@ -1250,6 +1250,34 @@
   .seat[disabled]:hover { border-color: var(--edge-panel); }
   .seat canvas { display:block; width:82px; height:54px; }
   .seat[disabled] canvas { opacity:0.25; }
+  /* THE SHELF PREVIEWS, CENTRED ABOVE THE BONE (Movie, 23 Oct): "little
+     square preview windows showing the SHELF items. if only one make it
+     centered above the bone, if more are added continue to center them
+     above the bone" -- and "make those SHELF squares retractable into a
+     SHELFS tab that will be positioned just above the bone when closed
+     (centered)". Mounted inside #dt-bar, whose left is the sheet's axis;
+     bottom:100% stands it on the foot strip's top edge, and the transform
+     makes the axis the strip's MIDDLE, however many squares it holds. */
+  #shelf-strip { position:absolute; left:0; bottom:100%; transform:translateX(-50%);
+    margin-bottom:4px; display:flex; flex-direction:column; align-items:center; gap:4px;
+    pointer-events:auto; }
+  #shelf-strip[hidden] { display:none; }
+  #shelf-previews { display:flex; align-items:flex-end; gap:6px; }
+  #shelf-previews[hidden] { display:none; }
+  .shelf-preview { width:72px; padding:0; cursor:pointer; overflow:hidden; text-align:center;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border:1px solid var(--edge-panel); border-radius:4px; }
+  .shelf-preview canvas { display:block; width:70px; height:70px; }
+  .shelf-preview .shelf-preview-name { display:block; padding:2px 3px 3px; font-size:9px;
+    letter-spacing:.04em; text-transform:uppercase; color: var(--ink-secondary, var(--ink-primary));
+    border-top:1px solid var(--edge-panel); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .shelf-preview:hover { border-color: var(--accent); }
+  .shelf-preview[data-active] { border-color: var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  #shelf-tab { padding:2px 10px; font-size:10px; letter-spacing:.08em; cursor:pointer; line-height:1.4;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
+  #shelf-tab:hover { color: var(--accent); border-color: var(--accent); }
   .seat-label { padding:3px 4px 4px; border-top:1px solid var(--edge-panel);
     font-family: var(--font-ui); font-size:8px; font-weight:600;
     letter-spacing:0.04em; text-transform:uppercase; color: var(--ink-quiet);
@@ -3596,7 +3624,7 @@
   // A SHOWN HOLOGRAM IS ON THE SHEET TOO: its walls, where they are placed.
   // Main view only, like the marks below -- a rail thumbnail is this house.
   const hologramFramePoints = () => (window.DraftHologram ? window.DraftHologram.framePoints(drawing) : []);
-  const fit = (wide = false) => {
+  const fit = (wide = false, margin = 0.86) => {
     const own = allPoints(wide);
     const pts = thumbTarget || shootingPaper ? own : own.concat(hologramFramePoints());
     // THE EMPTY TEST STILL STANDS HERE FOR EVERY OTHER LEVEL, and only moves
@@ -3660,7 +3688,9 @@
           });
         }
       }
-      (siteMarkRing() || autoElevationCuts()).forEach(cut => {
+      // THE E MARKS AS DRAWN (eMarksDrawn): none on the shelf, so a shelf's
+      // fit frames the suite and not the house's ring round nothing.
+      eMarksDrawn().forEach(cut => {
         if (cut.startPt) framed.push(cut.startPt);
         if (cut.endPt) framed.push(cut.endPt);
       });
@@ -3679,7 +3709,6 @@
     // and a zero-extent one must not divide by zero.
     const spanX = Math.max(maxX - minX, 1);
     const spanZ = Math.max(maxZ - minZ, 1);
-    const margin = 0.86;
     view.scale = Math.min(cssW / spanX, openH / spanZ) * margin;
     view.scale = Math.max(0.25, Math.min(view.scale, 200));
     // CENTRE IN THE OPEN BAND, not on the canvas. toS puts view.cz at cssH/2
@@ -10344,6 +10373,7 @@
     const saveAsButton = document.getElementById('file-save-as');
     if (saveButton) saveButton.disabled = !drawing;
     if (saveAsButton) saveAsButton.disabled = !drawing;
+    buildShelfStrip();
   };
 
   // ONE WAY INTO THE BONEYARD, and one way out. The card and every shelf row
@@ -10371,6 +10401,82 @@
     paint();
   };
 
+  // ENTERING A SHELF FRAMES ITS ITEM (Movie, 23 Oct: "when a user enters a
+  // SHELF can the zoom go to center the item in the viewport and leave a
+  // little extra space on the sides"): the page's own fit, with a roomier
+  // margin than a floor's, once the shelf is the drafting context.
+  const SHELF_FIT_MARGIN = 0.74;
+  const enterShelf = shelfId => {
+    goToBoneyard(shelfId);
+    fit(false, SHELF_FIT_MARGIN);
+    paint();
+  };
+  // THE SHELF PREVIEWS ABOVE THE BONE (Movie, 23 Oct; see #shelf-strip's
+  // CSS). One square per shelf, each a miniature of the shelf drawn by the
+  // page's own painters (paintPlanThumb, the rail's seats' way), the shelf
+  // the drafter stands on lit; a press enters that shelf. The row retracts
+  // into a SHELVES tab, remembered with the lights (keepLight).
+  let shelfStripOpen = stored.shelfStrip !== false;
+  const shelfStrip = () => document.getElementById('shelf-strip');
+  const buildShelfStrip = () => {
+    const bar = document.getElementById('dt-bar');
+    if (!bar) return;
+    let strip = shelfStrip();
+    if (!strip) {
+      strip = document.createElement('div');
+      strip.id = 'shelf-strip';
+      strip.dataset.shelfStrip = '';
+      const previews = document.createElement('div');
+      previews.id = 'shelf-previews';
+      previews.dataset.shelfPreviews = '';
+      const tab = document.createElement('button');
+      tab.id = 'shelf-tab';
+      tab.type = 'button';
+      tab.dataset.shelfTab = '';
+      tab.addEventListener('click', () => {
+        shelfStripOpen = !shelfStripOpen;
+        keepLight('shelfStrip', shelfStripOpen);
+        buildShelfStrip();
+      });
+      strip.append(previews, tab);
+      bar.append(strip);
+    }
+    const list = drawing ? shelves() : [];
+    strip.hidden = !list.length;
+    const tab = strip.querySelector('#shelf-tab');
+    tab.textContent = `SHELVES ${shelfStripOpen ? '\u25BE' : '\u25B4'}`;
+    tab.title = shelfStripOpen ? 'Put the shelf previews away' : 'Show the shelf previews';
+    strip.dataset.open = String(shelfStripOpen);
+    const previews = strip.querySelector('#shelf-previews');
+    previews.hidden = !shelfStripOpen;
+    previews.innerHTML = '';
+    list.forEach(shelf => {
+      const square = document.createElement('button');
+      square.type = 'button';
+      square.className = 'shelf-preview';
+      square.dataset.shelfPreview = String(shelf.id);
+      const name = shelf.name || `SHELF ${shelf.id}`;
+      square.title = `Go to ${name}`;
+      if (boneyardActive && Number(shelf.id) === activeShelfId()) square.toggleAttribute('data-active', true);
+      const screen = document.createElement('canvas');
+      screen.width = 140; screen.height = 140;
+      const label = document.createElement('span');
+      label.className = 'shelf-preview-name';
+      label.textContent = name;
+      square.append(screen, label);
+      square.addEventListener('click', () => enterShelf(Number(shelf.id)));
+      previews.append(square);
+    });
+    paintShelfPreviews();
+  };
+  const paintShelfPreviews = () => {
+    const strip = shelfStrip();
+    if (!strip || strip.hidden || !shelfStripOpen || !drawing) return;
+    strip.querySelectorAll('.shelf-preview').forEach(square => {
+      const screen = square.querySelector('canvas');
+      if (screen) paintPlanThumb(screen, boneyardLevelId(Number(square.dataset.shelfPreview)), null);
+    });
+  };
   const addShelf = () => {
     if (!drawing) return;
     const list = shelves();
@@ -11044,6 +11150,9 @@
       return;
     }
     railQueue = null;
+    // AND THE SHELF PREVIEWS ABOVE THE BONE, after the seats: the same
+    // epoch, the same painters, the same deferred frame.
+    paintShelfPreviews();
     railPassEnv = null;
     // THE NUMBER THE WHOLE LIVE-THUMBNAIL DECISION RESTS ON, on screen
     // rather than in a commit message. The spec recommended label-only seats
