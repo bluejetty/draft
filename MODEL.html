@@ -4770,8 +4770,11 @@
     // file named for the shelf -- so the square and the copies read as one
     // unit type at a glance. A shelf no copy has come from yet keeps the
     // plain aqua.
+    // AND NOT WHEN THE SHELF HAS SUPER NODES OF ITS OWN: those replace the
+    // four corners, as a suite's own do (suiteSuperNodes), and are drawn
+    // above as the house's are, the one on the target gold.
     const shelfLevel = activeLevelId();
-    if (shelfLevel < 0 && H()?.shelfSuperNodes) {
+    if (shelfLevel < 0 && !superNodes().length && H()?.shelfSuperNodes) {
       const ink = shelfColourOf(shelves().find(sh => -Number(sh.id) === shelfLevel))?.ink || null;
       H().shelfSuperNodes(walls(), shelfLevel).forEach(n => superDot(n.point, { ring: true, gold: n.registration === true, ink }));
     }

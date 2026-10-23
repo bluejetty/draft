@@ -125,3 +125,27 @@ test('on the shelf itself the corners wear the same colour, and its registration
   }
   expect(await page.locator('#plan').getAttribute('data-gold-super-nodes')).toBe('1');
 });
+
+test('a shelf with super nodes of its own shows those, not the four corners', async ({ page }) => {
+  // The same rule a suite has: its own super nodes replace the corners. The
+  // 1BDEN shelf gets one of its own on its target corner; its square draws
+  // that one gold and no green ring, and the sheet, standing on the shelf,
+  // counts one gold node, not two.
+  const f = drawing();
+  f.superNodes = [{ id: 'sn1', levelId: -1, view: 'plan', point: P(100 - 1.75 / 12, 52 + 1.75 / 12) }];
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html?level=3&right=1');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  if (await page.locator('#shelf-previews').isHidden()) await page.locator('#shelf-tab').click();
+  const { green } = await inks(page);
+  await page.waitForTimeout(300);
+  expect(await count(page.locator('.shelf-preview').nth(0).locator('canvas'), rgb(green)), 'no green corner in its square').toBe(0);
+  await page.locator('.shelf-preview').nth(0).click();
+  await expect(page.locator('#readout')).toContainText('walls 4/');
+  await page.waitForTimeout(300);
+  expect(await page.locator('#plan').getAttribute('data-gold-super-nodes')).toBe('1');
+});
