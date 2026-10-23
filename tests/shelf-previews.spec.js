@@ -95,11 +95,15 @@ test('the squares start retracted in a SHELVES tab centred above the bone; the t
   await expect(page.locator('#shelf-previews')).toBeHidden();
   await expect(strip(page)).toHaveAttribute('data-open', 'false');
   expect(Math.abs(await centreX(page.locator('#shelf-tab')) - await centreX(page.locator('#bone'))), 'the tab centred above the bone').toBeLessThan(2);
-  // RETRACTED, THE TAB COVERS NOTHING A PRESS WANTS: the fitted house's
-  // south wall stands above it.
+  // RETRACTED, THE TAB COVERS NO SHEET: it sits inside the foot bar's own
+  // top band, above the bone, so a press at the sheet's foot lands on the
+  // sheet.
   const tabBox = await page.locator('#shelf-tab').boundingBox();
-  const { at } = await h.planFrame(page);
-  expect(at(30, 30)[1] + 12, 'the south wall and its grab zone clear of the tab').toBeLessThan(tabBox.y);
+  const barBox = await page.locator('#house-strip').boundingBox();
+  expect(tabBox.y, 'inside the bar').toBeGreaterThanOrEqual(barBox.y - 0.5);
+  expect(tabBox.y, 'above the bone').toBeLessThan((await page.locator('#bone').boundingBox()).y);
+  expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [tabBox.x + tabBox.width / 2, barBox.y - 2]),
+    'a hair above the bar it is the sheet').toBe('plan');
   await page.locator('#shelf-tab').click();
   await expect(page.locator('#shelf-previews')).toBeVisible();
   await page.reload();

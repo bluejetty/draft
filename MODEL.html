@@ -1255,11 +1255,16 @@
      centered above the bone, if more are added continue to center them
      above the bone" -- and "make those SHELF squares retractable into a
      SHELFS tab that will be positioned just above the bone when closed
-     (centered)". Mounted inside #dt-bar, whose left is the sheet's axis;
-     bottom:100% stands it on the foot strip's top edge, and the transform
-     makes the axis the strip's MIDDLE, however many squares it holds. */
-  #shelf-strip { position:absolute; left:0; bottom:100%; transform:translateX(-50%);
-    margin-bottom:4px; display:flex; flex-direction:column; align-items:center; gap:4px;
+     (centered)". Mounted inside #dt-bar, whose left is the sheet's axis,
+     and the transform makes the axis the strip's MIDDLE, however many
+     squares it holds. THE TAB SITS INSIDE THE BAR'S OWN TOP BAND, not over
+     the sheet: the strip's foot is one tab's height (14px, clear of the
+     bone's top) below the bar's top edge, so retracted it covers nothing a
+     press on the sheet wants
+     (typed-drag's line at the sheet's foot landed on it, measured), and
+     opened the squares rise above the bar. */
+  #shelf-strip { position:absolute; left:0; bottom:calc(100% - 14px); transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:4px;
     pointer-events:auto; }
   #shelf-strip[hidden] { display:none; }
   #shelf-previews { display:flex; align-items:flex-end; gap:6px; }
@@ -1273,7 +1278,8 @@
     border-top:1px solid var(--edge-panel); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .shelf-preview:hover { border-color: var(--accent); }
   .shelf-preview[data-active] { border-color: var(--accent); box-shadow:0 0 0 1px var(--accent); }
-  #shelf-tab { padding:2px 10px; font-size:10px; letter-spacing:.08em; cursor:pointer; line-height:1.4;
+  #shelf-tab { height:14px; box-sizing:border-box; padding:0 8px; font-size:8px; letter-spacing:.08em;
+    cursor:pointer; line-height:12px;
     color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
@@ -3595,18 +3601,20 @@
     };
     const top = tall('strip');
     // AND THE SHELF PREVIEWS' BAND ABOVE THE BAR (#shelf-strip), while the
-    // squares are UP: they stand on the bar's top edge, over the sheet, and
-    // a drawing fitted under them would have its foot where a press lands on
-    // a square instead of on the wall (model-tool-select's south wall did,
-    // measured). Retracted, the tab alone sits inside the fit's own margin
-    // and the band is as it was -- the offset a taller bottom bar puts on
-    // the centre is one several specs stand on. The margin is the strip's
-    // own (margin-bottom:4px).
+    // squares are UP: they rise over the sheet, and a drawing fitted under
+    // them would have its foot where a press lands on a square instead of
+    // on the wall (model-tool-select's south wall did, measured). What is
+    // counted is the part of the strip ABOVE the bar's top edge, plus a
+    // hair of air. Retracted, the tab sits inside the bar and the band is
+    // as it was -- the offset a taller bottom bar puts on the centre is
+    // one several specs stand on.
     const stripBand = () => {
       const el = document.getElementById('shelf-strip');
-      if (!el || el.hidden || el.dataset.open !== 'true') return 0;
-      const r = el.getBoundingClientRect();
-      return Number.isFinite(r?.height) && r.height ? r.height + 4 : 0;
+      const bar = document.getElementById('house-strip');
+      if (!el || !bar || el.hidden || el.dataset.open !== 'true') return 0;
+      const r = el.getBoundingClientRect(), b = bar.getBoundingClientRect();
+      const above = Number.isFinite(r?.top) && Number.isFinite(b?.top) ? b.top - r.top : 0;
+      return above > 0 ? above + 4 : 0;
     };
     const bottom = Math.max(tall('house-strip') - hemOf('house-strip'), 0) + stripBand();
     // ── AND NOT THE SIDE TABS, WHICH WAS TRIED AND MEASURED ────────────
