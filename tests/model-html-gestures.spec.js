@@ -842,6 +842,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             '\u27F2 90', '\u27F3 90', '180', 'DONE',
             // FLIP's own row: left for right, top for bottom, and DONE.
             '\u21C6 L/R', '\u21C5 U/D', 'DONE',
+            // RESCALE's own row (Movie, 23 Oct): its hint is words, its one
+            // press DONE.
+            'DONE',
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
             // one answer.
             'OK',
