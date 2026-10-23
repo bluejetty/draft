@@ -35973,9 +35973,15 @@
           // MIN 0 FEET, not the drawn run's 1: a nudge of less than half a foot
           // rounds back to where the corner started, and a corner that stayed
           // put is the honest answer to a hand that barely moved.
-          const landed = snapped || (tracked ? tracked.pt : null) || (footOn
-            ? onTheFoot(from, { x: wanted.x, z: wanted.z }, 0)
-            : wanted);
+          // THE CROSS LINE KEEPS ONLY THE AXIS IT WON; the foot still rounds
+          // the other (the body drag's own rule: "the catch keeps the across
+          // it won; the along is rounded"), so a 2.4 ft pull along a line
+          // some corner shares still lands on the foot.
+          const footed = footOn ? onTheFoot(from, { x: wanted.x, z: wanted.z }, 0) : wanted;
+          const landed = snapped || (tracked
+            ? { x: tracked.rays.some(r => r.axis === 'x') ? tracked.pt.x : footed.x,
+              z: tracked.rays.some(r => r.axis === 'z') ? tracked.pt.z : footed.z }
+            : footed);
           // AND WITHIN AN INCH OF A LINE THE RUN CROSSES, THE END IS ON IT
           // (inchJoin): a catch that beats the foot, as every catch does.
           const joined = board !== 'toy'
