@@ -83,6 +83,9 @@ function loadDraftModules() {
     // harnesses that read it require()d it themselves and so could not be
     // mutated.
     'areas.js',
+    // AND THE QUANTITIES OFF THE DRAWING (Movie, 23 Oct), with the spec
+    // master whose order and numbers they are laid out under.
+    'spec-master.js', 'estimates.js',
     'room-standards.js', 'level-assembly.js',
     // AND THE STOREY LADDER, which layout-plan reads to find the floor
     // below a plan and the beams under a deck (joistCalloutsFor). Without
