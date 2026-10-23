@@ -796,6 +796,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // beside rotate and move"): a mirror of what is already drawn,
             // about its own middle; it makes nothing, as ROTATE makes nothing.
             'model-flip',
+            // RESCALE (Movie, 23 Oct): a picked photo's handles size what is
+            // already on the sheet; it makes nothing, as FLIP makes nothing.
+            'model-rescale',
             // BREAK (Movie, 18 Oct) cuts a roof in two along a flush gable, or
             // breaks an assembly into its pieces. It divides what is drawn and
             // starts nothing new, so no absence row moves.
