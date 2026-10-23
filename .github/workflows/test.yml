@@ -84,8 +84,13 @@ jobs:
     # every elevation row to repaint -- and was cancelled at 15m04s, all six
     # playwright shards green beside it. Same cancelled-not-red failure, same
     # remedy: the ceiling sits clear of the work, not on top of it.
+    #
+    # AND AGAIN (23 Oct): 20 -> 30. #872's job ran 18m40s and #873's was
+    # cancelled at 20m00s with every shard green beside it -- the same
+    # failure a fourth time, the sweep having grown to 160 engines. The
+    # remedy is the same; the ceiling is a ceiling for a hang.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       # @v7 ON ALL THREE ACTIONS, AND THE MAJOR WAS CHECKED PER ACTION.
       #
