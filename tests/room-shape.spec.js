@@ -216,7 +216,8 @@ test('SHOW AREA off counts nothing; a FLOORING picks a finish; the file carries 
   // The format: two corners are no shape; a bad finish is no flooring.
   const out = await page.evaluate(() => window.DraftDrawingFormat.roomTags([
     { id: 1, at: { x: 0, z: 0 }, levelId: 3, name: 'A', points: [{ x: 0, z: 0 }, { x: 1, z: 0 }], flooring: { type: 'tile' } },
-    { id: 2, at: { x: 0, z: 0 }, levelId: 3, name: 'B', points: [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 2 }], flooring: { type: 'marble' }, areaShown: false },
+    { id: 2, at: { x: 0, z: 0 }, levelId: 3, name: 'B', flooring: { type: 'marble' }, areaShown: false,
+      points: [{ x: 0, z: 0, link: { wallId: 'n', end: 'start', dx: 0.15, dz: 0.15 } }, { x: 2, z: 0, link: { wallId: 'n', end: 'middle', dx: 1, dz: 1 } }, { x: 2, z: 2 }] },
   ], new Set([3])));
   expect(out[0].points).toBeUndefined();
   expect(out[0].flooring).toBeUndefined();
@@ -224,6 +225,9 @@ test('SHOW AREA off counts nothing; a FLOORING picks a finish; the file carries 
   expect(out[1].flooring).toBeUndefined();
   expect(out[1].areaShown).toBe(false);
   expect(out[1].areaSqFt).toBe(0);
+  // A corner's link to a wall's end is kept; one naming no end is no link.
+  expect(out[1].points[0].link).toEqual({ wallId: 'n', end: 'start', dx: 0.15, dz: 0.15 });
+  expect(out[1].points[1].link).toBeUndefined();
 });
 
 test('a dropped WC brings its tag, shaped to the room\'s inside and tiled; one UNDO takes it with the room', async ({ page }) => {

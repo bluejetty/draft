@@ -1941,10 +1941,16 @@ if (!window.DraftRender2D) {
     if (!finish && env.isPrinting) return;
     const screen = pts.map(p => toS({ x: p.x, y: 0, z: p.z }));
     const colour = env.flooringColor || env.color;
+    // THE LOOP AS A PATH, traced twice where a finish is laid: once to clip
+    // the joints to, and again to stroke the edge -- the joints' own path
+    // replaces the first, and a path is not part of what save/restore keeps.
+    const trace = () => {
+      ctx.beginPath();
+      screen.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+    };
     ctx.save();
-    ctx.beginPath();
-    screen.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-    ctx.closePath();
+    trace();
     if (finish) {
       ctx.save();
       ctx.clip();
@@ -1981,6 +1987,7 @@ if (!window.DraftRender2D) {
         ctx.stroke();
       }
       ctx.restore();
+      trace();
       ctx.strokeStyle = atAlpha(colour, 0.8);
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
