@@ -148,11 +148,19 @@
      The hand is still here and still takes the press; what went is the panel
      it used to draw under itself on hover -- the arrow lights up instead, in
      paintNorth, because it is painted on the canvas and CSS cannot reach it. */
-  #north-hit { border:0; padding:0; background:transparent; cursor:pointer; border-radius:50%; }
-  /* MATCHED TO THE ARROW, and square: 40px against the arrow's 41. */
-  #strip-rotate { display:flex; align-items:center; justify-content:center; width:40px; height:40px;
-    border:1px solid var(--edge-panel); border-radius:6px; cursor:pointer; color:#ffffff;
+  /* THREE MATCHED CHIPS (Movie, 23 Oct, with a mockup): "update the NORTH
+     arrow make it look like the other button" and "add a ZOOM TO FILL". The
+     arrow's hand, HOUSE turn and ZOOM TO FILL wear one 40px box; the arrow
+     is painted on the little canvas inside its own, by the same painter
+     that drew it bare on the sheet from 14 Oct to today. */
+  #north-dock .dock-chip { display:flex; align-items:center; justify-content:center; width:40px; height:40px;
+    padding:0; border:1px solid var(--edge-panel); border-radius:6px; cursor:pointer; color:#ffffff;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
+  #north-hit canvas { display:block; width:38px; height:38px; }
+  /* GREEN UNDER THE HAND, the site mark's own (14 Oct); the needles glow
+     the same green, painted. */
+  #north-hit:hover, #north-hit:focus-visible { border-color: var(--draw-site-datum, #6a9a57); }
+  #strip-fill:hover, #strip-fill:focus-visible { border-color: var(--accent); color: var(--accent); }
   /* GOLD, AND THE SAME GOLD THE HOUSE MARK WEARS -- draw-origin, read here as
      the CSS twin of the key paintOrigin paints with. The LETTERING is tinted
      and the glow is the colour at strength, which is his "glow from the WHITE
@@ -1639,15 +1647,27 @@
   <label id="length-hint-off"><input type="checkbox" id="length-hint-hide" data-length-hint-off /> DON'T SHOW THIS AGAIN</label>
 </div>
 <div id="north-dock" hidden>
-  <button type="button" id="north-hit" data-north-button data-north-hit
-    title="NORTH — click to set construction north and true north" aria-label="North arrows"></button>
-  <button type="button" id="strip-rotate" data-mode-rotate
+  <button type="button" id="north-hit" class="dock-chip" data-north-button data-north-hit
+    title="NORTH — click to set construction north and true north" aria-label="North arrows"><canvas data-north-face width="76" height="76" aria-hidden="true"></canvas></button>
+  <button type="button" id="strip-rotate" class="dock-chip" data-mode-rotate
     title="TURN THE HOUSE — a quarter turn clockwise; the elevations turn with it and E1 stays the front">
     <svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <path d="M4.6 9.2 L8 6.3 L11.4 9.2"></path>
       <path d="M5.8 9.2 V12.3 H10.2 V9.2"></path>
       <path d="M2.7 7.6 A6.3 6.3 0 0 1 13.3 7.6" stroke-width="1"></path>
       <path d="M11.9 6.2 L13.5 7.8 L11.9 9" stroke-width="1"></path>
+    </svg>
+  </button>
+  <!-- ZOOM TO FILL (Movie, 23 Oct): "fill the screen with the OBJECTS DRAWN
+       and add 20% padding without dimensions (from the building) and 10% if
+       dimensions (from the dimensions)". Four corners closing on a house. -->
+  <button type="button" id="strip-fill" class="dock-chip" data-zoom-fill
+    title="ZOOM TO FILL — fill the sheet with what is drawn: a fifth of air round the building, a tenth round its dimensions">
+    <svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M2 5.5 V2 H5.5"></path><path d="M10.5 2 H14 V5.5"></path>
+      <path d="M14 10.5 V14 H10.5"></path><path d="M5.5 14 H2 V10.5"></path>
+      <path d="M5.2 8.6 L8 6.3 L10.8 8.6"></path>
+      <path d="M6.2 8.6 V11 H9.8 V8.6"></path>
     </svg>
   </button>
 </div>
@@ -3739,6 +3759,83 @@
     // half the DIFFERENCE between the bars, in feet. Equal bars, no offset,
     // which is why this was invisible while they matched.
     view.cz = (minZ + maxZ) / 2 - (ins.top - ins.bottom) / 2 / view.scale;
+  };
+
+  // ── ZOOM TO FILL ──────────────────────────────────────────────────────
+  //
+  // Movie, 23 Oct: "add a ZOOM TO FILL - fill the screen with the OBJECTS
+  // DRAWN and add 20% padding without dimensions (from the building) and 10%
+  // if dimensions (from the dimensions)".
+  //
+  // WHAT IS FRAMED is everything drawn on this level: walls, lines, floors,
+  // roofs, outlines, shapes, columns, beams, stairs, notes and room tags, and
+  // a hologram standing on the sheet -- not the E marks, which fit() frames
+  // and which are not objects drawn. With dimension strings showing, the
+  // frame is theirs: each string's drawn line stands DIM_LINE_PX off its
+  // record on the screen, and its figure a little beyond that, so the
+  // stand-off is folded in at the scale the frame lands on (two passes: the
+  // stand-off is pixels, the frame is feet).
+  //
+  // THE PADDING is a share of the framed span, each side: a fifth of the
+  // building's span round the building, a tenth of the strings' round the
+  // strings. "20%" read as 20% of what is being framed rather than of the
+  // sheet -- the building fills 1/1.4 of the sheet's tight axis, which is
+  // the "little extra space" of the shelf fit he liked, and with dimensions
+  // 1/1.2, tighter, since the figures already stand off the house.
+  const ZOOM_FILL_PAD = { plain: 0.20, dims: 0.10 };
+  // THE FIGURE OVER THE LINE: the line is DIM_LINE_PX off the record (19) and
+  // the figure sits about 13px past it.
+  const DIM_FILL_PX = 32;
+  const zoomFillPoints = () => {
+    const pts = [];
+    const push = p => { if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) pts.push(p); };
+    walls().forEach(w => { push(w.start); push(w.end); });
+    lines().forEach(l => { push(l.start); push(l.end); });
+    [floors(), roofs(), outlines(), shapes()].forEach(list => list.forEach(item => (item.points || []).forEach(push)));
+    columns().forEach(c => push(c.point));
+    beams().forEach(b => { push(b.start); push(b.end); });
+    stairs().forEach(st => { push(st.start); push(st.end); (st.points || []).forEach(push); });
+    notes().forEach(n => { push(n.anchor); push(n.text); });
+    roomTags().forEach(t => push(t.at));
+    if (!thumbTarget && !shootingPaper) hologramFramePoints().forEach(push);
+    return pts;
+  };
+  const zoomToFill = () => {
+    if (!drawing) return false;
+    const own = zoomFillPoints();
+    const dims = shownDimensions().filter(d => d.start && d.end);
+    if (!own.length && !dims.length) return false;
+    const pad = dims.length ? ZOOM_FILL_PAD.dims : ZOOM_FILL_PAD.plain;
+    const ins = chromeInsets();
+    const openH = Math.max(cssH - ins.top - ins.bottom, 1);
+    const frame = scale => {
+      const framed = own.slice();
+      dims.forEach(d => {
+        const len = Math.hypot(d.end.x - d.start.x, d.end.z - d.start.z);
+        if (len < 0.01) return;
+        // THE LINE'S SIDE, as drawDimension2D stands it: the left of
+        // start->end on a screen whose y is z.
+        const nx = -(d.end.z - d.start.z) / len, nz = (d.end.x - d.start.x) / len;
+        const off = DIM_FILL_PX / scale;
+        [d.start, d.end].forEach(p => { framed.push(p); framed.push({ x: p.x + nx * off, z: p.z + nz * off }); });
+      });
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      framed.forEach(p => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+      });
+      const spanX = Math.max(maxX - minX, 1), spanZ = Math.max(maxZ - minZ, 1);
+      const next = Math.min(cssW / (spanX * (1 + 2 * pad)), openH / (spanZ * (1 + 2 * pad)));
+      return { scale: Math.max(0.25, Math.min(next, 200)), minX, maxX, minZ, maxZ };
+    };
+    // Once at the sheet's scale to size the stand-off, once more at the
+    // scale that gives.
+    const first = frame(view.scale);
+    const f = frame(first.scale);
+    view.scale = f.scale;
+    view.cx = (f.minX + f.maxX) / 2;
+    view.cz = (f.minZ + f.maxZ) / 2 - (ins.top - ins.bottom) / 2 / view.scale;
+    return true;
   };
 
   // ── painting ──────────────────────────────────────────────────────────────
@@ -6550,7 +6647,13 @@
   //
   // HALF THE SIZE IT WAS. At r=30 the arrow stood 77px tall beside a 36px
   // button; at 16 the two are a matched pair, which is what he asked for.
-  const NORTH_R = 16;
+  //
+  // AND INTO A BOX, 23 Oct (Movie, with a mockup: "update the NORTH arrow
+  // make it look like the other button"). The arrow is painted on the face
+  // canvas inside its own chip now, the same size as HOUSE turn's and the new
+  // ZOOM TO FILL's; r=11 stands its letter and ring inside 40px.
+  const NORTH_R = 11;
+  const DOCK_CHIP = 40;
   // CENTRED ON THE SEATS THEMSELVES, not on an offset from the right edge.
   // The rail is two columns of thumbnails and those columns are what the pair
   // sits over; measuring them means the pair follows the rail when it is
@@ -6580,11 +6683,6 @@
   // draw-origin -- so they are read from the skin rather than typed again
   // here, and they follow DAY and NIGHT without a second table.
   let northHover = false;
-  // WHERE THE ARROW WAS LAST PAINTED, which is a different question from
-  // where the dock is seated: the dock is HTML and moves the moment the rail
-  // reports a width, while the arrow is on the canvas and only moves on the
-  // next paint. The observer at the foot of this file compares the two.
-  let paintedNorthX = null;
   const northDock = document.getElementById('north-dock');
   const seatNorthDock = () => {
     if (!northDock) return;
@@ -6597,28 +6695,21 @@
     if (activeCut()) { northDock.hidden = true; return; }
     const box = canvas.getBoundingClientRect();
     const c = northCentre();
-    // THE ARROW'S OWN EXTENT: its letters stand 1.55 r above the centre and
-    // its ring 0.62 r below, so the hand covers both and the turn button is
-    // centred on that same span.
-    const top = c.y - NORTH_R * 1.75, bottom = c.y + NORTH_R * 0.8;
+    // THREE IN A ROW (Movie's mockup, 23 Oct): the arrow over the rail's
+    // first column, ZOOM TO FILL over the second, HOUSE turn halfway between
+    // -- the pitch is read off the columns, so the row follows the rail. A
+    // chip is 40 wide, so the pitch never closes under 44 or they'd touch.
+    const cols = railColumns();
+    const pitch = Math.max(DOCK_CHIP + 4, cols ? (cols[1] - cols[0]) / 2 : 45);
+    const top = c.y - 28, mid = top + DOCK_CHIP / 2;
     northDock.hidden = false;
     northDock.style.left = `${box.left}px`;
     northDock.style.top = `${box.top}px`;
-    const hit = document.getElementById('north-hit');
-    if (hit) Object.assign(hit.style, {
-      left: `${c.x - NORTH_R}px`, top: `${top}px`, width: `${NORTH_R * 2}px`, height: `${bottom - top}px`,
+    [['north-hit', c.x], ['strip-rotate', c.x + pitch], ['strip-fill', c.x + pitch * 2]].forEach(([id, cx]) => {
+      const chip = document.getElementById(id);
+      if (chip) Object.assign(chip.style, { left: `${cx - DOCK_CHIP / 2}px`, top: `${top}px` });
     });
-    const turn = document.getElementById('strip-rotate');
-    if (turn) {
-      const cols = railColumns();
-      // ON THE SECOND COLUMN, and centred on the arrow's own line so the two
-      // read as a pair rather than as one control and a stray.
-      const tx = cols ? cols[1] : c.x + NORTH_R + 10 + 21;
-      Object.assign(turn.style, {
-        left: `${tx - 20}px`, top: `${(top + bottom) / 2 - 20}px`,
-      });
-    }
-    seatDimsShow(northDock, c, (top + bottom) / 2);
+    seatDimsShow(northDock, c, mid);
     syncNorthHands();
   };
   // THE TWO CHIPS STAND LEFT OF THE ARROW, on its line, and only where there
@@ -6657,7 +6748,7 @@
       btn.setAttribute('aria-pressed', String(!dimsHidden[btn.dataset.dimsShow]));
     });
     const w = dimsShowBox.offsetWidth, hgt = dimsShowBox.offsetHeight;
-    dimsShowBox.style.left = `${c.x - NORTH_R - 16 - w}px`;
+    dimsShowBox.style.left = `${c.x - DOCK_CHIP / 2 - 10 - w}px`;
     dimsShowBox.style.top = `${midY - hgt / 2}px`;
   }
   // THE ARROW LIGHTS UNDER THE HAND, and it has to be wired rather than
@@ -6699,7 +6790,7 @@
   const syncNorthHands = () => {
     if (northDock && driveThruUp()) northDock.hidden = true;
     const drafting = activeTool !== RESTING_TOOL;
-    ['north-hit', 'strip-rotate'].forEach(id => {
+    ['north-hit', 'strip-rotate', 'strip-fill'].forEach(id => {
       const b = document.getElementById(id);
       if (b) b.style.pointerEvents = drafting ? 'none' : '';
     });
@@ -6707,7 +6798,6 @@
   const paintNorth = () => {
     seatNorthDock();
     if (!window.DraftNorth || !drawing) return;
-    const c = northCentre();
     // WHITE, AND GREEN WHEN THE HAND IS OVER IT. Movie, 14 Oct: "make them
     // glow green for the north arrow if a user passes the mouse over ... make
     // it glow from the WHITE part like it is being iluminated in that color
@@ -6717,8 +6807,26 @@
     // THE INK STAYS WHITE AND THE HALO CARRIES THE COLOUR, which is what
     // "illuminated in that color" is -- a needle painted flat green would
     // read as a different arrow rather than a lit one.
-    paintedNorthX = c.x;
-    window.DraftNorth.drawPair(ctx, c.x, c.y, NORTH_R, northOf(), {
+    //
+    // ON THE CHIP'S OWN FACE since 23 Oct, not on the sheet: the arrow lives
+    // in a box like its neighbours now, so it is drawn where the box is and
+    // goes wherever the box goes, with nothing left to split from. Painted
+    // once per change of north or hand, not once per frame.
+    const face = document.querySelector('[data-north-face]');
+    if (!face) return;
+    const n = northOf();
+    const key = `${n.cn}:${n.tn}:${northHover ? 1 : 0}:${face.clientWidth}`;
+    if (face.dataset.painted === key) return;
+    face.dataset.painted = key;
+    const dprNow = window.devicePixelRatio || 1;
+    const side = Math.max(1, face.clientWidth || 38);
+    face.width = Math.round(side * dprNow); face.height = Math.round(side * dprNow);
+    const fx = face.getContext('2d');
+    fx.setTransform(dprNow, 0, 0, dprNow, 0, 0);
+    fx.clearRect(0, 0, side, side);
+    // THE LETTER STANDS 1.55 r ABOVE THE CENTRE and the ring 0.62 r below:
+    // the centre sits a little low so the whole of it is inside the face.
+    window.DraftNorth.drawPair(fx, side / 2, side / 2 + NORTH_R * 0.4, NORTH_R, n, {
       cnColor: '#ffffff',
       tnColor: 'rgba(255,255,255,0.72)',
       glow: northHover ? (skin['draw-site-datum'] || '#6a9a57') : null,
@@ -11109,20 +11217,15 @@
   // line up with, and nothing repaints the plan afterwards to try again.
   // A ResizeObserver is the real signal for "the columns are somewhere new",
   // which is the question being asked, rather than a retry on a timer.
-  // AND THE ARROW GOES WITH THE DOCK. Seating alone moves the HTML -- the
-  // hand and the turn button -- while the arrow itself is painted on the
-  // canvas and stays where the LAST paint put it, so the pair sat split until
-  // something else happened to repaint. The split was invisible to the eye
-  // (the hand is transparent) and perfectly visible to a canvas hash: three
-  // selection specs read the same drawing twice, got two pictures, and were
-  // right to say so.
+  // THE ARROW GOES WITH THE DOCK, since 23 Oct by construction: it is painted
+  // on its chip's own face, so seating the dock moves it too and no second
+  // paint is owed. (Before that it was on the sheet, and a seat without a
+  // repaint left the pair split -- which three selection specs' canvas
+  // hashes caught.)
   {
     const rail = document.getElementById('view-rail');
     if (rail && typeof ResizeObserver === 'function') {
-      new ResizeObserver(() => {
-        seatNorthDock();
-        if (paintedNorthX !== null && northCentre().x !== paintedNorthX) paint();
-      }).observe(rail);
+      new ResizeObserver(() => { seatNorthDock(); }).observe(rail);
     }
   }
 
@@ -30254,6 +30357,17 @@
         markDirty();
         paint();
       });
+    });
+  }
+
+  // ZOOM TO FILL (Movie, 23 Oct). Nothing drawn, nothing to fill: the strip
+  // says so and the view stays.
+  const fillChip = document.querySelector('[data-zoom-fill]');
+  if (fillChip) {
+    fillChip.addEventListener('click', () => {
+      if (!drawing) return;
+      if (zoomToFill()) { paint(); return; }
+      sayOnStrip('ZOOM TO FILL: nothing drawn on this level to fill the sheet with.');
     });
   }
 
