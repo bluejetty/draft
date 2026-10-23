@@ -34,6 +34,11 @@ async function open(page, f = drawing()) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 const strip = page => page.locator('#shelf-strip');
+// THE SQUARES START RETRACTED; the tab brings them up.
+async function showSquares(page) {
+  if (await page.locator('#shelf-previews').isHidden()) await page.locator('#shelf-tab').click();
+  await expect(page.locator('#shelf-previews')).toBeVisible();
+}
 const previews = page => page.locator('.shelf-preview');
 const centreX = async loc => { const b = await loc.boundingBox(); return b.x + b.width / 2; };
 // How much of a canvas is drawn on: the share of pixels with any alpha.
@@ -46,52 +51,67 @@ const inked = screen => screen.evaluate(c => {
 
 test('one square per shelf, the row centred above the bone, the suite drawn in its square', async ({ page }) => {
   await open(page);
+  await showSquares(page);
   await expect(previews(page)).toHaveCount(2);
   await expect(previews(page).nth(0)).toContainText('SHELF 1');
   const bone = page.locator('#bone');
   expect(Math.abs(await centreX(strip(page)) - await centreX(bone)), 'centred on the bone').toBeLessThan(2);
   const stripBox = await strip(page).boundingBox(), trioBox = await page.locator('#dt-trio').boundingBox();
   expect(stripBox.y + stripBox.height, 'above the trio').toBeLessThanOrEqual(trioBox.y + 1);
+  // AND THE SHEET'S FIT KEEPS THE HOUSE ABOVE THE SQUARES: a press on the
+  // house's south wall lands on the wall, not on a square.
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at } = await h.planFrame(page);
+  expect(at(30, 30)[1], 'the south wall fitted above the strip').toBeLessThan(stripBox.y - 4);
   await expect.poll(() => inked(previews(page).nth(0).locator('canvas')), 'SHELF 1 is drawn').toBeGreaterThan(0.002);
   expect(await inked(previews(page).nth(1).locator('canvas')), 'SHELF 2 is empty').toBe(0);
 });
 
 test('one shelf: the lone square is centred above the bone', async ({ page }) => {
   await open(page, drawing(1));
+  await showSquares(page);
   await expect(previews(page)).toHaveCount(1);
   expect(Math.abs(await centreX(previews(page).first()) - await centreX(page.locator('#bone')))).toBeLessThan(2);
 });
 
 test('a press on a square enters that shelf, framed with room at the sides; the square lights', async ({ page }) => {
   await open(page);
+  await showSquares(page);
   await previews(page).nth(0).click();
   await expect(page.locator('#readout'), 'the shelf\'s four walls of the six').toContainText('walls 4/6');
   await expect(previews(page).nth(0)).toHaveAttribute('data-active', '');
   await expect(page.locator('[data-shelf="1"]')).toHaveAttribute('data-active', '');
   const { cx, cz, scale, box } = await h.planFrame(page);
   expect(Math.abs(cx - 110), 'centred on the suite').toBeLessThan(0.5);
-  expect(Math.abs(cz - 47.5)).toBeLessThan(2);
+  expect(Math.abs(cz - 47.5), 'centred in the band above the squares').toBeLessThan(4);
   const across = 20 * scale / box.width;
   expect(across, 'the suite takes well under the whole width').toBeLessThan(0.8);
   expect(across, 'but is not lost in it').toBeGreaterThan(0.2);
 });
 
-test('the SHELVES tab puts the squares away and brings them back, and a reload remembers', async ({ page }) => {
+test('the squares start retracted in a SHELVES tab centred above the bone; the tab brings them up, a reload remembers, the tab puts them away', async ({ page }) => {
   await open(page);
-  await expect(page.locator('#shelf-previews')).toBeVisible();
-  await page.locator('#shelf-tab').click();
   await expect(page.locator('#shelf-previews')).toBeHidden();
   await expect(strip(page)).toHaveAttribute('data-open', 'false');
   expect(Math.abs(await centreX(page.locator('#shelf-tab')) - await centreX(page.locator('#bone'))), 'the tab centred above the bone').toBeLessThan(2);
-  await page.reload();
-  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await expect(page.locator('#shelf-previews')).toBeHidden();
+  // RETRACTED, THE TAB COVERS NOTHING A PRESS WANTS: the fitted house's
+  // south wall stands above it.
+  const tabBox = await page.locator('#shelf-tab').boundingBox();
+  const { at } = await h.planFrame(page);
+  expect(at(30, 30)[1] + 12, 'the south wall and its grab zone clear of the tab').toBeLessThan(tabBox.y);
   await page.locator('#shelf-tab').click();
   await expect(page.locator('#shelf-previews')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await expect(page.locator('#shelf-previews')).toBeVisible();
+  await page.locator('#shelf-tab').click();
+  await expect(page.locator('#shelf-previews')).toBeHidden();
 });
 
 test('+ SHELF adds a square, and the row stays centred on the bone', async ({ page }) => {
   await open(page);
+  await showSquares(page);
   await h.openModelRail(page);
   await page.getByRole('button', { name: '+ SHELF', exact: true }).click();
   await expect(previews(page)).toHaveCount(3);

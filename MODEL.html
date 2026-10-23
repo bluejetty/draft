@@ -3594,7 +3594,21 @@
       return Number.isFinite(pad) ? pad : 0;
     };
     const top = tall('strip');
-    const bottom = Math.max(tall('house-strip') - hemOf('house-strip'), 0);
+    // AND THE SHELF PREVIEWS' BAND ABOVE THE BAR (#shelf-strip), while the
+    // squares are UP: they stand on the bar's top edge, over the sheet, and
+    // a drawing fitted under them would have its foot where a press lands on
+    // a square instead of on the wall (model-tool-select's south wall did,
+    // measured). Retracted, the tab alone sits inside the fit's own margin
+    // and the band is as it was -- the offset a taller bottom bar puts on
+    // the centre is one several specs stand on. The margin is the strip's
+    // own (margin-bottom:4px).
+    const stripBand = () => {
+      const el = document.getElementById('shelf-strip');
+      if (!el || el.hidden || el.dataset.open !== 'true') return 0;
+      const r = el.getBoundingClientRect();
+      return Number.isFinite(r?.height) && r.height ? r.height + 4 : 0;
+    };
+    const bottom = Math.max(tall('house-strip') - hemOf('house-strip'), 0) + stripBand();
     // ── AND NOT THE SIDE TABS, WHICH WAS TRIED AND MEASURED ────────────
     //
     // Movie, 27 Sep, asked for the marks to clear "the top bottom and
@@ -10415,8 +10429,12 @@
   // CSS). One square per shelf, each a miniature of the shelf drawn by the
   // page's own painters (paintPlanThumb, the rail's seats' way), the shelf
   // the drafter stands on lit; a press enters that shelf. The row retracts
-  // into a SHELVES tab, remembered with the lights (keepLight).
-  let shelfStripOpen = stored.shelfStrip !== false;
+  // into a SHELVES tab, remembered with the lights (keepLight). RETRACTED
+  // UNTIL ASKED FOR: the squares stand over the sheet's foot, where a fitted
+  // drawing's south wall is, and a press there must land on the wall until
+  // the drafter has chosen the squares; the tab alone sits in the fit's own
+  // margin and covers nothing a press wants.
+  let shelfStripOpen = stored.shelfStrip === true;
   const shelfStrip = () => document.getElementById('shelf-strip');
   const buildShelfStrip = () => {
     const bar = document.getElementById('dt-bar');
