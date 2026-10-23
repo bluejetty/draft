@@ -13503,12 +13503,20 @@
     // gesture. Same rule as a wall's: SELECTION FIRST, then the grab -- so a
     // pan begun near a corner still pans, and only the outline the drafter
     // chose offers handles.
+    // AND A SHELF WALL'S OR LINE'S ENDS AS WELL (Movie, 22 Oct, on a suite
+    // on the shelf: "the length of the walls seems to be locked, can we
+    // allow the user to select the nodes at the end of the line and then
+    // change its length by dragging"). This returned null for anything but
+    // a master here, so on the shelf a wall slid by its body and its ends
+    // took no grab at all; a selected master still offers its corners, and
+    // anything else falls through to the rule below.
     if (showingBoneyard()) {
       const lone = selection.length === 1 && selection[0].type === 'outline'
         ? selection[0].item : null;
-      if (!lone || !outlines().includes(lone)) return null;
-      const G = window.DraftGeometry2D;
-      return G.nearestVertex(lone.points || [], worldPt, CORNER_GRAB_PX / view.scale);
+      if (lone && outlines().includes(lone)) {
+        const G = window.DraftGeometry2D;
+        return G.nearestVertex(lone.points || [], worldPt, CORNER_GRAB_PX / view.scale);
+      }
     }
     // AND A SELECTED LINE'S TWO ENDS, which the LINE panel has promised since
     // it was written -- "A LINE IS TWO POINTS. DRAG AN END TO CHANGE IT." --
@@ -13993,6 +14001,39 @@
   };
   // Where a dragged point lands: a node first, then a face corner, then a
   // face line. `{ pt, corner }` or `{ pt, seg }`, or null.
+  // WITHIN AN INCH OF A LINE IT CROSSES, A DRAGGED END CONNECTS TO IT (Movie,
+  // 22 Oct: "when i stretch or shrink a line, when it crosses a line or wall
+  // line int or ext, allow it to connect to that line if the user drops it
+  // within an inch"). The end's own run -- one wall or line, free at this
+  // end -- is carried on through `pt` to where it meets each still face or
+  // line, and the nearest meeting within the inch is where the end goes: on
+  // the line, at the run's own angle, which is what keeps the angle he
+  // likes locked. A corner two runs share has no one angle, so none.
+  const INCH_JOIN_FT = 1 / 12;
+  const runsAtVertex = vtx => [...walls(), ...lines()].filter(r => r.start === vtx || r.end === vtx);
+  const inchJoin = (vtx, pt, segs) => {
+    const owners = runsAtVertex(vtx);
+    if (owners.length !== 1 || !segs?.length) return null;
+    const run = owners[0];
+    const other = run.start === vtx ? run.end : run.start;
+    if (!other) return null;
+    const dx = pt.x - other.x, dz = pt.z - other.z;
+    if (Math.hypot(dx, dz) < 1e-6) return null;
+    let best = null;
+    segs.forEach(seg => {
+      const P = seg.start || seg.a || seg[0], Q = seg.end || seg.b || seg[1];
+      if (!P || !Q) return;
+      const ex = Q.x - P.x, ez = Q.z - P.z;
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-9) return;
+      const s = ((P.x - other.x) * dz - (P.z - other.z) * dx) / den;
+      if (s < -1e-6 || s > 1 + 1e-6) return;
+      const X = { x: P.x + ex * s, z: P.z + ez * s };
+      const d = Math.hypot(X.x - pt.x, X.z - pt.z);
+      if (d <= INCH_JOIN_FT && (!best || d < best.d)) best = { d, pt: X, seg };
+    });
+    return best;
+  };
   const dragMagnetAt = (at, vtx, magnet) => {
     const node = cornerSnap(at, vtx);
     if (node) return { pt: { x: node.x, y: 0, z: node.z }, corner: node, node: true };
@@ -14072,12 +14113,12 @@
   // THE CROSS LINES' CATCH, on its own so a dragged loop corner can take it
   // without the node catch that would find the corner itself. `skip` is the
   // point in hand: its own rays are no guide to where it should go.
-  const trackSnap = (at, skip = []) => {
+  const trackSnap = (at, skip = [], nodes = null) => {
     if (!trackOn) return null;
     const reach = RAY_HIT_PX / view.scale;
     const skipped = n => skip.some(s => Math.abs(s.x - n.x) < 1e-6 && Math.abs(s.z - n.z) < 1e-6);
     let bx = null, bz = null;
-    [...trackingNodes(), ...nodeEnds()].forEach(n => {
+    (nodes || [...trackingNodes(), ...nodeEnds()]).forEach(n => {
       if (skipped(n)) return;
       const dx = Math.abs(at.x - n.x), dz = Math.abs(at.z - n.z);
       if (dx <= reach && dz > reach && (!bx || dx < bx.d)) bx = { d: dx, n };
@@ -18821,6 +18862,17 @@
     // from every corner too, as the house outline always has (Movie, 21 Oct).
     const trace = traceCorners();
     if (trace.length) return trace;
+    // A DRAGGED END TRACKS FROM THE CORNERS IT COULD LINE UP WITH (Movie, 22
+    // Oct: "i'd like the interior corners to have mini-node style magnetic
+    // link / cross lines"): the faces' corners of every wall the end is not
+    // joined to -- inside corners among them -- each sending its cross the
+    // moment the hand is in line with it, and none before, so a house's
+    // dozens of corners do not fill the sheet with lines.
+    const md = moveDrag;
+    if (md && md.kind === 'corner' && md.active && board !== 'toy') {
+      md.rays ||= dragMagnet(md.before[0].vtx).corners;
+      return md.rays.filter(c => litRays([c], cursorWorld).length);
+    }
     if (!drawsRun() || !drawStart) { wallRunNodes = []; return wallRunNodes; }
     const last = wallRunNodes[wallRunNodes.length - 1];
     if (!last || Math.hypot(last.x - drawStart.x, last.z - drawStart.z) > 1e-6) {
@@ -35905,13 +35957,36 @@
             : dragMagnetAt(wanted, grabbed.vtx, magnet);
           md.lit = hit;
           md.cursor = raw;
+          // THE CURSOR READS THROUGH THE DRAG: the pointermove below this
+          // branch never runs while an end is held, so the rays' "in line
+          // with the hand" (litRays) read a cursor left where the press was.
+          cursorWorld = raw;
           const snapped = hit?.pt || null;
+          // THE CROSS LINES PULL TOO (Movie, 22 Oct), when no node or face has
+          // caught and the square is not holding an axis: the end lands on
+          // the line through whichever corner it is in line with -- the
+          // inside corner of the room it is being trimmed to, as often as
+          // not -- off the magnet's own corners (trackingNodes), never the
+          // dragged wall's own, which travel with the hand.
+          const tracked = !snapped && !fixed && board !== 'toy'
+            ? trackSnap(wanted, [], (md.rays ||= dragMagnet(grabbed.vtx).corners)) : null;
           // MIN 0 FEET, not the drawn run's 1: a nudge of less than half a foot
           // rounds back to where the corner started, and a corner that stayed
           // put is the honest answer to a hand that barely moved.
-          const pt = snapped || (footOn
-            ? onTheFoot(from, { x: wanted.x, z: wanted.z }, 0)
-            : wanted);
+          // THE CROSS LINE KEEPS ONLY THE AXIS IT WON; the foot still rounds
+          // the other (the body drag's own rule: "the catch keeps the across
+          // it won; the along is rounded"), so a 2.4 ft pull along a line
+          // some corner shares still lands on the foot.
+          const footed = footOn ? onTheFoot(from, { x: wanted.x, z: wanted.z }, 0) : wanted;
+          const landed = snapped || (tracked
+            ? { x: tracked.rays.some(r => r.axis === 'x') ? tracked.pt.x : footed.x,
+              z: tracked.rays.some(r => r.axis === 'z') ? tracked.pt.z : footed.z }
+            : footed);
+          // AND WITHIN AN INCH OF A LINE THE RUN CROSSES, THE END IS ON IT
+          // (inchJoin): a catch that beats the foot, as every catch does.
+          const joined = board !== 'toy'
+            ? inchJoin(grabbed.vtx, landed, (md.segs ||= dragMagnet(grabbed.vtx).segs)) : null;
+          const pt = joined ? joined.pt : landed;
           grabbed.vtx.x = pt.x;
           grabbed.vtx.z = pt.z;
         } else {
