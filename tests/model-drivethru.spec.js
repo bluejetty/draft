@@ -175,13 +175,13 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     // REAL ESTATE LAYOUT CAME OFF THIS LIST ON 27 SEP, when the page arrived.
     // The claim was never "these two chips are grey" -- it is that a chip is
     // lit by a page EXISTING and by nothing else, least of all by being moved
-    // between rows. So it is asserted the other way now: the built one is a
-    // link to its page, and ESTIMATES, which is still unbuilt, is still down.
+    // between rows. So it is asserted the other way now: each built one is a
+    // link to its page -- ESTIMATES too, since 23 Oct.
     await expect(page.locator('#page-row [data-page="ext-finish"]'))
       .toHaveAttribute('href', './EXTFINISH.html');
     await expect(page.locator('#sheet-row [data-page="real-estate"]'))
       .toHaveAttribute('href', './REALESTATEPLAN.html');
-    await expect(page.locator('#sheet-row [data-page="estimates"]')).toBeDisabled();
+    await expect(page.locator('#sheet-row [data-page="estimates"]')).toHaveAttribute('href', './ESTIMATES.html');
   });
 
 // THE QUIET WAY OUT TO THE CONSTRUCTION DETAILS. Movie, 19 Sep: "on the

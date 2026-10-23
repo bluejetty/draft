@@ -2391,6 +2391,32 @@ if (!window.DraftDrawingFormat) {
   //   body  — a master section this job rewords (the master text stays put)
   //   added — a section this job has and the master does not; it carries its
   //           own division and title, and its id is the drafter's number.
+  // ── ESTIMATES (Movie, 23 Oct) ──────────────────────────────────────────
+  // What the ESTIMATES page keeps in the file: the waste percent per
+  // category (10-15%, his PDF tool's default of 15 when absent), a unit
+  // price per row key, and notes. Quantities are never stored -- they are
+  // read off the drawing each time (estimates.js) -- so nothing here can
+  // go stale against the walls.
+  const estimates = raw => {
+    const pctOf = value => {
+      const v = Number(value);
+      return Number.isFinite(v) && v >= 0 && v <= 100 ? Math.round(v * 10) / 10 : null;
+    };
+    const waste = {};
+    ['flooring', 'roofing', 'exterior'].forEach(cat => {
+      const v = pctOf(raw?.waste?.[cat]);
+      if (v !== null) waste[cat] = v;
+    });
+    const prices = {};
+    Object.entries(raw?.prices && typeof raw.prices === 'object' ? raw.prices : {}).forEach(([key, value]) => {
+      const k = String(key).trim().slice(0, 80);
+      const v = Number(value);
+      if (k && Number.isFinite(v) && v >= 0) prices[k] = Math.round(v * 100) / 100;
+    });
+    const notes = String(raw?.notes ?? '').replace(/\r\n?/g, '\n').slice(0, 20000);
+    return { waste, prices, ...(notes ? { notes } : {}) };
+  };
+
   const specs = raw => {
     const id = value => String(value ?? '').trim().slice(0, 40);
     const line = value => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
@@ -2535,6 +2561,7 @@ if (!window.DraftDrawingFormat) {
     SECTION_TABLE_CHOICES_BY_TYPE,
     SECTION_TABLE_CHOICE_FIELDS,
     specs,
+    estimates,
     layout,
     tour,
     roofIntent,

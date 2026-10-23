@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <title>Draft — Estimates</title>
+  <!-- THE SKIN, read the same way SPECS reads it: one choice across the app,
+       synchronous and in the head so the page has colour between parse and
+       boot. -->
+  <link rel="stylesheet" href="./shell-bars.css" />
+  <script src="./palette.js"></script>
+  <script src="./shell-bars.js"></script>
+  <script>
+    (() => {
+      const P = window.DraftPalette;
+      const params = new URLSearchParams(location.search);
+      const stored = (() => {
+        try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+        catch { return {}; }
+      })();
+      const pick = (name, allowed, fallback) => {
+        const asked = params.get(name);
+        if (asked && allowed.includes(asked)) return asked;
+        return allowed.includes(stored[name]) ? stored[name] : fallback;
+      };
+      window.__estimatesSkin = { theme: pick('theme', P.THEMES, 'ruff'), mode: pick('mode', P.MODES, 'night') };
+      P.apply(document, window.__estimatesSkin.theme, window.__estimatesSkin.mode);
+    })();
+  </script>
+  <script src="./shared-file-store.js"></script>
+  <script src="./formatters.js"></script>
+  <script src="./wall-types.js"></script>
+  <script src="./geometry-2d.js"></script>
+  <script src="./line-styles.js"></script>
+  <script src="./drawing-format.js"></script>
+  <script src="./building-bodies.js"></script>
+  <script src="./level-assembly.js"></script>
+  <script src="./roof-types.js"></script>
+  <script src="./fen-labels.js"></script>
+  <script src="./spec-master.js"></script>
+  <script src="./estimates.js"></script>
+  <link rel="stylesheet" href="vendor/fonts.css" />
+  <script src="orientation-guard.js"></script>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
+    main { width:min(1180px, calc(100vw - 32px));
+      margin:calc(var(--strip-h) + 24px) auto calc(var(--house-h) + 40px); }
+    h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+    .intro { max-width:760px; margin:7px 0 0; color:var(--ink-secondary); font-size:14px; line-height:1.5; }
+    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid var(--ink-warn); background:color-mix(in srgb, var(--ink-warn) 8%, transparent); font-size:13px; }
+    .notice.visible { display:block; }
+    .head-row { display:flex; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap; }
+    .head-row .spacer { flex:1; }
+    .btn { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+      padding:6px 12px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); cursor:pointer; }
+    .btn:hover { border-color:var(--accent); color:var(--accent); }
+    .grand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; letter-spacing:.05em; }
+    .grand b { font-size:19px; margin-left:6px; }
+    .divisions { margin-top:14px; display:flex; flex-direction:column; gap:10px; }
+    .division { border:1px solid var(--edge-panel); background:var(--surface-panel); }
+    .div-title { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--edge-panel);
+      font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+    .div-title .total { margin-left:auto; color:var(--ink-secondary); font-size:12px; }
+    .section { padding:8px 12px 10px; border-bottom:1px dashed var(--edge-panel); }
+    .section:last-child { border-bottom:0; }
+    .sec-title { display:flex; align-items:center; gap:10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .sec-title .no { color:var(--ink-quiet); min-width:34px; }
+    .sec-title .empty { color:var(--ink-quiet); font-weight:400; letter-spacing:.03em; text-transform:none; }
+    .sec-title .waste { margin-left:auto; display:flex; align-items:center; gap:6px; font-weight:400; text-transform:none; letter-spacing:0; font-size:12px; color:var(--ink-secondary); }
+    .sec-title .waste input { width:52px; padding:2px 5px; border:1px solid var(--edge-panel); background:var(--surface-page); color:var(--ink-primary); font:inherit; }
+    .section.quiet { padding:5px 12px; }
+    .section.quiet .sec-title { font-weight:500; color:var(--ink-secondary); }
+    table { width:100%; border-collapse:collapse; margin-top:6px; font-size:13px; }
+    th { text-align:left; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-quiet); padding:3px 6px; border-bottom:1px solid var(--edge-panel); }
+    td { padding:5px 6px; border-bottom:1px solid color-mix(in srgb, var(--edge-panel) 50%, transparent); vertical-align:top; }
+    td.num, th.num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    td .detail { display:block; color:var(--ink-quiet); font-size:11px; margin-top:2px; }
+    tr.unassigned td { color:var(--ink-warn); }
+    td input.price { width:84px; padding:2px 5px; border:1px solid var(--edge-panel); background:var(--surface-page); color:var(--ink-primary); font:inherit; text-align:right; }
+    tr.total td { font-weight:600; border-bottom:0; }
+    .notes { margin-top:14px; }
+    .notes textarea { width:100%; min-height:80px; padding:8px; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-primary); font:inherit; font-size:13px; resize:vertical; }
+    #status { position:fixed; right:16px; bottom:calc(var(--house-h) + 12px); font-size:12px; color:var(--ink-secondary); }
+    @media print {
+      body { background:#fff; color:#1d1f20; }
+      main { width:auto; margin:0; }
+      .head-row .btn, #status, .section.quiet, input, .notes textarea { display:none; }
+      .division { break-inside:avoid; border-color:#999; }
+      td input.price { display:inline; border:0; background:none; }
+    }
+  </style>
+</head>
+<body>
+  <script>window.DraftShellBars.topBar();</script>
+  <main>
+    <h1>Estimates</h1>
+    <p class="intro">The quantities this drawing holds, laid out in the order and under the numbers of the specifications. Rooms with a flooring set, roofs by their pitch, the shell&rsquo;s walls less their openings, and every door and window by size &mdash; nothing traced. Type a unit price against a line and it totals; the waste percent rides every area.</p>
+    <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; nothing to count, and nothing can be saved.</div>
+    <div class="head-row">
+      <span class="grand" data-grand>TOTAL <b data-grand-total>&mdash;</b></span>
+      <span class="spacer"></span>
+      <button class="btn" data-print>Print</button>
+    </div>
+    <div class="divisions" data-divisions></div>
+    <div class="notes">
+      <label class="sec-title" for="estimate-notes"><span class="no"></span>Notes</label>
+      <textarea id="estimate-notes" data-notes placeholder="Additional notes…"></textarea>
+    </div>
+    <div id="status" role="status"></div>
+  </main>
+  <script>window.DraftShellBars.bottomBar({ page: 'estimates', bone: false });</script>
+
+  <script>
+    (async () => {
+      const format = window.DraftDrawingFormat;
+      const E = window.DraftEstimates;
+      const BUCKET = 'model-drawing';
+
+      // ── The drawing ──────────────────────────────────────────────────────
+      let drawing = null, fileName = 'model-drawing.json';
+      try {
+        const file = await window.SharedFileStore.loadSharedFile(BUCKET);
+        if (file) { drawing = JSON.parse(await file.text()); fileName = file.name || fileName; }
+      } catch { drawing = null; }
+      if (!drawing) drawing = { version: format.VERSION };
+      const readOnly = !window.SharedFileStore;
+      if (readOnly) document.querySelector('#no-drawing-notice').classList.add('visible');
+      let settings = format.estimates(drawing.estimates);
+
+      const statusEl = document.querySelector('#status');
+      let statusTimer = null;
+      const showStatus = text => {
+        statusEl.textContent = text;
+        clearTimeout(statusTimer);
+        if (text) statusTimer = setTimeout(() => { statusEl.textContent = ''; }, 4000);
+      };
+
+      // ── Saving: the `estimates` key is the only one this page writes ─────
+      // Re-read inside the queue and write guarded by the revision just read,
+      // the guard SPECS, PROJECT and LAYOUT use, so a house drawn in another
+      // tab is never flattened.
+      const writeToStore = async (triesLeft = 3) => {
+        const store = window.SharedFileStore;
+        const at = await store.loadSharedFileAt(BUCKET);
+        let base = null;
+        if (at.file) { try { base = JSON.parse(await at.file.text()); } catch { base = null; } }
+        if (!base || typeof base !== 'object') base = drawing;
+        const merged = { ...base, estimates: settings };
+        const file = new File([JSON.stringify(merged)], fileName, { type: 'application/json' });
+        try {
+          await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });
+        } catch (error) {
+          if (!error?.stale || triesLeft <= 0) throw error;
+          return writeToStore(triesLeft - 1);
+        }
+        drawing = merged;
+      };
+      let saveQueue = Promise.resolve();
+      const save = note => {
+        if (readOnly) return;
+        saveQueue = saveQueue.catch(() => {})
+          .then(writeToStore)
+          .then(() => showStatus(note || 'Saved'))
+          .catch(error => { console.error(error); showStatus('Not saved — try again'); });
+      };
+
+      // ── The page ─────────────────────────────────────────────────────────
+      const money = v => (v == null ? '' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      const qty = row => (row.unit === 'EA' ? String(row.qty) : row.qty.toLocaleString('en-US', { maximumFractionDigits: 1 }));
+      const WASTE_WORD = { flooring: 'flooring', roofing: 'roofing', exterior: 'cladding' };
+      const divisionsEl = document.querySelector('[data-divisions]');
+
+      const render = () => {
+        const out = E.estimateSections(drawing, settings);
+        document.querySelector('[data-grand-total]').textContent = out.total ? money(out.total) : '—';
+        divisionsEl.innerHTML = '';
+        const byDiv = new Map();
+        out.sections.forEach(section => {
+          if (!byDiv.has(section.div)) byDiv.set(section.div, { div: section.div, title: section.divTitle, sections: [], total: 0 });
+          const d = byDiv.get(section.div);
+          d.sections.push(section);
+          d.total += section.total;
+        });
+        [...byDiv.values()].forEach(d => {
+          const card = document.createElement('section');
+          card.className = 'division';
+          card.dataset.division = String(d.div);
+          const head = document.createElement('div');
+          head.className = 'div-title';
+          head.innerHTML = `<span>${d.div}. ${d.title}</span>`;
+          if (d.total) {
+            const total = document.createElement('span');
+            total.className = 'total';
+            total.textContent = `$${money(Math.round(d.total * 100) / 100)}`;
+            head.append(total);
+          }
+          card.append(head);
+          d.sections.forEach(section => card.append(sectionNode(section)));
+          divisionsEl.append(card);
+        });
+      };
+
+      const sectionNode = section => {
+        const el = document.createElement('div');
+        el.className = `section${section.rows.length || section.category ? '' : ' quiet'}`;
+        el.dataset.section = section.id;
+        const title = document.createElement('div');
+        title.className = 'sec-title';
+        title.innerHTML = `<span class="no">${section.id}</span><span>${section.title}</span>`;
+        if (!section.rows.length) {
+          const empty = document.createElement('span');
+          empty.className = 'empty';
+          empty.textContent = section.category ? 'nothing to count on this drawing yet' : '—';
+          title.append(empty);
+        }
+        if (section.category) {
+          // THE WASTE PERCENT, per category (his PDF tool's 10-15%, 15 by
+          // default), on the section that lays the material.
+          const waste = document.createElement('label');
+          waste.className = 'waste';
+          const input = document.createElement('input');
+          input.type = 'number'; input.min = '0'; input.max = '100'; input.step = '1';
+          input.dataset.waste = section.category;
+          input.value = settings.waste[section.category] ?? E.DEFAULT_WASTE_PCT;
+          input.setAttribute('aria-label', `${WASTE_WORD[section.category]} waste percent`);
+          input.addEventListener('change', () => {
+            const v = Number(input.value);
+            // BLANK IS THE DEFAULT AGAIN, not zero waste.
+            if (input.value.trim() !== '' && Number.isFinite(v) && v >= 0 && v <= 100) settings.waste[section.category] = Math.round(v * 10) / 10;
+            else delete settings.waste[section.category];
+            settings = format.estimates(settings);
+            render();
+            save(`${WASTE_WORD[section.category]} waste ${settings.waste[section.category] ?? E.DEFAULT_WASTE_PCT}%`);
+          });
+          waste.append(document.createTextNode(`${WASTE_WORD[section.category]} waste %`), input);
+          title.append(waste);
+        }
+        el.append(title);
+        if (!section.rows.length) return el;
+        const table = document.createElement('table');
+        table.innerHTML = '<thead><tr><th>Item</th><th class="num">Net</th><th class="num">Waste</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>';
+        const body = document.createElement('tbody');
+        section.rows.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.dataset.row = row.key;
+          if (row.unassigned) tr.className = 'unassigned';
+          const item = document.createElement('td');
+          item.innerHTML = `${row.label}${row.detail ? `<span class="detail">${row.detail}</span>` : ''}`;
+          const net = document.createElement('td'); net.className = 'num';
+          net.textContent = row.unit === 'EA' ? '' : `${row.net.toLocaleString('en-US', { maximumFractionDigits: 1 })} ${row.unit}`;
+          const waste = document.createElement('td'); waste.className = 'num';
+          waste.textContent = row.unit === 'EA' || row.unassigned ? '' : `${row.waste}%`;
+          const quantity = document.createElement('td'); quantity.className = 'num';
+          quantity.dataset.qty = '';
+          quantity.textContent = `${qty(row)} ${row.unit}`;
+          const price = document.createElement('td'); price.className = 'num';
+          if (!row.unassigned) {
+            const input = document.createElement('input');
+            input.className = 'price';
+            input.type = 'number'; input.min = '0'; input.step = '0.01';
+            input.dataset.price = row.key;
+            input.placeholder = `$ / ${row.unit}`;
+            input.value = row.price == null ? '' : String(row.price);
+            input.setAttribute('aria-label', `unit price for ${row.label}`);
+            input.addEventListener('change', () => {
+              const v = Number(input.value);
+              if (input.value.trim() !== '' && Number.isFinite(v) && v >= 0) settings.prices[row.key] = Math.round(v * 100) / 100;
+              else delete settings.prices[row.key];
+              render();
+              save(`${row.label} priced`);
+            });
+            price.append(input);
+          }
+          const amount = document.createElement('td'); amount.className = 'num';
+          amount.dataset.amount = '';
+          amount.textContent = row.amount == null ? '' : `$${money(row.amount)}`;
+          tr.append(item, net, waste, quantity, price, amount);
+          body.append(tr);
+        });
+        if (section.total) {
+          const tr = document.createElement('tr');
+          tr.className = 'total';
+          tr.innerHTML = `<td colspan="5">${section.id} total</td><td class="num" data-section-total>$${money(section.total)}</td>`;
+          body.append(tr);
+        }
+        table.append(body);
+        el.append(table);
+        return el;
+      };
+
+      const notes = document.querySelector('[data-notes]');
+      notes.value = settings.notes || '';
+      notes.addEventListener('change', () => {
+        settings = format.estimates({ ...settings, notes: notes.value });
+        save('Notes saved');
+      });
+      document.querySelector('[data-print]').addEventListener('click', () => window.print());
+
+      render();
+      document.body.dataset.estimatesReady = '1';
+      // THE SKIN SWITCH IS THE BAR'S; everything here is CSS in --role tokens,
+      // so applying the palette is the repaint (SPECS says the same).
+      window.DraftShellBars.wireSkin({
+        theme: window.__estimatesSkin.theme,
+        mode: window.__estimatesSkin.mode,
+        onSkin: (skin, theme, mode) => { window.__estimatesSkin = { theme, mode }; },
+      });
+    })();
+  </script>
+  <script src="./traffic-counter.js" defer></script>
+</body>
+</html>

@@ -67,8 +67,8 @@ test('LAYOUT wears the shared page row rather than a cluster of its own', async 
   const here = page.locator('[data-page="construction"]');
   await expect(here).toHaveAttribute('aria-current', 'page');
   expect(await here.evaluate(el => el.tagName)).toBe('SPAN');
-  // And a page that does not exist yet is a disabled button, not a dead link.
-  await expect(page.locator('[data-page="estimates"]')).toBeDisabled();
+  // And the last sheet to be built, ESTIMATES (23 Oct), is a link like the rest.
+  await expect(page.locator('[data-page="estimates"]')).toHaveAttribute('href', './ESTIMATES.html');
 });
 
 test('LAYOUT wears the top bar too, with the instruments standing down', async ({ page }) => {

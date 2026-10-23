@@ -124,9 +124,13 @@ if (!window.DraftShellBars) {
       href: './SPECS.html',
       title: 'The specifications for this house',
       here: 'The specifications \u2014 you are here' }),
+    // BUILT (Movie, 23 Oct: "i guess we should start the ESTIMATION area" --
+    // "will be easier to estimate directly from the file rather than from the
+    // PDF"): the quantities off this drawing, under the spec's numbers.
     Object.freeze({ id: 'estimates', row: 'sheet', label: 'ESTIMATES',
-      href: null,
-      title: 'ESTIMATES \u2014 quantities and costs off this model, not built yet' }),
+      href: './ESTIMATES.html',
+      title: 'ESTIMATES \u2014 the quantities off this model, in the specification\u2019s order, with your prices',
+      here: 'The estimates \u2014 you are here' }),
   ]);
 
   // ── THE PAGE'S OWN BUTTONS IN THE BOTTOM BAR ──────────────────────────
