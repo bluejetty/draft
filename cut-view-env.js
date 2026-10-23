@@ -238,6 +238,9 @@ if (!window.DraftCutViewEnv) {
       floors: () => floors,
       stairs: () => (Array.isArray(saved.stairs) ? saved.stairs : []),
       fixtures: () => (Array.isArray(saved.fixtures) ? saved.fixtures : []),
+      // THE ROOM TAGS, for the flooring a shaped tag lays (cut-view.js).
+      roomTags: () => (format && format.roomTags
+        ? format.roomTags(saved.roomTags, levelIds) : (Array.isArray(saved.roomTags) ? saved.roomTags : [])),
       floorOpenings: floorId => (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
         .filter(o => o.hostType === 'floor' && String(o.hostId) === String(floorId)),
       columns: () => columns,

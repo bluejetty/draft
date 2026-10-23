@@ -1166,6 +1166,71 @@ suite('drawRoomTag2D', 'an area is drawn under the name when the caller supplies
     'DEN|120 SQ FT');
 });
 
+// THE LINES UNDER THE NAME (Movie, 23 Oct): the size the caller hands over,
+// and the AREA a shaped tag measures for itself, unless its switch is off.
+suite('roomTagLines', 'the size the caller gives, then the shape-s own area', R => {
+  const square = [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 3 }, { x: 0, z: 3 }];
+  expect('a bare tag has no lines', R.roomTagLines({ name: 'DEN', at: { x: 0, z: 0 } }, tagEnv()).join('|'), '');
+  expect('the size alone', R.roomTagLines({ name: 'DEN', at: { x: 0, z: 0 } }, tagEnv({ areaFor: () => '12X10' })).join('|'), '12X10');
+  expect('a shape adds its area, in the caller-s words',
+    R.roomTagLines({ name: 'DEN', at: { x: 0, z: 0 }, points: square }, tagEnv({ areaFor: () => '12X10', areaLabel: sqFt => `${sqFt} SQUARE FEET` })).join('|'),
+    '12X10|9 SQUARE FEET');
+  expect('or in its own when the caller has none',
+    R.roomTagLines({ name: 'DEN', at: { x: 0, z: 0 }, points: square }, tagEnv()).join('|'), '9 SQ FT');
+  expect('and none with the switch off',
+    R.roomTagLines({ name: 'DEN', at: { x: 0, z: 0 }, points: square, areaShown: false }, tagEnv()).join('|'), '');
+  expect('two corners are no shape', R.roomTagLines({ name: 'DEN', at: { x: 0, z: 0 }, points: square.slice(0, 2) }, tagEnv()).join('|'), '');
+});
+
+suite('drawRoomTag2D', 'a shaped tag-s area is a line under the name', R => {
+  const ctx = recordingCtx();
+  R.drawRoomTag2D(ctx, toS, { name: 'DEN', at: { x: 0, z: 0 }, points: [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 5 }, { x: 0, z: 5 }] }, {}, tagEnv());
+  expect('name, then area', calls(ctx, 'fillText').map(a => a[0]).join('|'), 'DEN|20 SQ FT');
+});
+
+// THE ROOM-S SHAPE AND ITS FLOORING (Movie, 23 Oct). A 6 x 9 room at 10 px
+// a foot: the loop, and inside it the finish the tag lays.
+const ROOM_6x9 = [{ x: 2, z: 2 }, { x: 8, z: 2 }, { x: 8, z: 11 }, { x: 2, z: 11 }];
+const shapeTag = over => ({ name: 'WC', at: { x: 5, z: 6 }, points: ROOM_6x9, ...over });
+suite('drawRoomShape2D', 'a bare shape is a dashed desk mark that never prints', R => {
+  const ctx = recordingCtx();
+  R.drawRoomShape2D(ctx, toS, shapeTag(), {}, tagEnv());
+  expect('dashed', calls(ctx, 'setLineDash').some(a => Array.isArray(a[0]) && a[0].length === 2), true);
+  expect('no clip, nothing laid inside', count(ctx, 'clip'), 0);
+  expect('one loop, four corners', count(ctx, 'lineTo'), 3);
+  const paper = recordingCtx();
+  R.drawRoomShape2D(paper, toS, shapeTag(), {}, tagEnv({ isPrinting: true }));
+  expect('nothing on paper', paper.tape.length, 0);
+  const none = recordingCtx();
+  R.drawRoomShape2D(none, toS, shapeTag({ points: ROOM_6x9.slice(0, 2) }), {}, tagEnv());
+  expect('and nothing for two corners', none.tape.length, 0);
+});
+
+suite('drawRoomShape2D', 'tile is a foot grid clipped to the loop; boards run the long way; carpet is a wash', R => {
+  const tile = recordingCtx();
+  R.drawRoomShape2D(tile, toS, shapeTag({ flooring: { type: 'tile' } }), {}, tagEnv());
+  expect('clipped to the loop', count(tile, 'clip'), 1);
+  // Joints at 0..9 along the 9' side and 0..6 across it: 10 + 7 lines, after
+  // the two traced loops' own moveTo.
+  expect('10 + 7 joints', count(tile, 'moveTo') - 2, 17);
+  expect('the edge is the loop, traced again after the joints',
+    calls(tile, 'moveTo')[calls(tile, 'moveTo').length - 1].join(','), `${toS(ROOM_6x9[0]).x},${toS(ROOM_6x9[0]).y}`);
+  expect('and it prints', (() => { const paper = recordingCtx(); R.drawRoomShape2D(paper, toS, shapeTag({ flooring: { type: 'tile' } }), {}, tagEnv({ isPrinting: true })); return count(paper, 'clip'); })(), 1);
+  // Boards 3" wide along the 9' side: lines every 1/4' across the 6' width,
+  // 0..6 inclusive, and none across the boards. At 20 px a foot: at 10 the
+  // joints are 2.5 px apart and the scale gate makes them a wash.
+  const toS20 = p => ({ x: 400 + (p.x || 0) * 20, y: 300 + (p.z || 0) * 20 });
+  const boards = recordingCtx();
+  R.drawRoomShape2D(boards, toS20, shapeTag({ flooring: { type: 'hardwood' } }), {}, tagEnv());
+  expect('25 board lines', count(boards, 'moveTo') - 2, 25);
+  const fine = recordingCtx();
+  R.drawRoomShape2D(fine, toS, shapeTag({ flooring: { type: 'hardwood' } }), {}, tagEnv());
+  expect('and a wash where they would be under 4 px apart', count(fine, 'moveTo'), 2);
+  const carpet = recordingCtx();
+  R.drawRoomShape2D(carpet, toS, shapeTag({ flooring: { type: 'carpet' } }), {}, tagEnv());
+  expect('a wash and no joints', count(carpet, 'fill') === 1 && count(carpet, 'moveTo') === 2, true);
+});
+
 suite('drawRoomTag2D', 'the WC suffix rides the name rather than being a second string', R => {
   const ctx = recordingCtx();
   R.drawRoomTag2D(ctx, toS, { name: 'WC', at: { x: 0, z: 0 } }, {},
@@ -4003,6 +4068,17 @@ function coverage() {
       'const vote = side.len;')],
     ['drawWetFloors2D joints from the centreline', src => src.replace(
       'const uStart = halfOf(prev, o)', 'const uStart = 0 * halfOf(prev, o)')],
+    // THE ROOM SHAPE (Movie, 23 Oct): a bare one that reaches paper, boards
+    // with joints across them, the area line deaf to its switch, and the
+    // edge stroked on the joints' path instead of the loop's.
+    ['drawRoomShape2D a bare shape prints', src => src.replace(
+      'if (!finish && env.isPrinting) return;', 'if (false) return;')],
+    ['drawRoomShape2D boards get joints across them too', src => src.replace(
+      "if (finish === 'tile') {\n          for (let u", "if (true) {\n          for (let u")],
+    ['roomTagLines the area line ignores its switch', src => src.replace(
+      'tag.points.length < 3 || tag.areaShown === false) return', 'tag.points.length < 3) return')],
+    ['drawRoomShape2D the edge is stroked on the joints', src => src.replace(
+      '      ctx.restore();\n      trace();\n      ctx.strokeStyle = atAlpha(colour, 0.8);', '      ctx.restore();\n      ctx.strokeStyle = atAlpha(colour, 0.8);')],
     // THE DOTTED LINE UNDER A HIGHER ROOF (Movie, 16 Oct), wrong both ways:
     // the hidden stretch stroked solid with the rest, and never dotted.
     ['drawRoof2D strokes what is under a higher roof solid', src => {

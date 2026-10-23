@@ -182,6 +182,14 @@ if (!window.DraftPlanComposition) {
     if (env.floorEnv) floors.forEach(floor => { onLayer(ctx, floor.layer || 'A-FL'); render.drawFloor2D(ctx, toS, floor, {}, env.floorEnv); });
     if (env.shapeEnv) shapes.forEach(shape => { onLayer(ctx, shape.layer || 'SHAPE'); render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv); });
     if (env.roofEnv) roofs.forEach(roof => { onLayer(ctx, roof.layer || 'A-ROOF'); render.drawRoof2D(ctx, toS, roof, {}, env.roofEnv); });
+    // THE FLOORING A ROOM TAG LAYS (Movie, 23 Oct), under the walls so their
+    // fill stops it at the face, on the finishes layer. Only a shaped tag
+    // with its flooring on reaches paper; the painter drops the bare shape
+    // on a print. The tags' own pass (the names) stays last.
+    const roomShapes = env.roomTagEnv && render.drawRoomShape2D
+      ? pick(env.roomTags, { views: false }).filter(tag => (tag.points || []).length >= 3 && shows('A-FL-FLOORING'))
+      : [];
+    roomShapes.forEach(tag => { onLayer(ctx, 'A-FL-FLOORING'); render.drawRoomShape2D(ctx, toS, tag, {}, env.roomTagEnv); });
 
     // MELDED where a wall ends on another or two cross (geometry-2d's
     // meldPieces) -- the pieces are for the painter only; openings and
@@ -194,6 +202,7 @@ if (!window.DraftPlanComposition) {
       onLayer(ctx, 'A-FL-FLOORING');
       render.drawWetFloors2D(ctx, toS, {
         walls,
+        flooredAt: roomShapes.filter(tag => tag.flooring).map(tag => tag.at),
         fixtures: levelFixtures,
         fixtureGeometry: env.fixtureEnv.fixtureGeometry,
         wallFrame: env.fixtureEnv.wallFrame,

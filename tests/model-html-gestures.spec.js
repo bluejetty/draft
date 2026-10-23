@@ -890,6 +890,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // not an entity any absence row is about.
             'STEP IN FOR A ROOF DECK',
             'MOVE FOUNDATION, FLOORS & ROOF',
+            // A ROOM SHAPE'S LINKED CORNER PRESSED (Movie, 23 Oct): "a popup
+            // asks, 1. move wall and floor / 2. de-link and move only
+            // floor". Two answers about a corner already there; neither
+            // makes anything, so no absence row moves.
+            'MOVE WALL AND FLOOR', 'DE-LINK, MOVE ONLY THE FLOOR',
             // THE BONE'S SECOND PRESS (Movie, 19 Sep): "on 2nd always offer
             // choice between drivetrhu or house build". Two answers to one
             // question, like every other card on this page -- and neither

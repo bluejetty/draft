@@ -1311,10 +1311,35 @@ if (!window.DraftRender2D) {
   // MODEL.dc.html shows them on the main floor only, when the drafter has
   // asked for areas at all. So `env.areaFor` returns a string or nothing, and
   // this draws whatever it is given.
+  // THE LINES UNDER THE NAME: the size as the drafter typed it (the caller's
+  // `areaFor`), and the AREA the room's own shape measures (Movie, 23 Oct:
+  // "a AREA marking under the ROOM TAG that can be toggled on and off") --
+  // a shaped tag's, unless its switch is off. Shared with the page's pick
+  // box so the box always covers what is drawn.
+  function roomTagLines(tag, env) {
+    const lines = [];
+    const size = (env.areaFor && env.areaFor(tag)) || '';
+    if (size) lines.push(size);
+    const area = roomTagAreaLabel(tag, env);
+    if (area) lines.push(area);
+    return lines;
+  }
+  function roomTagAreaLabel(tag, env) {
+    if (!Array.isArray(tag.points) || tag.points.length < 3 || tag.areaShown === false) return '';
+    const sqFt = loopArea(tag.points);
+    if (!(sqFt > 0)) return '';
+    return env.areaLabel ? env.areaLabel(sqFt) : `${Math.round(sqFt).toLocaleString('en-US')} SQ FT`;
+  }
+  const loopArea = points => Math.abs(points.reduce((sum, p, i) => {
+    const q = points[(i + 1) % points.length];
+    return sum + (p.x * q.z - q.x * p.z) / 2;
+  }, 0));
+
   function drawRoomTag2D(ctx, toS, tag, options, env) {
     const s = toS(tag.at);
     const label = String(tag.name || '') + (env.suffixFor ? env.suffixFor(tag) : '');
-    const area = (env.areaFor && env.areaFor(tag)) || '';
+    const lines = roomTagLines(tag, env);
+    const area = lines.length > 0;
     ctx.save();
     ctx.textAlign = 'center';
     ctx.fillStyle = env.color;
@@ -1324,12 +1349,12 @@ if (!window.DraftRender2D) {
     ctx.fillText(label, s.x, y);
     const hit = { tag, x: s.x, y, w: ctx.measureText(label).width };
     let subY = s.y + 1;
-    if (area) {
+    lines.forEach(line => {
       ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
       ctx.textBaseline = 'top';
-      ctx.fillText(area, s.x, subY);
+      ctx.fillText(line, s.x, subY);
       subY += 11;
-    }
+    });
     // SCREEN ONLY. A compliance nag belongs to the drafter, not to the sheet
     // that goes to site -- so it is suppressed when printing, exactly as it
     // was on the page this came from.
@@ -1897,6 +1922,86 @@ if (!window.DraftRender2D) {
     return inside;
   };
 
+  // ── A ROOM TAG'S SHAPE, AND THE FLOORING IT STANDS AS ─────────────────
+  //
+  // Movie, 23 Oct: "the FLOOR shape and ROOM TAG shape can be the same thing,
+  // but the FLOOR aspect doesn't always need to be turned on" -- "to
+  // calculate estimates for flooring i'd turn it on 'the flooring' so i can
+  // adjust the shape to get accurate estimates". So a shaped tag draws its
+  // loop faintly, a desk mark that never prints; with `flooring` on it draws
+  // the finish inside the loop and a thin edge round it, and that prints:
+  // tile as the WC tiler lays it (a 1 ft grid squared to the room's longest
+  // side, from the room's own corner, since the loop IS the finished face),
+  // hardwood and laminate as boards along that side, carpet as a wash.
+  const PLANK_FT = 0.25;
+  function drawRoomShape2D(ctx, toS, tag, options = {}, env) {
+    const pts = Array.isArray(tag.points) ? tag.points : [];
+    if (pts.length < 3) return;
+    const finish = tag.flooring && tag.flooring.type;
+    if (!finish && env.isPrinting) return;
+    const screen = pts.map(p => toS({ x: p.x, y: 0, z: p.z }));
+    const colour = env.flooringColor || env.color;
+    // THE LOOP AS A PATH, traced twice where a finish is laid: once to clip
+    // the joints to, and again to stroke the edge -- the joints' own path
+    // replaces the first, and a path is not part of what save/restore keeps.
+    const trace = () => {
+      ctx.beginPath();
+      screen.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+    };
+    ctx.save();
+    trace();
+    if (finish) {
+      ctx.save();
+      ctx.clip();
+      ctx.fillStyle = atAlpha(colour, finish === 'carpet' ? 0.10 : 0.04);
+      ctx.fill();
+      const a = toS({ x: 0, y: 0, z: 0 }), b = toS({ x: 1, y: 0, z: 0 });
+      const pxPerFt = Math.hypot(b.x - a.x, b.y - a.y);
+      const step = finish === 'tile' ? TILE_FT : PLANK_FT;
+      // The scale gate the tiler keeps: joints closer than 4 px are a wash.
+      if (finish !== 'carpet' && step * pxPerFt >= 4) {
+        const k = squareSideOf(pts);
+        const o = pts[k], q = pts[(k + 1) % pts.length];
+        const longest = Math.hypot(q.x - o.x, q.z - o.z) || 1;
+        const ux = (q.x - o.x) / longest, uz = (q.z - o.z) / longest;
+        const vx = -uz, vz = ux;
+        let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+        pts.forEach(p => {
+          const u = (p.x - o.x) * ux + (p.z - o.z) * uz, v = (p.x - o.x) * vx + (p.z - o.z) * vz;
+          u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+        });
+        const W = (u, v) => toS({ x: o.x + ux * u + vx * v, y: 0, z: o.z + uz * u + vz * v });
+        ctx.strokeStyle = atAlpha(colour, 0.5);
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        // Boards run along the long side: joints across it only for tile.
+        if (finish === 'tile') {
+          for (let u = Math.ceil(u0 / step) * step; u <= u1; u += step) {
+            const s0 = W(u, v0), e0 = W(u, v1); ctx.moveTo(s0.x, s0.y); ctx.lineTo(e0.x, e0.y);
+          }
+        }
+        for (let v = Math.ceil(v0 / step) * step; v <= v1; v += step) {
+          const s0 = W(u0, v), e0 = W(u1, v); ctx.moveTo(s0.x, s0.y); ctx.lineTo(e0.x, e0.y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+      trace();
+      ctx.strokeStyle = atAlpha(colour, 0.8);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = atAlpha(colour, 0.45);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
   // Which loops are wet rooms. Pure, and exported so a test can ask it.
   // `roomLoops` is geometry-2d's, handed in rather than reached for so this
   // module keeps no load-order dependency of its own.
@@ -1961,8 +2066,12 @@ if (!window.DraftRender2D) {
     const a = toS({ x: 0, y: 0, z: 0 }), b = toS({ x: TILE_FT, y: 0, z: 0 });
     // The scale gate: joints closer than 4 px are a grey wash, not tile.
     if (Math.hypot(b.x - a.x, b.y - a.y) < 4) return;
+    // A ROOM WHOSE TAG LAYS ITS OWN FLOORING is not tiled twice: the tag's
+    // point is in the loop, and its shape says what the floor is.
+    const own = (env.flooredAt || []).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.z));
     loops.forEach(loop => {
       const pts = loop.points;
+      if (own.some(p => pointInLoop(p, pts))) return;
       const k = squareSideOf(pts);
       const longest = Math.hypot(pts[(k + 1) % pts.length].x - pts[k].x, pts[(k + 1) % pts.length].z - pts[k].z);
       const o = pts[k], q = pts[(k + 1) % pts.length];
@@ -3416,6 +3525,8 @@ if (!window.DraftRender2D) {
     drawFixture2D,
     drawWetFloors2D,
     wetRoomLoops,
+    drawRoomShape2D,
+    roomTagLines,
     squareSideOf,
     drawRoomTag2D,
     drawUnderlays2D,
