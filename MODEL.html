@@ -18573,6 +18573,60 @@
     md.detached = fresh;
     sayOnStrip(`Corner let go — this ${walls().includes(run) ? 'wall' : 'line'}'s end moves alone; the other keeps the corner. UNDO joins them again.`);
   };
+  // DOORS, WINDOWS AND FIXTURES STAY PUT WHEN A WALL'S END IS DRAGGED
+  // (Movie, 23 Oct: "when a wall is stretched/shrunk lengthwise, can the
+  // doors stay in the same position and if the wall is squeezed smaller than
+  // where the door is, delete that door"). An opening's offset is measured
+  // from its wall's start, so a start dragged took every door on the wall
+  // with it. Each opening on a wall the end belongs to is held where it
+  // stood on the sheet -- its centre, read off the wall as it was when the
+  // end was pressed -- and its offset re-read from the wall as it is now; on
+  // release, one no longer wholly on its wall is deleted. One UNDO puts the
+  // offsets and the deleted back (the drag's step becomes a batch).
+  const stayPutOf = (md, grabbed) => {
+    if (md.stayPut) return md.stayPut;
+    const v = grabbed.vtx, from = { x: grabbed.x, z: grabbed.z };
+    md.stayPut = [];
+    (drawing.walls || []).filter(w => w.start === v || w.end === v).forEach(wall => {
+      const s = wall.start === v ? from : wall.start, e = wall.end === v ? from : wall.end;
+      const len = Math.hypot(e.x - s.x, e.z - s.z) || 1;
+      [drawing.fenestrations || [], drawing.fixtures || []].forEach(list => list
+        .filter(o => String(o.wallId) === String(wall.id) && Number.isFinite(Number(o.offset)))
+        .forEach(item => {
+          const t = Number(item.offset) / len;
+          md.stayPut.push({ item, wall, list, before: { ...item },
+            at: { x: s.x + (e.x - s.x) * t, z: s.z + (e.z - s.z) * t } });
+        }));
+    });
+    return md.stayPut;
+  };
+  const keepOpeningsPut = (md, grabbed) => {
+    stayPutOf(md, grabbed).forEach(r => {
+      const w = r.wall;
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      if (len < 1e-6) return;
+      const along = ((r.at.x - w.start.x) * dx + (r.at.z - w.start.z) * dz) / len;
+      r.item.offset = Number(along.toFixed(4));
+    });
+  };
+  // ON RELEASE: the ones no longer wholly on their wall go, as undoable
+  // removals; the rest's new offsets, as a props step.
+  const settleOpeningsPut = md => {
+    const gone = [], edits = [];
+    (md.stayPut || []).forEach(r => {
+      const w = r.wall, len = Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z);
+      const half = (Number(r.item.width) || 0) / 2, off = Number(r.item.offset);
+      if (off - half < -1e-6 || off + half > len + 1e-6) {
+        // AS IT WAS, so UNDO puts back the record the drafter had, not one
+        // carrying the offset it fell off the wall with.
+        r.item.offset = Number(r.before.offset);
+        const index = r.list.indexOf(r.item);
+        if (index >= 0) { r.list.splice(index, 1); gone.push({ kind: 'remove-item', list: r.list, index, item: r.item }); }
+      } else if (Math.abs(off - Number(r.before.offset)) > 1e-9) edits.push({ item: r.item, before: r.before });
+    });
+    if (gone.length) sayOnStrip(`${gone.length} off the wall now, deleted. UNDO brings ${gone.length === 1 ? 'it' : 'them'} back.`);
+    return [...(edits.length ? [{ kind: 'props', edits }] : []), ...gone];
+  };
   const splitRunCorners = md => {
     if (board !== 'toy' || md.kind !== 'wall' || !md.body) return;
     const wall = md.body;
@@ -36017,6 +36071,8 @@
           const pt = joined ? joined.pt : landed;
           grabbed.vtx.x = pt.x;
           grabbed.vtx.z = pt.z;
+          // THE DOORS AND WINDOWS ON THE WALLS THIS END BELONGS TO STAY PUT.
+          if (board !== 'toy') keepOpeningsPut(md, grabbed);
         } else {
           // A WALL MOVES BY THE DELTA, and the delta is measured from where
           // the press landed to where the cursor is now — never accumulated
@@ -36360,7 +36416,10 @@
           before: [...md.before, ...(md.lockBefore || []), ...(md.follow || [])],
           // A WALL LET GO WITH SHIFT takes its old corners back on UNDO.
           ...(md.loose ? { loose: { wall: md.body, shared: md.loose.shared.map(b => b.vtx), fresh: md.loose.fresh.map(f => f.vtx) } } : {}) };
-        undoStack.push(moveStep);
+        // AN END DRAGGED SETTLES ITS WALLS' OPENINGS (settleOpeningsPut): the
+        // steps ride the move's as one batch, so one UNDO puts it all back.
+        const settledOpenings = md.kind === 'corner' && board !== 'toy' ? settleOpeningsPut(md) : [];
+        undoStack.push(settledOpenings.length ? { kind: 'batch', steps: [moveStep, ...settledOpenings] } : moveStep);
         markDirty();
         // §5: the bone moved, so what the storey above covers has changed and
         // the roofs under it are stale. Recomputed on the RELEASE, not on
