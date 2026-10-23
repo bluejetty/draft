@@ -160,7 +160,12 @@ if (!window.DraftFixtureGeometry) {
     const frame = wallFrame(wall);
     if (!frame) return null;
     if (fixture.kind === 'tub' && fixture.endWallId) return tubGeometry(walls, fixture, wall, frame);
-    const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));
+    // ITS OWN WIDTH, WHATEVER THE WALL'S LENGTH (Movie, 23 Oct: "lets only
+    // allow the object to change if they click on it and change the
+    // properties"): a shower on a wall shortened under it keeps its size and
+    // stands past the wall's end, rather than shrinking to fit. It used to
+    // be cut down to the wall.
+    const width = Math.max(fixture.width, 0.5);
     const half = width / 2;
     const along = Math.min(Math.max(fixture.offset, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
     // A standoff floats the body clear of the wall face (the island's aisle).

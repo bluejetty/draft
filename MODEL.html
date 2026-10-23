@@ -5135,6 +5135,11 @@
   const TAG_HIT_PAD = 5;
   const TAG_HIT_HALF_H = 8;
   const windowTagHits = [];
+  // THE BATH FIXTURES' SIZE MARKS (Movie, 23 Oct), kept apart from the
+  // windows' so each list clears with its own painter's guards.
+  const fixtureTagHits = [];
+  const SIZE_MARKED_KINDS = new Set(['shower', 'stall', 'tub']);
+  const SIZE_MARK_OFF_PX = 11;
   const paintWindowSizes = (ctx, toS, shown) => {
     // ── THE SHEET'S OWN TAGS, AND NOT THE THUMBNAILS' ────────────────────
     //
@@ -5223,6 +5228,46 @@
         });
       }
     });
+    // ── A SIZE MARK ON THE BATH FIXTURES (Movie, 23 Oct) ─────────────────
+    //
+    // "we should actually add a SIZE mark (30X60) etc to show the size, and
+    // also allow the user to click on the size mark to change the size". A
+    // shower, a stall or a tub carries its size just off its front edge, in
+    // the room: depth X width in inches (millimetres on a metric drawing),
+    // the way he wrote it. The mark takes a press like a window's tag, and
+    // the box that opens writes the fixture's own width and depth.
+    const FG = window.DraftFixtureGeometry;
+    if (live) fixtureTagHits.length = 0;
+    const marked = [];
+    if (FG) {
+      const all = drawing?.walls || [];
+      const metric = drawing?.units === 'metric';
+      fixtures().filter(fx => SIZE_MARKED_KINDS.has(fx.kind)).forEach(fx => {
+        const geo = FG.fixtureGeometry(all, fx);
+        if (!geo || !geo.corners || geo.corners.length < 4) return;
+        const along = geo.tub ? geo.tubLen : geo.width;
+        const say = ft => (metric ? String(FL.mmTo(ft, 5)) : String(Math.round(ft * 12)));
+        const label = `${say(fx.depth)}X${say(along)}`;
+        // The front edge, and a line a little past it, into the room.
+        const a = toS(geo.corners[3]), b = toS(geo.corners[2]);
+        const c = toS(geo.center);
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const nl = Math.hypot(mx - c.x, my - c.y) || 1;
+        const nx = (mx - c.x) / nl * SIZE_MARK_OFF_PX, ny = (my - c.y) / nl * SIZE_MARK_OFF_PX;
+        const placed = R.labelAlongLine2D(ctx, { x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny },
+          label, { offset: 0, color: skin['ink-quiet'] || skin['draw-wall-edge'] });
+        if (!placed) return;
+        marked.push({ id: fx.id, label, cx: placed.cx, cy: placed.cy });
+        if (live) {
+          fixtureTagHits.push({
+            fixture: fx, label, cx: placed.cx, cy: placed.cy, angle: placed.angle,
+            halfW: ctx.measureText(label).width / 2 + TAG_HIT_PAD,
+            halfH: TAG_HIT_HALF_H,
+          });
+        }
+      });
+    }
+    if (live) window.__fixtureTags = marked;
     ctx.restore();
   };
 
@@ -5244,8 +5289,9 @@
   // sheet is paint order, so the pick runs the list backwards to agree with
   // the picture.
   const windowTagAt = (sx, sy) => {
-    for (let i = windowTagHits.length - 1; i >= 0; i -= 1) {
-      const hit = windowTagHits[i];
+    const hits = [...windowTagHits, ...fixtureTagHits];
+    for (let i = hits.length - 1; i >= 0; i -= 1) {
+      const hit = hits[i];
       const dx = sx - hit.cx, dy = sy - hit.cy;
       const cos = Math.cos(-hit.angle), sin = Math.sin(-hit.angle);
       if (Math.abs(dx * cos - dy * sin) <= hit.halfW
@@ -5273,7 +5319,8 @@
     const rect = canvas.getBoundingClientRect();
     const box = document.createElement('input');
     box.type = 'text';
-    box.dataset.windowSizeEntry = String(hit.opening.id);
+    if (hit.fixture) box.dataset.fixtureSizeEntry = String(hit.fixture.id);
+    else box.dataset.windowSizeEntry = String(hit.opening.id);
     box.value = hit.label;
     Object.assign(box.style, {
       position: 'fixed', left: `${rect.left + hit.cx - 36}px`,
@@ -5294,9 +5341,10 @@
       // box would arm a tool behind the drafter's back.
       event.stopPropagation();
       if (event.key === 'Enter') {
-        const opening = hit.opening, typed = box.value;
+        const opening = hit.opening, fixture = hit.fixture, typed = box.value;
         closeWindowTagEditor();
-        commitWindowSize(opening, typed);
+        if (fixture) commitFixtureSize(fixture, typed);
+        else commitWindowSize(opening, typed);
       }
       if (event.key === 'Escape') closeWindowTagEditor();
     });
@@ -5347,6 +5395,31 @@
     return most > 0 ? ` The most it can take is ${say(most)}.` : ' It cannot take an opening at all.';
   };
 
+  // THE SIZE MARK TYPED INTO (Movie, 23 Oct): "30X60" is 30" deep off the
+  // wall by 60" along it -- depth first, as the mark reads. A tub that was
+  // filling an alcove becomes a plain tub of the typed size. One UNDO.
+  const commitFixtureSize = (fixture, text) => {
+    const FL = window.DraftFenLabels;
+    const metric = drawing?.units === 'metric';
+    const nums = String(text ?? '').match(/\d+(?:\.\d+)?/g);
+    if (!nums || nums.length !== 2 || !(Number(nums[0]) > 0) || !(Number(nums[1]) > 0)) {
+      sayOnStrip(`${String(text).trim() || 'That'} is not a size \u2014 type it as `
+        + (metric ? '760 X 1525, in millimetres' : '30 X 60, in inches') + ': depth first, then along the wall.');
+      return;
+    }
+    const per = metric ? (FL?.MM_PER_FT || 304.8) : 12;
+    const depth = Number(nums[0]) / per, width = Number(nums[1]) / per;
+    const before = { ...fixture };
+    fixture.depth = Number(depth.toFixed(4));
+    fixture.width = Number(width.toFixed(4));
+    if (fixture.kind === 'tub') { delete fixture.endWallId; delete fixture.dir; }
+    undoStack.push({ kind: 'props', edits: [{ item: fixture, before }] });
+    markDirty();
+    paint();
+    const K = window.DraftFixtureKinds;
+    const name = K?.kindFor?.(fixture.kind)?.label || fixture.kind;
+    sayOnStrip(`${name} is ${nums[0]} X ${nums[1]} \u2014 UNDO puts it back.`);
+  };
   const commitWindowSize = (opening, text) => {
     const FL = window.DraftFenLabels;
     const G = window.DraftGeometry2D;
@@ -16559,11 +16632,28 @@
   // second thing and reports success.
   const deleteSelection = () => {
     if (!drawing || !selection.length) return 0;
-    const doomed = selection.slice();
+    // A FIXED ASSEMBLY'S FIXTURES STAY WHEN ITS WALLS GO (Movie, 23 Oct:
+    // "the shower seems to be deleted if i delete this back wall, can we do
+    // the same thing we did with the toilet so the wall can be deleted"). A
+    // press on one wall picks the whole WC, walls and fixtures; DELETE takes
+    // the walls, and their cascade leaves each fixture standing where it was
+    // (deleteWall's `host`), as it does for a wall deleted on its own. A
+    // fixture is deleted when it is picked on its own.
+    const stays = entry => {
+      if (entry.type !== 'fixture') return false;
+      const owner = groupOf(entry);
+      return !!owner && owner.fixed === true
+        && selection.some(e => e.type === 'wall' && groupOf(e) === owner);
+    };
+    const staying = selection.filter(stays);
+    const doomed = selection.filter(entry => !stays(entry));
     let gone = 0;
     const mark = undoStack.length;
     doomed.forEach(entry => { if (deleteEntry(entry)) gone += 1; });
     if (!gone) return 0;
+    if (staying.length) {
+      sayOnStrip(`${staying.length === 1 ? 'The fixture stays' : `${staying.length} fixtures stay`} where ${staying.length === 1 ? 'it' : 'they'} stood \u2014 pick one on its own to delete it. UNDO puts the walls back.`);
+    }
     // A DELETED ROW OF BEAM LENGTHENS THE BAYS EITHER SIDE OF IT, so its
     // floor is asked again -- see stepUpJoists -- in the same UNDO.
     const framing = [...new Set(doomed.filter(e => e.type === 'beam').map(e => Number(e.item.levelId)))];
