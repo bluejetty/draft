@@ -3343,9 +3343,48 @@
   const ROOM_HANDLE_PX = 7;
   const ROOM_EDGE_PICK_PX = 5;
   const roomShapeOf = tag => (Array.isArray(tag?.points) && tag.points.length >= 3 ? tag.points : null);
-  // A corner is LINKED when a wall stands on the same point object: the
-  // pool's identity, not its coordinates.
-  const wallsOnCorner = pt => (drawing?.walls || []).filter(w => w.start === pt || w.end === pt);
+  // A corner is LINKED when a wall stands on the same point object (the
+  // pool's identity, not its coordinates) -- or when it carries a `link`:
+  // a wall's end and its own offset from it (Movie, 23 Oct: "can we also
+  // get it to LINK to non-NODE, corners of 2 walls?"). The inside corner of
+  // two centre-line walls is no node; it is a face corner, half a wall off
+  // the node, and the link keeps that offset as the node moves.
+  const linkWall = pt => (pt?.link ? (drawing?.walls || []).find(w => String(w.id) === String(pt.link.wallId)) || null : null);
+  const wallsOnCorner = pt => {
+    const on = (drawing?.walls || []).filter(w => w.start === pt || w.end === pt);
+    const by = linkWall(pt);
+    return by && !on.includes(by) ? [...on, by] : on;
+  };
+  const ROOM_LINK_FT = 1;
+  // THE LINK A FREE POINT TAKES: the nearest wall end within a foot, and the
+  // offset from it. None when no wall end is near.
+  const roomLinkAt = p => {
+    let best = null;
+    walls().forEach(w => ['start', 'end'].forEach(end => {
+      const v = w[end];
+      if (!v) return;
+      const d = Math.hypot(v.x - p.x, v.z - p.z);
+      if (d <= ROOM_LINK_FT && (!best || d < best.d)) best = { d, link: { wallId: String(w.id), end, dx: p.x - v.x, dz: p.z - v.z } };
+    }));
+    return best ? best.link : null;
+  };
+  // EVERY PAINT, A LINKED CORNER STANDS ITS OFFSET OFF ITS WALL'S END, so it
+  // follows the wall's node wherever a drag or an UNDO puts it. A wall that
+  // is gone drops the link and the corner stays where it stood: the floor
+  // outlives the wall (Movie: "the floor just stays in same position").
+  var followRoomLinks = () => {
+    (drawing?.roomTags || []).forEach(tag => {
+      if (!Array.isArray(tag.points)) return;
+      tag.points.forEach(pt => {
+        if (!pt.link) return;
+        const w = linkWall(pt);
+        const v = w && w[pt.link.end];
+        if (!v) { delete pt.link; return; }
+        const x = v.x + pt.link.dx, z = v.z + pt.link.dz;
+        if (Math.abs(pt.x - x) > 1e-9 || Math.abs(pt.z - z) > 1e-9) { pt.x = x; pt.z = z; }
+      });
+    });
+  };
   const roomSquare = at => [
     { x: at.x - ROOM_TAG_SQUARE_FT / 2, z: at.z - ROOM_TAG_SQUARE_FT / 2 },
     { x: at.x + ROOM_TAG_SQUARE_FT / 2, z: at.z - ROOM_TAG_SQUARE_FT / 2 },
@@ -7256,6 +7295,7 @@
     const t0 = performance.now();
     // Hand dimensions onto the corners they were put on, before anything draws.
     if (typeof followDimLinks === 'function') followDimLinks();
+    if (typeof followRoomLinks === 'function') followRoomLinks();
     // THE ARROW'S HAND AND HOUSE ROTATE GO WITH THE ARROW: put away here and
     // seated again by paintNorth, which only a plan paint reaches -- so an
     // elevation or a section shows neither a click over nothing nor a turn
@@ -16873,7 +16913,7 @@
         // A ROOM SHAPE'S LINKED CORNERS LIKEWISE: the shape turns on its
         // own copies, and the wall's node stays where the wall is.
         item.points.forEach((pt, index) => {
-          if (!held.has(pt)) return;
+          if (!held.has(pt) && !pt.link) return;
           detached.push({ wall: item.points, key: index, orig: pt });
           item.points[index] = { x: pt.x, z: pt.z };
         });
@@ -22430,13 +22470,19 @@
     drawing.nextGroupId = 1 + n;
     // THE ROOM'S TAG, shaped to its inside faces and tiled (Movie, 23 Oct:
     // "maybe when the bathroom is dropped in they will be linked"). Its
-    // corners are the inside corners, which these centre-line walls have no
-    // node at; the day the presets draw on the interior line, they link.
+    // corners are the inside corners, linked by their offset off the nodes
+    // the centre-line walls meet at.
     drawing.roomTags = drawing.roomTags || [];
     const tagIds = drawing.roomTags.map(t => Number(t.id)).filter(Number.isInteger);
     const tagId = Math.max(0, ...tagIds, (Number(drawing.nextRoomTagId) || 1) - 1) + 1;
     drawing.nextRoomTagId = tagId + 1;
-    const inside = (room.inside || []).map(p => ({ x: p.x, z: p.z }));
+    // EACH INSIDE CORNER LINKED to the nearest wall end -- the WC's own
+    // walls', or the house wall it stands against -- so the floor follows
+    // the room (Movie: "when the bathroom is dropped in they will be linked").
+    const inside = (room.inside || []).map(p => {
+      const link = roomLinkAt({ x: p.x, z: p.z });
+      return { x: p.x, z: p.z, ...(link ? { link } : {}) };
+    });
     const tag = inside.length >= 3 ? addItem(drawing.roomTags, {
       id: tagId, at: { x: room.centre.x, z: room.centre.z }, levelId, view: 'plan',
       name: room.name, areaSqFt: 0, underMin: false, stamped: true, layer: ROOM_TAG_LAYER,
@@ -36777,8 +36823,19 @@
           const Q = window.DraftToyConstraints;
           let x = raw.x, z = raw.z;
           if (footOn && Q) { x = Q.quantiseFeet(x); z = Q.quantiseFeet(z); }
+          // A WALL'S NODE TAKES THE CORNER AS ITSELF; a face corner (the
+          // inside corner of two walls, say) takes it at its offset from the
+          // nearest wall end, so the floor follows that wall too.
           const caught = cornerSnap(raw, md.points[md.index]);
-          const pt = caught || { x, z };
+          let pt = caught;
+          if (!pt) {
+            const faces = wallFaceNodes();
+            const face = window.DraftGeometry2D.nearestVertex(faces, raw, CORNER_SNAP_PX / view.scale);
+            if (face) {
+              const link = roomLinkAt(face);
+              pt = { x: face.x, z: face.z, ...(link ? { link } : {}) };
+            } else pt = { x, z };
+          }
           md.points = md.points.map((p, i) => (i === md.index ? pt : p));
           md.tag.points = md.points;
           md.moved = true;
@@ -37253,10 +37310,11 @@
             } else {
               tag.points = pts;
               const linked = pts.includes(md.points[i]) && wallsOnCorner(md.points[i]).length > 0;
+              const byFace = linked && !!md.points[i].link;
               undoStack.push({ kind: 'props', edits: [{ item: tag, before: md.before }] });
               markDirty();
               sayOnStrip(linked
-                ? 'Corner linked to the wall\u2019s node \u2014 the floor follows the wall now. UNDO frees it.'
+                ? `Corner linked to the wall\u2019s ${byFace ? 'corner' : 'node'} \u2014 the floor follows the wall now. UNDO frees it.`
                 : `${tag.name || 'ROOM'} is ${roomTagEnv().areaLabel(window.DraftDrawingFormat.loopAreaSqFt(pts))}.`);
             }
           } else {
@@ -38428,7 +38486,11 @@
     // places only, so a corner a hair off a node stays its own.
     (drawing.roomTags || []).forEach(tag => {
       if (!Array.isArray(tag.points) || tag.points.length < 3) return;
-      tag.points = tag.points.map(p => G.mergeVertex(vertexPool, p, tag.levelId, 'plan', 'house'));
+      tag.points = tag.points.map(p => {
+        const v = G.mergeVertex(vertexPool, p, tag.levelId, 'plan', 'house');
+        if (p.link && !v.link) v.link = { ...p.link };
+        return v;
+      });
     });
 
     // THE HISTORY GOES WITH THE DRAWING IT POINTS INTO. Undo entries hold
@@ -38818,7 +38880,7 @@
       // A SHAPED TAG'S CORNERS ARE POOLED OBJECTS, written as plain points;
       // its area is the shape's as it stands, the figure the roll-ups read.
       roomTags: (drawing.roomTags || []).map(tag => (roomShapeOf(tag)
-        ? { ...tag, points: tag.points.map(point), areaSqFt: roomTagArea(tag) }
+        ? { ...tag, points: tag.points.map(p => ({ ...point(p), ...(p.link ? { link: { ...p.link } } : {}) })), areaSqFt: roomTagArea(tag) }
         : tag)),
     };
   };

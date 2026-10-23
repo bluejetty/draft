@@ -1442,8 +1442,19 @@ if (!window.DraftDrawingFormat) {
       // off counts NOTHING: Movie's own habit is a small square per room
       // with the size off, and nine square feet per room in a floor-area
       // total would be a wrong total on every listing.
+      // A CORNER MAY LINK to a wall's end by its offset from it (a face
+      // corner, where two walls meet): `link: { wallId, end, dx, dz }`.
       const points = (Array.isArray(tag?.points) ? tag.points : [])
-        .map(point).filter(Boolean).map(p => ({ x: p.x, z: p.z }));
+        .map(raw => {
+          const p = point(raw);
+          if (!p) return null;
+          const l = raw?.link;
+          const wallId = String(l?.wallId ?? '').trim();
+          const end = l?.end === 'start' || l?.end === 'end' ? l.end : null;
+          const dx = num(l?.dx), dz = num(l?.dz);
+          const link = wallId && end && dx !== null && dz !== null ? { wallId, end, dx, dz } : null;
+          return { x: p.x, z: p.z, ...(link ? { link } : {}) };
+        }).filter(Boolean);
       const shaped = points.length >= 3;
       const areaShown = tag?.areaShown !== false;
       const tagFlooring = oneOf(tag?.flooring?.type, FLOORING_TYPES, null);

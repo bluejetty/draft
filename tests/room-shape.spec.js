@@ -121,6 +121,38 @@ test('a corner dragged onto a wall\'s node links there; the node dragged carries
   expect(tagNamed(d, 'BEDROOM').points[0].x).toBeCloseTo(0, 2);
 });
 
+test('a corner dropped on the inside corner of two walls links by its offset off the node; the node dragged carries it; the wall deleted leaves it standing', async ({ page }) => {
+  let { at } = await open(page);
+  await click(page, at, [6, 5]);
+  // The inside corner of the 2x4 walls meeting at (0, 0): 1 3/4" in on each.
+  const f = 1.75 / 12;
+  await drag(page, at, [4.5, 3.5], [f, f]);
+  await expect(page.locator('#strip-message')).toContainText('linked to the wall\u2019s corner');
+  let tag = tagNamed(await saved(page), 'BEDROOM');
+  expect(tag.points[0].x).toBeCloseTo(f, 3);
+  expect(tag.points[0].link).toMatchObject({ wallId: 'n', end: 'start' });
+  expect(tag.points[0].link.dx).toBeCloseTo(f, 3);
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(250);
+  ({ at } = await h.planFrame(page));
+  await click(page, at, [6, 0]);
+  await expect(page.locator('#props-slot .props-title').first()).toHaveText('WALL');
+  await drag(page, at, [0, 0], [-2, 0]);
+  let d = await saved(page);
+  expect(d.walls.find(w => w.id === 'n').start.x).toBeCloseTo(-2, 2);
+  expect(tagNamed(d, 'BEDROOM').points[0].x, 'the corner kept its offset off the node').toBeCloseTo(-2 + f, 2);
+  // THE WALL DELETED: the floor stays where it stood, its corner free.
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(150);
+  d = await saved(page);
+  expect(d.walls.map(w => w.id)).not.toContain('n');
+  const p0 = tagNamed(d, 'BEDROOM').points[0];
+  expect(p0.x).toBeCloseTo(-2 + f, 2);
+  expect(p0.link).toBeUndefined();
+});
+
 test('a press on a linked corner asks: DE-LINK frees the corner from the wall; MOVE WALL AND FLOOR picks the wall', async ({ page }) => {
   const { at } = await open(page, drawing({ corner: { x: 0, z: 0 } }));
   await click(page, at, [6, 5]);
@@ -206,6 +238,7 @@ test('a dropped WC brings its tag, shaped to the room\'s inside and tiled; one U
   const wc = tagNamed(d, 'WC 2');
   expect(wc, 'the WC has its tag').toBeTruthy();
   expect(wc.points.length).toBeGreaterThanOrEqual(4);
+  expect(wc.points.every(p => p.link && p.link.wallId), 'every corner linked to a wall of the room').toBe(true);
   expect(wc.flooring).toEqual({ type: 'tile' });
   // 5'-1" x 8'-1" inside.
   expect(wc.areaSqFt).toBeCloseTo((61 / 12) * (97 / 12), 1);
