@@ -417,6 +417,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             : el.dataset.selFilter !== undefined ? 'sel-filter'
               : el.dataset.assemblyStart !== undefined ? 'assembly-start'
                 : el.dataset.assemblyUngroup !== undefined ? 'assembly-ungroup'
+                // ANCHOR (Movie, 22 Oct), the third verb on a held assembly.
+                : el.dataset.assemblyAnchor !== undefined ? 'assembly-anchor'
                   : el.dataset.assemblyFixed !== undefined ? 'assembly-fixed'
                     : el.dataset.assemblyLoose !== undefined ? 'assembly-loose'
                       : el.dataset.assemblyName !== undefined ? 'assembly-name'
@@ -1103,7 +1105,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // THE HELP LINE UNDER THEM IS A DIV and so is not counted, which is
           // the same reach this list has always had: it counts what can be
           // pressed or typed into, not what can be read.
-          toolKinds: ['assembly-fixed', 'assembly-loose', 'assembly-name',
+          toolKinds: ['assembly-anchor', 'assembly-fixed', 'assembly-loose', 'assembly-name',
             'assembly-start', 'assembly-ungroup',
             'fixture-kind',
             // KITCHEN L1, one control kind (see toolKind).
