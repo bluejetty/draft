@@ -5025,7 +5025,7 @@
     const shelfLevel = activeLevelId();
     if (shelfLevel < 0 && !superNodes().length && H()?.shelfSuperNodes) {
       const ink = shelfColourOf(shelves().find(sh => -Number(sh.id) === shelfLevel))?.ink || null;
-      H().shelfSuperNodes(walls(), shelfLevel).forEach(n => superDot(n.point, { ring: true, gold: n.registration === true, ink }));
+      H().shelfSuperNodes(walls(), shelfLevel, drawing?.planTurn || 0).forEach(n => superDot(n.point, { ring: true, gold: n.registration === true, ink }));
     }
     // THE SHEET'S OWN COUNT, not a shelf square's: a thumb paint passes
     // through here too now, and must not write over what the sheet said.
