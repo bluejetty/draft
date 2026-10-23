@@ -184,8 +184,11 @@ check('a fixture pushed past the far end stays on the wall',
 check('a fixture pushed behind the near end stays on the wall',
   G => [G.fixtureGeometry([east], sink({ offset: -100 })).alongStart >= 0, true]);
 
-check('a fixture wider than its wall is cut down to it',
-  G => [G.fixtureGeometry([east], sink({ width: 500 })).width <= 20, true]);
+// SINCE 23 OCT IT IS NOT (Movie: "lets only allow the object to change if
+// they click on it and change the properties"): a fixture wider than its
+// wall keeps its width and stands past the wall's end.
+check('a fixture wider than its wall keeps its width',
+  G => [G.fixtureGeometry([east], sink({ width: 500 })).width, 500]);
 
 // The clamp must not go the other way and shrink a fixture that fits.
 check('a fixture that fits is not shrunk',
@@ -381,9 +384,9 @@ const MUTATIONS = [
   ['the fixture is drawn at its placed offset, unclamped',
     s => s.replace('const along = Math.min(Math.max(fixture.offset, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));',
       'const along = fixture.offset;')],
-  ['a fixture wider than its wall is drawn at full width',
-    s => s.replace('const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));',
-      'const width = fixture.width;')],
+  ['a fixture wider than its wall is cut down to it again',
+    s => s.replace('const width = Math.max(fixture.width, 0.5);',
+      'const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));')],
   ['the standoff is dropped, so an island sits against the wall',
     s => s.replace("+ fixture.side * (fixture.standoff || 0);", ';')],
   ['both sides back onto the same face',
