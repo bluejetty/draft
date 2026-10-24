@@ -2830,6 +2830,22 @@
   // sections). Declared up here because paint() reads them, and paint can run
   // before the block that works them has been reached. See elevPress below.
   let elevFrame = null;      // where a foot of the elevation on screen lands
+  // ── ZOOM AND PAN ON AN ELEVATION (Movie, 23 Oct) ─────────────────────
+  //
+  // "once a user goes to elevation can it be zoomed out fill like it is
+  // now, but once the user is in the elevation can they zoom in to look at
+  // details they'd like to see closer". A cut view opens at the painter's
+  // own fit (the whole building, its marks, a tenth of air); the wheel then
+  // zooms about the cursor and a drag pans, exactly as the plan does, and 0
+  // brings the fit back. The painter is handed the frame to draw in
+  // (`opts.frame`, its pinned pass) rather than fitting for itself; nothing
+  // here is a second fit. `elevPin` is that frame, null for the fit, and
+  // `elevPinFor` the cut it belongs to -- another cut opens fitted.
+  let elevPin = null;
+  let elevPinFor = null;
+  // The fit's own scale, read off the last unpinned paint, so zooming out
+  // stops at half of it rather than running off to nothing.
+  let elevFitPx = null;
   let elevLineStart = null;  // { u, e } -- a line half drawn
   let elevCursor = null;     // { u, e } -- the pointer, for the line's preview
   let elevSelected = null;   // the id of the mark Select is holding
@@ -3155,6 +3171,8 @@
     return allCuts().find(cut => String(cut.id) === wanted) || null;
   };
   const activeCut = () => cutForViewId(params.get('view'));
+  // The hand-set frame for THIS cut, if any (see elevPin).
+  const elevPinned = cut => !!(elevPin && cut && elevPinFor === String(cut.id || cut.name));
 
   const activeViewId = () => {
     if (thumbTarget) return thumbTarget.viewId;
@@ -3828,6 +3846,8 @@
     .flatMap(holo => hologramWallsHere(holo).flatMap(w => [w.start, w.end]))
     .filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.z));
   const fit = (wide = false, margin = 0.86) => {
+    // 0 TO FIT on an elevation: back to the painter's own fit.
+    elevPin = null; elevPinFor = null;
     const own = allPoints(wide);
     const pts = thumbTarget || shootingPaper ? own : own.concat(hologramFramePoints());
     // THE EMPTY TEST STILL STANDS HERE FOR EVERY OTHER LEVEL, and only moves
@@ -7487,7 +7507,12 @@
             // and the line being drawn and the mark held are shown in place.
             // Read by the specs too (tests/clipped-gable.spec.js), which
             // measure the fit from the frame rather than by hunting ink.
-            onFrame: f => { elevFrame = f; window.__elevFrame = f; },
+            onFrame: f => {
+              elevFrame = f; window.__elevFrame = f;
+              if (!elevPinned(cut)) elevFitPx = f.pxPerFt;
+            },
+            // Zoomed or panned by hand: the painter draws in this frame.
+            ...(elevPinned(cut) ? { frame: elevPin } : {}),
             selectedMark: elevSelected,
             selectColor: skin['draw-selected'],
             markPreview: (activeTool === 'line' && elevLineStart && elevCursor)
@@ -36492,7 +36517,20 @@
     const pts = [...touchPts.values()];
     return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
   };
-  const startPan = (x, y, extra = {}) => ({ sx: x, sy: y, cx: view.cx, cz: view.cz, moved: 0, ...extra });
+  const startPan = (x, y, extra = {}) => ({ sx: x, sy: y, cx: view.cx, cz: view.cz, moved: 0,
+    // On an elevation a pan moves the painter's frame, not the plan's view.
+    elev: drawing && activeCut() && elevFrame ? { ...elevFrame } : null,
+    ...extra });
+  const panElev = (pan, dx, dy) => {
+    if (!pan.elev) return false;
+    const cutNow = activeCut();
+    if (!cutNow) return false;
+    elevPin = { pxPerFt: pan.elev.pxPerFt, uMin: pan.elev.uMin, yTop: pan.elev.yTop,
+      x0: pan.elev.x0 + dx, y0: pan.elev.y0 + dy };
+    elevPinFor = String(cutNow.id || cutNow.name);
+    paint();
+    return true;
+  };
   // THE STAIR WORKSPACE TAKES A PRESS AS ENLARGE / SPLIT, and nothing else:
   // it is a drawing to read, not a sheet to draw on.
   canvas.addEventListener('pointerdown', e => {
@@ -37092,6 +37130,7 @@
       touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (twoPan && touchPts.size >= 2) {
         const m = touchMid();
+        if (panElev(twoPan, m.x - twoPan.sx, m.y - twoPan.sy)) return;
         view.cx = twoPan.cx - (m.x - twoPan.sx) / view.scale;
         view.cz = twoPan.cz - (m.y - twoPan.sy) / view.scale;
         paint();
@@ -37558,6 +37597,7 @@
       if (dragging.box.active) paint();
       return;
     }
+    if (panElev(dragging, e.clientX - dragging.sx, e.clientY - dragging.sy)) return;
     view.cx = dragging.cx - (e.clientX - dragging.sx) / view.scale;
     view.cz = dragging.cz - (e.clientY - dragging.sy) / view.scale;
     paint();
@@ -38055,6 +38095,23 @@
     // Zoom about the cursor: the world point under it must not move.
     const before = toWorld(sx, sy);
     const factor = Math.exp(-e.deltaY * 0.0015);
+    // ON AN ELEVATION the wheel zooms the painter's frame about the cursor
+    // (elevPin), from the fit down to half of it and in to 800 px a foot,
+    // the plan's own ceiling.
+    const cutNow = drawing ? activeCut() : null;
+    if (cutNow && elevFrame) {
+      const at = elevAt(sx, sy);
+      const floor = elevFitPx ? elevFitPx * 0.5 : 0.25;
+      const px = Math.max(floor, Math.min(elevFrame.pxPerFt * factor, 800));
+      elevPin = {
+        pxPerFt: px, uMin: elevFrame.uMin, yTop: elevFrame.yTop,
+        x0: sx - (at.u - elevFrame.uMin) * px,
+        y0: sy - (elevFrame.yTop - at.e) * px,
+      };
+      elevPinFor = String(cutNow.id || cutNow.name);
+      paint();
+      return;
+    }
     // IN TO 800 PX A FOOT (Movie, 20 Oct: "would it be possible to go about
     // 4X even further zoom"): a sixteenth of an inch is four pixels there,
     // which is what a 1/16" nudge needs to be seen. 200 was the old stop, and
