@@ -5563,7 +5563,7 @@
       // THE UPPERS OVER IT, each run its own width, lighter.
       const spans = R.upperSpans2D ? R.upperSpans2D(fx, list, env) : [];
       if (spans.length) {
-        const front = R.upperFrontOff2D(geo);
+        const front = R.upperFrontOff2D(geo, fx);
         ctx.save();
         ctx.globalAlpha *= UPPER_MARK_ALPHA;
         spans.forEach(([u0, u1]) => {
@@ -35683,6 +35683,16 @@
       box.append(propSelect('BOWLS', [['double', 'DOUBLE'], ['single', 'SINGLE'], ['right', 'DOUBLE, BIG RIGHT 60/40']],
         agreedOn(items, f => R2.sinkBowlsOf(f)), id => {
           commitFixtureEdits(items.map(f => ({ item: f, patch: { bowls: id } })));
+        }));
+    }
+    // UPPERS ON OR OFF over each lower piece, as wide as it (Movie, 24 Oct:
+    // "allow the lower cabinets to turn on or off upper cabinet that would
+    // match the width. oh ya also above the fridge too"). ON until turned off.
+    const KU = window.DraftFixtureKinds;
+    if (KU?.takesUppers && items.every(f => KU.takesUppers(f))) {
+      box.append(propSelect('UPPERS', [['on', 'ON'], ['off', 'OFF']],
+        agreedOn(items, f => (f.uppers === false ? 'off' : 'on')), id => {
+          commitFixtureEdits(items.map(f => ({ item: f, patch: { uppers: id === 'off' ? false : null } })));
         }));
     }
     if (items.every(f => f.kind === 'island')) {

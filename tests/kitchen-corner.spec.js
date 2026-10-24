@@ -211,14 +211,16 @@ test('a cabinet run with a stove and a fridge on it: the counter stops at each, 
   expect(over(geo.fr), 'none over the fridge').toBe(false);
 });
 
-// NO UPPERS OVER THE SINK OR THE DISHWASHER (Movie, 24 Oct: "the uppers
-// shouldn't be on the dishwasher and the sink").
-test('uppers run over the cabinets but stop at a sink and a dishwasher on the run', async ({ page }) => {
-  const fixtures = [
-    FX('run', 'back', 'cabinet', 6, 8),
-    FX('sk', 'back', 'sinkbase', 5, 3),
-    FX('dw', 'back', 'dish', 7.5, 2),
-  ];
+// UPPERS OVER EVERY LOWER PIECE UNTIL SWITCHED OFF (Movie, 24 Oct: "allow
+// the lower cabinets to turn on or off upper cabinet that would match the
+// width" -- "All lowers, all ON"). The sink and the dishwasher hang their own;
+// switched OFF, the run's uppers stop at them, as they did before the switch.
+const UPPERS_RUN = more => [
+  FX('run', 'back', 'cabinet', 6, 8),
+  { ...FX('sk', 'back', 'sinkbase', 5, 3), ...more },
+  { ...FX('dw', 'back', 'dish', 7.5, 2), ...more },
+];
+async function uppersOver(page, fixtures) {
   await open(page, fixtures);
   const d = await saved(page);
   const uppers = (await counterLines(page, d)).filter(s => s.dashed);
@@ -230,6 +232,15 @@ test('uppers run over the cabinets but stop at a sink and a dishwasher on the ru
   expect(uppers.length, 'uppers are drawn').toBeGreaterThan(0);
   const front = uppers.filter(s => Math.abs(s.a[1] - s.b[1]) < 0.005 && s.a[1] > FACE + 0.3);
   const over = ([lo, hi]) => front.some(s => Math.min(s.a[0], s.b[0]) < hi - 0.01 && Math.max(s.a[0], s.b[0]) > lo + 0.01);
+  return { over, span };
+}
+test('uppers run over the cabinets, the sink and the dishwasher until each is switched off', async ({ page }) => {
+  const { over, span } = await uppersOver(page, UPPERS_RUN({}));
+  expect(over([span.sk[0], span.dw[1]]), 'over the sink and the dishwasher, ON as they come').toBe(true);
+  expect(over([span.run[0], span.sk[0]]), 'and over the cabinet beside them').toBe(true);
+});
+test('switched OFF, the sink and the dishwasher have none and the run\'s stop at them', async ({ page }) => {
+  const { over, span } = await uppersOver(page, UPPERS_RUN({ uppers: false }));
   expect(over([span.sk[0], span.dw[1]]), 'none over the sink or the dishwasher').toBe(false);
   expect(over([span.run[0], span.sk[0]]), 'but over the cabinet beside them').toBe(true);
 });

@@ -15,10 +15,10 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/kitchen-corner.spec.js';
 const MUTANTS = [
-  { file: 'render-2d.js', name: 'the uppers run over the sink and the dishwasher',
-    find: "uppers.push(...upperRings(fx, geo, spansOn(fx, NO_UPPER_KINDS)));",
+  { file: 'render-2d.js', name: 'the uppers run over a sink and a dishwasher switched OFF',
+    find: "uppers.push(...upperRings(fx, geo, upperCutsOn(fx, list, env)));",
     with: "uppers.push(...upperRings(fx, geo));",
-    test: 'stop at a sink and a dishwasher' },
+    test: 'switched OFF' },
   { file: 'render-2d.js', name: 'the counter runs over the stove and the fridge',
     find: "        counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT, cuts));\n",
     with: "        counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT));\n",

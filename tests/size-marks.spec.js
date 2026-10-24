@@ -205,8 +205,9 @@ test('cabinet runs say their width on the front edge, cut round the stove; upper
   const ups = all.filter(m => m.what === 'upper');
   expect(ups.filter(m => m.id === 'cab').map(m => m.label).sort()).toEqual(['33', '33']);
   expect(ups.filter(m => m.id === 'stove').map(m => m.label)).toEqual(['30']);
-  // No uppers over a sink base, so none said.
-  expect(ups.filter(m => /^sb/.test(m.id))).toEqual([]);
+  // A sink base hangs its own and says its own width (Movie, 24 Oct: "All
+  // lowers, all ON").
+  expect(ups.filter(m => m.id === 'sb2').map(m => m.label)).toEqual(['48']);
   // The cabinet's marks sit nearer its front than the uppers' do.
   const c = await cornersOf(page, 'cab');
   const front = (c[2].y + c[3].y) / 2;
