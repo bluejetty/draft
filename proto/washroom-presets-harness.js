@@ -163,7 +163,7 @@ const SUITES = {
     doors: '36 single out, 36 single in, 57 french out', tubIn: 72 },
   BF4: { size: '113 x 138', walls: 'left right far clFarA clFarB tub stub plumb',
     fixtures: 'toilet:tub:20x28 tub:right:72x42 vanity:left:48x26 vanity:plumb:60x26',
-    doors: '36 single out', tubIn: 72.5 },
+    doors: '36 single out', tubIn: 72 },
   BF5: { size: '88.7 x 126', walls: 'left part clB right far tub',
     fixtures: 'shower:tub:60x30 toilet:part:20x28 vanity:right:48x25',
     doors: '36 single out, 51 french out', tubIn: null },
@@ -214,8 +214,10 @@ for (const id of WP.IDS) {
         continue;
       }
       const tubRec = R.fixtures.find(f => f.kind === 'tub');
-      // THE ALCOVE LESS ITS HALF INCH EACH END, where it can spare them.
-      const want = id === 'A' ? 60.5 : id === 'B' ? 60 : SUITES[id].tubIn;
+      // ITS OWN LENGTH, the half inch each end out of the alcove (Movie, 24
+      // Oct: "the tub should only be 42 x 72 (not 73)"): A's 61 1/2" alcove
+      // no longer stretches its 60" tub to 60 1/2".
+      const want = id === 'A' || id === 'B' ? 60 : SUITES[id].tubIn;
       if (want == null) { check(`${tag}: no tub`, Boolean(tubRec), false); continue; }
       const tub = R.geo(tubRec);
       check(`${tag}: the tub fills its alcove`, tub ? inches(tub.tubLen) : 'none', want);
@@ -348,7 +350,7 @@ for (const id of ['BF1', 'BF2', 'BF3', 'BF4']) {
   const tubRec = R.fixtures.find(f => f.kind === 'tub');
   check('the tub sits on the exterior wall', tubRec.wallId, 'ext');
   const tub = R.geo(tubRec);
-  check('inside the room, filling its alcove', tub && inside(tub.center, room.inside) ? inches(tub.tubLen) : 'none', 60.5);
+  check('inside the room, its own 60"', tub && inside(tub.center, room.inside) ? inches(tub.tubLen) : 'none', 60);
 
   // AND THE WC'S VANITY END THE SAME WAY: dropped by the exterior wall, the
   // room draws no end wall and the V42 stands on the house's.
