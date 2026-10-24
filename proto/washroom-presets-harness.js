@@ -110,6 +110,9 @@ const realise = (room, extWall = null) => {
   const fixtures = room.fixtures.map(f => ({ kind: f.kind, wallId: idOf(f.host), levelId: 3, offset: f.offset,
     width: f.width, depth: f.depth, side: f.side,
     ...(f.kind === 'tub' ? { endWallId: idOf(f.endWall), dir: f.dir } : {}) }));
+  // AS THE PAGE DROPS IT: a piece run into a wall stands its half inch off
+  // it (settleWallGaps; Movie, 23 Oct).
+  FG.settleWallGaps(walls, fixtures).forEach(({ fixture, offset }) => { fixture.offset = offset; });
   return { walls, fixtures, geo: f => FG.fixtureGeometry(walls, f) };
 };
 const inside = (pt, poly) => {
@@ -160,7 +163,7 @@ const SUITES = {
     doors: '36 single out, 36 single in, 57 french out', tubIn: 72 },
   BF4: { size: '113 x 138', walls: 'left right far clFarA clFarB tub stub plumb',
     fixtures: 'toilet:tub:20x28 tub:right:72x42 vanity:left:48x26 vanity:plumb:60x26',
-    doors: '36 single out', tubIn: 73.5 },
+    doors: '36 single out', tubIn: 72.5 },
   BF5: { size: '88.7 x 126', walls: 'left part clB right far tub',
     fixtures: 'shower:tub:60x30 toilet:part:20x28 vanity:right:48x25',
     doors: '36 single out, 51 french out', tubIn: null },
@@ -200,17 +203,19 @@ for (const id of WP.IDS) {
       check(`${tag}: every fixture inside its space`, outside.join(',') || 'none', 'none');
       if (id === 'BF1') {
         // The shower lies across the far end from the left wall: 72" along
-        // it, its near edge on that wall's inside face.
+        // it, its back corner half an inch off that wall's inside face and
+        // off the far wall (Movie, 23 Oct: the 1/2" on back and sides).
         const shower = R.geo(R.fixtures.find(f => f.kind === 'shower'));
         const farWall = R.walls.find(w => w.id === 'far');
         const fromLeft = Math.min(...[shower.corners[0], shower.corners[1]].map(c =>
           Math.min(...room.inside.map(p => Math.hypot(p.x - c.x, p.z - c.z)))));
         check(`${tag}: the shower runs 72" along the far wall from a corner`,
-          `${inches(shower.width)} ${r2(fromLeft)} ${shower.wall === farWall}`, '72 0 true');
+          `${inches(shower.width)} ${r2(fromLeft)} ${shower.wall === farWall}`, '72 0.06 true');
         continue;
       }
       const tubRec = R.fixtures.find(f => f.kind === 'tub');
-      const want = id === 'A' ? 61.5 : id === 'B' ? 61 : SUITES[id].tubIn;
+      // THE ALCOVE LESS ITS HALF INCH EACH END, where it can spare them.
+      const want = id === 'A' ? 60.5 : id === 'B' ? 60 : SUITES[id].tubIn;
       if (want == null) { check(`${tag}: no tub`, Boolean(tubRec), false); continue; }
       const tub = R.geo(tubRec);
       check(`${tag}: the tub fills its alcove`, tub ? inches(tub.tubLen) : 'none', want);
@@ -227,7 +232,8 @@ for (const id of ['BF1', 'BF2', 'BF3', 'BF4']) {
   const v = R.fixtures.find(f => f.kind === 'vanity' && f.wallId === 'plumb');
   const g = v && R.geo(v);
   check(`${id}: a vanity on the plumbing wall, full width`, g ? `${inches(g.width)} ${r2(g.backOff * 12)}` : 'none',
-    g ? `${inches(v.width)} ${r2((v.side === 1 ? 1 : -1) * 1.75)}` : 'a vanity');
+    // Its back half an inch off the plumbing wall's face (1 3/4" + 1/2").
+    g ? `${inches(v.width)} ${r2((v.side === 1 ? 1 : -1) * 2.25)}` : 'a vanity');
 }
 
 // ── THE DOOR: IN, AND HUNG WHERE MOVIE HUNG IT ─────────────────────────────
@@ -342,7 +348,7 @@ for (const id of ['BF1', 'BF2', 'BF3', 'BF4']) {
   const tubRec = R.fixtures.find(f => f.kind === 'tub');
   check('the tub sits on the exterior wall', tubRec.wallId, 'ext');
   const tub = R.geo(tubRec);
-  check('inside the room, filling its alcove', tub && inside(tub.center, room.inside) ? inches(tub.tubLen) : 'none', 61.5);
+  check('inside the room, filling its alcove', tub && inside(tub.center, room.inside) ? inches(tub.tubLen) : 'none', 60.5);
 
   // AND THE WC'S VANITY END THE SAME WAY: dropped by the exterior wall, the
   // room draws no end wall and the V42 stands on the house's.

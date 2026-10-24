@@ -154,23 +154,25 @@ check('the centre is the middle of the rectangle',
   G => { const g = G.fixtureGeometry([east], sink());
          return [round(dist(g.center, g.corners[0])), round(Math.hypot(1, 1))]; });
 
-check('it backs onto the wall face, not the drawn line',
+// HALF AN INCH OFF THE FACE (Movie, 23 Oct: "add 1/2" on back and sides").
+check('it backs onto the wall face, not the drawn line -- half an inch off it',
   G => { const g = G.fixtureGeometry([east], sink());
-         return [round(g.backOff), round(G.wallFrame(east).endOff)]; });
+         return [round(g.backOff), round(G.wallFrame(east).endOff + G.WALL_GAP_FT)]; });
 
 // side is the whole reason a fixture can sit in either room a wall divides.
 check('the far side backs onto the other face',
   G => { const g = G.fixtureGeometry([east], sink({ side: -1 }));
-         return [round(g.backOff), round(G.wallFrame(east).startOff)]; });
+         return [round(g.backOff), round(G.wallFrame(east).startOff - G.WALL_GAP_FT)]; });
 
 check('and the two sides land on opposite sides of the wall',
   G => [G.fixtureGeometry([east], sink()).center.z
         * G.fixtureGeometry([east], sink({ side: -1 })).center.z < 0, true]);
 
-// A standoff is what makes an island: the body floats clear of the face.
+// A standoff is what makes an island: the body floats clear of the face,
+// and the standoff takes the place of the half inch.
 check('a standoff floats the fixture off the face',
   G => [round(G.fixtureGeometry([east], sink({ standoff: 1.5 })).backOff
-              - G.fixtureGeometry([east], sink()).backOff), 1.5]);
+              - G.fixtureGeometry([east], sink()).backOff), round(1.5 - G.WALL_GAP_FT)]);
 
 check('no standoff is the same as a zero one',
   G => [round(G.fixtureGeometry([east], sink({ standoff: undefined })).backOff),
@@ -293,10 +295,10 @@ check('nor does one on another sheet',
 // exterior wall is drawn on its outside face, and its tub ran 2 3/4" into it).
 check('a far wall drawn on its face stops the alcove at the face looking at the tub',
   G => { const g = G.fixtureGeometry([backWall, faucet, W('t3', 8, -6, 8, 6, { refLine: 'left' })], tub());
-         return [round(g.alcove), round(8 - 5.5 / 12 - 1 - 2.75 / 12)]; });
+         return [round(g.alcove), round(8 - 5.5 / 12 - 1 - 2.75 / 12 - 2 * G.WALL_GAP_FT)]; });
 check('and a faucet wall drawn on its face starts the alcove at its face on the tub side',
   G => { const g = G.fixtureGeometry([backWall, W('t2', 1, 6, 1, -6, { refLine: 'left' }), farWall(8)], tub());
-         return [round(g.alcove), round(8 - 2.75 / 12 - 1 - 5.5 / 12)]; });
+         return [round(g.alcove), round(8 - 2.75 / 12 - 1 - 5.5 / 12 - 2 * G.WALL_GAP_FT)]; });
 
 check('a tub whose faucet wall is gone has no geometry',
   G => [G.fixtureGeometry([backWall, faucet], tub({ endWallId: 'vanished' })), null]);
@@ -388,9 +390,9 @@ const MUTATIONS = [
     s => s.replace('const width = Math.max(fixture.width, 0.5);',
       'const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));')],
   ['the standoff is dropped, so an island sits against the wall',
-    s => s.replace("+ fixture.side * (fixture.standoff || 0);", ';')],
+    s => s.replace("fixture.side * ((fixture.standoff || 0) + wallGap);", 'fixture.side * wallGap;')],
   ['both sides back onto the same face',
-    s => s.replace('(fixture.side === -1 ? frame.startOff : frame.endOff) +', 'frame.endOff +')],
+    s => s.replace('const faceOff = fixture.side === -1 ? frame.startOff : frame.endOff;\n    const wallGap', 'const faceOff = frame.endOff;\n    const wallGap')],
   ['the fixture depth is ignored',
     s => s.replace('const frontOff = backOff + fixture.side * fixture.depth;\n    const geo = {\n      wall, frame,\n      along,',
       'const frontOff = backOff;\n    const geo = {\n      wall, frame,\n      along,')],
@@ -408,11 +410,11 @@ const MUTATIONS = [
     s => s.replace('corners: rect(Math.min(near, far), Math.max(near, far)),',
       'corners: rect(Math.min(face, farFace), Math.max(face, farFace)),')],
   ['the alcove stops at the furthest crossing wall, not the nearest',
-    s => s.replace('&& dir * (otherFace - face) < dir * (farFace - face)', '')],
+    s => s.replace('&& dir * (otherFace - bare) < dir * (farFace - bare)', '')],
   ['walls on other levels and sheets are scanned too',
     s => s.replace("if (other.levelId !== wall.levelId || (other.view || 'plan') !== (wall.view || 'plan')) return;", '')],
   ['the tub slide is not held inside the gap',
-    s => s.replace('const slide = Math.min(Math.max(fixture.offset, 0), gap);', 'const slide = fixture.offset;')],
+    s => s.replace('const slide = Math.min(Math.max(fixture.offset, 0), room);', 'const slide = fixture.offset;')],
   ['a tub with no faucet wall named takes the alcove path anyway',
     s => s.replace("if (fixture.kind === 'tub' && fixture.endWallId)", "if (fixture.kind === 'tub')")],
   ['the counter overhang is halved',
@@ -423,8 +425,8 @@ const MUTATIONS = [
     s => s.replace('const otherFace = dir > 0 ? Math.min(...otherFaces) : Math.max(...otherFaces);',
       'const otherFace = dir > 0 ? Math.max(...otherFaces) : Math.min(...otherFaces);')],
   ['the faucet wall\'s face away from the tub starts the alcove',
-    s => s.replace('const face = dir > 0 ? Math.max(...endFaces) : Math.min(...endFaces);',
-      'const face = dir > 0 ? Math.min(...endFaces) : Math.max(...endFaces);')],
+    s => s.replace('const bare = dir > 0 ? Math.max(...endFaces) : Math.min(...endFaces);',
+      'const bare = dir > 0 ? Math.min(...endFaces) : Math.max(...endFaces);')],
   ['a fixture whose wall is gone is drawn anyway',
     s => s.replace('if (!wall) return null;', 'if (!wall) wall = { start:{x:0,y:0,z:0}, end:{x:9,y:0,z:0} };')],
 ];

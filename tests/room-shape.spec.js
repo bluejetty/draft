@@ -85,6 +85,14 @@ test('ROOM TAG placed by hand starts as a 3 ft square whose AREA shows; dragging
   tag = tagNamed(await saved(page), 'ROOM');
   expect(tag.at.x).toBeCloseTo(5, 1);
   expect(xz(tag.points)).toEqual([[3.5, 5.5], [6.5, 5.5], [6.5, 8.5], [3.5, 8.5]]);
+  // INSIDE ITS OWN FLOOR THE NAME MOVES ALONE (Movie, 23 Oct: "allow the
+  // ROOM TAG to be moved around within the 'flooring' area without changing
+  // the flooring"): the square stays where it is.
+  await click(page, at, [5, 7]);
+  await drag(page, at, [5, 7], [6, 8]);
+  tag = tagNamed(await saved(page), 'ROOM');
+  expect(tag.at.x).toBeCloseTo(6, 1);
+  expect(xz(tag.points), 'the square untouched').toEqual([[3.5, 5.5], [6.5, 5.5], [6.5, 8.5], [3.5, 8.5]]);
   // The OLD tag is as it was: a name at a point, its area kept.
   const old = tagNamed(await saved(page), 'OLD');
   expect(old.points).toBeUndefined();

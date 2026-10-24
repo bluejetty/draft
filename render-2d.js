@@ -1539,12 +1539,19 @@ if (!window.DraftRender2D) {
       return [geoRect(geo, geo.alongStart - o, geo.alongEnd + o, c0 - o, c1 + o)];
     }
     const front = geo.frontOff + dir * o;
-    const rings = [geoRect(geo, geo.alongStart, geo.alongEnd, geo.backOff, front)];
+    // THE COUNTER STILL MEETS THE WALL: the cabinet stands its half inch
+    // off it (wallGapOf), the top does not.
+    const back = geo.faceOff != null ? geo.faceOff : geo.backOff;
     if (fixture.kind === 'cornerbase' && geo.cornerAlong != null) {
+      // AND INTO THE CORNER: its corner end stands the half inch off the
+      // other wall, the top runs on to that wall's face.
       const c = geo.cornerAlong > geo.legAlong ? 1 : -1;
-      rings.push(geoRect(geo, geo.cornerAlong, geo.legAlong - c * o, geo.backOff, geo.legOff));
+      const wallEnd = geo.cornerAlong + c * (geo.wallGap || 0);
+      const far = c > 0 ? geo.alongStart : geo.alongEnd;
+      return [geoRect(geo, Math.min(far, wallEnd), Math.max(far, wallEnd), back, front),
+        geoRect(geo, wallEnd, geo.legAlong - c * o, back, geo.legOff)];
     }
-    return rings;
+    return [geoRect(geo, geo.alongStart, geo.alongEnd, back, front)];
   }
   // THE UPPERS OVER A PIECE: 12" off the wall, both legs for the CORNER.
   function upperRings(fixture, geo) {
@@ -1685,6 +1692,32 @@ if (!window.DraftRender2D) {
         seg([a, cBack], [a, cFront]);
         ctx.restore();
       });
+    }
+    // THE HALF INCH, AS A LIGHT LINE (Movie, 23 Oct: "the 1/2" just draw a
+    // lighter ling 1/2" from the edge"): round the back and the two sides,
+    // never the front; a side another piece stands against on the same face
+    // draws none, since a run stays tight. Its back corners are the ones that
+    // meet the wall's corner.
+    const wallGap = geo.wallGap || 0;
+    if (wallGap > 0 && geo.faceOff != null) {
+      const abuts = at => Array.isArray(env.fixtures) && env.fixtures.some(other => {
+        if (other === fixture || !other || !sameHost(other, fixture)) return false;
+        if ((other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return false;
+        const g = env.fixtureGeometry(other);
+        return !!g && (Math.abs(g.alongEnd - at) < JOINT_FT || Math.abs(g.alongStart - at) < JOINT_FT);
+      });
+      const m0 = a0 - wallGap, m1 = a1 + wallGap;
+      ctx.save();
+      ctx.lineWidth = 0.6;
+      ctx.globalAlpha *= 0.4;
+      ctx.beginPath();
+      const L = (p, q) => { const A = P(p[0], p[1]), B = P(q[0], q[1]); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); };
+      const left = abuts(a0) ? a0 : m0, right = abuts(a1) ? a1 : m1;
+      L([left, geo.faceOff], [right, geo.faceOff]);
+      if (left === m0) L([m0, geo.faceOff], [m0, cFront]);
+      if (right === m1) L([m1, geo.faceOff], [m1, cFront]);
+      ctx.stroke();
+      ctx.restore();
     }
     if (kind === 'vanity') {
       const widthIn = (a1 - a0) * 12, depthIn = (cMax - cMin) * 12;

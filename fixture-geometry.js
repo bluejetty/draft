@@ -41,6 +41,22 @@ if (!window.DraftFixtureGeometry) {
   // was extracted to stop.
   const COUNTER_OVERHANG_FT = 1 / 12; // countertop edge past the cabinet face
 
+  // HALF AN INCH OFF THE WALLS IT STANDS AGAINST (Movie, 23 Oct: "for the
+  // BATHRUB / SHOWER / and SINK / KITCHEN CABINETS.. can you add 1/2" to the
+  // sides of the item (for example a 60X30 bathtub show it 60x30 but add 1/2"
+  // on back and sides (not on front)" -- "the corner at the extra 1/2" point
+  // will be the important point i need to attached to the corner of wall";
+  // "anything that is 'against' a wall"; "not the toilet"; "only when
+  // against a wall"; "update all the stuff"). The piece keeps its size; it
+  // stands WALL_GAP_FT off the wall it backs onto, and an end of it (or of
+  // the run it is in) that meets a crossing wall stands the same off that
+  // wall (settleWallGaps). A toilet, an island (its aisle is its standoff)
+  // and a closet (its own walls) take none.
+  const WALL_GAP_FT = 0.5 / 12;
+  const NO_WALL_GAP = new Set(['toilet', 'island', 'closet']);
+  const wallGapOf = fixture => (!fixture || NO_WALL_GAP.has(fixture.kind) || (Number(fixture.standoff) || 0) > 0
+    ? 0 : WALL_GAP_FT);
+
   const wallTypes = () => {
     const WT = window.DraftWallTypes;
     if (!WT) throw new Error('fixture-geometry.js: wall-types.js did not load, so a wall has no assembly width');
@@ -109,7 +125,9 @@ if (!window.DraftFixtureGeometry) {
     // The end wall's face on the tub's side, and each crossing wall's face
     // that looks back at the tub.
     const endFaces = facesAlong(frame, endWall, cross.along);
-    const face = dir > 0 ? Math.max(...endFaces) : Math.min(...endFaces);
+    // HALF AN INCH OFF EACH END WALL, and off the back (wallGapOf).
+    const gap = wallGapOf(fixture);
+    const bare = dir > 0 ? Math.max(...endFaces) : Math.min(...endFaces);
     // The alcove's far bound: the nearest crossing wall past the faucet wall,
     // or the end of the back wall itself.
     let farFace = dir > 0 ? frame.len : 0;
@@ -120,25 +138,32 @@ if (!window.DraftFixtureGeometry) {
       if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
       const otherFaces = facesAlong(frame, other, hit.along);
       const otherFace = dir > 0 ? Math.min(...otherFaces) : Math.max(...otherFaces);
-      if (dir * (otherFace - face) > 0.5 && dir * (otherFace - face) < dir * (farFace - face)) farFace = otherFace;
+      if (dir * (otherFace - bare) > 0.5 && dir * (otherFace - bare) < dir * (farFace - bare)) farFace = otherFace;
     });
+    // The alcove found between the bare faces; the tub then keeps its half
+    // inch off each -- or what the alcove can spare past the tub's own
+    // length, shared: a 72" tub in a 72" alcove (BF2) stays 72".
+    const ends = Math.max(0, Math.min(gap, (dir * (farFace - bare) - fixture.width) / 2));
+    const face = bare + dir * ends;
+    farFace -= dir * ends;
     const alcove = dir * (farFace - face);
     if (alcove < TUB_MIN_LENGTH_FT) return null;
     const tubLen = Math.min(alcove, fixture.width + TUB_STRETCH_MAX_FT);
-    const gap = Math.max(alcove - tubLen, 0);
-    const slide = Math.min(Math.max(fixture.offset, 0), gap);
+    const room = Math.max(alcove - tubLen, 0);
+    const slide = Math.min(Math.max(fixture.offset, 0), room);
     const near = face + dir * slide;
     const far = near + dir * tubLen;
-    const backOff = fixture.side === -1 ? frame.startOff : frame.endOff;
+    const faceOff = fixture.side === -1 ? frame.startOff : frame.endOff;
+    const backOff = faceOff + fixture.side * gap;
     const frontOff = backOff + fixture.side * fixture.depth;
     const rect = (a0, a1) => [
       frame.at(a0, backOff), frame.at(a1, backOff), frame.at(a1, frontOff), frame.at(a0, frontOff),
     ];
     const decks = [];
     if (slide > 0.04) decks.push(rect(Math.min(face, near), Math.max(face, near)));
-    if (gap - slide > 0.04) decks.push(rect(Math.min(far, farFace), Math.max(far, farFace)));
+    if (room - slide > 0.04) decks.push(rect(Math.min(far, farFace), Math.max(far, farFace)));
     return {
-      wall, frame, tub: true, dir, face, farFace, alcove, tubLen, gap, slide,
+      wall, frame, tub: true, dir, face, farFace, alcove, tubLen, gap: room, wallGap: gap, faceOff, slide,
       faucetAlong: near,
       along: (near + far) / 2,
       alongStart: Math.min(face, farFace), alongEnd: Math.max(face, farFace),
@@ -168,13 +193,16 @@ if (!window.DraftFixtureGeometry) {
     const width = Math.max(fixture.width, 0.5);
     const half = width / 2;
     const along = Math.min(Math.max(fixture.offset, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
-    // A standoff floats the body clear of the wall face (the island's aisle).
-    const backOff = (fixture.side === -1 ? frame.startOff : frame.endOff) + fixture.side * (fixture.standoff || 0);
+    // A standoff floats the body clear of the wall face (the island's aisle),
+    // and the half inch off the wall does the same (wallGapOf).
+    const faceOff = fixture.side === -1 ? frame.startOff : frame.endOff;
+    const wallGap = wallGapOf(fixture);
+    const backOff = faceOff + fixture.side * ((fixture.standoff || 0) + wallGap);
     const frontOff = backOff + fixture.side * fixture.depth;
     const geo = {
       wall, frame,
       along, alongStart: along - half, alongEnd: along + half,
-      backOff, frontOff, width, side: fixture.side,
+      backOff, frontOff, width, side: fixture.side, faceOff, wallGap,
       corners: [
         frame.at(along - half, backOff),
         frame.at(along + half, backOff),
@@ -192,7 +220,9 @@ if (!window.DraftFixtureGeometry) {
       const c = fixture.corner === -1 ? -1 : 1;
       geo.cornerAlong = c > 0 ? along + half : along - half;
       geo.legAlong = geo.cornerAlong - c * fixture.depth;
-      geo.legOff = backOff + fixture.side * width;
+      // FROM THE WALL'S FACE, not from the half inch: the next piece on the
+      // other wall still stands tight to the leg's end.
+      geo.legOff = faceOff + fixture.side * width;
       geo.decks = [[frame.at(geo.cornerAlong, frontOff), frame.at(geo.legAlong, frontOff),
         frame.at(geo.legAlong, geo.legOff), frame.at(geo.cornerAlong, geo.legOff)]];
     }
@@ -248,7 +278,104 @@ if (!window.DraftFixtureGeometry) {
     return best;
   };
 
+  // ── THE HALF INCH OFF A CROSSING WALL (Movie, 23 Oct) ─────────────────
+  //
+  // Where a piece's end -- or the end of the run of pieces it stands in,
+  // touching end to end on one face of one wall -- meets a crossing wall, it
+  // stands WALL_GAP_FT off that wall's face: within GAP_SNAP_FT of it, or
+  // into it by up to a few inches, the run slides -- in or out -- to
+  // exactly the half inch.
+  // Pieces within a run stay tight ("only when against a wall"). A run with
+  // a wall at both ends and no inch to spare is left where it is. A tub in
+  // its alcove (endWallId) takes its half inches in tubGeometry.
+  // The changes as [{ fixture, offset }], nothing mutated.
+  const GAP_SNAP_FT = 3 / 12;
+  const GAP_INTO_FT = 3 / 12;
+  const crossFacesOn = (walls, wall, frame) => {
+    const faces = [];
+    (walls || []).forEach(other => {
+      if (!other || other === wall || !other.start || !other.end) return;
+      if (String(other.levelId) !== String(wall.levelId) || (other.view || 'plan') !== (wall.view || 'plan')) return;
+      const hit = wallCross(wall, frame, other);
+      if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
+      faces.push(...facesAlong(frame, other, hit.along));
+    });
+    return faces;
+  };
+  const settleWallGaps = (walls, fixtures) => {
+    const groups = new Map();
+    (fixtures || []).forEach(f => {
+      if (!f || f.endWallId != null || !wallGapOf(f) || !(Number(f.width) > 0)) return;
+      const key = `${hostKey(f)}|${f.side === -1 ? -1 : 1}|${f.levelId}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(f);
+    });
+    const out = [];
+    groups.forEach(list => {
+      const wall = hostOf(walls, list[0]);
+      const frame = wall ? wallFrame(wall) : null;
+      if (!frame) return;
+      const faces = crossFacesOn(walls, wall, frame);
+      if (!faces.length) return;
+      const span = f => [Number(f.offset) - Number(f.width) / 2, Number(f.offset) + Number(f.width) / 2];
+      const sorted = list.slice().sort((a, b) => span(a)[0] - span(b)[0]);
+      const runs = [];
+      sorted.forEach(f => {
+        const last = runs[runs.length - 1];
+        if (last && span(f)[0] - last.hi < RUN_TOL_FT * 2) { last.items.push(f); last.hi = Math.max(last.hi, span(f)[1]); }
+        else runs.push({ items: [f], lo: span(f)[0], hi: span(f)[1] });
+      });
+      runs.forEach(run => {
+        // THE SLIDE EACH END ASKS FOR, toward or away from the face nearest
+        // it; a run asked both ways by two walls has no room and stays.
+        let lo = null, hi = null;
+        faces.forEach(face => {
+          const dLo = run.lo - face;
+          if (dLo > -GAP_INTO_FT && dLo < GAP_SNAP_FT && face < run.hi) {
+            const ask = face + WALL_GAP_FT - run.lo;
+            if (lo == null || Math.abs(ask) < Math.abs(lo)) lo = ask;
+          }
+          const dHi = face - run.hi;
+          if (dHi > -GAP_INTO_FT && dHi < GAP_SNAP_FT && face > run.lo) {
+            const ask = face - WALL_GAP_FT - run.hi;
+            if (hi == null || Math.abs(ask) < Math.abs(hi)) hi = ask;
+          }
+        });
+        const shift = lo != null && hi != null ? (Math.abs(lo - hi) < 1e-4 ? lo : 0) : lo ?? hi ?? 0;
+        if (Math.abs(shift) < 1e-4) return;
+        run.items.forEach(f => out.push({ fixture: f, offset: Number(f.offset) + shift }));
+      });
+    });
+    return out;
+  };
+
+  // A PIECE PRESSED BY A CORNER: the centre that stands its end exactly the
+  // half inch off the crossing wall's face, when that end is within `reach`
+  // of the face or runs into the wall; null when no end is near one.
+  const snapToWallGap = (walls, wall, along, width, reach = 0.5) => {
+    const frame = wall && wallFrame(wall);
+    if (!frame) return null;
+    const half = width / 2;
+    let best = null;
+    crossFacesOn(walls, wall, frame).forEach(face => {
+      const lo = along - half, hi = along + half;
+      if (face <= along && lo - face > -half && lo - face < reach) {
+        const at = face + WALL_GAP_FT + half;
+        if (!best || Math.abs(at - along) < Math.abs(best - along)) best = at;
+      }
+      if (face >= along && face - hi > -half && face - hi < reach) {
+        const at = face - WALL_GAP_FT - half;
+        if (!best || Math.abs(at - along) < Math.abs(best - along)) best = at;
+      }
+    });
+    return best;
+  };
+
   window.DraftFixtureGeometry = Object.freeze({
+    WALL_GAP_FT,
+    snapToWallGap,
+    wallGapOf,
+    settleWallGaps,
     runMates,
     islandHolding,
     islandPieces,
