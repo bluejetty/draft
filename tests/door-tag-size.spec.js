@@ -27,7 +27,8 @@ const drawing = () => ({
   surfaceOpenings: [], notes: [], stairs: [], roomTags: [], columns: [], beams: [],
   boneyardOutlines: [], groups: [], levelLocks: [], underlays: [],
 });
-const DOOR_TAG = /^D\d+$/;
+// D36, or both panels of a pair -- D18/18 -- since 24 Oct.
+const DOOR_TAG = /^D\d+(\/\d+)?$/;
 
 async function open(page) {
   await h.openModel(page, { webgl: false });
@@ -69,10 +70,11 @@ async function saved(page) {
   return h.savedDrawing(page);
 }
 
-test('click D36, type D60: the door is 5\'-0" wide, its height and centre kept', async ({ page }) => {
+test('click D18/18, type D60: the door is 5\'-0" wide, its height and centre kept', async ({ page }) => {
   await open(page);
   const tag = await pressDoorTag(page);
-  expect(tag.text).toBe('D36');
+  // THE PAIR'S TWO LEAVES ON THE TAG, its whole width in the box (24 Oct).
+  expect(tag.text).toBe('D18/18');
   const entry = page.locator('[data-window-size-entry]');
   await expect(entry).toBeVisible();
   await expect(entry).toHaveValue('D36');

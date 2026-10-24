@@ -32,7 +32,14 @@ if (!window.DraftFixtureGeometry) {
 (() => {
   // The tub's own spec, and it lives here rather than at the call sites: a tub
   // is the one fixture whose drawn length is not the length it was placed at.
-  const TUB_STRETCH_MAX_FT = 0.5;    // the tub grows up to 6" past standard; the rest is deck
+  // THE TUB IS ITS OWN SIZE (Movie, 24 Oct: "the tub should only be 42 x 72
+  // (not 73), but should have the extra 1/2" on each side (so will need 73
+  // space but tub is 72"): it no longer grows to fill an alcove. It grew up
+  // to 6", and a 72" tub in a 73 3/4" alcove read 42X73.
+  const TUB_STRETCH_MAX_FT = 0;
+  // SLACK UNDER AN INCH IS GAP, NOT DECK: an alcove a hair longer than the
+  // tub and its two half inches draws no sliver of a deck strip.
+  const TUB_DECK_MIN_FT = 1 / 12;
   const TUB_MIN_LENGTH_FT = 4;       // an alcove shorter than this can't take the tub
   // Not read in this file: drawFixture2D takes it through env, and the kitchen
   // island reads it to stand its cabinet off the counter. It lives here because
@@ -162,8 +169,8 @@ if (!window.DraftFixtureGeometry) {
       frame.at(a0, backOff), frame.at(a1, backOff), frame.at(a1, frontOff), frame.at(a0, frontOff),
     ];
     const decks = [];
-    if (slide > 0.04) decks.push(rect(Math.min(face, near), Math.max(face, near)));
-    if (room - slide > 0.04) decks.push(rect(Math.min(far, farFace), Math.max(far, farFace)));
+    if (slide > TUB_DECK_MIN_FT) decks.push(rect(Math.min(face, near), Math.max(face, near)));
+    if (room - slide > TUB_DECK_MIN_FT) decks.push(rect(Math.min(far, farFace), Math.max(far, farFace)));
     return {
       wall, frame, tub: true, dir, face, farFace, alcove, tubLen, gap: room, wallGap: gap, faceOff, slide,
       faucetAlong: near,

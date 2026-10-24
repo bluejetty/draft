@@ -143,10 +143,11 @@ check('but with no door wall the hall sees them',
 // ── ALONG THE ROOM: side-on, farthest first ────────────────────────────────
 {
   const { strokes, fills } = extra(BATH, ALONG);
-  // The tub's apron stretched to its alcove (5'-6" here), the toilet 26"
-  // tank to bowl, the vanity its 24" depth.
+  // The tub's apron its own 5'-0" (Movie, 24 Oct: "the tub should only be
+  // 42 x 72 (not 73)" -- it no longer stretches to its alcove), the toilet
+  // 26" tank to bowl, the vanity its 24" depth.
   check('the vanity and toilet side-on, the tub\'s apron', JSON.stringify(strokes.map(span)),
-    JSON.stringify([[66, 20], [26, 28], [24, 46]]));
+    JSON.stringify([[60, 20], [26, 28], [24, 46]]));
   const sils = fills.slice().sort((a, b) => a.seq - b.seq);
   check('each one\'s silhouette goes down before its lines',
     sils.length === 3 && sils.every((f, i) => f.seq < strokes[i].seq), true);

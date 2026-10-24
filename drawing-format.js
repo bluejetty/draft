@@ -435,6 +435,9 @@ if (!window.DraftDrawingFormat) {
         // pocket, the barn track and a GARDEN's leaf follow the same hinge.
         hingeFlip: isDoor ? opening?.hingeFlip === true : null,
         swingFlip: isDoor ? opening?.swingFlip === true : null,
+        // SHOW HEIGHT (Movie, 24 Oct): the door's mark says its height at the
+        // standard 80" too. Only a door that asked carries the key.
+        ...(isDoor && opening?.showHeight === true ? { showHeight: true } : {}),
         // Board #169: the bone's own windows carry their provenance so a
         // re-deal knows which are still its to replace. Old drawings have
         // no flag and validate unchanged as the drafter's.
@@ -456,7 +459,8 @@ if (!window.DraftDrawingFormat) {
   // island records a standoff: the clear distance from the host wall face to
   // the island's near edge, so it stands free of the wall but still rides it.
   // The last five are Movie's kitchen pieces (KITCHENITEMS1/2.DXF, 9 Oct).
-  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'sinkbase', 'drawerbase', 'doorbase', 'cornerbase', 'tallcab', 'fridge30', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
+  const SINK_BOWLS = ['single', 'double', 'right'];
+  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'sinkbase', 'drawerbase', 'doorbase', 'cornerbase', 'tallcab', 'fridge30', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet', 'pedestal', 'pedestal30'];
   // `env.drops` like walls, lines, floors and dimensions: a refused record is
   // REPORTED rather than silently gone. MODEL.html re-emits what it refused
   // on save (withRefused), so without this sink a caller that normalises
@@ -508,6 +512,10 @@ if (!window.DraftDrawingFormat) {
         ...(endWallId ? { endWallId, dir: fixture?.dir === -1 ? -1 : 1 } : {}),
         // THE CORNER PIECE'S CORNER: which end along its wall stands in it.
         ...(kind === 'cornerbase' ? { corner: fixture?.corner === -1 ? -1 : 1 } : {}),
+        // A SINK BASE'S BOWLS (Movie, 24 Oct: "add double sink right bowl
+        // option"): 'single', 'double', or 'right' -- a double with the
+        // bigger bowl, 60/40, on the right. No key is how it always drew.
+        ...((kind === 'sinkbase' || kind === 'sink') && SINK_BOWLS.includes(fixture?.bowls) ? { bowls: fixture.bowls } : {}),
       };
     }), env.drops).filter(Boolean);
 

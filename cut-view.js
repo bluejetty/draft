@@ -3343,16 +3343,17 @@ if (!window.DraftCutView) {
     // outside line dimensions and leave the window sizes on i won't be able
     // too". The corner string and the 36X36 are different marks about the
     // same window and a drafter wants each without the other.
-    const fenStandard = env.layerStandard ? env.layerStandard('A-DIMS-WIN') : null;
-    const showFenTags = !fenStandard || fenStandard.visible !== false;
-    // A DOOR'S SIZE ON AN ELEVATION IS OFF UNTIL THE OFFICE TURNS IT ON
-    // (Movie, 1 Oct: "WINDOW sizes ON in elevation ... DOORS off by default
-    // but they could turn it on"). Two switches, both needed: STANDARDS'
-    // DOOR SIZES ON ELEVATIONS, and A-DIMS-DOOR's own Visible tick. A page
-    // that hands no fenestration standards draws none -- off is the default.
-    const doorStandard = env.layerStandard ? env.layerStandard('A-DIMS-DOOR') : null;
+    // A DOOR'S SIZE ON AN ELEVATION IS ON BY DEFAULT NOW (Movie, 24 Oct: "ok
+    // put them on by default"; it was off from 1 Oct), and the window's has a
+    // STANDARDS switch of its own beside it. Two switches each, both needed:
+    // STANDARDS' SIZE MARKS row, and the layer's own Visible tick. A page
+    // that hands no fenestration standards draws them -- on is the default.
     const fenStandards = env.fenStandards ? env.fenStandards() : null;
-    const showDoorTags = !!(fenStandards && fenStandards.doorsOnElevations)
+    const fenStandard = env.layerStandard ? env.layerStandard('A-DIMS-WIN') : null;
+    const showFenTags = (!fenStandard || fenStandard.visible !== false)
+      && (!fenStandards || fenStandards.windowSizesOnElevations !== false);
+    const doorStandard = env.layerStandard ? env.layerStandard('A-DIMS-DOOR') : null;
+    const showDoorTags = (!fenStandards || fenStandards.doorSizesOnElevations !== false)
       && (!doorStandard || doorStandard.visible !== false);
 
     // Roof silhouette: at each spot along the cut, the tallest roof surface
@@ -5908,15 +5909,15 @@ if (!window.DraftCutView) {
             ctx.restore();
           }
         }
-        // THE DOOR'S, when the office asked for it: D36, or G 16W x 8H on a
-        // garage door, centred on the leaf by the window's own fit rule.
+        // THE DOOR'S: D36, D36/24 on two panels, X 96 when it is not 80"
+        // tall, 16' X 8' on a garage door -- the plan's own label, out of
+        // fen-labels -- centred on the opening by the window's fit rule.
         if (f.type === 'door' && window.DraftFenLabels && showDoorTags) {
-          const doorLabel = window.DraftFenLabels.fenLabel({
+          const doorLabel = window.DraftFenLabels.fenLabelForOpening(f, {
             // A door stands on the floor: its height is its head, not a
             // window's head-less-sill (a door's stored sill is 0, which the
             // line above reads as "use the default window sill").
-            type: 'door', widthFt: f.width, heightFt: head,
-            garage: f.garage === true || f.doorType === 'garage', units: env.units });
+            heightFt: head, units: env.units });
           if (doorLabel) {
             ctx.save();
             ctx.fillStyle = INK;

@@ -1,6 +1,6 @@
 // FENESTRATION LABELS (board #141): the office's naming ladder as a pure
 // formatter (fen-labels.js) — since 1 Oct three letters for the estimate:
-// G 16W x 8H garage doors in FEET width-first, D36 for every other door in
+// 16' X 8' garage doors in FEET width-first (24 Oct; G 16W x 8H before), D36 for every other door in
 // inches of width, W 36 X 42 windows in INCHES width-first — plus the
 // editable stock ladder in COMPANY STANDARDS and the DOOR SIZES ON
 // ELEVATIONS switch, which defaults OFF.
@@ -70,8 +70,8 @@ test('the formatter encodes every quirk in the ladder', async ({ page }) => {
   });
   expect(labels.wNoHeight, 'width only, no height invented').toBe('W 36');
   expect(labels.wFlat, 'a head at the sill is no height either').toBe('W 36');
-  expect(labels.garageDouble).toBe('G 16W x 8H');
-  expect(labels.garageSingle).toBe('G 9W x 8H');
+  expect(labels.garageDouble).toBe("16' X 8'");
+  expect(labels.garageSingle).toBe("9' X 8'");
   expect(labels.ed36).toBe('D36');
   expect(labels.ed32).toBe('D32');
   expect(labels.d32).toBe('D32');
@@ -83,12 +83,12 @@ test('the formatter encodes every quirk in the ladder', async ({ page }) => {
   expect(labels.dd48).toBe('D48');
   expect(labels.w2436).toBe('W 24 X 36');
   expect(labels.wOddSize).toBe('W 37 X 49');
-  expect(labels.autoOverhead).toBe('G 16W x 7H');
+  expect(labels.autoOverhead).toBe("16' X 7'");
   expect(labels.autoMan).toBe('D32');
   expect(labels.looseWallDoor).toBe('D36');
   expect(labels.window).toBe('W 24 X 36');
   // Door sizes stay off the elevations until the office turns them on.
-  expect(labels.defaults.doorsOnElevations).toBe(false);
+  expect(labels.defaults.doorSizesOnElevations, 'ON by default since 24 Oct').toBe(true);
   expect(labels.defaults.showLabels).toBe(false);
   expect(labels.defaults.stock.d).toEqual(['36', '32', '30', '24', '18']);
   expect(labels.defaults.stock.garage).toEqual(['16x8', '9x8']);
@@ -96,10 +96,11 @@ test('the formatter encodes every quirk in the ladder', async ({ page }) => {
 
 test('the STANDARDS stock ladder edits persist and reset restores the seeds', async ({ page }) => {
   await openStandards(page);
+  // ON BY DEFAULT since 24 Oct ("ok put them on by default").
   const toggle = page.locator('[data-fen-doors-elevations]');
-  await expect(toggle).not.toBeChecked();
-  await toggle.check();
-  await expect(page.locator('#status')).toContainText('Door sizes on elevations ON.');
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await expect(page.locator('#status')).toContainText('Door sizes on elevations OFF.');
 
   const dLadder = page.locator('[data-fen-stock="d"]');
   await expect(dLadder).toHaveValue('36, 32, 30, 24, 18');
@@ -108,7 +109,7 @@ test('the STANDARDS stock ladder edits persist and reset restores the seeds', as
   await expect(page.locator('#status')).toContainText('D stock ladder saved.');
 
   await page.reload();
-  await expect(page.locator('[data-fen-doors-elevations]')).toBeChecked();
+  await expect(page.locator('[data-fen-doors-elevations]')).not.toBeChecked();
   await expect(page.locator('[data-fen-stock="d"]')).toHaveValue('32, 28');
   // An emptied list never sticks — it falls back to the seeds.
   await page.locator('[data-fen-stock="dd"]').fill(' ,  , ');
@@ -116,7 +117,7 @@ test('the STANDARDS stock ladder edits persist and reset restores the seeds', as
   await expect(page.locator('[data-fen-stock="dd"]')).toHaveValue('72, 60, 48');
 
   await page.locator('#reset').click();
-  await expect(page.locator('[data-fen-doors-elevations]')).not.toBeChecked();
+  await expect(page.locator('[data-fen-doors-elevations]')).toBeChecked();
   await expect(page.locator('[data-fen-stock="d"]')).toHaveValue('36, 32, 30, 24, 18');
 });
 

@@ -244,12 +244,16 @@ check('and those corners are the tub body, not the whole alcove',
   G => { const g = alcove(9)(G);
          return [round(dist(g.corners[0], g.corners[1])), round(g.tubLen)]; });
 
-check('a tub stretches to fill a short alcove',
+check('a tub shortens to a short alcove',
   G => { const g = alcove(6)(G); return [round(g.tubLen), round(g.alcove)]; });
 
-check('but not past its stretch limit',
-  G => { const g = alcove(20)(G);
-         return [round(g.tubLen), round(5 + G.TUB_STRETCH_MAX_FT)]; });
+// Movie, 24 Oct: "the tub should only be 42 x 72 (not 73)".
+check('but never grows past its own length in a long one',
+  G => { const g = alcove(20)(G); return [round(g.tubLen), 5]; });
+
+check('an alcove a hair longer than the tub draws no deck sliver',
+  G => { const g = alcove(6)(G); const h = G.fixtureGeometry([backWall, faucet, farWall(1 + (6 - 1) + 0.06)],
+           tub({ width: round(g.alcove) - 0.06 })); return [h.decks.length, 0]; });
 
 check('what it cannot fill becomes deck',
   G => [alcove(20)(G).decks.length > 0, true]);
@@ -403,8 +407,10 @@ const MUTATIONS = [
     s => s.replace('if (alcove < TUB_MIN_LENGTH_FT) return null;', 'if (alcove < -1) return null;')],
   ['the tub stretches without limit',
     s => s.replace('const tubLen = Math.min(alcove, fixture.width + TUB_STRETCH_MAX_FT);', 'const tubLen = alcove;')],
-  ['the tub never stretches past its placed width',
-    s => s.replace('fixture.width + TUB_STRETCH_MAX_FT', 'fixture.width')],
+  ['the tub grows 6" past its placed width again',
+    s => s.replace('fixture.width + TUB_STRETCH_MAX_FT', 'fixture.width + 0.5')],
+  ['a sliver of slack draws a deck again',
+    s => s.replace('const TUB_DECK_MIN_FT = 1 / 12;', 'const TUB_DECK_MIN_FT = 0.001;')],
   ['the tub corners are dropped, the defect the differential caught',
     s => s.replace('      corners: rect(Math.min(near, far), Math.max(near, far)),\n', '')],
   ['the tub corners span the whole alcove instead of the body',
