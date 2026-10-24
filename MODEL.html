@@ -22570,6 +22570,19 @@
   // the kind, because this page has no serializer between the push and the
   // file: a record that is only right after a reload is a file that is wrong
   // until then.
+  // THE HALF INCH OFF A CROSSING WALL (fixture-geometry settleWallGaps):
+  // every piece, or run of pieces, an end of which meets a crossing wall
+  // slides to stand exactly WALL_GAP_FT off its face. What moved, as 'props'
+  // undo edits for the caller to fold into its own step.
+  const settleFixtureGaps = () => {
+    const FG = window.DraftFixtureGeometry;
+    if (!FG?.settleWallGaps || !drawing) return [];
+    return FG.settleWallGaps(drawing.walls || [], drawing.fixtures || []).map(({ fixture, offset }) => {
+      const before = { ...fixture };
+      fixture.offset = offset;
+      return { item: fixture, before };
+    });
+  };
   const addFixture = (kind, wall, props) => {
     const record = {
       id: newDrawingItemId('fixture'),
@@ -22584,6 +22597,11 @@
     if (!Array.isArray(drawing.fixtures)) drawing.fixtures = [];
     drawing.fixtures.push(record);
     undoStack.push({ kind: 'add-item', list: drawing.fixtures, item: record });
+    // PRESSED INTO A CORNER, IT STANDS ITS HALF INCH OFF THE OTHER WALL. Its
+    // own move is part of the add; any other piece its run carried is a
+    // second step, which the add's UNDO follows.
+    const moved = settleFixtureGaps().filter(e => e.item !== record);
+    if (moved.length) undoStack.push({ kind: 'props', edits: moved });
     sayOnStrip(`${kind.label} placed on ${record.layer} — it rides the wall it sits against.`);
     markDirty();
     paint();
@@ -22794,6 +22812,8 @@
     // ONE STEP BACK TAKES THE ROOM: the walls' own 'add' steps give way to a
     // single 'built' carrying everything the press made.
     undoStack.length = mark;
+    // ITS PIECES STAND THEIR HALF INCH OFF THE WALLS THEY RUN INTO.
+    const gapped = settleFixtureGaps().filter(e => !fixtures.includes(e.item));
     undoStack.push({
       kind: 'built', walls: made, outlines: [], list: null,
       openings: doors,
@@ -22801,6 +22821,7 @@
         .concat([{ list: drawing.groups, item: group }])
         .concat(tag ? [{ list: drawing.roomTags, item: tag }] : []),
     });
+    if (gapped.length) undoStack.push({ kind: 'props', edits: gapped });
     sayOnStrip(`${room.name} placed${room.ext ? ' against the exterior wall' : ''} — `
       + 'one assembly: ASSEMBLY BUST to break it into pieces.');
     markDirty();
@@ -22899,6 +22920,9 @@
     drawing.groups = groups();
     drawing.groups.push(group);
     drawing.nextGroupId = 1 + n;
+    // ITS PIECES STAND THEIR HALF INCH OFF THE WALLS THEY RUN INTO.
+    const gapped = settleFixtureGaps().filter(e => !made.includes(e.item));
+    if (gapped.length) undoStack.push({ kind: 'props', edits: gapped });
     // ONE STEP BACK TAKES THE KITCHEN, its walls and its assembly with it.
     undoStack.push({
       kind: 'built', walls: ownWalls, outlines: [], list: null,
@@ -23093,7 +23117,14 @@
     // corner; and changing it is a product decision, which is Movie's.
     if (kind.id === 'cornerbase') return cornerPress(kind, placement);
     const G = window.DraftGeometry2D;
-    const clamped = G.clampOpeningToWall(placement.wall, placement.along, kind.widthFt, {
+    // PRESSED BY A CORNER, IT GOES INTO IT, its half inch off the crossing
+    // wall (Movie, 23 Oct: "the corner at the extra 1/2" point will be the
+    // important point i need to attached to the corner of wall") -- not held
+    // off by the header bearing a window takes. Not a toilet.
+    const FGs = window.DraftFixtureGeometry;
+    const intoCorner = FGs?.wallGapOf?.({ kind: kind.id })
+      ? FGs.snapToWallGap(drawing.walls || [], placement.wall, placement.along, kind.widthFt) : null;
+    const clamped = intoCorner != null ? { offset: intoCorner } : G.clampOpeningToWall(placement.wall, placement.along, kind.widthFt, {
       walls: walls(),
       thicknessFt: openingThicknessFt(),
     });
@@ -37692,13 +37723,20 @@
         if (md.kind === 'fixture') {
           // ONE GESTURE, ONE UNDO: a 'props' step restores each record in
           // place, the island's aisle key coming or going with it.
+          // AND LET GO BY A CROSSING WALL, IT STANDS ITS HALF INCH OFF IT
+          // (settleFixtureGaps), in the same step.
+          const gapIn = () => settleFixtureGaps().forEach(e => {
+            if (!md.edits.some(x => x.item === e.item)) md.edits.push(e);
+          });
           if (md.moved && md.free) {
             const onto = freeFixtureLand(md);
+            gapIn();
             undoStack.push({ kind: 'props', edits: [...md.edits] });
             markDirty();
             sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now. UNDO puts it back.`
               : `${fixtureLabel(md.fixture)} moved, on no wall -- let it go against one to put it on it. UNDO puts it back.`);
           } else if (md.moved) {
+            gapIn();
             undoStack.push({ kind: 'props', edits: md.edits });
             markDirty();
             sayOnStrip(md.fixture.kind === 'island'
@@ -38731,6 +38769,10 @@
     };
     adoptNotes();
     trimSlivers({ walls: true });
+    // THE HALF INCH OFF A CROSSING WALL, on every drawing opened (Movie, 23
+    // Oct: "update all the stuff"): a piece or run that ran into a wall
+    // stands its half inch off it (settleFixtureGaps).
+    settleFixtureGaps();
     // Recorded against the RAW file: the normaliser is the only thing that knows
     // a substitution happened, and it does not say so — the two types differ and
     // nothing else marks it.

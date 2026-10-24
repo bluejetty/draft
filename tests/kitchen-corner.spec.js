@@ -50,6 +50,7 @@ async function place(page, at, kind, x, z) {
 }
 const FACE = 0.229;          // a 2x6's face off its line, to the 1/1000 ft
 const LEG = 28 / 12;
+const GAP = 0.5 / 12;         // the half inch off a wall (fixture-geometry WALL_GAP_FT)
 
 test('CORNER sits tight in the corner; the next drawers start 28" out on either wall', async ({ page }) => {
   const { at } = await open(page);
@@ -66,9 +67,12 @@ test('CORNER sits tight in the corner; the next drawers start 28" out on either 
     const pts = [...g.corners, ...g.decks[0]];
     return { xs: pts.map(p => p.x), zs: pts.map(p => p.z) };
   }, d);
-  expect(Math.min(...geo.xs), 'tight to the side wall').toBeCloseTo(FACE, 2);
-  expect(Math.min(...geo.zs), 'tight to the back wall').toBeCloseTo(FACE, 2);
-  expect(Math.max(...geo.xs), '28" out along one wall').toBeCloseTo(FACE + LEG, 2);
+  // HALF AN INCH OFF EACH WALL (Movie, 23 Oct: "add 1/2" on back and sides"),
+  // its leg still ending 28" off the back wall so the next piece there
+  // stands where it did.
+  expect(Math.min(...geo.xs), 'half an inch off the side wall').toBeCloseTo(FACE + GAP, 2);
+  expect(Math.min(...geo.zs), 'half an inch off the back wall').toBeCloseTo(FACE + GAP, 2);
+  expect(Math.max(...geo.xs), '28" on from that along one wall').toBeCloseTo(FACE + GAP + LEG, 2);
   expect(Math.max(...geo.zs), '28" out along the other').toBeCloseTo(FACE + LEG, 2);
   // DRAWERS PRESSED NEAR EACH LEG'S END land against it.
   await place(page, at, 'drawerbase', FACE + LEG + 1.3, 1);
@@ -79,7 +83,7 @@ test('CORNER sits tight in the corner; the next drawers start 28" out on either 
     return { x: Math.min(...g.corners.map(p => p.x)), z: Math.min(...g.corners.map(p => p.z)), wall: fx.wallId };
   }), d);
   const onBack = spans.find(s => s.wall === 'back'), onSide = spans.find(s => s.wall === 'side');
-  expect(onBack && onBack.x, 'on the back wall, from 28" out').toBeCloseTo(FACE + LEG, 2);
+  expect(onBack && onBack.x, 'on the back wall, from the corner\'s end').toBeCloseTo(FACE + GAP + LEG, 2);
   expect(onSide && onSide.z, 'on the side wall, from 28" out').toBeCloseTo(FACE + LEG, 2);
 });
 
@@ -137,8 +141,9 @@ test('one counter: it turns the corner with no joint across it, and nothing runs
     expect(mx > FACE - 0.001 && mz > FACE - 0.001 && !(Math.abs(mx - FACE) < 0.01 && Math.abs(s.a[0] - s.b[0]) < 0.01)
       && !(Math.abs(mz - FACE) < 0.01 && Math.abs(s.a[1] - s.b[1]) < 0.01), `a line on or in a wall: ${JSON.stringify(s)}`).toBe(true);
   });
-  // THE FRONT TURNS THE CORNER: an inside corner of the counter at 25" off both walls.
-  const o = 1 / 12, frontZ = FACE + 2 + o, frontX = FACE + 2 + o;
+  // THE FRONT TURNS THE CORNER: an inside corner of the counter at 25 1/2"
+  // off both walls (24" cabinets standing their half inch off, 1" overhang).
+  const o = 1 / 12, frontZ = FACE + GAP + 2 + o, frontX = FACE + GAP + 2 + o;
   const hasPoint = (x, z) => segs.some(s => [s.a, s.b].some(p => Math.abs(p[0] - x) < 0.01 && Math.abs(p[1] - z) < 0.01));
   expect(hasPoint(frontX, frontZ), 'the counter\'s inside corner').toBe(true);
   // AND THE UPPERS ARE ONE RUN TOO, dashed, with no joint across them.
