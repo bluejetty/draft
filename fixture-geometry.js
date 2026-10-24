@@ -39,7 +39,9 @@ if (!window.DraftFixtureGeometry) {
   // it is the fixture's spec and both boards need the same number -- a counter
   // that overhangs by a different amount on each page is the drift this module
   // was extracted to stop.
-  const COUNTER_OVERHANG_FT = 1 / 12; // countertop edge past the cabinet face
+  // HALF AN INCH (Movie, 24 Oct: "should only be 1/2" over the edge of
+  // cabinet").
+  const COUNTER_OVERHANG_FT = 0.5 / 12; // countertop edge past the cabinet face
 
   // HALF AN INCH OFF THE WALLS IT STANDS AGAINST (Movie, 23 Oct: "for the
   // BATHRUB / SHOWER / and SINK / KITCHEN CABINETS.. can you add 1/2" to the

@@ -2889,6 +2889,9 @@
   let brushWarned = null;   // { opening } or { wall } a TOO BIG glows on, until the next press
   let rulerFrom = null;     // the ruler's first press, in world feet
   let cursorWorld = null;   // where the cursor last was, for the live readouts
+  // THE HOVERED NODE AND THE SHIFT THAT LINES UP ON IT (refPoint).
+  let refHover = null;
+  let refLock = null;
   // STRETCH's presses so far: the box's two corners, then the base point.
   let stretchState = { a: null, b: null, base: null };
   // THE CORNER UNDER THE CURSOR, or null. Painted, not just cursored -- see
@@ -5039,6 +5042,7 @@
   // come later in the file than this paint pass); the assembly whose
   // anchors are being picked, while the ANCHOR verb is lit.
   let paintAnchors = () => {};
+  let paintRefGuide = () => {};
   let anchorPicking = null;
   // THE HOUSE'S AS DOTS, A HOLOGRAM'S AS RINGS, so the two kinds read
   // apart; the pair that has a hologram in hand, bright. For the specs,
@@ -7607,6 +7611,7 @@
         // never on a sheet, never in a PRINTSCREEN).
         paintSuperNodes();
         paintAnchors();
+        paintRefGuide();
         // LAST, because dimensions are annotation: MODEL.dc.html paints them
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
@@ -19393,7 +19398,96 @@
     return line.away * nAlongAxis > 0 ? 'left' : 'right';
   };
 
+  // ── A HOVERED NODE, AND SHIFT TO LINE UP ON IT (Movie, 23 Oct) ────────
+  //
+  // "on ARCHICAD, i can SCROLL OVER a node/ or corner and i can use that
+  // 'node' or corner (the one most recently scrolled over become the point
+  // if i press SHIFT and hold the T SQUARE will line up with that previously
+  // scrolled over node and i can enter a length and the length will be
+  // measured from that node" -- "if protractor is on at angle use that angle
+  // or T use 90"; let go, "the SHIFT will return the cursor to free moving"
+  // and the node is hovered again (or a new one) to use it again; every
+  // drawing tool.
+  //
+  // While a drawing tool is up, the node the cursor last passed over is
+  // REF_HOVER. SHIFT held with one in hand locks it (refLock): the next point
+  // of any drawing tool lies on the line through it -- the locked angle, the
+  // protractor's nearest step, or else straight across or straight up --
+  // where the hand is along that line, and a length typed is measured from
+  // it. Let go, the lock stays only until the pointer moves (so the length
+  // can be typed with the hand still), then the cursor is free again and
+  // the node forgotten.
+  const REF_TOOLS = new Set(['wall', 'line', 'floor', 'shape', 'outline', 'roof', 'dimension', 'beam']);
+  const refAim = (ref, at) => {
+    const locked = lockedPoint(ref, at);
+    if (locked) return locked;
+    const stepped = protractorPoint(ref, at);
+    if (stepped) return stepped;
+    return Math.abs(at.x - ref.x) >= Math.abs(at.z - ref.z) ? { x: at.x, y: 0, z: ref.z } : { x: ref.x, y: 0, z: at.z };
+  };
+  const refPoint = at => {
+    if (!refLock || !at || !REF_TOOLS.has(activeTool)) return null;
+    const p = refAim(refLock, at);
+    return { x: p.x, y: 0, z: p.z };
+  };
+  // A LENGTH TYPED WHILE LINED UP: that far from the node, along the line
+  // the hand is aiming down. Null when nothing is lined up.
+  const refTyped = feet => {
+    if (!refLock || !cursorWorld) return null;
+    const p = refAim(refLock, cursorWorld);
+    const dx = p.x - refLock.x, dz = p.z - refLock.z, len = Math.hypot(dx, dz);
+    if (len < 1e-6) return null;
+    return { x: refLock.x + dx / len * feet, y: 0, z: refLock.z + dz / len * feet };
+  };
+  const dropRefLock = () => {
+    if (!refLock && !refHover) return false;
+    refLock = null;
+    refHover = null;
+    return true;
+  };
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'Shift' || e.repeat || !refHover || refLock || !REF_TOOLS.has(activeTool) || board === 'toy') return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+    refLock = { x: refHover.x, z: refHover.z, released: false, at: null };
+    sayOnStrip('LINED UP on that node -- aim along the guide, and type a length to measure it from the node. Let go of SHIFT and move to go free.');
+    paint();
+  }, true);
+  window.addEventListener('keyup', e => {
+    if (e.key !== 'Shift' || !refLock) return;
+    refLock.released = true;
+    refLock.at = cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : { x: refLock.x, z: refLock.z };
+  }, true);
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && dropRefLock()) paint();
+  }, true);
+  // THE NODE IN HAND, RINGED, AND THE GUIDE FROM IT TO WHERE THE POINT
+  // WOULD GO -- dashed while SHIFT holds it.
+  paintRefGuide = () => {
+    if (presenting || !REF_TOOLS.has(activeTool)) { delete canvas.dataset.refLock; return; }
+    const node = refLock || refHover;
+    if (!node) { delete canvas.dataset.refLock; return; }
+    const ink = '#ffb84d';
+    const p = toS(node);
+    ctx.save();
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = refLock ? 2 : 1.2;
+    ctx.globalAlpha = refLock ? 1 : 0.6;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.stroke();
+    const to = refLock && cursorWorld ? refPoint(cursorWorld) : null;
+    if (to) {
+      const q = toS(to);
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+    if (refLock) canvas.dataset.refLock = JSON.stringify([Number(refLock.x.toFixed(4)), Number(refLock.z.toFixed(4))]);
+    else delete canvas.dataset.refLock;
+  };
   const drawPoint = at => {
+    const ref = refPoint(at);
+    if (ref) return ref;
     // THE LOCKED BEARING BEFORE EVERYTHING ELSE: the run travels along it and
     // nothing pulls it off -- no square, no corner snap -- only the whole foot
     // when that is on.
@@ -20625,6 +20719,8 @@
   };
 
   const outlinePoint = at => {
+    const ref = refPoint(at);
+    if (ref) return { x: ref.x, z: ref.z };
     const from = outlineTail();
     if (!from) {
       const corner = cornerSnap(at, []);
@@ -21852,6 +21948,8 @@
   // before it, a loop's next corner is drawPoint's, as a wall run's next
   // point is -- squared, snapped along the square, by the foot when lit.
   const loopPoint = (at, corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : []) => {
+    const ref = refPoint(at);
+    if (ref) return { x: ref.x, z: ref.z };
     if (board === 'toy') return { x: at.x, z: at.z };
     const last = corners[corners.length - 1];
     if (last && !drawStart) {
@@ -32334,11 +32432,14 @@
     // 12'-6" would be the page correcting him in the middle of telling him
     // something else.
     promoteForNumber(toyCouldMakeLength(feet), String(lengthBox.value).trim());
+    // LINED UP ON A NODE, THE LENGTH IS MEASURED FROM IT (refTyped).
+    const fromRef = refTyped(feet);
     const aim = lockedPoint(drawStart, cursorWorld) || squareTo(drawStart, cursorWorld);
     const dx = aim.x - drawStart.x, dz = aim.z - drawStart.z;
     const len = Math.hypot(dx, dz);
-    if (len < 1e-6) { stripMessage.textContent = 'point away from the start first'; return; }
-    const end = { x: drawStart.x + dx / len * feet, y: 0, z: drawStart.z + dz / len * feet };
+    if (!fromRef && len < 1e-6) { stripMessage.textContent = 'point away from the start first'; return; }
+    const end = fromRef || { x: drawStart.x + dx / len * feet, y: 0, z: drawStart.z + dz / len * feet };
+    if (fromRef) dropRefLock();
     const made = commitDrawn(drawStart, end);
     drawStart = made.item.end;
     // THE SELECTION IS A SET ON THIS BRANCH. #398 wrote this line as
@@ -35494,6 +35595,8 @@
     return best;
   };
   const dimPoint = at => {
+    const ref = refPoint(at);
+    if (ref) return { x: ref.x, z: ref.z };
     const dot = openingCentreAt(at);
     if (dot) return { x: dot.c.x, z: dot.c.z, ref: { openingId: String(dot.opening.id), x: dot.c.x, z: dot.c.z } };
     const snap = board !== 'toy' ? drawSnap(at) : {};
@@ -37549,6 +37652,13 @@
       // The instruments read the cursor, which is what makes them
       // instruments: length and angle are live while the run is in hand and
       // blank when it is not, exactly as the old strip behaves.
+      // LET GO OF SHIFT, THE FIRST REAL MOVE FREES THE CURSOR (refPoint);
+      // UNLOCKED, THE NODE UNDER IT IS THE ONE SHIFT WILL LINE UP ON.
+      if (refLock?.released && cursorWorld && Math.hypot(at.x - refLock.at.x, at.z - refLock.at.z) * view.scale > 6) dropRefLock();
+      if (!refLock && REF_TOOLS.has(activeTool) && board !== 'toy') {
+        const node = snapNodeAt(at);
+        if (node) refHover = { x: node.x, z: node.z };
+      }
       cursorWorld = at;
       pointerScreen = { x: e.clientX, y: e.clientY, type: e.pointerType };
       stripRefresh();

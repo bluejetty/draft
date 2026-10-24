@@ -15,6 +15,18 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/kitchen-corner.spec.js';
 const MUTANTS = [
+  { file: 'render-2d.js', name: 'the uppers run over the sink and the dishwasher',
+    find: "uppers.push(...upperRings(fx, geo, spansOn(fx, NO_UPPER_KINDS)));",
+    with: "uppers.push(...upperRings(fx, geo));",
+    test: 'stop at a sink and a dishwasher' },
+  { file: 'render-2d.js', name: 'the counter runs over the stove and the fridge',
+    find: "        counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT, cuts));\n",
+    with: "        counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT));\n",
+    test: 'stops at each' },
+  { file: 'fixture-geometry.js', name: 'the counter hangs an inch past the cabinets',
+    find: "  const COUNTER_OVERHANG_FT = 0.5 / 12;",
+    with: "  const COUNTER_OVERHANG_FT = 1 / 12;",
+    test: 'stops at each' },
   { file: 'render-2d.js', name: 'every edge kept: a joint line across the counter',
     find: "if (covered({ x: m.x + nx, z: m.z + nz }) !== covered({ x: m.x - nx, z: m.z - nz })) {",
     with: "if (true) {",

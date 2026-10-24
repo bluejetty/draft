@@ -320,8 +320,9 @@ check('a tub cannot slide further than the gap it has',
 check('the counter overhang is exported for the painter to read',
   G => [G.COUNTER_OVERHANG_FT > 0, true]);
 
-check('and it is one inch, the same on both boards',
-  G => [round(G.COUNTER_OVERHANG_FT * 12), 1]);
+// HALF AN INCH (Movie, 24 Oct: "should only be 1/2" over the edge of cabinet").
+check('and it is half an inch, the same on both boards',
+  G => [round(G.COUNTER_OVERHANG_FT * 12), 0.5]);
 
 // ── MODEL.dc.html still delegates ──
 // The duplication this module exists to remove is also the thing most likely
@@ -417,8 +418,8 @@ const MUTATIONS = [
     s => s.replace('const slide = Math.min(Math.max(fixture.offset, 0), room);', 'const slide = fixture.offset;')],
   ['a tub with no faucet wall named takes the alcove path anyway',
     s => s.replace("if (fixture.kind === 'tub' && fixture.endWallId)", "if (fixture.kind === 'tub')")],
-  ['the counter overhang is halved',
-    s => s.replace('const COUNTER_OVERHANG_FT = 1 / 12;', 'const COUNTER_OVERHANG_FT = 1 / 24;')],
+  ['the counter overhang is doubled',
+    s => s.replace('const COUNTER_OVERHANG_FT = 0.5 / 12;', 'const COUNTER_OVERHANG_FT = 1 / 12;')],
   ['a crossing wall is taken as centred on its line again',
     s => s.replace('return [along + of.startOff / k, along + of.endOff / k];', 'return [along - of.totalFt / 2, along + of.totalFt / 2];')],
   ['the far wall\'s face away from the tub bounds the alcove',
