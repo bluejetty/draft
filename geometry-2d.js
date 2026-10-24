@@ -3431,6 +3431,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     { id: 'ext-slide', type: 'ext', style: 'slide', label: 'EXT – SLIDER', sizes: inches([60, 72, 96]), defaultFt: 60 / 12 },
     { id: 'ext-french', type: 'ext', style: 'french', label: 'EXT – FRENCH', sizes: inches([48, 60, 72]), defaultFt: 60 / 12 },
     { id: 'ext-garden', type: 'ext', style: 'garden', label: 'EXT – GARDEN', sizes: inches([60, 72]), defaultFt: 60 / 12 },
+    // A DOOR WITH ITS SIDELIGHTS (Movie, 24 Oct): a 36" leaf and a 14" light
+    // by default, one side or both.
+    { id: 'ext-sidelight', type: 'ext', style: 'sidelight', label: 'EXT – SIDELIGHT', sizes: inches([50, 64]), defaultFt: 50 / 12 },
     { id: 'int-single', type: 'int', style: 'single', label: 'INT – TYP.', sizes: inches([24, 28, 30, 32, 34, 36]), defaultFt: 30 / 12 },
     { id: 'int-pocket', type: 'int', style: 'pocket', label: 'INT – POCKET', sizes: inches([24, 28, 30, 32, 36]), defaultFt: 30 / 12 },
     { id: 'int-barn', type: 'int', style: 'barn', label: 'INT – BARN', sizes: inches([30, 36, 42]), defaultFt: 36 / 12 },
@@ -3457,6 +3460,26 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     const stored = Number(opening?.gardenWindowWidth);
     const windowFt = Number.isFinite(stored) && stored > 0 && stored < total - 1 / 12 ? stored : total / 2;
     return { doorFt: total - windowFt, windowFt };
+  };
+
+  // A SIDELIGHT door's panels, along its run from the HINGE jamb: the leaf
+  // and a fixed light at the latch side (the default), the hinge side, or
+  // both. A light it cannot fit with a foot of leaf left reads 14", or a
+  // quarter of the unit when even that will not go.
+  const SIDELIGHT_DEFAULT_FT = 14 / 12;
+  const SIDELIGHT_SIDES = Object.freeze(['latch', 'hinge', 'both']);
+  const sidelightPanelsFt = opening => {
+    const total = Number(opening?.width) || 0;
+    const sides = SIDELIGHT_SIDES.includes(opening?.sidelightSides) ? opening.sidelightSides : 'latch';
+    const n = sides === 'both' ? 2 : 1;
+    const fits = l => l > 0 && total - n * l >= 1;
+    const stored = Number(opening?.sidelightWidth);
+    const lightFt = fits(stored) ? stored : fits(SIDELIGHT_DEFAULT_FT) ? SIDELIGHT_DEFAULT_FT : total / 4;
+    const doorFt = total - n * lightFt;
+    const panels = sides === 'latch' ? [['door', 0, doorFt], ['light', doorFt, total]]
+      : sides === 'hinge' ? [['light', 0, lightFt], ['door', lightFt, total]]
+        : [['light', 0, lightFt], ['door', lightFt, lightFt + doorFt], ['light', lightFt + doorFt, total]];
+    return { sides, lightFt, doorFt, panels: panels.map(([kind, s0, s1]) => ({ kind, s0, s1 })) };
   };
 
   // The width an opening of this type takes when the drafter has not typed
@@ -3978,6 +4001,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     DOOR_CATALOG,
     doorCatalogEntry,
     gardenSplitFt,
+    sidelightPanelsFt,
+    SIDELIGHT_SIDES,
+    SIDELIGHT_DEFAULT_FT,
     DEFAULT_OPENING_HEAD_FT,
     defaultOpeningWidthFt,
     OPENING_FREE_END_POST_IN,

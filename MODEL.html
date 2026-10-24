@@ -31780,7 +31780,7 @@
     // `offset` and `wallId` are the two that must NEVER travel -- they are
     // where it is.
     fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage', 'casement',
-      'doorType', 'doorStyle', 'gardenWindowWidth', 'hingeFlip', 'swingFlip', 'showHeight'],
+      'doorType', 'doorStyle', 'gardenWindowWidth', 'sidelightWidth', 'sidelightSides', 'hingeFlip', 'swingFlip', 'showHeight'],
     // NOT `structure`. Whether a floor is framed or a slab is read from the
     // layer set it lives on (layer-views.js's floorHomeView), so copying it
     // would make a floor's own two answers disagree -- and `points` is its
@@ -34480,6 +34480,28 @@
         box.append(propField('WINDOW WIDTH', split.windowFt, feet => {
           if (!(feet > 0)) return 'The window needs a width greater than zero.';
           return resizeOpenings(split.doorFt + feet, () => ({ gardenWindowWidth: feet }));
+        }, showSelectionProps, { inches: true }));
+      }
+      // A SIDELIGHT'S SIDES AND ITS LIGHT (Movie, 24 Oct: "One or two,
+      // picked", "36" door + 14" light"). The leaf keeps its width: a light
+      // added or taken away widens or narrows the unit by its own width.
+      if (openings.length === 1 && openings[0].doorStyle === 'sidelight') {
+        const only = openings[0];
+        const p = G.sidelightPanelsFt(only);
+        const count = sides => (sides === 'both' ? 2 : 1);
+        box.append(propSelect('SIDELIGHT', [['latch', 'LATCH SIDE'], ['hinge', 'HINGE SIDE'], ['both', 'BOTH SIDES']],
+          p.sides, sides => {
+            const refusal = resizeOpenings(p.doorFt + count(sides) * p.lightFt,
+              () => ({ sidelightSides: sides, sidelightWidth: p.lightFt }));
+            if (refusal) sayOnStrip(refusal);
+          }));
+        box.append(propField('DOOR WIDTH', p.doorFt, feet => {
+          if (!(feet >= 1)) return 'The door needs a width of a foot or more.';
+          return resizeOpenings(feet + count(p.sides) * p.lightFt, () => ({ sidelightWidth: p.lightFt, sidelightSides: p.sides }));
+        }, showSelectionProps, { inches: true }));
+        box.append(propField('LIGHT WIDTH', p.lightFt, feet => {
+          if (!(feet > 0)) return 'The light needs a width greater than zero.';
+          return resizeOpenings(p.doorFt + count(p.sides) * feet, () => ({ sidelightWidth: feet, sidelightSides: p.sides }));
         }, showSelectionProps, { inches: true }));
       }
       if (openings.every(o => o.garage !== true)) {

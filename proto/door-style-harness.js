@@ -34,8 +34,8 @@ const ROOT = path.join(__dirname, '..');
 // the plan painter and the flip.
 const MUTATIONS = [
   ['the vocabulary grows a style nothing draws', 'drawing-format.js',
-    c => c.replace("  const DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'overhead']);",
-      "  const DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'overhead', 'dutch']);")],
+    c => c.replace("  const DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'sidelight', 'overhead']);",
+      "  const DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'sidelight', 'overhead', 'dutch']);")],
   ['an exterior FRENCH door is not the 60 inches he named', 'geometry-2d.js',
     c => c.replace("label: 'EXT – FRENCH', sizes: inches([48, 60, 72]), defaultFt: 60 / 12",
       "label: 'EXT – FRENCH', sizes: inches([48, 60, 72]), defaultFt: 72 / 12")],

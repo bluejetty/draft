@@ -29,7 +29,7 @@ if (!window.DraftCutView) {
   // The style a door is drawn in on an elevation: one of the styles below,
   // or a single for anything else -- a door drawn before styles existed has
   // always been a single.
-  const ELEVATION_DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden']);
+  const ELEVATION_DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'sidelight']);
   const elevationDoorStyle = f => (ELEVATION_DOOR_STYLES.includes(f.doorStyle) ? f.doorStyle : 'single');
   // TEXT AT ITS PRINTED SIZE (Movie, 16 Oct: "can you put it at the exact size
   // that it will PRINT when the layout is PRINTED so the user can adjust it if
@@ -6021,6 +6021,23 @@ if (!window.DraftCutView) {
             frameLines(doorL, doorR, 4 * IN);
             frameLines(winL, winR, 2 * IN);
             knob(hingeLeft ? sx - 2.5 * IN : sx + 2.5 * IN);
+          } else if (doorStyle === 'sidelight') {
+            // THE LEAF AND ITS LIGHTS, the same height, a mullion at each
+            // join: the leaf with the wide frame and its knob at the latch
+            // edge, each light the thin frame and glass.
+            const atS = sFt => X(hingeU + (latchU - hingeU) * (sFt / f.width));
+            geo().sidelightPanelsFt(f).panels.forEach(p => {
+              const a = atS(p.s0), b = atS(p.s1);
+              const [x0, x1] = a <= b ? [a, b] : [b, a];
+              if (p.s0 > 0.01) seg(a, yt, a, yb);
+              if (p.kind === 'door') {
+                frameLines(x0, x1, 4 * IN);
+                const latchX = atS(p.s1);
+                knob(latchX > a ? latchX - 2.5 * IN : latchX + 2.5 * IN);
+              } else {
+                frameLines(x0, x1, 2 * IN);
+              }
+            });
           }
           ctx.stroke();
         } else if (f.type === 'door' && !f.garage) {

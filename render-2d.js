@@ -3482,13 +3482,29 @@ if (!window.DraftRender2D) {
   // The door styles this painter draws; anything else is drawn as a single.
   // Not exported -- coverage() in the render harness treats every export as
   // a painter. proto/door-style-harness.js holds it to drawing-format.js's.
-  const DOOR_STYLES_DRAWN = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden']);
+  const DOOR_STYLES_DRAWN = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'sidelight']);
   // A GARDEN's door leaf, out of its whole width: the stored window share
   // when it leaves the leaf room, half otherwise -- drawing-format.js's rule.
   const gardenDoorFt = (opening, total) => {
     const stored = Number(opening.gardenWindowWidth);
     const windowFt = Number.isFinite(stored) && stored > 0 && stored < total - 1 / 12 ? stored : total / 2;
     return total - windowFt;
+  };
+
+  // A SIDELIGHT's panels from the hinge jamb, geometry-2d's sidelightPanelsFt
+  // rule copied here because this painter loads with nothing else (as the
+  // garden's share above is). door-style-harness holds the two together.
+  const sidelightPanelsFt = opening => {
+    const total = Number(opening.width) || 0;
+    const sides = ['latch', 'hinge', 'both'].includes(opening.sidelightSides) ? opening.sidelightSides : 'latch';
+    const n = sides === 'both' ? 2 : 1;
+    const fits = l => l > 0 && total - n * l >= 1;
+    const stored = Number(opening.sidelightWidth);
+    const lightFt = fits(stored) ? stored : fits(14 / 12) ? 14 / 12 : total / 4;
+    const doorFt = total - n * lightFt;
+    return sides === 'latch' ? [['door', 0, doorFt], ['light', doorFt, total]]
+      : sides === 'hinge' ? [['light', 0, lightFt], ['door', lightFt, total]]
+        : [['light', 0, lightFt], ['door', lightFt, lightFt + doorFt], ['light', lightFt + doorFt, total]];
   };
 
   function drawOpening2D(ctx, toS, opening, options = {}, env = {}) {
@@ -3645,6 +3661,20 @@ if (!window.DraftRender2D) {
         frame(doorFt - 0.75 * IN, 1.5 * IN);
         frame(W - 1 * IN, 1 * IN);
         [0.375 * IN, -0.375 * IN].forEach(t => line(P(doorFt + 0.75 * IN, t), P(W - 1 * IN, t)));
+      } else if (style === 'sidelight') {
+        // THE LEAF AND ITS LIGHTS (Movie, 24 Oct: "like a window beside the
+        // leaf"): the leaf swings in its own span, hung at its hinge-side
+        // edge; each light is fixed glass -- two panes, the window's own --
+        // with a jamb block between it and the leaf.
+        ctx.lineWidth = 1.25;
+        frame(0, 2 * IN);
+        frame(W - 2 * IN, 2 * IN);
+        sidelightPanelsFt(opening).forEach(([kind, s0, s1]) => {
+          if (kind === 'door') { swing(s0, s1 - s0, 1); ctx.lineWidth = 1.25; return; }
+          [0.375 * IN, -0.375 * IN].forEach(t => line(P(s0 + 0.75 * IN, t), P(s1 - 0.75 * IN, t)));
+          if (s0 > 0.01) frame(s0 - 0.75 * IN, 1.5 * IN);
+          if (s1 < W - 0.01) frame(s1 - 0.75 * IN, 1.5 * IN);
+        });
       } else {
         swing(0, W, 1);
       }
