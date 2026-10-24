@@ -36075,7 +36075,6 @@
   };
   const endDimString = () => {
     dimLinesStale();
-    if (dimPlacing) return dimLastLine ? finishDimString() : false;
     if (dimPoints.length < 2) {
       sayOnStrip('DIMENSION — press two points at least, then SPACE, ENTER or the right button.');
       return false;
