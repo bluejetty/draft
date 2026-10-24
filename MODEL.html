@@ -7835,7 +7835,7 @@
           // is the placed corners alone -- which is the truth rather than a
           // degraded version of it.
           const trace = cursorWorld
-            ? floorCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            ? floorCorners.concat([loopPoint(cursorWorld)])
             : floorCorners;
           R.drawFloor2D(ctx, toS, { points: trace }, { preview: true }, floorEnv());
           ctx.save();
@@ -7869,7 +7869,7 @@
         // the close ring once three corners make closing legal.
         if (activeTool === 'shape' && shapeCorners.length) {
           const trace = cursorWorld
-            ? shapeCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            ? shapeCorners.concat([loopPoint(cursorWorld)])
             : shapeCorners;
           ctx.save();
           ctx.strokeStyle = skin['draw-note'];
@@ -14924,6 +14924,12 @@
     loopCorners().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND A FIXTURE'S CORNERS, while a FLOOR or SHAPE is drawn (Movie, 23
+    // Oct: "make the corners of tub and sink mini- snap nodes if possible for
+    // connecting the flooring").
+    fixtureNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     // AND THE TRACE IN HAND'S FIRST CORNER, once it can be closed on (Movie,
     // 21 Oct): the last corner finds the first as it finds any node.
     traceHome().forEach(v => {
@@ -14933,6 +14939,19 @@
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
     return out;
+  };
+  // THE FIXTURE CORNERS A FLOOR OR SHAPE CATCHES: the four of each piece's
+  // box (a toilet's is no outline to floor to), on this level, only while
+  // one of those two tools is up -- a wall drawn past a tub still takes the
+  // wall's own nodes and nothing of the tub's.
+  const fixtureNodes = () => {
+    if (activeTool !== 'floor' && activeTool !== 'shape') return [];
+    const FG = window.DraftFixtureGeometry;
+    if (!FG?.fixtureGeometry) return [];
+    return fixtures().filter(fx => fx.kind !== 'toilet').flatMap(fx => {
+      const geo = FG.fixtureGeometry(drawing.walls || [], fx);
+      return (geo?.corners || []).map(c => ({ x: c.x, z: c.z }));
+    });
   };
   // A WALL'S OWN NODE WINS: its face corners stand an inch or two off it,
   // and a press meant for the node it always took must still land there. The
@@ -21798,8 +21817,17 @@
     const tail = corners[corners.length - 1];
     return !!tail && Math.abs(tail.x - pt.x) < 1e-6 && Math.abs(tail.z - pt.z) < 1e-6;
   };
-  const loopPoint = at => {
+  // THE T-SQUARE AND THE MAGNET ON A FLOOR'S CORNERS TOO (Movie, 23 Oct:
+  // "the FLOORING , the T and NODES don't seem to work"): from the corner
+  // before it, a loop's next corner is drawPoint's, as a wall run's next
+  // point is -- squared, snapped along the square, by the foot when lit.
+  const loopPoint = (at, corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : []) => {
     if (board === 'toy') return { x: at.x, z: at.z };
+    const last = corners[corners.length - 1];
+    if (last && !drawStart) {
+      drawStart = { x: last.x, y: 0, z: last.z };
+      try { const p = drawPoint(at); return { x: p.x, z: p.z }; } finally { drawStart = null; }
+    }
     const corner = cornerSnap(at, []);
     if (corner) return { x: corner.x, z: corner.z };
     const snap = drawSnap(at);
