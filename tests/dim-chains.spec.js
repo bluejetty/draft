@@ -136,29 +136,61 @@ test('after the first line, each click lays another line of the same points unti
   expect(hand(d), 'one piece gone, the rest kept').toHaveLength(5);
 });
 
-test('a click on the line just placed finishes; it lays no extra line', async ({ page }) => {
+// MOVIE'S SEQUENCE (24 Oct): LEFT only adds; RIGHT, SPACE or ENTER finish.
+test('a click beside the line just placed lays another; a click right on it lays nothing; ENTER finishes', async ({ page }) => {
   await open(page, drawing(RUN));
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
+  await page.keyboard.press('Enter');
   await press(page, at, [5, 1.5]);
-  await press(page, at, [7, 1.5]);
+  await press(page, at, [7, 1.5]);           // the same line again: nothing new
+  await press(page, at, [5, 2.5]);           // a foot further: a second line
+  await expect(page.locator('#strip-message')).not.toContainText('done');
+  expect(hand(await saved(page))).toHaveLength(4);
+  await page.keyboard.press('Enter');
   await expect(page.locator('#strip-message')).toContainText('done');
-  expect(hand(await saved(page))).toHaveLength(2);
+  expect(hand(await saved(page))).toHaveLength(4);
 });
 
-test('a double-click finishes too, and leaves no line from its own first press', async ({ page }) => {
+test('a double-click does not finish: it is two clicks, one line, and the string waits for ENTER', async ({ page }) => {
   await open(page, drawing(RUN));
   const { at } = await frame(page);
   await armDimension(page);
   for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
-  await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
-  await press(page, at, [5, 1.5]);
+  await page.keyboard.press('Enter');
   await page.mouse.dblclick(...at(5, 4));
   await page.waitForTimeout(100);
-  await expect(page.locator('#strip-message')).toContainText('done');
+  await expect(page.locator('#strip-message')).not.toContainText('done');
   expect(hand(await saved(page))).toHaveLength(2);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#strip-message')).toContainText('done');
+});
+
+test('ESC while the lines are being laid takes every one of them back: nothing placed', async ({ page }) => {
+  await open(page, drawing(RUN));
+  const { at } = await frame(page);
+  await armDimension(page);
+  for (const pt of [[0, 0], [4, 0], [10, 0]]) await press(page, at, pt);
+  await page.keyboard.press('Enter');
+  await press(page, at, [5, 1.5]);
+  await press(page, at, [5, 3]);
+  expect(hand(await saved(page))).toHaveLength(4);
+  await page.mouse.move(...at(6, 6));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  expect(hand(await saved(page)), 'none of the string stays').toHaveLength(0);
+});
+
+test('points clicked quickly, one after another, are all points', async ({ page }) => {
+  await open(page, drawing(RUN));
+  const { at } = await frame(page);
+  await armDimension(page);
+  for (const pt of [[0, 0], [4, 0], [10, 0]]) await page.mouse.click(...at(...pt));
+  await page.keyboard.press('Enter');
+  await press(page, at, [5, 1.5]);
+  await page.keyboard.press('Enter');
+  expect(hand(await saved(page)), 'three points, two dimensions').toHaveLength(2);
 });
 
 test('a dimension COPIED and PASTED lands as a row of its own, 2 ft out, to slide and trim', async ({ page }) => {

@@ -36084,35 +36084,37 @@
     sayOnStrip(`DIMENSION — ${dimPoints.length - 1} to place: click where the string goes.`);
     return true;
   };
-  // SPACEBAR AND ENTER are the series rule's (seriesKeyPress): once a press
-  // at the cursor, twice quickly the double-click below (Movie, 20 Oct: "can
-  // you also add PRESS SPACEBAR to also end the cycle and go to placing the
-  // line"; 22 Oct: "dimensions and lines too should work that way too").
-  // A DOUBLE-CLICK'S FIRST PRESS lays a line before its second says stop:
-  // that line is taken back, so stopping leaves nothing extra. Only a line
-  // laid a moment ago, past the first, and still the last thing done.
-  const takeBackDoubleClickLine = () => {
-    const last = dimLastLine;
-    if (!last || Date.now() - last.when >= 700 || last.count < 2
-      || undoStack[undoStack.length - 1] !== last.step) return;
-    undoStack.pop();
-    last.made.forEach(item => { const i = drawing.dimensions.indexOf(item); if (i >= 0) drawing.dimensions.splice(i, 1); });
-    last.count -= 1;
-  };
-  // ON THE LINE JUST PLACED: within 8 px of it, across the string.
+  // ── THE SEQUENCE, AS MOVIE SET IT OUT (24 Oct) ────────────────────────
+  //
+  // "first press "D" to start the dimensiong ... choose a point and beging
+  // making a line of dimensions by clicking left click on each point, when
+  // i press RIGHT mouse, SPACE or ENTER the points are finished and we move
+  // onto the LINE placement, once the line is in a good place the user
+  // presses LEFT click to place line, and again another LEFT click at
+  // another line location,,, when wish to finish press RIGHT CLICK, SPACE or
+  // ENTER. at any time if they user would like to abort the DIMensionsing
+  // process press ESC key to exit out without placing dimension".
+  //
+  // So LEFT only ever adds -- a point, or a line -- and only RIGHT, SPACE or
+  // ENTER moves the string on. The double-click that used to end it, and the
+  // click on the line just placed that used to finish it, are gone: a
+  // drafter clicking two points quickly, or laying a second line close to
+  // the first, was being told he had finished. A click exactly where the last
+  // line already stands lays nothing: that line is there.
+  // ON THE LINE JUST PLACED: within 2 px of it, across the string.
   const dimOnLastLine = at => {
     if (!dimLastLine) return false;
     const u = dimDirection(dimPoints);
     const n = u ? { x: -u.z, z: u.x } : null;
     const off = n ? (at.x - dimLastLine.at.x) * n.x + (at.z - dimLastLine.at.z) * n.z : Infinity;
-    return Math.abs(off) * view.scale < 8;
+    return Math.abs(off) * view.scale < 2;
   };
   const dimPress = at => {
     dimLinesStale();
     if (dimPlacing) {
       // A CLICK ON THE LINE JUST PLACED puts the string down: the same spot,
       // twice, is how he says he is done.
-      if (dimOnLastLine(at)) { takeBackDoubleClickLine(); finishDimString(); return; }
+      if (dimOnLastLine(at)) return;
       const pieces = dimString(dimPoints, at);
       if (!pieces.length) { sayOnStrip('DIMENSION — those points measure nothing that way.'); return; }
       const { levelId } = onActiveLevel();
@@ -36128,7 +36130,9 @@
       const step = { kind: 'built', walls: [], outlines: [], list: null,
         items: made.map(item => ({ list: drawing.dimensions, item })) };
       undoStack.push(step);
-      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1 };
+      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1,
+        // EVERY LINE OF THIS STRING, for ESC to take back.
+        lines: [...(dimLastLine?.lines || []), { made, step }] };
       sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or SPACE, ENTER or the right button to finish.`);
       markDirty();
       paint();
@@ -36143,20 +36147,6 @@
     sayOnStrip(dimPoints.length === 1 ? 'DIMENSION — the next point'
       : `DIMENSION — ${dimPoints.length} points: the next, or SPACE, ENTER or the right button to end the string`);
     paint();
-  };
-  // A DOUBLE-CLICK ENDS THE STRING, as ENTER does. Its two presses landed on
-  // one point, which dimPress took once.
-  //
-  // AND, WHILE LINES ARE BEING PLACED, IT FINISHES THEM -- taking back the
-  // line its own first press just put down, so a double-click to stop leaves
-  // no extra line behind.
-  const dimDoubleEnds = () => {
-    if (dimPlacing) {
-      takeBackDoubleClickLine();
-      if (dimLastLine) finishDimString();
-      return;
-    }
-    if (endDimString()) paint();
   };
   // ONCE ENDS (Movie, 23 Oct): SPACE, ENTER or the right button. While the
   // points go down it ends them and the line placement begins; while the
@@ -36179,11 +36169,24 @@
     if (endDimString()) paint();
     return true;
   };
-  canvas.addEventListener('dblclick', e => {
-    if (activeTool !== 'dimension' || !dimPoints.length) return;
-    e.preventDefault();
-    dimDoubleEnds();
-  });
+  // ESC TAKES BACK EVERY LINE OF THE STRING IN HAND -- "exit out without
+  // placing dimension" -- and the steps that laid them, so no UNDO is left
+  // pointing at a line that is gone. Called by cancelGestures.
+  const dimAbandon = () => {
+    const lines = dimLastLine?.lines || [];
+    lines.slice().reverse().forEach(({ made, step }) => {
+      // BY ID: a save between the press and the ESC hands the page fresh
+      // records for the same dimensions.
+      const ids = new Set(made.map(item => item.id));
+      const list = drawing.dimensions || [];
+      for (let i = list.length - 1; i >= 0; i -= 1) if (ids.has(list[i].id)) list.splice(i, 1);
+      const k = undoStack.lastIndexOf(step);
+      if (k >= 0) undoStack.splice(k, 1);
+    });
+    dimLastLine = null;
+    if (lines.length) markDirty();
+    return lines.length > 0;
+  };
   // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
   // through the register's listeners, because setTool runs at load, before
   // this block has declared anything.
@@ -37066,6 +37069,7 @@
       || stretchState.a);
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
+    if (dimPlacing) dimAbandon();
     dimPoints = [];
     dimPlacing = false;
     rulerFrom = null;
