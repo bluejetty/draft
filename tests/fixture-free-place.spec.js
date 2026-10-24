@@ -83,4 +83,8 @@ test('a CABINET and a FRIDGE drop free too; one UNDO takes each back', async ({ 
   await page.waitForTimeout(150);
   d = await saved(page);
   expect(d.fixtures.map(f => f.kind)).toEqual(['fridge']);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  d = await saved(page);
+  expect(d.fixtures, 'and the second UNDO takes the fridge').toEqual([]);
 });
