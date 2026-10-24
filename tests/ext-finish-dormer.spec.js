@@ -6,6 +6,15 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// A WIDER WINDOW THAN THE CONFIG'S 1280, since 23 Oct: EXT. FINISH fits the
+// elevation with the painter's marks gutter and a tenth of the drawing of air
+// each side (Movie: "about 10% extra cushion"), which puts this 76 ft view at
+// 9 px to the foot in a 1280 window -- and 4" lap siding is under
+// finish-patterns' three-pixel scale gate there, drawn as plain fill. The
+// claims here are about the dormer's cladding, not about that gate, so the
+// window is wide enough for the siding to draw at all.
+test.use({ viewport: { width: 1600, height: 900 } });
+
 const BUCKET = 'model-drawing';
 const W = (id, a, b, extra = {}) => ({ id, levelId: 3, view: 'plan', wallType: 'stud_2x6', refLine: 'center',
   baseHeight: 0, topHeight: 8, start: { x: a[0], y: 0, z: a[1] }, end: { x: b[0], y: 0, z: b[1] }, ...extra });

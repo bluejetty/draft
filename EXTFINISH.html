@@ -1018,6 +1018,9 @@
       // on a wall the drafter is not looking at.
       const canvas = document.getElementById('elev');
       let frame = null;    // the mapping the last paint used, for the inverse
+      // A tenth of the drawing of air on every side of it (Movie, 23 Oct:
+      // "about 10% extra cushion"); cut-view's screenCushion says how.
+      const ELEVATION_CUSHION = 0.1;
       // SIZED TO ITS ROOM, in CSS pixels, before anything measures it. The
       // pick inverts the frame this paint used, so the backing store and the
       // box on screen have to be the same number or every click is off by the
@@ -1039,32 +1042,42 @@
           frame = null;
           return;
         }
-        const extents = CV.cutViewExtents(env, cut);
-        if (!extents) { frame = null; return; }
         const axis = CV.cutAxis(cut);
-        const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
-        const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
-        const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
-        const { yTop, yBottom } = extents;
-        // OUR OWN FIT, so the inverse below is exact rather than a guess at
-        // what the painter chose. With `pxPerFt` and `extents` handed in, the
-        // painter's margins are zero and its frame is arithmetic on these five
-        // numbers -- see the note at externalFit.
-        const pad = 14;
-        const pxPerFt = Math.max(2, Math.min(
-          (canvas.width - pad * 2) / Math.max(uMax - uMin, 4),
-          (canvas.height - pad * 2) / Math.max(yTop - yBottom, 8)));
-        const x0 = (canvas.width - (uMax - uMin) * pxPerFt) / 2;
-        const y0 = (canvas.height - (yTop - yBottom) * pxPerFt) / 2;
-        frame = { uMin, uMax, yTop, yBottom, pxPerFt, x0, y0, cut, axis };
+        // ── THE PAINTER'S FIT, HANDED BACK ────────────────────────────
+        //
+        // Movie, 23 Oct: "on the EXT finish and ELEVATION make sure it zooms
+        // out to show the entire building in addition to the ELEVATION
+        // marks on the side (elevation dimensions and about 10% extra
+        // cushion". His E3 came up with the roof running off the left of
+        // the canvas and no level marks at all.
+        //
+        // THIS PAGE USED TO FIT THE DRAWING ITSELF, from the cut's own ends,
+        // and hand the painter a pxPerFt and extents. Two things were wrong
+        // with that and both are the same thing: the page and the painter
+        // disagreed about the drawing. The painter grows a standard mark out
+        // to every roof it looks along (cut-view.js reachingEaves) and this
+        // fit read the mark before it grew -- so the painter centred a wider
+        // drawing in a frame cut for a narrower one and both ends ran off
+        // the canvas; and an external fit is a fit with no margins, so the
+        // level readings, drawn OUTSIDE the drawing in the painter's left
+        // gutter, landed at a negative x and were never seen.
+        //
+        // SO THE PAINTER FITS, as it does on MODEL: its own margins, which
+        // are the marks' gutter and the header, plus a tenth of the drawing
+        // all round, and the frame it chose comes back through `onFrame` --
+        // the one mapping a click is inverted through, exact because it is
+        // the painter's own and not this page's guess at it.
+        const colors = CV.inksFromSkin(window.__reSkin);
+        frame = null;
+        CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
+          { colors, finishes: true, cushion: ELEVATION_CUSHION,
+            onFrame: f => { frame = { ...f, cut, axis }; } });
+        if (!frame) return;
         // Read by the specs, which aim clicks at what was drawn.
         window.__extFinishFrame = frame;
         window.__extFinishDormers = () => (CV.dormerGables && env && CV.sectionLevelStack(env)
           ? CV.dormerGables(env, cut, CV.sectionLevelStack(env), axis)
             .map(dg => ({ lo: dg.lo, hi: dg.hi, mid: dg.mid, base: dg.base, apex: dg.apex, finish: dg.finish })) : []);
-        const colors = CV.inksFromSkin(window.__reSkin);
-        CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
-          { pxPerFt, extents, colors, finishes: true });
         if (picked) paintPickMark(ctx);
       };
 

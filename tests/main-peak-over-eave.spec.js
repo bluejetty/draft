@@ -43,17 +43,39 @@ const darkRows = (page, x, y0, y1) => page.evaluate(({ x, y0, y1 }) => {
   return out;
 }, { x, y0, y1 });
 
+// IN FEET THROUGH THE FRAME, since 23 Oct. This read rows 274-275 and
+// columns 700..770 at the fixed viewport, which was true of one fit; the
+// elevations then took the painter's cushion (a tenth of air each side and
+// sky above, Movie: "about 10% extra cushion") and every pixel moved. MODEL
+// hands the frame it painted with to `window.__elevFrame`, so the fascia's
+// bottom line is named by its elevation and the peak by its place along the
+// view, and the rows and columns are worked out from those each time.
+const FOOT_E = 15.37;   // the upper roof's fascia bottom, feet
+const PEAK_U = 0;       // the main roof's peak along E3, feet
+const frameOf = page => page.evaluate(() => {
+  const f = window.__elevFrame;
+  const c = document.getElementById('plan');
+  const r = c.getBoundingClientRect();
+  return { ...f, left: r.left, top: r.top };
+});
+
 test('E3: the main roof peak stands in front of the upper eave, not behind its fascia line', async ({ page }) => {
   await openE3(page);
-  // The fascia's bottom line runs at rows 274-275 at this viewport. x 700 and
-  // 770 are either side of the main roof's peak, x 734 is the peak itself.
-  const FOOT = [274, 275];
-  const beside = [...await darkRows(page, 700, 262, 280), ...await darkRows(page, 770, 262, 280)];
-  expect(FOOT.every(y => beside.includes(y)), `either side of the peak: ${beside}`).toBe(true);
-  for (const x of [730, 734, 738]) {
-    const over = await darkRows(page, x, 262, 280);
-    expect(FOOT.some(y => over.includes(y)), `over the peak at x ${x}: ${over}`).toBe(false);
+  const f = await frameOf(page);
+  const X = u => Math.round(f.left + f.x0 + (u - f.uMin) * f.pxPerFt);
+  const Y = e => Math.round(f.top + f.y0 + (f.yTop - e) * f.pxPerFt);
+  // The band of rows round the fascia's bottom line, and the line itself:
+  // the rows dark in BOTH columns 2.3 ft either side of the peak.
+  const y0 = Y(FOOT_E + 0.35), y1 = Y(FOOT_E - 0.35);
+  const left = await darkRows(page, X(PEAK_U - 2.3), y0, y1);
+  const right = await darkRows(page, X(PEAK_U + 2.3), y0, y1);
+  const foot = left.filter(y => right.includes(y));
+  expect(foot.length, `the fascia line either side of the peak: ${left} / ${right}`).toBeGreaterThanOrEqual(1);
+  for (const u of [PEAK_U - 0.2, PEAK_U, PEAK_U + 0.2]) {
+    const over = await darkRows(page, X(u), Y(FOOT_E + 1.2), y1);
+    expect(foot.some(y => over.includes(y)), `over the peak at u ${u}: ${over}`).toBe(false);
     // And the peak itself is drawn there, above where the line was.
-    expect(over.some(y => y > 267 && y < 274), `the peak's own lines at x ${x}: ${over}`).toBe(true);
+    expect(over.some(y => y > Y(FOOT_E + 0.9) && y < Math.min(...foot)),
+      `the peak's own lines at u ${u}: ${over}`).toBe(true);
   }
 });
