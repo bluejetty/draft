@@ -380,7 +380,37 @@ if (!window.DraftFixtureGeometry) {
     return best;
   };
 
+  // ── THE HALF INCH'S CORNERS, AS NODES (Movie, 24 Oct) ─────────────────
+  //
+  // "the corner where the 2 X 1/2" faint lines meet so the user can place it
+  // against a wall and if there is a corner node the use can 'connect' them
+  // when they are located at the same location". Where the faint line along
+  // the wall face meets a faint side line: each end of the piece, half an
+  // inch out, on the face. An end another piece stands against (a run kept
+  // tight) has no side line there, and no node. `end` is -1 at the low end
+  // along the wall, +1 at the high.
+  const GAP_JOINT_FT = 0.03;
+  const gapCorners = (walls, fixture, fixtures = []) => {
+    const geo = fixtureGeometry(walls, fixture);
+    if (!geo || !geo.frame || geo.faceOff == null || !(geo.wallGap > 0)) return [];
+    const g = geo.wallGap;
+    const a0 = geo.tub ? geo.tubAlongStart : geo.alongStart;
+    const a1 = geo.tub ? geo.tubAlongEnd : geo.alongEnd;
+    const side = fixture.side === -1 ? -1 : 1;
+    const abuts = at => fixtures.some(other => other && other !== fixture
+      && hostKey(other) === hostKey(fixture) && String(other.levelId) === String(fixture.levelId)
+      && (other.side === -1 ? -1 : 1) === side && (() => {
+        const o = fixtureGeometry(walls, other);
+        return !!o && (Math.abs(o.alongEnd - at) < GAP_JOINT_FT || Math.abs(o.alongStart - at) < GAP_JOINT_FT);
+      })());
+    const out = [];
+    if (!abuts(a0)) out.push({ ...geo.frame.at(a0 - g, geo.faceOff), end: -1 });
+    if (!abuts(a1)) out.push({ ...geo.frame.at(a1 + g, geo.faceOff), end: 1 });
+    return out.map(p => ({ x: p.x, z: p.z, end: p.end }));
+  };
+
   window.DraftFixtureGeometry = Object.freeze({
+    gapCorners,
     WALL_GAP_FT,
     snapToWallGap,
     wallGapOf,

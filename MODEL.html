@@ -7560,7 +7560,10 @@
   // and called from every paint -- a drag repaints on each move it makes.
   // A `var`, so a paint before that line has run finds it empty, not dead.
   var syncDragLength = null;
+  // WHICH PAINT THIS IS, for what is worked out once a frame.
+  var paintFrame = 0;
   const paint = () => {
+    paintFrame += 1;
     if (syncDragLength) syncDragLength();
     const t0 = performance.now();
     // Hand dimensions onto the corners they were put on, before anything draws.
@@ -13680,6 +13683,18 @@
           ctx.closePath();
           ctx.stroke();
         });
+        // ITS HALF-INCH CORNERS, as the nodes they are (Movie, 24 Oct): a
+        // small ring each, where a wall end can be put to connect.
+        if (type === 'fixture') {
+          const FG = window.DraftFixtureGeometry;
+          (FG?.gapCorners ? FG.gapCorners(drawing?.walls || [], item, fixtures()) : []).forEach(c => {
+            const p = toS(c);
+            ctx.save();
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(p.x, p.y, GAP_NODE_PX, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+          });
+        }
         return;
       }
       if (type === 'fenestration') {
@@ -14735,7 +14750,25 @@
   // THE STRONGER PULL between an orange node and a yellow corner in reach:
   // nearer as a share of its own reach wins, the orange on a tie. `{ v,
   // node }`, or null when neither reaches.
+  // WITHIN AN EIGHTH OF AN INCH, THAT CORNER (Movie, 24 Oct: "i have a hard
+  // time to click on the outside of the 3.5" wall (maybe too close to the
+  // other magnetic snapps, can we make it so if you are within 1/8" of a
+  // corner like this it will override any stronger snaps ?", and "if a user
+  // has problems snapping they can zoom in"). Any corner -- a node, a face
+  // corner, a half-inch corner -- the hand is that close to is the one it
+  // meant, whatever pulls harder from further off.
+  const EIGHTH_FT = 1 / 96;
+  const cornerUnderHand = (at, nodes, corners) => {
+    let best = null;
+    [[nodes, true], [corners, false]].forEach(([list, node]) => (list || []).forEach(v => {
+      const d = Math.hypot(v.x - at.x, v.z - at.z);
+      if (d <= EIGHTH_FT && (!best || d < best.d)) best = { d, v, node };
+    }));
+    return best ? { v: best.v, node: best.node } : null;
+  };
   const strongerPoint = (at, nodes, corners) => {
+    const close = cornerUnderHand(at, nodes, corners);
+    if (close) return close;
     const score = (list, px) => {
       const r = pullFt(px);
       let best = null;
@@ -15058,6 +15091,8 @@
     return best;
   };
   const dragMagnetAt = (at, vtx, magnet) => {
+    const close = magnet ? cornerUnderHand(at, magnet.nodes || [], magnet.corners) : null;
+    if (close) return { pt: { x: close.v.x, y: 0, z: close.v.z }, corner: close.v, node: close.node };
     const node = cornerSnap(at, vtx);
     if (node) return { pt: { x: node.x, y: 0, z: node.z }, corner: node, node: true };
     if (!magnet) return null;
@@ -15085,6 +15120,13 @@
     fixtureNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND EACH FIXTURE'S HALF-INCH CORNERS, for every tool (Movie, 24 Oct:
+    // "the corner where the 2 X 1/2" faint lines meet ... if there is a
+    // corner node the use can 'connect' them"): a wall drawn or dragged to
+    // one lands on it, and rides the fixture after (fixtureLinks).
+    fixtureGapNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     // AND THE TRACE IN HAND'S FIRST CORNER, once it can be closed on (Movie,
     // 21 Oct): the last corner finds the first as it finds any node.
     traceHome().forEach(v => {
@@ -15108,6 +15150,122 @@
       return (geo?.corners || []).map(c => ({ x: c.x, z: c.z }));
     });
   };
+  // THE HALF-INCH CORNERS OF EVERY FIXTURE ON THE LEVEL, kept for the frame:
+  // nodeEnds is asked on every pointer move, and a fixture's geometry does not
+  // change between two paints.
+  let gapNodeCache = { frame: -1, nodes: [] };
+  const fixtureGapNodes = () => {
+    if (gapNodeCache.frame === paintFrame) return gapNodeCache.nodes;
+    const FG = window.DraftFixtureGeometry;
+    const list = drawing ? fixtures() : [];
+    const nodes = FG?.gapCorners
+      ? list.flatMap(fx => FG.gapCorners(drawing.walls || [], fx, list).map(c => ({ x: c.x, z: c.z, fixture: fx, end: c.end })))
+      : [];
+    gapNodeCache = { frame: paintFrame, nodes };
+    return nodes;
+  };
+  // A WALL PUT ON A HALF-INCH CORNER PUTS ITS FACE THERE, not its middle
+  // (Movie, 24 Oct, asked which: "Wall's face lines up"): its end moves off
+  // the corner by the distance from its drawn line to the face that looks at
+  // the fixture, so the fixture keeps exactly its half inch to that face.
+  // Twice, because the end moving turns the wall a hair and the face with it.
+  const faceSpot = (wall, node, vtx) => {
+    const FG = window.DraftFixtureGeometry;
+    const geo = FG.fixtureGeometry(drawing.walls || [], node.fixture);
+    if (!geo) return null;
+    let at = { x: vtx.x, z: vtx.z };
+    for (let i = 0; i < 2; i += 1) {
+      const trial = { ...wall, start: wall.start === vtx ? at : wall.start, end: wall.end === vtx ? at : wall.end };
+      const frame = FG.wallFrame(trial);
+      if (!frame) return null;
+      const toward = (geo.center.x - node.x) * frame.nx + (geo.center.z - node.z) * frame.nz;
+      const off = toward >= 0 ? Math.max(frame.startOff, frame.endOff) : Math.min(frame.startOff, frame.endOff);
+      at = { x: node.x - frame.nx * off, z: node.z - frame.nz * off };
+    }
+    return at;
+  };
+  // THE WHOLE WALL STEPS ACROSS when its other end is loose -- joined to
+  // nothing, on no corner -- so it keeps its line instead of leaning; an
+  // other end held by something stays, and the wall turns the hair it must.
+  // Returns how far the end moved, or null when it was on no corner.
+  const looseEnd = (v, wall) => !!v
+    && ![...walls(), ...lines()].some(r => r !== wall && (r.start === v || r.end === v))
+    && !fixtureGapNodes().some(n => Math.hypot(n.x - v.x, n.z - v.z) < 1e-6);
+  const faceOntoGap = (wall, vtx, { otherFrom = null } = {}) => {
+    if (!wall || !vtx || !walls().includes(wall)) return null;
+    const node = fixtureGapNodes().find(n => Math.hypot(n.x - vtx.x, n.z - vtx.z) < 1e-6);
+    if (!node) return null;
+    const other = wall.start === vtx ? wall.end : wall.start;
+    const carry = otherFrom || (looseEnd(other, wall) ? { x: other.x, z: other.z } : null);
+    const FG = window.DraftFixtureGeometry;
+    let at;
+    if (carry) {
+      // A STRAIGHT STEP ACROSS: the wall's own line, so one pass is exact.
+      const geo = FG.fixtureGeometry(drawing.walls || [], node.fixture);
+      const frame = geo && FG.wallFrame({ ...wall, start: wall.start === vtx ? node : carry, end: wall.end === vtx ? node : carry });
+      if (!frame) return null;
+      const toward = (geo.center.x - node.x) * frame.nx + (geo.center.z - node.z) * frame.nz;
+      const off = toward >= 0 ? Math.max(frame.startOff, frame.endOff) : Math.min(frame.startOff, frame.endOff);
+      at = { x: node.x - frame.nx * off, z: node.z - frame.nz * off };
+    } else {
+      at = faceSpot(wall, node, vtx);
+    }
+    if (!at) return null;
+    const shift = { x: at.x - node.x, z: at.z - node.z };
+    vtx.x = at.x;
+    vtx.z = at.z;
+    relinkVertex(vtx);
+    if (carry) {
+      other.x = carry.x + shift.x;
+      other.z = carry.z + shift.z;
+      relinkVertex(other);
+    }
+    return shift;
+  };
+  // THE WALL ENDS STANDING WITH THEIR FACE ON A FIXTURE'S HALF-INCH CORNER:
+  // connected to it, so a slide of the fixture takes them along. Dragged off,
+  // they let go -- being there is the whole of the connection.
+  const LINK_TOL_FT = 0.01;
+  const GAP_NODE_PX = 4;
+  const fixtureLinks = fixture => {
+    const FG = window.DraftFixtureGeometry;
+    if (!FG?.gapCorners) return [];
+    const corners = FG.gapCorners(drawing.walls || [], fixture, fixtures())
+      .map(c => ({ ...c, fixture }));
+    const host = hostWallOf(fixture);
+    const seen = new Set();
+    const out = [];
+    walls().forEach(wall => {
+      if (wall === host) return;
+      [wall.start, wall.end].forEach(v => {
+        if (!v || seen.has(v)) return;
+        const c = corners.find(p => {
+          if (Math.hypot(p.x - v.x, p.z - v.z) < LINK_TOL_FT) return true;
+          const spot = faceSpot(wall, p, v);
+          return !!spot && Math.hypot(spot.x - v.x, spot.z - v.z) < LINK_TOL_FT;
+        });
+        if (!c) return;
+        seen.add(v);
+        out.push({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ, end: c.end, cx: c.x, cz: c.z });
+      });
+    });
+    return out;
+  };
+  const hostWallOf = fixture => walls().find(w => w.id === fixture.wallId) || null;
+  // THE CONNECTED WALL ENDS GO WHERE THEIR CORNERS WENT, each keeping how it
+  // stood off the corner at its own end of the piece.
+  const carryFixtureLinks = md => {
+    if (!md.links?.length) return;
+    const FG = window.DraftFixtureGeometry;
+    const corners = FG.gapCorners(drawing.walls || [], md.fixture, fixtures());
+    md.links.forEach(l => {
+      const c = corners.find(p => p.end === l.end);
+      if (!c) return;
+      l.vtx.x = c.x + (l.x - l.cx);
+      l.vtx.z = c.z + (l.z - l.cz);
+      relinkVertex(l.vtx);
+    });
+  };
   // A WALL'S OWN NODE WINS: its face corners stand an inch or two off it,
   // and a press meant for the node it always took must still land there. The
   // face corners take a press only where no node is in reach.
@@ -15125,8 +15283,9 @@
       });
       return best ? best.v : null;
     };
-    return nearest(nodeEnds({ faces: false }))
-      || strongerPoint(at, nodeEnds({ faces: false }), actLikeNodes())?.v || null;
+    const nodes = nodeEnds({ faces: false }), corners = actLikeNodes();
+    return cornerUnderHand(at, nodes, corners)?.v || nearest(nodes)
+      || strongerPoint(at, nodes, corners)?.v || null;
   };
   let lastSnapKey = '';
   let moveHoverAt = null;   // where the MOVE hover last painted
@@ -15562,6 +15721,8 @@
     // house concrete is drawn at the house's own height.
     if (body) wall.body = body;
     drawing.walls.push(wall);
+    // AN END PUT ON A FIXTURE'S HALF-INCH CORNER: its face goes there.
+    if (board !== 'toy') { faceOntoGap(wall, wall.start); faceOntoGap(wall, wall.end); }
     undoStack.push({ kind: 'add', wall });
     if (bone) extendToyBone(startPt, endPt, levelId);
     markDirty();
@@ -36561,6 +36722,99 @@
     }
     return null;
   };
+  // ── A LONE SHIFT TAP BREAKS A CORNER (Movie, 24 Oct) ─────────────────
+  //
+  // "we should add the disconnect option for corners, but not with a popup
+  // ... if the user selects a corner node ... will break the nodes and the
+  // user will control one of the lines (if they selected the node and
+  // selected one of the line at the beginning it will give them control of
+  // that line, but if they only selected a node it will randomly give them
+  // control of one", and then "choose NODE (and line if desired) and then
+  // press SHIFT --- just shift once".
+  //
+  // ONCE, ON ITS OWN: SHIFT pressed and let go with no press, no other key
+  // and no drag between. SHIFT+click still adds to a selection, SHIFT held
+  // through a wall drag still lets its corners go, and SHIFT with a drawing
+  // tool up still lines up on a node -- none of those is a lone tap, or
+  // under SELECT.
+  //
+  // The corner under the hand is broken: the picked wall's end there comes
+  // free and follows the hand until a click puts it down (one UNDO joins it
+  // again); Esc joins it back at once.
+  let shiftTap = null;
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Shift' && !e.repeat) shiftTap = { clean: true };
+    else if (shiftTap) shiftTap.clean = false;
+  }, true);
+  window.addEventListener('pointerdown', () => { if (shiftTap) shiftTap.clean = false; }, true);
+  window.addEventListener('keyup', e => {
+    if (e.key !== 'Shift') return;
+    const tap = shiftTap;
+    shiftTap = null;
+    if (tap?.clean) breakCornerByShift();
+  }, true);
+  // THE CORNER AND THE WALL THAT COMES FREE: the picked wall's end under the
+  // hand; with no wall picked, any wall's end there, the first that shares it.
+  const cornerToBreak = () => {
+    if (!cursorWorld) return null;
+    const reach = CORNER_GRAB_PX / view.scale;
+    const near = v => v && Math.hypot(v.x - cursorWorld.x, v.z - cursorWorld.z) <= reach;
+    const picked = selectedSegment();
+    if (picked && walls().includes(picked)) {
+      const v = [picked.start, picked.end].find(near);
+      return v ? { run: picked, v } : null;
+    }
+    let best = null;
+    walls().forEach(w => [w.start, w.end].forEach(v => {
+      if (!near(v)) return;
+      const d = Math.hypot(v.x - cursorWorld.x, v.z - cursorWorld.z);
+      if (!best || d < best.d) best = { run: w, v, d };
+    }));
+    return best;
+  };
+  const breakCornerByShift = () => {
+    if (activeTool !== RESTING_TOOL || moveDrag || board === 'toy' || modalUp()) return;
+    const hit = cornerToBreak();
+    if (!hit) return;
+    const { run, v } = hit;
+    if (![...walls(), ...lines()].some(r => r !== run && (r.start === v || r.end === v))) {
+      sayOnStrip('Nothing else meets at that corner -- there is nothing to break.');
+      return;
+    }
+    // detachCorner frees the PICKED wall's end; picked here so it is this one.
+    setSelection([{ type: 'wall', item: run }]);
+    const before = [{ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ }];
+    const at = { x: v.x, y: 0, z: v.z };
+    moveDrag = { kind: 'corner', body: run, grab: at, before, follow: [],
+      sx: pointerScreen?.x ?? 0, sy: pointerScreen?.y ?? 0, active: true, carry: true };
+    detachCorner(moveDrag, v);
+    sayOnStrip('Corner broken -- this wall\'s end follows the hand; click to put it down, Esc joins it back.');
+    paint();
+  };
+  // THE CLICK THAT PUTS THE CARRIED END DOWN ends the drag as a release
+  // would, and is nothing else.
+  canvas.addEventListener('pointerdown', e => {
+    if (!moveDrag?.carry) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    moveDrag.carry = false;
+    endDrag(e);
+  }, true);
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !moveDrag?.carry) return;
+    e.stopImmediatePropagation();
+    const md = moveDrag;
+    moveDrag = null;
+    const { shared, fresh } = md.loose;
+    fresh.forEach((f, i) => {
+      if (md.body.start === f.vtx) md.body.start = shared[i].vtx;
+      if (md.body.end === f.vtx) md.body.end = shared[i].vtx;
+      const k = vertexPool.indexOf(f.vtx);
+      if (k >= 0) vertexPool.splice(k, 1);
+    });
+    sayOnStrip('Corner joined again.');
+    paint();
+  }, true);
   syncDragLength = () => {
     const ft = liveDragFt();
     if (ft == null || document.activeElement === lengthBox) return;
@@ -37320,7 +37574,7 @@
     if (fixtureGrab) {
       const held = fixtureMoveBegin(fixtureGrab, at);
       if (held) {
-        moveDrag = { kind: 'fixture', ...held, sx: e.clientX, sy: e.clientY, active: false };
+        moveDrag = { kind: 'fixture', ...held, links: fixtureLinks(held.fixture), sx: e.clientX, sy: e.clientY, active: false };
         canvas.setPointerCapture(e.pointerId);
         return;
       }
@@ -37584,7 +37838,7 @@
           paint();
           return;
         }
-        if (md.kind === 'fixture') { fixtureMoveTo(md, raw); paint(); return; }
+        if (md.kind === 'fixture') { fixtureMoveTo(md, raw); carryFixtureLinks(md); paint(); return; }
         if (md.kind === 'opening') {
           const G = window.DraftGeometry2D;
           const wall = md.host;
@@ -37735,6 +37989,22 @@
           const pt = joined ? joined.pt : landed;
           grabbed.vtx.x = pt.x;
           grabbed.vtx.z = pt.z;
+          // ON A FIXTURE'S HALF-INCH CORNER, THE WALL'S FACE GOES THERE, a
+          // loose far end stepping across with it -- from where it stood when
+          // the drag began, so a hand that moves off the corner puts it back.
+          // THE WALL IS THE ONE THIS END BELONGS TO: a press on a corner arms
+          // with no body, so it is found -- and only when there is one wall.
+          const own = md.body && walls().includes(md.body) ? md.body
+            : (() => { const at = walls().filter(w => w.start === grabbed.vtx || w.end === grabbed.vtx); return at.length === 1 ? at[0] : null; })();
+          if (board !== 'toy' && own) {
+            const other = own.start === grabbed.vtx ? own.end : own.start;
+            if (md.faceFrom === undefined) {
+              md.faceFrom = looseEnd(other, own) ? { x: other.x, z: other.z } : null;
+              if (md.faceFrom) md.faceBefore = [{ vtx: other, x: other.x, z: other.z, offX: other.offX, offZ: other.offZ }];
+            }
+            const shift = faceOntoGap(own, grabbed.vtx, { otherFrom: md.faceFrom });
+            if (!shift && md.faceFrom) { other.x = md.faceFrom.x; other.z = md.faceFrom.z; relinkVertex(other); }
+          }
           // THE DOORS AND WINDOWS ON THE WALLS THIS END BELONGS TO STAY PUT.
           if (board !== 'toy') keepOpeningsPut(md, grabbed);
         } else {
@@ -38079,16 +38349,21 @@
           const gapIn = () => settleFixtureGaps().forEach(e => {
             if (!md.edits.some(x => x.item === e.item)) md.edits.push(e);
           });
+          // THE WALL ENDS IT CARRIED come back with it on UNDO, in one step.
+          const withLinks = step => (md.links?.length
+            ? { kind: 'batch', steps: [step, { kind: 'move', before: md.links.map(({ vtx, x, z, offX, offZ }) => ({ vtx, x, z, offX, offZ })) }] }
+            : step);
+          if (md.moved && !md.free) { gapIn(); carryFixtureLinks(md); }
           if (md.moved && md.free) {
             const onto = freeFixtureLand(md);
             gapIn();
-            undoStack.push({ kind: 'props', edits: [...md.edits] });
+            carryFixtureLinks(md);
+            undoStack.push(withLinks({ kind: 'props', edits: [...md.edits] }));
             markDirty();
             sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now. UNDO puts it back.`
               : `${fixtureLabel(md.fixture)} moved, on no wall -- let it go against one to put it on it. UNDO puts it back.`);
           } else if (md.moved) {
-            gapIn();
-            undoStack.push({ kind: 'props', edits: md.edits });
+            undoStack.push(withLinks({ kind: 'props', edits: md.edits }));
             markDirty();
             sayOnStrip(md.fixture.kind === 'island'
               ? `ISLAND moved${md.riders.length ? ', its pieces with it' : ''}. UNDO puts it back.`
@@ -38124,7 +38399,7 @@
           return;
         }
         const moveStep = { kind: 'move',
-          before: [...md.before, ...(md.lockBefore || []), ...(md.follow || [])],
+          before: [...md.before, ...(md.lockBefore || []), ...(md.follow || []), ...(md.faceBefore || [])],
           // A WALL LET GO WITH SHIFT takes its old corners back on UNDO.
           ...(md.loose ? { loose: { wall: md.body, shared: md.loose.shared.map(b => b.vtx), fresh: md.loose.fresh.map(f => f.vtx) } } : {}) };
         // AN END DRAGGED SETTLES ITS WALLS' OPENINGS (settleOpeningsPut): the
