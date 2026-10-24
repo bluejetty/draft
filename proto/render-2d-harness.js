@@ -2107,18 +2107,20 @@ suite('drawFixture2D', 'the four appliances carry their own letters', R => {
 });
 
 // Movie, 24 Oct: "can the fridge size mark be brought to the front edge of
-// the fridge". The box runs y 300 (wall) to 320 (front), its middle y 310.
-suite('drawFixture2D', 'the fridge says REF just inside its front edge; a washer keeps its letter in the middle', R => {
+// the fridge". A 6 ft deep box: y 300 (wall) to 360 (front), its inner
+// front line at 358.5, its middle y 330.
+suite('drawFixture2D', 'the fridge says REF just inside its front line; a washer keeps its letter in the middle', R => {
+  const geo = { frontOff: 6, center: { x: 2, z: 3 } };
   const at = kind => {
     const ctx = recordingCtx();
-    R.drawFixture2D(ctx, toS, { kind }, {}, null, fixtureEnv());
+    R.drawFixture2D(ctx, toS, { kind }, {}, null, fixtureEnv({}, geo));
     const a = calls(ctx, 'fillText')[0];
     return { x: Math.round(a[1] * 10) / 10, y: Math.round(a[2] * 10) / 10 };
   };
   const ref = at('fridge');
   expect('REF is across the middle of the front', ref.x, 420);
-  expect('REF sits toward the front edge, past the middle', ref.y > 310.5 && ref.y < 320, true);
-  expect('a washer\'s W stays in the middle', JSON.stringify(at('washer')), JSON.stringify({ x: 420, y: 310 }));
+  expect('REF sits by the front, inside the inner line', ref.y > 345 && ref.y < 358.5, true);
+  expect('a washer\'s W stays in the middle', JSON.stringify(at('washer')), JSON.stringify({ x: 420, y: 330 }));
 });
 
 // ── Movie's traced bath fixtures (9 Oct) ──
@@ -4167,7 +4169,7 @@ function coverage() {
     }],
     // THE FRIDGE'S REF AT ITS FRONT (Movie, 24 Oct), back in the middle.
     ['drawFixture2D says REF in the middle of the fridge again', src => {
-      const out = src.replace("        if (name === 'REF') c = frontMarkAt(ctx, toS, geo, name, c);\n", '');
+      const out = src.replace("        if (name === 'REF') c = frontMarkAt(ctx, toS, geo, cFront > cBack ? cFront - inset : cFront + inset, name, c);\n", '');
       if (out === src) throw new Error('the REF placement moved');
       return out;
     }],

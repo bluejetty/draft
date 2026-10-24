@@ -1660,12 +1660,12 @@ if (!window.DraftRender2D) {
     });
   }
 
-  // WHERE A WORD SITS JUST INSIDE A PIECE'S FRONT EDGE, upright: the front
-  // edge's middle, moved toward the piece's middle by a few pixels and half
-  // the word's own extent that way, whichever way the piece faces.
+  // WHERE A WORD SITS JUST INSIDE A PIECE'S FRONT, upright: the middle of
+  // the line along it at `across`, moved toward the piece's middle by a few
+  // pixels and half the word's own extent that way, whichever way it faces.
   const FRONT_MARK_IN_PX = 4;
-  function frontMarkAt(ctx, toS, geo, word, centre) {
-    const f = toS(geo.frame.at((geo.alongStart + geo.alongEnd) / 2, geo.frontOff));
+  function frontMarkAt(ctx, toS, geo, across, word, centre) {
+    const f = toS(geo.frame.at((geo.alongStart + geo.alongEnd) / 2, across));
     const dx = centre.x - f.x, dy = centre.y - f.y, len = Math.hypot(dx, dy);
     if (len < 1) return centre;
     const ux = dx / len, uy = dy / len;
@@ -1903,8 +1903,9 @@ if (!window.DraftRender2D) {
         const name = kind === 'fridge' || kind === 'fridge30' ? 'REF' : kind === 'washer' ? 'W' : kind === 'dryer' ? 'D' : 'DW';
         // THE FRIDGE'S MARK AT ITS FRONT (Movie, 24 Oct: "can the fridge
         // size mark be brought to the front edge of the fridge"): just
-        // inside the front edge, clear of the uppers' line and their mark.
-        if (name === 'REF') c = frontMarkAt(ctx, toS, geo, name, c);
+        // inside the box's inner front line, clear of the uppers' line and
+        // their mark.
+        if (name === 'REF') c = frontMarkAt(ctx, toS, geo, cFront > cBack ? cFront - inset : cFront + inset, name, c);
         ctx.fillText(name, c.x, c.y);
       }
     } else if (kind === 'island') {
