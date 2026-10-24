@@ -3511,8 +3511,13 @@ if (!window.DraftCutView) {
     // existing house's walls off a sheet viewport.
     const pin = pinnedFrame(opts);
     const mg = screenMargins(opts, w);
-    const marginL = fit || pin ? 0 : mg.left, marginR = fit || pin ? 0 : mg.right,
-      marginT = fit || pin ? 0 : mg.top, marginB = fit || pin ? 0 : mg.bottom;
+    // A PINNED ELEVATION KEEPS ITS MARGINS FOR THE MARKS. The frame comes
+    // from the pin (x0, y0, pxPerFt below), so the margins fit nothing; but
+    // the level readings are drawn in the left margin, and a zoomed
+    // elevation (MODEL, Movie 23 Oct) is still an elevation with readings.
+    // An external fit still takes none: the paper decides there.
+    const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
+      marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
     // THE CUSHION IS AIR AT THE SIDES AND SKY AT THE TOP, AND NOTHING BELOW:
     // the footing goes on resting on its inch of dirt against the foot bar
     // (the 26 Sep ruling at yFit), with the pile shafts running under it.
@@ -3561,6 +3566,21 @@ if (!window.DraftCutView) {
       : uMax;
     stack.floors.forEach(level => { mark(level.floorTop, houseHi); mark(level.wallTop, houseHi); });
     mark(fdn.grade);
+    // ── A ZOOMED ELEVATION STAYS INSIDE ITS MARGINS ──────────────────────
+    //
+    // Pinned by hand (MODEL's wheel and pan, Movie 23 Oct), the drawing can
+    // run under the gutter where the readings above were just written, and
+    // a wall's fill went over them. So from here on the drawing is clipped
+    // to the room inside the margins -- a viewport -- and the readings stay
+    // where they are. The fit never needs this (it was fitted inside them)
+    // and an external fit has no margins to keep.
+    const pinClip = Boolean(pin) && !fit;
+    if (pinClip) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(marginL, marginT, Math.max(0, w - marginL - marginR), Math.max(0, h - marginT - marginB));
+      ctx.clip();
+    }
 
     // Foundation faces split at grade. The exposed concrete above grade reads
     // as light grey faces, far to near, with a light-medium crease down each
@@ -7783,6 +7803,7 @@ if (!window.DraftCutView) {
     paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
       { x0, y0, pxPerFt, uMin, yTop, uMax, yFit, w, h, marginL, marginR, marginT, marginB,
         cushion: fit || pin ? 0 : screenCushion(opts) });
+    if (pinClip) ctx.restore();
     return true;
   }
 
