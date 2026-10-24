@@ -7135,7 +7135,23 @@
   // here, and they follow DAY and NIGHT without a second table.
   let northHover = false;
   const northDock = document.getElementById('north-dock');
+  // THE SELECT KEYS ON THE DOCK'S LINE (Movie, 24 Oct: "the SELECT /
+  // ASSEMBLY / DIMENSION / TRIM buttons should be brough down ... so the
+  // text can be read and they will be level /symetrical with the AUTO DIMS /
+  // HAND DIMS etc line on the other side"): centred on the row the arrow,
+  // the turn and the two DIMS chips stand on, and never over the strip's
+  // words.
+  const seatSelectBar = () => {
+    const bar = document.getElementById('select-bar');
+    if (!bar || !bar.offsetHeight) return;
+    const mid = canvas.getBoundingClientRect().top + northCentre().y - 28 + DOCK_CHIP / 2;
+    // The strip's line is 12px capitals from its top, said or not yet.
+    const words = document.getElementById('strip-message')?.getBoundingClientRect();
+    const floor = words ? words.top + 12 : 0;
+    bar.style.top = `${Math.max(mid - bar.offsetHeight / 2, floor)}px`;
+  };
   const seatNorthDock = () => {
+    seatSelectBar();
     if (!northDock) return;
     if (!window.DraftNorth || !drawing || driveThruUp()) { northDock.hidden = true; return; }
     // AND NOT ON A CUT VIEW. `paint()` puts the dock away and only a plan
