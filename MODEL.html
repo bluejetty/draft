@@ -5458,7 +5458,8 @@
   //   CABINETS       the width, inside the front edge, the numbers' foot to it
   //   SINK BASE      the width in the bowl: centred in a single, the left
   //                  bowl of a double, the bigger (right) of a 60/40
-  //   UPPERS         the width just inside their front line, lighter grey
+  //   UPPERS         the width just behind their dashed front line, toward
+  //                  the wall, lighter grey
   // Left is the drafter's, standing in the room facing the piece. The
   // fixtures' marks take a press; the cabinets' only say.
   const paintFixtureMarks = (ctx, toS) => {
@@ -5496,6 +5497,16 @@
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       const nl = Math.hypot(c.x - mx, c.y - my) || 1;
       const nx = (c.x - mx) / nl * px, ny = (c.y - my) / nl * px;
+      return [{ x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny }];
+    };
+    // ...or moved `px` toward the line at `toward` -- the uppers' mark goes
+    // behind their dashed line, toward the wall (Movie, 24 Oct: "the 36 on
+    // the upper cabinet move to be behind the dashed line (not on top)").
+    const lineToward = (geo, along0, along1, across, toward, px) => {
+      const a = toS(geo.frame.at(along0, across)), b = toS(geo.frame.at(along1, across));
+      const t = toS(geo.frame.at(along0, toward));
+      const nl = Math.hypot(t.x - a.x, t.y - a.y) || 1;
+      const nx = (t.x - a.x) / nl * px, ny = (t.y - a.y) / nl * px;
       return [{ x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny }];
     };
     const draw = ([a, b], label, color = ink, what = null, id = null) => {
@@ -5556,7 +5567,7 @@
         ctx.save();
         ctx.globalAlpha *= UPPER_MARK_ALPHA;
         spans.forEach(([u0, u1]) => {
-          if (u1 - u0 >= MARKED_RUN_MIN_FT) draw(lineAt(geo, u0, u1, front, SIZE_MARK_IN_PX), say(u1 - u0), ink, 'upper', fx.id);
+          if (u1 - u0 >= MARKED_RUN_MIN_FT) draw(lineToward(geo, u0, u1, front, geo.backOff, SIZE_MARK_IN_PX), say(u1 - u0), ink, 'upper', fx.id);
         });
         ctx.restore();
       }
@@ -18946,6 +18957,18 @@
         canvas.setPointerCapture(event.pointerId);
         return;
       }
+      // A FIXTURE SLIDES AS ITS SELECT DRAG SLIDES IT (Movie, 24 Oct: "i
+      // can't MOVE the cabinets sideways"). A piece on a wall stands on no
+      // points of its own, so the selection move carried nothing and said
+      // "Moved." -- MOVE now drives fixtureMoveBegin / fixtureMoveTo by the
+      // press's travel, wherever on the sheet the press began.
+      const piece = selection.length === 1 && selection[0].type === 'fixture' ? selection[0].item : null;
+      const held = piece && fixtureMoveBegin(piece, at);
+      if (held) {
+        moveState.drag = { kind: 'fixture', at, md: { kind: 'fixture', ...held, links: fixtureLinks(piece) }, moved: false };
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
       moveState.drag = { kind: 'selection', at, set: selectionMoveSet(), moved: false };
       canvas.setPointerCapture(event.pointerId);
       return;
@@ -18992,6 +19015,12 @@
         d.opening.offset = clamped.offset;
         liveRedimStep(d.live);
       }
+      paint();
+      return;
+    }
+    if (d.kind === 'fixture') {
+      fixtureMoveTo(d.md, at);
+      carryFixtureLinks(d.md);
       paint();
       return;
     }
@@ -19119,6 +19148,12 @@
         sayOnStrip('Slid along its wall. Type a distance for an exact one, or UNDO puts it back.');
       }
       finishTypedMidDrag();
+      paint();
+      return;
+    }
+    if (d.kind === 'fixture') {
+      fixtureMoveRelease(d.md);
+      setSelection([...selection]);
       paint();
       return;
     }
@@ -23398,6 +23433,24 @@
       moved: false,
     };
   };
+  // ITS SIDE GOES TO A NEIGHBOUR'S SIDE within an inch (Movie, 24 Oct: "can
+  // you make the edges (not the 1/2" extra but the main edge of the cabinet)
+  // to snap to the SIDE of the other CABINET when its within 1 inch"): the
+  // pieces' own widths, never the half inch a wall stands them off. SNAP lit,
+  // off TOY, as every other catch.
+  const SIDE_SNAP_FT = 1 / 12;
+  const sideSnap = (fixture, target, half) => {
+    if (!snapOn || board === 'toy') return target;
+    let best = target, bestD = SIDE_SNAP_FT + 1e-9;
+    window.DraftFixtureGeometry.runMates(fixtures(), fixture).filter(o => o.kind !== 'island').forEach(o => {
+      const o0 = Number(o.offset) - Number(o.width) / 2, o1 = Number(o.offset) + Number(o.width) / 2;
+      [o1 + half, o0 - half].forEach(t => {
+        const d = Math.abs(t - target);
+        if (d < bestD) { bestD = d; best = t; }
+      });
+    });
+    return best;
+  };
   const setStandoff = (item, standoff) => { if (standoff > 0) item.standoff = standoff; else delete item.standoff; };
   const fixtureMoveTo = (md, raw) => {
     const FG = window.DraftFixtureGeometry;
@@ -23444,7 +23497,7 @@
       const blocks = runs(fixture) ? []
         : FG.runMates(fixtures(), fixture).filter(o => o.kind !== 'island' && !runs(o))
           .map(o => [Number(o.offset) - Number(o.width) / 2, Number(o.offset) + Number(o.width) / 2]);
-      const at = FG.slideClamp(md.was.offset + dAlong, half, bounds, blocks);
+      const at = FG.slideClamp(sideSnap(fixture, md.was.offset + dAlong, half), half, bounds, blocks);
       if (at != null) fixture.offset = at;
     }
     md.moved = md.edits.some(({ item, before }) => item.offset !== before.offset
@@ -23490,6 +23543,36 @@
       if (item.kind !== 'island' && !md.riders.some(r => r.item === item)) delete item.standoff;
     });
     return wall;
+  };
+  // A FIXTURE LET GO, from the SELECT drag or the MOVE verb alike.
+  // ONE GESTURE, ONE UNDO: a 'props' step restores each record in place,
+  // the island's aisle key coming or going with it. AND LET GO BY A
+  // CROSSING WALL, IT STANDS ITS HALF INCH OFF IT (settleFixtureGaps), in
+  // the same step.
+  const fixtureMoveRelease = md => {
+    const gapIn = () => settleFixtureGaps().forEach(e => {
+      if (!md.edits.some(x => x.item === e.item)) md.edits.push(e);
+    });
+    // THE WALL ENDS IT CARRIED come back with it on UNDO, in one step.
+    const withLinks = step => (md.links?.length
+      ? { kind: 'batch', steps: [step, { kind: 'move', before: md.links.map(({ vtx, x, z, offX, offZ }) => ({ vtx, x, z, offX, offZ })) }] }
+      : step);
+    if (md.moved && !md.free) { gapIn(); carryFixtureLinks(md); }
+    if (md.moved && md.free) {
+      const onto = freeFixtureLand(md);
+      gapIn();
+      carryFixtureLinks(md);
+      undoStack.push(withLinks({ kind: 'props', edits: [...md.edits] }));
+      markDirty();
+      sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now. UNDO puts it back.`
+        : `${fixtureLabel(md.fixture)} moved, on no wall -- let it go against one to put it on it. UNDO puts it back.`);
+    } else if (md.moved) {
+      undoStack.push(withLinks({ kind: 'props', edits: md.edits }));
+      markDirty();
+      sayOnStrip(md.fixture.kind === 'island'
+        ? `ISLAND moved${md.riders.length ? ', its pieces with it' : ''}. UNDO puts it back.`
+        : `${fixtureLabel(md.fixture)} slid ${md.island ? 'inside its island' : 'along its wall'}. UNDO puts it back.`);
+    }
   };
   const fixturePress = at => {
     if (washroomPreset) return dropWashroom(at);
@@ -38396,33 +38479,7 @@
           return;
         }
         if (md.kind === 'fixture') {
-          // ONE GESTURE, ONE UNDO: a 'props' step restores each record in
-          // place, the island's aisle key coming or going with it.
-          // AND LET GO BY A CROSSING WALL, IT STANDS ITS HALF INCH OFF IT
-          // (settleFixtureGaps), in the same step.
-          const gapIn = () => settleFixtureGaps().forEach(e => {
-            if (!md.edits.some(x => x.item === e.item)) md.edits.push(e);
-          });
-          // THE WALL ENDS IT CARRIED come back with it on UNDO, in one step.
-          const withLinks = step => (md.links?.length
-            ? { kind: 'batch', steps: [step, { kind: 'move', before: md.links.map(({ vtx, x, z, offX, offZ }) => ({ vtx, x, z, offX, offZ })) }] }
-            : step);
-          if (md.moved && !md.free) { gapIn(); carryFixtureLinks(md); }
-          if (md.moved && md.free) {
-            const onto = freeFixtureLand(md);
-            gapIn();
-            carryFixtureLinks(md);
-            undoStack.push(withLinks({ kind: 'props', edits: [...md.edits] }));
-            markDirty();
-            sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now. UNDO puts it back.`
-              : `${fixtureLabel(md.fixture)} moved, on no wall -- let it go against one to put it on it. UNDO puts it back.`);
-          } else if (md.moved) {
-            undoStack.push(withLinks({ kind: 'props', edits: md.edits }));
-            markDirty();
-            sayOnStrip(md.fixture.kind === 'island'
-              ? `ISLAND moved${md.riders.length ? ', its pieces with it' : ''}. UNDO puts it back.`
-              : `${fixtureLabel(md.fixture)} slid ${md.island ? 'inside its island' : 'along its wall'}. UNDO puts it back.`);
-          }
+          fixtureMoveRelease(md);
           moveDrag = null;
           if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
           paint();

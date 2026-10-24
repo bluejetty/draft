@@ -2084,7 +2084,9 @@ suite('drawFixture2D', 'a stall is drawn exactly as a shower is', R => {
 });
 
 suite('drawFixture2D', 'the four appliances are one box that differs only by its letter', R => {
-  const withoutLetter = kind => signature(R, kind).replace(/fillText\([^)]*\)/, 'fillText(LETTER)');
+  // The fridge measures its word to stand it inside its front edge.
+  const withoutLetter = kind => signature(R, kind).replace(/ measureText\([^)]*\)/g, '')
+    .replace(/fillText\([^)]*\)/, 'fillText(LETTER)');
   expect('washer matches fridge', withoutLetter('washer'), withoutLetter('fridge'));
   expect('dryer matches fridge', withoutLetter('dryer'), withoutLetter('fridge'));
   expect('dishwasher matches fridge', withoutLetter('dish'), withoutLetter('fridge'));
@@ -2102,6 +2104,23 @@ suite('drawFixture2D', 'the four appliances carry their own letters', R => {
   expect('a washer', letterFor('washer'), 'W');
   expect('a dryer', letterFor('dryer'), 'D');
   expect('a dishwasher', letterFor('dish'), 'DW');
+});
+
+// Movie, 24 Oct: "can the fridge size mark be brought to the front edge of
+// the fridge". A 6 ft deep box: y 300 (wall) to 360 (front), its inner
+// front line at 358.5, its middle y 330.
+suite('drawFixture2D', 'the fridge says REF just inside its front line; a washer keeps its letter in the middle', R => {
+  const geo = { frontOff: 6, center: { x: 2, z: 3 } };
+  const at = kind => {
+    const ctx = recordingCtx();
+    R.drawFixture2D(ctx, toS, { kind }, {}, null, fixtureEnv({}, geo));
+    const a = calls(ctx, 'fillText')[0];
+    return { x: Math.round(a[1] * 10) / 10, y: Math.round(a[2] * 10) / 10 };
+  };
+  const ref = at('fridge');
+  expect('REF is across the middle of the front', ref.x, 420);
+  expect('REF sits by the front, inside the inner line', ref.y > 345 && ref.y < 358.5, true);
+  expect('a washer\'s W stays in the middle', JSON.stringify(at('washer')), JSON.stringify({ x: 420, y: 330 }));
 });
 
 // ── Movie's traced bath fixtures (9 Oct) ──
@@ -4146,6 +4165,12 @@ function coverage() {
     ['drawRoof2D never dots what is under a higher roof', src => {
       const out = src.replace('    if (hiddenOk) {\n      ctx.save();\n      ctx.setLineDash([3, 3]);', '    if (false) {\n      ctx.save();\n      ctx.setLineDash([3, 3]);');
       if (out === src) throw new Error('the dotted pass moved');
+      return out;
+    }],
+    // THE FRIDGE'S REF AT ITS FRONT (Movie, 24 Oct), back in the middle.
+    ['drawFixture2D says REF in the middle of the fridge again', src => {
+      const out = src.replace("        if (name === 'REF') c = frontMarkAt(ctx, toS, geo, cFront > cBack ? cFront - inset : cFront + inset, name, c);\n", '');
+      if (out === src) throw new Error('the REF placement moved');
       return out;
     }],
   ];

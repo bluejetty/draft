@@ -116,8 +116,10 @@ test('the island dragged goes along the wall and off it, its sink and dishwasher
   expect([r2(fx(d, 'dw').offset), r2(fx(d, 'dw').standoff)]).toEqual([18.5, 9]);
   expect(fx(d, 'isl').wallId, 'still the wall\'s').toBe('a');
   await expect(page.locator('#strip-message')).toContainText(/island moved, its pieces with it/i);
-  // ONE UNDO TAKES THE LOT BACK, the aisle included.
+  // ONE UNDO TAKES THE LOT BACK, the aisle included -- the drag's own step,
+  // not the saved version before it, which an empty stack falls back to.
   await page.keyboard.press('Control+z');
+  await expect(page.locator('#strip-message')).not.toContainText('version from');
   const back = await saved(page);
   expect([r2(fx(back, 'isl').offset), r2(fx(back, 'isl').standoff), r2(fx(back, 'dw').offset), r2(fx(back, 'dw').standoff)])
     .toEqual([12, 5, 14.5, 5]);
