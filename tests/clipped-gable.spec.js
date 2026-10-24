@@ -68,9 +68,8 @@ async function openExt(page) {
   await page.waitForFunction(() => !!window.__extFinishFrame && window.__extFinishFrame.cut.id === 'E3');
   await page.waitForTimeout(300);
   return page.evaluate(() => {
-    const f = window.__extFinishFrame;
-    const c = document.getElementById('elev');
-    return { x0: f.x0, y0: f.y0, pxPerFt: f.pxPerFt, uMin: f.uMin, yTop: f.yTop, w: c.width, h: c.height };
+    const { cut, axis, ...f } = window.__extFinishFrame;
+    return f;
   });
 }
 
@@ -84,6 +83,18 @@ const boxAt = (page, f, u, e, half = 1) => page.evaluate(([x, y, half]) => {
 }, [f.x0 + (u - f.uMin) * f.pxPerFt, f.y0 + (f.yTop - e) * f.pxPerFt, half]);
 const same = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) <= 12;
 const rakeAt = u => PLATE + (EAVE_CORNER - u) / 3;
+// The scale a tenth of cushion produces from the fit the painter hands back:
+// the drawing's span plus a tenth each side, its height plus a tenth of sky,
+// into the room inside the margins. A fit with no cushion is a tenth or a
+// fifth larger, so two percent of slack tells them apart.
+const expectCushionedScale = f => {
+  const want = Math.min(
+    (f.w - f.marginL - f.marginR) / ((f.uMax - f.uMin) * 1.2),
+    (f.h - f.marginT - f.marginB) / ((f.yTop - f.yFit) * 1.1));
+  expect(f.cushion, 'the painter was asked for a tenth').toBeCloseTo(0.1, 5);
+  expect(Math.abs(f.pxPerFt - want) / want,
+    `${f.pxPerFt.toFixed(3)} px/ft drawn against ${want.toFixed(3)} with the cushion`).toBeLessThan(0.02);
+};
 
 test('the 45 corner is a plumb crease from the floor to the rake, and no wall line leans beside it', async ({ page }) => {
   const f = await openExt(page);
@@ -152,6 +163,7 @@ test('EXT. FINISH fits the whole building and its level marks, a tenth of air ea
     return out;
   }, [f.x0 - 10, f.y0 + (f.yTop - PLATE) * f.pxPerFt]);
   expect(gutter.some(p => !same(p, paper)), 'the plate\'s level rule reaches into the gutter').toBe(true);
+  expectCushionedScale(f);
 });
 
 test('MODEL\'s E3 fits the same way', async ({ page }) => {
@@ -165,16 +177,16 @@ test('MODEL\'s E3 fits the same way', async ({ page }) => {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForFunction(() => !!window.__elevFrame);
   await page.waitForTimeout(500);
-  const read = await page.evaluate(() => {
-    const f = window.__elevFrame;
-    const c = document.getElementById('plan');
-    const r = c.getBoundingClientRect();
-    return { x0: f.x0, pxPerFt: f.pxPerFt, uMin: f.uMin, w: r.width };
-  });
+  const read = await page.evaluate(() => ({ ...window.__elevFrame }));
   const X = u => read.x0 + (u - read.uMin) * read.pxPerFt;
   const span = X(89) - X(-2);
   expect(read.uMin).toBeLessThanOrEqual(-2);
   // The painter's own gutter and tail, then the cushion inside them.
   expect(X(-2) - 64, `air left of the roof: ${(X(-2) - 64).toFixed(0)}px of ${span.toFixed(0)}`).toBeGreaterThanOrEqual(span * 0.08);
   expect(read.w - 24 - X(89), `air right of the roof: ${(read.w - 24 - X(89)).toFixed(0)}px`).toBeGreaterThanOrEqual(span * 0.08);
+  // AND THE SCALE IS THE CUSHIONED ONE, whichever way the window limits it:
+  // the drawing a fifth wider and a tenth taller than it is, fitted into the
+  // room the margins leave. The painter hands the whole fit back, so this is
+  // arithmetic on its own numbers rather than a hunt for ink.
+  expectCushionedScale(read);
 });

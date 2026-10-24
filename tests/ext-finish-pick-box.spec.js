@@ -115,11 +115,24 @@ const armRecorders = page => page.evaluate(() => {
   ctx.strokeRect = (x, y, w, hh) => { window.__rects.push({ x, y, w, h: hh }); return realRect(x, y, w, hh); };
 });
 
-async function clickFaceAndCompare(page, fx, fy) {
+// AIMED THROUGH THE FRAME since 23 Oct: `fx` is a fraction of the drawing's
+// own width and `eFt` an elevation in feet. The page used to fill the canvas
+// edge to edge and a canvas fraction was as good; it now fits the elevation
+// with the painter's marks gutter and a tenth of air each side and sky above
+// (Movie: "about 10% extra cushion"), and a fraction of the canvas lands in
+// that sky.
+async function clickFaceAndCompare(page, fx, eFt) {
   await armRecorders(page);
   const box = await page.locator('#elev').boundingBox();
   await page.evaluate(() => { window.__finishBoxes = []; window.__rects = []; });
-  await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+  const [px, py] = await page.evaluate(([fx, eFt]) => {
+    const f = window.__extFinishFrame;
+    const c = document.getElementById('elev');
+    const r = c.getBoundingClientRect();
+    return [(f.x0 + fx * (f.uMax - f.uMin) * f.pxPerFt) * r.width / c.width,
+      (f.y0 + (f.yTop - eFt) * f.pxPerFt) * r.height / c.height];
+  }, [fx, eFt]);
+  await page.mouse.click(box.x + px, box.y + py);
   await page.waitForTimeout(200);
   return page.evaluate(() => {
     const rect = window.__rects[window.__rects.length - 1] || null;
@@ -153,7 +166,7 @@ async function clickFaceAndCompare(page, fx, fy) {
 test.describe('EXT. FINISH — the pick box sits on the cladding', () => {
   test('MAIN FL: the box bottom is where the brick stops', async ({ page }) => {
     await openWith(page, 'main');
-    const m = await clickFaceAndCompare(page, 0.5, 0.62);
+    const m = await clickFaceAndCompare(page, 0.5, 4);
     expect(m.status, 'a wall was picked').toMatch(/ft on E1/);
     expect(m.paintBottom, 'the clad face painted under the click').not.toBeNull();
     // 2px for the stroke's own width. The bug this replaces was tens of pixels.
@@ -170,7 +183,7 @@ test.describe('EXT. FINISH — the pick box sits on the cladding', () => {
       // is exactly the ceiling line of the storey below. A check on MAIN FL
       // alone passes on a painter that deducts a plate from every floor.
       await openWith(page, 'upper');
-      const m = await clickFaceAndCompare(page, 0.5, 0.38);
+      const m = await clickFaceAndCompare(page, 0.5, 13);
       expect(m.status, 'a wall was picked').toMatch(/ft on E1/);
       expect(m.paintBottom, 'the clad face painted under the click').not.toBeNull();
       expect(Math.abs(m.rectBottom - m.paintBottom),
@@ -192,7 +205,7 @@ test.describe('EXT. FINISH — the pick box sits on the cladding', () => {
       // rather than the wall's own number. That is the whole claim of this
       // change -- the outline reports what was drawn, not what it recomputes.
       await openWith(page, 'short');
-      const m = await clickFaceAndCompare(page, 0.5, 0.62);
+      const m = await clickFaceAndCompare(page, 0.5, 4);
       expect(m.status, 'a wall was picked').toMatch(/ft on E1/);
       expect(m.paintTop, 'the clad face painted under the click').not.toBeNull();
       expect(Math.abs(m.rectTop - m.paintTop),
@@ -206,9 +219,9 @@ test.describe('EXT. FINISH — the pick box sits on the cladding', () => {
       // box and every finish at one height. They are only two checks if the
       // two answers differ.
       await openWith(page, 'main');
-      const lower = await clickFaceAndCompare(page, 0.5, 0.62);
+      const lower = await clickFaceAndCompare(page, 0.5, 4);
       await openWith(page, 'upper');
-      const upper = await clickFaceAndCompare(page, 0.5, 0.38);
+      const upper = await clickFaceAndCompare(page, 0.5, 13);
       expect(Math.abs(lower.rectBottom - upper.rectBottom),
         'the two storeys sit at different heights on the sheet')
         .toBeGreaterThan(20);

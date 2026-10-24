@@ -7694,8 +7694,12 @@ if (!window.DraftCutView) {
     ctx.moveTo(marginL - 18, Y(fdn.grade));
     ctx.lineTo(w - marginR, Y(fdn.grade));
     ctx.stroke();
+    // THE WHOLE FIT GOES BACK, not just the mapping: the span and the
+    // margins it was fitted into, so a page (or a spec) can say what scale
+    // the cushion should have produced and check the one it got.
     paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
-      { x0, y0, pxPerFt, uMin, yTop });
+      { x0, y0, pxPerFt, uMin, yTop, uMax, yFit, w, h, marginL, marginR, marginT, marginB,
+        cushion: fit || pin ? 0 : screenCushion(opts) });
     return true;
   }
 
