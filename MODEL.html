@@ -23500,10 +23500,14 @@
       return null;
     }
     const placement = fixturePlacement(at, kind.run ? 0 : (Number(kind.depthFt) || 0) + 0.5);
-    if (!placement) {
-      sayOnStrip('Press near a wall — fixtures and cabinets sit against the wall that carries them.');
-      return null;
-    }
+    // AWAY FROM EVERY WALL, IT DROPS FREE WHERE IT IS PRESSED (Movie, 24
+    // Oct: "i can't place the INDUVIDUAL items of the kitchen items manually
+    // yet - like STOVE / CABINET / or FRIDGE etc. i'l like to be able to
+    // place all those so i can arrange the kitchens"): centred on the press,
+    // its back to the top of the sheet, standing on a line of its own as a
+    // fixture kept when its wall went does. Dragged against a wall and let
+    // go, it goes onto that wall (freeFixtureLand).
+    if (!placement) return freeFixturePress(kind, at);
     if (kind.run) return fixtureRunPress(kind, placement);
     // CLAMPED, NOT REFUSED, when the press lands near a corner. Null means the
     // wall cannot carry the width at all, which is a different answer and gets
@@ -23551,6 +23555,32 @@
     return addFixture(kind, placement.wall, {
       offset, width: kind.widthFt, side: placement.side,
     });
+  };
+
+  const freeFixturePress = (kind, at) => {
+    const FG = window.DraftFixtureGeometry;
+    const active = onActiveLevel();
+    const width = Number(kind.widthFt) || 1;
+    const id = newDrawingItemId('fixture');
+    const host = { id: `free:${id}`, start: { x: at.x - width, y: 0, z: at.z }, end: { x: at.x + width, y: 0, z: at.z },
+      wallType: 'stud_2x4', refLine: 'center', levelId: active.levelId, view: active.viewId || 'plan' };
+    const record = { id, wallId: null, host, levelId: active.levelId, view: active.viewId || 'plan',
+      kind: kind.id, layer: FIXTURE_LAYER, offset: width, width, depth: kind.depthFt, side: 1 };
+    // CENTRED ON THE PRESS: its line moved by however far the piece's middle
+    // stands off it.
+    const geo = FG.fixtureGeometry(drawing.walls || [], record);
+    if (geo?.center) {
+      const dx = at.x - geo.center.x, dz = at.z - geo.center.z;
+      host.start = { x: host.start.x + dx, y: 0, z: host.start.z + dz };
+      host.end = { x: host.end.x + dx, y: 0, z: host.end.z + dz };
+    }
+    if (!Array.isArray(drawing.fixtures)) drawing.fixtures = [];
+    drawing.fixtures.push(record);
+    undoStack.push({ kind: 'add-item', list: drawing.fixtures, item: record });
+    sayOnStrip(`${kind.label} placed free -- drag it against a wall to put it on that wall.`);
+    markDirty();
+    paint();
+    return record;
   };
 
   // THE CORNER, PRESSED INTO A CORNER (Movie, 21 Oct): the crossing wall's
