@@ -106,14 +106,15 @@ test('a HORIZ string: three points, ENTER, a press above stands two dimensions t
   expect(made.every(x => inkSide(x).z < 0)).toBe(true);
 });
 
-test('a VERT string ends with a double-click and stands where the next press is', async ({ page }) => {
+test('a VERT string ends with ENTER and stands where the next press is', async ({ page }) => {
   await open(page, drawing(RUN));
   const { at } = await frame(page);
   await armDimension(page);
   await page.locator('[data-dim-pop] [data-dim-mode="v"]').click();
   await press(page, at, [10.03, 0.02]);
   await page.mouse.move(...at(10.02, 5.98));
-  await page.mouse.dblclick(...at(10.02, 5.98));
+  await press(page, at, [10.02, 5.98]);
+  await page.keyboard.press('Enter');
   await page.waitForTimeout(80);
   await expect(page.locator('#strip-message')).toContainText('click where the string goes');
   await press(page, at, [11.5, 3]);
@@ -247,8 +248,9 @@ test('a hand dimension follows the corner it was put on, along its own run; UNDO
   expect(hand(d).map(span)).toEqual([[4, 10, -1.5, -1.5]]);
   expect(hand(d)[0].endRef || hand(d)[0].startRef).toBeTruthy();
   // The corner at (10, 0) dragged 2' along: the string's end goes with it,
-  // and its row stays where it was put.
-  await page.keyboard.press('Escape');
+  // and its row stays where it was put. ENTER finishes the string (ESC would
+  // abandon it, Movie 24 Oct).
+  await page.keyboard.press('Enter');
   await page.keyboard.press('s');
   await press(page, at, [7, 0]);
   await page.mouse.move(...at(10, 0));

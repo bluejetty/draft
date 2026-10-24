@@ -23500,10 +23500,14 @@
       return null;
     }
     const placement = fixturePlacement(at, kind.run ? 0 : (Number(kind.depthFt) || 0) + 0.5);
-    if (!placement) {
-      sayOnStrip('Press near a wall — fixtures and cabinets sit against the wall that carries them.');
-      return null;
-    }
+    // AWAY FROM EVERY WALL, IT DROPS FREE WHERE IT IS PRESSED (Movie, 24
+    // Oct: "i can't place the INDUVIDUAL items of the kitchen items manually
+    // yet - like STOVE / CABINET / or FRIDGE etc. i'l like to be able to
+    // place all those so i can arrange the kitchens"): centred on the press,
+    // its back to the top of the sheet, standing on a line of its own as a
+    // fixture kept when its wall went does. Dragged against a wall and let
+    // go, it goes onto that wall (freeFixtureLand).
+    if (!placement) return freeFixturePress(kind, at);
     if (kind.run) return fixtureRunPress(kind, placement);
     // CLAMPED, NOT REFUSED, when the press lands near a corner. Null means the
     // wall cannot carry the width at all, which is a different answer and gets
@@ -23551,6 +23555,32 @@
     return addFixture(kind, placement.wall, {
       offset, width: kind.widthFt, side: placement.side,
     });
+  };
+
+  const freeFixturePress = (kind, at) => {
+    const FG = window.DraftFixtureGeometry;
+    const active = onActiveLevel();
+    const width = Number(kind.widthFt) || 1;
+    const id = newDrawingItemId('fixture');
+    const host = { id: `free:${id}`, start: { x: at.x - width, y: 0, z: at.z }, end: { x: at.x + width, y: 0, z: at.z },
+      wallType: 'stud_2x4', refLine: 'center', levelId: active.levelId, view: active.viewId || 'plan' };
+    const record = { id, wallId: null, host, levelId: active.levelId, view: active.viewId || 'plan',
+      kind: kind.id, layer: FIXTURE_LAYER, offset: width, width, depth: kind.depthFt, side: 1 };
+    // CENTRED ON THE PRESS: its line moved by however far the piece's middle
+    // stands off it.
+    const geo = FG.fixtureGeometry(drawing.walls || [], record);
+    if (geo?.center) {
+      const dx = at.x - geo.center.x, dz = at.z - geo.center.z;
+      host.start = { x: host.start.x + dx, y: 0, z: host.start.z + dz };
+      host.end = { x: host.end.x + dx, y: 0, z: host.end.z + dz };
+    }
+    if (!Array.isArray(drawing.fixtures)) drawing.fixtures = [];
+    drawing.fixtures.push(record);
+    undoStack.push({ kind: 'add-item', list: drawing.fixtures, item: record });
+    sayOnStrip(`${kind.label} placed free -- drag it against a wall to put it on that wall.`);
+    markDirty();
+    paint();
+    return record;
   };
 
   // THE CORNER, PRESSED INTO A CORNER (Movie, 21 Oct): the crossing wall's
@@ -31780,7 +31810,7 @@
     // `offset` and `wallId` are the two that must NEVER travel -- they are
     // where it is.
     fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage', 'casement',
-      'doorType', 'doorStyle', 'gardenWindowWidth', 'hingeFlip', 'swingFlip', 'showHeight'],
+      'doorType', 'doorStyle', 'gardenWindowWidth', 'sidelightWidth', 'sidelightSides', 'hingeFlip', 'swingFlip', 'showHeight'],
     // NOT `structure`. Whether a floor is framed or a slab is read from the
     // layer set it lives on (layer-views.js's floorHomeView), so copying it
     // would make a floor's own two answers disagree -- and `points` is its
@@ -34482,6 +34512,28 @@
           return resizeOpenings(split.doorFt + feet, () => ({ gardenWindowWidth: feet }));
         }, showSelectionProps, { inches: true }));
       }
+      // A SIDELIGHT'S SIDES AND ITS LIGHT (Movie, 24 Oct: "One or two,
+      // picked", "36" door + 14" light"). The leaf keeps its width: a light
+      // added or taken away widens or narrows the unit by its own width.
+      if (openings.length === 1 && openings[0].doorStyle === 'sidelight') {
+        const only = openings[0];
+        const p = G.sidelightPanelsFt(only);
+        const count = sides => (sides === 'both' ? 2 : 1);
+        box.append(propSelect('SIDELIGHT', [['latch', 'LATCH SIDE'], ['hinge', 'HINGE SIDE'], ['both', 'BOTH SIDES']],
+          p.sides, sides => {
+            const refusal = resizeOpenings(p.doorFt + count(sides) * p.lightFt,
+              () => ({ sidelightSides: sides, sidelightWidth: p.lightFt }));
+            if (refusal) sayOnStrip(refusal);
+          }));
+        box.append(propField('DOOR WIDTH', p.doorFt, feet => {
+          if (!(feet >= 1)) return 'The door needs a width of a foot or more.';
+          return resizeOpenings(feet + count(p.sides) * p.lightFt, () => ({ sidelightWidth: p.lightFt, sidelightSides: p.sides }));
+        }, showSelectionProps, { inches: true }));
+        box.append(propField('LIGHT WIDTH', p.lightFt, feet => {
+          if (!(feet > 0)) return 'The light needs a width greater than zero.';
+          return resizeOpenings(p.doorFt + count(p.sides) * feet, () => ({ sidelightWidth: feet, sidelightSides: p.sides }));
+        }, showSelectionProps, { inches: true }));
+      }
       if (openings.every(o => o.garage !== true)) {
         box.append(doorHandRow(
           openings.every(o => o.hingeFlip === true),
@@ -36023,7 +36075,6 @@
   };
   const endDimString = () => {
     dimLinesStale();
-    if (dimPlacing) return dimLastLine ? finishDimString() : false;
     if (dimPoints.length < 2) {
       sayOnStrip('DIMENSION — press two points at least, then SPACE, ENTER or the right button.');
       return false;
@@ -36032,35 +36083,37 @@
     sayOnStrip(`DIMENSION — ${dimPoints.length - 1} to place: click where the string goes.`);
     return true;
   };
-  // SPACEBAR AND ENTER are the series rule's (seriesKeyPress): once a press
-  // at the cursor, twice quickly the double-click below (Movie, 20 Oct: "can
-  // you also add PRESS SPACEBAR to also end the cycle and go to placing the
-  // line"; 22 Oct: "dimensions and lines too should work that way too").
-  // A DOUBLE-CLICK'S FIRST PRESS lays a line before its second says stop:
-  // that line is taken back, so stopping leaves nothing extra. Only a line
-  // laid a moment ago, past the first, and still the last thing done.
-  const takeBackDoubleClickLine = () => {
-    const last = dimLastLine;
-    if (!last || Date.now() - last.when >= 700 || last.count < 2
-      || undoStack[undoStack.length - 1] !== last.step) return;
-    undoStack.pop();
-    last.made.forEach(item => { const i = drawing.dimensions.indexOf(item); if (i >= 0) drawing.dimensions.splice(i, 1); });
-    last.count -= 1;
-  };
-  // ON THE LINE JUST PLACED: within 8 px of it, across the string.
+  // ── THE SEQUENCE, AS MOVIE SET IT OUT (24 Oct) ────────────────────────
+  //
+  // "first press "D" to start the dimensiong ... choose a point and beging
+  // making a line of dimensions by clicking left click on each point, when
+  // i press RIGHT mouse, SPACE or ENTER the points are finished and we move
+  // onto the LINE placement, once the line is in a good place the user
+  // presses LEFT click to place line, and again another LEFT click at
+  // another line location,,, when wish to finish press RIGHT CLICK, SPACE or
+  // ENTER. at any time if they user would like to abort the DIMensionsing
+  // process press ESC key to exit out without placing dimension".
+  //
+  // So LEFT only ever adds -- a point, or a line -- and only RIGHT, SPACE or
+  // ENTER moves the string on. The double-click that used to end it, and the
+  // click on the line just placed that used to finish it, are gone: a
+  // drafter clicking two points quickly, or laying a second line close to
+  // the first, was being told he had finished. A click exactly where the last
+  // line already stands lays nothing: that line is there.
+  // ON THE LINE JUST PLACED: within 2 px of it, across the string.
   const dimOnLastLine = at => {
     if (!dimLastLine) return false;
     const u = dimDirection(dimPoints);
     const n = u ? { x: -u.z, z: u.x } : null;
     const off = n ? (at.x - dimLastLine.at.x) * n.x + (at.z - dimLastLine.at.z) * n.z : Infinity;
-    return Math.abs(off) * view.scale < 8;
+    return Math.abs(off) * view.scale < 2;
   };
   const dimPress = at => {
     dimLinesStale();
     if (dimPlacing) {
       // A CLICK ON THE LINE JUST PLACED puts the string down: the same spot,
       // twice, is how he says he is done.
-      if (dimOnLastLine(at)) { takeBackDoubleClickLine(); finishDimString(); return; }
+      if (dimOnLastLine(at)) return;
       const pieces = dimString(dimPoints, at);
       if (!pieces.length) { sayOnStrip('DIMENSION — those points measure nothing that way.'); return; }
       const { levelId } = onActiveLevel();
@@ -36076,7 +36129,9 @@
       const step = { kind: 'built', walls: [], outlines: [], list: null,
         items: made.map(item => ({ list: drawing.dimensions, item })) };
       undoStack.push(step);
-      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1 };
+      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1,
+        // EVERY LINE OF THIS STRING, for ESC to take back.
+        lines: [...(dimLastLine?.lines || []), { made, step }] };
       sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or SPACE, ENTER or the right button to finish.`);
       markDirty();
       paint();
@@ -36091,20 +36146,6 @@
     sayOnStrip(dimPoints.length === 1 ? 'DIMENSION — the next point'
       : `DIMENSION — ${dimPoints.length} points: the next, or SPACE, ENTER or the right button to end the string`);
     paint();
-  };
-  // A DOUBLE-CLICK ENDS THE STRING, as ENTER does. Its two presses landed on
-  // one point, which dimPress took once.
-  //
-  // AND, WHILE LINES ARE BEING PLACED, IT FINISHES THEM -- taking back the
-  // line its own first press just put down, so a double-click to stop leaves
-  // no extra line behind.
-  const dimDoubleEnds = () => {
-    if (dimPlacing) {
-      takeBackDoubleClickLine();
-      if (dimLastLine) finishDimString();
-      return;
-    }
-    if (endDimString()) paint();
   };
   // ONCE ENDS (Movie, 23 Oct): SPACE, ENTER or the right button. While the
   // points go down it ends them and the line placement begins; while the
@@ -36127,11 +36168,24 @@
     if (endDimString()) paint();
     return true;
   };
-  canvas.addEventListener('dblclick', e => {
-    if (activeTool !== 'dimension' || !dimPoints.length) return;
-    e.preventDefault();
-    dimDoubleEnds();
-  });
+  // ESC TAKES BACK EVERY LINE OF THE STRING IN HAND -- "exit out without
+  // placing dimension" -- and the steps that laid them, so no UNDO is left
+  // pointing at a line that is gone. Called by cancelGestures.
+  const dimAbandon = () => {
+    const lines = dimLastLine?.lines || [];
+    lines.slice().reverse().forEach(({ made, step }) => {
+      // BY ID: a save between the press and the ESC hands the page fresh
+      // records for the same dimensions.
+      const ids = new Set(made.map(item => item.id));
+      const list = drawing.dimensions || [];
+      for (let i = list.length - 1; i >= 0; i -= 1) if (ids.has(list[i].id)) list.splice(i, 1);
+      const k = undoStack.lastIndexOf(step);
+      if (k >= 0) undoStack.splice(k, 1);
+    });
+    dimLastLine = null;
+    if (lines.length) markDirty();
+    return lines.length > 0;
+  };
   // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
   // through the register's listeners, because setTool runs at load, before
   // this block has declared anything.
@@ -37014,6 +37068,7 @@
       || stretchState.a);
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
+    if (dimPlacing) dimAbandon();
     dimPoints = [];
     dimPlacing = false;
     rulerFrom = null;

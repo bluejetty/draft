@@ -373,7 +373,7 @@ if (!window.DraftDrawingFormat) {
   // was inside or out, so the reader does not guess. Neither key appears on
   // a window. No version bump: the stored shape only gains optional keys.
   const DOOR_TYPES = Object.freeze(['ext', 'int', 'garage']);
-  const DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'overhead']);
+  const DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden', 'sidelight', 'overhead']);
   // A GARDEN DOOR IS ONE UNIT, a leaf beside a fixed window, and `width` is
   // the whole unit; this is the window's share. One missing, or one that
   // leaves the leaf no room, reads as half the unit -- a 60" GARDEN is a
@@ -429,6 +429,13 @@ if (!window.DraftDrawingFormat) {
         doorType: !isDoor ? null : (isGarage ? 'garage' : oneOf(opening?.doorType, ['ext', 'int'], null)),
         doorStyle,
         gardenWindowWidth: doorStyle === 'garden' ? gardenWindowWidthFt(opening?.gardenWindowWidth, width) : null,
+        // A SIDELIGHT's light width and which side(s) it stands (Movie, 24
+        // Oct). Kept as stored; the painters read a light that cannot fit
+        // as 14" -- geometry-2d's sidelightPanelsFt is the one rule.
+        ...(doorStyle === 'sidelight' ? {
+          sidelightWidth: positive(opening?.sidelightWidth, 14 / 12),
+          sidelightSides: oneOf(opening?.sidelightSides, ['latch', 'hinge', 'both'], 'latch'),
+        } : {}),
         // WHICH WAY IT OPENS. With neither set, the hinge is at the jamb
         // nearer the wall's start and the leaf swings to the left of the
         // wall's direction -- how every door has always been drawn. The

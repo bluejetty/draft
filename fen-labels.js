@@ -92,9 +92,10 @@ if (!window.DraftFenLabels) {
     // TWO PANELS, BOTH SIZES (Movie, 24 Oct: "if there is a double door or
     // sidelight we mark both sizes", "D36/24"): the leaf first, then the
     // second panel.
-    const two = Array.isArray(splitFt) && splitFt.length === 2
+    // A SIDELIGHT both sides is three: D14/36/14.
+    const panels = Array.isArray(splitFt) && splitFt.length >= 2
       && splitFt.every(ft => Number.isFinite(ft) && ft > 0);
-    const width = two ? `${size(splitFt[0])}/${size(splitFt[1])}` : String(size(widthFt));
+    const width = panels ? splitFt.map(size).join('/') : String(size(widthFt));
     const tall = Number.isFinite(heightFt) && heightFt > 0
       && (showHeight === true || Math.abs(heightFt - STANDARD_DOOR_HEIGHT_FT) > DOOR_HEIGHT_SLACK_FT);
     return tall ? `D${width} X ${size(heightFt)}` : `D${width}`;
@@ -115,6 +116,17 @@ if (!window.DraftFenLabels) {
       return [total - windowFt, windowFt];
     }
     if (EQUAL_PANEL_STYLES.has(opening.doorStyle)) return [total / 2, total / 2];
+    // A SIDELIGHT: the leaf first and its light (D36/14), or the lights
+    // either side of it (D14/36/14). geometry-2d's sidelightPanelsFt rule.
+    if (opening.doorStyle === 'sidelight') {
+      const sides = ['latch', 'hinge', 'both'].includes(opening.sidelightSides) ? opening.sidelightSides : 'latch';
+      const n = sides === 'both' ? 2 : 1;
+      const fits = l => l > 0 && total - n * l >= 1;
+      const stored = Number(opening.sidelightWidth);
+      const light = fits(stored) ? stored : fits(14 / 12) ? 14 / 12 : total / 4;
+      const door = total - n * light;
+      return n === 2 ? [light, door, light] : [door, light];
+    }
     return null;
   };
 
@@ -334,7 +346,7 @@ if (!window.DraftFenLabels) {
   // line in the next room. A door that slides (POCKET, BARN, SLIDE, BYPASS)
   // has no arc, and keeps that other face. The swing side is render-2d's:
   // the left of the glazing run, turned over by FLIP SWING.
-  const SWINGING_DOOR_STYLES = new Set(['single', 'french', 'garden']);
+  const SWINGING_DOOR_STYLES = new Set(['single', 'french', 'garden', 'sidelight']);
   const doorTagLine = (opening, geometry, { gapFt = PLAN_TAG_GAP_FT } = {}) => {
     if (!geometry || !geometry.glazing || !geometry.corners || !geometry.center) return null;
     const [ga, gb] = geometry.glazing;

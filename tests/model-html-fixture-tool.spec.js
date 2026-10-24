@@ -180,7 +180,10 @@ test('casework lands on its own layer', async ({ page }) => {
   expect(fixtures[0].width * 2, 'and on the half foot').toBeCloseTo(Math.round(fixtures[0].width * 2), 6);
 });
 
-test('a press away from every wall places nothing and says why', async ({ page }) => {
+// IT USED TO PLACE NOTHING. Movie, 24 Oct: "i'l like to be able to place
+// all those so i can arrange the kitchens" -- a press off every wall now
+// drops the piece free there, to be dragged onto a wall.
+test('a press away from every wall drops the piece free there and says so', async ({ page }) => {
   await houseOnLivePage(page);
   await armKind(page, 'toilet');
 
@@ -216,9 +219,12 @@ test('a press away from every wall places nothing and says why', async ({ page }
   await page.mouse.move(px, py);
   await page.mouse.click(px, py);
 
-  expect(await fixturesOf(page)).toHaveLength(0);
-  await expect(page.locator('#strip-message'))
-    .toContainText(/sit against the wall/i);
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  const placed = await fixturesOf(page);
+  expect(placed).toHaveLength(1);
+  expect(placed[0].wallId, 'on no wall').toBeNull();
+  await expect(page.locator('#strip-message')).toContainText(/placed free/i);
 });
 
 // THE GESTURE THIS PORT DOES NOT CARRY, asserted so its absence is a stated
