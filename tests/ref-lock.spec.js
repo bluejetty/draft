@@ -109,14 +109,15 @@ test('a floor\'s corner lines up on a hovered node too', async ({ page }) => {
   const { at } = await open(page);
   await tsquare(page, false);
   await h.armFromRail(page, 'floor');
-  await press(page, at, 2, 2);
+  // THE FIRST CORNER, lined up: it has no corner before it to run from.
   await move(page, at, 12, 0);
   await page.keyboard.down('Shift');
   await press(page, at, 12.3, 6);
   await page.keyboard.up('Shift');
   await move(page, at, 7, 7);
-  await press(page, at, 2, 7);
-  await press(page, at, 2, 2);
+  await press(page, at, 6, 6);
+  await press(page, at, 6, 9);
+  await press(page, at, 12, 6);
   const d = await saved(page);
   expect(d.floors, 'one floor').toHaveLength(1);
   expect(d.floors[0].points.some(p => r3(p.x) === 12 && r3(p.z) === 6), 'a corner straight up from the node').toBe(true);
