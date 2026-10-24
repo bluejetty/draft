@@ -72,9 +72,9 @@ test('the formats: windows and doors to 5 mm, the garage to 10, the letters kept
     });
     expect(out.window).toBe('W 915 X 1065');
     expect(out.door).toBe('D915');
-    expect(out.garage, 'his own numbers').toBe('G 4880W x 2440H');
+    expect(out.garage, 'his own numbers').toBe('4880 X 2440');
     expect(out.imperialWindow, 'imperial is untouched').toBe('W 36 X 42');
-    expect(out.imperialGarage).toBe('G 16W x 8H');
+    expect(out.imperialGarage).toBe("16' X 8'");
     expect(out.readBack.widthFt * 304.8).toBeCloseTo(915, 6);
     expect(out.readBack.heightFt * 304.8).toBeCloseTo(1065, 6);
     expect(out.readInches.widthFt).toBeCloseTo(3, 9);

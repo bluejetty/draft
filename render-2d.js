@@ -1582,6 +1582,34 @@ if (!window.DraftRender2D) {
     }
     return rings;
   }
+  // THE UPPERS OVER ONE PIECE, as spans along its wall: what drawCounters2D
+  // hangs over it, less a sink or dishwasher on the same run -- for the
+  // width mark each run of uppers carries (Movie, 24 Oct).
+  // An appliance standing in a cabinet run says its own uppers' width, so
+  // the run's are cut round it rather than said twice over it.
+  const APPLIANCE_UPPER_KINDS = Object.freeze(['stove', 'fridge', 'fridge30']);
+  const spansOnRun = (fixture, fixtures, kinds, env) => {
+    const side = fixture.side === -1 ? -1 : 1;
+    return (fixtures || []).filter(o => o && o !== fixture && kinds.includes(o.kind) && sameHost(o, fixture)
+      && (o.side === -1 ? -1 : 1) === side)
+      .map(o => env.fixtureGeometry(o)).filter(Boolean).map(g => [g.alongStart, g.alongEnd]);
+  };
+  function upperSpans2D(fixture, fixtures, env) {
+    if (!fixture || typeof env.hasUppers !== 'function' || !env.hasUppers(fixture)) return [];
+    const geo = env.fixtureGeometry(fixture);
+    if (!geo || geo.tub) return [];
+    const kinds = APPLIANCE_UPPER_KINDS.includes(fixture.kind) ? NO_UPPER_KINDS
+      : NO_UPPER_KINDS.concat(APPLIANCE_UPPER_KINDS);
+    return without(geo.alongStart, geo.alongEnd, spansOnRun(fixture, fixtures, kinds, env));
+  }
+  // A BASE PIECE'S RUNS UNDER THE COUNTER: the piece less a stove, fridge,
+  // pantry or full-height cabinet standing in it -- each run says its width.
+  function counterSpans2D(fixture, fixtures, env) {
+    const geo = fixture && env.fixtureGeometry(fixture);
+    if (!geo || geo.tub) return [];
+    return without(geo.alongStart, geo.alongEnd,
+      spansOnRun(fixture, fixtures, NO_COUNTER_KINDS.filter(k => k !== fixture.kind), env));
+  }
   // THE WALLS A COUNTER STANDS AGAINST, as rings: what nothing hangs into.
   const wallRings = (walls, levelId, wallFrame) => (walls || [])
     .filter(w => w && w.start && w.end && String(w.levelId) === String(levelId) && (w.view || 'plan') === 'plan')
@@ -1624,6 +1652,52 @@ if (!window.DraftRender2D) {
       stroke(outlineSegments(counters, blockers), false);
       stroke(outlineSegments(uppers, blockers), true);
     });
+  }
+
+  // THE PEDESTAL SINKS, drawn with no box (Movie, 24 Oct).
+  const PEDESTAL_KINDS = Object.freeze(['pedestal', 'pedestal30']);
+  // ── WHICH WAY IS THE DRAFTER'S LEFT, STANDING AT A PIECE ──────────────
+  //
+  // Facing the wall from the room, in SCREEN space -- the page may turn the
+  // plan, and left is what the drafter sees. `P(along, across)` is the
+  // piece's own screen placer. True when their left is the low-along end.
+  function viewerLeftIsLow(P, a0, a1, cBack, cFront) {
+    const lo = P(a0, cFront), hi = P(a1, cFront), back = P(a0, cBack);
+    const dx = back.x - lo.x, dy = back.y - lo.y;
+    // Screen y runs down, so the left of a heading (dx, dy) is (dy, -dx).
+    return (dy * (hi.x - lo.x) - dx * (hi.y - lo.y)) < 0;
+  }
+  // A SINK BASE'S BOWLS, as spans along the wall, and which bowl carries the
+  // mark (Movie, 24 Oct: "kitchen sinks number left bowl (right if bigger) or
+  // centre if single"). 'single' is one bowl; 'right' a double with the
+  // bigger, 60/40, on the drafter's right; anything else the equal double.
+  // A SINK's bowls when it does not say: one up to 26 1/2", two past it --
+  // how the drop-in SINK has always drawn. A SINK BASE is two unless told.
+  const sinkBowlsOf = fixture => fixture.bowls
+    || (fixture.kind === 'sink' && (Number(fixture.width) || 0) <= 2.2 ? 'single' : 'double');
+  // `inset` set, the bowls fill the piece to that margin (the drop-in SINK);
+  // unset, they are the sink base's, centred at most 18" each.
+  function sinkBowlSpans(a0, a1, bowls, leftIsLow, inset) {
+    if (inset != null) {
+      const lo = a0 + inset, hi = a1 - inset, w = hi - lo;
+      if (bowls === 'single') return { spans: [[lo, hi]], mark: 0 };
+      const cut = lo + w * (bowls === 'right' ? (leftIsLow ? 0.4 : 0.6) : 0.5);
+      return { spans: [[lo, cut - 0.05], [cut + 0.05, hi]],
+        mark: bowls === 'right' ? (leftIsLow ? 1 : 0) : (leftIsLow ? 0 : 1) };
+    }
+    const mid = (a0 + a1) / 2, w = a1 - a0;
+    if (bowls === 'single') {
+      const h = Math.max(0.2, Math.min(1.25, w / 2 - 0.25));
+      return { spans: [[mid - h, mid + h]], mark: 0 };
+    }
+    const half = Math.max(0.1, Math.min(0.75, w / 4 - 0.05));
+    const total = 4 * half, s0 = mid - 2 * half - 0.04;
+    if (bowls === 'right') {
+      const small = 0.4 * total, big = 0.6 * total;
+      const first = leftIsLow ? small : big;
+      return { spans: [[s0, s0 + first], [s0 + first + 0.08, s0 + total + 0.08]], mark: leftIsLow ? 1 : 0 };
+    }
+    return { spans: [[s0, mid - 0.04], [mid + 0.04, s0 + total + 0.08]], mark: leftIsLow ? 0 : 1 };
   }
 
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
@@ -1702,7 +1776,7 @@ if (!window.DraftRender2D) {
       } else rect(a0, a1, cBack, cFront);
       ctx.fill();
       ctx.save(); ctx.lineWidth = 0.5; ctx.globalAlpha *= 0.45; ctx.stroke(); ctx.restore();
-    } else if (kind !== 'toilet' && !joined) { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
+    } else if (kind !== 'toilet' && !PEDESTAL_KINDS.includes(kind) && !joined) { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
     if (joined) {
       rect(a0, a1, cBack, cFront); ctx.fill();
       const seg = (p, q) => { const A = P(p[0], p[1]), B = P(q[0], q[1]); ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); };
@@ -1748,6 +1822,16 @@ if (!window.DraftRender2D) {
       const centre = (a0 + a1) / 2;
       const lift = (depthIn - BASIN_D_IN * s) / 2;
       BASIN.forEach(flat => { tracePath(flat, x => centre + x * s / 12, o => (lift + o * s) / 12); ctx.stroke(); });
+    } else if (PEDESTAL_KINDS.includes(kind)) {
+      // THE PEDESTAL SINK: no cabinet, so no box -- a ledge along the back,
+      // the basin's rim round the front, the bowl inside it and the drain.
+      const centre = (a0 + a1) / 2, w = a1 - a0, d = cMax - cMin;
+      const ledge = Math.min(0.33, d * 0.2);
+      rect(a0, a1, cBack, cBack + dirC * ledge); ctx.fill(); ctx.stroke();
+      const rimC = cBack + dirC * (ledge + (d - ledge) / 2);
+      oval(centre, rimC, w / 2, (d - ledge) / 2); ctx.fill(); ctx.stroke();
+      oval(centre, rimC, Math.max(0.15, w / 2 - 0.25), Math.max(0.15, (d - ledge) / 2 - 0.2)); ctx.stroke();
+      oval(centre, rimC, 0.06, 0.06); ctx.stroke();
     } else if (kind === 'toilet') {
       const s = Math.min(1, (a1 - a0) * 12 / TOILET_W_IN, (cMax - cMin) * 12 / TOILET_D_IN);
       const centre = (a0 + a1) / 2;
@@ -1764,10 +1848,12 @@ if (!window.DraftRender2D) {
         ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
       }
       if (kind === 'sinkbase') {
-        // The double bowl, centred, with the faucet's dot at the back.
-        const mid2 = (a0 + a1) / 2, half = Math.min(0.75, (a1 - a0) / 4 - 0.05);
-        rect(mid2 - 2 * half - 0.04, mid2 - 0.04, cMin + 0.25, cMax - 0.2); ctx.stroke();
-        rect(mid2 + 0.04, mid2 + 2 * half + 0.04, cMin + 0.25, cMax - 0.2); ctx.stroke();
+        // The bowls, centred: an equal double unless the piece says one bowl
+        // or the bigger on the right (sinkBowlSpans).
+        const left = viewerLeftIsLow(P, a0, a1, cBack, cFront);
+        sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left).spans.forEach(([b0, b1]) => {
+          rect(b0, b1, cMin + 0.25, cMax - 0.2); ctx.stroke();
+        });
       }
     } else if (kind === 'tallcab') {
       // A full-height piece reads by its cross, the plan convention for a
@@ -1776,13 +1862,10 @@ if (!window.DraftRender2D) {
       ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
       ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); ctx.stroke();
     } else if (kind === 'sink') {
-      const w = a1 - a0;
-      if (w > 2.2) {
-        rect(a0 + inset, a0 + w / 2 - 0.05, cMin + inset, cMax - inset); ctx.stroke();
-        rect(a0 + w / 2 + 0.05, a1 - inset, cMin + inset, cMax - inset); ctx.stroke();
-      } else {
-        rect(a0 + inset, a1 - inset, cMin + inset, cMax - inset); ctx.stroke();
-      }
+      const left = viewerLeftIsLow(P, a0, a1, cBack, cFront);
+      sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left, inset).spans.forEach(([b0, b1]) => {
+        rect(b0, b1, cMin + inset, cMax - inset); ctx.stroke();
+      });
     } else if (kind === 'stove') {
       const w = a1 - a0, d = cMax - cMin;
       [[0.28, 0.3], [0.72, 0.3], [0.28, 0.7], [0.72, 0.7]].forEach(([fa, fc]) => {
@@ -1934,8 +2017,12 @@ if (!window.DraftRender2D) {
       });
     }
     if (options.selected) {
+      // ROUND THE HALF INCH, not the body (Movie, 24 Oct: "the BLUE line
+      // should go to the outside of the 1/2" faint line when its selected"):
+      // the gap is part of what was placed.
+      const g = geo.faceOff != null ? (geo.wallGap || 0) : 0;
       ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2;
-      rect(a0, a1, cBack, cFront); ctx.stroke();
+      rect(a0 - g, a1 + g, g > 0 ? geo.faceOff : cBack, cFront); ctx.stroke();
     }
     ctx.restore();
   }
@@ -3593,6 +3680,12 @@ if (!window.DraftRender2D) {
     drawOutlines2D,
     strokeSegPath2D,
     labelAlongLine2D,
+    viewerLeftIsLow,
+    sinkBowlSpans,
+    sinkBowlsOf,
+    UPPER_CABINET_DEPTH_FT,
+    upperSpans2D,
+    counterSpans2D,
     drawNoteScreen2D,
     noteBoxScreen2D,
     drawStairNotes2D,

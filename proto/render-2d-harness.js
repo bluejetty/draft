@@ -2041,7 +2041,9 @@ suite('drawFixture2D', 'every kind paints something', R => {
 const SAME_BY_DESIGN = [['fridge', 'fridge30', 'washer', 'dryer', 'dish'], ['shower', 'stall'],
   // A base cabinet in plan is its box and its counter edge, whatever is
   // behind its doors -- the drawers show in elevation, not on the floor plan.
-  ['cabinet', 'drawerbase', 'doorbase']];
+  ['cabinet', 'drawerbase', 'doorbase'],
+  // The two pedestal sinks are one drawing at two widths.
+  ['pedestal', 'pedestal30']];
 
 suite('drawFixture2D', 'no two kinds paint the same picture, bar the ones that share a branch', R => {
   // The ladder's real risk: drop a branch and that kind silently collapses
@@ -4035,7 +4037,7 @@ function coverage() {
     ['drawColumn2D pile and telepost draw the same', columnShapeIgnored],
     ['drawColumn2D back on the old page ink', dropColumnEnvColour],
     ['drawFixture2D toilet back in its box', src => src.replace(
-      "if (kind !== 'toilet' && !joined) { rect(", 'if (!joined) { rect(')],
+      "if (kind !== 'toilet' && !PEDESTAL_KINDS.includes(kind) && !joined) { rect(", "if (!PEDESTAL_KINDS.includes(kind) && !joined) { rect(")],
     ['drawFixture2D tub drain always at the start', src => src.replace(
       'const along = faucetAtStart ? (x => a1 - x * perIn) : (x => a0 + x * perIn);', 'const along = x => a0 + x * perIn;')],
     ['wetRoomLoops any fixture makes a wet room', src => src.replace(

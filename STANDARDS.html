@@ -328,12 +328,15 @@
     </section>
     <section class="group" style="margin-top:14px;" aria-label="Fenestration labels">
       <div class="group-title">Fenestration labels</div>
-      <p class="intro" style="margin:6px 0 8px;">The office&#8217;s three letters for the size beside each opening, for the estimate &mdash; G 16W x 8H garage doors in FEET, width then height; D36 for every other door in inches of width; W 36 X 42 windows in INCHES width&times;height. Plan tags switch with the A-DIMS-WIN and A-DIMS-DOOR layers. The stock lists are which sizes the office orders; schedules and auto-fenestration will pick from them later.</p>
-      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
-        <span class="default-name">DOORS ON ELEVATIONS</span>
-        <span class="layer-use">Print each door&#8217;s size on the elevations too. OFF by default &mdash; windows carry theirs on elevations, doors only when the office turns this on.</span>
-        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
-          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="fen-doors-elevations" data-fen-doors-elevations aria-label="Show door sizes on elevations" /> DOOR SIZES ON ELEVATIONS</label>
+      <p class="intro" style="margin:6px 0 8px;">The office&#8217;s three letters for the size beside each opening, for the estimate &mdash; 16' X 8' garage doors in FEET, width then height; D36 for every other door in inches of width (D36/24 on two panels, and X 96 when it is not 80&quot; tall); W 36 X 42 windows in INCHES width&times;height. Plan tags switch with the A-DIMS-WIN and A-DIMS-DOOR layers. The stock lists are which sizes the office orders; schedules and auto-fenestration will pick from them later.</p>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;" data-size-marks>
+        <span class="default-name">SIZE MARKS</span>
+        <span class="layer-use">Which sizes the sheets print. All ON by default &mdash; untick one to leave it off: a window&#8217;s and a door&#8217;s size on the elevations, a kitchen cabinet&#8217;s width and a tub&#8217;s, shower&#8217;s or sink&#8217;s size on the plans.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px; flex-direction:column; align-items:flex-start;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" data-fen-size-switch="windowSizesOnElevations" aria-label="Show window sizes on elevations" /> WINDOW SIZES ON ELEVATIONS</label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="fen-doors-elevations" data-fen-doors-elevations data-fen-size-switch="doorSizesOnElevations" aria-label="Show door sizes on elevations" /> DOOR SIZES ON ELEVATIONS</label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" data-fen-size-switch="cabinetSizes" aria-label="Show cabinet sizes on plans" /> CABINET SIZES</label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" data-fen-size-switch="fixtureSizes" aria-label="Show fixture sizes on plans" /> FIXTURE SIZES</label>
         </span>
       </div>
       <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
@@ -646,22 +649,27 @@
         saveActive('Room tray saved.');
       });
 
-      const fenDoorsInput = document.querySelector('[data-fen-doors-elevations]');
+      const fenSizeInputs = [...document.querySelectorAll('[data-fen-size-switch]')];
       const fenStockInputs = [...document.querySelectorAll('[data-fen-stock]')];
+      const fenSizeNames = {
+        windowSizesOnElevations: 'Window sizes on elevations', doorSizesOnElevations: 'Door sizes on elevations',
+        cabinetSizes: 'Cabinet sizes', fixtureSizes: 'Fixture sizes',
+      };
       const fillFenStandards = () => {
-        fenDoorsInput.checked = fenestrationStandards.doorsOnElevations;
+        fenSizeInputs.forEach(input => { input.checked = fenestrationStandards[input.dataset.fenSizeSwitch]; });
         fenStockInputs.forEach(input => {
           input.value = fenestrationStandards.stock[input.dataset.fenStock].join(', ');
         });
       };
       fillFenStandards();
-      fenDoorsInput.addEventListener('change', () => {
+      fenSizeInputs.forEach(input => input.addEventListener('change', () => {
+        const key = input.dataset.fenSizeSwitch;
         fenestrationStandards = window.DraftFenLabels.normaliseFenStandards({
-          ...fenestrationStandards, doorsOnElevations: fenDoorsInput.checked,
+          ...fenestrationStandards, [key]: input.checked,
         });
         fillFenStandards();
-        saveActive(`Door sizes on elevations ${fenestrationStandards.doorsOnElevations ? 'ON' : 'OFF'}.`);
-      });
+        saveActive(`${fenSizeNames[key]} ${fenestrationStandards[key] ? 'ON' : 'OFF'}.`);
+      }));
       fenStockInputs.forEach(input => {
         input.addEventListener('change', () => {
           const family = input.dataset.fenStock;

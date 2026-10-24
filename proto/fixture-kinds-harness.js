@@ -33,9 +33,9 @@ const ROOT = path.join(__dirname, '..');
 // fallback, which nothing here called with an id the catalogue lacks.
 const MUTATIONS = [
   ['the format forgets a kind, so a placed closet is dropped on load', 'drawing-format.js',
-    c => c.replace("'tub', 'shower', 'stall', 'closet'];", "'tub', 'shower', 'stall'];")],
+    c => c.replace("'tub', 'shower', 'stall', 'closet', 'pedestal',", "'tub', 'shower', 'stall', 'pedestal',")],
   ['the format accepts the L preset, so a file can claim to hold one', 'drawing-format.js',
-    c => c.replace("'tub', 'shower', 'stall', 'closet'];", "'tub', 'shower', 'stall', 'closet', 'kitchenL'];")],
+    c => c.replace("'pedestal', 'pedestal30'];", "'pedestal', 'pedestal30', 'kitchenL'];")],
   ['the closet restates its depth as the literal sum', 'fixture-kinds.js',
     c => c.replace('depthFt: CLOSET_INSIDE_DEPTH_FT + CLOSET_WALL_FT,', 'depthFt: 2.375,')],
   ['the sink becomes a two-click run', 'fixture-kinds.js',

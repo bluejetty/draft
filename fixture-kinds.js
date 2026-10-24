@@ -91,6 +91,15 @@ if (!window.DraftFixtureKinds) {
       note: '48" x 32" shower stall — click it onto a wall.' },
     { id: 'vanity',  label: 'VANITY',  group: 'BATH',     widthFt: 2.5,    depthFt: 2,      casework: true,  run: true,
       note: 'Vanity run — two clicks along a wall set the run; 24" deep with a basin.' },
+    // THE PEDESTAL SINK (Movie, 24 Oct: "add PEDESTAL SINK 2ft and 30"",
+    // "make 22" for both pedestals", "pedestal also 1/2" off wall"): a basin
+    // on a column, no cabinet under it, so it is drawn with no box -- like
+    // the toilet -- and keeps the half inch off the wall every other piece
+    // does.
+    { id: 'pedestal', label: 'PEDESTAL 24', group: 'BATH', widthFt: 2, depthFt: 22 / 12, casework: false, run: false,
+      note: '24" pedestal sink, 22" deep — click it onto a wall.' },
+    { id: 'pedestal30', label: 'PEDESTAL 30', group: 'BATH', widthFt: 2.5, depthFt: 22 / 12, casework: false, run: false,
+      note: '30" pedestal sink, 22" deep — click it onto a wall.' },
     { id: 'washer',  label: 'WASHER',  group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
       note: 'Washer box — click it onto a wall.' },
     { id: 'dryer',   label: 'DRYER',   group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,

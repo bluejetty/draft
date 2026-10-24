@@ -53,7 +53,14 @@ if (!window.DraftFenLabels) {
   const isMetric = units => units === 'metric';
   const mmTo = (ft, step) => Math.round(ft * MM_PER_FT / step) * step;
 
-  const fenLabel = ({ type, widthFt, heightFt, exterior, double: isDouble, garage, units }) => {
+  // A DOOR'S HEIGHT IS SAID ONLY WHEN IT IS NOT THE STANDARD 80" (Movie, 24
+  // Oct: "doors only mark WIDTH, but allow them to add X 80", "if the height
+  // isn't 80 show the height") -- or when the door's own SHOW HEIGHT is on.
+  const STANDARD_DOOR_HEIGHT_FT = 80 / 12;
+  const DOOR_HEIGHT_SLACK_FT = 0.25 / 12;
+
+  const fenLabel = ({ type, widthFt, heightFt, exterior, double: isDouble, garage, units,
+    splitFt, showHeight }) => {
     if (!Number.isFinite(widthFt) || widthFt <= 0) return '';
     const metric = isMetric(units);
     const size = ft => (metric ? mmTo(ft, 5) : roundInches(ft));
@@ -72,16 +79,43 @@ if (!window.DraftFenLabels) {
     if (type !== 'door') return '';
     if (garage) {
       if (!Number.isFinite(heightFt) || heightFt <= 0) return '';
-      // WIDTH FIRST, AND SAYS WHICH IS WHICH: "make it obvious which is which
-      // in the garage".
-      if (metric) return `G ${mmTo(widthFt, 10)}W x ${mmTo(heightFt, 10)}H`;
-      return `G ${trimFeet(widthFt)}W x ${trimFeet(heightFt)}H`;
+      // IN FEET, WIDTH FIRST, THE FOOT MARKS SAYING WHICH UNIT (Movie, 24
+      // Oct: "Garag Doors in ft 16'x8'"). Metric has no feet, so it is the
+      // two millimetre numbers, to the nearest 10 -- his 4880 X 2440.
+      if (metric) return `${mmTo(widthFt, 10)} X ${mmTo(heightFt, 10)}`;
+      return `${trimFeet(widthFt)}' X ${trimFeet(heightFt)}'`;
     }
     // ONE LETTER FOR EVERY OTHER DOOR. `exterior` and `double` are still
     // accepted, so a caller that passes them is not wrong -- they simply no
     // longer change the name.
     void exterior; void isDouble;
-    return `D${size(widthFt)}`;
+    // TWO PANELS, BOTH SIZES (Movie, 24 Oct: "if there is a double door or
+    // sidelight we mark both sizes", "D36/24"): the leaf first, then the
+    // second panel.
+    const two = Array.isArray(splitFt) && splitFt.length === 2
+      && splitFt.every(ft => Number.isFinite(ft) && ft > 0);
+    const width = two ? `${size(splitFt[0])}/${size(splitFt[1])}` : String(size(widthFt));
+    const tall = Number.isFinite(heightFt) && heightFt > 0
+      && (showHeight === true || Math.abs(heightFt - STANDARD_DOOR_HEIGHT_FT) > DOOR_HEIGHT_SLACK_FT);
+    return tall ? `D${width} X ${size(heightFt)}` : `D${width}`;
+  };
+
+  // WHICH DOORS ARE TWO PANELS, and how the width splits: a GARDEN is its
+  // leaf and its window (the window's share stored, half when it is not); a
+  // FRENCH pair, a SLIDER and a BYPASS are two equal halves. Anything else is
+  // one leaf, and null.
+  const EQUAL_PANEL_STYLES = new Set(['french', 'slide', 'bypass']);
+  const doorPanelsFt = opening => {
+    if (!opening || opening.type !== 'door' || opening.garage === true) return null;
+    const total = Number(opening.width) || 0;
+    if (!(total > 0)) return null;
+    if (opening.doorStyle === 'garden') {
+      const stored = Number(opening.gardenWindowWidth);
+      const windowFt = Number.isFinite(stored) && stored > 0 && stored < total - 1 / 12 ? stored : total / 2;
+      return [total - windowFt, windowFt];
+    }
+    if (EQUAL_PANEL_STYLES.has(opening.doorStyle)) return [total / 2, total / 2];
+    return null;
   };
 
   // Classification the plan can derive without asking anyone: garage from
@@ -90,10 +124,10 @@ if (!window.DraftFenLabels) {
   // host wall riding the house outline (the codebase's own exterior test —
   // loose walls with no closed outline read interior, which fails to the
   // plain D label, never to a wrong claim).
-  const fenLabelForOpening = (opening, { exteriorWall, units } = {}) => {
+  const fenLabelForOpening = (opening, { exteriorWall, units, heightFt: givenHeight } = {}) => {
     if (!opening) return '';
     const widthFt = opening.width;
-    const heightFt = opening.type === 'window'
+    const heightFt = Number.isFinite(givenHeight) ? givenHeight : opening.type === 'window'
       ? (opening.headHeight ?? 0) - (opening.sillHeight ?? 0)
       : opening.headHeight;
     const garage = opening.garage === true || opening.doorType === 'garage'
@@ -106,6 +140,8 @@ if (!window.DraftFenLabels) {
       double: widthFt >= 4,
       garage,
       units,
+      splitFt: garage ? null : doorPanelsFt(opening),
+      showHeight: opening.showHeight === true,
     });
   };
 
@@ -152,13 +188,28 @@ if (!window.DraftFenLabels) {
   // A-DIMS-DOOR -- because a tick on STANDARDS that the pages ignored was a
   // switch that did nothing.
   //
-  // doorsOnElevations: a door's size on an ELEVATION is OFF until the office
-  // turns it on (Movie, 1 Oct: "WINDOW sizes ON in elevation construction
-  // plans (by default) DOORS off by default but they could turn it on"). On
-  // the floor plan both draw, by their layers.
+  // THE SIZE MARKS' OWN SWITCHES (Movie, 24 Oct: door sizes on elevations
+  // "ok put them on by default", and "can the window, cabinet and fixture
+  // sizes also get turned on and off in that location in standards?"). All
+  // four are ON until the office turns one off:
+  //   windowSizesOnElevations  the W 36 X 42 on an elevation's glass
+  //   doorSizesOnElevations    the D36 on an elevation's door
+  //   cabinetSizes             a kitchen cabinet's width on the plan
+  //   fixtureSizes             a tub's, shower's or sink's mark on the plan
+  // On the floor plan windows and doors still switch with their layers.
+  //
+  // NEW NAMES, NOT doorsOnElevations. That key was OFF by default (Movie, 1
+  // Oct) and every office that ever saved STANDARDS stored its false; read
+  // under the old name, "on by default" would have reached nobody who had
+  // saved once. The old key is left to be ignored.
+  const SIZE_MARK_SWITCHES = Object.freeze(['windowSizesOnElevations', 'doorSizesOnElevations',
+    'cabinetSizes', 'fixtureSizes']);
   const DEFAULT_FEN_STANDARDS = Object.freeze({
     showLabels: false,
-    doorsOnElevations: false,
+    windowSizesOnElevations: true,
+    doorSizesOnElevations: true,
+    cabinetSizes: true,
+    fixtureSizes: true,
     stock: Object.freeze({
       garage: Object.freeze(['16x8', '9x8']),
       ed: Object.freeze(['36', '32']),
@@ -176,7 +227,7 @@ if (!window.DraftFenLabels) {
     const storedStock = stored.stock && typeof stored.stock === 'object' ? stored.stock : {};
     return {
       showLabels: stored.showLabels === true,
-      doorsOnElevations: stored.doorsOnElevations === true,
+      ...Object.fromEntries(SIZE_MARK_SWITCHES.map(key => [key, stored[key] !== false])),
       stock: Object.fromEntries(Object.entries(DEFAULT_FEN_STANDARDS.stock).map(([family, fallback]) => {
         const list = Array.isArray(storedStock[family])
           ? storedStock[family].map(entry => String(entry).trim()).filter(Boolean)
@@ -276,19 +327,24 @@ if (!window.DraftFenLabels) {
     };
   };
 
-  // A DOOR'S TAG GOES WHERE ITS LEAF DOES NOT. An interior door has no
-  // outside to step to, and the side it swings into is under the arc -- so
-  // the tag is stepped off the OTHER face, by the same half-thickness-plus-gap
-  // a window's is. For the usual inswing front door that is the outside too.
-  // The swing side is render-2d's: the left of the glazing run, turned over
-  // by FLIP SWING.
+  // A SWINGING DOOR'S TAG GOES INSIDE ITS SWING (Movie, 24 Oct: "move the
+  // mark to inside of swing"), stepped off the face the leaf opens to by the
+  // same half-thickness-plus-gap a window's is -- under the arc, where the
+  // door is read. It used to go to the OTHER face, and sat beside the wall
+  // line in the next room. A door that slides (POCKET, BARN, SLIDE, BYPASS)
+  // has no arc, and keeps that other face. The swing side is render-2d's:
+  // the left of the glazing run, turned over by FLIP SWING.
+  const SWINGING_DOOR_STYLES = new Set(['single', 'french', 'garden']);
   const doorTagLine = (opening, geometry, { gapFt = PLAN_TAG_GAP_FT } = {}) => {
     if (!geometry || !geometry.glazing || !geometry.corners || !geometry.center) return null;
     const [ga, gb] = geometry.glazing;
     const run = Math.hypot(gb.x - ga.x, gb.z - ga.z) || 1;
     const ux = (gb.x - ga.x) / run, uz = (gb.z - ga.z) / run;
     const flip = opening && opening.swingFlip === true ? -1 : 1;
-    const away = { x: uz * flip, z: -ux * flip };
+    const swings = SWINGING_DOOR_STYLES.has((opening && opening.doorStyle) || 'single')
+      && !(opening && opening.garage === true);
+    const side = swings ? -flip : flip;
+    const away = { x: uz * side, z: -ux * side };
     const half = Math.max(...geometry.corners.map(corner =>
       Math.abs((corner.x - geometry.center.x) * away.x
         + (corner.z - geometry.center.z) * away.z)));
@@ -302,8 +358,8 @@ if (!window.DraftFenLabels) {
   };
 
   // WHICH LINE A TAG RUNS ALONG, for any opening: a window and a garage door
-  // step outside the house; every other door steps off the face its leaf
-  // does not swing to. A garage with no outline to read falls back to that.
+  // step outside the house; every other door steps into its swing (a
+  // sliding one, off the other face). A garage with no outline to read falls back to that.
   const openingTagLine = (opening, geometry, outline, { centre = null } = {}) => {
     if (!opening) return null;
     const isGarage = opening.type === 'door'
@@ -331,8 +387,11 @@ if (!window.DraftFenLabels) {
     isMetric,
     mmTo,
     fenLabelForOpening,
+    doorPanelsFt,
+    STANDARD_DOOR_HEIGHT_FT,
     parseWindowSize,
     DEFAULT_FEN_STANDARDS,
+    SIZE_MARK_SWITCHES,
     stockListFromText,
     normaliseFenStandards,
     PLAN_TAG_GAP_FT,

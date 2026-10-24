@@ -5340,8 +5340,21 @@
   // THE BATH FIXTURES' SIZE MARKS (Movie, 23 Oct), kept apart from the
   // windows' so each list clears with its own painter's guards.
   const fixtureTagHits = [];
-  const SIZE_MARKED_KINDS = new Set(['shower', 'stall', 'tub']);
+  const SIZE_MARKED_KINDS = new Set(['shower', 'stall', 'tub', 'vanity', 'pedestal', 'pedestal30']);
   const SIZE_MARK_OFF_PX = 11;
+  // HOW FAR IN FROM AN EDGE a mark that sits INSIDE its piece is drawn: the
+  // 9px text centred this far in has its foot about a pixel off the edge.
+  const SIZE_MARK_IN_PX = 7;
+  // THE PIECES WHOSE WIDTH IS SAID ON THEIR FRONT EDGE (Movie, 24 Oct:
+  // "kitchen cabinet width on front edge, bottom of numbers closest to
+  // edge"). The sink base says it in its bowl, the uppers inside their own
+  // front line; the appliances say what they are, not a width.
+  const CABINET_MARKED_KINDS = new Set(['cabinet', 'drawerbase', 'doorbase', 'cornerbase', 'tallcab']);
+  // THE OFFICE'S SIZE SWITCHES (STANDARDS, SIZE MARKS), read at paint time.
+  const sizeMarkStandards = () => (window.DraftFenLabels && window.DraftProfileManager
+    ? window.DraftFenLabels.normaliseFenStandards(
+      window.DraftProfileManager.getActive('standards')?.content?.model?.fenestrationStandards)
+    : null);
   const paintWindowSizes = (ctx, toS, shown) => {
     // ── THE SHEET'S OWN TAGS, AND NOT THE THUMBNAILS' ────────────────────
     //
@@ -5430,48 +5443,132 @@
         });
       }
     });
-    // ── A SIZE MARK ON THE BATH FIXTURES (Movie, 23 Oct) ─────────────────
-    //
-    // "we should actually add a SIZE mark (30X60) etc to show the size, and
-    // also allow the user to click on the size mark to change the size". A
-    // shower, a stall or a tub carries its size just off its front edge, in
-    // the room: depth X width in inches (millimetres on a metric drawing),
-    // the way he wrote it. The mark takes a press like a window's tag, and
-    // the box that opens writes the fixture's own width and depth.
-    const FG = window.DraftFixtureGeometry;
-    if (live) fixtureTagHits.length = 0;
-    const marked = [];
-    if (FG) {
-      const all = drawing?.walls || [];
-      const metric = drawing?.units === 'metric';
-      fixtures().filter(fx => SIZE_MARKED_KINDS.has(fx.kind)).forEach(fx => {
-        const geo = FG.fixtureGeometry(all, fx);
-        if (!geo || !geo.corners || geo.corners.length < 4) return;
-        const along = geo.tub ? geo.tubLen : geo.width;
-        const say = ft => (metric ? String(FL.mmTo(ft, 5)) : String(Math.round(ft * 12)));
-        const label = `${say(fx.depth)}X${say(along)}`;
-        // The front edge, and a line a little past it, into the room.
-        const a = toS(geo.corners[3]), b = toS(geo.corners[2]);
-        const c = toS(geo.center);
-        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-        const nl = Math.hypot(mx - c.x, my - c.y) || 1;
-        const nx = (mx - c.x) / nl * SIZE_MARK_OFF_PX, ny = (my - c.y) / nl * SIZE_MARK_OFF_PX;
-        const placed = R.labelAlongLine2D(ctx, { x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny },
-          label, { offset: 0, color: skin['ink-quiet'] || skin['draw-wall-edge'] });
-        if (!placed) return;
-        marked.push({ id: fx.id, label, cx: placed.cx, cy: placed.cy });
-        if (live) {
-          fixtureTagHits.push({
-            fixture: fx, label, cx: placed.cx, cy: placed.cy, angle: placed.angle,
-            halfW: ctx.measureText(label).width / 2 + TAG_HIT_PAD,
-            halfH: TAG_HIT_HALF_H,
-          });
-        }
-      });
-    }
-    if (live) window.__fixtureTags = marked;
     ctx.restore();
   };
+
+  // ── THE FIXTURES' AND CABINETS' MARKS (Movie, 23 and 24 Oct) ──────────
+  //
+  // "we should actually add a SIZE mark (30X60) etc to show the size, and
+  // also allow the user to click on the size mark to change the size", and on
+  // 24 Oct where each one goes:
+  //   SHOWER, STALL  depth X width, just off the front edge, in the room
+  //   TUB            inside it, near the open side -- one mark, its own size
+  //   VANITY         inside it, at the front left ("sink left front of vanity")
+  //   PEDESTAL       just off its front edge
+  //   CABINETS       the width, inside the front edge, the numbers' foot to it
+  //   SINK BASE      the width in the bowl: centred in a single, the left
+  //                  bowl of a double, the bigger (right) of a 60/40
+  //   UPPERS         the width just inside their front line, lighter grey
+  // Left is the drafter's, standing in the room facing the piece. The
+  // fixtures' marks take a press; the cabinets' only say.
+  const paintFixtureMarks = (ctx, toS) => {
+    const live = ctx.canvas === canvas;
+    if (live) fixtureTagHits.length = 0;
+    const marked = [];
+    const R = window.DraftRender2D;
+    const FL = window.DraftFenLabels;
+    const FG = window.DraftFixtureGeometry;
+    if (live) window.__fixtureTags = marked;
+    // EVERY MARK SAID, for the specs: what it marks, what it says, where.
+    const said = [];
+    if (live) window.__sizeMarks = said;
+    if (!R || !R.labelAlongLine2D || !FL || !FG) return;
+    const std = sizeMarkStandards();
+    const showFixtures = !std || std.fixtureSizes !== false;
+    const showCabinets = !std || std.cabinetSizes !== false;
+    if (!showFixtures && !showCabinets) return;
+    const all = drawing?.walls || [];
+    const metric = drawing?.units === 'metric';
+    const say = ft => (metric ? String(FL.mmTo(ft, 5)) : String(Math.round(ft * 12)));
+    const ink = skin['ink-quiet'] || skin['draw-wall-edge'];
+    const env = {
+      fixtureGeometry: fx => FG.fixtureGeometry(all, fx),
+      hasUppers: fx => !!window.DraftFixtureKinds?.hasUppers(fx),
+    };
+    const list = fixtures();
+    ctx.save();
+    ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+    // A line along the piece at (along0..along1, across), moved `px` screen
+    // pixels toward the piece's middle (negative: out into the room).
+    const lineAt = (geo, along0, along1, across, px) => {
+      const a = toS(geo.frame.at(along0, across)), b = toS(geo.frame.at(along1, across));
+      const c = toS(geo.center);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const nl = Math.hypot(c.x - mx, c.y - my) || 1;
+      const nx = (c.x - mx) / nl * px, ny = (c.y - my) / nl * px;
+      return [{ x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny }];
+    };
+    const draw = ([a, b], label, color = ink, what = null, id = null) => {
+      const placed = R.labelAlongLine2D(ctx, a, b, label, { offset: 0, color });
+      if (placed && what) said.push({ what, id, label, cx: placed.cx, cy: placed.cy });
+      return placed;
+    };
+    const take = (fx, label, placed) => {
+      if (!placed) return;
+      marked.push({ id: fx.id, label, cx: placed.cx, cy: placed.cy });
+      if (live) {
+        fixtureTagHits.push({
+          fixture: fx, label, cx: placed.cx, cy: placed.cy, angle: placed.angle,
+          halfW: ctx.measureText(label).width / 2 + TAG_HIT_PAD, halfH: TAG_HIT_HALF_H,
+        });
+      }
+    };
+    list.forEach(fx => {
+      const geo = FG.fixtureGeometry(all, fx);
+      if (!geo || !geo.frame) return;
+      const a0 = geo.tub ? geo.tubAlongStart : geo.alongStart;
+      const a1 = geo.tub ? geo.tubAlongEnd : geo.alongEnd;
+      const P = (along, across) => toS(geo.frame.at(along, across));
+      if (showFixtures && SIZE_MARKED_KINDS.has(fx.kind)) {
+        const label = `${say(fx.depth)}X${say(a1 - a0)}`;
+        if (fx.kind === 'tub') {
+          take(fx, label, draw(lineAt(geo, a0, a1, geo.frontOff, SIZE_MARK_IN_PX), label));
+        } else if (fx.kind === 'vanity') {
+          // THE FRONT LEFT: a run along the front from the drafter's left
+          // corner, as long as the mark and a little, with the mark on it.
+          const leftLow = R.viewerLeftIsLow(P, a0, a1, geo.backOff, geo.frontOff);
+          const [lo, hi] = lineAt(geo, a0, a1, geo.frontOff, SIZE_MARK_IN_PX);
+          const [from, to] = leftLow ? [lo, hi] : [hi, lo];
+          const len = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+          const reach = Math.min(len, ctx.measureText(label).width + 8);
+          const end = { x: from.x + (to.x - from.x) / len * reach, y: from.y + (to.y - from.y) / len * reach };
+          take(fx, label, draw([from, end], label));
+        } else {
+          take(fx, label, draw(lineAt(geo, a0, a1, geo.frontOff, -SIZE_MARK_OFF_PX), label));
+        }
+      }
+      if (!showCabinets) return;
+      if (CABINET_MARKED_KINDS.has(fx.kind)) {
+        // EACH RUN UNDER THE COUNTER, a stove standing in it cut out.
+        (R.counterSpans2D ? R.counterSpans2D(fx, list, env) : [[a0, a1]]).forEach(([c0, c1]) => {
+          if (c1 - c0 >= MARKED_RUN_MIN_FT) draw(lineAt(geo, c0, c1, geo.frontOff, SIZE_MARK_IN_PX), say(c1 - c0), ink, 'cabinet', fx.id);
+        });
+      } else if (fx.kind === 'sinkbase' || fx.kind === 'sink') {
+        const leftLow = R.viewerLeftIsLow(P, a0, a1, geo.backOff, geo.frontOff);
+        const bowls = R.sinkBowlSpans(a0, a1, R.sinkBowlsOf(fx), leftLow, fx.kind === 'sink' ? 0.15 : undefined);
+        const [b0, b1] = bowls.spans[bowls.mark];
+        draw(lineAt(geo, b0, b1, (geo.backOff + geo.frontOff) / 2, 0), say(a1 - a0), ink, 'sink', fx.id);
+      }
+      // THE UPPERS OVER IT, each run its own width, lighter.
+      const spans = R.upperSpans2D ? R.upperSpans2D(fx, list, env) : [];
+      if (spans.length) {
+        const dir = geo.frontOff >= geo.backOff ? 1 : -1;
+        const deep = Math.min(R.UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
+        const front = geo.backOff + dir * deep;
+        ctx.save();
+        ctx.globalAlpha *= UPPER_MARK_ALPHA;
+        spans.forEach(([u0, u1]) => {
+          if (u1 - u0 >= MARKED_RUN_MIN_FT) draw(lineAt(geo, u0, u1, front, SIZE_MARK_IN_PX), say(u1 - u0), ink, 'upper', fx.id);
+        });
+        ctx.restore();
+      }
+    });
+    ctx.restore();
+  };
+  // "not as dark / grey" (Movie, 24 Oct): the uppers' marks, under the rest.
+  const UPPER_MARK_ALPHA = 0.55;
+  // A run shorter than this is a filler, and says nothing.
+  const MARKED_RUN_MIN_FT = 6 / 12;
 
   // ── WHICH TAG IS UNDER THE POINTER ─────────────────────────────────────
   //
@@ -5523,7 +5620,13 @@
     box.type = 'text';
     if (hit.fixture) box.dataset.fixtureSizeEntry = String(hit.fixture.id);
     else box.dataset.windowSizeEntry = String(hit.opening.id);
-    box.value = hit.label;
+    // A DOOR'S BOX OPENS ON ITS WHOLE WIDTH: the tag may say both panels and
+    // a height (D36/24 X 96), but what the box takes back is one number.
+    const doorOpening = !hit.fixture && hit.opening?.type === 'door';
+    box.value = doorOpening
+      ? `D${drawing?.units === 'metric' ? window.DraftFenLabels.mmTo(hit.opening.width, 5)
+        : Math.round((Number(hit.opening.width) || 0) * 12)}`
+      : hit.label;
     Object.assign(box.style, {
       position: 'fixed', left: `${rect.left + hit.cx - 36}px`,
       top: `${rect.top + hit.cy - 11}px`, width: '72px', zIndex: '60',
@@ -5992,6 +6095,8 @@
       if (K && K.hasUppers(fixture) && R.drawUpperCabinets2D) R.drawUpperCabinets2D(ctx, toS, fixture, wall, env);
     });
     if (R.drawCounters2D) R.drawCounters2D(ctx, toS, fixtures(), env);
+    // THE MARKS OVER THE PIECES, never under their fill.
+    paintFixtureMarks(ctx, toS);
   };
 
   // THE WC FLOOR -- 1'-0" tile in a room with a toilet, tub or shower in it
@@ -7453,7 +7558,12 @@
   // at the order boot and layout happen in.
   let paintedForRails = null;
 
+  // THE DRAG'S DISTANCE INTO LENGTH, set where the drag state lives (below)
+  // and called from every paint -- a drag repaints on each move it makes.
+  // A `var`, so a paint before that line has run finds it empty, not dead.
+  var syncDragLength = null;
   const paint = () => {
+    if (syncDragLength) syncDragLength();
     const t0 = performance.now();
     // Hand dimensions onto the corners they were put on, before anything draws.
     if (typeof followDimLinks === 'function') followDimLinks();
@@ -13547,7 +13657,19 @@
       const rings = type === 'fixture'
         ? (() => {
           const geo = window.DraftFixtureGeometry?.fixtureGeometry(drawing?.walls || [], item);
-          return geo ? [geo.corners, ...(geo.decks || [])] : [];
+          if (!geo) return [];
+          // ROUND THE HALF INCH, not the body (Movie, 24 Oct: "the BLUE line
+          // should go to the outside of the 1/2" faint line when its
+          // selected"): the gap is part of what was placed.
+          const g = geo.faceOff != null && geo.frame ? (geo.wallGap || 0) : 0;
+          if (g > 0) {
+            const a0 = (geo.tub ? geo.tubAlongStart : geo.alongStart) - g;
+            const a1 = (geo.tub ? geo.tubAlongEnd : geo.alongEnd) + g;
+            const at = (a, c) => geo.frame.at(a, c);
+            return [[at(a0, geo.faceOff), at(a1, geo.faceOff), at(a1, geo.frontOff), at(a0, geo.frontOff)],
+              ...(geo.decks || [])];
+          }
+          return [geo.corners, ...(geo.decks || [])];
         })()
         : type === 'stair' ? stairRings(item, stairLevels()) : null;
       if (rings) {
@@ -31499,7 +31621,7 @@
     // `offset` and `wallId` are the two that must NEVER travel -- they are
     // where it is.
     fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage', 'casement',
-      'doorType', 'doorStyle', 'gardenWindowWidth', 'hingeFlip', 'swingFlip'],
+      'doorType', 'doorStyle', 'gardenWindowWidth', 'hingeFlip', 'swingFlip', 'showHeight'],
     // NOT `structure`. Whether a floor is framed or a slab is read from the
     // layer set it lives on (layer-views.js's floorHomeView), so copying it
     // would make a floor's own two answers disagree -- and `points` is its
@@ -34207,6 +34329,24 @@
           openings.every(o => o.swingFlip === true),
           which => applyToOpenings(openings, o => (which === 'hinge'
             ? { hingeFlip: o.hingeFlip !== true } : { swingFlip: o.swingFlip !== true }))));
+        // SHOW HEIGHT (Movie, 24 Oct: "doors only mark WIDTH, but allow them
+        // to add X 80"): the mark says the height on this door even at the
+        // standard 80". Off the height is said only when it is not 80".
+        const shown = openings.every(o => o.showHeight === true);
+        const row = document.createElement('div');
+        row.dataset.propRow = 'show-height';
+        const chips = document.createElement('div');
+        chips.className = 'chip-row';
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'sel-chip';
+        chip.dataset.doorShowHeight = '';
+        chip.textContent = 'SHOW HEIGHT';
+        chip.setAttribute('aria-pressed', String(shown));
+        chip.addEventListener('click', () => applyToOpenings(openings, () => ({ showHeight: shown ? null : true })));
+        chips.append(chip);
+        row.append(chips);
+        box.append(row);
       }
     }
 
@@ -35241,6 +35381,16 @@
       commitFixtureEdits(items.map(f => ({ item: f, patch: { depth: feet } })));
       return null;
     }));
+    // A SINK BASE'S BOWLS (Movie, 24 Oct: "add double sink right bowl
+    // option"): one bowl, two equal, or two with the bigger, 60/40, on the
+    // right. The equal double is what a sink base always was.
+    const R2 = window.DraftRender2D;
+    if (R2 && items.every(f => f.kind === 'sinkbase' || f.kind === 'sink')) {
+      box.append(propSelect('BOWLS', [['double', 'DOUBLE'], ['single', 'SINGLE'], ['right', 'DOUBLE, BIG RIGHT 60/40']],
+        agreedOn(items, f => R2.sinkBowlsOf(f)), id => {
+          commitFixtureEdits(items.map(f => ({ item: f, patch: { bowls: id } })));
+        }));
+    }
     if (items.every(f => f.kind === 'island')) {
       box.append(field('AISLE', f => Number(f.standoff) || 0, feet => {
         if (!(feet >= 0)) return 'The aisle is the clear run from the wall: zero or more.';
@@ -36386,6 +36536,39 @@
   // the wall's body, and `before` is the list of pooled vertices it will move
   // with the numbers they started with.
   let moveDrag = null;
+  // ── HOW FAR A DRAG HAS GONE, IN THE LENGTH BOX (Movie, 24 Oct) ─────────
+  //
+  // "when i 'strech' stuff can the LENGTH box show the measured number of
+  // how far i am moving the STRETCH from the origin point". Every drag that
+  // moves something -- a wall's body or corner, an assembly, a selection
+  // under MOVE, an opening sliding, a note, a stair -- reads its distance
+  // from where the press took it while the button is down. The corners
+  // say what they actually moved (a wall's body only goes square to
+  // itself); the rest, how far the hand is from the press.
+  //
+  // READ IN PAINT, after the drag's own handler has moved what it moves, so
+  // the number is this move's and not the last one's.
+  const liveDragFt = () => {
+    const d = moveDrag;
+    if (d && d.active) {
+      if (d.kind === 'opening' && d.opening) return Math.abs((Number(d.opening.offset) || 0) - (Number(d.was) || 0));
+      const first = Array.isArray(d.before) && d.before.find(b => b && b.vtx);
+      if (first) return Math.hypot(first.vtx.x - first.x, first.vtx.z - first.z);
+      if (d.grab && cursorWorld) return Math.hypot(cursorWorld.x - d.grab.x, cursorWorld.z - d.grab.z);
+    }
+    const m = moveState && moveState.drag;
+    if (m && m.moved) {
+      if (m.kind === 'opening' && m.opening) return Math.abs((Number(m.opening.offset) || 0) - (Number(m.was) || 0));
+      if (m.at && cursorWorld) return Math.hypot(cursorWorld.x - m.at.x, cursorWorld.z - m.at.z);
+    }
+    return null;
+  };
+  syncDragLength = () => {
+    const ft = liveDragFt();
+    if (ft == null || document.activeElement === lengthBox) return;
+    lengthBox.value = feetLabel(ft);
+    lengthBox.classList.add('live');
+  };
 
   // ── §3: MOVING A BONE ────────────────────────────────────────────────────
   //
