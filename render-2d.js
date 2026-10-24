@@ -1602,6 +1602,12 @@ if (!window.DraftRender2D) {
       : NO_UPPER_KINDS.concat(APPLIANCE_UPPER_KINDS);
     return without(geo.alongStart, geo.alongEnd, spansOnRun(fixture, fixtures, kinds, env));
   }
+  // WHERE THE UPPERS' FRONT LINE RUNS over a piece, across its wall: 12"
+  // off the back, or the piece's own depth if it is shallower.
+  function upperFrontOff2D(geo) {
+    const dir = geo.frontOff >= geo.backOff ? 1 : -1;
+    return geo.backOff + dir * Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
+  }
   // A BASE PIECE'S RUNS UNDER THE COUNTER: the piece less a stove, fridge,
   // pantry or full-height cabinet standing in it -- each run says its width.
   function counterSpans2D(fixture, fixtures, env) {
@@ -1673,8 +1679,10 @@ if (!window.DraftRender2D) {
   // bigger, 60/40, on the drafter's right; anything else the equal double.
   // A SINK's bowls when it does not say: one up to 26 1/2", two past it --
   // how the drop-in SINK has always drawn. A SINK BASE is two unless told.
-  const sinkBowlsOf = fixture => fixture.bowls
-    || (fixture.kind === 'sink' && (Number(fixture.width) || 0) <= 2.2 ? 'single' : 'double');
+  function sinkBowlsOf(fixture) {
+    return fixture.bowls
+      || (fixture.kind === 'sink' && (Number(fixture.width) || 0) <= 2.2 ? 'single' : 'double');
+  }
   // `inset` set, the bowls fill the piece to that margin (the drop-in SINK);
   // unset, they are the sink base's, centred at most 18" each.
   function sinkBowlSpans(a0, a1, bowls, leftIsLow, inset) {
@@ -3683,7 +3691,7 @@ if (!window.DraftRender2D) {
     viewerLeftIsLow,
     sinkBowlSpans,
     sinkBowlsOf,
-    UPPER_CABINET_DEPTH_FT,
+    upperFrontOff2D,
     upperSpans2D,
     counterSpans2D,
     drawNoteScreen2D,

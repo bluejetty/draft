@@ -5552,9 +5552,7 @@
       // THE UPPERS OVER IT, each run its own width, lighter.
       const spans = R.upperSpans2D ? R.upperSpans2D(fx, list, env) : [];
       if (spans.length) {
-        const dir = geo.frontOff >= geo.backOff ? 1 : -1;
-        const deep = Math.min(R.UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
-        const front = geo.backOff + dir * deep;
+        const front = R.upperFrontOff2D(geo);
         ctx.save();
         ctx.globalAlpha *= UPPER_MARK_ALPHA;
         spans.forEach(([u0, u1]) => {

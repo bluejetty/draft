@@ -2272,6 +2272,61 @@ const meldEnv = fixtures => ({
   walls: [{ id: 'w', levelId: 3, view: 'plan', start: { x: 0, z: 0 }, end: { x: 10, z: 0 } }],
   COUNTER_OVERHANG_FT: 1 / 12, FIXTURE_COLOR: '#000', hasUppers: () => false, fixtures,
 });
+// ── THE SIZE MARKS' HELPERS (Movie, 24 Oct) ──
+// Where the drafter's left is, which bowl a sink is marked in, and which
+// runs a cabinet and its uppers are said in -- MODEL.html places the marks.
+suite('viewerLeftIsLow', 'the drafter facing the piece from the room has its left end on their left', R => {
+  const P = (a, c) => ({ x: a * 10, y: c * 10 });
+  expect('front below the back on screen: left is the low end', R.viewerLeftIsLow(P, 0, 4, 0, 2), true);
+  expect('front above the back: left is the high end', R.viewerLeftIsLow(P, 0, 4, 2, 0), false);
+});
+suite('sinkBowlSpans', 'a single centred, a double marked in the left bowl, a 60/40 in its bigger right bowl', R => {
+  const one = R.sinkBowlSpans(0, 3, 'single', true);
+  expect('a single is one bowl, marked', [one.spans.length, one.mark].join(), '1,0');
+  expect('centred', ((one.spans[0][0] + one.spans[0][1]) / 2).toFixed(3), '1.500');
+  expect('a double marked in its low bowl when the low end is the left', R.sinkBowlSpans(0, 4, 'double', true).mark, 0);
+  expect('and its high bowl when the high end is', R.sinkBowlSpans(0, 4, 'double', false).mark, 1);
+  const w = ([a, b]) => b - a;
+  [true, false].forEach(left => {
+    const r = R.sinkBowlSpans(0, 4, 'right', left);
+    const big = r.spans[r.mark], small = r.spans[1 - r.mark];
+    expect(`60/40 (left ${left ? 'low' : 'high'}): marked in the bigger bowl`, w(big) > w(small), true);
+    expect(`60/40 (left ${left ? 'low' : 'high'}): the bigger one is on the right`,
+      left ? big[0] > small[0] : big[0] < small[0], true);
+  });
+  const drop = R.sinkBowlSpans(0, 2.5, 'double', true, 0.15);
+  expect('a drop-in sink fills itself to its inset', [drop.spans[0][0], drop.spans[1][1]].map(v => v.toFixed(2)).join(), '0.15,2.35');
+});
+suite('sinkBowlsOf', 'a sink says its bowls, or reads them off its size', R => {
+  expect('a small drop-in is one bowl', R.sinkBowlsOf({ kind: 'sink', width: 2 }), 'single');
+  expect('a wide one two', R.sinkBowlsOf({ kind: 'sink', width: 2.5 }), 'double');
+  expect('a sink base is two', R.sinkBowlsOf({ kind: 'sinkbase', width: 4 }), 'double');
+  expect('what it says wins', R.sinkBowlsOf({ kind: 'sinkbase', width: 4, bowls: 'right' }), 'right');
+});
+suite('upperFrontOff2D', 'the uppers\' front line is 12" off the back, toward the room', R => {
+  expect('a 24" base: 12" out', R.upperFrontOff2D({ backOff: 0.25, frontOff: 2.25 }), 1.25);
+  expect('the other side of its wall too', R.upperFrontOff2D({ backOff: -0.25, frontOff: -2.25 }), -1.25);
+  expect('a shallower piece: its own front', R.upperFrontOff2D({ backOff: 0, frontOff: 0.5 }), 0.5);
+});
+const runEnv = (fixtures, uppers = () => true) => ({
+  fixtureGeometry: f => ({ frame: meldFrame, alongStart: f.offset - f.width / 2, alongEnd: f.offset + f.width / 2, backOff: 0.25, frontOff: 2.25 }),
+  hasUppers: uppers, fixtures,
+});
+const RUN = [{ id: 'cab', kind: 'cabinet', wallId: 'w', side: 1, offset: 4, width: 8 },
+  { id: 'st', kind: 'stove', wallId: 'w', side: 1, offset: 4, width: 2 },
+  { id: 'sk', kind: 'sinkbase', wallId: 'w', side: 1, offset: 1, width: 2 },
+  { id: 'far', kind: 'stove', wallId: 'other', side: 1, offset: 6, width: 2 }];
+const spanText = spans => spans.map(([a, b]) => `${a.toFixed(1)}-${b.toFixed(1)}`).join(' ');
+suite('upperSpans2D', 'a run\'s uppers stop at a sink and round a stove, which says its own', R => {
+  expect('the cabinet run, less the sink base and the stove', spanText(R.upperSpans2D(RUN[0], RUN, runEnv(RUN))), '2.0-3.0 5.0-8.0');
+  expect('the stove keeps its own', spanText(R.upperSpans2D(RUN[1], RUN, runEnv(RUN))), '3.0-5.0');
+  expect('a piece with no uppers has none to say', R.upperSpans2D(RUN[0], RUN, runEnv(RUN, () => false)).length, 0);
+});
+suite('counterSpans2D', 'a cabinet run under the counter is said either side of a stove standing in it', R => {
+  expect('two runs either side', spanText(R.counterSpans2D(RUN[0], RUN, runEnv(RUN))), '0.0-3.0 5.0-8.0');
+  expect('a stove on another wall cuts nothing', spanText(R.counterSpans2D(RUN[0], [RUN[0], RUN[3]], runEnv(RUN))), '0.0-8.0');
+});
+
 suite('drawCounters2D', 'touching base pieces are one counter, nothing on the wall', R => {
   const all = [{ ...piece('a', 2), levelId: 3 }, { ...piece('b', 4), levelId: 3 }];
   const ctx = recordingCtx();
