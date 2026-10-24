@@ -13,7 +13,7 @@ const SPEC = 'tests/photo-rescale.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'a press on the picture picks nothing',
-    find: "      const photo = underlayAt(worldPt);\n      if (photo) return { type: 'underlay', item: photo };\n",
+    find: "      const photo = underlayAt(worldPt);\n      if ((photo) && take({ type: 'underlay', item: photo })) return out;\n",
     with: "",
     test: 'a press on the picture picks it' },
   { file: 'MODEL.html',

@@ -16,7 +16,7 @@ const SPEC = 'tests/dim-points.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'a point is never under the cursor',
-    find: "      const point = dimPointAt(worldPt);\n      if (point) return point;\n",
+    find: "      const point = dimPointAt(worldPt);\n      if (point && take(point)) return out;\n",
     with: "",
     test: 'DELETE on the point where two pieces meet joins them into one longer measurement' },
   { file: 'MODEL.html',
