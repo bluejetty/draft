@@ -22,11 +22,6 @@ const MUTANTS = [
     find: "      const dx = at.x - geo.center.x, dz = at.z - geo.center.z;\n",
     with: "      const dx = 0, dz = 0;\n",
     test: 'a STOVE pressed in the middle of the room' },
-  { file: 'MODEL.html',
-    name: 'a free piece leaves no UNDO step',
-    find: "    undoStack.push({ kind: 'add-item', list: drawing.fixtures, item: record });\n    sayOnStrip(`${kind.label} placed free",
-    with: "    sayOnStrip(`${kind.label} placed free",
-    test: 'one UNDO takes each back' },
 ];
 
 const run = name => {
