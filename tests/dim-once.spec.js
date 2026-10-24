@@ -116,3 +116,22 @@ test('one point and ENTER: the strip asks for two at least, and the right button
   await press(page, at, 10, -10);
   await expect(strip(page)).toContainText('2 points');
 });
+
+// A SECOND END BEFORE ANY LINE IS DOWN KEEPS THE STRING (Movie, 23 Oct: "it
+// doesn't produce the dimension at the very end it just ESC's and nothing
+// appears"): only Esc throws it away.
+test('SPACE twice, or the right button twice, does not throw the string away before a line is placed', async ({ page }) => {
+  const { at } = await open(page);
+  await armDimension(page);
+  await press(page, at, -10, -10);
+  await press(page, at, 10, -10);
+  await page.keyboard.press(' ');
+  await page.keyboard.press(' ');
+  await press(page, at, 5, -5, 'right');
+  await expect(strip(page), 'still waiting for the line').toContainText('click where the string goes');
+  await press(page, at, 0, -8);
+  await expect(strip(page)).toContainText('1 placed');
+  await page.keyboard.press('Enter');
+  await expect(strip(page)).toContainText('done');
+  expect(hand(await saved(page))).toHaveLength(1);
+});

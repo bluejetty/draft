@@ -100,11 +100,12 @@ test('SUPERNODE armed: a press by a corner lands the node on it exactly, and a r
   expect(d.superNodes, 'kept through a reload').toHaveLength(2);
 });
 
-test('a suite dragged to within a foot of a house super node clicks onto it exactly, and its window cuts the shell', async ({ page }) => {
+// FOUR INCHES, not the foot it was (Movie, 23 Oct: "switch both to 4"").
+test('a suite dragged to within 4" of a house super node clicks onto it exactly, and its window cuts the shell', async ({ page }) => {
   const { at } = await open(page, shell());
-  // The hand carries the suite 29.5 ft across: its corner node stops six
+  // The hand carries the suite 29.75 ft across: its corner node stops three
   // inches short of the house's at (30, 0), and is pulled on.
-  await dragSuite(page, at, [10, 7.5], [39.5, 7.5], { release: false });
+  await dragSuite(page, at, [10, 7.5], [39.75, 7.5], { release: false });
   expect(await lockAt(page), 'the house node holding it').toEqual([30, 0]);
   await page.mouse.up();
   await page.waitForTimeout(150);
@@ -115,35 +116,35 @@ test('a suite dragged to within a foot of a house super node clicks onto it exac
   expect(await hostOpenings(page, d)).toEqual([['a', 38, 4, 'h1:w1']]);
 });
 
-test('a foot and a half short, no catch: the suite stays where the hand left it', async ({ page }) => {
+test('six inches short, no catch: the suite stays where the hand left it', async ({ page }) => {
   const { at } = await open(page, shell());
-  await dragSuite(page, at, [10, 7.5], [38.4, 7.5], { release: false });
-  expect(await lockAt(page), 'nothing holding it').toBeNull();
-  await page.mouse.up();
-  await page.waitForTimeout(150);
-  const d = await saved(page);
-  expect(d.holograms[0].x).toBeCloseTo(28.4, 1);
-});
-
-test('T-square lit: the catch moves the suite along the hand\'s axis only', async ({ page }) => {
-  // The house node a little below the line: the catch would pull the suite
-  // half a foot across and six inches down; the square keeps the down.
-  const { at } = await open(page, shell({ superNodes: [SN('hn1', 30, 0.5)] }));
-  await lightTsquare(page);
-  await dragSuite(page, at, [10, 7.5], [39.5, 7.8]);
-  const d = await saved(page);
-  expect([r3(d.holograms[0].x), r3(d.holograms[0].z)], 'thirty across, not an inch down').toEqual([30, 0]);
-});
-
-test('a blue hologram does not catch, and the strip says to set it to SUITE', async ({ page }) => {
-  const { at } = await open(page, shell({ holo: { mode: 'hologram' } }));
   await dragSuite(page, at, [10, 7.5], [39.5, 7.5], { release: false });
   expect(await lockAt(page), 'nothing holding it').toBeNull();
-  await expect(page.locator('#strip-message')).toContainText('Set it to SUITE');
   await page.mouse.up();
   await page.waitForTimeout(150);
   const d = await saved(page);
   expect(d.holograms[0].x).toBeCloseTo(29.5, 1);
+});
+
+test('T-square lit: the catch moves the suite along the hand\'s axis only', async ({ page }) => {
+  // The house node a little below the line: the catch would pull the suite
+  // a few inches across and down; the square keeps the down.
+  const { at } = await open(page, shell({ superNodes: [SN('hn1', 30, 0.2)] }));
+  await lightTsquare(page);
+  await dragSuite(page, at, [10, 7.5], [39.8, 7.6]);
+  const d = await saved(page);
+  expect([r3(d.holograms[0].x), r3(d.holograms[0].z)], 'thirty across, not an inch down').toEqual([30, 0]);
+});
+
+// A BLUE ONE CATCHES TOO (Movie, 23 Oct: "all suites attrached and glow").
+test('a blue hologram\'s corners click on too', async ({ page }) => {
+  const { at } = await open(page, shell({ holo: { mode: 'hologram' } }));
+  await dragSuite(page, at, [10, 7.5], [39.75, 7.5], { release: false });
+  expect(await lockAt(page), 'the house node holding it').toEqual([30, 0]);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const d = await saved(page);
+  expect([r3(d.holograms[0].x), r3(d.holograms[0].z)]).toEqual([30, 0]);
 });
 
 test('a super node never prints: the LAYOUT sheet draws no turquoise', async ({ page }) => {
