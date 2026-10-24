@@ -13425,18 +13425,23 @@
     });
   };
 
-  const hitAt = worldPt => {
+  // EVERYTHING UNDER A PRESS, top first, in the pick chain's own order:
+  // hitAt is its first, and a click again on the same spot steps down it
+  // (pickUnder). `first` stops at the first, which is every hover's need.
+  const hitsAt = (worldPt, first = false) => {
+    const out = [];
+    const take = hit => { if (hit && !out.some(h => h.item === hit.item)) out.push(hit); return first && out.length > 0; };
     // A ROOM TAG IS ON TOP OF WHAT IT NAMES: it is painted last, over the
     // floor and often over a fixture, so the pick agrees with the picture.
     // Movie, 1 Oct: "i wasn't able to select the ROOM TAG".
     if (filterAllows('roomtag')) {
       const tag = roomTagAt(worldPt);
-      if (tag) return { type: 'roomtag', item: tag };
+      if ((tag) && take({ type: 'roomtag', item: tag })) return out;
     }
     // A NOTE TOO: painted with the tags, over what it points at.
     if (filterAllows('note')) {
       const note = noteAt(worldPt);
-      if (note) return { type: 'note', item: note };
+      if ((note) && take({ type: 'note', item: note })) return out;
     }
     // AN OPENING BEATS ITS HOST WALL, and the old page says why in its own
     // words: "Openings under a select click take priority over their host
@@ -13445,36 +13450,36 @@
     // make every opening unselectable -- not hard to select, impossible.
     if (filterAllows('fenestration')) {
       const opening = openingAt(worldPt);
-      if (opening) return { type: 'fenestration', item: opening };
+      if ((opening) && take({ type: 'fenestration', item: opening })) return out;
     }
     // A FIXTURE BEATS ITS HOST WALL for the opening's reason: a closet or a
     // sink is always against a wall, and wall-first would make every one of
     // them unselectable.
     if (filterAllows('fixture')) {
       const fixture = fixtureAt(worldPt);
-      if (fixture && fixtureKindAllowed(fixture)) return { type: 'fixture', item: fixture };
+      if ((fixture && fixtureKindAllowed(fixture)) && take({ type: 'fixture', item: fixture })) return out;
     }
     // A DIMENSION IS ANNOTATION, painted over the plan, and its line stands
     // off what it measures -- so it is asked before the walls it sits beside.
     if (filterAllows('dimension')) {
       const point = dimPointAt(worldPt);
-      if (point) return point;
+      if (point && take(point)) return out;
       const dimension = dimensionAt(worldPt);
-      if (dimension) return { type: 'dimension', item: dimension };
+      if ((dimension) && take({ type: 'dimension', item: dimension })) return out;
     }
     // A SUPER NODE IS A DOT ON A CORNER, picked before the walls that meet
     // there would take the click.
     if (filterAllows('superNode')) {
       const node = superNodeAt(worldPt);
-      if (node) return { type: 'superNode', item: node };
+      if ((node) && take({ type: 'superNode', item: node })) return out;
     }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
-      if (wall) return { type: 'wall', item: wall };
+      if ((wall) && take({ type: 'wall', item: wall })) return out;
     }
     if (filterAllows('line')) {
       const line = lineAt(worldPt);
-      if (line) return { type: 'line', item: line };
+      if ((line) && take({ type: 'line', item: line })) return out;
     }
     // A COLUMN, THEN THE BEAM IT HOLDS UP (Movie, 19 Oct: "I'd like to be
     // able to move the BEAM manually so that all the columns follow. i will
@@ -13484,51 +13489,82 @@
     // every post on one unreachable.
     if (filterAllows('column')) {
       const column = columnAt(worldPt);
-      if (column) return { type: 'column', item: column };
+      if ((column) && take({ type: 'column', item: column })) return out;
     }
     if (filterAllows('beam')) {
       const beam = segAt(beams(), worldPt);
-      if (beam) return { type: 'beam', item: beam };
+      if ((beam) && take({ type: 'beam', item: beam })) return out;
     }
     // A STAIR BEATS THE FLOOR IT STANDS IN, which would otherwise take every
     // click inside the stairwell.
     if (filterAllows('stair')) {
       const stair = stairAt(worldPt);
-      if (stair) return { type: 'stair', item: stair };
+      if ((stair) && take({ type: 'stair', item: stair })) return out;
     }
     // A SHAPE BEATS THE FLOOR UNDER IT: a suite outlined inside a floor would
     // otherwise be unreachable, every click inside it taking the floor.
     if (filterAllows('shape')) {
       const shape = shapes().slice().reverse()
         .find(sh => (sh.points || []).length >= 3 && pointInRing(sh.points, worldPt));
-      if (shape) return { type: 'shape', item: shape };
+      if ((shape) && take({ type: 'shape', item: shape })) return out;
     }
     if (filterAllows('outline')) {
       const outline = outlineAt(worldPt);
-      if (outline) return { type: 'outline', item: outline };
+      if ((outline) && take({ type: 'outline', item: outline })) return out;
     }
     if (filterAllows('floor')) {
       const floor = floorAt(worldPt);
-      if (floor) return { type: 'floor', item: floor };
+      if ((floor) && take({ type: 'floor', item: floor })) return out;
     }
     if (filterAllows('roof')) {
       const roof = roofAt(worldPt);
-      if (roof) return { type: 'roof', item: roof };
+      if ((roof) && take({ type: 'roof', item: roof })) return out;
     }
     // A HOLOGRAM LAST: it is under the drawing, so anything of this drawing's
     // own at the press is what the press means.
     if (filterAllows('hologram')) {
       const holo = hologramPickAt(worldPt);
-      if (holo) return { type: 'hologram', item: holo };
+      if ((holo) && take({ type: 'hologram', item: holo })) return out;
     }
     // A PHOTO LAST OF ALL (Movie, 23 Oct: "click on the bg photo"): it lies
     // under everything drawn, so it is picked only where nothing else is,
     // and only while TRACE shows it.
     if (filterAllows('underlay')) {
       const photo = underlayAt(worldPt);
-      if (photo) return { type: 'underlay', item: photo };
+      if ((photo) && take({ type: 'underlay', item: photo })) return out;
     }
-    return null;
+    return out;
+  };
+  const hitAt = worldPt => hitsAt(worldPt, true)[0] || null;
+  // CLICK AGAIN FOR WHAT IS UNDERNEATH (Movie, 24 Oct: "if a user clicks
+  // and the wrong item (if they overlap) is selected the first time, allow
+  // the user to make a 2nd click and it will select the 'underneath' item,
+  // and if more than 2 a 3rd click will do it too etc... and then cycle back
+  // to the first one"). A click within a few pixels of the last one, with
+  // one of the things there in hand, takes the next one down that is not
+  // already in hand -- an assembly's other walls are skipped -- and after
+  // the last comes the first again. Anywhere else, the top one, as always.
+  const PICK_AGAIN_PX = 4;
+  let lastPick = null;
+  const pickUnder = (sx, sy) => {
+    const hits = hitsAt(toWorld(sx, sy));
+    let at = 0;
+    const again = lastPick && Math.hypot(sx - lastPick.sx, sy - lastPick.sy) <= PICK_AGAIN_PX;
+    const held = h => selection.some(entry => entry.item === h.item);
+    const now = again ? hits.findIndex(held) : -1;
+    if (now >= 0 && hits.length > 1) {
+      for (let i = 1; i <= hits.length; i += 1) {
+        const k = (now + i) % hits.length;
+        if (!held(hits[k])) { at = k; break; }
+      }
+    }
+    lastPick = { sx, sy };
+    return { hit: hits[at] || null, at, of: hits.length };
+  };
+  // WHAT IS IN HAND, SAID: which of how many, so the drafter sees there is
+  // more under it and what each one is.
+  const sayPickUnder = under => {
+    if (under.of > 1) sayOnStrip(`${under.at + 1} OF ${under.of} HERE: ${hitSays(under.hit)} \u2014 click again on the same spot for the one under it.`);
   };
 
   // EVERY SELECTED ITEM, not just the one wall. The highlight is what tells a
@@ -38626,6 +38662,17 @@
         // The grab answers for a selected LINE now as well, and a line is not
         // a bone: BREAK HERE would offer to put a joint in one.
         offerBoneChoice(md.body, md.grab);
+      } else if (e && !e.shiftKey && activeTool !== 'assembly') {
+        // A PRESS ON WHAT IS ALREADY IN HAND, let go where it was, IS THE
+        // CLICK AGAIN: it takes the next thing under it (pickUnder).
+        const rect = canvas.getBoundingClientRect();
+        const under = pickUnder(e.clientX - rect.left, e.clientY - rect.top);
+        if (under.hit && !selection.some(entry => entry.item === under.hit.item)) {
+          wallPicked = under.hit.type === 'wall' ? under.hit.item : null;
+          setSelection(withGroup(under.hit));
+          sayPickUnder(under);
+          paint();
+        }
       }
       moveDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
@@ -38684,7 +38731,11 @@
     // wall gets no pan they can see.
     if (dragging.moved <= 4 && e) {
       const rect = canvas.getBoundingClientRect();
-      const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+      // A PLAIN CLICK AGAIN ON THE SAME SPOT TAKES THE NEXT THING UNDER IT
+      // (pickUnder); a shift-click or an ASSEMBLY click keeps the top one.
+      const plainClick = !e.shiftKey && activeTool !== 'assembly';
+      const under = plainClick ? pickUnder(e.clientX - rect.left, e.clientY - rect.top) : null;
+      const hit = plainClick ? under.hit : hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
       // SHIFT ADDS OR REMOVES, which is what the mode help line promises and
       // the only way to build a selection of more than one by clicking. A
       // shift-click on something already selected takes it OUT -- the old
@@ -38744,6 +38795,7 @@
         // picks the whole WC, and the verb still needs to know which wall.
         wallPicked = hit?.type === 'wall' ? hit.item : null;
         setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : withGroup(hit));
+        if (under) sayPickUnder(under);
       }
       paint();
     }
