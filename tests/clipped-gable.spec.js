@@ -151,6 +151,21 @@ test('the rest of the gable past the 45 wall is wall, not shingles, out to the e
   // all but a sliver of that triangle.)
 });
 
+test('the eave\'s soffit return reaches the porch wall', async ({ page }) => {
+  const f = await openExt(page);
+  const [wall] = await boxAt(page, f, 30, PLATE - 3, 0);
+  // Movie, 23 Oct: "one of the eave is missing a small soffit line". The
+  // return from the eave corner (u 83) runs back to the porch wall (u 81)
+  // at the plate; measured along the 45 rake it stopped at 81.58 and left
+  // a gap in the plate line between the wall's end and the return. The
+  // infill above draws no line along its foot, so a pixel in that gap is
+  // the return's ink or nothing.
+  for (const u of [81.2, 81.4]) {
+    const [p] = await boxAt(page, f, u, PLATE, 0);
+    expect(same(p, wall), `ink at u ${u} on the plate line`).toBe(false);
+  }
+});
+
 test('EXT. FINISH fits the whole building and its level marks, a tenth of air each side', async ({ page }) => {
   const f = await openExt(page);
   // THE ROOF RUNS u -2..89 ON THIS VIEW (the eave past the house on both
