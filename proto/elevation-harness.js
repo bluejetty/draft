@@ -109,6 +109,11 @@ const MUTATIONS = [
   ['a soffit return is drawn at the foot of a rake that meets another rake', 'cut-view.js',
     c => c.replace('              if (shown && atEave && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2\n',
       '              if (shown && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2\n')],
+  ['a soffit return under a diagonal rake is measured along the rake, not square to the eave', 'cut-view.js',
+    c => c.replace('              const reach = Number.isFinite(along) && along > 0.05 ? along : fallback;\n',
+      '              const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;\n')],
+  ['a grown run end leans to its first station instead of rising plumb', 'cut-view.js',
+    c => c.replace('            if (top > s.base + fasciaFt + 0.05) ctx.lineTo(X(u0), Y(top));\n', '')],
   // THE `min` IN garageGround HAS NO ROW, and the reason is written here so
   // nobody adds one and watches it survive: the faces of a 2 storey garage
   // arrive ground storey first, so "lowest" and "first seen" give the same
@@ -2710,6 +2715,53 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     check('clipped gable: no soffit return stands in the air at the corner between the two rakes',
       returns.length === 0,
       returns.map(([a, b]) => `(${a.u.toFixed(2)},${a.e.toFixed(2)})->(${b.u.toFixed(2)},${b.e.toFixed(2)})`).join(', '));
+    // AND THE RETURN AT THE REAL EAVE CORNER REACHES THE PORCH WALL (Movie,
+    // 23 Oct, "one of the eave is missing a small soffit line"): a level
+    // stroke at the plate from the eave corner at u 83 back to the wall at
+    // u 81 -- the overhang measured square to the eave, not along the 45
+    // rake, which came 0.58 ft short (cut-view.js, the soffit return's reach).
+    const soffitReturn = view.strokes.flatMap(st => {
+      const out = [];
+      for (let k = 1; k < st.pts.length; k += 1) {
+        const a = st.pts[k - 1], b = st.pts[k];
+        if (b.move || b.close) continue;
+        if (Math.abs(a.e - plate) < 0.05 && Math.abs(b.e - plate) < 0.05
+          && Math.abs(Math.max(a.u, b.u) - 83) < 0.1 && Math.min(a.u, b.u) < 82.5) out.push(Math.min(a.u, b.u));
+      }
+      return out;
+    });
+    check('clipped gable: the eave\'s soffit return runs from the eave corner back to the porch wall',
+      soffitReturn.length > 0 && Math.min(...soffitReturn) <= 81.05,
+      soffitReturn.length ? `it stops at u ${Math.min(...soffitReturn).toFixed(2)}, the wall is at 81` : 'no level stroke at the plate from u 83');
+  }
+  // ── AND THE ROOF'S END SEEN FROM THE EAVE SIDE (Movie, 23 Oct) ───────
+  //
+  // "something wrong at the end of the roof": the silhouette's run was grown
+  // out to the eave's true end at u 0 and joined to its first STATION, 1.14
+  // ft in on this 380 ft house, with one leaning line from the eave height
+  // up to the ridge. The roof's end is a gable, a plumb edge; the outline
+  // now rises plumb at the grown end to the roof's real height there.
+  const side = standardElevationCuts(cEnv).find(c => Math.abs(c.dirVec.z - 1) < 1e-9);
+  check('clipped gable: a standard mark looks at the long side from +z', !!side);
+  if (side) {
+    const sv = paintElevation(win, cEnv, side, { pxPerFt: 40 });
+    const outline = sv.strokes.filter(st => Math.abs(st.w - 1.5) < 1e-9);
+    let plumb = null;
+    const leaning = [];
+    outline.forEach(st => {
+      for (let k = 1; k < st.pts.length; k += 1) {
+        const a = st.pts[k - 1], b = st.pts[k];
+        if (b.move || b.close) continue;
+        if (Math.max(a.u, b.u) > 3 || Math.min(a.u, b.u) < -1) continue;
+        const du = Math.abs(a.u - b.u), de = Math.abs(a.e - b.e);
+        if (du < 0.05 && de > 10) plumb = [a, b];
+        if (du > 0.3 && de > 3) leaning.push(`(${a.u.toFixed(2)},${a.e.toFixed(2)})->(${b.u.toFixed(2)},${b.e.toFixed(2)})`);
+      }
+    });
+    check('clipped gable, long side: the roof\'s gable end rises plumb to the ridge in the outline',
+      !!plumb, 'no plumb outline stroke of 10 ft or more within 3 ft of the roof\'s end');
+    check('clipped gable, long side: and nothing in the outline leans at the roof\'s end',
+      leaning.length === 0, leaning.join(', '));
   }
 }
 

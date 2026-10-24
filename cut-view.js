@@ -3361,6 +3361,9 @@ if (!window.DraftCutView) {
     const silhouette = [];
     let facesByRoof = null;
     let dLo = Infinity, dHi = -Infinity;
+    // The roof's height at any u along the cut, sampled the way the
+    // silhouette's own stations are; null until the roofs are read.
+    let tallestAtU = () => null;
     if (roofs.length) {
       roofs.forEach(roof => (roof.points || []).forEach(pt => {
         const d = pt.x * dir.x + pt.z * dir.z;
@@ -3403,10 +3406,9 @@ if (!window.DraftCutView) {
       // number that matters on a printed sheet is the one that was always here.
       const coarse = Boolean(opts && opts.coarseSilhouette);
       const steps = coarse ? 40 : 240, depthSteps = coarse ? 10 : 40;
-      for (let i = 0; i <= steps; i++) {
-        const s = i / steps;
-        const bx = cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s;
-        const bz = cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s;
+      // ONE STATION, AS A FUNCTION, so the outline pass can ask the roof's
+      // height at a grown run end exactly (tallestAtU, below).
+      const stationAt = (bx, bz) => {
         const baseD = bx * dir.x + bz * dir.z;
         const elevAt = k => {
           const px = bx + dir.x * (k - baseD), pz = bz + dir.z * (k - baseD);
@@ -3440,12 +3442,26 @@ if (!window.DraftCutView) {
           const refined = elevAt((a + b) / 2);
           if (refined && refined.elev > best.elev) best = refined;
         }
-        silhouette.push({
+        return {
           u: bx * axis.x + bz * axis.z,
           elev: best === null ? null : best.elev,
           base: best === null ? null : best.base,
-        });
+        };
+      };
+      for (let i = 0; i <= steps; i++) {
+        const s = i / steps;
+        silhouette.push(stationAt(
+          cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s,
+          cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s));
       }
+      tallestAtU = u => {
+        const ua = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+        const ub = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+        const s = Math.abs(ub - ua) < 1e-9 ? 0 : (u - ua) / (ub - ua);
+        return stationAt(
+          cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s,
+          cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s).elev;
+      };
     }
 
     const fdn = stack.foundation;
@@ -6974,11 +6990,33 @@ if (!window.DraftCutView) {
       // not an edge of anything: the surface carries on, hidden. The start of
       // such a run has never drawn a riser (see the moveTo below), and the end
       // of one drew a fascia drop hanging in mid-slope with nothing under it.
+      // ── A GROWN END RISES PLUMB TO THE ROOF'S HEIGHT THERE ────────────
+      //
+      // Movie, 23 Oct, E2 and E4 of the clipped gable: "something wrong at
+      // the end of the roof". A run grown out to an eave's true end was
+      // joined to its last STATION with one line: from the eave height at
+      // the grown end up to the station's height, a station away. At a hip
+      // end that is the hip, near enough; at a GABLE end seen from the eave
+      // side the station is the ridge and the line leaned a station's width
+      // -- 1.14 ft on his 380 ft house, a sliver against the exact plumb
+      // edge the face pass draws. So the grown end is asked the roof's real
+      // height (tallestAtU) and rises plumb to it before the run carries on.
+      // On a hip that height is the eave's and nothing changes.
+      // Asked a hair inside the run: the grown end is the roof's own edge,
+      // where a point-in-polygon test is a coin toss.
+      const riserTop = (u, base, inward) => {
+        const top = tallestAtU(u + inward * 0.02);
+        return top != null && top > base + fasciaFt + 0.05 ? top : base + fasciaFt;
+      };
       const closePen = (openAir = true) => {
         if (!pen) return;
         if (!openAir) { pen = null; return; }
         const u1 = grownAt.has(penI) ? grownAt.get(penI) : pen.u;
-        if (u1 !== pen.u) ctx.lineTo(X(u1), Y(pen.base + fasciaFt));
+        if (u1 !== pen.u) {
+          const top = riserTop(u1, pen.base, u1 > pen.u ? -1 : 1);
+          ctx.lineTo(X(u1), Y(top));
+          if (top > pen.base + fasciaFt + 0.05) ctx.lineTo(X(u1), Y(pen.base + fasciaFt));
+        }
         ctx.lineTo(X(u1), Y(pen.base));
         pen = null;
       };
@@ -6995,7 +7033,12 @@ if (!window.DraftCutView) {
         if (!pen && !prevLit) {
           const u0 = grownAt.has(i) ? grownAt.get(i) : s.u;
           ctx.moveTo(X(u0), Y(s.base));
-          if (u0 !== s.u) { ctx.lineTo(X(u0), Y(s.base + fasciaFt)); ctx.lineTo(X(s.u), Y(s.elev)); }
+          if (u0 !== s.u) {
+            ctx.lineTo(X(u0), Y(s.base + fasciaFt));
+            const top = riserTop(u0, s.base, u0 < s.u ? 1 : -1);
+            if (top > s.base + fasciaFt + 0.05) ctx.lineTo(X(u0), Y(top));
+            ctx.lineTo(X(s.u), Y(s.elev));
+          }
           else ctx.lineTo(X(u0), Y(s.elev));
         }
         else if (!pen) ctx.moveTo(X(s.u), Y(s.elev));
@@ -7475,7 +7518,32 @@ if (!window.DraftCutView) {
               const masterPt = srcPt?.srcId ? env.masterPointById(srcPt.srcId) : null;
               const along = masterPt
                 ? (masterPt.x - lo.p.x) * rux + (masterPt.z - lo.p.z) * ruz : NaN;
-              const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;
+              // ── TWO FEET BACK FROM THE EAVE, NOT TWO FEET UP THE RAKE ──────
+              //
+              // Movie, 23 Oct, E3 of the clipped gable, a small red mark at
+              // the porch wall's end: "one of the eave is missing a small
+              // soffit line". The return ran `overhang` feet ALONG the rake
+              // from its foot, which on a rake square to its eave is the
+              // overhang and lands on the wall; on his 45 rake two feet of
+              // rake is 1.41 ft of eave, and the line stopped 0.58 ft short
+              // of the wall with a gap in the plate line. The wall is one
+              // overhang inside the EAVE, so the reach along the rake is the
+              // overhang over the rake's share of the eave's normal -- the
+              // same number as before on every square gable, and the whole
+              // way to the wall on a diagonal one.
+              const footAt = rpts.findIndex(rp => Math.hypot(rp.x - lo.p.x, rp.z - lo.p.z) < 0.05);
+              const edgeKind = k => (roof.edges || [])[(k + rpts.length) % rpts.length];
+              const eaveAtFoot = footAt < 0 ? null
+                : edgeKind(footAt) === 'eave' ? [rpts[footAt], rpts[(footAt + 1) % rpts.length]]
+                  : edgeKind(footAt - 1) === 'eave' ? [rpts[(footAt + rpts.length - 1) % rpts.length], rpts[footAt]] : null;
+              let fallback = overhang;
+              if (eaveAtFoot) {
+                const ex = eaveAtFoot[1].x - eaveAtFoot[0].x, ez = eaveAtFoot[1].z - eaveAtFoot[0].z;
+                const el = Math.hypot(ex, ez) || 1;
+                const across = Math.abs(rux * (-ez / el) + ruz * (ex / el));
+                if (across > 0.2) fallback = overhang / across;
+              }
+              const reach = Number.isFinite(along) && along > 0.05 ? along : fallback;
               const wallU = (lo.p.x + rux * reach) * axis.x + (lo.p.z + ruz * reach) * axis.z;
               const shown = drawn.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
                 && lo.u <= Math.max(r.u0, r.u1) + 0.1);
@@ -7492,10 +7560,8 @@ if (!window.DraftCutView) {
               // at the corner's height. So the foot is asked which plan
               // edges meet at its corner, and a corner between two gable
               // edges draws none of this.
-              const footIndex = rpts.findIndex(rp => Math.hypot(rp.x - lo.p.x, rp.z - lo.p.z) < 0.05);
-              const kindAt = k => (roof.edges || [])[(k + rpts.length) % rpts.length];
-              const atEave = footIndex < 0
-                || kindAt(footIndex) !== 'gable' || kindAt(footIndex - 1) !== 'gable';
+              const atEave = footAt < 0
+                || edgeKind(footAt) !== 'gable' || edgeKind(footAt - 1) !== 'gable';
               if (shown && atEave && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
                 && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
                 const wallUc = Math.max(uMin, Math.min(uMax, wallU));
