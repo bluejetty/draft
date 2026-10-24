@@ -37190,7 +37190,22 @@
           // holds the point the tag started at, and it must stay that point.
           const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
           md.tag.at = { x: md.from.x + dx, z: md.from.z + dz };
-          if (md.points) md.tag.points = md.points.map(({ pt, free }) => (free ? { x: pt.x + dx, z: pt.z + dz } : pt));
+          // INSIDE ITS OWN FLOOR THE NAME MOVES ALONE (Movie, 23 Oct: "allow
+          // the ROOM TAG to be moved around within the 'flooring' area without
+          // changing the flooring"): the shape stays exactly as it was. Only a
+          // shape no wall holds a corner of is carried, and only once the name
+          // leaves it -- a tag square being taken to its room.
+          const inside = !md.points || (() => {
+            const ring = md.points.map(({ pt }) => pt), p = md.tag.at;
+            let hit = false;
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+              const a = ring[i], b = ring[j];
+              if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+            }
+            return hit;
+          })();
+          const carry = !!md.points && !inside && md.points.every(({ free }) => free);
+          if (md.points) md.tag.points = md.points.map(({ pt }) => (carry ? { x: pt.x + dx, z: pt.z + dz } : pt));
           paint();
           return;
         }
