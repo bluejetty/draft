@@ -160,10 +160,21 @@ test('the eave\'s soffit return reaches the porch wall', async ({ page }) => {
   // a gap in the plate line between the wall's end and the return. The
   // infill above draws no line along its foot, so a pixel in that gap is
   // the return's ink or nothing.
-  for (const u of [81.2, 81.4]) {
+  // Read as a run, not a point: the wall's own top line and the return
+  // each bleed a pixel past their ends, so one pixel in the gap can read as
+  // ink either way. Across the whole gap, the return makes ten inked
+  // samples of ten; without it the middle six are plain wall.
+  // INK IS LIGHT ON THIS SKIN: the plate row is the seam between the infill
+  // above (wall colour) and the sky under the eave beyond the wall, so "not
+  // wall" is not enough -- a blend of the two reads as neither. The return
+  // is a light line; the gap is a dark blend.
+  const light = p => p[0] > wall[0] + 40;
+  let inked = 0;
+  for (let u = 81.05; u <= 81.56; u += 0.05) {
     const [p] = await boxAt(page, f, u, PLATE, 0);
-    expect(same(p, wall), `ink at u ${u} on the plate line`).toBe(false);
+    if (light(p)) inked += 1;
   }
+  expect(inked, `${inked} of 11 samples across u 81.05..81.55 on the plate line are ink`).toBeGreaterThanOrEqual(9);
 });
 
 test('EXT. FINISH fits the whole building and its level marks, a tenth of air each side', async ({ page }) => {
