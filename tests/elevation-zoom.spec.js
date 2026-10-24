@@ -62,6 +62,10 @@ test('the wheel zooms the elevation about the cursor, and 0 brings the fit back'
   // The reading sits right-aligned 22px inside the painter's left margin
   // (cut-view.js SCREEN_MARGINS), which the frame hands back; a box over
   // the reading's last characters, on the rule's row.
+  // The painter's gutter is 64px (cut-view.js SCREEN_MARGINS.left) plus the
+  // rail's cover; a pinned pass that dropped its margins would hand back 0
+  // here and read the pixel off the canvas, where nothing is anything.
+  expect(zoomed.marginL, 'the readings\' gutter is kept while zoomed').toBeGreaterThanOrEqual(64);
   const gutterInk = await page.evaluate(([x, y]) => {
     const c = document.getElementById('plan');
     const r = c.getBoundingClientRect();
