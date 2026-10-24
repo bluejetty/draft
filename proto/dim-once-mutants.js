@@ -31,6 +31,11 @@ const MUTANTS = [
     find: "    dimPoints = [];\n    dimPlacing = false;\n    rulerFrom = null;\n",
     with: "    rulerFrom = null;\n",
     test: 'ESC alone abandons the string' },
+  { file: 'MODEL.html',
+    name: 'a second end before any line throws the string away',
+    find: "    if (dimPlacing && !dimLastLine) {\n",
+    with: "    if (false) {\n",
+    test: 'does not throw the string away' },
 ];
 
 const run = name => {

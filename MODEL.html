@@ -4913,7 +4913,8 @@
   // line -- so it lands on the wall line exactly. A suite hologram's super nodes, moved by its placement,
   // click onto the house's: within SUPER_NODE_PULL_FT the nearest pair
   // coincides, and the face slide is not asked.
-  const SUPER_NODE_PULL_FT = 1;
+  const SUPER_NODE_PULL_FT = 4 / 12;
+  const SUPER_NODE_HOLD_FT = 8 / 12;
   const SUPER_NODE_SHOW_FT = 6;
   const SUPER_NODE_INK = '#1ef2ff';
   const SUPER_NODE_GLOW = 'rgba(30, 242, 255, 0.95)';
@@ -4955,19 +4956,37 @@
     return twin ? H().colourOf(twin, drawing) : null;
   };
   // THE PAIR THAT HAS A HOLOGRAM IN HAND: its nearest super node to a house
-  // super node within pull, as `{ dx, dz, mine, house }` -- the slide that
-  // puts them together -- or null.
-  const superNodeLock = holo => {
+  // super node, or to ANOTHER HOLOGRAM'S CORNER RING (Movie, 23 Oct: "when
+  // they come close to another suite circle corner node can they 'GLOW' and
+  // be 'MAGNETIC SNAP (no matter where the cursor is grabbing or placing the
+  // SUITE ... within about 4" radius 8" diameter (pretty strong" -- the
+  // house's too, "switch both to 4"", and "all suites attrached and glow for
+  // all other suites"), as `{ dx, dz, mine, house, other }` -- the slide that
+  // puts them together; `other` the hologram whose ring it is -- or null.
+  // Corner to corner, never the cursor. A pair already caught (`was`) HOLDS
+  // until the hand takes it past SUPER_NODE_HOLD_FT, so a wobble does not
+  // knock it off.
+  const superNodeLock = (holo, was = null) => {
     const mine = hologramSuperNodes(holo);
-    const house = superNodes();
+    if (!mine.length) return null;
+    const others = holograms().filter(o => o !== holo && !o.hidden);
+    const pair = (a, b, other) => ({ dx: b.point.x - a.point.x, dz: b.point.z - a.point.z,
+      mine: a, house: b, other, d: Math.hypot(b.point.x - a.point.x, b.point.z - a.point.z) });
+    if (was) {
+      const a = mine.find(n => n.id === was.mine.id);
+      const b = was.other ? (others.includes(was.other) ? hologramSuperNodes(was.other).find(n => n.id === was.house.id) : null)
+        : superNodes().find(n => n === was.house);
+      const kept = a && b ? pair(a, b, was.other || null) : null;
+      if (kept && kept.d <= SUPER_NODE_HOLD_FT) return kept;
+    }
     let best = null;
-    mine.forEach(a => house.forEach(b => {
-      const d = Math.hypot(b.point.x - a.point.x, b.point.z - a.point.z);
-      if (d <= SUPER_NODE_PULL_FT && (!best || d < best.d)) best = { d, mine: a, house: b };
-    }));
-    if (!best) return null;
-    return { dx: best.house.point.x - best.mine.point.x, dz: best.house.point.z - best.mine.point.z,
-      mine: best.mine, house: best.house };
+    const offer = (b, other) => mine.forEach(a => {
+      const p = pair(a, b, other);
+      if (p.d <= SUPER_NODE_PULL_FT && (!best || p.d < best.d)) best = p;
+    });
+    superNodes().forEach(b => offer(b, null));
+    others.forEach(other => hologramSuperNodes(other).forEach(b => offer(b, other)));
+    return best;
   };
   // GOLD ON THE REGISTRATION CORNER (Movie, 22 Oct: "make that SUPERNODE
   // corner gold to match"): the super node standing on the gold target's
@@ -5021,7 +5040,10 @@
     holograms().filter(holo => !holo.hidden).forEach(holo => {
       const held = !!lock && traceMoving.underlay === holo;
       const ink = H().colourOf?.(holo, drawing)?.ink || null;
-      hologramSuperNodes(holo).forEach(n => superDot(n.point, { ring: true, ink, bright: held && lock.mine.id === n.id, gold: n.registration === true }));
+      // THE OTHER SUITE'S CORNER THAT HAS IT, bright too (superNodeLock).
+      const caught = !!lock && lock.other === holo;
+      hologramSuperNodes(holo).forEach(n => superDot(n.point, { ring: true, ink,
+        bright: (held && lock.mine.id === n.id) || (caught && lock.house.id === n.id), gold: n.registration === true }));
     });
     // AND A SHELF'S OWN CORNERS, on the shelf and in its little square above
     // the bone, in the colour its copies on the plan wear -- the hologram
@@ -5052,6 +5074,15 @@
     superNodes().forEach(n => {
       const near = mine.some(a => Math.hypot(a.point.x - n.point.x, a.point.z - n.point.z) <= SUPER_NODE_SHOW_FT);
       if (near) superDot(n.point, { faint: true, ring: true });
+    });
+    // AND EVERY OTHER HOLOGRAM'S CORNER RINGS: the ones it could click
+    // onto, glowing before they catch.
+    holograms().filter(o => o !== holo && !o.hidden).forEach(o => {
+      const ink = H().colourOf?.(o, drawing)?.ink || null;
+      hologramSuperNodes(o).forEach(n => {
+        const near = mine.some(a => Math.hypot(a.point.x - n.point.x, a.point.z - n.point.z) <= SUPER_NODE_SHOW_FT);
+        if (near) superDot(n.point, { faint: true, ring: true, ink });
+      });
     });
   };
   const paintHolograms = () => {
@@ -7804,7 +7835,7 @@
           // is the placed corners alone -- which is the truth rather than a
           // degraded version of it.
           const trace = cursorWorld
-            ? floorCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            ? floorCorners.concat([loopPoint(cursorWorld)])
             : floorCorners;
           R.drawFloor2D(ctx, toS, { points: trace }, { preview: true }, floorEnv());
           ctx.save();
@@ -7838,7 +7869,7 @@
         // the close ring once three corners make closing legal.
         if (activeTool === 'shape' && shapeCorners.length) {
           const trace = cursorWorld
-            ? shapeCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            ? shapeCorners.concat([loopPoint(cursorWorld)])
             : shapeCorners;
           ctx.save();
           ctx.strokeStyle = skin['draw-note'];
@@ -14893,6 +14924,12 @@
     loopCorners().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND A FIXTURE'S CORNERS, while a FLOOR or SHAPE is drawn (Movie, 23
+    // Oct: "make the corners of tub and sink mini- snap nodes if possible for
+    // connecting the flooring").
+    fixtureNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     // AND THE TRACE IN HAND'S FIRST CORNER, once it can be closed on (Movie,
     // 21 Oct): the last corner finds the first as it finds any node.
     traceHome().forEach(v => {
@@ -14902,6 +14939,19 @@
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
     return out;
+  };
+  // THE FIXTURE CORNERS A FLOOR OR SHAPE CATCHES: the four of each piece's
+  // box (a toilet's is no outline to floor to), on this level, only while
+  // one of those two tools is up -- a wall drawn past a tub still takes the
+  // wall's own nodes and nothing of the tub's.
+  const fixtureNodes = () => {
+    if (activeTool !== 'floor' && activeTool !== 'shape') return [];
+    const FG = window.DraftFixtureGeometry;
+    if (!FG?.fixtureGeometry) return [];
+    return fixtures().filter(fx => fx.kind !== 'toilet').flatMap(fx => {
+      const geo = FG.fixtureGeometry(drawing.walls || [], fx);
+      return (geo?.corners || []).map(c => ({ x: c.x, z: c.z }));
+    });
   };
   // A WALL'S OWN NODE WINS: its face corners stand an inch or two off it,
   // and a press meant for the node it always took must still land there. The
@@ -21767,8 +21817,17 @@
     const tail = corners[corners.length - 1];
     return !!tail && Math.abs(tail.x - pt.x) < 1e-6 && Math.abs(tail.z - pt.z) < 1e-6;
   };
-  const loopPoint = at => {
+  // THE T-SQUARE AND THE MAGNET ON A FLOOR'S CORNERS TOO (Movie, 23 Oct:
+  // "the FLOORING , the T and NODES don't seem to work"): from the corner
+  // before it, a loop's next corner is drawPoint's, as a wall run's next
+  // point is -- squared, snapped along the square, by the foot when lit.
+  const loopPoint = (at, corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : []) => {
     if (board === 'toy') return { x: at.x, z: at.z };
+    const last = corners[corners.length - 1];
+    if (last && !drawStart) {
+      drawStart = { x: last.x, y: 0, z: last.z };
+      try { const p = drawPoint(at); return { x: p.x, z: p.z }; } finally { drawStart = null; }
+    }
     const corner = cornerSnap(at, []);
     if (corner) return { x: corner.x, z: corner.z };
     const snap = drawSnap(at);
@@ -30991,15 +31050,14 @@
     // node pulls the suite until the two coincide, and the face slide below
     // is not asked. A blue hologram's are read too, so the strip can say it
     // would have caught had it been a SUITE.
-    const superPair = m.hologram ? superNodeLock(m.underlay) : null;
-    m.superLock = superPair && m.underlay.mode === 'suite' ? superPair : null;
+    // EVERY HOLOGRAM'S, blue too (Movie, 23 Oct: "all suites attrached"),
+    // and before every other snap: "the corner rings should take priority".
+    m.superLock = m.hologram ? superNodeLock(m.underlay, m.superLock) : null;
     if (m.superLock) {
       // AND NOT OFF THE SQUARE, the face slide's own rule below.
       const held = squaredAxis(m.from, at);
       m.underlay.x += held === 'x' ? 0 : m.superLock.dx;
       m.underlay.z += held === 'z' ? 0 : m.superLock.dz;
-    } else if (superPair) {
-      sayOnStrip('This hologram is blue, so it does not snap. Set it to SUITE on the HOLOGRAM card: its super nodes click onto the house\'s.');
     }
     // A SUITE SNAPS ONTO THE SHELL (Movie, 18 Oct: "when they go close to
     // lining them up it snaps to make it easy for them"): within 6" of a
@@ -35578,10 +35636,20 @@
   // ONCE ENDS (Movie, 23 Oct): SPACE, ENTER or the right button. While the
   // points go down it ends them and the line placement begins; while the
   // lines are placed it finishes the string, with nothing taken back -- the
-  // key or the button laid no line of its own. Finished with no line placed,
-  // the string is put down with none. Esc alone abandons it (cancelGestures).
+  // key or the button laid no line of its own. Esc alone abandons it
+  // (cancelGestures).
+  // NOT BEFORE A LINE IS DOWN (Movie, 23 Oct: "it doesn't produce the
+  // dimension at the very end it just ESC's and nothing appears"): a second
+  // SPACE, ENTER or right click straight after the one that ended the points
+  // -- the habit of the twice rule this replaced -- used to finish the string
+  // with no line, which only Esc should do. With no line laid it keeps the
+  // string up and says where the click goes.
   const dimOnceEnds = () => {
     dimLinesStale();
+    if (dimPlacing && !dimLastLine) {
+      sayOnStrip(`DIMENSION — ${Math.max(dimPoints.length - 1, 1)} to place: click where the string goes (Esc abandons it).`);
+      return true;
+    }
     if (dimPlacing) return finishDimString();
     if (endDimString()) paint();
     return true;
