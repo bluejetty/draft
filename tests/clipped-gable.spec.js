@@ -119,6 +119,18 @@ test('the 45 corner is a plumb crease from the floor to the rake, and no wall li
     const px = await boxAt(page, f, CORNER + 0.75, e, 1);
     expect(px.every(p => same(p, wall)), `plain wall at u ${CORNER + 0.75}, ${e.toFixed(2)} ft`).toBe(true);
   }
+  // AND NO SOFFIT RETURN IN THE AIR beside it (the blue line): the x = 0
+  // rake's foot meets the 45 rake at u 68.48, not an eave, so no level line
+  // runs back from that corner at its height. Read under the rake board,
+  // which sits 5 1/2" below the rake and clear of this box.
+  // The line stood 0.22 ft under the roof surface there (plate + 5.07 at
+  // u 67.8, the rake board above that). Two single pixels across its row,
+  // each clear of the surface's own stroke a pixel and a half above.
+  const lineE = PLATE + (EAVE_CORNER - 68.48) / 3;
+  for (const e of [lineE - 0.06, lineE]) {
+    const [p] = await boxAt(page, f, 67.8, e, 0);
+    expect(same(p, wall), `plain wall where the soffit return stood, ${e.toFixed(2)} ft`).toBe(true);
+  }
 });
 
 test('the rest of the gable past the 45 wall is wall, not shingles, out to the eave corner', async ({ page }) => {

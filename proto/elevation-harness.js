@@ -106,6 +106,9 @@ const MUTATIONS = [
   ['the eave-s soffit past a gable corner is filled as a gable too', 'cut-view.js',
     c => c.replace('            if (u1 - u0 <= overhang + 0.75) return;\n',
       '            if (u1 - u0 <= 0.05) return;\n')],
+  ['a soffit return is drawn at the foot of a rake that meets another rake', 'cut-view.js',
+    c => c.replace('              if (shown && atEave && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2\n',
+      '              if (shown && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2\n')],
   // THE `min` IN garageGround HAS NO ROW, and the reason is written here so
   // nobody adds one and watches it survive: the faces of a 2 storey garage
   // arrive ground storey first, so "lowest" and "first seen" give the same
@@ -2689,6 +2692,24 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
       && f.pts.every(p => p.u <= 0.15) && f.pts.some(p => p.e > plate + 0.05));
     check('clipped gable: the eave\'s soffit past the other gable corner stays open',
       !soffit, soffit ? `a fill stands on the plate over u -2..0: ${soffit.pts.map(p => `(${p.u.toFixed(1)},${p.e.toFixed(2)})`).join(' ')}` : '');
+    // THE BLUE LINE: a level stroke two feet long at the clipped corner's
+    // height, the eave soffit's return drawn at the foot of a rake that
+    // meets no eave (cut-view.js, the roof edge pass, `atEave`).
+    const corner = { u: 68.48, e: plate + (83 - 68.48) / 3 };
+    const returns = view.strokes.flatMap(st => {
+      const out = [];
+      for (let k = 1; k < st.pts.length; k += 1) {
+        const a = st.pts[k - 1], b = st.pts[k];
+        if (b.move || b.close) continue;
+        if (Math.abs(a.e - b.e) < 0.02 && Math.abs(a.u - b.u) > 0.5
+          && Math.abs(a.e - corner.e) < 0.15
+          && Math.max(a.u, b.u) <= corner.u + 0.1 && Math.min(a.u, b.u) >= corner.u - 3) out.push([a, b]);
+      }
+      return out;
+    });
+    check('clipped gable: no soffit return stands in the air at the corner between the two rakes',
+      returns.length === 0,
+      returns.map(([a, b]) => `(${a.u.toFixed(2)},${a.e.toFixed(2)})->(${b.u.toFixed(2)},${b.e.toFixed(2)})`).join(', '));
   }
 }
 

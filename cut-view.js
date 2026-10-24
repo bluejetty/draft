@@ -7479,7 +7479,24 @@ if (!window.DraftCutView) {
               const wallU = (lo.p.x + rux * reach) * axis.x + (lo.p.z + ruz * reach) * axis.z;
               const shown = drawn.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
                 && lo.u <= Math.max(r.u0, r.u1) + 0.1);
-              if (shown && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
+              // ── ONLY WHERE THE RAKE'S FOOT MEETS AN EAVE ──────────────
+              //
+              // Movie, 23 Oct, E3 of the clipped gable, a short level line
+              // marked blue beside the corner crease: "lines shouldn't be
+              // there (should be deleted)". The soffit return below is the
+              // eave's soffit seen from the gable end, running from the
+              // rake's low corner back to the wall -- and it assumed every
+              // rake runs down to an eave. His x = 0 rake runs down to the
+              // 45 rake instead: two rakes meeting at a clipped corner, no
+              // eave, no soffit, and the line stood two feet into the air
+              // at the corner's height. So the foot is asked which plan
+              // edges meet at its corner, and a corner between two gable
+              // edges draws none of this.
+              const footIndex = rpts.findIndex(rp => Math.hypot(rp.x - lo.p.x, rp.z - lo.p.z) < 0.05);
+              const kindAt = k => (roof.edges || [])[(k + rpts.length) % rpts.length];
+              const atEave = footIndex < 0
+                || kindAt(footIndex) !== 'gable' || kindAt(footIndex - 1) !== 'gable';
+              if (shown && atEave && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
                 && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
                 const wallUc = Math.max(uMin, Math.min(uMax, wallU));
                 ctx.strokeStyle = INK; ctx.lineWidth = 1;
