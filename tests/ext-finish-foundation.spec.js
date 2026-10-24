@@ -41,8 +41,18 @@ async function open(page) {
 // Returns the y fraction that landed on concrete, or null.
 async function clickConcrete(page) {
   const box = await page.locator('#elev').boundingBox();
+  // THE COLUMN COMES FROM THE FRAME, since 23 Oct: the page fits the
+  // elevation with the painter's marks gutter and a tenth of the drawing of
+  // air each side (Movie: "about 10% extra cushion"), so a fixed 30% of the
+  // canvas lands on that air in a short window. Twenty feet in from the
+  // left end of the frame is the same spot on the house the 30% used to be.
+  const col = await page.evaluate(() => {
+    const f = window.__extFinishFrame;
+    const c = document.getElementById('elev');
+    return (f.x0 + 20 * f.pxPerFt) / c.width;
+  });
   for (let f = 0.60; f <= 0.96; f += 0.01) {
-    await page.mouse.click(box.x + box.width * 0.30, box.y + box.height * f);
+    await page.mouse.click(box.x + box.width * col, box.y + box.height * f);
     const said = await page.locator('#status').textContent()
       .catch(() => '');
     if ((said || '').includes('Foundation')) return f;

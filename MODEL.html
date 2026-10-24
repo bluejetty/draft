@@ -7443,7 +7443,10 @@
         // `skin`: inDaylight swaps it to day for the length of the shoot, so
         // a drafter working at night still hands a client a white drawing.
         window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
-          { margins: rails, colors: window.DraftCutView.inksFromSkin(skin),
+          // AND A TENTH OF THE DRAWING OF AIR ROUND IT (Movie, 23 Oct: "make
+          // sure it zooms out to show the entire building in addition to
+          // the ELEVATION marks on the side ... about 10% extra cushion").
+          { margins: rails, cushion: 0.1, colors: window.DraftCutView.inksFromSkin(skin),
             // THE EXISTING HOUSE UNDER IT (hologram PR 5): called back with
             // the frame, before this drawing's own lines.
             ...(window.DraftHologram ? window.DraftHologram.cutOptions(ctx, cssW, cssH, cut, drawing,
@@ -7451,7 +7454,9 @@
                 colors: window.DraftCutView.inksFromSkin(skin) }) : {}),
             // The frame comes back so a press can be read in the view's feet,
             // and the line being drawn and the mark held are shown in place.
-            onFrame: f => { elevFrame = f; },
+            // Read by the specs too (tests/clipped-gable.spec.js), which
+            // measure the fit from the frame rather than by hunting ink.
+            onFrame: f => { elevFrame = f; window.__elevFrame = f; },
             selectedMark: elevSelected,
             selectColor: skin['draw-selected'],
             markPreview: (activeTool === 'line' && elevLineStart && elevCursor)

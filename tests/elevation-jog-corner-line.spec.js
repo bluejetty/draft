@@ -86,7 +86,12 @@ async function cornerLine(page, near, y0, y1) {
 // sill plate below it -- and stops short of the wall's foot, which the 2%
 // re-fit moved. The one light row left inside it is the band's OWN bottom
 // line, drawn light either side of the corner.
-const SPAN = [410, 462];
+// RE-SEATED ON 23 Oct, when the elevations took a tenth of the drawing of
+// sky above them (cut-view.js screenCushion, Movie: "about 10% extra
+// cushion"): the drawing sits lower and smaller, the floor band's rows are
+// 449..458 at this window, and its bottom line is the one light row at 429
+// above it. Found by reading the column, as the note above says to.
+const SPAN = [400, 459];
 
 test('E4: the jog\'s corner line runs on through the floor band and the sill', async ({ page }) => {
   await openView(page, 'E4');

@@ -95,6 +95,17 @@ const MUTATIONS = [
   ['every storey of a garage stands on the garage-s bearing', 'cut-view.js',
     c => c.replace('      const floor = face.garage && bearsOnGarage(face)',
       '      const floor = face.garage')],
+  // Movie, 23 Oct -- the clipped gable, the last block in this file.
+  ['a wall under a rake is measured to the rake-s ends, not its line', 'cut-view.js',
+    c => c.replace('            return along >= -reach && along <= gLen + reach && off <= reach;\n',
+      '            return distToSegment(pt, a, b) <= reach;\n')],
+  ['a corner where both walls climb is still capped at the plate', 'cut-view.js',
+    c => c.replace('          top = Math.max(top, Math.min(own, end.top));\n', '')],
+  ['no gable infill under a rake with nothing standing under it', 'cut-view.js',
+    c => c.replace('    gableInfills().forEach(g => faceGeoms.push(g));\n', '')],
+  ['the eave-s soffit past a gable corner is filled as a gable too', 'cut-view.js',
+    c => c.replace('            if (u1 - u0 <= overhang + 0.75) return;\n',
+      '            if (u1 - u0 <= 0.05) return;\n')],
   // THE `min` IN garageGround HAS NO ROW, and the reason is written here so
   // nobody adds one and watches it survive: the faces of a 2 storey garage
   // arrive ground storey first, so "lowest" and "first seen" give the same
@@ -2606,6 +2617,79 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
       `detached 2 storey ${cut.id}: the bay's own window at ${tag.e.toFixed(2)} ft stayed down`,
       tag.e < bay.wallTop, `${bay.wallTop.toFixed(2)} is the bay's plate`));
   });
+}
+
+// ── A GABLE WITH ITS CORNER CLIPPED AT 45 ─────────────────────────────
+//
+// Movie, 23 Oct, E3 of his own drawing (proto/repro-movie-clipped-gable.draft,
+// saved off the live page): "the wall seam is warped - i marked in red where
+// the 45 corner crease in the wall should be. the rest of the 'exposed'
+// gable area of roof i show should all be the exterior finish (in green) but
+// the roof is roof asphalt/fiberglass shingle showing through".
+//
+// THE DRAWING: a long bungalow whose gable end (x = 0, z 0..65) turns 45 at
+// one corner into a wall to (10, 75); the roof's rake follows the turn and
+// runs on past the wall, over a porch, to the eave corner at z 83. Looked at
+// from -x the view's u is z, so the corner is u 65, the 45 wall's end u 75
+// and the eave corner u 83. The roof bears on the plate and the rake over
+// the 45 wall is plate + (83 - u) / 3.
+//
+// THREE CLAIMS, each the geometry of one thing he marked:
+//   THE CREASE  a plumb stroke at u 65 from the plate up to the rake --
+//               both walls meeting there climb, so their corner is a seam
+//               the whole way up (cut-view.js cornerTopAt).
+//   THE SEAM    nothing between u 65 and 67 leans: the 45 wall's top used
+//               to jump from the plate to the rake over one station,
+//               because the wall was measured to the rake segment's END
+//               rather than its line (gableTopAt).
+//   THE GABLE   a wall-face fill from the 45 wall's end to the eave corner,
+//               standing on the plate and rising to the rake: the rest of
+//               the gable, where the far hip's shingles came through
+//               (gableInfills). And NOT past the other corner: the two feet
+//               of rake beyond u 0 are the eave's soffit and stay open.
+{
+  const cFile = path.join(ROOT, 'proto', 'repro-movie-clipped-gable.draft');
+  const cEnv = buildEnv(win, JSON.parse(fs.readFileSync(cFile, 'utf8')));
+  const cStack = win.DraftCutView.sectionLevelStack(cEnv);
+  const plate = cStack.floors.find(level => Number(level.id) === 3).wallTop;
+  const cut = standardElevationCuts(cEnv).find(c => Math.abs(c.dirVec.x + 1) < 1e-9);
+  check('clipped gable: a standard mark looks at the x = 0 end from -x', !!cut);
+  if (cut) {
+    // Line work only: with finishes on, the pattern pass leaves the pen at
+    // its own width and the outline stroke after it no longer reads as the
+    // wall's -- a reading problem, not a painting one.
+    const view = paintElevation(win, cEnv, cut, { pxPerFt: 40 });
+    const segs = [];
+    view.strokes.forEach(st => {
+      if (Math.abs(st.w - WALL_FACE_W) > 1e-9) return;
+      for (let k = 1; k < st.pts.length; k += 1) {
+        const a = st.pts[k - 1], b = st.pts[k];
+        if (b.move || b.close) continue;
+        segs.push({ a, b });
+      }
+    });
+    const plumbAt = u => segs.filter(s => Math.abs(s.a.u - u) < 0.05 && Math.abs(s.b.u - u) < 0.05);
+    const creaseTop = Math.max(-Infinity, ...plumbAt(65).map(s => Math.max(s.a.e, s.b.e)));
+    check('clipped gable: the corner crease at u 65 rises to the rake, 6 ft over the plate',
+      creaseTop >= plate + 5.5,
+      `the highest plumb wall stroke at u 65 tops out at ${creaseTop.toFixed(2)}, the plate is ${plate.toFixed(2)}`);
+    const leaning = segs.filter(s => Math.min(s.a.u, s.b.u) >= 64.9 && Math.max(s.a.u, s.b.u) <= 67
+      && Math.abs(s.a.u - s.b.u) > 0.01 && Math.abs(s.a.e - s.b.e) > Math.abs(s.a.u - s.b.u));
+    check('clipped gable: no wall line leans at the corner (the 45 wall climbs from its corner)',
+      leaning.length === 0,
+      leaning.map(s => `(${s.a.u.toFixed(2)},${s.a.e.toFixed(2)})->(${s.b.u.toFixed(2)},${s.b.e.toFixed(2)})`).join(', '));
+    const onPlate = (p, u) => Math.abs(p.u - u) < 0.15 && Math.abs(p.e - plate) < 0.1;
+    const infill = view.modelFills.find(f => Array.isArray(f.pts)
+      && f.pts.some(p => onPlate(p, 75)) && f.pts.some(p => onPlate(p, 83))
+      && f.pts.some(p => p.e > plate + 2 && p.u > 74.9 && p.u < 77));
+    check('clipped gable: the rest of the gable is filled as a wall from the 45 wall\'s end to the eave corner',
+      !!infill, `${view.modelFills.length} fills, none standing on the plate from u 75 to u 83 and rising to the rake`);
+    const soffit = view.modelFills.find(f => Array.isArray(f.pts)
+      && f.pts.some(p => onPlate(p, -2)) && f.pts.some(p => onPlate(p, 0))
+      && f.pts.every(p => p.u <= 0.15) && f.pts.some(p => p.e > plate + 0.05));
+    check('clipped gable: the eave\'s soffit past the other gable corner stays open',
+      !soffit, soffit ? `a fill stands on the plate over u -2..0: ${soffit.pts.map(p => `(${p.u.toFixed(1)},${p.e.toFixed(2)})`).join(' ')}` : '');
+  }
 }
 
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);

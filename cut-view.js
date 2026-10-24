@@ -2001,6 +2001,27 @@ if (!window.DraftCutView) {
     };
   };
 
+  // ── AND THE AIR ROUND THE DRAWING INSIDE THEM ─────────────────────────────
+  //
+  // Movie, 23 Oct: "on the EXT finish and ELEVATION make sure it zooms out to
+  // show the entire building in addition to the ELEVATION marks on the side
+  // (elevation dimensions and about 10% extra cushion".
+  //
+  // `opts.cushion` is a FRACTION OF THE DRAWING added at each side and above
+  // it: 0.1 fits the building into the room the margins leave as if it were
+  // a fifth wider and a tenth taller than it is, so it stands a tenth of
+  // itself off each side and under a tenth of sky. NOT BELOW: the footing
+  // rests on its inch of dirt against the foot bar, which is the 26 Sep
+  // ruling at yFit, and the pile shafts run on under it. A fraction rather
+  // than pixels because the ask is about the house -- a tenth of it is a
+  // tenth of it on a laptop and on a wall screen -- and the margins already
+  // hold the pixel claims: the marks' gutter, the header, the furniture. An
+  // external fit and a pinned pass take none: the paper decides there.
+  const screenCushion = opts => {
+    const asked = opts ? Number(opts.cushion) : NaN;
+    return Number.isFinite(asked) && asked > 0 ? Math.min(asked, 0.45) : 0;
+  };
+
   // ── THE DRAFTER'S OWN LINES AND NOTES ON AN ELEVATION ─────────────────────
   //
   // Movie, 5 Oct: "i'd like to be able to also draw lines and add annotations
@@ -2186,15 +2207,18 @@ if (!window.DraftCutView) {
     const mg = screenMargins(opts, w);
     const marginL = fit || pin ? 0 : mg.left, marginR = fit || pin ? 0 : mg.right,
       marginT = fit || pin ? 0 : mg.top, marginB = fit || pin ? 0 : mg.bottom;
+    // The cushion is air at the sides and sky at the top (screenCushion).
+    const grow = 1 + 2 * screenCushion(opts);
+    const sky = fit || pin ? 0 : screenCushion(opts) * Math.max(yTop - yBottom, 8);
     const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(2, Math.min(
-      (w - marginL - marginR) / Math.max(uMax - uMin, 4),
-      (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
+      (w - marginL - marginR) / (Math.max(uMax - uMin, 4) * grow),
+      (h - marginT - marginB) / (Math.max(yTop - yBottom, 8) + sky)));
     // PINNED: the same foot lands on the same pixel as in the pinned frame,
     // whatever this drawing's own extents would have chosen.
     const x0 = pin ? pin.x0 + (uMin - pin.uMin) * pxPerFt
       : marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
     const y0 = pin ? pin.y0 + (pin.yTop - yTop) * pxPerFt
-      : marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
+      : marginT + ((h - marginT - marginB) - (yTop + sky - yBottom) * pxPerFt) / 2 + sky * pxPerFt;
     const X = u => x0 + (u - uMin) * pxPerFt;
     const Y = e => y0 + (yTop - e) * pxPerFt;
     // A SECTION HAS NO OVERLAY: every hologram goes under it, as it always has.
@@ -3472,13 +3496,18 @@ if (!window.DraftCutView) {
     const mg = screenMargins(opts, w);
     const marginL = fit || pin ? 0 : mg.left, marginR = fit || pin ? 0 : mg.right,
       marginT = fit || pin ? 0 : mg.top, marginB = fit || pin ? 0 : mg.bottom;
+    // THE CUSHION IS AIR AT THE SIDES AND SKY AT THE TOP, AND NOTHING BELOW:
+    // the footing goes on resting on its inch of dirt against the foot bar
+    // (the 26 Sep ruling at yFit), with the pile shafts running under it.
+    const grow = 1 + 2 * screenCushion(opts);
+    const sky = fit || pin ? 0 : screenCushion(opts) * Math.max(yTop - yFit, 8);
     const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(2, Math.min(
-      (w - marginL - marginR) / Math.max(uMax - uMin, 4),
-      (h - marginT - marginB) / Math.max(yTop - yFit, 8)));
+      (w - marginL - marginR) / (Math.max(uMax - uMin, 4) * grow),
+      (h - marginT - marginB) / (Math.max(yTop - yFit, 8) + sky)));
     const x0 = pin ? pin.x0 + (uMin - pin.uMin) * pxPerFt
       : marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
     const y0 = pin ? pin.y0 + (pin.yTop - yTop) * pxPerFt
-      : marginT + ((h - marginT - marginB) - (yTop - yFit) * pxPerFt) / 2;
+      : marginT + ((h - marginT - marginB) - (yTop + sky - yFit) * pxPerFt) / 2 + sky * pxPerFt;
     const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
     if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop })) return true;
@@ -4601,6 +4630,27 @@ if (!window.DraftCutView) {
     });
     // Only a wall running ALONG the gable climbs; a perpendicular wall
     // passing the gable's corner keeps its plate.
+    //
+    // ── AGAINST THE RAKE'S LINE, NOT THE SEGMENT'S ENDS ──────────────────
+    //
+    // Movie, 23 Oct, E3 of a gable whose corner is clipped at 45 (proto/
+    // repro-movie-clipped-gable.draft): "the wall seam is warped". The rake
+    // over the 45 wall runs from the roof's clipped corner to its eave
+    // corner, and the WALL under it starts 3 1/2 ft before the rake's own
+    // start -- the roof's two rakes meet at a corner 2 ft out from the
+    // walls', and the diagonal puts that corner further along the wall than
+    // the overhang alone would. Measured to the segment, the wall's first
+    // half foot was 3.48 ft from the rake's nearest point and kept its
+    // plate; the next station was 2.7 ft off and climbed to the roof; the
+    // top joined the two over one half-foot sample and drew the slant he
+    // marked.
+    //
+    // A WALL RUNNING ALONG A RAKE IS UNDER IT FOR ITS WHOLE LENGTH where it
+    // lies within reach of the rake's LINE and within reach of its extent
+    // along that line -- the overhang's worth past either end, which is what
+    // `reach` already is. A wall off the end by more than that is somewhere
+    // else. The perpendicular test (`cross`) is unchanged: a wall across the
+    // rake still keeps its plate.
     const gableTopAt = (pt, plateTop, wallDir, wall) => {
       let top = plateTop;
       if (!facesByRoof) return top;
@@ -4613,11 +4663,16 @@ if (!window.DraftCutView) {
         const nearGable = pts.some((a, i) => {
           if (roof.edges?.[i] !== 'gable') return false;
           const b = pts[(i + 1) % pts.length];
+          const gx = b.x - a.x, gz = b.z - a.z;
+          const gLen = Math.hypot(gx, gz) || 1;
           if (wallDir) {
-            const gx = b.x - a.x, gz = b.z - a.z;
-            const gLen = Math.hypot(gx, gz) || 1;
             const cross = Math.abs(wallDir.x * gz - wallDir.z * gx) / gLen;
             if (cross > 0.2) return false;
+            // Along the rake: how far past its ends the point lies, and how
+            // far off its line.
+            const along = ((pt.x - a.x) * gx + (pt.z - a.z) * gz) / gLen;
+            const off = Math.abs((pt.x - a.x) * gz - (pt.z - a.z) * gx) / gLen;
+            return along >= -reach && along <= gLen + reach && off <= reach;
           }
           return distToSegment(pt, a, b) <= reach;
         });
@@ -4805,7 +4860,13 @@ if (!window.DraftCutView) {
         x: (wall.end.x - wall.start.x) / wallLen,
         z: (wall.end.z - wall.start.z) / wallLen,
       };
-      const samples = Math.min(64, Math.max(2, Math.ceil((hiU - loU) / 0.5)));
+      // HALF A FOOT A STATION, up to 256 of them. The cap was 64, which is
+      // half-foot stations on a wall up to 32 ft and coarser past that; the
+      // harness's "level or plumb" rule reads a wall's sloping top as at
+      // most a foot a piece, and Movie's 65 ft gable end (proto/repro-movie-
+      // clipped-gable.draft) came out in 1.02 ft pieces. Four times the
+      // stations on the longest walls only; a short wall is unchanged.
+      const samples = Math.min(256, Math.max(2, Math.ceil((hiU - loU) / 0.5)));
       // Dropped to the floor of a nearer roof's band when that band swallows
       // the wall's top. What is left below still meets the nearer WALLS, and
       // the painter's opaque fill goes on covering that the way it always has.
@@ -4849,6 +4910,151 @@ if (!window.DraftCutView) {
       && geom.tops.every(s =>
         gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir,
           other.face.wall) >= s.top - 1e-3));
+    // ── THE REST OF A GABLE, WHERE NO WALL STANDS UNDER THE RAKE ──────────
+    //
+    // Movie, 23 Oct, E3 of the clipped gable, the triangle between the 45
+    // wall's end and the eave corner marked in green: "the rest of the
+    // 'exposed' gable area of roof i show should all be the exterior finish
+    // ... but the roof is roof asphalt/fiberglass shingle showing through".
+    //
+    // His rake runs on past the 45 wall, over a porch, to the eave at the
+    // corner. No wall stands under that stretch, so the painter drew nothing
+    // there and the far hip's shingles came through from behind -- a sheet
+    // that is in fact hidden, by the gable end a builder closes under every
+    // rake: the triangle from the plate line up to the roof, framed and clad
+    // in the wall's finish, standing on the porch ceiling. That triangle is
+    // the rest of the gable wall, and it is drawn here as a face of its own.
+    //
+    // WHERE, EXACTLY. Each rake (a `gable` edge) that faces the viewer is
+    // walked along its length at the walls' own station, and a station is
+    // COVERED where some wall's painted top already reaches the roof there --
+    // the walls' tops are the ones worked out above, roof clip and all, so
+    // the test is the picture's and not a second reading of the geometry.
+    // What is left uncovered, in runs, is the infill. A run no longer than
+    // the overhang and a hair is the rake's own end past the wall's corner:
+    // the eave's soffit triangle, not a gable, and it draws nothing -- which
+    // is what keeps every ordinary gable end exactly as it was.
+    //
+    // IT WEARS THE WALL IT CONTINUES: the covered wall at the run's end (the
+    // 45 wall here), else the nearest wall on the rake's storey. A wall of
+    // its own with a fresh id, so no window of the donor's rides onto it and
+    // no band of the donor's starts again at its foot; one base finish, as
+    // a dormer's gable has.
+    //
+    // AND IT STANDS WHERE THE RAKE STANDS, for paint order: the rake is at
+    // the roof's edge, nearer the viewer than anything under that roof, so
+    // the infill covers the jog wall's top and the far sheet's hatch behind
+    // it, and a nearer sheet still covers the infill.
+    const topOfAt = (geom, u) => {
+      const tops = geom.tops;
+      if (u <= tops[0].u) return tops[0].top;
+      for (let i = 1; i < tops.length; i++) {
+        if (u > tops[i].u) continue;
+        const lo = tops[i - 1], hi = tops[i];
+        const t = (u - lo.u) / ((hi.u - lo.u) || 1);
+        return lo.top + (hi.top - lo.top) * t;
+      }
+      return tops[tops.length - 1].top;
+    };
+    const GABLE_INFILL_EPS = 0.1;
+    const gableInfills = () => {
+      const out = [];
+      if (!facesByRoof) return out;
+      const uOf = p => p.x * axis.x + p.z * axis.z;
+      facesByRoof.forEach((roofFaces, roof) => {
+        const base = roofBaseElev(roof, stack, env);
+        const pts = roof.points || [];
+        const edges = roof.edges || [];
+        const overhang = Number(roof.overhang) || 0;
+        // The storey this roof bears on, read off the walls that stop at
+        // its plate; a roof over no wall of this drawing has no gable.
+        const storey = faceGeoms.map(g => g.face)
+          .find(f => !f.garage && Math.abs(f.level.wallTop - base) <= 0.6);
+        if (!storey) return;
+        pts.forEach((a, i) => {
+          if (edges[i] !== 'gable') return;
+          const b = pts[(i + 1) % pts.length];
+          const ex = b.x - a.x, ez = b.z - a.z;
+          const len = Math.hypot(ex, ez);
+          if (len < 0.5) return;
+          // Outward off the roof, and only a rake that faces the viewer.
+          let nx = -ez / len, nz = ex / len;
+          const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+          if (pointInPolygon({ x: mid.x + nx * 0.05, z: mid.z + nz * 0.05 }, pts)) { nx = -nx; nz = -nz; }
+          if (nx * dir.x + nz * dir.z < 0.3) return;
+          const ua = uOf(a), ub = uOf(b);
+          const lo = Math.max(Math.min(ua, ub), uMin), hi = Math.min(Math.max(ua, ub), uMax);
+          if (hi - lo < 0.5) return;
+          const at = u => {
+            const t = (u - ua) / (ub - ua);
+            // A hair inside the edge, so the surface answers rather than
+            // the half-open parity rule at the boundary.
+            return { x: a.x + ex * t - nx * 0.01, z: a.z + ez * t - nz * 0.01 };
+          };
+          const depth = mid.x * dir.x + mid.z * dir.z;
+          const topAt = u => {
+            const pt = at(u);
+            const rise = sectionRoofHeightAt(pt, roof, roofFaces);
+            if (rise == null) return base;
+            return Math.max(base, roofClippedTop(pt, depth, base + rise));
+          };
+          const coveredBy = u => {
+            const h = topAt(u);
+            return faceGeoms.find(g => u >= g.loU - 1e-6 && u <= g.hiU + 1e-6
+              && topOfAt(g, u) >= h - GABLE_INFILL_EPS) || null;
+          };
+          const samples = Math.min(64, Math.max(2, Math.ceil((hi - lo) / 0.5)));
+          const station = s => lo + (hi - lo) * s / samples;
+          let run = null;
+          const runs = [];
+          for (let s = 0; s <= samples; s++) {
+            const u = station(s);
+            const cover = coveredBy(u);
+            if (!cover) {
+              if (!run) run = { s0: s, s1: s, before: s ? coveredBy(station(s - 1)) : null };
+              run.s1 = s;
+            } else if (run) {
+              run.after = cover;
+              runs.push(run); run = null;
+            }
+          }
+          if (run) runs.push(run);
+          runs.forEach(r => {
+            // Snapped onto the covering wall's own end, so the seam is one
+            // line and not a station's worth apart.
+            let u0 = station(r.s0), u1 = station(r.s1);
+            if (r.before) u0 = r.before.loU <= u0 && r.before.hiU >= u0 - 0.5 ? r.before.hiU : u0;
+            if (r.after) u1 = r.after.hiU >= u1 && r.after.loU <= u1 + 0.5 ? r.after.loU : u1;
+            if (r.before && r.before.loU > u0) u0 = r.before.loU;   // the wall stands on the far side
+            if (r.after && r.after.hiU < u1) u1 = r.after.hiU;
+            if (u1 - u0 <= overhang + 0.75) return;
+            const tops = [];
+            const n = Math.max(2, Math.ceil((u1 - u0) / 0.5));
+            for (let k = 0; k <= n; k++) {
+              const u = u0 + (u1 - u0) * k / n;
+              tops.push({ u, top: topAt(u) });
+            }
+            if (!tops.some(t => t.top > base + 0.05)) return;
+            const donorFace = r.before || r.after;
+            const donor = donorFace ? donorFace.face.wall
+              : (faceGeoms.filter(g => !g.face.garage).sort((p, q) =>
+                Math.min(Math.abs(p.loU - u0), Math.abs(p.hiU - u1))
+                - Math.min(Math.abs(q.loU - u0), Math.abs(q.hiU - u1)))[0] || {}).face?.wall;
+            if (!donor) return;
+            const start = at(u0), end = at(u1);
+            const wall = { ...donor, id: `${donor.id}:gable:${roof.id}:${i}`, finishBands: [],
+              start: { x: start.x, y: 0, z: start.z }, end: { x: end.x, y: 0, z: end.z },
+              hoodOf: null, gableInfill: true };
+            const level = donorFace ? donorFace.face.level : storey.level;
+            const face = { wall, u1: u0, u2: u1, depth, level, garage: null, gableInfill: true };
+            out.push({ face, loU: u0, hiU: u1, floor: base, worldAt: at,
+              wallDir: { x: ex / len, z: ez / len }, tops });
+          });
+        });
+      });
+      return out;
+    };
+    gableInfills().forEach(g => faceGeoms.push(g));
     // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
     //
     // A BASE OVER THE WHOLE FACE, THEN THE BANDS OVER THAT, in the order they
@@ -5342,8 +5548,34 @@ if (!window.DraftCutView) {
       const nudge = Math.min(0.02, (hiU - loU) / 4);
       const footAt = (u, top) => (worldAt
         ? roofClippedFoot(worldAt(u), face.depth, floor, top) : floor);
-      const topL = Math.min(tops[0].top, level.wallTop);
-      const topR = Math.min(tops[tops.length - 1].top, level.wallTop);
+      // ── EXCEPT WHERE THE CORNER ITSELF CLIMBS ─────────────────────────
+      //
+      // Movie, 23 Oct, E3 of the clipped gable: "i marked in red where the
+      // 45 corner crease in the wall should be" -- a vertical from the plate
+      // up to the rake, at the corner where the gable wall turns 45. Both
+      // walls there climb: the gable wall ends 6 ft up its rake and the 45
+      // wall starts at the same height under the same roof, so their corner
+      // is a crease the whole way up, and the plate cap drew none of it.
+      //
+      // THE CAP IS FOR THE SOFFIT TRIANGLE, and it stays for that: at an
+      // ordinary gable corner the wall next door is an eave wall at the
+      // plate, and the foot or so of rake above the corner is the eave's
+      // soffit, not a seam. So the corner rises only as far as the wall
+      // sharing it also rises -- the plate where the neighbour is an eave
+      // wall, the roof where it is a gable wall too.
+      const cornerTopAt = (u, own) => {
+        let top = Math.min(own, level.wallTop);
+        faceGeoms.forEach(g => {
+          if (g === geom || Math.abs(g.face.depth - face.depth) < 0.05) return;
+          const end = Math.abs(g.loU - u) < 0.05 ? g.tops[0]
+            : Math.abs(g.hiU - u) < 0.05 ? g.tops[g.tops.length - 1] : null;
+          if (!end) return;
+          top = Math.max(top, Math.min(own, end.top));
+        });
+        return top;
+      };
+      const topL = cornerTopAt(loU, tops[0].top);
+      const topR = cornerTopAt(hiU, tops[tops.length - 1].top);
       const footL = footAt(loU + nudge, topL);
       const footR = footAt(hiU - nudge, topR);
       // ── NO SEAM WHERE THE WALL CARRIES ON IN THE SAME PLANE ───────────
