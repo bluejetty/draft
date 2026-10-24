@@ -404,7 +404,11 @@
   // identify each suite type"): the same four corners a suite gets when it
   // stands on a plan, read off the walls on the shelf's level as they are,
   // with the registration corner marked. The shelf is unturned and unmoved.
-  const shelfSuperNodes = (walls, levelId) => registered(cornerSuperNodes(walls, levelId), walls, levelId, 0);
+  // THE SHELF'S TURN IS THE DRAWING'S (Movie, 23 Oct: "how come the lower
+  // left corner is gold? ... only the TARGET node should be gold"): the
+  // target the sheet draws on a shelf follows planTurn, and the registration
+  // was read at turn 0, so a turned drawing showed gold on two corners.
+  const shelfSuperNodes = (walls, levelId, turn = 0) => registered(cornerSuperNodes(walls, levelId), walls, levelId, turn);
   // A suite's own plan less the walls the shell has taken, and their openings.
   const suiteExisting = (holo, existing, info) => {
     const gone = info?.hidden.get(holo.id);

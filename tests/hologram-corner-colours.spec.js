@@ -36,12 +36,12 @@ const drawing = () => ({ version: 1, board: 'drafting', planTurn: 0, levels: LEV
   boneyardShelves: [{ id: 1, name: '1BDEN' }, { id: 2, name: '2BD' }, { id: 3, name: 'SHELF 3' }, { id: 4, name: 'SHELF 4' }],
   nextBoneyardShelfId: 5, activeBoneyardShelfId: 1, nextDrawingItemId: 60 });
 
-async function open(page) {
+async function open(page, f = drawing()) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
+  }, { bucket: BUCKET, f });
   await page.goto('/MODEL.html?level=3&right=1');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(200);
@@ -119,6 +119,40 @@ test('on the shelf itself the corners wear the same colour, and its registration
   const nodes = await page.evaluate(walls => window.DraftHologram.shelfSuperNodes(walls, -1), drawing().walls);
   expect(nodes).toHaveLength(4);
   expect(nodes.filter(n => n.registration), 'one of the four is the registration corner').toHaveLength(1);
+  for (const n of nodes) {
+    const samples = await ringInk(page, ...at(n.point.x, n.point.z));
+    expect(hasInk(samples, n.registration ? rgb(gold) : rgb(green)), `corner ${n.id}: ${JSON.stringify(samples)}`).toBe(true);
+  }
+  expect(await page.locator('#plan').getAttribute('data-gold-super-nodes')).toBe('1');
+});
+
+// A TURNED DRAWING (Movie, 23 Oct: "how come the lower left corner is gold?
+// ... only the TARGET node should be gold"): the target the sheet draws on
+// a shelf follows the HOUSE turn, and the registration was read at turn 0,
+// so the two sat on different corners and both were gold. The gold corner
+// is the one the target names, at the drawing's own turn.
+test('on a turned drawing the shelf\'s gold corner is the one under the target, and it alone', async ({ page }) => {
+  const f = drawing();
+  f.planTurn = 1;
+  await open(page, f);
+  if (await page.locator('#shelf-previews').isHidden()) await page.locator('#shelf-tab').click();
+  await page.locator('.shelf-preview').nth(0).click();
+  await expect(page.locator('#readout')).toContainText('walls 4/');
+  await page.waitForTimeout(200);
+  const { green, gold } = await inks(page);
+  const { at } = await h.planFrame(page);
+  const { nodes, target } = await page.evaluate(walls => {
+    const WT = window.DraftWallTypes;
+    const thicknessFt = w => (WT.WALL_TYPES.find(t => t.id === w.wallType)?.totalIn || 0) / 12;
+    const own = walls.filter(w => w.levelId === -1).map(w => ({ ...w, levelId: 3 }));
+    return { nodes: window.DraftHologram.shelfSuperNodes(walls, -1, 1),
+      target: window.DraftCutMarks.siteDatum(own, { turn: 1, thicknessFt }) };
+  }, drawing().walls);
+  const atTurn0 = await page.evaluate(walls => window.DraftHologram.shelfSuperNodes(walls, -1).find(n => n.registration).point, drawing().walls);
+  const reg = nodes.find(n => n.registration);
+  expect(reg, 'one corner is the registration').toBeTruthy();
+  expect(Math.hypot(reg.point.x - target.x, reg.point.z - target.z), 'and it is the corner under the target').toBeLessThan(1);
+  expect(Math.hypot(reg.point.x - atTurn0.x, reg.point.z - atTurn0.z), 'not the corner turn 0 would pick').toBeGreaterThan(1);
   for (const n of nodes) {
     const samples = await ringInk(page, ...at(n.point.x, n.point.z));
     expect(hasInk(samples, n.registration ? rgb(gold) : rgb(green)), `corner ${n.id}: ${JSON.stringify(samples)}`).toBe(true);
