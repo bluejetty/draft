@@ -141,9 +141,9 @@ test('one counter: it turns the corner with no joint across it, and nothing runs
     expect(mx > FACE - 0.001 && mz > FACE - 0.001 && !(Math.abs(mx - FACE) < 0.01 && Math.abs(s.a[0] - s.b[0]) < 0.01)
       && !(Math.abs(mz - FACE) < 0.01 && Math.abs(s.a[1] - s.b[1]) < 0.01), `a line on or in a wall: ${JSON.stringify(s)}`).toBe(true);
   });
-  // THE FRONT TURNS THE CORNER: an inside corner of the counter at 25 1/2"
-  // off both walls (24" cabinets standing their half inch off, 1" overhang).
-  const o = 1 / 12, frontZ = FACE + GAP + 2 + o, frontX = FACE + GAP + 2 + o;
+  // THE FRONT TURNS THE CORNER: an inside corner of the counter at 25"
+  // off both walls (24" cabinets standing their half inch off, 1/2" overhang).
+  const o = 0.5 / 12, frontZ = FACE + GAP + 2 + o, frontX = FACE + GAP + 2 + o;
   const hasPoint = (x, z) => segs.some(s => [s.a, s.b].some(p => Math.abs(p[0] - x) < 0.01 && Math.abs(p[1] - z) < 0.01));
   expect(hasPoint(frontX, frontZ), 'the counter\'s inside corner').toBe(true);
   // AND THE UPPERS ARE ONE RUN TOO, dashed, with no joint across them.
@@ -185,4 +185,51 @@ test('melded, a cabinet\'s own box is drawn light', async ({ page }) => {
     return out;
   });
   expect(widths[0], 'its box, light').toBe(0.5);
+});
+
+// NO COUNTERTOP OVER THE STOVE OR THE FRIDGE (Movie, 24 Oct: "at stove and
+// fridge no countertop"; "should only be 1/2" over the edge of cabinet").
+test('a cabinet run with a stove and a fridge on it: the counter stops at each, half an inch past the cabinets', async ({ page }) => {
+  const fixtures = [
+    FX('run', 'back', 'cabinet', 6, 8),
+    FX('st', 'back', 'stove', 6, 2.5),
+    FX('fr', 'back', 'fridge', 9.5, 3),
+  ];
+  await open(page, fixtures);
+  const d = await saved(page);
+  const segs = (await counterLines(page, d)).filter(s => !s.dashed);
+  const geo = await page.evaluate(d => {
+    const FG = window.DraftFixtureGeometry;
+    const g = id => { const x = FG.fixtureGeometry(d.walls, d.fixtures.find(f => f.id === id)); return [x.alongStart, x.alongEnd, x.frontOff]; };
+    return { run: g('run'), st: g('st'), fr: g('fr') };
+  }, d);
+  const front = geo.run[2] + 0.5 / 12;
+  const fronts = segs.filter(s => Math.abs(s.a[1] - front) < 0.005 && Math.abs(s.b[1] - front) < 0.005);
+  expect(fronts.length, 'a counter front half an inch past the cabinets').toBeGreaterThan(0);
+  const over = ([lo, hi]) => fronts.some(s => Math.min(s.a[0], s.b[0]) < hi - 0.01 && Math.max(s.a[0], s.b[0]) > lo + 0.01);
+  expect(over(geo.st), 'none over the stove').toBe(false);
+  expect(over(geo.fr), 'none over the fridge').toBe(false);
+});
+
+// NO UPPERS OVER THE SINK OR THE DISHWASHER (Movie, 24 Oct: "the uppers
+// shouldn't be on the dishwasher and the sink").
+test('uppers run over the cabinets but stop at a sink and a dishwasher on the run', async ({ page }) => {
+  const fixtures = [
+    FX('run', 'back', 'cabinet', 6, 8),
+    FX('sk', 'back', 'sinkbase', 5, 3),
+    FX('dw', 'back', 'dish', 7.5, 2),
+  ];
+  await open(page, fixtures);
+  const d = await saved(page);
+  const uppers = (await counterLines(page, d)).filter(s => s.dashed);
+  const span = await page.evaluate(d => {
+    const FG = window.DraftFixtureGeometry;
+    const g = id => { const x = FG.fixtureGeometry(d.walls, d.fixtures.find(f => f.id === id)); return [x.alongStart, x.alongEnd]; };
+    return { sk: g('sk'), dw: g('dw'), run: g('run') };
+  }, d);
+  expect(uppers.length, 'uppers are drawn').toBeGreaterThan(0);
+  const front = uppers.filter(s => Math.abs(s.a[1] - s.b[1]) < 0.005 && s.a[1] > FACE + 0.3);
+  const over = ([lo, hi]) => front.some(s => Math.min(s.a[0], s.b[0]) < hi - 0.01 && Math.max(s.a[0], s.b[0]) > lo + 0.01);
+  expect(over([span.sk[0], span.dw[1]]), 'none over the sink or the dishwasher').toBe(false);
+  expect(over([span.run[0], span.sk[0]]), 'but over the cabinet beside them').toBe(true);
 });

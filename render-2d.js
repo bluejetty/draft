@@ -1529,8 +1529,21 @@ if (!window.DraftRender2D) {
     return out;
   }
   const geoRect = (geo, a0, a1, c0, c1) => [geo.frame.at(a0, c0), geo.frame.at(a1, c0), geo.frame.at(a1, c1), geo.frame.at(a0, c1)];
+  // NO COUNTERTOP OVER A STOVE OR A FRIDGE (Movie, 24 Oct: "at stove and
+  // fridge no countertop"), nor a pantry or a full-height cabinet: where one
+  // stands on the same face of the same wall, a counter piece's top stops at
+  // its sides. The spans along the wall, as [lo, hi].
+  const NO_COUNTER_KINDS = Object.freeze(['stove', 'fridge', 'fridge30', 'pantry', 'tallcab']);
+  const without = (lo, hi, cuts) => {
+    let parts = [[lo, hi]];
+    (cuts || []).forEach(([c0, c1]) => {
+      parts = parts.flatMap(([a, b]) => (c1 <= a || c0 >= b ? [[a, b]]
+        : [[a, Math.min(b, c0)], [Math.max(a, c1), b]].filter(([x, y]) => y - x > MELD_EPS_FT)));
+    });
+    return parts;
+  };
   // A PIECE'S COUNTER, as rings in plan feet: none for a piece not under one.
-  function counterRings(fixture, geo, overhang) {
+  function counterRings(fixture, geo, overhang, cuts = []) {
     if (!geo || geo.tub || !MELD_KINDS.includes(fixture.kind)) return [];
     const dir = geo.frontOff >= geo.backOff ? 1 : -1;
     const o = overhang || 0;
@@ -1551,14 +1564,18 @@ if (!window.DraftRender2D) {
       return [geoRect(geo, Math.min(far, wallEnd), Math.max(far, wallEnd), back, front),
         geoRect(geo, wallEnd, geo.legAlong - c * o, back, geo.legOff)];
     }
-    return [geoRect(geo, geo.alongStart, geo.alongEnd, back, front)];
+    return without(geo.alongStart, geo.alongEnd, cuts).map(([a0, a1]) => geoRect(geo, a0, a1, back, front));
   }
-  // THE UPPERS OVER A PIECE: 12" off the wall, both legs for the CORNER.
-  function upperRings(fixture, geo) {
+  // THE UPPERS OVER A PIECE: 12" off the wall, both legs for the CORNER --
+  // and none over a sink or a dishwasher standing on the same run (Movie, 24
+  // Oct: "the uppers shouldn't be on the dishwasher and the sink").
+  const NO_UPPER_KINDS = Object.freeze(['sink', 'sinkbase', 'dish']);
+  function upperRings(fixture, geo, cuts = []) {
     if (!geo || geo.tub) return [];
     const dir = geo.frontOff >= geo.backOff ? 1 : -1;
     const deep = Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
-    const rings = [geoRect(geo, geo.alongStart, geo.alongEnd, geo.backOff, geo.backOff + dir * deep)];
+    const rings = without(geo.alongStart, geo.alongEnd, cuts)
+      .map(([a0, a1]) => geoRect(geo, a0, a1, geo.backOff, geo.backOff + dir * deep));
     if (fixture.kind === 'cornerbase' && geo.cornerAlong != null) {
       const c = geo.cornerAlong > geo.legAlong ? 1 : -1;
       rings.push(geoRect(geo, geo.cornerAlong, geo.cornerAlong - c * deep, geo.backOff, geo.legOff));
@@ -1595,10 +1612,14 @@ if (!window.DraftRender2D) {
     byLevel.forEach((list, levelId) => {
       const blockers = wallRings(env.walls, levelId, env.wallFrame);
       const counters = [], uppers = [];
+      const spansOn = (fx, kinds) => list.filter(o => kinds.includes(o.kind) && sameHost(o, fx)
+        && (o.side === -1 ? -1 : 1) === (fx.side === -1 ? -1 : 1))
+        .map(o => env.fixtureGeometry(o)).filter(Boolean).map(g => [g.alongStart, g.alongEnd]);
       list.forEach(fx => {
         const geo = env.fixtureGeometry(fx);
-        counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT));
-        if (typeof env.hasUppers === 'function' && env.hasUppers(fx)) uppers.push(...upperRings(fx, geo));
+        const cuts = spansOn(fx, NO_COUNTER_KINDS);
+        counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT, cuts));
+        if (typeof env.hasUppers === 'function' && env.hasUppers(fx)) uppers.push(...upperRings(fx, geo, spansOn(fx, NO_UPPER_KINDS)));
       });
       stroke(outlineSegments(counters, blockers), false);
       stroke(outlineSegments(uppers, blockers), true);

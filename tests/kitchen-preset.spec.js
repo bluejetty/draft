@@ -119,11 +119,11 @@ test('+ PANTRY and + ISLAND add the corner pantry and the 42"-aisle island', asy
   const longRun = byKind(drawing, 'cabinet').find(run => run.wallId === longWall.id);
   expect(longRun.offset - longRun.width / 2).toBeGreaterThan(3.9);
 
-  // The island floats 42" + countertop overhang off the wall face.
+  // The island floats 42" + countertop overhang (1/2") off the wall face.
   const [island] = byKind(drawing, 'island');
   expect(island.wallId).toBe(longWall.id);
   expect(island.depth).toBeCloseTo(3, 5);
-  expect(island.standoff).toBeCloseTo(2 + 1 / 12 + 3.5, 5);
+  expect(island.standoff).toBeCloseTo(2 + 0.5 / 12 + 3.5, 5);
 });
 
 test('the preset refuses a corner without enough clear wall', async ({ page }) => {
@@ -180,7 +180,7 @@ test('kitchen preset fixtures survive a reload, island standoff included', async
   const drawing = await h.savedDrawing(page);
   expect(drawing.fixtures).toHaveLength(8);
   const [island] = byKind(drawing, 'island');
-  expect(island.standoff).toBeCloseTo(2 + 1 / 12 + 3.5, 5);
+  expect(island.standoff).toBeCloseTo(2 + 0.5 / 12 + 3.5, 5);
   expect(byKind(drawing, 'pantry')).toHaveLength(1);
   expect(byKind(drawing, 'dish')).toHaveLength(1);
 });

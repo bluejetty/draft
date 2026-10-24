@@ -47,13 +47,13 @@ if (!window.DraftFixtureKinds) {
   const FIXTURE_KINDS = [
     { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true, uppers: true,
       note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
-    { id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false, uppers: true,
+    { id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false, uppers: false,
       note: 'Kitchen sink — click it onto a wall (usually over a cabinet run).' },
     { id: 'fridge',  label: 'FRIDGE',  group: 'KITCHEN',  widthFt: 3,      depthFt: 2.5,    casework: false, run: false, uppers: true,
       note: 'Refrigerator box — click it onto a wall.' },
     { id: 'stove',   label: 'STOVE',   group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2.17,   casework: false, run: false, uppers: true,
       note: 'Range with burners — click it onto a wall.' },
-    { id: 'dish',    label: 'DW',      group: 'KITCHEN',  widthFt: 2,      depthFt: 2,      casework: false, run: false, uppers: true,
+    { id: 'dish',    label: 'DW',      group: 'KITCHEN',  widthFt: 2,      depthFt: 2,      casework: false, run: false, uppers: false,
       note: '24" dishwasher — click it onto a wall, usually beside the sink.' },
     { id: 'island',  label: 'ISLAND',  group: 'KITCHEN',  widthFt: 6,      depthFt: 3,      casework: false, run: false,
       note: '36" x 72" island — click it onto a wall; it stands 42" clear of the counter and slides along the run.' },
@@ -62,7 +62,7 @@ if (!window.DraftFixtureKinds) {
     // MOVIE'S KITCHEN PIECES (KITCHENITEMS1/2.DXF, 9 Oct): each placed on its
     // own, one click onto a wall; where two touch they read as one counter
     // with a light line at the joint.
-    { id: 'sinkbase', label: 'SINK BASE', group: 'KITCHEN', widthFt: 4, depthFt: 2, casework: false, run: false, uppers: true,
+    { id: 'sinkbase', label: 'SINK BASE', group: 'KITCHEN', widthFt: 4, depthFt: 2, casework: false, run: false, uppers: false,
       note: '48" sink base, two doors and a double bowl — click it onto a wall.' },
     { id: 'drawerbase', label: 'DRAWERS', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false, uppers: true,
       note: '24" drawer base, four drawers — click it onto a wall.' },
@@ -115,7 +115,9 @@ if (!window.DraftFixtureKinds) {
   // Panel order, derived rather than listed: a new kind appears under its own
   // heading without a second place to edit.
   const GROUPS = [...new Set(FIXTURE_KINDS.map(kind => kind.group))];
-  // Does this fixture (a record, or a kind id) carry upper cabinets?
+  // Does this fixture (a record, or a kind id) carry upper cabinets? Not the
+  // sink, the sink base or the dishwasher (Movie, 24 Oct: "the uppers
+  // shouldn't be on the dishwasher and the sink").
   const hasUppers = fixture => {
     const id = typeof fixture === 'string' ? fixture : fixture?.kind;
     return FIXTURE_KINDS.some(kind => kind.id === id && kind.uppers === true);
