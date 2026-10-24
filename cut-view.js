@@ -2008,7 +2008,8 @@ if (!window.DraftCutView) {
   // (elevation dimensions and about 10% extra cushion".
   //
   // `opts.cushion` is a FRACTION OF THE DRAWING added at each side and above
-  // it: 0.1 fits the building into the room the margins leave as if it were
+  // it, ON AN ELEVATION (a section keeps the frame it has, with its own two
+  // feet of air; the ask was about the elevations): 0.1 fits the building into the room the margins leave as if it were
   // a fifth wider and a tenth taller than it is, so it stands a tenth of
   // itself off each side and under a tenth of sky. NOT BELOW: the footing
   // rests on its inch of dirt against the foot bar, which is the 26 Sep
@@ -2207,18 +2208,18 @@ if (!window.DraftCutView) {
     const mg = screenMargins(opts, w);
     const marginL = fit || pin ? 0 : mg.left, marginR = fit || pin ? 0 : mg.right,
       marginT = fit || pin ? 0 : mg.top, marginB = fit || pin ? 0 : mg.bottom;
-    // The cushion is air at the sides and sky at the top (screenCushion).
-    const grow = 1 + 2 * screenCushion(opts);
-    const sky = fit || pin ? 0 : screenCushion(opts) * Math.max(yTop - yBottom, 8);
+    // NO CUSHION ON A SECTION (screenCushion): Movie asked it of the
+    // elevations, and a section's frame already carries its own two feet
+    // of air over the ridge and under the footing.
     const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(2, Math.min(
-      (w - marginL - marginR) / (Math.max(uMax - uMin, 4) * grow),
-      (h - marginT - marginB) / (Math.max(yTop - yBottom, 8) + sky)));
+      (w - marginL - marginR) / Math.max(uMax - uMin, 4),
+      (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
     // PINNED: the same foot lands on the same pixel as in the pinned frame,
     // whatever this drawing's own extents would have chosen.
     const x0 = pin ? pin.x0 + (uMin - pin.uMin) * pxPerFt
       : marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
     const y0 = pin ? pin.y0 + (pin.yTop - yTop) * pxPerFt
-      : marginT + ((h - marginT - marginB) - (yTop + sky - yBottom) * pxPerFt) / 2 + sky * pxPerFt;
+      : marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
     const X = u => x0 + (u - uMin) * pxPerFt;
     const Y = e => y0 + (yTop - e) * pxPerFt;
     // A SECTION HAS NO OVERLAY: every hologram goes under it, as it always has.
@@ -4992,19 +4993,26 @@ if (!window.DraftCutView) {
             return { x: a.x + ex * t - nx * 0.01, z: a.z + ez * t - nz * 0.01 };
           };
           const depth = mid.x * dir.x + mid.z * dir.z;
-          const topAt = u => {
-            const pt = at(u);
-            const rise = sectionRoofHeightAt(pt, roof, roofFaces);
-            if (rise == null) return base;
-            return Math.max(base, roofClippedTop(pt, depth, base + rise));
+          // THE RAKE'S OWN HEIGHT for the covering test, and the clip by a
+          // nearer sheet only on the runs that come out of it. roofClippedTop
+          // clips every roof's faces against a ray, and asked at every
+          // station of every rake it cost a section-budget test a quarter of
+          // a millisecond on a 24-wall house; the runs are few (none at all
+          // on an ordinary gable end) and the clip only ever lowers a top,
+          // which the `base + 0.05` test below then throws away.
+          const rakeAt = u => {
+            const rise = sectionRoofHeightAt(at(u), roof, roofFaces);
+            return rise == null ? base : base + rise;
           };
+          const topAt = u => Math.max(base, roofClippedTop(at(u), depth, rakeAt(u)));
           const coveredBy = u => {
-            const h = topAt(u);
+            const h = rakeAt(u);
             return faceGeoms.find(g => u >= g.loU - 1e-6 && u <= g.hiU + 1e-6
               && topOfAt(g, u) >= h - GABLE_INFILL_EPS) || null;
           };
-          const samples = Math.min(64, Math.max(2, Math.ceil((hi - lo) / 0.5)));
+          const samples = Math.min(256, Math.max(2, Math.ceil((hi - lo) / 0.5)));
           const station = s => lo + (hi - lo) * s / samples;
+          const step = (hi - lo) / samples;
           let run = null;
           const runs = [];
           for (let s = 0; s <= samples; s++) {
@@ -5023,8 +5031,8 @@ if (!window.DraftCutView) {
             // Snapped onto the covering wall's own end, so the seam is one
             // line and not a station's worth apart.
             let u0 = station(r.s0), u1 = station(r.s1);
-            if (r.before) u0 = r.before.loU <= u0 && r.before.hiU >= u0 - 0.5 ? r.before.hiU : u0;
-            if (r.after) u1 = r.after.hiU >= u1 && r.after.loU <= u1 + 0.5 ? r.after.loU : u1;
+            if (r.before) u0 = r.before.loU <= u0 && r.before.hiU >= u0 - step - 1e-6 ? r.before.hiU : u0;
+            if (r.after) u1 = r.after.hiU >= u1 && r.after.loU <= u1 + step + 1e-6 ? r.after.loU : u1;
             if (r.before && r.before.loU > u0) u0 = r.before.loU;   // the wall stands on the far side
             if (r.after && r.after.hiU < u1) u1 = r.after.hiU;
             if (u1 - u0 <= overhang + 0.75) return;
