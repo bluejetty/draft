@@ -36791,14 +36791,13 @@
     sayOnStrip('Corner broken -- this wall\'s end follows the hand; click to put it down, Esc joins it back.');
     paint();
   };
-  // THE CLICK THAT PUTS THE CARRIED END DOWN ends the drag as a release
-  // would, and is nothing else.
+  // THE CLICK THAT PUTS THE CARRIED END DOWN is nothing else: its press is
+  // kept from the page, and its release ends the drag as any release does.
   canvas.addEventListener('pointerdown', e => {
     if (!moveDrag?.carry) return;
     e.stopImmediatePropagation();
     e.preventDefault();
     moveDrag.carry = false;
-    endDrag(e);
   }, true);
   window.addEventListener('keydown', e => {
     if (e.key !== 'Escape' || !moveDrag?.carry) return;

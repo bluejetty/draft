@@ -134,7 +134,11 @@ test('a wall with its face on a half-inch corner is connected: the fixture slid 
 });
 
 test('within an eighth of an inch of a wall\'s outside face corner, that corner wins over the node beside it', async ({ page }) => {
-  await open(page);
+  // A LINE ENDING AN INCH OFF THE CORNER: its node is inside the node's own
+  // two-inch catch, which beat the face corner before the eighth-inch rule.
+  const cx0 = 16 + HALF_2X4, cz0 = -HALF_2X4;
+  await open(page, drawing({ lines: [{ id: 'near', start: { x: cx0 + 1 / 12, y: 0, z: cz0 }, end: { x: cx0 + 3, y: 0, z: cz0 },
+    levelId: 3, view: 'plan', layer: 'A-ANNO-NOTE' }] }));
   await tsquare(page, false);
   await h.armFromRail(page, 'line');
   await page.keyboard.press('0');
@@ -166,7 +170,7 @@ test('within an eighth of an inch of a wall\'s outside face corner, that corner 
   await press(page, f.at, cx + 1 / 192, cz - 1 / 192);
   await press(page, f.at, cx + 0.25, cz - 0.25);
   await page.keyboard.press('Escape');
-  const line = (await saved(page)).lines.at(-1);
+  const line = (await saved(page)).lines.find(l => l.id !== 'near');
   expect(line, 'a line was drawn').toBeTruthy();
   expect([r3(line.start.x), r3(line.start.z)], 'on the face corner, not the node').toEqual([r3(cx), r3(cz)]);
 });
@@ -245,10 +249,11 @@ test('Esc while the end is carried joins the corner back; SHIFT+click and a held
   await move(page, at, 13, 4);
   let b = (await saved(page)).walls.find(x => x.id === 'b');
   expect([r3(b.start.x), r3(b.start.z)]).toEqual([16, 0]);
-  // SHIFT HELD THROUGH A CLICK is SHIFT+click, not a tap.
+  // SHIFT HELD THROUGH A CLICK is SHIFT+click, not a tap -- even a click on
+  // the corner itself, the hand still on it when SHIFT comes up.
   await move(page, at, 16, 0);
   await page.keyboard.down('Shift');
-  await page.mouse.click(...at(8, 0));
+  await page.mouse.click(...at(16, 0));
   await page.keyboard.up('Shift');
   await page.waitForTimeout(100);
   await expect(page.locator('#strip-message')).not.toContainText('Corner broken');

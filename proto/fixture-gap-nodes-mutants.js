@@ -76,14 +76,9 @@ const MUTANTS = [
     test: 'one SHIFT tap' },
   { file: 'MODEL.html',
     name: 'Esc leaves the corner broken',
-    find: "    sayOnStrip('Corner joined again.');\n",
-    with: "    sayOnStrip('Corner joined again.'); return;\n",
+    find: "      if (md.body.start === f.vtx) md.body.start = shared[i].vtx;\n      if (md.body.end === f.vtx) md.body.end = shared[i].vtx;\n",
+    with: "",
     test: 'Esc while the end is carried' },
-  { file: 'MODEL.html',
-    name: 'the click does not put the carried end down',
-    find: "    moveDrag.carry = false;\n    endDrag(e);\n",
-    with: "    moveDrag.carry = false;\n",
-    test: 'one SHIFT tap' },
 ];
 
 const run = name => {
