@@ -196,7 +196,7 @@ test('the vanity\'s mark is at its front left; the pedestal sinks are 22" deep, 
   expect(kept.showHeight).toBe(true);
 });
 
-test('cabinet runs say their width on the front edge, cut round the stove; uppers say theirs lighter, inside their line', async ({ page }) => {
+test('cabinet runs say their width on the front edge, cut round the stove; uppers say theirs lighter, behind their dashed line', async ({ page }) => {
   await open(page);
   const all = await marks(page);
   const cab = all.filter(m => m.what === 'cabinet' && m.id === 'cab').map(m => m.label).sort();
@@ -212,6 +212,11 @@ test('cabinet runs say their width on the front edge, cut round the stove; upper
   const front = (c[2].y + c[3].y) / 2;
   const cabY = all.find(m => m.what === 'cabinet').cy, upY = ups.find(m => m.id === 'cab').cy;
   expect(Math.abs(cabY - front)).toBeLessThan(Math.abs(upY - front));
+  // ...and the uppers' sits behind their dashed line, 12" off the wall,
+  // toward the wall, not on it (Movie, 24 Oct: "behind the dashed line (not
+  // on top)").
+  const back = (c[0].y + c[1].y) / 2, dashed = back + (front - back) / 2;
+  expect(Math.abs(upY - back), 'between the wall and the dashed line').toBeLessThan(Math.abs(dashed - back) - 3);
 });
 
 test('a sink base says its width in its left bowl, the bigger one in a 60/40, the middle of a single', async ({ page }) => {

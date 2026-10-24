@@ -5458,7 +5458,8 @@
   //   CABINETS       the width, inside the front edge, the numbers' foot to it
   //   SINK BASE      the width in the bowl: centred in a single, the left
   //                  bowl of a double, the bigger (right) of a 60/40
-  //   UPPERS         the width just inside their front line, lighter grey
+  //   UPPERS         the width just behind their dashed front line, toward
+  //                  the wall, lighter grey
   // Left is the drafter's, standing in the room facing the piece. The
   // fixtures' marks take a press; the cabinets' only say.
   const paintFixtureMarks = (ctx, toS) => {
@@ -5496,6 +5497,16 @@
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       const nl = Math.hypot(c.x - mx, c.y - my) || 1;
       const nx = (c.x - mx) / nl * px, ny = (c.y - my) / nl * px;
+      return [{ x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny }];
+    };
+    // ...or moved `px` toward the line at `toward` -- the uppers' mark goes
+    // behind their dashed line, toward the wall (Movie, 24 Oct: "the 36 on
+    // the upper cabinet move to be behind the dashed line (not on top)").
+    const lineToward = (geo, along0, along1, across, toward, px) => {
+      const a = toS(geo.frame.at(along0, across)), b = toS(geo.frame.at(along1, across));
+      const t = toS(geo.frame.at(along0, toward));
+      const nl = Math.hypot(t.x - a.x, t.y - a.y) || 1;
+      const nx = (t.x - a.x) / nl * px, ny = (t.y - a.y) / nl * px;
       return [{ x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny }];
     };
     const draw = ([a, b], label, color = ink, what = null, id = null) => {
@@ -5556,7 +5567,7 @@
         ctx.save();
         ctx.globalAlpha *= UPPER_MARK_ALPHA;
         spans.forEach(([u0, u1]) => {
-          if (u1 - u0 >= MARKED_RUN_MIN_FT) draw(lineAt(geo, u0, u1, front, SIZE_MARK_IN_PX), say(u1 - u0), ink, 'upper', fx.id);
+          if (u1 - u0 >= MARKED_RUN_MIN_FT) draw(lineToward(geo, u0, u1, front, geo.backOff, SIZE_MARK_IN_PX), say(u1 - u0), ink, 'upper', fx.id);
         });
         ctx.restore();
       }
