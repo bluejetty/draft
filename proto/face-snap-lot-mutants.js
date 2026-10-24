@@ -58,7 +58,7 @@ const MUTANTS = [
     with: "      lotAsked = true;\n",
     test: "a double-click on the SITE PLAN seat opens it too, and NOT NOW leaves the lot as it was" },
   { file: "MODEL.html", name: "a face corner beats the wall's own node",
-    find: "    return nearest(nodeEnds({ faces: false }))\n      || strongerPoint(at, nodeEnds({ faces: false }), actLikeNodes())?.v || null;\n",
+    find: "    return cornerUnderHand(at, nodes, corners)?.v || nearest(nodes)\n      || strongerPoint(at, nodes, corners)?.v || null;\n",
     with: "    return nearest(nodeEnds());\n",
     test: "SNAP: a press near a wall end lands exactly on it, and the orange donut marks it first" },
 ];

@@ -88,8 +88,8 @@ const MUTANTS = [
     // and the dimension re-lay are both written INTO the step after it has
     // been pushed, which needs a handle on it. The mutation is the same one
     // -- the siblings' snapshot dropped from the step undo walks.
-    find: `          before: [...md.before, ...(md.lockBefore || []), ...(md.follow || [])],`,
-    with: `          before: [...md.before, ...(md.follow || [])],`,
+    find: `          before: [...md.before, ...(md.lockBefore || []), ...(md.follow || []), ...(md.faceBefore || [])],`,
+    with: `          before: [...md.before, ...(md.follow || []), ...(md.faceBefore || [])],`,
     test: 'one Ctrl+Z puts BOTH floors back' },
 ];
 

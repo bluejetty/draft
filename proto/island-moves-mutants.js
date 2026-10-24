@@ -40,7 +40,7 @@ const MUTANTS = [
     test: 'the island dragged goes along the wall and off it, its sink and dishwasher riding' },
   { file: 'MODEL.html',
     name: 'the release writes no undo',
-    find: "            undoStack.push({ kind: 'props', edits: md.edits });\n",
+    find: "            undoStack.push(withLinks({ kind: 'props', edits: md.edits }));\n",
     with: "",
     test: 'the island dragged goes along the wall and off it, its sink and dishwasher riding' },
   { file: 'MODEL.html',
