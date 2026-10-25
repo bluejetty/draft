@@ -69,7 +69,7 @@ test('UPPERS OFF in the window saves on the piece; the tab shuts it; nothing pic
   await expect(win.locator('[data-prop-select="uppers"]'), 'the window shows what it saved').toHaveValue('off');
   // Empty sheet in front of the run, clear of both panes.
   await page.mouse.click(...at(7, 3.2));
-  await expect(win.locator('[data-objprop-title]')).toHaveText('PICK A FIXTURE OR CABINET');
+  await expect(win.locator('[data-objprop-title]')).toHaveText('PICK A FIXTURE, CABINET OR STAIR');
   await page.locator('#objprop-tab').click();
   await expect(win).toBeHidden();
 });

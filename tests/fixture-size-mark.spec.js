@@ -142,3 +142,21 @@ test('the tub in its alcove carries the length it fills; a typed size makes it a
   expect(tb.width).toBeCloseTo(5.5, 3);
   expect(tb.endWallId, 'no longer filling the alcove').toBeUndefined();
 });
+
+test('the shower\'s mark sits inside its lip, just in from the front edge, not out in the room', async ({ page }) => {
+  const { at } = await open(page);
+  const box = await page.locator('#plan').boundingBox();
+  const tag = (await tags(page)).find(t => t.id === 'sh');
+  expect(tag, 'the shower is marked').toBeTruthy();
+  const geo = await page.evaluate(d => {
+    const g = window.DraftFixtureGeometry.fixtureGeometry(d.walls, d.fixtures[0]);
+    return { back: g.backOff, front: g.frontOff, a: g.along };
+  }, await page.evaluate(() => ({ walls: drawing.walls, fixtures: drawing.fixtures.filter(f => f.id === 'sh') })));
+  // The back wall runs along x at z = 0, the shower out toward +z: the mark's
+  // z, read back off the screen, lies between the back and the front, near
+  // the front.
+  const [, y0] = at(0, 0), [, y1] = at(0, 1);
+  const z = (box.y + tag.cy - y0) / (y1 - y0);
+  expect(z, 'inside the front edge').toBeLessThan(geo.front);
+  expect(z, 'well clear of the back').toBeGreaterThan((geo.back + geo.front) / 2);
+});

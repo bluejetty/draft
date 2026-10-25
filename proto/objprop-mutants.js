@@ -20,7 +20,7 @@ const MUTANTS = [
     test: 'the tab hangs' },
   { file: 'model/15-panels.js',
     name: 'a click on a fixture leaves the window shut',
-    find: "    if (objPieces().length && !objOpen) { setObjOpen(true); return; }\n",
+    find: "    if ((objPieces().length || objStair()) && !objOpen) { setObjOpen(true); return; }\n",
     with: "",
     test: 'the tab hangs' },
   { file: 'model/15-panels.js',

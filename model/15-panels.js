@@ -1388,6 +1388,49 @@
         count => write({ winders: count })));
     }
 
+    // ITS WIDTH, ONE RISER MORE OR LESS, AND ITS RAIL (Movie, 25 Oct: "One
+    // PROPERTIES i'd like added is WIDTH", "ADD or SUBTRACT stair tread",
+    // inside the riser limits). Through editStair, so the well is cut again
+    // and the framing laid again with them; the panel and OBJ / PROP redrawn.
+    const redraw = () => { showSelectionProps(); renderObjProp(); };
+    const width = document.createElement('div');
+    width.dataset.propRow = 'width';
+    const wName = document.createElement('div');
+    wName.className = 'props-title';
+    wName.textContent = 'WIDTH (IN)';
+    const wInput = document.createElement('input');
+    wInput.type = 'number';
+    wInput.dataset.stairWidth = '';
+    wInput.min = String(STAIR_MIN_WIDTH_IN);
+    wInput.step = '1';
+    wInput.value = String(Math.round((Number(stair.widthFt) || 3) * 12 * 8) / 8);
+    wInput.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') wInput.blur(); });
+    wInput.addEventListener('change', () => { setStairWidth(stair, wInput.value); redraw(); });
+    width.append(wName, wInput);
+    const risers = document.createElement('div');
+    risers.dataset.propRow = 'risers';
+    const rName = document.createElement('div');
+    rName.className = 'props-title';
+    rName.textContent = 'RISERS';
+    const rRow = document.createElement('div');
+    rRow.className = 'chip-row';
+    const step = (face, by, key) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.textContent = face;
+      btn.dataset.stairRisers = key;
+      btn.addEventListener('click', () => { stepStairRisers(stair, by); redraw(); });
+      return btn;
+    };
+    const count = document.createElement('span');
+    count.dataset.stairRisersSaid = '';
+    count.textContent = `${layout.risers} @ ${F.formatInchesOnly(layout.riserIn)} \u00b7 RUN ${F.formatArchitecturalInches(layout.runFt * 12)}`;
+    rRow.append(step('\u2212', -1, 'less'), count, step('+', 1, 'more'));
+    risers.append(rName, rRow);
+    box.append(width, risers, propRow('RAIL', [['left', 'LEFT'], ['right', 'RIGHT'], ['both', 'BOTH'], ['none', 'NONE']],
+      stair.rail || 'left', id => { editStair(stair, st => { st.rail = id; return null; }); redraw(); }));
+
     // THE FLIGHT AS IT IS, in the painter's own words (drawStairs2D writes
     // `DN — {risers}R @ {riser}`), so the panel and the plan cannot disagree.
     // SHORT, and the length is load-bearing -- see the BEAM panel's note.
@@ -1993,6 +2036,11 @@
   const objWin = document.getElementById('objprop');
   let objOpen = false;
   const objPieces = () => selection.filter(entry => entry.type === 'fixture').map(entry => entry.item);
+  // AND A STAIR (Movie, 25 Oct: "so it a guy clicks on the STAIRCASE it will
+  // allow him to see the OBJ/PROP window with the STAIR info"): its PLAN and
+  // its SECTION in the two top boxes, the stair workspace's own panes, and
+  // its PROPERTIES under them. The two lower boxes are not a stair's.
+  const objStair = () => (selection.length === 1 && selection[0].type === 'stair' ? selection[0].item : null);
   const seatObjProp = () => {
     if (!objTab || !objWin) return;
     const rail = document.getElementById('right-rail');
@@ -2029,12 +2077,37 @@
         { line: skin['draw-fixture'], ground: fixtureFill(), text: skin['ink-quiet'] || skin['draw-fixture'] });
     });
   };
+  const drawObjStairViews = stair => {
+    const S = window.DraftStairSection;
+    objWin.querySelectorAll('[data-objprop-view]').forEach((cv, i) => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = cv.clientWidth || 140, h = cv.clientHeight || 110;
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      const c = cv.getContext('2d');
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, w, h);
+      if (!S || i > 1) return;
+      S.drawWorkspace(c, w, h, stair, { ...stairWorkspaceEnv(i === 0 ? 'plan' : 'section'), compact: true });
+    });
+  };
   const renderObjProp = () => {
     if (!objWin || !objOpen) return;
     const items = objPieces();
     const title = objWin.querySelector('[data-objprop-title]');
     const props = objWin.querySelector('[data-objprop-props]');
-    title.textContent = items.length ? `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}` : 'PICK A FIXTURE OR CABINET';
+    const stair = items.length ? null : objStair();
+    objWin.dataset.objpropKind = stair ? 'stair' : 'fixture';
+    const caps = stair ? ['PLAN', 'SECTION'] : ['TOP', 'FRONT', 'LEFT', 'RIGHT'];
+    objWin.querySelectorAll('figcaption').forEach((cap, i) => { if (caps[i]) cap.textContent = caps[i]; });
+    if (stair) {
+      const SG = window.DraftStairGeometry, F = window.DraftFormatters;
+      const layout = SG.stairCurrentLayout(stair, stairLevels());
+      title.textContent = `STAIR \u2014 ${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)} \u00b7 ${Math.round((Number(stair.widthFt) || 3) * 12)}" WIDE`;
+      props.replaceChildren(stairPropsNode(stair));
+      drawObjStairViews(stair);
+      return;
+    }
+    title.textContent = items.length ? `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}` : 'PICK A FIXTURE, CABINET OR STAIR';
     props.replaceChildren(...(items.length ? [fixturePropsNode(items)] : []));
     drawObjViews(items);
   };
@@ -2057,7 +2130,7 @@
   // A CLICK ON A FIXTURE OPENS IT; anything else leaves the window as it is,
   // saying what to pick.
   selectionWatchers.push(() => {
-    if (objPieces().length && !objOpen) { setObjOpen(true); return; }
+    if ((objPieces().length || objStair()) && !objOpen) { setObjOpen(true); return; }
     renderObjProp();
   });
 

@@ -1142,6 +1142,8 @@
     return { riseFt, landing: 'the garage slab' };
   };
 
+  // WHERE EACH STAIR'S WIDTH MARK WAS LAST DRAWN, in screen pixels.
+  let stairWidthMarks = [];
   const stairLevels = () => {
     const LA = window.DraftLevelAssembly;
     const LV = window.DraftLayerViews;
@@ -1233,6 +1235,46 @@
       partsFor: (stair, layout) => SG.stairPlanParts(stair, layout),
       formatInchesOnly: F.formatInchesOnly,
     });
+    // ITS WIDTH ON IT (Movie, 25 Oct: "add a STAIR WIDTH mark (36 / 42 / etc
+    // at the top of the stairs on the 2nd tread (1st dropped stair) with the
+    // bottom of text positioned over the 1st nosing"): in inches, across the
+    // flight's first tread down, upright. Kept where it was drawn so a
+    // double-click on it can change the width ("allow the user to change that
+    // number on the plan").
+    stairWidthMarks = [];
+    shown.filter(entry => entry.role !== 'below').forEach(({ stair }) => {
+      const layout = SG.stairCurrentLayout(stair, levels);
+      const run = SG.stairPlanParts(stair, layout).runs[0];
+      if (!run) return;
+      const step = SG.STAIR_TREAD_RUN_IN / 12;
+      const nose = { x: run.start.x + run.dir.x * step, z: run.start.z + run.dir.z * step };
+      const a = toS(run.start), b = toS(nose);
+      const dsx = b.x - a.x, dsy = b.y - a.y;
+      const len = Math.hypot(dsx, dsy);
+      if (len < 4) return;
+      const ux = dsx / len, uy = dsy / len;
+      // UP FOR THE TEXT IS BACK UP THE FLIGHT, so its foot rests on the nosing;
+      // turned over to stay readable, it hangs from the nosing instead.
+      let angle = Math.atan2(-ux, uy);
+      let baseline = 'alphabetic';
+      if (Math.abs(angle) > Math.PI / 2 + 1e-6) { angle += angle > 0 ? -Math.PI : Math.PI; baseline = 'top'; }
+      const text = String(Math.round((Number(stair.widthFt) || 3) * 12));
+      const px = Math.max(7, Math.min(16, len * 0.7));
+      const at = { x: b.x - ux * 1, y: b.y - uy * 1 };
+      ctx.save();
+      ctx.translate(baseline === 'top' ? b.x - ux * (len - 1) : at.x, baseline === 'top' ? b.y - uy * (len - 1) : at.y);
+      ctx.rotate(angle);
+      ctx.font = `600 ${px}px 'Barlow Condensed', system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = baseline === 'top' ? 'top' : 'alphabetic';
+      ctx.fillStyle = skin['draw-stair'] || '#5d4a8a';
+      ctx.fillText(text, 0, 0);
+      const w = ctx.measureText(text).width;
+      ctx.restore();
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      stairWidthMarks.push({ stair, x: mid.x, y: mid.y, w: w + 6, h: len, angle });
+    });
+    if (!thumbTarget) canvas.dataset.stairWidthMarks = JSON.stringify(stairWidthMarks.map(m => [Number(m.stair.id), Math.round(m.x), Math.round(m.y)]));
   };
 
   // THE DATUM MADE VISIBLE. Tier 2d anchored the grid to the datum but never
@@ -1729,19 +1771,16 @@
     return { x: mg.left, y: top, w: Math.max(40, cssW - mg.left - mg.right),
       h: Math.max(40, cssH - mg.bottom - top) };
   };
-  const paintStairWorkspace = () => {
-    const box = stairWorkspaceBox();
+  // WHAT THE STAIR PAINTER IS HANDED, for the workspace and for OBJ / PROP's
+  // two views of a picked stair alike.
+  const stairWorkspaceEnv = mode => {
     const F = window.DraftFormatters;
     const LA = window.DraftLevelAssembly;
     const level = (drawing.levels || []).find(l => Number(l.id) === Number(activeLevelId()));
-    ctx.save();
-    ctx.translate(box.x, box.y);
-    // Which pane is up, for anything reading the page rather than its pixels.
-    canvas.dataset.stairPane = workspaceStair() ? stairPane : 'empty';
-    window.DraftStairSection.drawWorkspace(ctx, box.w, box.h, workspaceStair(), {
+    return {
       levels: stairLevels(),
       levelName: level?.name,
-      mode: stairPane,
+      mode,
       printing: false,
       floorFt: levelId => LA.levelFloorFt(assemblyFor(levelId)),
       ftIn: ft => F.formatArchitecturalInches(ft * 12),
@@ -1750,7 +1789,15 @@
       floors: () => drawing.floors || [],
       openingsFor: (kind, id) => (drawing.surfaceOpenings || []).filter(o =>
         o.hostType === kind && String(o.hostId) === String(id) && (o.points || []).length >= 3),
-    });
+    };
+  };
+  const paintStairWorkspace = () => {
+    const box = stairWorkspaceBox();
+    ctx.save();
+    ctx.translate(box.x, box.y);
+    // Which pane is up, for anything reading the page rather than its pixels.
+    canvas.dataset.stairPane = workspaceStair() ? stairPane : 'empty';
+    window.DraftStairSection.drawWorkspace(ctx, box.w, box.h, workspaceStair(), stairWorkspaceEnv(stairPane));
     ctx.restore();
   };
 
