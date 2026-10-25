@@ -152,16 +152,21 @@ test('one kind at a time: another key swaps, the lit one lets go', async ({ page
   await expect(bar(page, 'select'), 'still picking').toHaveAttribute('data-picking', '');
 });
 
-test('DIMENSION picked: the box takes the dimensions; a plain box leaves them', async ({ page }) => {
+// A PLAIN BOX TAKES THE DIMENSIONS TOO (Movie, 25 Oct: "i'd like to be able
+// to SELECT the DIMS with the RECTANGULAR selection thingy ,, without needing
+// to choose SELECT & DIMENSION"); DIMENSION picked takes them alone.
+test('DIMENSION picked: the box takes only the dimensions; a plain box takes them with the rest', async ({ page }) => {
   const { at } = await open(page);
-  // A PLAIN BOX FIRST: everything but the dimension.
+  // A PLAIN BOX FIRST: the dimension goes with everything else.
   await boxAll(page, at);
   await page.locator('#delete').click();
   let d = await saved(page);
-  expect(d.dimensions, 'a plain box leaves the dimension').toHaveLength(1);
+  expect(d.dimensions, 'a plain box takes the dimension').toHaveLength(0);
   expect(d.walls).toHaveLength(0);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(150);
+  d = await saved(page);
+  expect(d.dimensions, 'UNDO puts it back').toHaveLength(1);
   await bar(page, 'select').click();
   await bar(page, 'dimension').click();
   await expect(bar(page, 'dimension'), 'the bar key glows too').toHaveAttribute('data-picked', '');
