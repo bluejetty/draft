@@ -457,6 +457,11 @@ if (!window.DraftTitleblock) {
     // title underneath (turn the sheet and they read as line one / line two).
     rot(info.projectName || 'NEW HOME', x + w * 0.32, arrowB, titleB, w * 0.3, 400, condensed, INK);
     rot(info.pageTitle || '', x + w * 0.68, arrowB, titleB, w * 0.22, 400, condensed, FAINT);
+    // WHERE THE PAGE TITLE STANDS, for a page that lets it be pressed to
+    // rename (LAYOUT, Movie 25 Oct): the title's half of its section.
+    if (typeof info.onPageTitle === 'function') {
+      info.onPageTitle({ x: x + w * 0.5, y: arrowB, w: w * 0.5, h: titleB - arrowB });
+    }
     divider(titleB);
 
     // Rotated address + owner: label column against the rail, words beside.
@@ -505,6 +510,9 @@ if (!window.DraftTitleblock) {
     // fills ~75% of the cell instead.
     const markH = markB - rowsB;
     let markY = rowsB + markH * 0.12;
+    // WHERE THE MARK'S CELL IS, for a page that opens a logo picker on it
+    // (LAYOUT, Movie 25 Oct: "double clicks on the logo area").
+    if (typeof info.onLogoCell === 'function') info.onLogoCell({ x, y: rowsB, w, h: markH });
     // ANY CANVAS-IMAGE SOURCE, not only an <img>. `drawImage` has always
     // taken a canvas; this read did not -- it asked for `naturalWidth`, which
     // only an <img> has, so a canvas passed in here drew nothing at all. The
@@ -608,6 +616,7 @@ if (!window.DraftTitleblock) {
 
     // Identity cell: logo beside the company name, stacked when narrow.
     const idCell = cells[0];
+    if (typeof info.onLogoCell === 'function') info.onLogoCell({ x: idCell.x, y, w: idCell.w, h });
     const logoH = h * 0.5;
     let textX = idCell.x + pad;
     if (logo && logo.complete && logo.naturalWidth) {

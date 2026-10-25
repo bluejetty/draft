@@ -452,6 +452,16 @@
      fill was says "this is taking your next press" on every skin. */
   #lay-add-viewport.arming { background-color: var(--surface-chip);
     background-image: var(--surface-chip-tex, none); color: var(--accent-mark); }
+  #lay-add-menu { margin-top:6px; display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  #lay-add-menu[hidden] { display:none; }
+  #lay-add-menu .lay-add-head { grid-column:1 / -1; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:10px; font-weight:600; letter-spacing:0.08em; color: var(--ink-quiet); margin-top:4px; }
+  #lay-add-menu button { border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary); font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:11px; letter-spacing:0.04em; text-transform:uppercase; padding:5px 6px; cursor:pointer;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #lay-add-menu button:hover { border-color: var(--accent); }
   #lay-deal { display:block; width:100%; margin-top:6px; text-align:center;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
@@ -594,6 +604,49 @@
   .lay-thumb:hover { border-color: var(--edge-panel); }
   .lay-thumb.on { border-color: var(--accent-mark); color: var(--ink-primary); }
   .lay-thumb canvas { display:block; width:var(--thumb-w, 64px); height:var(--thumb-h, 42px); }
+  /* A SHEET'S NAME AND ITS X (Movie, 25 Oct, marked in GIMP: "click on the
+     title ... a text box comes up and you can change the name it changes all
+     3 names. also add a X so the user can delete a page that is emtpty or
+     not neede. blue background with white x, red background in ruff
+     version"). The X wears the accent and its ink -- blue on day, red on
+     ROUGH -- at the right of each sheet row and the corner of each thumb. */
+  .lay-thumb { position:relative; }
+  [data-sheet-list] .lay-pick { position:relative; padding-right:26px; }
+  .lay-sheet-x { position:absolute; display:inline-flex; align-items:center; justify-content:center;
+    width:14px; height:14px; border-radius:2px; cursor:pointer;
+    background-color: var(--accent); color: var(--accent-ink);
+    font: 700 11px/1 'Barlow Condensed', system-ui, sans-serif; }
+  [data-sheet-list] .lay-sheet-x { right:6px; top:50%; transform:translateY(-50%); }
+  .lay-thumb .lay-sheet-x { right:1px; top:1px; }
+  .lay-sheet-x:hover { filter:brightness(1.15); }
+  [data-sheet-name] { cursor:text; }
+  #lay-logo-scrim { position:fixed; inset:0; z-index:45; background:rgba(0,0,0,0.35);
+    display:flex; align-items:center; justify-content:center; }
+  #lay-logo-scrim[hidden] { display:none; }
+  #lay-logo-pop { width:min(440px, calc(100vw - 32px)); padding:14px; border-radius:6px;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border:1px solid var(--edge-panel); box-shadow:0 16px 44px rgba(0,0,0,0.35); color: var(--ink-primary);
+    font-family:'Barlow Condensed', system-ui, sans-serif; }
+  .lay-logo-head { display:flex; justify-content:space-between; align-items:center;
+    font-weight:600; letter-spacing:0.08em; margin-bottom:10px; }
+  .lay-logo-head button { border:none; background:none; color: var(--ink-secondary); font-size:18px; cursor:pointer; }
+  #lay-logo-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  #lay-logo-grid button { display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px;
+    border:1px solid var(--edge-panel); border-radius:4px; background: var(--surface-chip); cursor:pointer;
+    color: var(--ink-primary); font: 600 11px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; }
+  #lay-logo-grid button.on { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #lay-logo-grid img { width:100%; height:52px; object-fit:contain; background:#fff; }
+  #lay-logo-grid .lay-logo-none { height:52px; width:100%; display:flex; align-items:center; justify-content:center;
+    background:#fff; color:#555; }
+  .lay-logo-foot { display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .lay-logo-foot button { border:1px solid var(--accent); background-color: var(--accent); color: var(--accent-ink);
+    font: 600 12px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; padding:7px 12px; cursor:pointer; }
+  [data-logo-note] { font-size:11px; color: var(--ink-quiet); }
+  [data-logo-note].bad { color:#b04050; }
+  #lay-rename { position:fixed; z-index:40; height:24px; padding:0 6px; box-sizing:border-box;
+    font: 600 12px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; text-transform:uppercase;
+    color: var(--ink-primary); background: var(--surface-panel);
+    border:1.5px solid var(--accent); border-radius:3px; outline:none; }
   .lay-thumb span { display:block; max-width:100%; overflow:hidden; white-space:nowrap;
     text-overflow:ellipsis; font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; }
@@ -744,6 +797,24 @@
 <!-- THE PRINT PACKAGE (Movie, 9 Oct): "we should do the PRINT function for
      LAYOUT for PDF and actual printing too" -- "allow the user to select which
      layouts to print in their 'package'", at 300 DPI. -->
+<!-- THE LOGO PICKER (Movie, 25 Oct: "when the user double clicks on the
+     logo area can it bring up a popup that allows the user to select one of
+     the available logos or allows the to add their logo jpg or other file to
+     the list and upload it"). Every mark on offer as a picture; ADD LOGO
+     takes a file, brings it down to size, trims its margin, and keeps it in
+     the company standard beside the ones uploaded on COMPANY STANDARDS. -->
+<div id="lay-logo-scrim" data-logo-picker hidden>
+  <div id="lay-logo-pop" role="dialog" aria-modal="true" aria-labelledby="lay-logo-title">
+    <div class="lay-logo-head"><span id="lay-logo-title">LOGO</span>
+      <button type="button" data-logo-close aria-label="Close">&times;</button></div>
+    <div id="lay-logo-grid" data-logo-grid></div>
+    <div class="lay-logo-foot">
+      <button type="button" data-logo-add>+ ADD LOGO…</button>
+      <input type="file" data-logo-upload accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden />
+      <span data-logo-note></span>
+    </div>
+  </div>
+</div>
 <div id="lay-print-scrim" hidden>
   <div id="lay-print" role="dialog" aria-modal="true" aria-label="Print">
     <div class="lay-head">
@@ -866,6 +937,15 @@
     <div id="lay-viewport-section">
       <div class="lay-section-title">Viewport</div>
       <button type="button" data-layout-add-viewport id="lay-add-viewport">+ Add Viewport</button>
+      <!-- WHAT TO BRING IN (Movie, 25 Oct: "the +add viewport button doesn't
+           seem to do anything yet can we activate it so users can bring in a
+           new viewport on an emply or page with extra space"). It placed the
+           LEVEL list's floor and nothing else, at whatever rung the whole
+           floor fitted -- on his 22-suite building a 1" = 30' sliver he took
+           for nothing. Now the press asks what: each floor's plan, the four
+           elevations, the drawn sections; the next press on the sheet puts
+           it there at the largest scale that fits the paper. -->
+      <div id="lay-add-menu" data-add-menu hidden></div>
       <!-- DEAL SHEETS -- the composer already existed and nothing could ask
            for it. _composeDefaultSet deals the whole set in Movie's order
            (1 Oct): SITE PLAN, ELEVATIONS, ROOF PLAN, 2ND FL PLAN, 2ND FLOOR,
@@ -1182,6 +1262,31 @@ const SCALES = [
   { label: '1" = 500\'', pif: 1/500 },
 ];
 
+// THE ARTWORK'S OWN BOX in a logo picture: what differs from the colour the
+// four corners agree on (transparent counts as one colour). Corners that
+// disagree mean the picture bleeds to its edge, and it is kept whole.
+const trimBox = (g, w, h) => {
+  const whole = { x: 0, y: 0, w, h };
+  let data;
+  try { data = g.getImageData(0, 0, w, h).data; } catch { return whole; }
+  const at = (x, y) => { const i = (y * w + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
+  const same = (a, b) => (a[3] <= 8 && b[3] <= 8)
+    || (Math.abs(a[3] - b[3]) <= 10 && Math.abs(a[0] - b[0]) <= 12
+      && Math.abs(a[1] - b[1]) <= 12 && Math.abs(a[2] - b[2]) <= 12);
+  const bg = at(0, 0);
+  if (![at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)].every(c => same(c, bg))) return whole;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if (same(at(x, y), bg)) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0 || x1 - x0 < 2 || y1 - y0 < 2) return whole;
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+};
+
 // A SCALE'S NAME, for any pif: the list's own label when it is on the list,
 // else one written the way the list writes its two kinds -- an engineer's
 // "1\" = N'" when a whole number of feet goes to the inch, an architect's
@@ -1393,7 +1498,8 @@ class Component extends PageLogic {
     activeSheet: 1,
     activeScale: WORKING_SCALE_IDX, // index into SCALES — 1/4" is the working plan scale
     activeLevelId: null,
-    addingViewport: false,
+    addingViewport: false,       // false, or the view { kind, levelId|elevId|cutId } the next press places
+    addMenuOpen: false,
     viewports: [],              // { id, kind, levelId|cutId|elevId, pif, sheet, xIn, yIn } — sheet inches
     sheets: [],                 // [{ title }] — sheet N is sheets[N-1]; empty = titles worked out from viewports
     nextViewportId: 1,
@@ -1521,8 +1627,15 @@ class Component extends PageLogic {
     // than a gesture nobody can see.
     this._canvas.addEventListener('dblclick', this._dcl = (e) => {
       if (this.state.addingViewport) return;
+      const pt = this._sheetPointIn(e);
+      const l = this._logoHitIn;
+      if (l && pt.xIn >= l.xIn && pt.xIn <= l.xIn + l.wIn && pt.yIn >= l.yIn && pt.yIn <= l.yIn + l.hIn) {
+        e.preventDefault();
+        this._openLogoPicker();
+        return;
+      }
       if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
-      const hit = this._viewportAt(this._sheetPointIn(e));
+      const hit = this._viewportAt(pt);
       if (!hit) return;
       this._draggingViewport = null;
       this._croppingViewport = null;
@@ -2592,6 +2705,11 @@ class Component extends PageLogic {
         return { id: vp.id, xIn: r.xIn, yIn: r.yIn, wIn: r.wIn, hIn: r.hIn };
       }));
     this._paintSheet(ctx, canvas, { zoom, panX, panY }, this.state.activeSheet);
+    // AND WHERE THE TITLEBLOCK'S PAGE TITLE AND LOGO CELL LANDED, in paper
+    // inches -- the two places a press renames the sheet or opens the logo
+    // picker, which a check can find no other way.
+    document.body.dataset.layoutTitleHit = JSON.stringify(this._titleHitIn || null);
+    document.body.dataset.layoutLogoHit = JSON.stringify(this._logoHitIn || null);
     // ARRIVING ON THE SITE PLAN SHEET IS THE QUESTION, and this is the one
     // place that sees every arrival -- a rail press, a re-deal, a sheet
     // removed from under the drafter, and the first paint after the set is
@@ -2700,7 +2818,15 @@ class Component extends PageLogic {
       ctx.lineWidth = 1;
       ctx.strokeRect(tbBox.x, tbBox.y, tbBox.w, tbBox.h);
     } else if (style) {
-      window.DraftTitleblock.draw(ctx, tbBox, style, this._titleblockInfo(sheet), this._logos?.[style.markId] || null);
+      // THE PAGE TITLE IS PRESSABLE ON THE DESK: the titleblock says where
+      // it drew it, in paper inches, for _onMouseDown to rename from.
+      const desk = !print;
+      if (desk) { this._titleHitIn = null; this._logoHitIn = null; }
+      const inches = r => ({ xIn: (r.x - panX) / zoom, yIn: (r.y - panY) / zoom, wIn: r.w / zoom, hIn: r.h / zoom });
+      const info = { ...this._titleblockInfo(sheet),
+        ...(desk ? { onPageTitle: r => { this._titleHitIn = inches(r); },
+          onLogoCell: r => { this._logoHitIn = inches(r); } } : {}) };
+      window.DraftTitleblock.draw(ctx, tbBox, style, info, this._logos?.[style.markId] || null);
     } else {
       ctx.strokeStyle = 'rgba(29,31,32,0.25)';
       ctx.lineWidth = 1;
@@ -2760,16 +2886,21 @@ class Component extends PageLogic {
   // REMOVE SHEET takes the sheet on the desk out of the set: its viewports go
   // with it, every later sheet moves up one so the numbers stay 1, 2, 3, and
   // the composer lets go. The last sheet cannot go -- a set is never empty.
-  _removeSheet() {
+  _removeSheet(gone = this.state.activeSheet) {
     const count = this._sheetCount();
     if (count <= 1) return;
-    const gone = this.state.activeSheet;
+    // A SHEET WITH DRAWINGS ON IT ASKS FIRST; an empty one just goes. UNDO
+    // brings either back.
+    const held = this._sheetViewports(gone).length;
+    if (held && !window.confirm(`Delete sheet ${gone} (${this._sheetTitle(gone)}) and the ${held} drawing${held === 1 ? '' : 's'} on it?`)) return;
+    const active = this.state.activeSheet;
     const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
     sheets.splice(gone - 1, 1);
     const viewports = this.state.viewports
       .filter(viewport => (viewport.sheet || 1) !== gone)
       .map(viewport => ((viewport.sheet || 1) > gone ? { ...viewport, sheet: viewport.sheet - 1 } : viewport));
-    this.setState({ sheets, viewports, activeSheet: Math.min(gone, count - 1),
+    const activeSheet = active > gone ? active - 1 : Math.min(active, count - 1);
+    this.setState({ sheets, viewports, activeSheet,
       selectedViewportId: null, auto: false }, () => { this._persistLayout(); this._draw(); });
   }
 
@@ -3195,10 +3326,17 @@ class Component extends PageLogic {
       return;
     }
     const hit = this._viewportAt(ptIn);
+    const t = this._titleHitIn;
     if (hit) {
       this._draggingViewport = { id: hit.id, dxIn: hit.xIn - ptIn.xIn, dyIn: hit.yIn - ptIn.yIn };
       this.setState({ selectedViewportId: hit.id }, () => this._draw());
       e.preventDefault();
+    } else if (t && ptIn.xIn >= t.xIn && ptIn.xIn <= t.xIn + t.wIn && ptIn.yIn >= t.yIn && ptIn.yIn <= t.yIn + t.hIn) {
+      e.preventDefault();
+      const r = this._canvas.getBoundingClientRect();
+      const { zoom, panX, panY } = this.state;
+      this._openRename(this.state.activeSheet, { left: r.left + t.xIn * zoom + panX - 70,
+        top: r.top + (t.yIn + t.hIn / 2) * zoom + panY, width: 160, height: 0 });
     } else if (this.state.selectedViewportId != null) {
       this.setState({ selectedViewportId: null }, () => this._draw());
     }
@@ -3300,7 +3438,7 @@ class Component extends PageLogic {
     }
     if (e.key === 'Escape') {
       if (this.state.addingViewport || this.state.selectedViewportId != null) {
-        this.setState({ addingViewport: false, selectedViewportId: null }, () => this._draw());
+        this.setState({ addingViewport: false, addMenuOpen: false, selectedViewportId: null }, () => this._draw());
       }
       return;
     }
@@ -3398,9 +3536,48 @@ class Component extends PageLogic {
   // rung is placed at the smallest rung rather than not placed at all -- the
   // sheet is the drafter's to arrange, and a viewport they can see and move
   // beats a press that silently did nothing.
+  // THE VIEWS ADD VIEWPORT OFFERS: each floor with walls, the four
+  // elevations, the drawn sections -- named the way their captions are.
+  _addChoices() {
+    const plans = (this._levelsWithWalls?.() || []).map(level =>
+      ({ kind: 'plan', levelId: level.id, label: `${level.name} PLAN` }));
+    const elevations = ['E1', 'E2', 'E3', 'E4'].map(elevId =>
+      ({ kind: 'elevation', elevId, label: `ELEVATION ${elevId}` }));
+    const sections = (this._cuts || []).map(cut =>
+      ({ kind: 'section', cutId: cut.id, label: `SECTION ${cut.name}` }));
+    return [['PLANS', plans], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections]]
+      .filter(([, list]) => list.length);
+  }
+
+  _paintAddMenu() {
+    const menu = document.querySelector('[data-add-menu]');
+    if (!menu) return;
+    menu.hidden = !this.state.addMenuOpen;
+    if (menu.hidden) return;
+    menu.textContent = '';
+    this._addChoices().forEach(([head, list]) => {
+      const title = document.createElement('div');
+      title.className = 'lay-add-head';
+      title.textContent = head;
+      menu.append(title);
+      list.forEach(({ label, ...view }) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.title = `${label} -- then click the sheet where it goes`;
+        button.dataset.addPick = view.kind === 'plan' ? `plan:${view.levelId}`
+          : view.kind === 'elevation' ? `elevation:${view.elevId}` : `section:${view.cutId}`;
+        button.addEventListener('click', () =>
+          this.setState({ addMenuOpen: false, addingViewport: view }, () => this._draw()));
+        menu.append(button);
+      });
+    });
+  }
+
   _placementPif(levelId) {
     const start = this.state.activeScale;
-    const foot = this._viewFootprintFt({ kind: 'plan', levelId });
+    const foot = this._viewFootprintFt(typeof levelId === 'object' && levelId
+      ? levelId : { kind: 'plan', levelId });
     if (!foot) return SCALES[start].pif;
     const region = this._composeRegionIn();
     const fits = pif => foot.wFt * pif <= region.w
@@ -3411,17 +3588,27 @@ class Component extends PageLogic {
     return SCALES[0].pif;
   }
 
+  _pickedPif(view) {
+    const foot = this._viewFootprintFt(view);
+    if (!foot) return SCALES[this.state.activeScale].pif;
+    return this._autoScaleFor([{ ...view, wFt: foot.wFt, hFt: foot.hFt }], this._composeRegionIn());
+  }
+
   _placeViewport(ptIn) {
+    const picked = typeof this.state.addingViewport === 'object' ? this.state.addingViewport : null;
     const levelId = this.state.activeLevelId;
-    if (!this._saved || levelId == null) {
+    if (!this._saved || (!picked && levelId == null)) {
       this.setState({ addingViewport: false });
       return;
     }
+    const view = picked || { kind: 'plan', levelId };
     const viewport = {
       id: this.state.nextViewportId,
-      kind: 'plan',
-      levelId,
-      pif: this._placementPif(levelId),
+      ...view,
+      // A PICKED VIEW TAKES THE SHEET SET'S OWN LADDER: the largest rung of
+      // its family that fits the paper, engineer's scales included, so a
+      // long building's elevation comes in at 1" = 30' and not off the sheet.
+      pif: picked ? this._pickedPif(view) : this._placementPif(view),
       xIn: ptIn.xIn,
       yIn: ptIn.yIn,
       sheet: this.state.activeSheet,
@@ -3617,14 +3804,7 @@ class Component extends PageLogic {
     document.querySelectorAll('[data-orient]').forEach(button =>
       button.classList.toggle('on', button.dataset.orient === orientation));
 
-    picks('[data-sheet-list]',
-      Array.from({ length: this._sheetCount() }, (_, i) => ({
-        key: i + 1,
-        label: `${i + 1}  ${this._sheetTitle(i + 1)}`,
-        on: this.state.activeSheet === i + 1,
-        data: { 'data-layout-sheet': String(i + 1) },
-      })),
-      sheet => this._setActiveSheet(sheet));
+    this._paintSheetList();
     // AND THE FOOT'S ARROWS ARE THE SAME LIST, so they grey at its ends. Here
     // rather than in `_draw`, because this is where the sheet list itself is
     // repainted -- one place that knows the stack changed, not two.
@@ -3719,8 +3899,10 @@ class Component extends PageLogic {
     }
 
     const addViewport = document.querySelector('[data-layout-add-viewport]');
-    addViewport.classList.toggle('arming', addingViewport);
-    addViewport.textContent = addingViewport ? 'CLICK THE SHEET…' : '+ Add Viewport';
+    addViewport.classList.toggle('arming', Boolean(addingViewport) || this.state.addMenuOpen);
+    this._paintAddMenu();
+    addViewport.textContent = this.state.addMenuOpen ? 'PICK A VIEW…'
+      : addingViewport ? 'CLICK THE SHEET…' : '+ Add Viewport';
 
     const deal = document.querySelector('[data-layout-deal-sheets]');
     deal.disabled = !this._saved;
@@ -3781,6 +3963,217 @@ class Component extends PageLogic {
   // ─── The sheet rail ────────────────────────────────────────────────────
   // Rebuilt only when the sheets' names or number change; otherwise this
   // moves the outline and asks each thumbnail whether its sheet changed.
+  // THE SHEET LIST: the number, the name, and the X. A press on the name of
+  // the sheet already open renames it; anywhere else on the row opens it.
+  _paintSheetList() {
+    const host = document.querySelector('[data-sheet-list]');
+    if (!host) return;
+    host.textContent = '';
+    const count = this._sheetCount();
+    for (let n = 1; n <= count; n += 1) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `lay-pick${this.state.activeSheet === n ? ' on' : ''}`;
+      button.setAttribute('data-layout-sheet', String(n));
+      const name = document.createElement('span');
+      name.dataset.sheetName = String(n);
+      name.textContent = this._sheetTitle(n);
+      button.append(`${n}  `, name);
+      if (count > 1) button.append(this._sheetX(n));
+      button.addEventListener('click', e => this._onSheetPress(e, n, name));
+      host.appendChild(button);
+    }
+  }
+
+  _sheetX(n) {
+    const x = document.createElement('span');
+    x.className = 'lay-sheet-x';
+    x.setAttribute('role', 'button');
+    x.dataset.removeSheetAt = String(n);
+    x.title = `Delete sheet ${n}`;
+    x.setAttribute('aria-label', `Delete sheet ${n}`);
+    x.textContent = '\u00d7';
+    return x;
+  }
+
+  _onSheetPress(e, n, nameEl) {
+    if (e.target.closest('[data-remove-sheet-at]')) {
+      e.stopPropagation();
+      this._removeSheet(n);
+      return;
+    }
+    if (this.state.activeSheet === n && e.target.closest('[data-sheet-name]')) {
+      this._openRename(n, nameEl.getBoundingClientRect());
+      return;
+    }
+    this._setActiveSheet(n);
+  }
+
+  // THE TEXT BOX, laid over the name that was pressed. ENTER or a press away
+  // keeps it, ESC lets it go; an empty name hands the sheet back to the one
+  // worked out from what is on it. One name, so the list, the thumbnail and
+  // the titleblock all read it.
+  _openRename(n, rect) {
+    document.getElementById('lay-rename')?.remove();
+    const input = document.createElement('input');
+    input.id = 'lay-rename';
+    input.dataset.sheetRename = String(n);
+    input.value = this._sheetTitle(n);
+    input.maxLength = 40;
+    Object.assign(input.style, { left: `${rect.left}px`, top: `${rect.top + rect.height / 2 - 12}px`,
+      width: `${Math.max(140, rect.width)}px` });
+    let done = false;
+    const close = keep => {
+      if (done) return;
+      done = true;
+      const title = input.value.trim().toUpperCase().slice(0, 40);
+      input.remove();
+      if (keep) this._renameSheet(n, title);
+    };
+    input.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); close(true); }
+      if (e.key === 'Escape') { e.preventDefault(); close(false); }
+    });
+    input.addEventListener('blur', () => close(true));
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+  }
+
+  _renameSheet(n, title) {
+    if (title === this._sheetTitle(n) && (title || !this.state.sheets[n - 1]?.title)) return;
+    const count = this._sheetCount();
+    const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
+    sheets[n - 1] = { ...sheets[n - 1], title };
+    this.setState({ sheets, auto: false }, () => { this._persistLayout(); this._draw(); });
+  }
+
+  // ── THE LOGO PICKER ─────────────────────────────────────────────────────
+  _openLogoPicker() {
+    const scrim = document.querySelector('[data-logo-picker]');
+    if (!scrim) return;
+    if (!this._logoWired) {
+      this._logoWired = true;
+      scrim.addEventListener('click', e => { if (e.target === scrim) this._closeLogoPicker(); });
+      scrim.querySelector('[data-logo-close]').addEventListener('click', () => this._closeLogoPicker());
+      scrim.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); this._closeLogoPicker(); } });
+      const upload = scrim.querySelector('[data-logo-upload]');
+      scrim.querySelector('[data-logo-add]').addEventListener('click', () => upload.click());
+      upload.addEventListener('change', () => {
+        const file = upload.files && upload.files[0];
+        upload.value = '';
+        if (file) this._addLogoFile(file);
+      });
+    }
+    this._logoNote('');
+    this._paintLogoGrid();
+    scrim.hidden = false;
+    scrim.querySelector('[data-logo-close]').focus();
+  }
+
+  _closeLogoPicker() {
+    const scrim = document.querySelector('[data-logo-picker]');
+    if (scrim) scrim.hidden = true;
+  }
+
+  _logoNote(text, bad = false) {
+    const note = document.querySelector('[data-logo-note]');
+    if (!note) return;
+    note.textContent = text;
+    note.classList.toggle('bad', bad);
+  }
+
+  _paintLogoGrid() {
+    const grid = document.querySelector('[data-logo-grid]');
+    if (!grid) return;
+    grid.textContent = '';
+    this._titleblockMarks().forEach(mark => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.logoPick = mark.id;
+      button.className = mark.id === this.state.titleblockMark ? 'on' : '';
+      if (mark.logoSrc) {
+        const img = document.createElement('img');
+        img.src = mark.logoSrc;
+        img.alt = '';
+        button.append(img);
+      } else {
+        const none = document.createElement('span');
+        none.className = 'lay-logo-none';
+        none.textContent = mark.company || mark.label;
+        button.append(none);
+      }
+      button.append(mark.label);
+      button.addEventListener('click', () => {
+        this._setTitleblockMark(mark.id);
+        this._closeLogoPicker();
+      });
+      grid.append(button);
+    });
+  }
+
+  // A FILE TO A LOGO: decoded, brought down to 512px, its margin trimmed off
+  // (a letterhead PNG is mostly white -- Movie, 14 Oct, "too much boarder"),
+  // PNG out so transparency survives, and kept in the active company
+  // standard as COMPANY nn -- the same record COMPANY STANDARDS writes, so
+  // it shows there too and can be cropped or renamed there.
+  async _addLogoFile(file) {
+    const T = window.DraftTitleblock;
+    const manager = window.DraftProfileManager;
+    if (!T || !manager) return;
+    const logos = this._companyLogos();
+    if (logos.length >= T.MAX_LOGOS) {
+      this._logoNote(`That is as many logos as one standard holds (${T.MAX_LOGOS}). Remove one in COMPANY STANDARDS first.`, true);
+      return;
+    }
+    let dataUrl;
+    try {
+      dataUrl = await new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image this browser can read.')); };
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          const iw = img.naturalWidth || 300, ih = img.naturalHeight || 300;
+          const k = Math.min(1, 512 / Math.max(iw, ih));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(iw * k));
+          c.height = Math.max(1, Math.round(ih * k));
+          const g = c.getContext('2d');
+          g.drawImage(img, 0, 0, c.width, c.height);
+          const box = trimBox(g, c.width, c.height);
+          const out = document.createElement('canvas');
+          out.width = box.w; out.height = box.h;
+          out.getContext('2d').drawImage(c, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+          resolve(out.toDataURL('image/png'));
+        };
+        img.src = url;
+      });
+    } catch (error) {
+      this._logoNote(error.message || 'That logo could not be read.', true);
+      return;
+    }
+    const taken = new Set(logos.map(logo => logo.seq).filter(Boolean));
+    let seq = 1;
+    while (taken.has(seq)) seq += 1;
+    const label = `COMPANY ${String(seq).padStart(2, '0')}`;
+    const id = `L${Date.now().toString(36)}`;
+    const next = T.normaliseCompanyLogos([...logos, { id, label, dataUrl, seq }]);
+    if (next.length === logos.length) {
+      this._logoNote('That logo is too big even after shrinking -- try a simpler image.', true);
+      return;
+    }
+    const active = manager.getActive('standards');
+    const content = active?.content || {};
+    manager.saveActive(manager.createPackage('standards', active?.name || manager.defaultName(),
+      { ...content, model: { ...(content.model || {}), companyLogos: next } }));
+    this._loadTitleblockLogos();
+    this._setTitleblockMark(`${T.LOGO_ID_PREFIX}${id}`);
+    this._paintLogoGrid();
+    this._logoNote(`${label} added -- rename or crop it in COMPANY STANDARDS.`);
+  }
+
   _paintRail() {
     const grid = document.querySelector('[data-sheet-rail-grid]');
     if (!grid || !this._drawingChecked) return;
@@ -3795,9 +4188,11 @@ class Component extends PageLogic {
         button.dataset.sheetThumb = String(i + 1);
         button.title = label;
         const name = document.createElement('span');
+        name.dataset.sheetName = String(i + 1);
         name.textContent = label;
         button.append(document.createElement('canvas'), name);
-        button.addEventListener('click', () => this._setActiveSheet(i + 1));
+        if (count > 1) button.append(this._sheetX(i + 1));
+        button.addEventListener('click', e => this._onSheetPress(e, i + 1, name));
         return button;
       }));
       grid.dataset.signature = signature;
@@ -4435,9 +4830,11 @@ class Component extends PageLogic {
     document.querySelectorAll('[data-orient]').forEach(button =>
       button.addEventListener('click', () => this._setOrientation(button.dataset.orient)));
     on('[data-layout-add-sheet]', 'click', () => this._addSheet());
-    on('[data-layout-remove-sheet]', 'click', () => this._removeSheet());
+    on('[data-layout-remove-sheet]', 'click', () => this._removeSheet(this.state.activeSheet));
     on('[data-layout-add-viewport]', 'click', () => this.setState(
-      { addingViewport: !this.state.addingViewport }, () => this._draw()));
+      this.state.addingViewport || this.state.addMenuOpen
+        ? { addingViewport: false, addMenuOpen: false }
+        : { addMenuOpen: true }, () => this._draw()));
     on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());
     on('[data-layout-dxf]', 'click', () => this._saveDxfSheets());
     // The panel's PRINT and the bone open the same dialog; neither is a
