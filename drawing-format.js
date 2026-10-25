@@ -1229,6 +1229,9 @@ if (!window.DraftDrawingFormat) {
       // the TOP leg before the landing — the entry L's short flight.
       // Absent means today's behavior exactly; old files are unaffected.
       const splitTreads = Number(stair?.splitTreads);
+      // THE DRAFTER'S OWN RISER COUNT (Movie, 25 Oct: OBJ / PROP's - / +),
+      // written only when set; absent, the fewest the rise allows, as before.
+      const riserCount = Number(stair?.riserCount);
       return {
         id,
         start,
@@ -1245,6 +1248,7 @@ if (!window.DraftDrawingFormat) {
         winders: shape === 'L' ? oneOf(Number(stair?.winders), [0, 2, 3], 0) : 0,
         auto: stair?.auto === true,
         ...(Number.isInteger(splitTreads) && splitTreads > 0 ? { splitTreads } : {}),
+        ...(Number.isInteger(riserCount) && riserCount > 0 ? { riserCount } : {}),
         // LOCKED TO A WALL'S INSIDE FACE (Movie, 18 Oct): which wall each side
         // of a straight flight lies on, so a thicker wall moves that side and
         // narrows the flight. Written only when present.

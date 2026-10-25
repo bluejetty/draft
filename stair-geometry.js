@@ -26,7 +26,10 @@
 // it an object literal.
 if (!window.DraftStairGeometry) {
 (() => {
-  const STAIR_MAX_RISER_IN = 7.875;    // 7 7/8" maximum riser
+  const STAIR_MAX_RISER_IN = 7.875;    // 7 7/8" maximum riser (200 mm)
+  // AND A FLOOR UNDER IT (Movie, 25 Oct: "make min rise 6""): the shortest
+  // riser the drafter's - / + may make.
+  const STAIR_MIN_RISER_IN = 6;
   const STAIR_TREAD_RUN_IN = 10;       // 10" run per tread
   const STAIR_RISER_FACE_IN = 11;      // nosing to riser face
   const STAIR_LANDING_MIN_FT = 3;      // 36" x 36" minimum CLEAR landing
@@ -46,9 +49,12 @@ if (!window.DraftStairGeometry) {
 
   // Even risers under the 7 7/8" maximum at a 10" tread run; one fewer
   // tread than risers because the upper floor itself is the top tread.
-  const stairLayout = (riseFt) => {
+  // `count`, when given, is the drafter's own number of risers (the stair's
+  // riserCount, set with OBJ / PROP's - / +); the rise is shared among them.
+  const stairLayout = (riseFt, count = null) => {
     const riseIn = Math.max(0, (riseFt || 0) * 12);
-    const risers = Math.max(1, Math.ceil(riseIn / STAIR_MAX_RISER_IN));
+    const risers = Number.isInteger(count) && count > 0 ? count
+      : Math.max(1, Math.ceil(riseIn / STAIR_MAX_RISER_IN));
     const riserIn = riseIn / risers;
     const treads = Math.max(1, risers - 1);
     return { riseFt: riseIn / 12, risers, riserIn, treads, runFt: treads * STAIR_TREAD_RUN_IN / 12 };
@@ -98,7 +104,23 @@ if (!window.DraftStairGeometry) {
   // back to the rise captured at placement if its level goes away.
   const stairCurrentLayout = (stair, levels) => {
     const descent = stairDescent(stair.levelId, levels);
-    return stairLayout(descent && descent.riseFt > 0 ? descent.riseFt : stair.riseFt);
+    const riseFt = descent && descent.riseFt > 0 ? descent.riseFt : stair.riseFt;
+    // THE DRAFTER'S COUNT HOLDS while it keeps every riser inside the limits;
+    // a floor height changed under it so far that it would not falls back to
+    // the fewest that fit, rather than drawing a stair no code allows.
+    const range = stairRiserRange(riseFt);
+    const count = Number.isInteger(stair.riserCount) && range
+      && stair.riserCount >= range.fewest && stair.riserCount <= range.most ? stair.riserCount : null;
+    return stairLayout(riseFt, count);
+  };
+  // HOW MANY RISERS A RISE MAY TAKE: the fewest that keep each under the
+  // maximum, the most that keep each over the minimum. Null with no rise.
+  const stairRiserRange = (riseFt, { maxIn = STAIR_MAX_RISER_IN, minIn = STAIR_MIN_RISER_IN } = {}) => {
+    const riseIn = (riseFt || 0) * 12;
+    if (!(riseIn > 0)) return null;
+    const fewest = Math.max(1, Math.ceil(riseIn / maxIn - 1e-9));
+    const most = Math.max(fewest, Math.floor(riseIn / minIn + 1e-9));
+    return { fewest, most };
   };
 
   // How a turned shape spends its treads. The one landing (flat, or 2-3
@@ -285,10 +307,12 @@ if (!window.DraftStairGeometry) {
     stairLandFt,
     stairDescent,
     stairCurrentLayout,
+    stairRiserRange,
     stairShapeSplit,
     stairEndFor,
     stairPlanParts,
     STAIR_MAX_RISER_IN,
+    STAIR_MIN_RISER_IN,
     STAIR_TREAD_RUN_IN,
     STAIR_RISER_FACE_IN,
     STAIR_LANDING_MIN_FT,

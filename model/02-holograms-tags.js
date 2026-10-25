@@ -516,6 +516,8 @@
   // HOW FAR IN FROM AN EDGE a mark that sits INSIDE its piece is drawn: the
   // 9px text centred this far in has its foot about a pixel off the edge.
   const SIZE_MARK_IN_PX = 7;
+  // The shower pan's curb, as render-2d.js draws it (its `inset`).
+  const SHOWER_CURB_FT = 0.15;
   // THE PIECES WHOSE WIDTH IS SAID ON THEIR FRONT EDGE (Movie, 24 Oct:
   // "kitchen cabinet width on front edge, bottom of numbers closest to
   // edge"). The sink base says it in its bowl, the uppers inside their own
@@ -715,6 +717,13 @@
           const reach = Math.min(len, ctx.measureText(label).width + 8);
           const end = { x: from.x + (to.x - from.x) / len * reach, y: from.y + (to.y - from.y) / len * reach };
           take(fx, label, draw([from, end], label));
+        } else if (fx.kind === 'shower' || fx.kind === 'stall') {
+          // INSIDE THE LIP (Movie, 25 Oct: "on the shower can the SIZE mark
+          // be brought to the inside lip of the shower (right now its on the
+          // outside of the lip"): just in from the pan's curb line, which
+          // render-2d draws SHOWER_CURB_FT in from the front edge.
+          const curb = geo.frontOff - (fx.side === -1 ? -1 : 1) * SHOWER_CURB_FT;
+          take(fx, label, draw(lineAt(geo, a0, a1, curb, SIZE_MARK_IN_PX), label));
         } else {
           take(fx, label, draw(lineAt(geo, a0, a1, geo.frontOff, -SIZE_MARK_OFF_PX), label));
         }

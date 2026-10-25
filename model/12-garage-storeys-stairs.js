@@ -3697,6 +3697,86 @@
     commitHandStair(cursorWorld);
   });
 
+  // ── A PLACED STAIR CHANGED (Movie, 25 Oct) ────────────────────────────
+  //
+  // OBJ / PROP's stair fields -- "One PROPERTIES i'd like added is WIDTH",
+  // "ADD or SUBTRACT stair tread", the shape, its turn, its rail -- and the
+  // width mark on the plan all come through here: the change, then its well
+  // cut again where the stair now stands and its framing laid again, and one
+  // UNDO for the lot. A stair the drafter has touched is his, not AUTO
+  // STAIR's suggestion any more.
+  const STAIR_MIN_WIDTH_IN = 36;
+  const editStair = (stair, change) => {
+    const before = { ...stair, start: { ...stair.start }, end: { ...stair.end },
+      ...(stair.lock ? { lock: JSON.parse(JSON.stringify(stair.lock)) } : {}) };
+    const hole = stairWellOf(stair).hole;
+    const holeBefore = hole ? { ...hole } : null;
+    const why = change(stair);
+    if (why) {
+      Object.keys(stair).forEach(key => { if (!(key in before)) delete stair[key]; });
+      Object.assign(stair, before);
+      sayOnStrip(why);
+      return false;
+    }
+    delete stair.auto;
+    const SG = window.DraftStairGeometry;
+    const layout = SG.stairCurrentLayout(stair, stairLevels());
+    stair.risers = layout.risers;
+    const end = SG.stairEndFor(stair, layout);
+    stair.end = { x: end.x, y: 0, z: end.z };
+    const ring = hole && stairOpeningFootprint(stair);
+    if (ring && ring.length >= 3) hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
+    const reframed = reframeStair(stair);
+    undoStack.push({ kind: 'batch', steps: [
+      { kind: 'props', edits: [{ item: stair, before }, ...(hole ? [{ item: hole, before: holeBefore }] : [])] },
+      ...reframed.steps] });
+    markDirty();
+    paint();
+    return true;
+  };
+  // ITS WIDTH, IN INCHES: a side that lies on a wall's face stays on it and
+  // the flight grows away from it; free on both sides, it grows both ways.
+  const setStairWidth = (stair, inches) => {
+    const want = Math.round(Number(inches) * 8) / 8;
+    if (!(want >= STAIR_MIN_WIDTH_IN)) {
+      sayOnStrip(`STAIR WIDTH -- ${STAIR_MIN_WIDTH_IN}" at the least.`);
+      return false;
+    }
+    return editStair(stair, st => {
+      const frame = stairFrame(st);
+      const lock = stairLockNow(st);
+      const half = (Number(st.widthFt) || 3) / 2, now = want / 24;
+      const shift = lock?.left && !lock?.right ? half - now : lock?.right && !lock?.left ? now - half : 0;
+      if (frame && shift) {
+        st.start = { ...st.start, x: st.start.x + frame.n.x * shift, z: st.start.z + frame.n.z * shift };
+        st.end = { ...st.end, x: st.end.x + frame.n.x * shift, z: st.end.z + frame.n.z * shift };
+      }
+      st.widthFt = want / 12;
+      return null;
+    }) && (sayOnStrip(`STAIR ${want}" wide -- its well cut again. UNDO puts it back.`), true);
+  };
+  // ONE RISER MORE OR LESS: the rise is the floor's, so each riser takes its
+  // share -- more risers, each lower and the flight a tread longer; fewer,
+  // each higher. Never outside the minimum and the maximum.
+  const stepStairRisers = (stair, by) => {
+    const SG = window.DraftStairGeometry;
+    const layout = SG.stairCurrentLayout(stair, stairLevels());
+    const range = SG.stairRiserRange(layout.riseFt);
+    const next = layout.risers + by;
+    const F = window.DraftFormatters;
+    if (!range || next < range.fewest) {
+      sayOnStrip(`STAIR -- ${next} risers would be ${F.formatInchesOnly(layout.riseFt * 12 / next)} each, over the ${F.formatInchesOnly(SG.STAIR_MAX_RISER_IN)} most.`);
+      return false;
+    }
+    if (next > range.most) {
+      sayOnStrip(`STAIR -- ${next} risers would be ${F.formatInchesOnly(layout.riseFt * 12 / next)} each, under the ${F.formatInchesOnly(SG.STAIR_MIN_RISER_IN)} least.`);
+      return false;
+    }
+    const done = editStair(stair, st => { st.riserCount = next; return null; });
+    if (done) sayOnStrip(`STAIR ${next} risers at ${F.formatInchesOnly(layout.riseFt * 12 / next)} -- its run ${F.formatArchitecturalInches(Math.max(1, next - 1) * SG.STAIR_TREAD_RUN_IN)}. UNDO puts it back.`);
+    return done;
+  };
+
   // ── A BILEVEL'S TWO FLIGHTS ────────────────────────────────────────────
   //
   // Movie, 2 Oct: from the landing "2 sets of stairs 1 going to main fl and

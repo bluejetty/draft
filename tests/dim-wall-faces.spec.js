@@ -104,3 +104,37 @@ test('a click on a face, outside the wall, is that face alone', async ({ page })
   await expect(strip(page)).toContainText('the next point');
   await expect(strip(page)).not.toContainText('both faces');
 });
+
+// AND THE DIMENSION STICKS TO THE WALL (Movie, 25 Oct: "when the WALL is
+// selected in the middle and both sides dimensioned can those dimensions
+// 'STICK to the wall"): the wall moved 2' across, its dimension goes with it.
+test('the wall moved across takes its both-faces dimension with it, and UNDO brings both back', async ({ page }) => {
+  let { at } = await open(page);
+  at = await zoomOn(page, at, 9.77, 0);
+  await armDimension(page);
+  await press(page, at, 10 - WALL_FT / 2, 0);
+  await page.keyboard.press(' ');
+  await press(page, at, 9.77, 1.5);
+  await page.keyboard.press('Enter');
+  await expect(strip(page)).toContainText('done');
+  const made = hand(await saved(page));
+  expect(made[0].startRef?.wallId, 'tied to the wall').toBe('e');
+  // THE WALL SLID 2' WEST, its corners with it, the way a drag leaves it.
+  await page.evaluate(() => {
+    const e = drawing.walls.find(w => w.id === 'e');
+    const before = [e.start, e.end].map(vtx => ({ vtx, x: vtx.x, z: vtx.z }));
+    e.start.x -= 2; e.end.x -= 2;
+    undoStack.push({ kind: 'rotate', before, detached: [] });
+    markDirty();
+    paint();
+  });
+  const moved = hand(await saved(page));
+  const xs = [moved[0].start.x, moved[0].end.x].map(r3).sort((a, b) => a - b);
+  expect(xs, 'two feet west with the wall').toEqual([r3(8 - WALL_FT), 8]);
+  expect(r3(moved[0].start.z), 'on its own row still').toBe(r3(made[0].start.z));
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  const back = hand(await saved(page));
+  expect([back[0].start.x, back[0].end.x].map(r3).sort((a, b) => a - b)).toEqual([r3(10 - WALL_FT), 10]);
+});

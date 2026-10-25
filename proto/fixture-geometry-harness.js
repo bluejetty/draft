@@ -202,6 +202,24 @@ check('a fixture on a wall that does not exist has no geometry',
 check('a fixture on a degenerate wall has no geometry',
   G => [G.fixtureGeometry([W('tiny', 0, 0, 0.005, 0)], sink({ wallId: 'tiny' })), null]);
 
+// ROOM BEHIND THE LAUNDRY (Movie, 25 Oct: "can we add a 7" space behind
+// them where they attach to the wall"): a washer or a dryer backs 7" off the
+// face; its ends keep the half inch; a sink keeps the half inch behind it.
+const laundry = kind => ({ kind, wallId: 'w1', offset: 5, width: 2.25, depth: 2.25, side: 1 });
+check('a washer stands 7" off the wall', G => {
+  const g = G.fixtureGeometry([east], laundry('washer'));
+  return [round(g.backOff - g.faceOff), round(7 / 12)];
+});
+check('a dryer stands 7" off the wall', G => {
+  const g = G.fixtureGeometry([east], laundry('dryer'));
+  return [round(g.backOff - g.faceOff), round(7 / 12)];
+});
+check('a washer keeps the half inch at its ends', G => [round(G.fixtureGeometry([east], laundry('washer')).wallGap), round(0.5 / 12)]);
+check('a sink still stands the half inch off', G => {
+  const g = G.fixtureGeometry([east], sink());
+  return [round(g.backOff - g.faceOff), round(0.5 / 12)];
+});
+
 // ── runMates, islandHolding, islandPieces, slideClamp: a run, an island, a slide ──
 //
 // Movie, 20 Oct: "move sink / dw in island back an forth / and they shouldn't
@@ -394,8 +412,12 @@ const MUTATIONS = [
   ['a fixture wider than its wall is cut down to it again',
     s => s.replace('const width = Math.max(fixture.width, 0.5);',
       'const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));')],
+  ['the washer backs on the half inch, like the rest',
+    s => s.replace("const BACK_GAP_FT = { washer: 7 / 12, dryer: 7 / 12 };", 'const BACK_GAP_FT = {};')],
+  ['the back gap is the half inch everywhere',
+    s => s.replace("fixture.side * ((fixture.standoff || 0) + backGap);", 'fixture.side * ((fixture.standoff || 0) + wallGap);')],
   ['the standoff is dropped, so an island sits against the wall',
-    s => s.replace("fixture.side * ((fixture.standoff || 0) + wallGap);", 'fixture.side * wallGap;')],
+    s => s.replace("fixture.side * ((fixture.standoff || 0) + backGap);", 'fixture.side * backGap;')],
   ['both sides back onto the same face',
     s => s.replace('const faceOff = fixture.side === -1 ? frame.startOff : frame.endOff;\n    const wallGap', 'const faceOff = frame.endOff;\n    const wallGap')],
   ['the fixture depth is ignored',

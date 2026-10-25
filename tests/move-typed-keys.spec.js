@@ -32,12 +32,12 @@ const drawing = () => ({
   levelLocks: [], underlays: [],
 });
 
-async function open(page) {
+async function open(page, file = drawing()) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
+  }, { bucket: BUCKET, f: file });
   await page.goto('/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
@@ -159,4 +159,35 @@ test('with nothing in hand, L is still the LINE key', async ({ page }) => {
   await page.keyboard.press('l');
   await expect(lineKey(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#frozen-length')).not.toBeFocused();
+});
+
+// ENTER WITH THE BUTTON STILL DOWN (Movie, 25 Oct: "press 0-2 and press
+// ENTER and at that point i'd like the wall to move 2 inchers over in the
+// direction i chose, but it doesn't do it at that point"): ENTER ends the
+// drag there and moves it the typed length; the button let go after adds
+// nothing.
+test('a lone wall dragged under SELECT, L, 0-2 and ENTER mid-drag: two inches over, there and then', async ({ page }) => {
+  const file = drawing();
+  file.groups = [];
+  file.walls = [W('free', [0, 0], [0, 8]), W('far', [12, 0], [12, 8])];
+  const { at } = await open(page, file);
+  await lightTsquare(page);
+  await page.mouse.click(...at(0, 4));
+  await expect(page.locator('#delete')).toBeVisible();
+  await page.mouse.move(...at(0, 4));
+  await page.mouse.down();
+  await page.mouse.move(...at(3, 4.3), { steps: 6 });
+  await page.keyboard.press('l');
+  await expect(page.locator('#frozen-length')).toBeFocused();
+  await page.keyboard.type('0-2');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#strip-message'), 'moved on the ENTER, button still down').toContainText(/[Mm]oved/);
+  const mid = await page.evaluate(() => drawing.walls.find(w => w.id === 'free').start.x);
+  expect(mid, 'two inches across, before the button comes up').toBeCloseTo(2 / 12, 6);
+  await page.mouse.move(...at(6, 4.3), { steps: 3 });
+  await page.mouse.up();
+  const d = await saved(page);
+  expect(wall(d, 'free').start.x, 'and the release added nothing').toBeCloseTo(2 / 12, 6);
+  expect(wall(d, 'free').start.z).toBeCloseTo(0, 6);
+  expect(wall(d, 'free').end.x).toBeCloseTo(2 / 12, 6);
 });

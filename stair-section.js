@@ -442,7 +442,7 @@ if (!window.DraftStairSection) {
   // The whole workspace: paper, both panes and the rule between them. Null
   // `stair` paints the empty-state line instead. `env`: floorFt(levelId),
   // ftIn(ft), inchesOnly(in), walls(), floors(), openingsFor(kind, id),
-  // printing, mode ('split' | 'section' | 'plan'), levelName.
+  // printing, mode ('split' | 'section' | 'plan'), levelName, compact.
   const drawWorkspace = (ctx, w, h, stair, env) => {
     ctx.fillStyle = '#fafafa';
     ctx.fillRect(0, 0, w, h);
@@ -459,14 +459,23 @@ if (!window.DraftStairSection) {
     const paneEnv = { ...env,
       header: (c, rect, label) => paneHeader(c, rect, label, frame.mode, env.printing) };
     const { rects, dev, uToX, pxPerFt } = frame;
-    if (rects.section) drawSectionPane(ctx, rects.section, stair, layout, descent, dev, uToX, pxPerFt, frame.sectionYOf, paneEnv);
-    if (rects.plan) drawPlanPane(ctx, rects.plan, stair, layout, dev, uToX, pxPerFt, frame.planYOf, paneEnv);
-    if (rects.section && rects.plan) {
-      ctx.strokeStyle = 'rgba(29,31,32,0.25)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, rects.plan.y - 3); ctx.lineTo(w, rects.plan.y - 3);
-      ctx.stroke();
+    // COMPACT, for OBJ / PROP's little boxes (Movie, 25 Oct: "can we use 2 of
+    // the windows to show plan and sections views"): the drawing alone. At
+    // 140px the captions, notes and site rule only crowd each other, and the
+    // window says the figures in its own title and PROPERTIES.
+    if (env.compact) ctx.fillText = () => {};
+    try {
+      if (rects.section) drawSectionPane(ctx, rects.section, stair, layout, descent, dev, uToX, pxPerFt, frame.sectionYOf, paneEnv);
+      if (rects.plan) drawPlanPane(ctx, rects.plan, stair, layout, dev, uToX, pxPerFt, frame.planYOf, paneEnv);
+      if (rects.section && rects.plan) {
+        ctx.strokeStyle = 'rgba(29,31,32,0.25)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, rects.plan.y - 3); ctx.lineTo(w, rects.plan.y - 3);
+        ctx.stroke();
+      }
+    } finally {
+      if (env.compact) delete ctx.fillText;
     }
     return frame;
   };

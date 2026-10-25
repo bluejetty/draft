@@ -52,6 +52,11 @@ const MUTANTS = [
     find: "    if (lengthBox.disabled && !mid) return;\n",
     with: "",
     test: 'with nothing in hand, L is still the LINE key' },
+  { file: 'model/14-promotion-tools.js',
+    name: 'ENTER with the button down waits for the release again (Movie, 25 Oct)',
+    find: "    if (typedMidDrag && dragInHand()) {\n",
+    with: "    if (false) {\n",
+    test: 'a lone wall dragged under SELECT' },
 ];
 
 const run = name => {

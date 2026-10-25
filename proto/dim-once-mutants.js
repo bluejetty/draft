@@ -32,10 +32,10 @@ const MUTANTS = [
     with: "    rulerFrom = null;\n",
     test: 'ESC alone abandons the string' },
   { file: 'model/15-panels.js',
-    name: 'the last end places nothing at the mouse (Movie, 25 Oct)',
-    find: "    if (dimPlacing && cursorWorld && dimString(dimPoints, cursorWorld).length) {\n",
-    with: "    if (false) {\n",
-    test: 'one line there, and done' },
+    name: 'the last end lays a line at the mouse again (Movie, 25 Oct: "don\'t add another")',
+    find: "  const dimOnceEnds = () => {\n    dimLinesStale();\n",
+    with: "  const dimOnceEnds = () => {\n    dimLinesStale();\n    if (dimPlacing && cursorWorld && dimString(dimPoints, cursorWorld).length) dimPress(cursorWorld);\n",
+    test: 'the RIGHT button ends the points' },
 ];
 
 const run = name => {

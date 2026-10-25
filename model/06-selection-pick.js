@@ -335,11 +335,13 @@
           toWorld(b.right, b.bottom), toWorld(b.left, b.bottom)]] });
       });
     }
-    // DIMENSIONS ONLY WHEN DIMENSION IS PICKED (Movie, 19 Oct: "the SELECT
-    // rectangle will be able to select dimensions to delete"). A plain box
-    // leaves them, so boxing walls to delete them keeps the strings. Each is
-    // the line as drawn, where the drafter sees it.
-    if (selectFilter === 'dimension') {
+    // DIMENSIONS IN THE PLAIN BOX TOO (Movie, 25 Oct: "i'd like to be able to
+    // SELECT the DIMS with the RECTANGULAR selection thingy ,, without needing
+    // to choose SELECT & DIMENSION ... jus twhen general SELECT is on"). They
+    // used to come only with DIMENSION picked (19 Oct), so a box over walls
+    // kept their strings; DIMENSION picked still takes them alone. Each is the
+    // line as drawn, where the drafter sees it.
+    if (filterAllows('dimension')) {
       shownDimensions().forEach(item => {
         const line = dimDrawnLine(item);
         if (line) out.push({ type: 'dimension', item, parts: [line.map(p => toWorld(p.x, p.y))], open: true });

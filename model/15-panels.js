@@ -1388,6 +1388,49 @@
         count => write({ winders: count })));
     }
 
+    // ITS WIDTH, ONE RISER MORE OR LESS, AND ITS RAIL (Movie, 25 Oct: "One
+    // PROPERTIES i'd like added is WIDTH", "ADD or SUBTRACT stair tread",
+    // inside the riser limits). Through editStair, so the well is cut again
+    // and the framing laid again with them; the panel and OBJ / PROP redrawn.
+    const redraw = () => { showSelectionProps(); renderObjProp(); };
+    const width = document.createElement('div');
+    width.dataset.propRow = 'width';
+    const wName = document.createElement('div');
+    wName.className = 'props-title';
+    wName.textContent = 'WIDTH (IN)';
+    const wInput = document.createElement('input');
+    wInput.type = 'number';
+    wInput.dataset.stairWidth = '';
+    wInput.min = String(STAIR_MIN_WIDTH_IN);
+    wInput.step = '1';
+    wInput.value = String(Math.round((Number(stair.widthFt) || 3) * 12 * 8) / 8);
+    wInput.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') wInput.blur(); });
+    wInput.addEventListener('change', () => { setStairWidth(stair, wInput.value); redraw(); });
+    width.append(wName, wInput);
+    const risers = document.createElement('div');
+    risers.dataset.propRow = 'risers';
+    const rName = document.createElement('div');
+    rName.className = 'props-title';
+    rName.textContent = 'RISERS';
+    const rRow = document.createElement('div');
+    rRow.className = 'chip-row';
+    const step = (face, by, key) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.textContent = face;
+      btn.dataset.stairRisers = key;
+      btn.addEventListener('click', () => { stepStairRisers(stair, by); redraw(); });
+      return btn;
+    };
+    const count = document.createElement('span');
+    count.dataset.stairRisersSaid = '';
+    count.textContent = `${layout.risers} @ ${F.formatInchesOnly(layout.riserIn)} \u00b7 RUN ${F.formatArchitecturalInches(layout.runFt * 12)}`;
+    rRow.append(step('\u2212', -1, 'less'), count, step('+', 1, 'more'));
+    risers.append(rName, rRow);
+    box.append(width, risers, propRow('RAIL', [['left', 'LEFT'], ['right', 'RIGHT'], ['both', 'BOTH'], ['none', 'NONE']],
+      stair.rail || 'left', id => { editStair(stair, st => { st.rail = id; return null; }); redraw(); }));
+
     // THE FLIGHT AS IT IS, in the painter's own words (drawStairs2D writes
     // `DN — {risers}R @ {riser}`), so the panel and the plan cannot disagree.
     // SHORT, and the length is load-bearing -- see the BEAM panel's note.
@@ -1993,6 +2036,11 @@
   const objWin = document.getElementById('objprop');
   let objOpen = false;
   const objPieces = () => selection.filter(entry => entry.type === 'fixture').map(entry => entry.item);
+  // AND A STAIR (Movie, 25 Oct: "so it a guy clicks on the STAIRCASE it will
+  // allow him to see the OBJ/PROP window with the STAIR info"): its PLAN and
+  // its SECTION in the two top boxes, the stair workspace's own panes, and
+  // its PROPERTIES under them. The two lower boxes are not a stair's.
+  const objStair = () => (selection.length === 1 && selection[0].type === 'stair' ? selection[0].item : null);
   const seatObjProp = () => {
     if (!objTab || !objWin) return;
     const rail = document.getElementById('right-rail');
@@ -2029,12 +2077,37 @@
         { line: skin['draw-fixture'], ground: fixtureFill(), text: skin['ink-quiet'] || skin['draw-fixture'] });
     });
   };
+  const drawObjStairViews = stair => {
+    const S = window.DraftStairSection;
+    objWin.querySelectorAll('[data-objprop-view]').forEach((cv, i) => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = cv.clientWidth || 140, h = cv.clientHeight || 110;
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      const c = cv.getContext('2d');
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, w, h);
+      if (!S || i > 1) return;
+      S.drawWorkspace(c, w, h, stair, { ...stairWorkspaceEnv(i === 0 ? 'plan' : 'section'), compact: true });
+    });
+  };
   const renderObjProp = () => {
     if (!objWin || !objOpen) return;
     const items = objPieces();
     const title = objWin.querySelector('[data-objprop-title]');
     const props = objWin.querySelector('[data-objprop-props]');
-    title.textContent = items.length ? `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}` : 'PICK A FIXTURE OR CABINET';
+    const stair = items.length ? null : objStair();
+    objWin.dataset.objpropKind = stair ? 'stair' : 'fixture';
+    const caps = stair ? ['PLAN', 'SECTION'] : ['TOP', 'FRONT', 'LEFT', 'RIGHT'];
+    objWin.querySelectorAll('figcaption').forEach((cap, i) => { if (caps[i]) cap.textContent = caps[i]; });
+    if (stair) {
+      const SG = window.DraftStairGeometry, F = window.DraftFormatters;
+      const layout = SG.stairCurrentLayout(stair, stairLevels());
+      title.textContent = `STAIR \u2014 ${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)} \u00b7 ${Math.round((Number(stair.widthFt) || 3) * 12)}" WIDE`;
+      props.replaceChildren(stairPropsNode(stair));
+      drawObjStairViews(stair);
+      return;
+    }
+    title.textContent = items.length ? `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}` : 'PICK A FIXTURE, CABINET OR STAIR';
     props.replaceChildren(...(items.length ? [fixturePropsNode(items)] : []));
     drawObjViews(items);
   };
@@ -2057,7 +2130,7 @@
   // A CLICK ON A FIXTURE OPENS IT; anything else leaves the window as it is,
   // saying what to pick.
   selectionWatchers.push(() => {
-    if (objPieces().length && !objOpen) { setObjOpen(true); return; }
+    if ((objPieces().length || objStair()) && !objOpen) { setObjOpen(true); return; }
     renderObjProp();
   });
 
@@ -2371,8 +2444,15 @@
       if (!(across > lo + clear && across < hi - clear)) continue;
       const base = { x: w.start.x + dx * t, z: w.start.z + dz * t };
       const nx = -dz / len, nz = dx / len;
+      // TIED TO THE WALL (Movie, 25 Oct: "when the WALL is selected in the
+      // middle and both sides dimensioned can those dimensions 'STICK to the
+      // wall"): both points remember the wall's start node, and followDimLinks
+      // carries them along the string as that node moves -- a wall dragged
+      // across takes its thickness dimension with it.
+      const ref = { wallId: String(w.id), end: 'start', x: w.start.x, z: w.start.z };
       return { wall: w, thicknessFt: hi - lo,
-        points: [{ x: base.x + nx * lo, z: base.z + nz * lo }, { x: base.x + nx * hi, z: base.z + nz * hi }] };
+        points: [{ x: base.x + nx * lo, z: base.z + nz * lo, ref: { ...ref } },
+          { x: base.x + nx * hi, z: base.z + nz * hi, ref: { ...ref } }] };
     }
     return null;
   };
@@ -2541,9 +2621,7 @@
       const step = { kind: 'built', walls: [], outlines: [], list: null,
         items: made.map(item => ({ list: drawing.dimensions, item })) };
       undoStack.push(step);
-      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1,
-        // EVERY LINE OF THIS STRING, for ESC to take back.
-        lines: [...(dimLastLine?.lines || []), { made, step }] };
+      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1 };
       // A LINE PLACED IS A LINE SEEN (Movie, 24 Oct: "the LEFT CLICK to place
       // the dimension line isn't working still" -- it was placing them, with
       // HAND DIMS switched off, so each one went down out of sight). Placing
@@ -2589,15 +2667,11 @@
   // string up and says where the click goes.
   const dimOnceEnds = () => {
     dimLinesStale();
-    // AND THE LINE UNDER THE CURSOR GOES DOWN FIRST (Movie, 25 Oct: "unless
-    // the user presses ESC (there will be no dimension shown for that case)
-    // but if they press anything else to end the dimension line placing
-    // sequence, the last line will be placed before the sequence finishes").
-    // Not where it measures nothing; dimPress already refuses the spot of the
-    // line just placed, so it is never laid twice.
-    if (dimPlacing && cursorWorld && dimString(dimPoints, cursorWorld).length) {
-      dimPress(cursorWorld);
-    }
+    // ONLY A LEFT CLICK LAYS A LINE (Movie, 25 Oct: "on the last dimension
+    // line when the user presses SPACE or ENTER to close it off. don't add
+    // another dimension line ... just leave the LEFT CLICK produced dims").
+    // The key or the button that ends the lines lays none of its own; the
+    // earlier rule that laid one at the mouse first is gone.
     if (dimPlacing && !dimLastLine) {
       sayOnStrip(`DIMENSION — ${Math.max(dimPoints.length - 1, 1)} to place: click where the string goes (Esc abandons it).`);
       return true;
@@ -2606,23 +2680,18 @@
     if (endDimString()) paint();
     return true;
   };
-  // ESC TAKES BACK EVERY LINE OF THE STRING IN HAND -- "exit out without
-  // placing dimension" -- and the steps that laid them, so no UNDO is left
-  // pointing at a line that is gone. Called by cancelGestures.
-  const dimAbandon = () => {
-    const lines = dimLastLine?.lines || [];
-    lines.slice().reverse().forEach(({ made, step }) => {
-      // BY ID: a save between the press and the ESC hands the page fresh
-      // records for the same dimensions.
-      const ids = new Set(made.map(item => item.id));
-      const list = drawing.dimensions || [];
-      for (let i = list.length - 1; i >= 0; i -= 1) if (ids.has(list[i].id)) list.splice(i, 1);
-      const k = undoStack.lastIndexOf(step);
-      if (k >= 0) undoStack.splice(k, 1);
-    });
+  // ESC KEEPS WHAT IS DOWN (Movie, 25 Oct: "i accidentally press it meaning
+  // to end the chain but to keep it. can we change it so what has been
+  // created so far is KEPT when ESC is pressed but if its only on the 1st
+  // stage it will finish the command quickly"). It used to take back every
+  // line of the string. Now the lines laid stay, and so do their UNDO steps;
+  // points not yet laid as a line simply go (cancelGestures). Called by
+  // cancelGestures; says so when there was something to keep.
+  const dimKeep = () => {
+    const placed = dimLastLine?.count || 0;
     dimLastLine = null;
-    if (lines.length) markDirty();
-    return lines.length > 0;
+    if (placed) sayOnStrip(`DIMENSION — done, ${placed} line${placed === 1 ? '' : 's'} kept. Press the next string's first point.`);
+    return placed > 0;
   };
   // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
   // through the register's listeners, because setTool runs at load, before

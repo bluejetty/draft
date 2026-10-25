@@ -65,6 +65,13 @@ if (!window.DraftFixtureGeometry) {
   const NO_WALL_GAP = new Set(['toilet', 'island', 'closet']);
   const wallGapOf = fixture => (!fixture || NO_WALL_GAP.has(fixture.kind) || (Number(fixture.standoff) || 0) > 0
     ? 0 : WALL_GAP_FT);
+  // ROOM BEHIND THE LAUNDRY (Movie, 25 Oct: "the LAUDRY Washer and Dryer,
+  // they need about 6-8" space behind for the venting and plugs and stuff
+  // . can we add a 7" space behind them where they attach to the wall"): a
+  // washer or a dryer stands 7" off the wall it backs onto; its ends keep
+  // the half inch (wallGapOf).
+  const BACK_GAP_FT = { washer: 7 / 12, dryer: 7 / 12 };
+  const backGapOf = fixture => (wallGapOf(fixture) ? (BACK_GAP_FT[fixture.kind] ?? WALL_GAP_FT) : 0);
 
   const wallTypes = () => {
     const WT = window.DraftWallTypes;
@@ -206,12 +213,13 @@ if (!window.DraftFixtureGeometry) {
     // and the half inch off the wall does the same (wallGapOf).
     const faceOff = fixture.side === -1 ? frame.startOff : frame.endOff;
     const wallGap = wallGapOf(fixture);
-    const backOff = faceOff + fixture.side * ((fixture.standoff || 0) + wallGap);
+    const backGap = backGapOf(fixture);
+    const backOff = faceOff + fixture.side * ((fixture.standoff || 0) + backGap);
     const frontOff = backOff + fixture.side * fixture.depth;
     const geo = {
       wall, frame,
       along, alongStart: along - half, alongEnd: along + half,
-      backOff, frontOff, width, side: fixture.side, faceOff, wallGap,
+      backOff, frontOff, width, side: fixture.side, faceOff, wallGap, backGap,
       corners: [
         frame.at(along - half, backOff),
         frame.at(along + half, backOff),
@@ -414,6 +422,7 @@ if (!window.DraftFixtureGeometry) {
     WALL_GAP_FT,
     snapToWallGap,
     wallGapOf,
+    backGapOf,
     settleWallGaps,
     runMates,
     islandHolding,
