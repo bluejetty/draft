@@ -109,6 +109,9 @@
   // coincides, and the face slide is not asked.
   const SUPER_NODE_PULL_FT = 4 / 12;
   const SUPER_NODE_HOLD_FT = 8 / 12;
+  // A SUITE'S END LINE PULLS THE NEXT SUITE'S ON from six inches across --
+  // the shell wall's own reach (hologram.js suiteSnap).
+  const SUITE_LINE_PULL_FT = 0.5;
   const SUPER_NODE_SHOW_FT = 6;
   const SUPER_NODE_INK = '#1ef2ff';
   const SUPER_NODE_GLOW = 'rgba(30, 242, 255, 0.95)';
@@ -179,7 +182,10 @@
       if (p.d <= SUPER_NODE_PULL_FT && (!best || p.d < best.d)) best = p;
     });
     superNodes().forEach(b => offer(b, null));
-    others.forEach(other => hologramSuperNodes(other).forEach(b => offer(b, other)));
+    // NOT ANOTHER SUITE'S CORNERS ANY MORE (Movie, 25 Oct: "the RINGS on the
+    // corners don't work that great"): suite meets suite by their end
+    // lines (hologram.js suiteLineSnap); the house's own super nodes still
+    // catch a suite's corner.
     return best;
   };
   // GOLD ON THE REGISTRATION CORNER (Movie, 22 Oct: "make that SUPERNODE
@@ -232,14 +238,42 @@
     // each unit type" -- "will be easier for a user to identify them"). The
     // same ink the HOLOGRAM panel's row and the tinted walls wear; the gold
     // registration corner stays gold.
+    // A SUITE'S END LINES, NOT ITS CORNER RINGS (Movie, 25 Oct): a line on
+    // its top and bottom, in its file's colour, 2 ft past each corner so it
+    // is easy to see and to grab; the pair a held suite has caught, bright.
+    // The gold registration corner keeps its dot, a corner the house's own
+    // super node holds lights, and super nodes drawn in the suite's own
+    // file still show as rings.
+    const lineLock = traceMoving?.hologram ? traceMoving.lineLock : null;
+    let litLines = 0;
     holograms().filter(holo => !holo.hidden).forEach(holo => {
       const held = !!lock && traceMoving.underlay === holo;
       const ink = H().colourOf?.(holo, drawing)?.ink || null;
-      // THE OTHER SUITE'S CORNER THAT HAS IT, bright too (superNodeLock).
-      const caught = !!lock && lock.other === holo;
-      hologramSuperNodes(holo).forEach(n => superDot(n.point, { ring: true, ink,
-        bright: (held && lock.mine.id === n.id) || (caught && lock.house.id === n.id), gold: n.registration === true }));
+      (H().suiteEndLines?.(holo, activeLevelId()) || []).forEach(L => {
+        const bright = !!lineLock && ((traceMoving.underlay === holo && lineLock.mine.end === L.end)
+          || (lineLock.other === holo && lineLock.line.end === L.end));
+        if (bright) litLines += 1;
+        const a = toS(L.ea), b = toS(L.eb);
+        ctx.save();
+        ctx.strokeStyle = ink || SUPER_NODE_INK;
+        ctx.shadowColor = ink || SUPER_NODE_GLOW;
+        ctx.shadowBlur = bright ? 14 : 6;
+        ctx.lineWidth = bright ? 4 : 2.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.restore();
+      });
+      hologramSuperNodes(holo).forEach(n => {
+        const lit = held && lock.mine.id === n.id;
+        if (n.registration === true) superDot(n.point, { ring: true, ink, bright: lit, gold: true });
+        else if (!n.auto || lit) superDot(n.point, { ring: true, ink, bright: lit });
+      });
     });
+    if (!thumbTarget) {
+      canvas.dataset.suiteLines = String(litLines);
+      if (lineLock) canvas.dataset.lineLock = `${lineLock.other.id}:${lineLock.line.end}`;
+      else delete canvas.dataset.lineLock;
+    }
     // AND A SHELF'S OWN CORNERS, on the shelf and in its little square above
     // the bone, in the colour its copies on the plan wear -- the hologram
     // file named for the shelf -- so the square and the copies read as one

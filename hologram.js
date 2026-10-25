@@ -399,6 +399,65 @@
     return [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z], i) => ({
       id: `corner-${i + 1}`, levelId: Number(levelId), view: 'plan', point: { x, y: 0, z }, auto: true }));
   };
+  // A SUITE'S TWO END LINES (Movie, 25 Oct: "on the suite i think the RINGS
+  // on the corners don't work that great. how about we make a LINE on each
+  // end of the suite (top and bott of the screen) that start and end where
+  // the RINGS are located and when the user puts the suite holograms close
+  // together those LINES should snap"). The top and bottom of the rectangle
+  // the four corner rings stood on, in the suite's own frame, so they turn
+  // and mirror with it; `n` points out of the suite. A suite or a suite
+  // file has them; a plain hologram (an existing house) has none.
+  const suiteEndLines = (holo, levelId) => {
+    const existing = parts(holo).existing;
+    // WHAT HAD RINGS HAS LINES: a suite, a suite file still blue, or any
+    // hologram whose file carries super nodes of its own on this level.
+    const own = (existing.superNodes || []).some(n => n?.point && Number(n.levelId) === Number(levelId));
+    if (!(isSuite(holo) || isSuiteFile(holo) || own)) return [];
+    const corners = cornerSuperNodes(existing.walls, levelId);
+    if (corners.length !== 4) return [];
+    const p = placed(holo, { superNodes: corners }).superNodes.map(n => n.point);
+    const mid = { x: (p[0].x + p[1].x + p[2].x + p[3].x) / 4, z: (p[0].z + p[1].z + p[2].z + p[3].z) / 4 };
+    const line = (end, a, b) => {
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      let n = { x: -(b.z - a.z) / len, z: (b.x - a.x) / len };
+      if (((a.x + b.x) / 2 - mid.x) * n.x + ((a.z + b.z) / 2 - mid.z) * n.z < 0) n = { x: -n.x, z: -n.z };
+      // DRAWN 2 FT PAST EACH CORNER (Movie, 25 Oct: "can those lines extend
+      // about 5 feet past the front and back ... so a user can see them
+      // easily and grab onto the line directly", then "maybe 3 ft", then
+      // "lets go 2ft , should be enough and not too much"): `ea`/`eb` are what is drawn and pressed; the snap
+      // reads the corners themselves.
+      const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+      return { end, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z }, n, len,
+        ea: { x: a.x - u.x * SUITE_LINE_REACH_FT, z: a.z - u.z * SUITE_LINE_REACH_FT },
+        eb: { x: b.x + u.x * SUITE_LINE_REACH_FT, z: b.z + u.z * SUITE_LINE_REACH_FT } };
+    };
+    return [line('top', p[0], p[1]), line('bottom', p[3], p[2])];
+  };
+  const SUITE_LINE_REACH_FT = 2;
+  // THE LINE SNAP: one of the held suite's end lines facing one of another
+  // suite's, parallel, within `reachFt` across and overlapping along, pulls
+  // the suite across until the two are ONE line -- "should line up to become
+  // one line" -- and ONLY across: "sometimes the suite will jog in or out so
+  // will need to slide back and forth to allow that", the along-the-line
+  // place being the shell wall's to set ("lock into the ext wall to ext
+  // wall (to show the windows and doors)"). The nearest pair wins. Returns
+  // { dx, dz, mine, line, other } or null.
+  const suiteLineSnap = (holo, others, levelId, reachFt = 0.5) => {
+    const mine = suiteEndLines(holo, levelId);
+    if (!mine.length) return null;
+    let best = null;
+    (others || []).forEach(other => suiteEndLines(other, levelId).forEach(M => mine.forEach(L => {
+      if (L.n.x * M.n.x + L.n.z * M.n.z > -0.999) return;
+      const d = (M.a.x - L.a.x) * L.n.x + (M.a.z - L.a.z) * L.n.z;
+      if (Math.abs(d) > reachFt) return;
+      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };
+      const t0 = (M.a.x - L.a.x) * u.x + (M.a.z - L.a.z) * u.z;
+      const t1 = (M.b.x - L.a.x) * u.x + (M.b.z - L.a.z) * u.z;
+      if (Math.min(L.len, Math.max(t0, t1)) - Math.max(0, Math.min(t0, t1)) <= 0.01) return;
+      if (!best || Math.abs(d) < Math.abs(best.d)) best = { d, dx: L.n.x * d, dz: L.n.z * d, mine: L, line: M, other };
+    })));
+    return best;
+  };
   // A SHELF'S OWN CORNERS (Movie, 23 Oct: "in the little SHELF layout in the
   // middle above the bone can you show the corner colors so they can easily
   // identify each suite type"): the same four corners a suite gets when it
@@ -925,6 +984,6 @@
     BLUE, PALE, ALPHA, VIEWS, COLOURS, colourOf, colourIndex, nextColour, fileOf,
     planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
-    drawn, suiteSuperNodes, shelfSuperNodes,
+    drawn, suiteSuperNodes, shelfSuperNodes, suiteEndLines, suiteLineSnap,
   });
 })();

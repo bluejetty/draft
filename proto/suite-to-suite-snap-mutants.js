@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// MUTATION GATE for corner rings clicking onto other holograms' corner rings
+// MUTATION GATE for suites meeting by their end lines (Movie, 25 Oct), which
+// replaced the corner rings clicking onto other holograms' corner rings
 // (tests/suite-to-suite-snap.spec.js).
 //
 // Movie, 23 Oct: "when they come close to another suite circle corner node
@@ -14,21 +15,41 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/suite-to-suite-snap.spec.js';
 const MUTANTS = [
-  { file: 'model/02-holograms-tags.js', name: 'another hologram\'s corner rings are not magnetic',
-    find: "    others.forEach(other => hologramSuperNodes(other).forEach(b => offer(b, other)));\n",
+  { file: 'hologram.js', name: 'the end lines catch nothing',
+    find: "      if (Math.abs(d) > reachFt) return;\n      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };",
+    with: "      if (true) return;\n      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };",
+    test: 'within 6"' },
+  { file: 'hologram.js', name: 'lines that do not face each other catch too',
+    find: "      if (L.n.x * M.n.x + L.n.z * M.n.z > -0.999) return;",
+    with: "      if (false) return;",
+    test: 'corners no longer pull' },
+  { file: 'hologram.js', name: 'a much wider reach',
+    find: "      if (Math.abs(d) > reachFt) return;\n      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };",
+    with: "      if (Math.abs(d) > reachFt * 3) return;\n      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };",
+    test: 'a foot short' },
+  { file: 'model/13-suites-trim-follow.js', name: 'the line also pins the suite along it (no jog)',
+    find: "        m.underlay.x += held === 'x' ? 0 : lock.dx;",
+    with: "        m.underlay.x = (holograms().find(o => o === lock.other) || m.underlay).x;\n        m.underlay.x += held === 'x' ? 0 : lock.dx;",
+    test: 'within 6"' },
+  { file: 'model/02-holograms-tags.js', name: 'other suites\' corners are magnetic again',
+    find: "    superNodes().forEach(b => offer(b, null));\n",
+    with: "    superNodes().forEach(b => offer(b, null));\n    others.forEach(other => hologramSuperNodes(other).forEach(b => offer(b, other)));\n",
+    test: 'corners no longer pull' },
+  { file: 'hologram.js', name: 'the lines stop at the corners',
+    find: "  const SUITE_LINE_REACH_FT = 2;",
+    with: "  const SUITE_LINE_REACH_FT = 0;",
+    test: 'the end lines' },
+  { file: 'model/13-suites-trim-follow.js', name: 'a press on a line picks nothing up',
+    find: "    const holo = suiteLineAt(event);\n    if (!holo) return;",
+    with: "    const holo = null;\n    if (!holo) return;",
+    test: 'press on a suite' },
+  { file: 'model/13-suites-trim-follow.js', name: 'a click on a line leaves the suite in hand',
+    find: "    if (m.grabbed) { endTraceMove(false); return; }\n",
     with: "",
-    test: 'within 4"' },
-  { file: 'model/02-holograms-tags.js', name: 'a caught pair does not hold',
-    find: "      if (kept && kept.d <= SUPER_NODE_HOLD_FT) return kept;\n",
-    with: "",
-    test: 'holds through a wobble' },
-  { file: 'model/02-holograms-tags.js', name: 'a caught pair never lets go',
-    find: "      if (kept && kept.d <= SUPER_NODE_HOLD_FT) return kept;\n",
-    with: "      if (kept) return kept;\n",
-    test: 'holds through a wobble' },
-  { file: 'model/02-holograms-tags.js', name: 'a blue hologram\'s rings are passed by',
-    find: "    const others = holograms().filter(o => o !== holo && !o.hidden);\n",
-    with: "    const others = holograms().filter(o => o !== holo && !o.hidden && o.mode === 'suite');\n",
+    test: 'press on a suite' },
+  { file: 'hologram.js', name: 'a blue hologram has no lines',
+    find: "    if (!(isSuite(holo) || isSuiteFile(holo) || own)) return [];",
+    with: "    if (!(isSuite(holo) || isSuiteFile(holo))) return [];",
     test: 'blue hologram' },
 ];
 const run = name => {

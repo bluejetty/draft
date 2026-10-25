@@ -1,10 +1,12 @@
-// A SUITE'S CORNERS CLICK ONTO ANOTHER SUITE'S (Movie, 23 Oct).
-//
-// "when i am putting the suites in, at the corner points with the circle
-// nodes, when they come close to another suite circle corner node can they
-// 'GLOW' and be 'MAGNETIC SNAP (no matter where the cursor is grabbing or
-// placing the SUITE,, if those corners come close, plase magnet snap and
-// glock snap within about 4" radius 8" diameter (pretty strong".
+// A SUITE MEETS ANOTHER BY ITS END LINES (Movie, 25 Oct), the corner rings
+// of 23 Oct retired: "on the suite i think the RINGS on the corners don't
+// work that great. how about we make a LINE on each end of the suite (top
+// and bott of the screen) that start and end where the RINGS are located
+// and when the user puts the suite holograms close together those LINES
+// should snap" -- "should line up to become one line and sometimes the
+// suite will job in or out so will need to slide back and forther to allow
+// that" -- and the lines "extend ... 2 ft past" each corner, so "a user can
+// see them easily and grab onto the line directly easily".
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -21,13 +23,14 @@ const EMPTY = { walls: [], lines: [], floors: [], roofs: [], fenestrations: [], 
 const SUITE = { version: 1, levels: LEVELS, activeLevelIdx: 2, ...EMPTY,
   walls: [W('s1', [0, 0], [20, 0]), W('s2', [20, 0], [20, 15]), W('s3', [20, 15], [0, 15]), W('s4', [0, 15], [0, 0])],
   superNodes: [SN('c1', 0, 0), SN('c2', 20, 0), SN('c3', 20, 15), SN('c4', 0, 15)] };
-// h1 at the origin, h2 standing forty across; no house super nodes at all.
+// h1 at the origin, h2 standing forty down the sheet, below it; no house
+// super nodes at all.
 const plan = (h2 = {}) => ({
   version: 1, board: 'drafting', planTurn: 0, levels: LEVELS, activeLevelIdx: 2, ...EMPTY,
   nextDrawingItemId: 20,
   holograms: [
     { id: 'h1', name: 'suite-a', mode: 'suite', x: 0, z: 0, angleDeg: 0, pivotX: 10, pivotZ: 7.5, source: SUITE },
-    { id: 'h2', name: 'suite-b', mode: 'suite', x: 40, z: 0, angleDeg: 0, pivotX: 10, pivotZ: 7.5, source: SUITE, ...h2 },
+    { id: 'h2', name: 'suite-b', mode: 'suite', x: 0, z: 40, angleDeg: 0, pivotX: 10, pivotZ: 7.5, source: SUITE, ...h2 },
   ] });
 
 async function open(page, drawing) {
@@ -63,47 +66,94 @@ async function grab(page, at, from) {
 const to = async (page, at, pt) => { await page.mouse.move(...at(...pt), { steps: 8 }); await page.waitForTimeout(100); };
 const drop = async page => { await page.mouse.up(); await page.waitForTimeout(150); };
 
-test('within 4": the suite\'s corner clicks onto the other suite\'s, wherever the hand holds it', async ({ page }) => {
-  const { at } = await open(page, plan());
-  // Held by its top, well away from the corner: its right corner stops
-  // three inches short of the other suite's left corner and is pulled on.
-  await grab(page, at, [14, 13]);
-  await to(page, at, [14 + 19.75, 13]);
-  expect(await lockAt(page), 'the other suite\'s corner holding it').toEqual([40, 0]);
-  await drop(page);
-  const d = await saved(page);
-  expect([r3(d.holograms[0].x), r3(d.holograms[0].z)], 'corner to corner').toEqual([20, 0]);
+const lineLock = page => page.locator('#plan').getAttribute('data-line-lock');
+// Where each suite's end lines stand, as the page works them out.
+const lines = (page, id) => page.evaluate(id => {
+  const holo = drawing.holograms.find(o => o.id === id);
+  return window.DraftHologram.suiteEndLines(holo, activeLevelId())
+    .map(L => ({ end: L.end, z: L.a.z, x0: Math.min(L.ea.x, L.eb.x), x1: Math.max(L.ea.x, L.eb.x), cx: L.a.x }));
+}, id);
+
+test('the end lines: a top and a bottom, 2 ft past each corner; no corner rings', async ({ page }) => {
+  await open(page, plan());
+  const [top, bottom] = await lines(page, 'h1');
+  expect([top.end, bottom.end]).toEqual(['top', 'bottom']);
+  expect(top.z).toBeLessThan(0);          // out to the wall's outside face
+  expect(bottom.z).toBeGreaterThan(15);
+  // The corners sit on the wall faces; the line runs 2 ft past each.
+  expect(top.x1 - top.x0 - (bottom.x1 - bottom.x0)).toBeCloseTo(0, 6);
+  const wide = await page.evaluate(() => {
+    const L = window.DraftHologram.suiteEndLines(drawing.holograms[0], activeLevelId())[0];
+    return [L.len, Math.hypot(L.eb.x - L.ea.x, L.eb.z - L.ea.z)];
+  });
+  expect(wide[1] - wide[0]).toBeCloseTo(4, 6);
 });
 
-test('six inches short, nothing catches', async ({ page }) => {
+test('within 6": the bottom line meets the suite below\'s top line -- one line -- and the suite stays where the hand put it the other way', async ({ page }) => {
   const { at } = await open(page, plan());
+  const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
+  // Down to three inches short of meeting, and two feet over: a jog.
   await grab(page, at, [10, 7.5]);
-  await to(page, at, [10 + 19.5, 7.5]);
-  expect(await lockAt(page)).toBeNull();
+  await to(page, at, [10 + 2, 7.5 + gap - 0.25]);
+  expect(await lineLock(page), 'the suite below\'s top line has it').toBe('h2:top');
+  expect(await page.locator('#plan').getAttribute('data-suite-lines'), 'both lines lit').toBe('2');
   await drop(page);
   const d = await saved(page);
-  expect(d.holograms[0].x).toBeCloseTo(19.5, 1);
+  expect(d.holograms[0].z, 'down onto the line').toBeCloseTo(gap, 4);
+  expect(d.holograms[0].x, 'the jog is kept').toBeCloseTo(2, 1);
+  const [, bottom] = await lines(page, 'h1');
+  expect(bottom.z).toBeCloseTo((await lines(page, 'h2'))[0].z, 6);
 });
 
-test('once caught it holds through a wobble of six inches, and lets go past eight', async ({ page }) => {
+test('a foot short, nothing catches', async ({ page }) => {
   const { at } = await open(page, plan());
+  const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
   await grab(page, at, [10, 7.5]);
-  await to(page, at, [10 + 19.9, 7.5]);
-  expect(await lockAt(page), 'caught').toEqual([40, 0]);
-  await to(page, at, [10 + 19.5, 7.5]);
-  expect(await lockAt(page), 'still held six inches back').toEqual([40, 0]);
-  await to(page, at, [10 + 19.1, 7.5]);
-  expect(await lockAt(page), 'let go past eight inches').toBeNull();
+  await to(page, at, [10, 7.5 + gap - 1]);
+  expect(await lineLock(page)).toBeNull();
   await drop(page);
-  const d = await saved(page);
-  expect(d.holograms[0].x).toBeCloseTo(19.1, 1);
+  expect((await saved(page)).holograms[0].z).toBeCloseTo(gap - 1, 1);
 });
 
-// "all suites attrached and glow for all other suites" -- a blue one too.
-test('a blue hologram\'s corner rings are magnetic too', async ({ page }) => {
+test('the corners no longer pull: corner to corner across, with the lines not facing, nothing catches', async ({ page }) => {
+  // h2 beside h1 this time, its corner three inches off h1's.
+  const { at } = await open(page, plan({ x: 40, z: 0 }));
+  await grab(page, at, [10, 7.5]);
+  await to(page, at, [10 + 19.75, 7.5]);
+  expect(await lineLock(page)).toBeNull();
+  expect(await page.locator('#plan').getAttribute('data-super-lock')).toBeNull();
+  await drop(page);
+});
+
+test('a blue hologram\'s lines catch too', async ({ page }) => {
   const { at } = await open(page, plan({ mode: 'hologram' }));
+  const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
   await grab(page, at, [10, 7.5]);
-  await to(page, at, [10 + 19.9, 7.5]);
-  expect(await lockAt(page)).toEqual([40, 0]);
+  await to(page, at, [10, 7.5 + gap - 0.25]);
+  expect(await lineLock(page)).toBe('h2:top');
   await drop(page);
+});
+
+test('a press on a suite\'s line picks it up and drags it -- no card, no MOVE; a click that moves nothing leaves it be', async ({ page }) => {
+  const { at } = await open(page, plan());
+  const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
+  const [, bottom] = await lines(page, 'h1');
+  // A foot past the corner, on the bottom line's reach.
+  const grabAt = [bottom.x1 - 1, bottom.z];
+  await page.mouse.move(...at(...grabAt));
+  await page.mouse.down();
+  await to(page, at, [grabAt[0] + 1, grabAt[1] + gap - 0.2]);
+  expect(await lineLock(page)).toBe('h2:top');
+  await drop(page);
+  let d = await saved(page);
+  expect(d.holograms[0].z).toBeCloseTo(gap, 4);
+  // A click on the line that moves nothing: nothing moves and nothing is left in hand.
+  const [, now] = await lines(page, 'h1');
+  await page.mouse.click(...at(now.x1 - 1, now.z));
+  await page.waitForTimeout(150);
+  await page.mouse.move(...at(now.x1 - 1 + 3, now.z + 3), { steps: 4 });
+  await page.waitForTimeout(150);
+  d = await saved(page);
+  expect(d.holograms[0].z).toBeCloseTo(gap, 4);
+  expect(d.holograms[0].x).toBeCloseTo(1, 1);
 });
