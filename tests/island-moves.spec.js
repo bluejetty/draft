@@ -128,10 +128,10 @@ test('the island dragged goes along the wall and off it, its sink and dishwasher
 test('clicking the island opens WIDTH, DEPTH and AISLE; a narrower island pulls its pieces in; UNDO puts it back', async ({ page }) => {
   const { at } = await open(page);
   await pick(page, at, 0, 7.8);
-  const width = page.locator('[data-prop-field="width"]');
+  const width = page.locator('#props-slot [data-prop-field="width"]');
   await expect(width).toHaveValue('7\'-0"');
-  await expect(page.locator('[data-prop-field="depth"]')).toHaveValue('3\'-0"');
-  await expect(page.locator('[data-prop-field="aisle"]')).toHaveValue('5\'-0"');
+  await expect(page.locator('#props-slot [data-prop-field="depth"]')).toHaveValue('3\'-0"');
+  await expect(page.locator('#props-slot [data-prop-field="aisle"]')).toHaveValue('5\'-0"');
   await width.fill('5');
   await width.press('Enter');
   let d = await saved(page);
@@ -140,8 +140,8 @@ test('clicking the island opens WIDTH, DEPTH and AISLE; a narrower island pulls 
   expect(r2(fx(d, 'dw').offset), 'a foot in from the 5\' island\'s end').toBe(13.5);
   // AND THE SINK, whose left edge stood 9\" past the new end, comes in too.
   expect(r2(fx(d, 'sink').offset), 'its edge on the island\'s left end').toBe(10.75);
-  await page.locator('[data-prop-field="depth"]').fill('4');
-  await page.locator('[data-prop-field="depth"]').press('Enter');
+  await page.locator('#props-slot [data-prop-field="depth"]').fill('4');
+  await page.locator('#props-slot [data-prop-field="depth"]').press('Enter');
   d = await saved(page);
   expect(r2(fx(d, 'isl').depth)).toBe(4);
   await page.keyboard.press('Control+z');
