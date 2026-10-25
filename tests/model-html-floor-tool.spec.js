@@ -414,7 +414,11 @@ test('one undo takes the floor back', async ({ page }) => {
     .toBe(0);
 });
 
-test('the tool puts itself down once the loop closes', async ({ page }) => {
+// THE TOOL STAYS UP ONCE THE LOOP CLOSES (Movie, 25 Oct: "i think tools stay
+// on rather than go to select"), as WALL and LINE do: the next presses are
+// the next floor. It used to put itself down, so that the next press was a
+// selection; SELECT is one key away for that.
+test('the tool stays up once the loop closes, and the next presses draw the next floor', async ({ page }) => {
   await open(page);
   await armFloor(page);
   await expect(page.locator('[data-tool-key="floor"]'))
@@ -424,14 +428,12 @@ test('the tool puts itself down once the loop closes', async ({ page }) => {
   await press(page, frame, SQUARE);
   await closeOn(page, frame, SQUARE[0]);
 
-  // A TOOL THAT STAYS ARMED DRAWS A SECOND FLOOR under the next press, which
-  // is the old page's behaviour for a finished gesture and not this page's:
-  // every placement tool here rests when it is done, so the drafter's next
-  // press is a selection rather than a corner they did not mean.
   await expect(page.locator('[data-tool-key="floor"]'))
-    .toHaveAttribute('aria-pressed', 'false');
+    .toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(600);
   await press(page, frame, [[-2, 0], [2, 0], [2, 3]]);
-  expect(await floorsTotal(page), 'three more presses draw nothing').toBe(1);
+  await closeOn(page, frame, [-2, 0]);
+  expect(await floorsTotal(page), 'the next floor, drawn').toBe(2);
 });
 
 // Movie, 12 Oct: the LENGTH box glows orange "for LINE, WALL, OUTLINE commands

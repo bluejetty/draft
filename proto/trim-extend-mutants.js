@@ -18,7 +18,7 @@ const SPEC = 'tests/model-html-trim.spec.js';
 const MUTANTS = [
   { file: 'model/13-suites-trim-follow.js',
     name: 'the selection is never the cutting edges',
-    find: "    return selection.filter(e => (e.type === 'wall' || e.type === 'line') && here.has(e.item)).map(e => e.item);\n",
+    find: "    return [...selection.filter(e => (e.type === 'wall' || e.type === 'line') && here.has(e.item)).map(e => e.item),\n      ...trimHoloWalls(true)];\n",
     with: '    return [];\n',
     test: 'his case: select the exterior wall and the partition run through it, TRIM, press outside -- it stops at the inside face' },
   { file: 'model/13-suites-trim-follow.js',

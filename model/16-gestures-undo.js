@@ -780,12 +780,17 @@
     // ── A ROOM SHAPE'S CORNER (Movie, 23 Oct) ──────────────────────────
     // On the one picked tag: a corner drags; a corner that is a wall's node
     // asks first (the card); an edge's midpoint grows a corner and drags it.
-    const shapedTag = selection.length === 1 && selection[0].type === 'roomtag'
-      && filterAllows('roomtag') && roomShapeOf(selection[0].item) ? selection[0].item : null;
+    // AND A PICKED SHAPE'S OR FLOOR'S (Movie, 25 Oct: dragging corners, as a
+    // wall's ends drag): the same handles, the same drag. Their corners are
+    // plain points, never a wall's node or a link -- the format keeps a
+    // floor's and a shape's corners as numbers.
+    const loopKind = selection.length === 1 && ['roomtag', 'shape', 'floor'].includes(selection[0].type)
+      && filterAllows(selection[0].type) && roomShapeOf(selection[0].item) ? selection[0].type : null;
+    const shapedTag = loopKind ? selection[0].item : null;
     const handle = shapedTag ? roomHandleAt(shapedTag, at) : null;
     if (handle) {
       const pts = shapedTag.points;
-      if (handle.kind === 'corner' && wallsOnCorner(pts[handle.index]).length) {
+      if (loopKind === 'roomtag' && handle.kind === 'corner' && wallsOnCorner(pts[handle.index]).length) {
         askRoomCorner(shapedTag, handle.index);
         return;
       }
@@ -799,7 +804,7 @@
         shapedTag.points = points;
       }
       moveDrag = {
-        kind: 'roomcorner', tag: shapedTag, before, points, index,
+        kind: 'roomcorner', loopKind, tag: shapedTag, before, points, index,
         grab: at, sx: e.clientX, sy: e.clientY, active: false, moved: false,
       };
       canvas.setPointerCapture(e.pointerId);
@@ -1079,6 +1084,8 @@
               pt = { x: face.x, z: face.z, ...(link ? { link } : {}) };
             } else pt = { x, z };
           }
+          // A SHAPE'S OR FLOOR'S CORNER TAKES THE NUMBERS ONLY: no node, no link.
+          if (md.loopKind !== 'roomtag') pt = md.loopKind === 'floor' ? { x: pt.x, y: 0, z: pt.z } : { x: pt.x, z: pt.z };
           md.points = md.points.map((p, i) => (i === md.index ? pt : p));
           md.tag.points = md.points;
           md.moved = true;
@@ -1591,13 +1598,13 @@
               sayOnStrip('That corner would make the shape cross itself, so it goes back.');
             } else {
               tag.points = pts;
-              const linked = pts.includes(md.points[i]) && wallsOnCorner(md.points[i]).length > 0;
+              const linked = md.loopKind === 'roomtag' && pts.includes(md.points[i]) && wallsOnCorner(md.points[i]).length > 0;
               const byFace = linked && !!md.points[i].link;
               undoStack.push({ kind: 'props', edits: [{ item: tag, before: md.before }] });
               markDirty();
               sayOnStrip(linked
                 ? `Corner linked to the wall\u2019s ${byFace ? 'corner' : 'node'} \u2014 the floor follows the wall now. UNDO frees it.`
-                : `${tag.name || 'ROOM'} is ${roomTagEnv().areaLabel(window.DraftDrawingFormat.loopAreaSqFt(pts))}.`);
+                : `${md.loopKind === 'roomtag' ? (tag.name || 'ROOM') : md.loopKind === 'floor' ? 'The floor' : 'The shape'} is ${roomTagEnv().areaLabel(window.DraftDrawingFormat.loopAreaSqFt(pts))}.`);
             }
           } else {
             tag.points = md.before.points;
@@ -2016,6 +2023,18 @@
       if (!drawing || modalUp() || activeCut()) return;
       e.preventDefault();
       selectAll();
+      return;
+    }
+    // CTRL+C COPIES AND CTRL+V PASTES (Movie, 25 Oct: "when the bottom bar has
+    // COPY ... can we do CTL-C for copy and CTL-P for past"): the foot's COPY
+    // and PASTE, the same verbs. V, not P -- Ctrl+P is the browser's print.
+    // A plain C is still CUT; eventMatchesBinding keeps the two apart.
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && ['c', 'v'].includes(e.key.toLowerCase())) {
+      if (!drawing || modalUp() || activeCut()) return;
+      // NOTHING PICKED, the browser's own copy stands (text on the page).
+      if (e.key.toLowerCase() === 'c' && !selection.length) return;
+      e.preventDefault();
+      if (e.key.toLowerCase() === 'c') { copySelection(); paint(); } else pasteHeld();
       return;
     }
     // ESCAPE IS THE OLD PAGE'S ESCAPE, measured rather than invented.

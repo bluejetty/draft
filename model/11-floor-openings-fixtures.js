@@ -49,8 +49,27 @@
     const snap = drawSnap(at);
     return snap.pt ? { x: snap.pt.x, z: snap.pt.z } : { x: at.x, z: at.z };
   };
+  // A LOOP IN HAND TAKES A TYPED LENGTH for its next corner (typedLoopCorner).
+  // Here, ahead of the strip that asks it and the box that answers it.
+  // A DOUBLE-CLICK ON THE FIRST CORNER CLOSES ON ITS FIRST CLICK, and with the
+  // tool staying up its second click would start the next loop right there.
+  // So the press that lands back on the corner just closed, straight after,
+  // is the double's second click, not a corner.
+  const LOOP_REPRESS_MS = 500;
+  let loopClosedAt = null;
+  const markLoopClosed = first => { loopClosedAt = { x: first.x, z: first.z, when: Date.now() }; };
+  const loopRepress = (corners, here) => {
+    const was = loopClosedAt;
+    loopClosedAt = null;
+    return !!was && !corners.length && Date.now() - was.when < LOOP_REPRESS_MS
+      && Math.hypot(here.x - was.x, here.z - was.z) <= OUTLINE_CLOSE_FT;
+  };
+  const loopCornersInHand = () => (activeTool === 'floor' ? floorCorners
+    : activeTool === 'shape' ? shapeCorners : null);
+  const loopTypable = () => !!(loopCornersInHand()?.length && cursorWorld);
   const floorPress = at => {
     const here = loopPoint(at);
+    if (loopRepress(floorCorners, here)) return;
     // THREE CORNERS BEFORE CLOSING IS LEGAL and two is not, for the reason the
     // outline's own guard gives: two enclose no area. Below three, a press near
     // the first corner is a drafter putting a corner there.
@@ -74,6 +93,7 @@
   // the outline and the floor refuse one.
   const shapePress = at => {
     const here = loopPoint(at);
+    if (loopRepress(shapeCorners, here)) return;
     if (shapeCorners.length >= 3) {
       const first = shapeCorners[0];
       if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
@@ -104,10 +124,12 @@
       layer: 'SHAPE',
     });
     shapeCorners = [];
+    markLoopClosed(loop[0]);
     // SELECTED, so its PROPERTIES -- the SECONDARY SUITE tick -- are up.
-    setTool(RESTING_TOOL);
+    // AND THE TOOL STAYS UP (Movie, 25 Oct: "i think tools stay on rather than
+    // go to select"), as WALL's and LINE's do: the next press starts the next.
     selectPlaced('shape', shape);
-    sayOnStrip('SHAPE closed. Tick SECONDARY SUITE in PROPERTIES if this is the suite.');
+    sayOnStrip('SHAPE closed. Tick SECONDARY SUITE in PROPERTIES if this is the suite, or press for the next shape.');
     return shape;
   };
 
@@ -171,7 +193,8 @@
     drawing.floors.push(floor);
     undoStack.push({ kind: 'add-item', list: drawing.floors, item: floor });
     floorCorners = [];
-    setTool(RESTING_TOOL);
+    markLoopClosed(loop[0]);
+    // THE TOOL STAYS UP for the next floor (Movie, 25 Oct), as SHAPE's does.
     // THE MESSAGE HAS TO SAY WHERE IT WENT WHEN IT WENT SOMEWHERE ELSE.
     // floorHomeView's second clause files a floor drawn on FOUNDATION's WALLS
     // plan onto the FOUNDATION set, which is right -- and from the drafter's

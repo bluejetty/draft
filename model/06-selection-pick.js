@@ -1328,6 +1328,33 @@
         ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
         return;
       }
+      // A PICKED SHAPE OR FLOOR SHOWS ITS CORNER HANDLES (Movie, 25 Oct): a
+      // hollow square on each corner to drag, a ring on each edge's midpoint
+      // to grow a corner -- the room shape's, without the wall-node fill.
+      if ((type === 'shape' || type === 'floor') && selection.length === 1 && roomShapeOf(item)) {
+        const screen = item.points.map(toS);
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        screen.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        ctx.closePath();
+        ctx.stroke();
+        const h = ROOM_HANDLE_PX;
+        screen.forEach(p => {
+          ctx.fillStyle = skin['surface-page'];
+          ctx.fillRect(p.x - h / 2, p.y - h / 2, h, h);
+          ctx.strokeRect(p.x - h / 2, p.y - h / 2, h, h);
+        });
+        ctx.lineWidth = 1.5;
+        screen.forEach((p, i) => {
+          const q = screen[(i + 1) % screen.length];
+          ctx.beginPath();
+          ctx.arc((p.x + q.x) / 2, (p.y + q.y) / 2, h / 2 - 0.5, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+        ctx.restore();
+        return;
+      }
       if (type === 'roomtag' || type === 'note') {
         const b = type === 'note' ? noteBox(item) : roomTagBox(item);
         ctx.save();

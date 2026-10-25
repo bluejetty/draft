@@ -352,9 +352,17 @@
   const trimLines = () => new Set(lines());
   // THE SELECTED WALLS AND LINES ON THIS LEVEL -- the cutting edges, when
   // there are any.
+  // A HOLOGRAM'S WALLS CUT TOO (Movie, 25 Oct: "looks like the TRIM won't
+  // work against a HOLOGRAM wall"): where they stand on this level, as edges
+  // only. A hologram is locked, so nothing of it is ever trimmed or moved,
+  // and a wall cut at one stops at its face rather than cornering with it.
+  const trimHoloWalls = picked => (picked
+    ? selection.filter(e => e.type === 'hologram').map(e => e.item)
+    : holograms()).flatMap(hologramWallsHere);
   const trimCuttersPicked = () => {
     const here = new Set([...walls(), ...lines()]);
-    return selection.filter(e => (e.type === 'wall' || e.type === 'line') && here.has(e.item)).map(e => e.item);
+    return [...selection.filter(e => (e.type === 'wall' || e.type === 'line') && here.has(e.item)).map(e => e.item),
+      ...trimHoloWalls(true)];
   };
   const trimThickness = () => {
     const isLine = trimLines();
@@ -399,7 +407,7 @@
     const seg = hit.seg;
     const thick = trimThickness();
     const picked = trimCuttersPicked().filter(c => c !== seg);
-    const cutters = picked.length ? picked : [...walls(), ...lines()].filter(c => c !== seg);
+    const cutters = picked.length ? picked : [...walls(), ...lines(), ...trimHoloWalls(false)].filter(c => c !== seg);
     // EXTEND REACHES A LITTLE FURTHER: to an edge whose own end stops short
     // of the line by up to TRIM_CORNER_FT, the two meeting in a corner there
     // -- the L that does not quite close, which is what extending is for.
@@ -419,6 +427,8 @@
   // -- a wall does not corner with a line.
   const trimCornerWith = (seg, cutter) => {
     if (!cutter || trimLines().has(seg) !== trimLines().has(cutter)) return null;
+    // NEVER A HOLOGRAM'S WALL: it is not this drawing's to move.
+    if (!walls().includes(cutter) && !lines().includes(cutter)) return null;
     const r = { x: seg.end.x - seg.start.x, z: seg.end.z - seg.start.z };
     const q = { x: cutter.end.x - cutter.start.x, z: cutter.end.z - cutter.start.z };
     const den = r.x * q.z - r.z * q.x;
@@ -781,7 +791,7 @@
     }
     // FLOOR AND SHAPE TOO, for the strip's readout only (Movie, 12 Oct: "area
     // and shapes like roof and floor too"): the edge from the last corner to
-    // the cursor. Their LENGTH box still takes no typing.
+    // the cursor. Their LENGTH box takes typing since 25 Oct (typedLoopCorner).
     // AND THE SINGLE SLOPE ROOF'S EDGE IN HAND, which the box can type.
     if (shedRun()) return shedRun();
     const corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : null;
@@ -947,7 +957,7 @@
     const moveTypable = moveReady || dimReady || stretchReady;
     const typable = !!(((drawsRun() && drawStart)
       || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable
-      || !!shedRun();
+      || !!shedRun() || loopTypable();
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
@@ -961,7 +971,7 @@
     // answer now is that 37 is taken and MOVES THE BOARD, which is the
     // drafter's own instruction. A box he cannot type in is the "they all go
     // dim" he was complaining about.
-    const angleTypable = drawsRun() || activeTool === 'outline';
+    const angleTypable = drawsRun() || ['outline', 'floor', 'shape'].includes(activeTool);
     if (angleBox.disabled === angleTypable) {
       angleBox.disabled = !angleTypable;
       if (!angleTypable) angleBox.value = '';
