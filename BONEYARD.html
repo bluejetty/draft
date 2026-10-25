@@ -41,6 +41,7 @@
 <script src="./layer-views.js"></script>
 <script src="./stair-geometry.js"></script>
 <script src="./render-2d.js"></script>
+<script src="./hologram.js"></script>
 <script src="./orientation-guard.js"></script>
 <script>
   // THE SKIN IS ONE CHOICE ACROSS THE APP: the same `draft-skin` key MODEL
@@ -91,7 +92,12 @@
   canvas#bones3d { cursor: grab; touch-action: none; }
   /* THE LEVELS STAND BETWEEN THE PANES, top-aligned so the first one is
      level with both heads, and no wider than the longest name needs. */
-  .levels-rail { flex: none; display: flex; align-items: flex-start; }
+  .levels-rail { flex: none; display: flex; flex-direction: column; align-items: stretch;
+    justify-content: space-between; gap: 12px; }
+  .holo-legend[hidden] { display: none; }
+  .holo-legend .holo-head { font-size: 10px; letter-spacing: .1em; color: var(--ink-quiet); }
+  .holo-legend button[aria-pressed="false"] { opacity: .55; }
+  .holo-legend button .count { margin-left: auto; color: var(--ink-quiet); }
   .levels-rail .legend { flex-direction: column; align-items: stretch;
     gap: 4px; flex-wrap: nowrap; }
   .levels-rail .legend button { justify-content: flex-start; white-space: nowrap; }
@@ -172,6 +178,14 @@
          the stack it names. -->
     <div class="levels-rail" aria-label="Levels">
       <div class="legend" id="legend"></div>
+      <!-- THE HOLOGRAMS, AT THE FOOT OF THE SAME COLUMN (Movie, 25 Oct: "at
+           the bottom of the 2 main viewports in that column area place the
+           different HOLOGRAM types - if there are multiples of each type -
+           allow the user to turn on or off the types ... and put them in the
+           same color as their card colors in the model area" -- "start off
+           and don't allow them to be edited in this area", "only allw them to
+           go on or off"). One button per file, its copies with it. -->
+      <div class="legend holo-legend" id="holo-legend" aria-label="Holograms" hidden></div>
     </div>
     <!-- RIGHT: THE CHOSEN LEVEL, FLAT, AND WHERE IT IS EDITED. Tap an edge,
          then drag it or use the arrow keys: whole feet, square to itself.
@@ -250,6 +264,10 @@
       // question about the next five minutes, not about the drawing.
       const bg = new Set();
       const keyOf = level => `${level.kind}:${level.levelId}`;
+      // THE HOLOGRAM FILES SHOWN, by file name. Off at every opening and never
+      // saved -- "start off" -- and only ever looked at: nothing here picks,
+      // drags or breaks a hologram wall.
+      const holoOn = new Set();
       let laid = { levels: [], scale: 0 };
       // The edge the drafter picked: which loop of the picked level, which edge.
       let selected = null;
@@ -436,6 +454,79 @@
       const shownPicked = () => (picked
         ? shown().find(l => l.kind === picked.kind && l.levelId === picked.levelId) || picked : null);
 
+      // ── THE HOLOGRAMS (Movie, 25 Oct) ─────────────────────────────────
+      //
+      // Each file the drawing brought in as a hologram, its copies and the
+      // holograms inside them (hologram.js drawn), in its own card colour.
+      // Their walls, placed where the model places them, by level.
+      const HOLO = window.DraftHologram;
+      const holoFiles = () => {
+        const d = preview ? preview.drawing : raw;
+        if (!HOLO || !d) return [];
+        const files = new Map();
+        HOLO.drawn(d).forEach(holo => {
+          const name = HOLO.fileOf(holo);
+          if (!files.has(name)) files.set(name, { name, color: HOLO.colourOf(holo, d).ink, holos: [], copies: 0 });
+          const file = files.get(name);
+          file.holos.push(holo);
+          if (!holo.nested) file.copies += 1;
+        });
+        return [...files.values()];
+      };
+      const holoWalls = file => file.holos.flatMap(holo =>
+        HOLO.placed(holo, HOLO.parts(holo).existing.walls || []))
+        .filter(w => w && w.start && w.end);
+      const holosShown = () => holoFiles().filter(file => holoOn.has(file.name));
+      const strokeHoloWalls = (ctx, walls, color, to) => {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.6;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        walls.forEach(w => {
+          const a = to(w.start, w), b = to(w.end, w);
+          if (!a || !b) return;
+          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        });
+        ctx.stroke();
+        ctx.restore();
+      };
+      const paintHoloLegend = () => {
+        const box = document.getElementById('holo-legend');
+        const files = holoFiles();
+        box.hidden = !files.length;
+        const head = document.createElement('div');
+        head.className = 'holo-head';
+        head.textContent = 'HOLOGRAMS';
+        box.replaceChildren(head, ...files.map(file => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.dataset.boneHolo = file.name;
+          b.setAttribute('aria-pressed', String(holoOn.has(file.name)));
+          b.style.color = file.color;
+          b.style.borderColor = holoOn.has(file.name) ? file.color : '';
+          b.title = `Show or hide ${file.name} (view only)`;
+          const sw = document.createElement('span');
+          sw.className = 'swatch';
+          sw.style.background = file.color;
+          const label = document.createElement('span');
+          label.textContent = file.name || 'HOLOGRAM';
+          b.append(sw, label);
+          if (file.copies > 1) {
+            const n = document.createElement('span');
+            n.className = 'count';
+            n.textContent = `\u00d7${file.copies}`;
+            b.append(n);
+          }
+          b.addEventListener('click', () => {
+            if (holoOn.has(file.name)) holoOn.delete(file.name); else holoOn.add(file.name);
+            paintHoloLegend();
+            paintAll();
+          });
+          return b;
+        }));
+      };
+
       // ── THE 3D WINDOW ───────────────────────────────────────────────
       const paint3d = () => {
         const { ctx, w, h } = sized(c3);
@@ -455,6 +546,20 @@
         // pilePosts, the same answer the elevations draw -- stood here as a
         // stick from the top of the concrete to that floor or roof, in that
         // bone's colour.
+        // THE HOLOGRAMS SWITCHED ON, each wall on the bone level its level is.
+        const holo3d = [];
+        if (laid.at) {
+          holosShown().forEach(file => {
+            const walls = holoWalls(file).filter(w => laid.levels.some(l => l.kind !== 'roof'
+              && Number(l.levelId) === Number(w.levelId)));
+            strokeHoloWalls(ctx, walls, file.color, (pt, w) => {
+              const l = laid.levels.find(lv => lv.kind !== 'roof' && Number(lv.levelId) === Number(w.levelId));
+              return laid.at(pt, l.elev);
+            });
+            holo3d.push({ name: file.name, walls: walls.length });
+          });
+        }
+        c3.setAttribute('data-holograms', JSON.stringify(holo3d));
         const sticks = laid.at ? postsOf(preview ? preview.drawing : raw) : [];
         ctx.lineWidth = 1.6;
         sticks.forEach(post => {
@@ -659,6 +764,16 @@
           window.DraftRender2D.drawStairs2D(ctx, p => toScreen(p), stairEnvFor(preview ? preview.drawing : raw, stairsHere, level));
         }
         c2.setAttribute('data-stairs', String(stairsHere.length));
+        // THE HOLOGRAMS SWITCHED ON, this level's walls of them only.
+        const holo2d = [];
+        if (level.kind !== 'roof') {
+          holosShown().forEach(file => {
+            const walls = holoWalls(file).filter(w => Number(w.levelId) === Number(level.levelId));
+            strokeHoloWalls(ctx, walls, file.color, pt => toScreen(pt));
+            holo2d.push({ name: file.name, walls: walls.length });
+          });
+        }
+        c2.setAttribute('data-holograms', JSON.stringify(holo2d));
         // Every corner, so a BREAK can be seen.
         ctx.fillStyle = level.color;
         level.loops.forEach(l => l.points.forEach(pt => {
@@ -761,6 +876,7 @@
         picked = level;
         selected = null;
         paintLegend();
+        paintHoloLegend();
         paint3d();
         paint2d();
       };
@@ -1139,6 +1255,7 @@
       else if (!lease) say(leaseWords());
       else say('Tap a loop, or a level above, to see it flat on the right. Tap an edge there to push it; BREAK puts a corner on a foot mark.');
       paintLegend();
+      paintHoloLegend();
       paintAll();
       document.body.dataset.boneyardReady = '1';
       window.addEventListener('resize', () => { frame = null; paintAll(); });

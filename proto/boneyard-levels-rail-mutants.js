@@ -24,9 +24,8 @@ const MUTANTS = [
     name: 'the levels go back into the right pane\'s head, where a fourth '
       + 'level squeezes the title and the verbs along',
     find: '    <div class="levels-rail" aria-label="Levels">\n'
-      + '      <div class="legend" id="legend"></div>\n'
-      + '    </div>\n',
-    with: '',
+      + '      <div class="legend" id="legend"></div>\n',
+    with: '    <div class="levels-rail" aria-label="Levels">\n',
     extra: [{ find: '        <span class="title" id="level-title">LEVEL</span>\n',
       with: '        <span class="title" id="level-title">LEVEL</span>\n'
         + '        <div class="legend" id="legend"></div>\n' }],
@@ -36,9 +35,8 @@ const MUTANTS = [
     name: 'the rail is put after both windows, so the levels stand to the '
       + 'right of the page instead of between them',
     find: '    <div class="levels-rail" aria-label="Levels">\n'
-      + '      <div class="legend" id="legend"></div>\n'
-      + '    </div>\n',
-    with: '',
+      + '      <div class="legend" id="legend"></div>\n',
+    with: '    <div aria-label="Holograms only">\n',
     extra: [{ find: '  </main>',
       with: '    <div class="levels-rail" aria-label="Levels">\n'
         + '      <div class="legend" id="legend"></div>\n'
@@ -47,8 +45,8 @@ const MUTANTS = [
 
   { file: 'BONEYARD.html',
     name: 'the rail may shrink: FOUNDATION is cut off on its own chip',
-    find: '  .levels-rail { flex: none; display: flex; align-items: flex-start; }',
-    with: '  .levels-rail { flex: 0 1 0; min-width: 0; display: flex; align-items: flex-start; }',
+    find: '  .levels-rail { flex: none; display: flex; flex-direction: column; align-items: stretch;\n',
+    with: '  .levels-rail { flex: 0 1 0; min-width: 0; display: flex; flex-direction: column; align-items: stretch;\n',
     test: 'they are stacked, top-aligned, and none of them is clipped' },
 
   { file: 'BONEYARD.html',
@@ -68,8 +66,8 @@ const MUTANTS = [
   { file: 'BONEYARD.html',
     name: 'the stack floats in the middle of the rail instead of starting '
       + 'with the two windows',
-    find: '  .levels-rail { flex: none; display: flex; align-items: flex-start; }',
-    with: '  .levels-rail { flex: none; display: flex; align-items: center; }',
+    find: '    justify-content: space-between; gap: 12px; }',
+    with: '    justify-content: center; gap: 12px; }',
     test: 'they are stacked, top-aligned, and none of them is clipped' },
 
   { file: 'BONEYARD.html',
