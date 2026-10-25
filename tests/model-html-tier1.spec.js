@@ -594,6 +594,28 @@ test.describe('MODEL.html tier 1', () => {
       // tab under the notebook tab"): it defines DraftCalc and stops; nothing
       // runs until a line is typed on the pad.
       './calc-engine.js',
+      // THE PAGE'S OWN SCRIPT, in seventeen parts (Stage 2). It was one inline
+      // block of 38,000 lines; it is cut at its own section headings and loads
+      // in order as classic scripts sharing one scope, so nothing here is a
+      // new dependency -- it is the same code, in files a person can open.
+      // proto/model-parts-harness.js holds the order and the names.
+      './model/01-skin-view.js',
+      './model/02-holograms-tags.js',
+      './model/03-plan-paint.js',
+      './model/04-levels-notes-bars.js',
+      './model/05-props-shelves-rail.js',
+      './model/06-selection-pick.js',
+      './model/07-walls-magnet.js',
+      './model/08-structure-roof.js',
+      './model/09-draw-move-stretch.js',
+      './model/10-tracking-garage.js',
+      './model/11-floor-openings-fixtures.js',
+      './model/12-garage-storeys-stairs.js',
+      './model/13-suites-trim-follow.js',
+      './model/14-promotion-tools.js',
+      './model/15-panels.js',
+      './model/16-gestures-undo.js',
+      './model/17-boot-save.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT
