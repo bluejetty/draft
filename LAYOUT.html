@@ -513,11 +513,13 @@
      (defaults, undo-layout) the moment SITE PLAN became the first sheet
      dealt -- before that the card was almost never up when they ran.
      188px is the panel's width and 172px the rail's; the offsets below clear
-     both, and the bottom one clears the status bar -- ALL of it now: 52px
-     sat on its top half, harmless while UNDO was out at the right and in
-     the way once the commands moved beside the bone (25 Oct). The page bar
-     is 64px and the status row 28px over it. */
-  #lay-lot { position:fixed; left:200px; bottom:96px; top:auto; transform:none;
+     both, and the bottom one clears the status bar.
+     BOTTOM-RIGHT SINCE 25 OCT: the status row's commands moved from its
+     right end to beside the bone (Movie, marked in GIMP), into the corner
+     of the row this card's bottom edge overlaps -- so the card moved to the
+     other corner, where the row carries only the paper readout, rather than
+     up into the sheet's working middle. */
+  #lay-lot { position:fixed; left:auto; right:184px; bottom:52px; top:auto; transform:none;
     z-index:40; width:min(430px, calc(100vw - 388px));
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
@@ -2895,13 +2897,15 @@ class Component extends PageLogic {
   // REMOVE SHEET takes the sheet on the desk out of the set: its viewports go
   // with it, every later sheet moves up one so the numbers stay 1, 2, 3, and
   // the composer lets go. The last sheet cannot go -- a set is never empty.
-  _removeSheet(gone = this.state.activeSheet) {
+  _removeSheet(gone = this.state.activeSheet, ask = false) {
     const count = this._sheetCount();
     if (count <= 1) return;
-    // A SHEET WITH DRAWINGS ON IT ASKS FIRST; an empty one just goes. UNDO
-    // brings either back.
+    // FROM AN X, A SHEET WITH DRAWINGS ON IT ASKS FIRST -- a small target on
+    // every row is easy to catch by accident; an empty one just goes. The
+    // panel's REMOVE SHEET has always gone straight away, and UNDO brings
+    // either back.
     const held = this._sheetViewports(gone).length;
-    if (held && !window.confirm(`Delete sheet ${gone} (${this._sheetTitle(gone)}) and the ${held} drawing${held === 1 ? '' : 's'} on it?`)) return;
+    if (ask && held && !window.confirm(`Delete sheet ${gone} (${this._sheetTitle(gone)}) and the ${held} drawing${held === 1 ? '' : 's'} on it?`)) return;
     const active = this.state.activeSheet;
     const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
     sheets.splice(gone - 1, 1);
@@ -4020,7 +4024,7 @@ class Component extends PageLogic {
   _onSheetPress(e, n, nameEl) {
     if (e.target.closest('[data-remove-sheet-at]')) {
       e.stopPropagation();
-      this._removeSheet(n);
+      this._removeSheet(n, true);
       return;
     }
     if (this.state.activeSheet === n && e.target.closest('[data-sheet-name]')) {
