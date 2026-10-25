@@ -85,9 +85,11 @@ test('the faces: a run tiled in 24" bays, the sides mirrored, a kind with no tra
     const plain = V.faceOf({ kind: 'shower', width: 5, depth: 3 }, 'front', FP);
     return {
       runWide: Math.round(Math.max(...xs(run)) - Math.min(...xs(run))), runBays: run.polys.length / FP.profileFor('cabinet', 'front').polys.length,
-      mirrored: Math.round(Math.max(...xs(right)) + Math.min(...xs(left))), deep: right.widthIn,
+      // Each point of LEFT is the same point of RIGHT turned about the depth.
+      mirrored: right.polys.every((p, i) => p.every((v, j) => j % 2 === 1 || Math.abs(v + left.polys[i][j] - 24) < 1e-6)),
+      deep: right.widthIn,
       plain: [plain.traced, plain.widthIn, plain.heightIn],
     };
   });
-  expect(got).toEqual({ runWide: 96, runBays: 4, mirrored: 24, deep: 24, plain: [false, 60, 80] });
+  expect(got).toEqual({ runWide: 96, runBays: 4, mirrored: true, deep: 24, plain: [false, 60, 80] });
 });
