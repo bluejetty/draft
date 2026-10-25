@@ -54,8 +54,8 @@ const MUTATIONS = [
   ['the turned stair\'s landing is not drawn', 'cut-view.js',
     c => c.replace('      if (parts.landing && flights[1]) {', '      if (false) {')],
   ['the stringer throat is measured off the nosings again', 'stair-section.js',
-    c => c.replace('- (layout.riserIn / STAIR_TREAD_RUN_IN) * (u - flight.u0 + STAIR_RISER_FACE_IN / 12);',
-      '- (layout.riserIn / STAIR_TREAD_RUN_IN) * (u - flight.u0);')],
+    c => c.replace('- (layout.riserIn / treadRunIn()) * (u - flight.u0 + STAIR_RISER_FACE_IN / 12);',
+      '- (layout.riserIn / treadRunIn()) * (u - flight.u0);')],
   ['a flight draws one tread short', 'stair-section.js',
     c => c.replace('    for (let k = 1; k < flight.risers; k++) {', '    for (let k = 2; k < flight.risers; k++) {')],
 ];

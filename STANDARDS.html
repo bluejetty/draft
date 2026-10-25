@@ -42,6 +42,8 @@
   <script src="./profile-manager.js"></script>
   <script src="./room-standards.js"></script>
   <script src="./fen-labels.js"></script>
+  <script src="./formatters.js"></script>
+  <script src="./stair-geometry.js"></script>
   <!-- For what a company logo IS. titleblock.js owns the shape of one and the
        limits on it, because an uploaded logo is a titleblock STYLE and nothing
        else; this page only takes the file in. -->
@@ -375,6 +377,50 @@
         </span>
       </div>
     </section>
+    <!-- STAIRS (Movie, 25 Oct: "is stair limitations set up in STANDARDS, we
+         should allow that to change too in STANDARDS"; MAX RISER 7 7/8" --
+         "what is 200mm in inches" ... "ok use that measurement" -- and "make
+         min rise 6""). Read by stair-geometry.js on every page that draws a
+         stair. -->
+    <section class="group" style="margin-top:14px;" aria-label="Stairs" data-stair-standards>
+      <div class="group-title">Stairs</div>
+      <p class="intro" style="margin:6px 0 8px;">The office&#8217;s stair numbers. A stair takes the fewest risers that keep each under MAX RISER; OBJ / PROP&#8217;s RISERS &minus; / + keeps each between MIN and MAX; every tread runs TREAD RUN; WIDTH is refused under MIN WIDTH. Type inches (7 7/8) or feet and inches (6&#8242;10&#8243;). A change reaches a page the next time it opens.</p>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">MAX RISER</span>
+        <span class="layer-use">The tallest riser a stair is laid out with &mdash; 7 7/8&#8243; (200 mm) by default.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" id="stair-std-maxRiserIn" data-stair-std="maxRiserIn" aria-label="MAX RISER" style="width:90px;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">MIN RISER</span>
+        <span class="layer-use">The shortest riser RISERS + may make &mdash; 6&#8243; by default.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" id="stair-std-minRiserIn" data-stair-std="minRiserIn" aria-label="MIN RISER" style="width:90px;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">TREAD RUN</span>
+        <span class="layer-use">The run of every tread, nosing to nosing &mdash; 10&#8243; by default.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" id="stair-std-treadRunIn" data-stair-std="treadRunIn" aria-label="TREAD RUN" style="width:90px;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">MIN WIDTH</span>
+        <span class="layer-use">The narrowest stair the WIDTH box and the plan&#8217;s width mark accept &mdash; 36&#8243; by default.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" id="stair-std-minWidthIn" data-stair-std="minWidthIn" aria-label="MIN WIDTH" style="width:90px;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">MIN HEADROOM</span>
+        <span class="layer-use">Clear height over the nosings &mdash; 6&#8242;-10&#8243; by default. Kept with the office&#8217;s numbers; nothing checks it yet.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" id="stair-std-headroomIn" data-stair-std="headroomIn" aria-label="MIN HEADROOM" style="width:90px;" />
+        </span>
+      </div>
+    </section>
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.STANDARDS</button>
@@ -403,6 +449,8 @@
       let roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(active?.content?.model?.roomMinimums);
       let roomTray = window.DraftRoomStandards.normaliseRoomTray(active?.content?.model?.roomTray);
       let fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(active?.content?.model?.fenestrationStandards);
+      const SG = window.DraftStairGeometry;
+      let stairStandards = SG.normaliseStairStandards(active?.content?.model?.stairStandards);
       // NORMALISED ON THE WAY IN like every other standard on this page: a
       // package can arrive from a file somebody edited or mailed, and
       // titleblock.js is where what counts as a logo is decided.
@@ -417,7 +465,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards, companyLogos } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards, stairStandards, companyLogos } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -682,6 +730,44 @@
         });
       });
 
+      // ── STAIRS ──────────────────────────────────────────────────────────
+      const stairInputs = [...document.querySelectorAll('[data-stair-std]')];
+      const stairNames = { maxRiserIn: 'MAX RISER', minRiserIn: 'MIN RISER', treadRunIn: 'TREAD RUN',
+        minWidthIn: 'MIN WIDTH', headroomIn: 'MIN HEADROOM' };
+      const FMT = window.DraftFormatters;
+      const sayInches = (key, inches) => (key === 'headroomIn' ? FMT.formatArchitecturalInches(inches) : FMT.formatInchesOnly(inches));
+      // INCHES UNLESS SAID OTHERWISE: "7 7/8" is a riser, not seven feet;
+      // a foot or inch mark goes through the drafting parser.
+      const readInches = text => {
+        const t = String(text || '').trim();
+        if (/['"\u2032\u2033]/.test(t)) {
+          const parsed = FMT.parseArchitecturalLength(t);
+          return parsed.ok ? parsed.inches : NaN;
+        }
+        const m = t.match(/^(\d+(?:\.\d+)?)(?:\s+(\d+)\/(\d+))?$|^(\d+)\/(\d+)$/);
+        if (!m) return NaN;
+        if (m[4]) return Number(m[4]) / Number(m[5]);
+        return Number(m[1]) + (m[2] ? Number(m[2]) / Number(m[3]) : 0);
+      };
+      const fillStairStandards = () => {
+        stairInputs.forEach(input => { input.value = sayInches(input.dataset.stairStd, stairStandards[input.dataset.stairStd]); });
+      };
+      fillStairStandards();
+      stairInputs.forEach(input => {
+        input.addEventListener('change', () => {
+          const key = input.dataset.stairStd;
+          const inches = readInches(input.value);
+          if (!Number.isFinite(inches) || !(inches > 0)) {
+            fillStairStandards();
+            showStatus(`${stairNames[key]}: type inches (7 7/8) or feet and inches (6'10").`, true);
+            return;
+          }
+          stairStandards = SG.normaliseStairStandards({ ...stairStandards, [key]: inches });
+          fillStairStandards();
+          saveActive(`${stairNames[key]} is ${sayInches(key, stairStandards[key])}.`);
+        });
+      });
+
       document.querySelector('#reset').addEventListener('click', () => {
         layerStandards = standardsApi.normaliseLayerStandards(null);
         structureStandards = window.DraftStructureStandards.normaliseStructureStandards(null);
@@ -692,11 +778,13 @@
         fillRoomTray();
         fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(null);
         fillFenStandards();
+        stairStandards = SG.normaliseStairStandards(null);
+        fillStairStandards();
         saveActive('Default layer standards restored.');
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards, companyLogos } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards, stairStandards, companyLogos } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
@@ -1093,6 +1181,8 @@
           roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(model.roomMinimums);
           roomTray = window.DraftRoomStandards.normaliseRoomTray(model.roomTray);
           fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(model.fenestrationStandards);
+          stairStandards = SG.normaliseStairStandards(model.stairStandards);
+          fillStairStandards();
           companyLogos = window.DraftTitleblock.normaliseCompanyLogos(model.companyLogos);
           manager.saveActive(pkg);
           render();

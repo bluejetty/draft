@@ -17,7 +17,8 @@ if (!window.DraftStairSection) {
 (() => {
   const SG = () => window.DraftStairGeometry;
   const STAIR_COLOR = '#5d4a8a';
-  const STAIR_TREAD_RUN_IN = window.DraftStairGeometry.STAIR_TREAD_RUN_IN;
+  // THE TREAD RUN, READ LIVE: it is the office's (STANDARDS, STAIRS).
+  const treadRunIn = () => SG().STAIR_TREAD_RUN_IN;
   const STAIR_TREAD_THICK_IN = 1.5;    // full 2x12 tread
   const STAIR_TREAD_BOARD_IN = 11.25;  // 2x12 actual width, left full
   const STAIR_RISER_THICK_IN = 0.75;   // 3/4" plywood riser
@@ -39,7 +40,7 @@ if (!window.DraftStairSection) {
   const devRun = (stair, layout) => {
     const split = SG().stairShapeSplit(stair, layout);
     if (!split || split.winders) return { runFt: layout.runFt, split };
-    return { runFt: (split.t1 + split.t2) * STAIR_TREAD_RUN_IN / 12 + split.landFt, split };
+    return { runFt: (split.t1 + split.t2) * treadRunIn() / 12 + split.landFt, split };
   };
 
   const paneRects = (w, h, mode = 'split') => {
@@ -104,7 +105,7 @@ if (!window.DraftStairSection) {
   });
   const drawFlight = (ctx, flight, layout, uToX, yOf, inks) => {
     const riseStep = layout.riserIn / 12;
-    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const runStep = treadRunIn() / 12;
     const treadThk = STAIR_TREAD_THICK_IN / 12;
     const boardW = STAIR_TREAD_BOARD_IN / 12;
     const riserThk = STAIR_RISER_THICK_IN / 12;
@@ -161,14 +162,14 @@ if (!window.DraftStairSection) {
   // The line through the notch roots (each tread's top at its riser face)
   // at stair u: the stringer's throat is measured plumb down from it.
   const notchRootE = (flight, layout, u) => flight.e0
-    - (layout.riserIn / STAIR_TREAD_RUN_IN) * (u - flight.u0 + STAIR_RISER_FACE_IN / 12);
+    - (layout.riserIn / treadRunIn()) * (u - flight.u0 + STAIR_RISER_FACE_IN / 12);
 
   // The flights a stair descends in, in unfolded stair u: one for a straight
   // stair (or winders, which unfold straight), two around the flat landing
   // for an L or U. `landU` is where the last riser meets the floor below.
   const stairFlights = (layout, split) => {
     const riseStep = layout.riserIn / 12;
-    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const runStep = treadRunIn() / 12;
     const flat = split && !split.winders ? split : null;
     const flights = flat
       ? [
@@ -184,7 +185,7 @@ if (!window.DraftStairSection) {
   // Where a flight's rail ends: the face of its last riser, 36" over the
   // floor it lands on -- the same line the section pane draws.
   const flightRailEnd = (flight, layout) => ({
-    u: flight.u0 + flight.risers * STAIR_TREAD_RUN_IN / 12 - STAIR_RISER_FACE_IN / 12,
+    u: flight.u0 + flight.risers * treadRunIn() / 12 - STAIR_RISER_FACE_IN / 12,
     e: flight.e0 - flight.risers * layout.riserIn / 12,
   });
 
@@ -198,7 +199,7 @@ if (!window.DraftStairSection) {
     env.header(ctx, rect,
       `STAIR SECTION — ${layout.risers}R @ ${env.inchesOnly(layout.riserIn)} · TREADS FULL 2x12 · RISERS 3/4" PLY FACE @ ${env.inchesOnly(STAIR_RISER_FACE_IN)}${shapeNote}`);
     const riseStep = layout.riserIn / 12;
-    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const runStep = treadRunIn() / 12;
     const fadeFill = 'rgba(89,128,166,0.14)';
     const fadeLine = 'rgba(89,128,166,0.55)';
     const noteFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
@@ -319,7 +320,7 @@ if (!window.DraftStairSection) {
       ? ` · ${split.shape} SHAPE UNFOLDED${split.winders ? ` (${split.winders} WINDERS)` : ''}`
       : '';
     env.header(ctx, rect, `STAIR PLAN — DN ${layout.risers}R TO THE RIGHT · ${env.ftIn(stair.widthFt)} WIDE${shapeNote}`);
-    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const runStep = treadRunIn() / 12;
     const vMid = vToY(0);
     // Stair-local frame: u downhill along the run, v to the right walking down.
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;

@@ -66,7 +66,7 @@ const MUTANTS = [
     test: 'WIDTH 42' },
   { file: 'model/12-garage-storeys-stairs.js',
     name: 'a stair under 36" is let through',
-    find: "    if (!(want >= STAIR_MIN_WIDTH_IN)) {\n",
+    find: "    if (!(want >= stairMinWidthIn())) {\n",
     with: "    if (!(want > 0)) {\n",
     test: 'WIDTH 42' },
   { file: 'model/12-garage-storeys-stairs.js',

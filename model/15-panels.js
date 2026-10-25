@@ -1401,7 +1401,7 @@
     const wInput = document.createElement('input');
     wInput.type = 'number';
     wInput.dataset.stairWidth = '';
-    wInput.min = String(STAIR_MIN_WIDTH_IN);
+    wInput.min = String(stairMinWidthIn());
     wInput.step = '1';
     wInput.value = String(Math.round((Number(stair.widthFt) || 3) * 12 * 8) / 8);
     wInput.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') wInput.blur(); });
