@@ -352,9 +352,17 @@
   const trimLines = () => new Set(lines());
   // THE SELECTED WALLS AND LINES ON THIS LEVEL -- the cutting edges, when
   // there are any.
+  // A HOLOGRAM'S WALLS CUT TOO (Movie, 25 Oct: "looks like the TRIM won't
+  // work against a HOLOGRAM wall"): where they stand on this level, as edges
+  // only. A hologram is locked, so nothing of it is ever trimmed or moved,
+  // and a wall cut at one stops at its face rather than cornering with it.
+  const trimHoloWalls = picked => (picked
+    ? selection.filter(e => e.type === 'hologram').map(e => e.item)
+    : holograms()).flatMap(hologramWallsHere);
   const trimCuttersPicked = () => {
     const here = new Set([...walls(), ...lines()]);
-    return selection.filter(e => (e.type === 'wall' || e.type === 'line') && here.has(e.item)).map(e => e.item);
+    return [...selection.filter(e => (e.type === 'wall' || e.type === 'line') && here.has(e.item)).map(e => e.item),
+      ...trimHoloWalls(true)];
   };
   const trimThickness = () => {
     const isLine = trimLines();
@@ -399,7 +407,7 @@
     const seg = hit.seg;
     const thick = trimThickness();
     const picked = trimCuttersPicked().filter(c => c !== seg);
-    const cutters = picked.length ? picked : [...walls(), ...lines()].filter(c => c !== seg);
+    const cutters = picked.length ? picked : [...walls(), ...lines(), ...trimHoloWalls(false)].filter(c => c !== seg);
     // EXTEND REACHES A LITTLE FURTHER: to an edge whose own end stops short
     // of the line by up to TRIM_CORNER_FT, the two meeting in a corner there
     // -- the L that does not quite close, which is what extending is for.
@@ -419,6 +427,8 @@
   // -- a wall does not corner with a line.
   const trimCornerWith = (seg, cutter) => {
     if (!cutter || trimLines().has(seg) !== trimLines().has(cutter)) return null;
+    // NEVER A HOLOGRAM'S WALL: it is not this drawing's to move.
+    if (!walls().includes(cutter) && !lines().includes(cutter)) return null;
     const r = { x: seg.end.x - seg.start.x, z: seg.end.z - seg.start.z };
     const q = { x: cutter.end.x - cutter.start.x, z: cutter.end.z - cutter.start.z };
     const den = r.x * q.z - r.z * q.x;
