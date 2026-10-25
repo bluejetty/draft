@@ -130,12 +130,19 @@
     const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
     const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
     const detached = [];
+    const linked = [];
     entries.forEach(({ type, item }) => {
       if (type === 'roomtag' && roomShapeOf(item)) {
         // A ROOM SHAPE'S LINKED CORNERS LIKEWISE: the shape turns on its
         // own copies, and the wall's node stays where the wall is.
+        // A CORNER WHOSE WALL TURNS WITH IT KEEPS ITS LINK (Movie, 25 Oct:
+        // "the bathroom floor acting weird"): a whole WC turned or flipped
+        // lost every tie between its floor and its walls, so the floor stood
+        // still the next time a wall of it was moved. Kept, its offset off
+        // the wall's end is turned with it (`linked`, for the caller).
         item.points.forEach((pt, index) => {
           if (!held.has(pt) && !pt.link) return;
+          if (pt.link && !held.has(pt) && chosen.has(linkWall(pt))) { linked.push(pt); return; }
           detached.push({ wall: item.points, key: index, orig: pt });
           item.points[index] = { x: pt.x, z: pt.z };
         });
@@ -150,7 +157,7 @@
     });
     const points = [...new Set(entries.flatMap(rotatePointsOf))]
       .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
-    return { entries, detached, points };
+    return { entries, detached, points, linked };
   };
   // A STAIR'S FRAMING RIDES THE TURN, the points of it the set does not
   // already own.
@@ -182,7 +189,7 @@
       return;
     }
     if (!selection.length || !Number.isFinite(degrees) || Math.abs(degrees % 360) < 1e-9) return;
-    const { entries, detached, points } = turnSet();
+    const { entries, detached, points, linked } = turnSet();
     const holos = entries.filter(e => e.type === 'hologram').map(e => e.item);
     if (!points.length && !holos.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
@@ -206,6 +213,13 @@
       pt.z = cz + dx * sin + dz * cos;
     };
     points.forEach(turnPoint);
+    // A KEPT LINK'S OFFSET TURNS BY AS MUCH, its old one kept for the UNDO.
+    linked.forEach(pt => {
+      const was = before.find(b => b.vtx === pt);
+      if (was) was.link = { ...pt.link };
+      const { dx, dz } = pt.link;
+      pt.link = { ...pt.link, dx: dx * cos - dz * sin, dz: dx * sin + dz * cos };
+    });
     // ITS FRAMING TURNS WITH IT, about the same middle -- and is then laid
     // again below where there is a house to measure it against.
     const framing = turnFraming(entries, points);
@@ -259,7 +273,7 @@
   const flipBar = document.getElementById('flip-bar');
   const flipSelection = axis => {
     if (!selection.length || (axis !== 'x' && axis !== 'z')) return;
-    const { entries, detached, points } = turnSet();
+    const { entries, detached, points, linked } = turnSet();
     const holos = entries.filter(e => e.type === 'hologram').map(e => e.item);
     if (!points.length && !holos.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
@@ -276,6 +290,12 @@
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
     const mirror = pt => { pt[axis] = 2 * mid - pt[axis]; };
     points.forEach(mirror);
+    // A KEPT LINK'S OFFSET MIRRORS TOO.
+    linked.forEach(pt => {
+      const was = before.find(b => b.vtx === pt);
+      if (was) was.link = { ...pt.link };
+      pt.link = { ...pt.link, [axis === 'x' ? 'dx' : 'dz']: -pt.link[axis === 'x' ? 'dx' : 'dz'] };
+    });
     const framing = turnFraming(entries, points);
     framing.forEach(vtx => before.push({ vtx, x: vtx.x, z: vtx.z }));
     framing.forEach(mirror);

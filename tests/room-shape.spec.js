@@ -287,3 +287,67 @@ test('MOVE on a floor tied to walls that stay takes every corner with it, its ar
   expect(xz(tag.points)).toEqual([[0.15, 0.15], [11.85, 0.15], [11.85, 4], [0.15, 4]]);
   expect(tag.points[0].link?.wallId, 'tied back').toBe('n');
 });
+
+// A WHOLE WC TURNED OR FLIPPED KEEPS ITS FLOOR TIED TO ITS WALLS (Movie, 25
+// Oct: "the bathroom floor acting weird"): the floor's corners turn with the
+// walls, their offsets off the wall ends turn with them, and a wall of it
+// moved afterwards still carries the floor. UNDO puts the ties back as they
+// were.
+for (const how of ['ROTATE', 'FLIP']) {
+  test(`${how} on a whole WC keeps its floor tied to its walls; a wall moved after carries the floor; UNDO`, async ({ page }) => {
+    const d0 = drawing(); d0.walls = []; d0.roomTags = [];
+    const { at } = await open(page, d0, 'level=3&left=1&lpane=build');
+    await page.locator('[data-washroom="B"]').click();
+    await click(page, at, [6, 5]);
+    await page.keyboard.press('Escape');
+    const read = () => page.evaluate(() => {
+      const tag = drawing.roomTags.find(t => t.name === 'WC 2');
+      return { pts: tag.points.map(p => ({ x: p.x, z: p.z, link: p.link ? { ...p.link } : null })), area: roomTagArea(tag) };
+    });
+    const before = await read();
+    expect(before.pts.every(p => p.link), 'tied before').toBe(true);
+    await page.evaluate(how => {
+      setSelection([...drawing.walls.map(item => ({ type: 'wall', item })),
+        { type: 'roomtag', item: drawing.roomTags.find(t => t.name === 'WC 2') }]);
+      if (how === 'ROTATE') rotateSelection(90); else flipSelection('x');
+    }, how);
+    await page.waitForTimeout(150);
+    const after = await read();
+    expect(after.pts.every(p => p.link), 'still tied').toBe(true);
+    expect(after.area, 'the same floor').toBeCloseTo(before.area, 3);
+    // ON ITS WALLS: each tied corner stands its offset off its wall's end.
+    const offWalls = await page.evaluate(() => {
+      const tag = drawing.roomTags.find(t => t.name === 'WC 2');
+      return tag.points.map(p => {
+        const w = drawing.walls.find(x => String(x.id) === String(p.link.wallId));
+        const v = w[p.link.end];
+        return Math.hypot(v.x + p.link.dx - p.x, v.z + p.link.dz - p.z);
+      });
+    });
+    offWalls.forEach(d => expect(d, 'on its wall').toBeLessThan(1e-6));
+    // A WALL OF IT MOVED AFTER: the floor follows.
+    const moved = await page.evaluate(() => {
+      const tag = drawing.roomTags.find(t => t.name === 'WC 2');
+      const w = drawing.walls.find(x => String(x.id) === String(tag.points[0].link.wallId));
+      const end = w[tag.points[0].link.end];
+      const was = tag.points[0].x;
+      end.x += 1;
+      paint();
+      return tag.points[0].x - was;
+    });
+    expect(moved, 'the floor corner went with its wall').toBeCloseTo(1, 6);
+    await page.evaluate(() => { const tag = drawing.roomTags.find(t => t.name === 'WC 2');
+      const w = drawing.walls.find(x => String(x.id) === String(tag.points[0].link.wallId));
+      w[tag.points[0].link.end].x -= 1; paint(); });
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(150);
+    const back = await read();
+    back.pts.forEach((p, i) => {
+      expect(p.x).toBeCloseTo(before.pts[i].x, 6);
+      expect(p.z).toBeCloseTo(before.pts[i].z, 6);
+      expect(p.link.dx).toBeCloseTo(before.pts[i].link.dx, 6);
+      expect(p.link.dz).toBeCloseTo(before.pts[i].link.dz, 6);
+    });
+  });
+}
