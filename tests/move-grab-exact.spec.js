@@ -67,8 +67,11 @@ test('the WC taken by its inside corner lands exactly on the inside corner of a 
   const grab = JSON.parse(await page.locator('#plan').getAttribute('data-move-grab') || 'null');
   expect(grab, 'the circle is on the WC\'s inside corner').toEqual([Number(wc.x.toFixed(4)), Number(wc.z.toFixed(4))]);
   await page.mouse.down();
-  // Dropped a few pixels off the house's inside corner.
-  await page.mouse.move(...at(target.x - off, target.z + off), { steps: 10 });
+  // Dropped between the house's inside corner and the 2x6's centre node,
+  // nearer the corner -- where the magnet's node-first rule would take the
+  // node (its reach is the longer).
+  const drop = { x: target.x + 0.47 * (0 - target.x), z: target.z + 0.47 * (0 - target.z) };
+  await page.mouse.move(...at(drop.x, drop.z), { steps: 10 });
   await page.waitForTimeout(100);
   await page.mouse.up();
   await page.waitForTimeout(150);
