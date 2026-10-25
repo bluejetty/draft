@@ -630,6 +630,16 @@
      bigger than the arrow drawn in it because a fingertip needs somewhere to
      land; the bar's own height caps the vertical dimension. */
   [data-history-controls] { display:flex; align-items:center; margin-right:12px; }
+  /* LEFT OF THE BONE (Movie, 25 Oct, marked in GIMP: "i like where the stuff
+     is over here on this line, but can we move the links over to just on the
+     left of the bone area -- the commands that pop up like COPY, MOVE,
+     ROTATE etc"). Same strip, same row; the cluster's right edge stands 12px
+     short of the bone trio, which the bar below centres on the page (116px
+     wide, so 58 either side of the middle), and it grows leftward as
+     commands come and go. */
+  #lay-status-bar { position:relative; }
+  #lay-status-bar [data-history-controls] { position:absolute; top:0; bottom:0;
+    right:calc(50% + 58px + 12px); margin-right:0; }
   .strip-history { display:inline-flex; align-items:center; justify-content:center;
     min-width:44px; height:28px; padding:0; border:none; background:transparent;
     color: var(--ink-secondary); cursor:pointer; transition:color 120ms ease; }

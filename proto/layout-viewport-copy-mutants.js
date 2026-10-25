@@ -14,6 +14,11 @@ const SPEC = 'tests/layout-viewport-copy.spec.js';
 
 const MUTANTS = [
   { file: 'LAYOUT.html',
+    name: 'the commands go back out to the right of the strip',
+    find: "  #lay-status-bar [data-history-controls] { position:absolute; top:0; bottom:0;\n    right:calc(50% + 58px + 12px); margin-right:0; }\n",
+    with: "",
+    test: 'left of the bone' },
+  { file: 'LAYOUT.html',
     name: 'the paste lands on the sheet it was copied from',
     find: "    const viewport = { ...JSON.parse(JSON.stringify(held)), id: this.state.nextViewportId, sheet, xIn, yIn };\n",
     with: "    const viewport = { ...JSON.parse(JSON.stringify(held)), id: this.state.nextViewportId, xIn, yIn };\n",
