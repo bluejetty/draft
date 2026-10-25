@@ -574,6 +574,16 @@
     paint();
   };
   const commitTypedLength = () => {
+    // ENTER WITH THE BUTTON STILL DOWN (Movie, 25 Oct: "i try to move it the
+    // direction id like then i press L or R to go into the LENGTH box and pres
+    // 0-2 and press ENTER and at that point i'd like the wall to move 2
+    // inchers over in the direction i chose"): the drag ends there, as its
+    // release would, and that release finishes the typed length
+    // (finishTypedMidDrag). The button coming up afterwards finds no drag.
+    if (typedMidDrag && dragInHand()) {
+      canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, pointerType: 'mouse' }));
+      return;
+    }
     if (stretchTypable()) { stretchByTyped(); return; }
     if (moveTypedReady()) { moveByTyped(); return; }
     if (dimTypedReady()) {
