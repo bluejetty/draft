@@ -332,7 +332,7 @@
       || stretchState.a || stairHand.at);
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
-    if (dimPlacing) dimAbandon();
+    if (dimPlacing) dimKeep();
     // A STAIR IN HAND goes; the tool stays up for the next first step.
     if (stairHand.at) { stairHand.at = null; syncStairPick(); }
     dimPoints = [];

@@ -2621,9 +2621,7 @@
       const step = { kind: 'built', walls: [], outlines: [], list: null,
         items: made.map(item => ({ list: drawing.dimensions, item })) };
       undoStack.push(step);
-      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1,
-        // EVERY LINE OF THIS STRING, for ESC to take back.
-        lines: [...(dimLastLine?.lines || []), { made, step }] };
+      dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1 };
       // A LINE PLACED IS A LINE SEEN (Movie, 24 Oct: "the LEFT CLICK to place
       // the dimension line isn't working still" -- it was placing them, with
       // HAND DIMS switched off, so each one went down out of sight). Placing
@@ -2682,23 +2680,18 @@
     if (endDimString()) paint();
     return true;
   };
-  // ESC TAKES BACK EVERY LINE OF THE STRING IN HAND -- "exit out without
-  // placing dimension" -- and the steps that laid them, so no UNDO is left
-  // pointing at a line that is gone. Called by cancelGestures.
-  const dimAbandon = () => {
-    const lines = dimLastLine?.lines || [];
-    lines.slice().reverse().forEach(({ made, step }) => {
-      // BY ID: a save between the press and the ESC hands the page fresh
-      // records for the same dimensions.
-      const ids = new Set(made.map(item => item.id));
-      const list = drawing.dimensions || [];
-      for (let i = list.length - 1; i >= 0; i -= 1) if (ids.has(list[i].id)) list.splice(i, 1);
-      const k = undoStack.lastIndexOf(step);
-      if (k >= 0) undoStack.splice(k, 1);
-    });
+  // ESC KEEPS WHAT IS DOWN (Movie, 25 Oct: "i accidentally press it meaning
+  // to end the chain but to keep it. can we change it so what has been
+  // created so far is KEPT when ESC is pressed but if its only on the 1st
+  // stage it will finish the command quickly"). It used to take back every
+  // line of the string. Now the lines laid stay, and so do their UNDO steps;
+  // points not yet laid as a line simply go (cancelGestures). Called by
+  // cancelGestures; says so when there was something to keep.
+  const dimKeep = () => {
+    const placed = dimLastLine?.count || 0;
     dimLastLine = null;
-    if (lines.length) markDirty();
-    return lines.length > 0;
+    if (placed) sayOnStrip(`DIMENSION — done, ${placed} line${placed === 1 ? '' : 's'} kept. Press the next string's first point.`);
+    return placed > 0;
   };
   // A TOOL CHANGE PUTS THE STRING DOWN and brings the pop-up up or down --
   // through the register's listeners, because setTool runs at load, before

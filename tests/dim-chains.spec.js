@@ -167,7 +167,9 @@ test('a double-click does not finish: it is two clicks, one line, and the string
   await expect(page.locator('#strip-message')).toContainText('done');
 });
 
-test('ESC while the lines are being laid takes every one of them back: nothing placed', async ({ page }) => {
+// ESC KEEPS WHAT IS DOWN (Movie, 25 Oct: "can we change it so what has been
+// created so far is KEPT when ESC is pressed").
+test('ESC while the lines are being laid keeps every line already laid, and lays no more', async ({ page }) => {
   await open(page, drawing(RUN));
   const { at } = await frame(page);
   await armDimension(page);
@@ -179,7 +181,16 @@ test('ESC while the lines are being laid takes every one of them back: nothing p
   await page.mouse.move(...at(6, 6));
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
-  expect(hand(await saved(page)), 'none of the string stays').toHaveLength(0);
+  await expect(page.locator('#strip-message')).toContainText('2 lines kept');
+  expect(hand(await saved(page)), 'both lines stay, none at the mouse').toHaveLength(4);
+  // THE NEXT PRESS STARTS A FRESH STRING.
+  await press(page, at, [0, 0]);
+  await expect(page.locator('#strip-message')).toContainText('the next point');
+  // AND UNDO STILL TAKES THEM BACK ONE LINE AT A TIME.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  expect(hand(await saved(page)), 'one line back').toHaveLength(2);
 });
 
 test('points clicked quickly, one after another, are all points', async ({ page }) => {
