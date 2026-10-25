@@ -122,7 +122,16 @@ function run(win) {
   // blind to exactly the records Movie named.
   const level = saved.levels.find(l => l.id === 3) || saved.levels[0];
   const lid = level.id;
-  saved.roomTags = [{ id: 1, levelId: lid, view: 'plan', at: { x: 12, z: -10 }, text: 'KITCHEN' }];
+  saved.roomTags = [{ id: 1, levelId: lid, view: 'plan', at: { x: 12, z: -10 }, text: 'KITCHEN' },
+    // A WC'S TILED FLOOR (Movie, 25 Oct: "the bathroom floor acting weird"):
+    // a shaped tag, one corner linked to a wall end by its offset off it.
+    { id: 2, levelId: lid, view: 'plan', at: { x: 14, z: -6 }, name: 'WC BF1', flooring: { type: 'tile' },
+      points: [{ x: 12, z: -8, link: { wallId: 'w1', end: 'start', dx: 0.25, dz: -0.5 } },
+        { x: 16, z: -8 }, { x: 16, z: -4 }, { x: 12, z: -4 }] }];
+  // AND A FREE FIXTURE, its wall gone: it stands on its own line.
+  saved.fixtures = [{ id: 'fx1', wallId: null, levelId: lid, view: 'plan', kind: 'toilet',
+    offset: 1, width: 1.6, depth: 2.4, side: 1,
+    host: { id: 'free:w9', start: { x: 12, y: 0, z: -8 }, end: { x: 16, y: 0, z: -8 } } }];
   saved.electricDevices = [{ id: 'd1', levelId: lid, view: 'plan', at: { x: 9, z: -3 }, kind: 'outlet' }];
   saved.shapes = [{ id: 's1', levelId: lid, view: 'plan',
     points: [{ x: 2, z: 2 }, { x: 6, z: 2 }, { x: 6, z: 6 }] }];
@@ -204,6 +213,12 @@ function run(win) {
     `${moved('notes', 'anchor')} / ${moved('notes', 'text')}`);
   check('and a room tag turns, so a label stays in its own room',
     moved('roomTags', 'at') === true, String(moved('roomTags', 'at')));
+  // A LINKED CORNER'S OFFSET IS A DIRECTION, so it spins as a cut's does:
+  // left as it was, the corner stands its old offset off its turned node.
+  check('and a linked floor corner-s offset off its wall end turns with it',
+    JSON.stringify(turned.roomTags[1].points[0].link) === JSON.stringify(
+      { wallId: 'w1', end: 'start', dx: 0.5, dz: 0.25 }),
+    JSON.stringify(turned.roomTags[1].points[0].link));
 
   // ── THE TWO THAT ARE NOT SIMPLY POINTS ────────────────────────────────
   //
@@ -499,7 +514,15 @@ const MUTATIONS = [
       + '    move(drawing.drawingOrigin);\n')],
   // ── THE RECORDS MOVIE NAMED, DROPPED ONE AT A TIME ──────────────────
   ['the room tags are forgotten, so every label stays in the wrong room',
-    s => sub(s, 'plan-rotate.js', "    { key: 'roomTags', at: ['at'] },\n", '')],
+    s => sub(s, 'plan-rotate.js', "    { key: 'roomTags', at: ['at'], points: true, links: true },\n", '')],
+  ['a room tag-s shape stays behind, so the WC-s floor runs off to where it was',
+    s => sub(s, 'plan-rotate.js', "    { key: 'roomTags', at: ['at'], points: true, links: true },\n",
+      "    { key: 'roomTags', at: ['at'] },\n")],
+  ['a linked corner keeps its unturned offset off its turned node',
+    s => sub(s, 'plan-rotate.js', "    { key: 'roomTags', at: ['at'], points: true, links: true },\n",
+      "    { key: 'roomTags', at: ['at'], points: true },\n")],
+  ['a free fixture-s line stays behind, so the toilet is left where the house was',
+    s => sub(s, 'plan-rotate.js', "    { key: 'fixtures', host: true },\n", '')],
   ['the dimensions are forgotten, so the strings measure thin air',
     s => sub(s, 'plan-rotate.js', "    { key: 'dimensions', at: ['start', 'end'] },\n", '')],
   ['the annotation notes are forgotten',

@@ -69,7 +69,20 @@ if (!window.DraftPlanRotate) {
     { key: 'dimensions', at: ['start', 'end'] },
     { key: 'notes', at: ['anchor', 'text'] },
     { key: 'columns', at: ['point'] },
-    { key: 'roomTags', at: ['at'] },
+    // A ROOM TAG'S SHAPE TURNS WITH ITS LABEL (Movie, 25 Oct: "the bathroom
+    // floor acting weird"). A WC drops its tiled floor as the tag's own
+    // corners, each linked to a wall end by an OFFSET -- and the offset is a
+    // direction, so it spins as a cut's does. Left out, a corner with no link
+    // stood still while the house turned and the floor ran off the sheet to
+    // it (874 SQ FT for an 84 SQ FT WC), and a linked one stood its unturned
+    // offset off its turned node.
+    { key: 'roomTags', at: ['at'], points: true, links: true },
+    // A FREE FIXTURE STANDS ON ITS OWN LINE, not a wall (its wall deleted, or
+    // dropped away from every wall), so the line turns or the piece is left
+    // where the house was: the WC's toilet and shower and the kitchen's pieces
+    // went missing on every turn but the one they were drawn at. A fixture on
+    // a wall rides it by an offset and needs nothing here.
+    { key: 'fixtures', host: true },
     { key: 'electricDevices', at: ['at'] },
     { key: 'floors', points: true },
     { key: 'roofs', points: true },
@@ -184,7 +197,16 @@ if (!window.DraftPlanRotate) {
           if (next[field]) next[field] = { ...next[field], ...spin(next[field], n) };
         });
         if (rule.points && Array.isArray(next.points)) {
-          next.points = next.points.map(pt => turnPoint(pt, centre, n));
+          next.points = next.points.map(pt => {
+            const moved = turnPoint(pt, centre, n);
+            if (!rule.links || !pt?.link) return moved;
+            const off = spin({ x: pt.link.dx, z: pt.link.dz }, n);
+            return { ...moved, link: { ...pt.link, dx: snap(off.x), dz: snap(off.z) } };
+          });
+        }
+        if (rule.host && next.wallId == null && next.host?.start && next.host?.end) {
+          next.host = { ...next.host,
+            start: turnPoint(next.host.start, centre, n), end: turnPoint(next.host.end, centre, n) };
         }
         if (rule.bare && Number.isFinite(Number(next.x)) && Number.isFinite(Number(next.z))) {
           const moved = turnPoint({ x: next.x, z: next.z }, centre, n);
@@ -249,6 +271,7 @@ if (!window.DraftPlanRotate) {
     const q = (((Number(turns) || 0) % 4) + 4) % 4;
     if (!q || !drawing || typeof drawing !== 'object') return drawing;
     const seen = new Set();
+    const spunLinks = new Set();
     const move = pt => {
       if (!pt || typeof pt !== 'object' || seen.has(pt)) return;
       if (!Number.isFinite(Number(pt.x)) || !Number.isFinite(Number(pt.z))) return;
@@ -264,7 +287,19 @@ if (!window.DraftPlanRotate) {
         if (!item || typeof item !== 'object') return;
         (rule.at || []).forEach(field => move(item[field]));
         (rule.spin || []).forEach(field => move(item[field]));
-        if (rule.points && Array.isArray(item.points)) item.points.forEach(move);
+        if (rule.points && Array.isArray(item.points)) {
+          item.points.forEach(pt => {
+            // A LINK'S OFFSET SPINS ONCE -- counted on its own, because the
+            // corner may be a wall's node the walls above already moved.
+            if (rule.links && pt?.link && !spunLinks.has(pt)) {
+              spunLinks.add(pt);
+              const off = spin({ x: pt.link.dx, z: pt.link.dz }, q);
+              pt.link = { ...pt.link, dx: off.x, dz: off.z };
+            }
+            move(pt);
+          });
+        }
+        if (rule.host && item.wallId == null && item.host) { move(item.host.start); move(item.host.end); }
         if (rule.bare) move(item);
         if (rule.swapSize && q % 2 === 1
           && Number.isFinite(Number(item.widthFt)) && Number.isFinite(Number(item.heightFt))) {
