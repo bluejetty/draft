@@ -15,6 +15,7 @@
 // offers -- because a test that asked STANDARDS whether it had saved a logo
 // would pass with the far end unwired.
 const { test, expect } = require('@playwright/test');
+const { pdfBytes } = require('./logo-files');
 
 const BUCKET = 'model-drawing';
 
@@ -195,4 +196,14 @@ test('a file that is not an image is refused, and says so', async ({ page }) => 
   // broken button -- the drafter tries the same file three more times.
   await expect(page.locator('#status')).toHaveClass(/warning/);
   await expect(page.locator('[data-logo-list]')).toContainText('NONE YET');
+});
+
+// A PDF IS A LOGO TOO (Movie, 25 Oct): its first page, into the crop.
+test('COMPANY STANDARDS takes a PDF logo -- its first page, through the crop', async ({ page }) => {
+  await openStandards(page);
+  await expect(page.locator('[data-logo-file]')).toHaveAttribute('accept', /\.pdf/);
+  await page.locator('[data-logo-file]').setInputFiles({ name: 'letterhead.pdf', mimeType: 'application/pdf', buffer: pdfBytes() });
+  await expect(page.locator('[data-crop-back]')).toBeVisible({ timeout: 15000 });
+  await page.locator('[data-crop-use]').click();
+  await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveCount(1);
 });

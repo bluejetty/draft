@@ -10,6 +10,7 @@
 // the list and upload it".
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
+const { pdfBytes, bmpBytes } = require('./logo-files');
 
 const BUCKET = 'model-drawing';
 const PW = 17;
@@ -252,3 +253,27 @@ test('a double press on the titleblock\'s logo opens the picker: pick one, or ad
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-logo-picker]')).toBeHidden();
 });
+
+// MORE THAN PICTURES (Movie, 25 Oct: "can we allow PDF and as many other
+// image filetypes as possilbe for the LOGO" -- "do all the check marks"): a
+// PDF's first page and a BMP each land as a logo, their margins trimmed.
+for (const [name, mimeType, bytes, ratio] of [
+  ['letterhead.pdf', 'application/pdf', pdfBytes, 2],
+  ['mark.bmp', 'image/bmp', bmpBytes, 2],
+]) {
+  test(`the logo picker takes a ${name.split('.').pop().toUpperCase()}`, async ({ page }) => {
+    await openLayout(page, boneDrawing());
+    await waitForCompose(page);
+    await expect(page.locator('[data-logo-upload]')).toHaveAttribute('accept', /\.pdf/);
+    await expect(page.locator('[data-logo-upload]')).toHaveAttribute('accept', /\.bmp/);
+    await expect(page.locator('[data-logo-upload]')).toHaveAttribute('accept', /\.ico/);
+    await expect(page.locator('[data-logo-upload]')).toHaveAttribute('accept', /\.avif/);
+    const logo = await hitOf(page, 'layoutLogoHit');
+    await page.mouse.dblclick(...await deskPoint(page, ...centre(logo)));
+    await page.locator('[data-logo-upload]').setInputFiles({ name, mimeType, buffer: bytes() });
+    await expect(page.locator('[data-logo-note]')).toContainText('COMPANY 01 added', { timeout: 15000 });
+    const kept = await page.evaluate(() => window.DraftProfileManager.getActive('standards').content.model.companyLogos);
+    const size = await page.evaluate(src => new Promise(res => { const i = new Image(); i.onload = () => res([i.width, i.height]); i.src = src; }), kept[0].dataUrl);
+    expect(Math.abs(size[0] / size[1] - ratio), `the block alone, ${size}`).toBeLessThan(0.08);
+  });
+}

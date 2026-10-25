@@ -48,6 +48,7 @@
        limits on it, because an uploaded logo is a titleblock STYLE and nothing
        else; this page only takes the file in. -->
   <script src="./titleblock.js"></script>
+  <script src="./logo-file.js"></script>
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
        critical path of the page. -->
   <link rel="stylesheet" href="vendor/fonts.css" />
@@ -159,9 +160,9 @@
       <div class="group-title">Logos</div>
       <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
         <span class="default-name">ADD A LOGO</span>
-        <span class="layer-use">A PNG with a transparent background reads best &mdash; the strip prints it on white paper. Big images are scaled down on the way in, so a logo straight off a letterhead is fine. The mark fills its cell, so one that already carries your company name needs no second line of type. <strong>You crop it next</strong>, against a live picture of the titleblock it is going into.</span>
+        <span class="layer-use">A PNG with a transparent background reads best &mdash; the strip prints it on white paper. Big images are scaled down on the way in, so a logo straight off a letterhead is fine. The mark fills its cell, so one that already carries your company name needs no second line of type. <strong>You crop it next</strong>, against a live picture of the titleblock it is going into. <em>PNG, JPG, GIF, WEBP, SVG, BMP, ICO, AVIF, or a PDF (its first page).</em></span>
         <span class="layer-print" style="justify-content:flex-start;">
-          <input type="file" id="logo-file" data-logo-file accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" aria-label="Upload a company logo" style="width:100%;" />
+          <input type="file" id="logo-file" data-logo-file accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.ico,.avif,.pdf" aria-label="Upload a company logo" style="width:100%;" />
         </span>
       </div>
       <div id="logo-list" data-logo-list></div>
@@ -812,26 +813,9 @@
       // a data URL: the crop dialog draws from it on every drag, and encoding
       // a PNG per frame to feed a picture the canvas already holds is a round
       // trip for nothing. One URL is made at the end, out of the crop.
-      const asCanvas = file => new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image this browser can read.')); };
-        img.onload = () => {
-          URL.revokeObjectURL(url);
-          // AN SVG WITH NO INTRINSIC SIZE decodes to 0x0 in some browsers;
-          // 300px square is what the spec says to assume, and it is a size a
-          // crop can be drawn against.
-          const iw = img.naturalWidth || img.width || 300;
-          const ih = img.naturalHeight || img.height || 300;
-          const scale = Math.min(1, LOGO_MAX_PX / Math.max(iw, ih));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, Math.round(iw * scale));
-          canvas.height = Math.max(1, Math.round(ih * scale));
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas);
-        };
-        img.src = url;
-      });
+      // ANY FILE logo-file.js READS (Movie, 25 Oct): the images a browser
+      // decodes, plus a PDF's first page. Down to LOGO_MAX_PX on the way in.
+      const asCanvas = file => window.DraftLogoFile.toCanvas(file, LOGO_MAX_PX);
 
       // ── WHERE THE ARTWORK ACTUALLY IS ──────────────────────────────────
       // Movie, 14 Oct, on his own first upload: "the one i uploaded had too

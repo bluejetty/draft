@@ -122,6 +122,7 @@
      this page would lay an AUTOSITE for an unturned house on a turned one. -->
 <script src="./cut-marks.js"></script>
 <script src="./titleblock.js"></script>
+<script src="./logo-file.js"></script>
 <script src="./lot-sizes.js"></script>
 <!-- Landscape on every working screen (board #310): in portrait on a touch
      device this covers the page until the tablet is turned. ENTRY is the one
@@ -810,7 +811,7 @@
     <div id="lay-logo-grid" data-logo-grid></div>
     <div class="lay-logo-foot">
       <button type="button" data-logo-add>+ ADD LOGO…</button>
-      <input type="file" data-logo-upload accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden />
+      <input type="file" data-logo-upload accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.ico,.avif,.pdf" hidden />
       <span data-logo-note></span>
     </div>
   </div>
@@ -4129,27 +4130,12 @@ class Component extends PageLogic {
     }
     let dataUrl;
     try {
-      dataUrl = await new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image this browser can read.')); };
-        img.onload = () => {
-          URL.revokeObjectURL(url);
-          const iw = img.naturalWidth || 300, ih = img.naturalHeight || 300;
-          const k = Math.min(1, 512 / Math.max(iw, ih));
-          const c = document.createElement('canvas');
-          c.width = Math.max(1, Math.round(iw * k));
-          c.height = Math.max(1, Math.round(ih * k));
-          const g = c.getContext('2d');
-          g.drawImage(img, 0, 0, c.width, c.height);
-          const box = trimBox(g, c.width, c.height);
-          const out = document.createElement('canvas');
-          out.width = box.w; out.height = box.h;
-          out.getContext('2d').drawImage(c, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
-          resolve(out.toDataURL('image/png'));
-        };
-        img.src = url;
-      });
+      const c = await window.DraftLogoFile.toCanvas(file, 512);
+      const box = trimBox(c.getContext('2d'), c.width, c.height);
+      const out = document.createElement('canvas');
+      out.width = box.w; out.height = box.h;
+      out.getContext('2d').drawImage(c, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+      dataUrl = out.toDataURL('image/png');
     } catch (error) {
       this._logoNote(error.message || 'That logo could not be read.', true);
       return;
