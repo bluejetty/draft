@@ -39,7 +39,7 @@ const MUTANTS = [
     test: 'a press on a linked corner asks' },
   { file: 'model/16-gestures-undo.js',
     name: 'a linked corner drags without asking',
-    find: "      if (handle.kind === 'corner' && wallsOnCorner(pts[handle.index]).length) {\n        askRoomCorner(shapedTag, handle.index);\n        return;\n      }\n",
+    find: "      if (loopKind === 'roomtag' && handle.kind === 'corner' && wallsOnCorner(pts[handle.index]).length) {\n        askRoomCorner(shapedTag, handle.index);\n        return;\n      }\n",
     with: "",
     test: 'a press on a linked corner asks' },
   { file: 'model/07-walls-magnet.js',

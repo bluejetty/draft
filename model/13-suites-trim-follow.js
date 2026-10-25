@@ -781,7 +781,7 @@
     }
     // FLOOR AND SHAPE TOO, for the strip's readout only (Movie, 12 Oct: "area
     // and shapes like roof and floor too"): the edge from the last corner to
-    // the cursor. Their LENGTH box still takes no typing.
+    // the cursor. Their LENGTH box takes typing since 25 Oct (typedLoopCorner).
     // AND THE SINGLE SLOPE ROOF'S EDGE IN HAND, which the box can type.
     if (shedRun()) return shedRun();
     const corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : null;
@@ -947,7 +947,7 @@
     const moveTypable = moveReady || dimReady || stretchReady;
     const typable = !!(((drawsRun() && drawStart)
       || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld) || moveTypable
-      || !!shedRun();
+      || !!shedRun() || loopTypable();
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
@@ -961,7 +961,7 @@
     // answer now is that 37 is taken and MOVES THE BOARD, which is the
     // drafter's own instruction. A box he cannot type in is the "they all go
     // dim" he was complaining about.
-    const angleTypable = drawsRun() || activeTool === 'outline';
+    const angleTypable = drawsRun() || ['outline', 'floor', 'shape'].includes(activeTool);
     if (angleBox.disabled === angleTypable) {
       angleBox.disabled = !angleTypable;
       if (!angleTypable) angleBox.value = '';

@@ -200,6 +200,19 @@
     if (len < 1e-6) { stripMessage.textContent = 'point away from the corner first'; return; }
     outlineAdd({ x: from.x + ux / len * feet, z: from.z + uz / len * feet });
   };
+  // A LOOP'S TYPED CORNER goes down where it is typed: not through
+  // loopPoint again, whose 1 ft light would round 12-6 back to 12.
+  const typedLoopCorner = feet => {
+    const corners = loopCornersInHand();
+    const from = corners[corners.length - 1];
+    const aim = loopPoint(cursorWorld);
+    const ux = aim.x - from.x, uz = aim.z - from.z;
+    const len = Math.hypot(ux, uz);
+    if (len < 1e-6) { stripMessage.textContent = 'point away from the corner first'; return; }
+    corners.push({ x: from.x + ux / len * feet, z: from.z + uz / len * feet });
+    stripRefresh();
+    paint();
+  };
   const typedOutlineFeet = () => {
     const parsed = F.parseArchitecturalLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return undefined; }
@@ -598,6 +611,16 @@
         typedOutlineEdge({ feet });
         if (promoted) sayOnStrip(promotionWord(said));
       }
+      lengthBox.blur();
+      return;
+    }
+    // A FLOOR'S OR A SHAPE'S NEXT CORNER, TYPED (Movie, 25 Oct: "do the other
+    // 2 for sure" -- typed lengths and dragging corners, as WALL and LINE
+    // have): that far from the last corner, the way the cursor points.
+    if (loopTypable()) {
+      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
+      const feet = typedOutlineFeet();
+      if (feet !== undefined) typedLoopCorner(feet);
       lengthBox.blur();
       return;
     }
