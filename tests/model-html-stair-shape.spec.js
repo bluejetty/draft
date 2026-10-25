@@ -114,12 +114,12 @@ async function pickStair(page, stair) {
   await expect(page.locator('#hover-name'), 'the click point is on the stair')
     .toHaveText('STAIR', { timeout: 4000 });
   await page.mouse.click(x, y);
-  await expect(page.locator('[data-prop-row="shape"]')).toBeVisible({ timeout: 4000 });
+  await expect(page.locator('#props-slot [data-prop-row="shape"]')).toBeVisible({ timeout: 4000 });
   return [x, y];
 }
 
 const chip = (page, row, value) =>
-  page.locator(`[data-prop-row="${row}"] [data-prop-value="${value}"]`);
+  page.locator(`#props-slot [data-prop-row="${row}"] [data-prop-value="${value}"]`);
 
 test('the panel offers STRAIGHT / L / U, and the turn only once there is one',
   async ({ page }) => {
@@ -130,11 +130,11 @@ test('the panel offers STRAIGHT / L / U, and the turn only once there is one',
     // A STRAIGHT FLIGHT HAS NO HANDED VERSION, so no TURN row is offered --
     // a row whose two choices mean nothing is the panel describing a property
     // the drawing does not have.
-    await expect(page.locator('[data-prop-row="turn"]')).toHaveCount(0);
+    await expect(page.locator('#props-slot [data-prop-row="turn"]')).toHaveCount(0);
 
     await chip(page, 'shape', 'U').click();
     await expect(chip(page, 'shape', 'U')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('[data-prop-row="turn"]')).toBeVisible();
+    await expect(page.locator('#props-slot [data-prop-row="turn"]')).toBeVisible();
 
     await save(page);
     const after = stairOf(await survives(page));
@@ -180,10 +180,10 @@ test('winders are behind a double-click on L, and only on an L', async ({ page }
   // not to do -- MODEL.dc.html's own note: "never the default and never
   // advertised".
   await chip(page, 'shape', 'L').click();
-  await expect(page.locator('[data-prop-row="winders"]')).toHaveCount(0);
+  await expect(page.locator('#props-slot [data-prop-row="winders"]')).toHaveCount(0);
 
   await chip(page, 'shape', 'L').dblclick();
-  await expect(page.locator('[data-prop-row="winders"]')).toBeVisible();
+  await expect(page.locator('#props-slot [data-prop-row="winders"]')).toBeVisible();
   await expect(chip(page, 'winders', '0')).toHaveAttribute('aria-pressed', 'true');
 
   await chip(page, 'winders', '2').click();
@@ -194,7 +194,7 @@ test('winders are behind a double-click on L, and only on an L', async ({ page }
   // a U clears them here rather than letting the record say 2 and the reader
   // say 0 -- which would be the panel showing a choice the file does not hold.
   await chip(page, 'shape', 'U').click();
-  await expect(page.locator('[data-prop-row="winders"]')).toHaveCount(0);
+  await expect(page.locator('#props-slot [data-prop-row="winders"]')).toHaveCount(0);
   await save(page);
   expect(stairOf(await survives(page)).winders, 'a U carries no winders').toBe(0);
 });
@@ -206,7 +206,7 @@ test('a stair that already has winders shows the row without being asked',
     // drawn -- a panel that omitted the row would make them unreachable.
     await open(page, base({ shape: 'L', winders: 3 }));
     await pickStair(page, base({ shape: 'L', winders: 3 }).stairs[0]);
-    await expect(page.locator('[data-prop-row="winders"]')).toBeVisible();
+    await expect(page.locator('#props-slot [data-prop-row="winders"]')).toBeVisible();
     await expect(chip(page, 'winders', '3')).toHaveAttribute('aria-pressed', 'true');
   });
 
