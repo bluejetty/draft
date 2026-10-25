@@ -2899,8 +2899,18 @@ if (!window.DraftRender2D) {
     //
     // THE ARROWHEADS OWN THE ENDS. `arrow` draws at size 5 from each end, so
     // the room a figure actually has is the run less both of them.
-    const FULL_FONT = `600 ${11 * k}px 'Barlow Condensed', system-ui, sans-serif`;
-    const TIGHT_FONT = `600 ${8 * k}px 'Barlow Condensed', system-ui, sans-serif`;
+    //
+    // THE FIGURE CAN BE SIZED ON ITS OWN (Movie, 25 Oct: "the dimension text
+    // is pretty small" -- "see the background drawing, it would be nice if
+    // the dimension text was approx that size", sized off "the LAYOUT VIEW
+    // for that LAYER/LEVEL"). `env.textScale` multiplies the figures, their
+    // plate and their outboard step, and nothing else: the arrowheads, the
+    // stand-off and the line the pick reads stay where they were. MODEL
+    // hands it the printed height at the level's sheet scale over the 11px
+    // figure; a sheet passes nothing and is unchanged.
+    const t = env && Number.isFinite(env.textScale) && env.textScale > 0 ? env.textScale : 1;
+    const FULL_FONT = `600 ${11 * k * t}px 'Barlow Condensed', system-ui, sans-serif`;
+    const TIGHT_FONT = `600 ${8 * k * t}px 'Barlow Condensed', system-ui, sans-serif`;
     ctx.font = FULL_FONT;
     const room = length - 12 * k;
     const labelFont = ctx.measureText(label).width > room ? TIGHT_FONT : FULL_FONT;
@@ -2937,13 +2947,13 @@ if (!window.DraftRender2D) {
     // supposed to leave; 10 puts a 3px gap under it. In paper units like
     // everything else here, so it holds its distance on a zoomed sheet.
     const tight = labelFont === TIGHT_FONT;
-    const push = tight ? 10 * k : 0;
+    const push = tight ? 10 * k * t : 0;
     labelAlongLine2D(ctx,
       { x: da.x + nx * push, y: da.y + ny * push },
       { x: db.x + nx * push, y: db.y + ny * push },
       label, {
         font: labelFont,
-        color, background: env.colors.labelBack, offset: 0, scale: k,
+        color, background: env.colors.labelBack, offset: 0, scale: k * t,
       });
     ctx.restore();
   }
