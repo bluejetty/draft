@@ -80,6 +80,9 @@
   const rotateBar = document.getElementById('rotate-bar');
   const rotatePointsOf = ({ type, item }) => {
     if (!item) return [];
+    // A FREE FIXTURE TURNS ON ITS OWN LINE (Movie, 25 Oct: "i tried to rotate
+    // it ... didn't work"): standing on no wall, it has nothing to turn with.
+    if (type === 'fixture' && item.wallId == null && item.host?.start && item.host?.end) return [item.host.start, item.host.end];
     if (type === 'fixture' || type === 'fenestration') return [];
     if (type === 'roomtag') return [item.at, ...(roomShapeOf(item) || [])].filter(Boolean);
     if (type === 'note') return [item.anchor, item.text].filter(Boolean);
@@ -186,7 +189,12 @@
       sayOnStrip('Nothing in the selection can be turned on its own -- doors, windows and fixtures turn with their walls.');
       return;
     }
-    const spread = [...points, ...holos.flatMap(hologramCorners)];
+    // ABOUT ITS MIDDLE: a free fixture's body counts, not only the line it
+    // stands on, so a lone one turns in place.
+    const freeOnes = entries.filter(e => e.type === 'fixture' && e.item.wallId == null && e.item.host).map(e => e.item);
+    const freeLines = new Set(freeOnes.flatMap(f => [f.host.start, f.host.end]));
+    const freeBodies = freeOnes.flatMap(f => window.DraftFixtureGeometry?.fixtureGeometry(drawing.walls || [], f)?.corners || []);
+    const spread = [...points.filter(pt => !freeLines.has(pt)), ...holos.flatMap(hologramCorners), ...freeBodies];
     const xs = spread.map(pt => pt.x), zs = spread.map(pt => pt.z);
     const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
     const a = degrees * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
@@ -258,7 +266,11 @@
       sayOnStrip('Nothing in the selection can be flipped on its own -- doors, windows and fixtures flip with their walls.');
       return;
     }
-    const vals = [...points, ...holos.flatMap(hologramCorners)].map(pt => pt[axis]);
+    // A FREE FIXTURE MIRRORS ABOUT ITS BODY, as it turns about it.
+    const freeOnes = entries.filter(e => e.type === 'fixture' && e.item.wallId == null && e.item.host).map(e => e.item);
+    const freeLines = new Set(freeOnes.flatMap(f => [f.host.start, f.host.end]));
+    const freeBodies = freeOnes.flatMap(f => window.DraftFixtureGeometry?.fixtureGeometry(drawing.walls || [], f)?.corners || []);
+    const vals = [...points.filter(pt => !freeLines.has(pt)), ...holos.flatMap(hologramCorners), ...freeBodies].map(pt => pt[axis]);
     const mid = (Math.min(...vals) + Math.max(...vals)) / 2;
     const before = points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
       ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) }));
@@ -278,7 +290,7 @@
       edits.push({ item: w, before: { ...w } });
       w.refLine = w.refLine === 'left' ? 'right' : 'left';
     });
-    (drawing.fixtures || []).filter(f => wallIds.has(String(f.wallId))).forEach(f => {
+    (drawing.fixtures || []).filter(f => wallIds.has(String(f.wallId)) || freeOnes.includes(f)).forEach(f => {
       edits.push({ item: f, before: { ...f } });
       f.side = f.side === -1 ? 1 : -1;
     });

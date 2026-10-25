@@ -1309,8 +1309,14 @@
     if (!geo || !G) return null;
     // ITS BACK OR ITS FRONT: brought up front first, it turns round and
     // hangs with its back on that wall, facing the room.
+    // OR EITHER SIDE (Movie, 25 Oct: "the VANITY doesn't go with its back
+    // towards the wall, it seems to only get positioned this way"): a free
+    // piece stands with its back to the top of the sheet, so against a wall
+    // running up the sheet it is a side that meets it -- and it turns a
+    // quarter to put its back there.
     const mid = (a, b) => ({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
-    const edges = [mid(geo.corners[0], geo.corners[1]), mid(geo.corners[2], geo.corners[3])];
+    const c = geo.corners;
+    const edges = [mid(c[0], c[1]), mid(c[2], c[3]), mid(c[1], c[2]), mid(c[3], c[0])];
     let best = null, bestD = Infinity;
     walls().forEach(wall => {
       const frame = wall.start && wall.end && FG.wallFrame(wall);
