@@ -14,27 +14,27 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/magnet-tiers.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'a node reaches no further than a corner',
     find: '  const NODE_PULL_PX = 14;\n',
     with: '  const NODE_PULL_PX = 11;\n',
     test: 'a node pulls harder than a crossing that acts like one; a crossing close by still wins' },
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'a corner is as magnetic as a node',
     find: '  const FACE_CORNER_PULL_PX = 11;\n',
     with: '  const FACE_CORNER_PULL_PX = 14;\n',
     test: 'a node pulls harder than a crossing that acts like one; a crossing close by still wins' },
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'a crossing is no corner',
     find: "    crossingCache = { key, list: G.lineCrossings(runsHere()) };\n",
     with: '    crossingCache = { key, list: [] };\n',
     test: 'a node pulls harder than a crossing that acts like one; a crossing close by still wins' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'a corner glows neon, not yellow',
     find: "    yellow: { ink: '#ffe600', glow: 'rgba(255, 230, 0, 0.95)' },\n",
     with: "    yellow: { ink: TRACK_LIT, glow: TRACK_GLOW },\n",
     test: 'the node glows orange, the corner yellow, the face neon' },
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'a drag sees no crossings',
     find: "    const still = walls().filter(w => !touches(w.start) && !touches(w.end));\n"
       + "    const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));\n"

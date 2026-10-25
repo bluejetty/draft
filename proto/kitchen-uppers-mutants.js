@@ -40,7 +40,7 @@ const MUTANTS = [
     find: "        ...(fixture?.uppers === false ? { uppers: false } : {}),\n",
     with: "",
     test: 'UPPERS OFF' },
-  { file: 'MODEL.html',
+  { file: 'model/15-panels.js',
     name: 'PROPERTIES has no UPPERS',
     find: "    if (KU?.takesUppers && items.every(f => KU.takesUppers(f))) {\n",
     with: "    if (false) {\n",

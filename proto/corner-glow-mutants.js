@@ -20,25 +20,25 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-corner-glow.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'the ring is never painted at all',
     find: '    if (!hoverCorner) return;',
     with: '    if (true) return;',
     test: 'paints a ring on it' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the ring is painted and NEVER CLEARED: every corner visited stays lit',
     find: '      if (corner !== hoverCorner) { hoverCorner = corner; paint(); }',
     with: '      if (corner && corner !== hoverCorner) { hoverCorner = corner; paint(); }',
     test: 'leaves nothing behind' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the ring follows the CURSOR rather than the grab: lit on bare sheet',
     find: '      const corner = cornerAt(at);\n      canvas.classList.toggle(\'over-corner\', !!corner);',
     with: '      const corner = cornerAt(at) || { x: at.x, z: at.z };\n      canvas.classList.toggle(\'over-corner\', !!corner);',
     test: 'bare sheet gets no ring' },
 
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the ring offers a grab the drag would refuse: an unselected wall lights',
     // DISAMBIGUATED, AND IT NO LONGER HAS TO BE. These lines used to read
     // `selectedWall()` and occurred TWICE in MODEL.html -- here in the

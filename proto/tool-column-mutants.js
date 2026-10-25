@@ -54,7 +54,7 @@ const MUTANTS = [
   },
   {
     name: 'the register lets two tools be armed at once',
-    file: 'MODEL.html',
+    file: 'model/14-promotion-tools.js',
     find: "      btn.setAttribute('aria-pressed', String(btn.dataset.toolKey === next));",
     with: "      if (btn.dataset.toolKey === next) btn.setAttribute('aria-pressed', 'true');",
     test: 'the register holds one tool',
@@ -71,7 +71,7 @@ const MUTANTS = [
   // armed at once' -- already guards the line that replaced it.
   {
     name: 'the press dispatch stops reading the register',
-    file: 'MODEL.html',
+    file: 'model/16-gestures-undo.js',
     // RE-POINTED. The anchor was the one-line wall case; §1 replaced it with
     // the press/lift split, so the old string stopped matching and this
     // mutation reported SKIPPED -- counting toward the score while checking

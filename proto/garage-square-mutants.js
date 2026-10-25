@@ -23,49 +23,49 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/garage-square.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the stair suggester is never told about the square: the well stands where the car goes',
     find: '      keepOuts: garageKeepOutsUnder(levelId).map(k => k.points),',
     with: '      keepOuts: [],',
     test: 'lands on the pier between the doors' },
 
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'the squares point OUT of the garage (the inward normal is never flipped)',
     find: "      if ((centre.x - at.x) * inward.x + (centre.z - at.z) * inward.z < 0) inward = { x: -inward.x, z: -inward.z };\n",
     with: '',
     test: 'lands on the pier between the doors' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the beam plan is not handed the squares: a column stands in front of the car',
     find: '        keepOuts,\n        openings,\n      });',
     with: '        keepOuts: [],\n        openings,\n      });',
     test: 'a beam never rests over the garage door' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the beam plan is not told where the doors are: the row rests over the garage door',
     find: '        keepOuts,\n        openings,\n      });',
     with: '        keepOuts,\n        openings: [],\n      });',
     test: 'a beam never rests over the garage door' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'no post is filed under the beam\'s ends',
     find: "        const record = { id: columnId++, point: { ...p, y: 0 }, levelId, view, footing: 'post6', inWall: true, auto: true };\n        drawing.columns.push(record);",
     with: "        const record = { id: columnId++, point: { ...p, y: 0 }, levelId, view, footing: 'post6', inWall: true, auto: true };",
     test: 'a 6x6 is built into the wall under each end' },
 
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'the square is measured from the wall line, not the inside face (the note reads 18 ft, not 17\'-1")',
     find: "        insetFt: (Number.isFinite(totalIn) ? totalIn : 5.5) / 12 }];",
     with: '        insetFt: 0 }];',
     test: 'too shallow for its square says so' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'a garage too shallow for its square is not called out',
     find: '      if (garage && shallow) {',
     with: '      if (false && garage && shallow) {',
     test: 'too shallow for its square says so' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'a re-run says the shallow-garage note again instead of taking it back first',
     find: '    drawing.notes = notesNow.filter(note => !isBeamTag(note) && !isSquareNote(note)',
     with: '    drawing.notes = notesNow.filter(note => !isBeamTag(note)',

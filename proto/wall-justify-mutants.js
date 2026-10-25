@@ -19,49 +19,49 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/07-walls-magnet.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'THE OLD DEFAULT: a drawn wall is a left-face wall, not a centreline wall',
     find: "        refLine || wallSetting('wallRefLine', 'center')),",
     with: "        refLine || wallSetting('wallRefLine', 'left')),",
     test: 'CENTERLINE pressed, and a drawn wall is a centreline wall' },
 
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/11-floor-openings-fixtures.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'THE PICK IS NOT THE DRAWING\'S: it lights a chip and changes no wall',
     find: '      drawing.wallRefLine = id;\n      markDirty();\n      showWallProps();',
     with: '      showWallProps();',
     test: 'LEFT SIDE puts the wall on the drafter' },
 
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/11-floor-openings-fixtures.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'THE WORDS MAP BACKWARDS: LEFT SIDE stores the left face, a wall on the right',
     find: "  const WALL_SIDES = [['right', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['left', 'RIGHT SIDE']];",
     with: "  const WALL_SIDES = [['left', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['right', 'RIGHT SIDE']];",
     test: 'LEFT SIDE puts the wall on the drafter' },
 
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/15-panels.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'the selection panel keeps the old sense: its LEFT is a wall on the right',
     find: "  const REF_LINES = [['right', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['left', 'RIGHT SIDE']];",
     with: "  const REF_LINES = [['left', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['right', 'RIGHT SIDE']];",
     test: 'the selection panel speaks the same words' },
 
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/08-structure-roof.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'A HARD LINE DOES NOT JUSTIFY: a wall along the face stands inside the exterior wall',
     find: '      const justified = toyJustifyAlongHardLine(from, to);',
     with: '      const justified = null;',
     test: 'along an inside face the wall takes the room side' },
 
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'JUSTIFIED THE WRONG WAY: into the exterior wall, over the hole',
     find: "    return line.away * nAlongAxis > 0 ? 'left' : 'right';",
     with: "    return line.away * nAlongAxis > 0 ? 'right' : 'left';",
     test: 'along an opening edge the wall goes away from the hole' },
 
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/15-panels.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'the WALL tool raises no panel: the choice has no control',
     find: "    if (tool === 'wall') { showWallProps(); return; }",
     with: '',
     test: 'arming the WALL tool raises its panel' },
 
-  { file: 'MODEL.html', spec: 'tests/model-wall-justify.spec.js',
+  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'an opening edge is justified toward the hole (the away sign read from the wrong end)',
     find: "        const band = (axis, c) => ({ axis, c, kind: 'opening', away: Math.sign(c - mid[axis]) || 1,",
     with: "        const band = (axis, c) => ({ axis, c, kind: 'opening', away: Math.sign(mid[axis] - c) || 1,",

@@ -17,17 +17,17 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/overhead-convention.spec.js';
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'MODEL never draws the beam above',
     find: '        paintBeamsAbove();\n',
     with: '',
     test: 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither' },
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'MODEL draws the beam above on the floor layout too',
     find: "    const onPlanView = activeViewId() === 'plan';",
     with: '    const onPlanView = true;',
     test: 'MODEL: the walls plan draws the beam over it dash-dot and the uppers dashed; the floor layout neither' },
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'MODEL hangs no uppers',
     find: '      if (K && K.hasUppers(fixture) && R.drawUpperCabinets2D) R.drawUpperCabinets2D(ctx, toS, fixture, wall, env);\n',
     with: '',

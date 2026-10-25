@@ -13,12 +13,12 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/all-wall-types.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'a context offers only its own kind again',
     find: "    return [...own, ...rest];\n",
     with: "    return own;\n",
     test: 'a MAIN FL wall offers the concrete and ICF assemblies after the framed ones, and takes ICF' },
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the other kind leads the list',
     find: "    return [...own, ...rest];\n",
     with: "    return [...rest, ...own];\n",

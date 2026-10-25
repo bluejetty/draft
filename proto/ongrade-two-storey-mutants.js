@@ -10,7 +10,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPECS = ['tests/model-html-premade-bungalow.spec.js'];
 const MUTANTS = [
-  { file: "MODEL.html", name: "the card-less tiles sit side by side again", spec: 'tests/model-html-premade-bungalow.spec.js',
+  { file: "model/04-levels-notes-bars.js", name: "the card-less tiles sit side by side again", spec: 'tests/model-html-premade-bungalow.spec.js',
     find: "      if (last?.classList?.contains('dt-stack')) { last.append(button); return; }\n      const prev = last && !last.classList.contains('card') ? slots.pop() : null;",
     with: "      const prev = null;",
     test: "ON GRADE / 2 STOREY builds the two-storey house on a ledger floor" },

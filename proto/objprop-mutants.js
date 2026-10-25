@@ -13,22 +13,22 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/objprop.spec.js tests/model-html-left-tabs.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/15-panels.js',
     name: 'the tab never shows',
     find: "    objTab.hidden = false;\n",
     with: "",
     test: 'the tab hangs' },
-  { file: 'MODEL.html',
+  { file: 'model/15-panels.js',
     name: 'a click on a fixture leaves the window shut',
     find: "    if (objPieces().length && !objOpen) { setObjOpen(true); return; }\n",
     with: "",
     test: 'the tab hangs' },
-  { file: 'MODEL.html',
+  { file: 'model/15-panels.js',
     name: 'the window has no properties',
     find: "    props.replaceChildren(...(items.length ? [fixturePropsNode(items)] : []));\n",
     with: "    props.replaceChildren();\n",
     test: 'the tab hangs' },
-  { file: 'MODEL.html',
+  { file: 'model/15-panels.js',
     name: 'the TOP view draws nothing',
     find: "        const { toS } = V.topFrame(geo, box);\n",
     with: "        return;\n",
@@ -45,7 +45,7 @@ const MUTANTS = [
     test: 'the faces' },
   // AND THE LEFT PROPERTIES TAB IS GONE, its box always on under BUILD and
   // DRAFTING (Movie, 25 Oct).
-  { file: 'MODEL.html',
+  { file: 'model/04-levels-notes-bars.js',
     name: 'an old lprops=0 link shuts PROPERTIES again',
     find: "  const propsShowing = () => true;\n",
     with: "  const propsShowing = () => params.get('lprops') !== '0';\n",

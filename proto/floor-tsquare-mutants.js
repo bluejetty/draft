@@ -13,11 +13,11 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/floor-tsquare-fixture-nodes.spec.js';
 const MUTANTS = [
-  { file: 'MODEL.html', name: 'a floor corner is not squared to the one before',
+  { file: 'model/11-floor-openings-fixtures.js', name: 'a floor corner is not squared to the one before',
     find: "    if (last && !drawStart) {\n",
     with: "    if (false) {\n",
     test: 'T-square lit' },
-  { file: 'MODEL.html', name: 'no fixture corner is a node',
+  { file: 'model/07-walls-magnet.js', name: 'no fixture corner is a node',
     find: "    if (activeTool !== 'floor' && activeTool !== 'shape') return [];\n",
     with: "    return [];\n",
     test: 'vanity' },

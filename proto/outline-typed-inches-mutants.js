@@ -16,12 +16,12 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/outline-typed-inches.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'the outline box refuses inches again',
     find: "        const promoted = promoteForNumber(toyCouldMakeLength(feet), said);\n",
     with: "        if (!toyCouldMakeLength(feet)) { stripMessage.textContent = 'the outline goes in whole feet'; lengthBox.blur(); return; }\n        const promoted = false;\n",
     test: 'on TOY, 5-2 typed for an outline edge moves the board to DRAFTING and makes the edge 5\'-2"' },
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'the outline box keeps the number and leaves the board on TOY',
     find: "        const promoted = promoteForNumber(toyCouldMakeLength(feet), said);\n",
     with: "        const promoted = false;\n",

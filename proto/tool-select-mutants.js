@@ -19,42 +19,49 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
   {
+    file: 'model/14-promotion-tools.js',
     name: 'ALL LEVELS becomes a modifier instead of a third mode',
     find: "  const setSelectionMode = id => {\n    selectionMode = id;",
     with: "  const setSelectionMode = id => {\n    selectionMode = id === 'window-all' ? 'window' : id;",
     test: 'the mode help says exactly',
   },
   {
+    file: 'model/14-promotion-tools.js',
     name: 'picking a mode no longer arms SELECT',
     find: "    selectionMode = id;\n    setTool('select');",
     with: '    selectionMode = id;',
     test: 'picking a mode also arms SELECT',
   },
   {
+    file: 'model/14-promotion-tools.js',
     name: 'the mode help drops the shift-drag sentence',
     find: "    click: 'Click items to select; Shift adds or removes. Drag left to right for a '\n      + 'blue box of what it encloses, right to left for a green box of what it '\n      + 'crosses. Right-drag (two fingers) pans.',",
     with: "    click: 'Click items to select; Shift adds or removes.',",
     test: 'the mode help says exactly',
   },
   {
+    file: 'model/14-promotion-tools.js',
     name: 'the filter help is red all the time',
     find: "      filterHelpEl.toggleAttribute('data-engaged', selectFilter !== 'all');",
     with: "      filterHelpEl.toggleAttribute('data-engaged', true);",
     test: 'an engaged filter turns the help red',
   },
   {
+    file: 'model/06-selection-pick.js',
     name: 'the filter stops restricting -- everything responds',
     find: "  const filterAllows = type => selectFilter === 'all' || selectFilter === type;",
     with: '  const filterAllows = () => true;',
     test: 'the WALL filter stops a line responding',
   },
   {
+    file: 'model/06-selection-pick.js',
     name: 'the filter over-restricts -- nothing responds',
     find: "  const filterAllows = type => selectFilter === 'all' || selectFilter === type;",
     with: "  const filterAllows = type => selectFilter === type;",
     test: 'the WALL filter stops a line responding',
   },
   {
+    file: 'model/16-gestures-undo.js',
     name: 'shift adds but never removes',
     // RE-POINTED. Both arms were rewritten when withGroup() arrived: the
     // toggle now compares by item identity across a group rather than by
@@ -65,6 +72,7 @@ const MUTANTS = [
     test: 'shift adds and shift removes',
   },
   {
+    file: 'model/16-gestures-undo.js',
     name: 'a plain click stops clearing the selection',
     // RE-POINTED. `setSelection(hit ? [hit] : [])` became
     // `setSelection(withGroup(hit))`, which returns the same empty array for
@@ -79,54 +87,63 @@ const MUTANTS = [
     test: 'a plain click on empty space',
   },
   {
+    file: 'model/16-gestures-undo.js',
     name: 'Esc drops the selection AND the filter in one press',
     find: "      if (!selection.length && selectFilter !== 'all') setSelectFilter('all');",
     with: "      if (selectFilter !== 'all') setSelectFilter('all');",
     test: 'Esc clears the selection',
   },
   {
+    file: 'model/06-selection-pick.js',
     name: 'a window takes what it crosses, not what it encloses',
     find: "      if (rings.every(p => p.every(inside))) return true;",
     with: "      if (rings.every(p => p.some(inside))) return true;",
     test: 'one end of a wall',
   },
   {
+    file: 'model/06-selection-pick.js',
     name: 'a floor only needs one corner in the box',
     find: '      if (rings.every(p => p.every(inside))) return true;\n      if (!crossing) return false;',
     with: '      if (rings.every(p => p.every(inside) || p.length > 2 && p.some(inside))) return true;\n      if (!crossing) return false;',
     test: 'every corner is in the box',
   },
   {
+    file: 'model/06-selection-pick.js',
     name: 'ALL LEVELS stops reaching past the active level',
     find: "  const enclosedBy = (a, b) => boxCatch(a, b, { all: selectionMode === 'window-all' });",
     with: '  const enclosedBy = (a, b) => boxCatch(a, b, { all: false });',
     test: 'ALL LEVELS reaches upstairs',
   },
   {
+    file: 'model/06-selection-pick.js',
     name: 'WINDOW starts reaching every level too',
     find: "  const enclosedBy = (a, b) => boxCatch(a, b, { all: selectionMode === 'window-all' });",
     with: '  const enclosedBy = (a, b) => boxCatch(a, b, { all: true });',
     test: 'ALL LEVELS reaches upstairs',
   },
   {
+    file: 'model/06-selection-pick.js',
     name: 'the filter stops restricting a window',
     find: "    if (filterAllows('line')) scope('lines', lines).forEach(",
     with: "    if (true) scope('lines', lines).forEach(",
     test: 'the OBJECT TYPE filter restricts a window',
   },
   {
+    file: 'model/16-gestures-undo.js',
     name: 'a shift-drag replaces instead of adding',
     find: '        setSelection(band.shift\n          ? selection.concat(caught.filter(c =>\n            !selection.some(entry => entry.item === c.item)))\n          : caught);',
     with: '        setSelection(caught);',
     test: 'shift-drag adds to the selection',
   },
   {
+    file: 'model/16-gestures-undo.js',
     name: 'a tap in a window mode stops selecting',
     find: "        const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));\n        setSelection(hit ? [hit] : []);\n      }\n      paint();\n      return;",
     with: '        setSelection([]);\n      }\n      paint();\n      return;',
     test: 'a tap in a window mode still selects',
   },
   {
+    file: 'model/03-plan-paint.js',
     name: 'the readout stops reporting the selection',
     find: "      + (selection.length ? `   <b>${selection.length} selected</b>` : '')",
     with: '',
@@ -152,17 +169,20 @@ const run = grep => {
   } catch { return 'failed'; }
 };
 
-const dirty = execSync('git status --porcelain MODEL.html',
+// EACH ROW NAMES ITS FILE since the page's script was split into model/*.js
+// (stage 2); a row without one means MODEL.html.
+const FILES = [...new Set(MUTANTS.map(m => m.file || 'MODEL.html'))];
+const dirty = execSync(`git status --porcelain ${FILES.join(' ')}`,
   { cwd: ROOT }).toString().trim();
 if (dirty) {
-  console.error('REFUSING TO RUN: MODEL.html has uncommitted changes and this '
+  console.error('REFUSING TO RUN: its files have uncommitted changes and this '
     + 'script restores it from HEAD.\n' + dirty);
   process.exit(1);
 }
 
-const PATH = `${ROOT}/MODEL.html`;
 let killed = 0, ran = 0, ambiguous = 0;
 for (const m of MUTANTS) {
+  const PATH = `${ROOT}/${m.file || 'MODEL.html'}`;
   const before = fs.readFileSync(PATH, 'utf8');
   const hits = before.split(m.find).length - 1;
   if (hits === 0) {
@@ -188,7 +208,7 @@ for (const m of MUTANTS) {
     // Aimed check let it through. Was anything else watching?
     if (run(null) === 'failed') { result = 'failed'; note = '  (caught by another check -- re-aim `test`)'; }
   }
-  execSync('git checkout -- MODEL.html', { cwd: ROOT });
+  execSync(`git checkout -- ${m.file || 'MODEL.html'}`, { cwd: ROOT });
   if (result === 'failed') killed += 1;
   console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}${note}`);
 }

@@ -60,7 +60,7 @@ const MUTANTS = [
     find: "          { colors, finishes: true, cushion: ELEVATION_CUSHION,\n",
     with: "          { colors, finishes: true, cushion: ELEVATION_CUSHION, margins: { left: 0, right: 0, top: 0, bottom: 0 },\n            pxPerFt: Math.max(2, Math.min((canvas.width - 28) / 91, (canvas.height - 28) / 36)), extents: CV.cutViewExtents(env, cut),\n",
     test: 'EXT. FINISH fits' },
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'MODEL asks for no cushion',
     find: "          { margins: rails, cushion: 0.1, colors: window.DraftCutView.inksFromSkin(skin),\n",
     with: "          { margins: rails, colors: window.DraftCutView.inksFromSkin(skin),\n",

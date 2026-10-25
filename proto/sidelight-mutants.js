@@ -42,7 +42,7 @@ const MUTANTS = [
     find: "          sidelightSides: oneOf(opening?.sidelightSides, ['latch', 'hinge', 'both'], 'latch'),\n",
     with: "",
     test: 'the file keeps' },
-  { file: 'MODEL.html',
+  { file: 'model/15-panels.js',
     name: 'BOTH SIDES keeps the unit\'s width and squeezes the leaf',
     find: "            const refusal = resizeOpenings(p.doorFt + count(sides) * p.lightFt,\n",
     with: "            const refusal = resizeOpenings(Number(only.width),\n",

@@ -62,33 +62,33 @@ const MUTANTS = [
     with: '        kept = kept.slice(0, -1);',
     test: 'a loop that doubles back loses the tip' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the roof ring is taken straight from the loop again, spike and all',
     find: '    let ring = unjogged.points;\n',
     with: '    let ring = loop.map(pt => ({ x: pt.x, z: pt.z }));\n',
     test: 'the roof dies into the 2nd-storey wall' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the roof is never asked to meet the wall: the cut is not passed',
     find: '          buildType: roofType, notch: houseRoofNotch, collect,\n',
     with: '          buildType: roofType, notch: null, collect,\n',
     test: 'the roof dies into the 2nd-storey wall' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the cut goes back to running AFTER the chamfer, which is the '
       + 'order that made the whole thing silent',
     find: '    const cut = notched || plain;',
     with: '    const cut = plain;',
     test: 'the roof dies into the 2nd-storey wall' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the edges cut against the wall keep their two feet of overhang, '
       + 'so a rake hangs inside the room',
     find: '        if (onWall) return 0;',
     with: '        if (onWall) return overhangFt;',
     test: 'the roof dies into the 2nd-storey wall' },
 
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the cut edges are left as eaves -- the roof stops at the wall and '
       + 'still drains into it',
     find: "        if (onWall) return 'gable';",
@@ -97,7 +97,7 @@ const MUTANTS = [
 
   // AND THE DESIGN THAT WAS ALREADY RIGHT. A fix for a traced house that
   // moved an ordered one would be a trade, not a fix.
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the clean trims a corner off the stock design',
     find: '    let ring = unjogged.points;\n',
     with: '    let ring = unjogged.points.slice(0, -1);\n',

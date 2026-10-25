@@ -22,44 +22,44 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the click never offers the choice, so §4 has no way in',
     find: '        offerBoneChoice(md.body, md.grab);',
     with: '        /* mutant */',
     test: 'offers break here' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'THE MARK IS A ROUNDED COORDINATE, not a distance along the run',
     // The rule I broke once tonight for real, in the other direction.
     find: '    return { x: wall.start.x + (rx / run) * feet, y: 0,\n      z: wall.start.z + (rz / run) * feet };',
     with: '    return { x: Math.round(at.x), y: 0, z: Math.round(at.z) };',
     test: 'ALONG THE RUN' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the mark does not round at all: the break lands under the cursor',
     find: '    const feet = Math.min(Math.max(Math.round(along), 1), Math.floor(run) - 1 || 1);',
     with: '    const feet = Math.min(Math.max(along, 1), Math.floor(run) - 1 || 1);',
     test: 'BREAK HERE splits the wall' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'BREAK HERE and MOVE THIS WALL both break, so the choice is theatre',
     find: "  boneChoice.querySelector('[data-break-move]').addEventListener('click', closeBoneChoice);",
     with: "  boneChoice.querySelector('[data-break-move]').addEventListener('click', () => { const p = boneChoiceFor; closeBoneChoice(); if (p) breakBoneAt(p.wall, p.pt); });",
     test: 'MOVE THIS WALL leaves' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'THE BREAK STOPS AT THE CLICKED LEVEL: the master and its floors keep the old ring',
     // §4 acceptance 7b, written by the order, and the defect I shipped.
     find: '    if (!hit.masterId) return true;        // a purely local bone cuts alone',
     with: '    return true;',
     test: '7a' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the master itself is skipped, so only the sibling floors take the cut',
     find: '      if (m.id === hit.masterId) insertOnEdge(m, a, b, pt);',
     with: '      if (false) insertOnEdge(m, a, b, pt);',
     test: '7a' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the point is APPENDED to the ring instead of placed on its edge',
     find: '        pts.splice(i + 1, 0, { x: pt.x, y: 0, z: pt.z });',
     with: '        pts.push({ x: pt.x, y: 0, z: pt.z });',
     test: '7a' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'TOY LEAKS: DRAFTING gets the bone choice too',
     // THE CONDITION BECAME TWO LINES when the body grab learned to answer
     // for a selected LINE: a line is not a bone, so the click asks whether
@@ -71,13 +71,13 @@ const MUTANTS = [
   // AND A LINE IS NOT A BONE. The body grab answers for a selected LINE now,
   // so without this test the card is raised over one -- BREAK HERE promising
   // to put a joint in something that holds up nothing.
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'A LINE GETS THE BONE CHOICE: break here, in a draughting line',
     find: "        && walls().includes(md.body)) {",
     with: "        && true) {",
     test: 'a selected LINE is offered no bone choice' },
 
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'THE CLAMP GOES: a break can land on the corner and make a null half',
     // Re-aimed. The mutant here attacked `if (feet <= 0 || feet >= run)`,
     // which SURVIVED -- the clamp below already makes it unreachable, so the
@@ -92,19 +92,19 @@ const MUTANTS = [
 
   // ── §4's SECOND HALF: THE CONNECTOR ──────────────────────────────────────
   // Four mutants, and every one is a failure actually hit building this.
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'THE CORNER IS NEVER UNSHARED: dragging half a run swings the other half',
     find: '        splitRunCorners(md);',
     with: '        /* mutant */',
     test: 'grows a connector' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'EVERY neighbour is split, so an ordinary drag drops a null wall each time',
     // The other arm. A perpendicular neighbour just stretches; splitting there
     // would leave a zero-length wall in the drawing on every single drag.
     find: '      if (!touching.some(other => collinearWith(wall, other))) return;',
     with: '      if (!touching.length) return;',
     test: 'makes no connector' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'ZERO-LENGTH WALLS GO TO THE MODULE: the connector refuses its own drag',
     // Found by reading inertReason: a wall of no length is not orthogonal, so
     // the connector made the wall that created it inert.

@@ -12,12 +12,12 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/fixture-free-place.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/11-floor-openings-fixtures.js',
     name: 'a press away from a wall is refused again',
     find: "    if (!placement) return freeFixturePress(kind, at);\n",
     with: "    if (!placement) { sayOnStrip('Press near a wall.'); return null; }\n",
     test: 'a STOVE pressed in the middle of the room' },
-  { file: 'MODEL.html',
+  { file: 'model/11-floor-openings-fixtures.js',
     name: 'the free piece is not centred on the press',
     find: "      const dx = at.x - geo.center.x, dz = at.z - geo.center.z;\n",
     with: "      const dx = 0, dz = 0;\n",

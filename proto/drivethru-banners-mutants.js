@@ -14,25 +14,25 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/drivethru-banners.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/04-levels-notes-bars.js',
     name: 'the row never rises: the banners are offered to nobody',
     find: "    document.querySelectorAll('[data-drivethru-banners]').forEach(row => { row.hidden = !canTrace; });",
     with: "    document.querySelectorAll('[data-drivethru-banners]').forEach(row => { row.hidden = true; });",
     test: 'say the short words' },
 
-  { file: 'MODEL.html',
+  { file: 'model/04-levels-notes-bars.js',
     name: 'the row is up before anything is picked',
     find: "    document.querySelectorAll('[data-drivethru-banners]').forEach(row => { row.hidden = !canTrace; });",
     with: "    document.querySelectorAll('[data-drivethru-banners]').forEach(row => { row.hidden = false; });",
     test: 'say the short words' },
 
-  { file: 'MODEL.html',
+  { file: 'model/04-levels-notes-bars.js',
     name: 'the banners say the long sentence instead of his words',
     find: "      press.textContent = banner(press) ? `DRAW ${kind.toUpperCase()}` : buildWords;",
     with: '      press.textContent = buildWords;',
     test: 'say the short words' },
 
-  { file: 'MODEL.html',
+  { file: 'model/04-levels-notes-bars.js',
     name: 'the outline banner says the text link\'s sentence',
     find: "      press.textContent = banner(press) ? `DRAW ${kind.toUpperCase()} OUTLINE` : traceWords;",
     with: '      press.textContent = traceWords;',
@@ -50,7 +50,7 @@ const MUTANTS = [
     with: '        data-drivethru-banner="outline"',
     test: 'the right banner draws the outline too' },
 
-  { file: 'MODEL.html',
+  { file: 'model/04-levels-notes-bars.js',
     name: 'the sign\'s bone never gets the number',
     find: "      el.textContent = boneBalanceEl.textContent;",
     with: "      el.textContent = '';",

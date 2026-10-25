@@ -23,35 +23,35 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-outline-starts-on-the-bullseye.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'no corner is seeded at all: the press arms the trace and leaves '
       + 'the sheet empty, as it did before',
     find: '    outlineCorners = bullseye ? [{ x: bullseye.x, z: bullseye.z }] : [];',
     with: '    outlineCorners = [];',
     test: 'the drive-thru press leaves the first corner on the bullseye' },
 
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'every arming seeds a corner, so a drafter still choosing a type '
       + 'has a point on his drawing he never placed',
     find: '    const bullseye = fromLink ? gridDatum() : null;',
     with: '    const bullseye = gridDatum();',
     test: 'a type picked at the window seeds nothing either' },
 
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the seed is the world origin rather than the bullseye: on a '
       + 'drawing whose datum has been moved, the corner is nowhere',
     find: '    const bullseye = fromLink ? gridDatum() : null;',
     with: '    const bullseye = fromLink ? { x: 0, z: 0 } : null;',
     test: 'the seed follows the datum, it is not the world origin' },
 
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'a drawing with NO bullseye painted gets a corner anyway, placed '
       + 'where nothing is drawn for it to stand on',
     find: '    outlineCorners = bullseye ? [{ x: bullseye.x, z: bullseye.z }] : [];',
     with: '    outlineCorners = [{ x: bullseye?.x || 0, z: bullseye?.z || 0 }];',
     test: 'a drawing with no bullseye painted gets no corner' },
 
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the seed is written before the arming, and the arming sweeps it: '
       + 'the one ordering the comment above it promises',
     // THE SAME FAULT, WRITTEN FORWARD. Moving the two lines above setTool is

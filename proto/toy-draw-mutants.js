@@ -24,31 +24,31 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the lift stops placing the line',
     find: '    const rect = canvas.getBoundingClientRect();\n    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));\n  });',
     with: '  });',
     test: 'a pen press, drag and lift' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'every lift commits, so a PC click makes a zero-length wall',
     // RE-AIMED: the guard is two lines now, a mouse lift never placing and a
     // tap that opened the run not closing it. Every lift committing is both gone.
     find: '    if (!press.touch) return;\n    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;\n    if (press.opened && !travelled) return;\n',
     with: '    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;\n',
     test: 'click-move-click reaches the same wall' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'a finger commits on the down again, so the drag after it is ignored',
     find: "      if (wallPress.touch && drawStart) { paint(); return; }",
     with: '',
     // RE-AIMED: this pointed at the mouse gesture, which the mutant does not
     // touch. It is the finger's press-again-and-drag that it breaks.
     test: 'presses again and drags' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the mouse stops committing on the down',
     find: "      if (wallPress.touch && drawStart) { paint(); return; }",
     with: '      if (drawStart) { paint(); return; }',
     test: 'click-move-click reaches the same wall' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the drag threshold goes, so the first press commits on its own lift',
     find: '    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;',
     with: '    const travelled = true;',
@@ -56,22 +56,22 @@ const MUTANTS = [
     // absorbing a tremor, not rescuing the PC click -- drawPress already does
     // that -- so the tremor check is the one that can see it go.
     test: 'a tremor during the press' },
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'THE SHIPPED DEFECT: the readout measures the cursor, the commit rounds it',
     find: "    if (drawStart && drawsRun()) return { from: drawStart, to: drawPoint(cursorWorld) };",
     with: "    if (drawStart && drawsRun()) return { from: drawStart, to: squareTo(drawStart, cursorWorld) };",
     test: 'the length on screen is the length that gets committed' },
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'the length never appears',
     find: '    drawLenEl.hidden = false;',
     with: '    drawLenEl.hidden = true;',
     test: 'the length on screen is the length that gets committed' },
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'the length stays on screen after the run ends',
     find: '    if (!run || !pointerScreen) { drawLenEl.hidden = true; return; }',
     with: '    if (!run || !pointerScreen) return;',
     test: 'goes out when the run does' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the squaring moves into the gesture, so TOY leaks into DRAFTING',
     // RE-POINTED: the board test moved into onTheFoot_if().
     find: "    return onTheFoot_if() ? onTheFoot(drawStart, free) : free;",

@@ -25,7 +25,7 @@ const MUTANTS = [
     find: '    if (!out && centre && Number.isFinite(centre.x) && Number.isFinite(centre.z)) {',
     with: '    if (false) {',
     spec: 'tests/window-size-tags.spec.js', test: 'a window on a level with no outline is still tagged, off the wall' },
-  { file: 'MODEL.html',
+  { file: 'model/02-holograms-tags.js',
     name: 'MODEL hands the tag no middle to step away from',
     find: '        { centre: FL.wallsCentre(shown) });',
     with: '        { centre: null });',

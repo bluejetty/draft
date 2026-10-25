@@ -39,7 +39,7 @@ const MUTANTS = [
     with: '    <button type="button" id="strip-brush" class="chip dormant" disabled data-mode-brush',
     test: 'the chip is awake, and empty it says nothing' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'THE BRUSH PAINTS NOTHING: it lifts and lights and never gives',
     find: '    Object.assign(item, brushLoad.props);',
     with: '    void brushLoad;',
@@ -49,31 +49,31 @@ const MUTANTS = [
   // brushLoad.props` on a load that has no `source`, so it fell straight back
   // to the real value and "survived" while changing nothing. A mutation that
   // does not mutate proves nothing and reads exactly like one that does.
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'THE WHOLE RECORD TRAVELS, so a dusted wall lands on top of its source',
     find: '    const out = {};',
     with: '    return { ...item }; /* mutant */ // eslint-disable-line',
     test: 'a second wall takes the first one-s properties and does not move' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'POSITION IS A PROPERTY: the wall arrives wearing where it came from',
     find: "    wall: ['wallType', 'refLine', 'baseHeight', 'topHeight'],",
     with: "    wall: ['wallType', 'refLine', 'baseHeight', 'topHeight', 'start', 'end'],",
     test: 'a second wall takes the first one-s properties and does not move' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'ANY KIND TAKES ANY KIND: a wall-s properties land on a line',
     find: '    if (kind === brushLoad.kind) { brushDust(hit); return; }',
     with: '    if (BRUSH_PROPS[kind]) { brushDust(hit); return; }',
     test: 'a wall-s properties will not land on a line' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'THE FIT IS NOT ASKED: a 16 ft door lands in a 4 ft bay and nothing draws it',
     find: '      if (!fit || Math.abs(fit.offset - (Number(item.offset) || 0)) > 1e-6) {',
     with: '      if (false) {',
     test: 'and onto one in a bay too short it says TOO BIG and changes nothing' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     // AIMED AT WALL e, NOT AT THE 4 FT ONE. On a wall too short to carry the
     // door at all, clampOpeningToWall returns null and `!fit` refuses on its
     // own -- so this mutant survived until the fixture grew a wall that CAN
@@ -83,25 +83,25 @@ const MUTANTS = [
     with: '      if (!fit) {',
     test: 'and it refuses rather than sliding the opening it was aimed at' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'A BARE WALL GETS NOTHING: the brush can only ever repaint',
     find: "    if (brushLoad.kind === 'fenestration' && kind === 'wall') {",
     with: '    if (false) {',
     test: 'a loaded opening on bare wall puts a new one there' },
 
-  { file: 'MODEL.html',
+  { file: 'model/11-floor-openings-fixtures.js',
     name: 'THE PLACED ONE IS THE TOOL-S, not the brush-s: same door, wrong properties',
     find: "    const dusting = brushHas('fenestration') ? brushLoad.props : null;",
     with: '    const dusting = null;',
     test: 'a loaded opening on bare wall puts a new one there' },
 
-  { file: 'MODEL.html',
+  { file: 'model/09-draw-move-stretch.js',
     name: 'THE LOAD DIES WITH THE TOOL CHANGE, so WALL draws the stored default',
     find: "    if (next !== RESTING_TOOL) brushOn = false;",
     with: "    if (next !== RESTING_TOOL) { brushOn = false; brushLoad = null; }",
     test: 'arming WALL puts the brush-s press down and keeps what it holds' },
 
-  { file: 'MODEL.html',
+  { file: 'model/08-structure-roof.js',
     name: 'THE DRAWN WALL IGNORES THE BRUSH: the load is held and never spent',
     // drawPress commits through commitDrawn since LINE shares the wall's
     // gesture (Movie, 5 Oct); the brush is spent there.
@@ -111,31 +111,31 @@ const MUTANTS = [
     with: "        { ...(justified ? { refLine: justified } : {}) }) };",
     test: 'arming WALL puts the brush-s press down and keeps what it holds' },
 
-  { file: 'MODEL.html',
+  { file: 'model/09-draw-move-stretch.js',
     name: 'THE BRUSH KEEPS TAKING PRESSES under an armed WALL, so nothing can be drawn',
     find: "    if (next !== RESTING_TOOL) brushOn = false;",
     with: '    void next;',
     test: 'arming WALL puts the brush-s press down and keeps what it holds' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'ESCAPE DROPS THE TOOL TOO, so there is no way to put the load down alone',
     find: '      if (brushLoad) { brushDrop(); return; }',
     with: '      if (brushLoad) { brushDrop(); brushOn = false; stripRefresh(); return; }',
     test: 'Escape puts the load down and leaves the brush up' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'ESCAPE DOES NOT REACH THE BRUSH: the load cannot be put down at all',
     find: '      if (brushLoad) { brushDrop(); return; }',
     with: '      void brushLoad;',
     test: 'Escape puts the load down and leaves the brush up' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'UNDO ASSIGNS ONLY: a window that was dusted stays an overhead door',
     find: '        Object.keys(item).forEach(key => {\n          if (!(key in before)) delete item[key];\n        });',
     with: '          /* mutant */',
     test: 'a key the brush added is removed by the undo, not left standing' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'A DUST IS NOT UNDOABLE: ten presses and no way back',
     find: '    undoStack.push(brushUndoStep([item]));',
     with: '    void brushUndoStep;',
@@ -147,7 +147,7 @@ const MUTANTS = [
     with: '        <path d="M2 11 L8 4 L14 11 Z"></path>\n        <path d="M6.6 4.8 V11.2" stroke-width="1.2"></path>',
     test: 'the foot switch is a square tile with a 1 in it' },
 
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'THE CHIP LIGHTS WHEN ARMED, not when loaded -- it stops saying what it will do',
     find: "    brushChip.classList.toggle('lit', !!brushLoad);",
     with: "    brushChip.classList.toggle('lit', brushOn);",

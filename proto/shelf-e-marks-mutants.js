@@ -12,12 +12,12 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/shelf-e-marks.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'the shelf draws the E marks as a floor does',
     find: "  const eMarksDrawn = () => (boneyardActive ? [] : (siteMarkRing() || autoElevationCuts()));\n",
     with: "  const eMarksDrawn = () => (siteMarkRing() || autoElevationCuts());\n",
     test: 'on the shelf no E mark is drawn' },
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'no E mark is drawn anywhere',
     find: "  const eMarksDrawn = () => (boneyardActive ? [] : (siteMarkRing() || autoElevationCuts()));\n",
     with: "  const eMarksDrawn = () => [];\n",

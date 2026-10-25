@@ -36,12 +36,12 @@ const MUTANTS = [
     find: '<script src="./toy-context.js"></script>',
     with: '',
     test: 'first nudge lands on the foot' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the drag stops asking the module and snaps like DRAFTING',
     find: "          const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;",
     with: '          const toy = null;',
     test: 'first nudge lands on the foot' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'TOY LEAKS: every board goes through the constraint path',
     find: "          const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;",
     with: '          const toy = toyWallDelta(md, dx, dz);',
@@ -52,7 +52,7 @@ const MUTANTS = [
   // value is asked for. Two lines encoding one intent, and the gate is what
   // said so -- the code is one line shorter and the mutant has nothing left to
   // change.
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the landing distance is quantised away by a whole-foot step',
     // RE-ANCHORED after the landing was collapsed into one function. The old
     // anchor named a line that no longer exists, so the gate printed SKIPPED
@@ -61,7 +61,7 @@ const MUTANTS = [
     find: '    const probe = { ...wall, stepFt: land };',
     with: '    const probe = { ...wall };',
     test: 'first nudge lands on the foot' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'THE ASK IS NOT THE LANDING: a one-foot drag sails past the mark',
     // The line I deleted as redundant and had to restore. Only a +z nudge can
     // see it: pulling -z, quantising by 0.958 lands on the mark whatever is
@@ -69,7 +69,7 @@ const MUTANTS = [
     find: '    const ask = offGridBy(pos) ? dir * land : wanted;',
     with: '    const ask = wanted;',
     test: 'pushed the other way' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the landing ignores which way the wall is going',
     // REPLACES the on-grid guard mutant, which survived because the guard had
     // become redundant -- an on-grid wall computes a step of FOOT down either
@@ -79,7 +79,7 @@ const MUTANTS = [
     find: "    return direction > 0 ? FOOT - frac : frac;",
     with: '    return frac;',
     test: 'first nudge lands on the foot' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the move is not perpendicular: the along-run component rides too',
     find: "    const wanted = axis === 'x' ? dz : dx;",
     with: '    const wanted = dz;',
@@ -88,12 +88,12 @@ const MUTANTS = [
     // mutant changed nothing and survived. A side wall is the only place the
     // difference shows.
     test: 'a side wall moves along its own perpendicular' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'a refused drag moves anyway, elastic instead of dead',
     find: '    const moved = verdict.delta || 0;',
     with: '    const moved = verdict.delta || ask;',
     test: 'a blocked drag stops dead' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'THE BLOCKER GOES SILENT, which is where this section started',
     // A NO-OP, NOT A DELETION, and the difference is the whole mutant.
     // Removing the line outright left `else if (verdict.delta) ...` dangling,
@@ -107,7 +107,7 @@ const MUTANTS = [
     find: '    if (stopped) sayOnStrip(blockerSays(verdict));',
     with: '    if (stopped) { /* mutant: the blocker says nothing */ }',
     test: 'a blocked drag stops dead' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'every refusal says the same thing, so the reason is decoration',
     find: '  const blockerSays = verdict =>\n    BLOCKER_WORDS[verdict.reason] || `cannot move it: ${verdict.reason}`;',
     with: "  const blockerSays = () => 'cannot move that';",

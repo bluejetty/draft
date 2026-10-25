@@ -57,7 +57,11 @@ const FILES = Object.freeze({
   module:    'level-assembly.js',
   stair:     'stair-geometry.js',
   modelDc:   'MODEL.dc.html',
-  modelHtml: 'MODEL.html',
+  // MODEL.html's code is the page and its script parts since stage 2 of the
+  // split: `modelPage` is all of it as one text (model-page-source.js), and
+  // `modelHtml` the part the role lookup lives in, where a mutation lands.
+  modelHtml: 'model/03-plan-paint.js',
+  modelPage: 'MODEL.html',
   // THE SHARED PAINTER'S ENV. This was LAYOUT.html until 27 Sep, when the
   // whole of that page's _cutViewEnv -- including its levelAssembly call --
   // was lifted into cut-view-env.js so the Real Estate Layout could draw
@@ -79,11 +83,15 @@ const FILES = Object.freeze({
 // Files scanned for role-less calls: everyone except the module that DEFINES
 // the functions (its own internal calls are the definition, not a caller) and
 // stair-geometry.js, which never names them.
-const CALLERS = Object.freeze(['modelDc', 'modelHtml', 'cutViewEnv', 'project', 'harnessEnv']);
+const CALLERS = Object.freeze(['modelDc', 'modelHtml', 'modelPage', 'cutViewEnv', 'project', 'harnessEnv']);
 
 function load(mutation) {
   const src = {};
-  for (const [key, rel] of Object.entries(FILES)) src[key] = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  // MODEL.html is the page and its script parts (model-page-source.js).
+  const { modelPageSource } = require('./model-page-source.js');
+  for (const [key, rel] of Object.entries(FILES)) {
+    src[key] = rel === 'MODEL.html' ? modelPageSource(ROOT) : fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  }
   if (mutation) {
     const { file, apply } = mutation;
     const next = apply(src[file]);

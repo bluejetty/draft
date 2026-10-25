@@ -16,12 +16,12 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/stairs-per-floor.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'MODEL paints its own stairs only, as it always did',
     find: '      stairs: shown.map(entry => entry.stair),',
     with: '      stairs: stairs(),',
     test: 'MODEL: the basement reads UP, MAIN reads DN and UP, 2ND FL reads DN with the lower stair lighter' },
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'MODEL tells the painter every stair is its own',
     with: "      roleFor: stair => 'own',",
     find: "      roleFor: stair => roles.get(stair) || 'own',",

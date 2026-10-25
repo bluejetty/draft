@@ -21,20 +21,20 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-opening-to-the-corners.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'the readout is never drawn: a picked opening says nothing',
     find: "    if (selection.length !== 1 || selection[0].type !== 'fenestration') { report(); return; }",
     with: '    if (true) { report(); return; }',
     test: 'clicking a window says how far it is from each corner' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'measured corner-to-centre STRAIGHT, so the two numbers no longer '
       + 'add up to the wall',
     find: '      const feet = Math.abs(i === 0 ? along : run - along);',
     with: '      const feet = Math.hypot(centre.x - corner.x, centre.z - corner.z);',
     test: 'clicking a window says how far it is from each corner' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'any selection gets it, so picking a WALL prints two numbers about '
       + 'an opening nobody chose',
     find: "    if (selection.length !== 1 || selection[0].type !== 'fenestration') { report(); return; }\n"
@@ -44,7 +44,7 @@ const MUTANTS = [
       + "      : (drawing.fenestrations || [])[0];",
     test: 'a wall picked instead says nothing' },
 
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'drawn from inside paintSelection, which returns early: the numbers '
       + 'never clear when the pick is dropped',
     find: '        openingCornerDims(ctx, toS);\n'
@@ -52,14 +52,14 @@ const MUTANTS = [
     with: '        // AFTER the selection, so a hovered corner of a selected wall reads as',
     test: 'dropping the pick takes the numbers with it' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'only the near corner is reported, so the room on the other side is '
       + 'never shown',
     find: '    [wall.start, wall.end].forEach((corner, i) => {',
     with: '    [wall.start].forEach((corner, i) => {',
     test: 'clicking a window says how far it is from each corner' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'the readout is painted once and never follows the slide',
     find: '      shownDims.push({ corner: i === 0 ? \'start\' : \'end\', ft: Math.round(feet * 1e4) / 1e4 });',
     with: '      shownDims.push({ corner: i === 0 ? \'start\' : \'end\', ft: 5 });',

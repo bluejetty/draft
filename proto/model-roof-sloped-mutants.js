@@ -12,19 +12,19 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-html-roof-move.spec.js';
 const MUTANTS = [
-  { file: 'MODEL.html', name: "a corner DELETEd joins its edges as a plain eave",
+  { file: 'model/09-draw-move-stretch.js', name: "a corner DELETEd joins its edges as a plain eave",
     find: "    if (turn > 1e-6) roof.edges[(i - 1 + n0) % n0] = 'sloped';\n",
     with: "",
     test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
-  { file: 'MODEL.html', name: "a node on a straight run DELETEd leaves a SLOPED edge too",
+  { file: 'model/09-draw-move-stretch.js', name: "a node on a straight run DELETEd leaves a SLOPED edge too",
     find: "    if (turn > 1e-6) roof.edges",
     with: "    if (turn >= 0) roof.edges",
     test: "a BREAK node DELETEd from a straight eave just goes; no SLOPED edge" },
-  { file: 'MODEL.html', name: "the EDGE panel has no SLOPED chip",
+  { file: 'model/15-panels.js', name: "the EDGE panel has no SLOPED chip",
     find: "['gable', 'GABLE'], ['sloped', 'SLOPED']];",
     with: "['gable', 'GABLE']];",
     test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
-  { file: 'MODEL.html', name: "a SLOPED edge reads as an eave in the page",
+  { file: 'model/15-panels.js', name: "a SLOPED edge reads as an eave in the page",
     find: "  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' ? k : 'eave');",
     with: "  const roofEdgeKind = k => (k === 'gable' ? k : 'eave');",
     test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },

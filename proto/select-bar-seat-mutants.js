@@ -12,12 +12,12 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/select-bar-seat.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'the keys stay hung under the top bar, over the words',
     find: "    seatSelectBar();\n    if (!northDock) return;\n",
     with: "    if (!northDock) return;\n",
     test: 'centred on the AUTO DIMS row' },
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'the keys sit a row low',
     find: "    const mid = canvas.getBoundingClientRect().top + northCentre().y - 28 + DOCK_CHIP / 2;\n",
     with: "    const mid = canvas.getBoundingClientRect().top + northCentre().y + DOCK_CHIP / 2;\n",

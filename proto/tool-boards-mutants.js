@@ -41,12 +41,12 @@ const MUTANTS = [
     test: 'the selection filters and the assembly verbs operate on TOY' },
 
   // ── the look ────────────────────────────────────────────────────────────
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'the keypad puts the build keys down anyway',
     find: '      btn.disabled = !usable;',
     with: "      btn.disabled = tool.group === 'build' && board === 'toy';",
     test: 'no key is down on TOY' },
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'a key still says the board refuses it',
     find: '      btn.title = tool.name;',
     with: "      btn.title = board === 'toy'\n"
@@ -54,7 +54,7 @@ const MUTANTS = [
     test: 'a key on TOY says its own name' },
 
   // ── the rule ────────────────────────────────────────────────────────────
-  { file: 'MODEL.html',
+  { file: 'model/09-draw-move-stretch.js',
     name: 'THE REGISTER STILL REFUSES, with every key lit over it -- the look '
       + 'without the rule, which is what this gate is for',
     find: '    const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;',
@@ -63,17 +63,17 @@ const MUTANTS = [
     test: 'the register ARMS a drafting tool on TOY' },
 
   // ── the lamp ────────────────────────────────────────────────────────────
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'the lamp says TOY whatever board the drawing is on',
     find: "    boardLamp.querySelector('[data-board-lamp]').textContent = toy ? 'TOY' : 'DRAFTING';",
     with: "    boardLamp.querySelector('[data-board-lamp]').textContent = 'TOY';",
     test: 'the lamp says DRAFTING, and goes out' },
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'the light never goes out, so a promoted drawing looks like a TOY one',
     find: "    boardLamp.toggleAttribute('data-lit', toy);",
     with: "    boardLamp.toggleAttribute('data-lit', true);",
     test: 'the lamp says DRAFTING, and goes out' },
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'the lamp drops its second row, so it is a label rather than an '
       + 'instrument -- "the user will know its 90s / and 1ft"',
     find: "    boardLamp.querySelector('[data-board-lamp-note]').textContent = toy\n"
@@ -82,7 +82,7 @@ const MUTANTS = [
     test: 'the board is a lamp, and there is nothing to press' },
 
   // ── where a new drawing starts ──────────────────────────────────────────
-  { file: 'MODEL.html',
+  { file: 'model/14-promotion-tools.js',
     name: 'the browser seeds the board again, so one promoted drawing puts '
       + 'every later one on DRAFTING before its first wall',
     // THE FIRST VERSION OF THIS MUTANT SURVIVED, and it was the check that
