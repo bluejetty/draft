@@ -1295,6 +1295,30 @@
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
   #shelf-tab:hover { color: var(--accent); border-color: var(--accent); }
+  /* OBJ / PROP: the SHELF tab turned upside down, hanging under the top bar
+     over the right rail, and the window it drops (Movie, 24 Oct). */
+  #objprop-tab { position:fixed; z-index:45; top:var(--strip-h, 44px); height:16px; box-sizing:border-box;
+    padding:0 10px; font-size:8px; letter-spacing:.08em; line-height:14px; cursor:pointer;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-top:none; border-radius:0 0 6px 6px; }
+  #objprop-tab:hover, #objprop-tab[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+  #objprop-tab[hidden], #objprop[hidden] { display:none; }
+  #objprop { position:fixed; z-index:45; width:300px; box-sizing:border-box; padding:6px;
+    max-height:calc(100vh - var(--strip-h, 44px) - 80px); overflow:auto;
+    /* SOLID: the rail's cards and the dock must not show through it. */
+    background-color: var(--surface-page, #111);
+    background-image: linear-gradient(var(--surface-panel), var(--surface-panel));
+    border:1px solid var(--accent); border-radius:0 0 4px 4px;
+    font-family: var(--font-ui); }
+  #objprop .objprop-title { font-size:10px; font-weight:600; letter-spacing:.08em; color: var(--ink-primary);
+    text-transform:uppercase; padding:0 2px 5px; }
+  #objprop .objprop-views { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  #objprop figure { margin:0; border:1px solid var(--edge-panel); border-radius:3px; }
+  #objprop canvas { display:block; width:100%; height:110px; }
+  #objprop figcaption { font-size:8px; letter-spacing:.08em; color: var(--ink-quiet);
+    padding:2px 4px; border-top:1px solid var(--edge-panel); }
+  #objprop .objprop-props { padding-top:6px; }
   /* OPEN SUITE AND SAVE AS SUITE EITHER SIDE OF THE TAB (Movie, 23 Oct),
      the tab's own size, and only while the sheet shows a shelf. Equal
      widths, so the tab between them stays centred on the bone. */
@@ -1780,8 +1804,10 @@
   data-left-pane-tab="drafting" hidden><span class="rail-tab-text">DRAFTING</span></button>
 <button id="build-tab" class="rail-tab" type="button"
   data-left-pane-tab="build" hidden><span class="rail-tab-text">BUILD</span></button>
-<button id="props-tab" class="rail-tab" type="button"
-  data-left-pane-tab="properties" hidden><span class="rail-tab-text">PROPERTIES</span></button>
+<!-- NO PROPERTIES TAB (Movie, 25 Oct: "keep the properties at the bottom of
+     the BUILD and DRAFT areas ... just leave them ON at the bottom of those
+     other tabs, and we won't need the left side PROPERTIES tab"). The box
+     stands under whichever of the two is up; OBJ / PROP shows them too. -->
 <aside id="left-rail" data-left-rail hidden>
   <div id="tool-slot" data-tool-slot>
     <div data-left-pane="drafting"></div>
@@ -1925,6 +1951,23 @@
     <div class="np-grip" data-notes-grip="bottom" title="Drag to make the pad taller"></div>
   </div>
 </aside>
+<!-- OBJ / PROP (Movie, 24 Oct): "click on the FIXTURES / CABINETS and items
+     like that in a different window ... (make it similar to the 'SHELF'
+     tabs but upside down ... then open up the window with the top and side
+     views and properties to change down below" -- "call that tab OBJ /
+     PROP". A tab hanging under the top bar over the right rail; the window
+     drops from it. objprop-views.js draws the views. -->
+<button id="objprop-tab" type="button" data-objprop-tab aria-expanded="false" hidden>OBJ / PROP</button>
+<section id="objprop" data-objprop aria-label="OBJ / PROP" hidden>
+  <div class="objprop-title" data-objprop-title>PICK A FIXTURE OR CABINET</div>
+  <div class="objprop-views">
+    <figure><canvas data-objprop-view="top"></canvas><figcaption>TOP</figcaption></figure>
+    <figure><canvas data-objprop-view="front"></canvas><figcaption>FRONT</figcaption></figure>
+    <figure><canvas data-objprop-view="left"></canvas><figcaption>LEFT</figcaption></figure>
+    <figure><canvas data-objprop-view="right"></canvas><figcaption>RIGHT</figcaption></figure>
+  </div>
+  <div class="objprop-props" data-objprop-props></div>
+</section>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 
 
@@ -2590,6 +2633,7 @@
      the same cabinet: it DREW fixtures long before it could place one, and
      a kitchen is seven of them. See ORDER-tiers-of-assembly.md. -->
 <script src="./fixture-kinds.js"></script>
+<script src="./objprop-views.js"></script>
 <!-- Movie's two default washrooms (9 Oct), dropped whole by the FIXTURE tool. -->
 <script src="./washroom-presets.js"></script>
 <script src="./kitchen-presets.js"></script>
@@ -5563,7 +5607,7 @@
       // THE UPPERS OVER IT, each run its own width, lighter.
       const spans = R.upperSpans2D ? R.upperSpans2D(fx, list, env) : [];
       if (spans.length) {
-        const front = R.upperFrontOff2D(geo);
+        const front = R.upperFrontOff2D(geo, fx);
         ctx.save();
         ctx.globalAlpha *= UPPER_MARK_ALPHA;
         spans.forEach(([u0, u1]) => {
@@ -6064,18 +6108,13 @@
   // its OWN level and view filtering while it scans (fixture-geometry.js).
   // Handing it a pre-filtered list would be filtering twice and would drop the
   // foundation wall a ground-floor tub can legitimately end against.
-  const paintFixtures = () => {
-    const R = window.DraftRender2D;
+  // WHAT THE FIXTURE PAINTER IS HANDED, the sheet's and the OBJ / PROP
+  // window's alike, so the two cannot draw a piece two ways.
+  const fixturePaintEnv = () => {
     const FG = window.DraftFixtureGeometry;
     const CL = window.DraftClosets;
-    const missing = [!R && 'render-2d.js', !FG && 'fixture-geometry.js',
-      !CL && 'closets.js'].filter(Boolean);
-    if (missing.length) {
-      throw new Error(`MODEL.html: cannot paint fixtures, ${missing.join(' and ')} `
-        + 'did not load. Check the script order in the page head.');
-    }
     const all = drawing?.walls || [];
-    const env = {
+    return {
       fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
       wallCross: (a, frame, b) => FG.wallCross(a, frame, b),
       wallFrame: wl => FG.wallFrame(wl),
@@ -6093,6 +6132,19 @@
       meldCounters: true,
       hasUppers: fixture => !!window.DraftFixtureKinds?.hasUppers(fixture),
     };
+  };
+  const paintFixtures = () => {
+    const R = window.DraftRender2D;
+    const FG = window.DraftFixtureGeometry;
+    const CL = window.DraftClosets;
+    const missing = [!R && 'render-2d.js', !FG && 'fixture-geometry.js',
+      !CL && 'closets.js'].filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint fixtures, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    const all = drawing?.walls || [];
+    const env = fixturePaintEnv();
     // options is {} for the same reason it is on notes: preview and selected
     // are states of the fixture TOOL, and this page has no tools.
     const K = window.DraftFixtureKinds;
@@ -7135,7 +7187,23 @@
   // here, and they follow DAY and NIGHT without a second table.
   let northHover = false;
   const northDock = document.getElementById('north-dock');
+  // THE SELECT KEYS ON THE DOCK'S LINE (Movie, 24 Oct: "the SELECT /
+  // ASSEMBLY / DIMENSION / TRIM buttons should be brough down ... so the
+  // text can be read and they will be level /symetrical with the AUTO DIMS /
+  // HAND DIMS etc line on the other side"): centred on the row the arrow,
+  // the turn and the two DIMS chips stand on, and never over the strip's
+  // words.
+  const seatSelectBar = () => {
+    const bar = document.getElementById('select-bar');
+    if (!bar || !bar.offsetHeight) return;
+    const mid = canvas.getBoundingClientRect().top + northCentre().y - 28 + DOCK_CHIP / 2;
+    // The strip's line is 12px capitals from its top, said or not yet.
+    const words = document.getElementById('strip-message')?.getBoundingClientRect();
+    const floor = words ? words.top + 12 : 0;
+    bar.style.top = `${Math.max(mid - bar.offsetHeight / 2, floor)}px`;
+  };
   const seatNorthDock = () => {
+    seatSelectBar();
     if (!northDock) return;
     if (!window.DraftNorth || !drawing || driveThruUp()) { northDock.hidden = true; return; }
     // AND NOT ON A CUT VIEW. `paint()` puts the dock away and only a plan
@@ -8745,17 +8813,12 @@
   // DEFAULT OPEN, and `lprops=0` is the only value that means anything -- the
   // same absent-means-open spelling the fold below uses, for the same reason:
   // a drafter who has just pressed a wall wants to see what he pressed.
-  const propsShowing = () => params.get('lprops') !== '0';
-  const setPropsPane = show => {
-    if (show) params.delete('lprops'); else params.set('lprops', '0');
-    // OPENING PROPERTIES OPENS THE RAIL, because a pane nobody can see is not
-    // open in any sense a drafter would recognise. Shutting it does NOT shut
-    // the rail: the tool tab beside it is still doing its job.
-    if (show && !railOpen('left')) { setRail('left', true); return; }
-    syncUrl();
-    syncShell();
-    paint();
-  };
+  //
+  // AND NOW ALWAYS ON (Movie, 25 Oct: "keep the properties at the bottom of
+  // the BUILD and DRAFT areas when the user is there, but just leave them ON
+  // ... and we won't need the left side PROPERTIES tab"): its tab is gone,
+  // so nothing can put it down, and an old `lprops=0` link means nothing.
+  const propsShowing = () => true;
 
   // WHICH TAB EACH BLOCK LIVES ON, AS A TABLE. Movie, 29 Sep: "i may want to
   // move the properties back in to DRAFT and BUILD depending on what they are
@@ -8783,7 +8846,8 @@
     // PROPERTIES IS NOT ONE OF THE TURNS. It has its own flag and its own
     // toggle, so a press on its tab must never be read as "which tool tab",
     // which would otherwise swap DRAFTING out from under the drafter.
-    if (pane === 'properties') { setPropsPane(!propsShowing()); return; }
+    // It has no tab now; asked for, it is the rail that opens.
+    if (pane === 'properties') { if (!railOpen('left')) setRail('left', true); return; }
     // Pressing the tool tab that is already up SHUTS the rail, and pressing
     // the other swaps without shutting. Identical to the right edge, and
     // deliberately so: one gesture for both edges is one thing to learn.
@@ -13409,18 +13473,23 @@
     });
   };
 
-  const hitAt = worldPt => {
+  // EVERYTHING UNDER A PRESS, top first, in the pick chain's own order:
+  // hitAt is its first, and a click again on the same spot steps down it
+  // (pickUnder). `first` stops at the first, which is every hover's need.
+  const hitsAt = (worldPt, first = false) => {
+    const out = [];
+    const take = hit => { if (hit && !out.some(h => h.item === hit.item)) out.push(hit); return first && out.length > 0; };
     // A ROOM TAG IS ON TOP OF WHAT IT NAMES: it is painted last, over the
     // floor and often over a fixture, so the pick agrees with the picture.
     // Movie, 1 Oct: "i wasn't able to select the ROOM TAG".
     if (filterAllows('roomtag')) {
       const tag = roomTagAt(worldPt);
-      if (tag) return { type: 'roomtag', item: tag };
+      if ((tag) && take({ type: 'roomtag', item: tag })) return out;
     }
     // A NOTE TOO: painted with the tags, over what it points at.
     if (filterAllows('note')) {
       const note = noteAt(worldPt);
-      if (note) return { type: 'note', item: note };
+      if ((note) && take({ type: 'note', item: note })) return out;
     }
     // AN OPENING BEATS ITS HOST WALL, and the old page says why in its own
     // words: "Openings under a select click take priority over their host
@@ -13429,36 +13498,36 @@
     // make every opening unselectable -- not hard to select, impossible.
     if (filterAllows('fenestration')) {
       const opening = openingAt(worldPt);
-      if (opening) return { type: 'fenestration', item: opening };
+      if ((opening) && take({ type: 'fenestration', item: opening })) return out;
     }
     // A FIXTURE BEATS ITS HOST WALL for the opening's reason: a closet or a
     // sink is always against a wall, and wall-first would make every one of
     // them unselectable.
     if (filterAllows('fixture')) {
       const fixture = fixtureAt(worldPt);
-      if (fixture && fixtureKindAllowed(fixture)) return { type: 'fixture', item: fixture };
+      if ((fixture && fixtureKindAllowed(fixture)) && take({ type: 'fixture', item: fixture })) return out;
     }
     // A DIMENSION IS ANNOTATION, painted over the plan, and its line stands
     // off what it measures -- so it is asked before the walls it sits beside.
     if (filterAllows('dimension')) {
       const point = dimPointAt(worldPt);
-      if (point) return point;
+      if (point && take(point)) return out;
       const dimension = dimensionAt(worldPt);
-      if (dimension) return { type: 'dimension', item: dimension };
+      if ((dimension) && take({ type: 'dimension', item: dimension })) return out;
     }
     // A SUPER NODE IS A DOT ON A CORNER, picked before the walls that meet
     // there would take the click.
     if (filterAllows('superNode')) {
       const node = superNodeAt(worldPt);
-      if (node) return { type: 'superNode', item: node };
+      if ((node) && take({ type: 'superNode', item: node })) return out;
     }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
-      if (wall) return { type: 'wall', item: wall };
+      if ((wall) && take({ type: 'wall', item: wall })) return out;
     }
     if (filterAllows('line')) {
       const line = lineAt(worldPt);
-      if (line) return { type: 'line', item: line };
+      if ((line) && take({ type: 'line', item: line })) return out;
     }
     // A COLUMN, THEN THE BEAM IT HOLDS UP (Movie, 19 Oct: "I'd like to be
     // able to move the BEAM manually so that all the columns follow. i will
@@ -13468,51 +13537,82 @@
     // every post on one unreachable.
     if (filterAllows('column')) {
       const column = columnAt(worldPt);
-      if (column) return { type: 'column', item: column };
+      if ((column) && take({ type: 'column', item: column })) return out;
     }
     if (filterAllows('beam')) {
       const beam = segAt(beams(), worldPt);
-      if (beam) return { type: 'beam', item: beam };
+      if ((beam) && take({ type: 'beam', item: beam })) return out;
     }
     // A STAIR BEATS THE FLOOR IT STANDS IN, which would otherwise take every
     // click inside the stairwell.
     if (filterAllows('stair')) {
       const stair = stairAt(worldPt);
-      if (stair) return { type: 'stair', item: stair };
+      if ((stair) && take({ type: 'stair', item: stair })) return out;
     }
     // A SHAPE BEATS THE FLOOR UNDER IT: a suite outlined inside a floor would
     // otherwise be unreachable, every click inside it taking the floor.
     if (filterAllows('shape')) {
       const shape = shapes().slice().reverse()
         .find(sh => (sh.points || []).length >= 3 && pointInRing(sh.points, worldPt));
-      if (shape) return { type: 'shape', item: shape };
+      if ((shape) && take({ type: 'shape', item: shape })) return out;
     }
     if (filterAllows('outline')) {
       const outline = outlineAt(worldPt);
-      if (outline) return { type: 'outline', item: outline };
+      if ((outline) && take({ type: 'outline', item: outline })) return out;
     }
     if (filterAllows('floor')) {
       const floor = floorAt(worldPt);
-      if (floor) return { type: 'floor', item: floor };
+      if ((floor) && take({ type: 'floor', item: floor })) return out;
     }
     if (filterAllows('roof')) {
       const roof = roofAt(worldPt);
-      if (roof) return { type: 'roof', item: roof };
+      if ((roof) && take({ type: 'roof', item: roof })) return out;
     }
     // A HOLOGRAM LAST: it is under the drawing, so anything of this drawing's
     // own at the press is what the press means.
     if (filterAllows('hologram')) {
       const holo = hologramPickAt(worldPt);
-      if (holo) return { type: 'hologram', item: holo };
+      if ((holo) && take({ type: 'hologram', item: holo })) return out;
     }
     // A PHOTO LAST OF ALL (Movie, 23 Oct: "click on the bg photo"): it lies
     // under everything drawn, so it is picked only where nothing else is,
     // and only while TRACE shows it.
     if (filterAllows('underlay')) {
       const photo = underlayAt(worldPt);
-      if (photo) return { type: 'underlay', item: photo };
+      if ((photo) && take({ type: 'underlay', item: photo })) return out;
     }
-    return null;
+    return out;
+  };
+  const hitAt = worldPt => hitsAt(worldPt, true)[0] || null;
+  // CLICK AGAIN FOR WHAT IS UNDERNEATH (Movie, 24 Oct: "if a user clicks
+  // and the wrong item (if they overlap) is selected the first time, allow
+  // the user to make a 2nd click and it will select the 'underneath' item,
+  // and if more than 2 a 3rd click will do it too etc... and then cycle back
+  // to the first one"). A click within a few pixels of the last one, with
+  // one of the things there in hand, takes the next one down that is not
+  // already in hand -- an assembly's other walls are skipped -- and after
+  // the last comes the first again. Anywhere else, the top one, as always.
+  const PICK_AGAIN_PX = 4;
+  let lastPick = null;
+  const pickUnder = (sx, sy) => {
+    const hits = hitsAt(toWorld(sx, sy));
+    let at = 0;
+    const again = lastPick && Math.hypot(sx - lastPick.sx, sy - lastPick.sy) <= PICK_AGAIN_PX;
+    const held = h => selection.some(entry => entry.item === h.item);
+    const now = again ? hits.findIndex(held) : -1;
+    if (now >= 0 && hits.length > 1) {
+      for (let i = 1; i <= hits.length; i += 1) {
+        const k = (now + i) % hits.length;
+        if (!held(hits[k])) { at = k; break; }
+      }
+    }
+    lastPick = { sx, sy };
+    return { hit: hits[at] || null, at, of: hits.length, again: !!again };
+  };
+  // WHAT IS IN HAND, SAID: which of how many, so the drafter sees there is
+  // more under it and what each one is.
+  const sayPickUnder = under => {
+    if (under.of > 1) sayOnStrip(`${under.at + 1} OF ${under.of} HERE: ${hitSays(under.hit)} \u2014 click again on the same spot for the one under it.`);
   };
 
   // EVERY SELECTED ITEM, not just the one wall. The highlight is what tells a
@@ -18962,6 +19062,15 @@
       // points of its own, so the selection move carried nothing and said
       // "Moved." -- MOVE now drives fixtureMoveBegin / fixtureMoveTo by the
       // press's travel, wherever on the sheet the press began.
+      // TWO OR MORE JOINED WITH Y SLIDE TOGETHER (Movie, 25 Oct: "ONE at a
+      // time unless the user connects 2 with Y ASSEMBLY (2 or mor)"): an
+      // assembly of pieces on one wall goes along it as one, its gaps kept.
+      const set = fixtureSetSlide(at);
+      if (set) {
+        moveState.drag = set;
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
       const piece = selection.length === 1 && selection[0].type === 'fixture' ? selection[0].item : null;
       const held = piece && fixtureMoveBegin(piece, at);
       if (held) {
@@ -19015,6 +19124,11 @@
         d.opening.offset = clamped.offset;
         liveRedimStep(d.live);
       }
+      paint();
+      return;
+    }
+    if (d.kind === 'fixtures') {
+      fixtureSetTo(d, at);
       paint();
       return;
     }
@@ -19148,6 +19262,18 @@
         sayOnStrip('Slid along its wall. Type a distance for an exact one, or UNDO puts it back.');
       }
       finishTypedMidDrag();
+      paint();
+      return;
+    }
+    if (d.kind === 'fixtures') {
+      if (d.moved) {
+        const edits = [...d.edits];
+        settleFixtureGaps().forEach(e => { if (!edits.some(x => x.item === e.item)) edits.push(e); });
+        undoStack.push({ kind: 'props', edits });
+        markDirty();
+        sayOnStrip(`${d.pieces.length} pieces slid along their wall together. UNDO puts them back.`);
+      }
+      setSelection([...selection]);
       paint();
       return;
     }
@@ -23543,6 +23669,54 @@
       if (item.kind !== 'island' && !md.riders.some(r => r.item === item)) delete item.standoff;
     });
     return wall;
+  };
+  // AN ASSEMBLY OF PIECES ON ONE WALL, in MOVE: every one along that wall by
+  // the same travel, held inside the wall, and its outer sides caught to a
+  // neighbour's within an inch as one piece's are (sideSnap). The piece in
+  // hand belongs to a Y ASSEMBLY of two or more fixtures and nothing else
+  // (a kitchen preset's assembly has its walls in it, and its pieces still
+  // move one at a time), all on one wall.
+  const fixtureSetSlide = at => {
+    if (!selection.length || selection.some(entry => entry.type !== 'fixture')) return null;
+    const owner = groupOf(selection[0]);
+    if (!owner || selection.some(entry => groupOf(entry) !== owner)) return null;
+    if ((owner.members || []).some(m => m.type !== 'fixture')) return null;
+    const pieces = fixtures().filter(f => owner.members.some(m => String(m.id) === String(f.id)));
+    if (pieces.length < 2) return null;
+    const hostId = pieces[0].wallId;
+    if (hostId == null || pieces.some(p => String(p.wallId) !== String(hostId))) return null;
+    const wall = walls().find(wl => String(wl.id) === String(hostId));
+    const frame = wall && window.DraftFixtureGeometry?.wallFrame(wall);
+    if (!frame) return null;
+    return { kind: 'fixtures', at, pieces, frame, was: pieces.map(p => Number(p.offset) || 0),
+      edits: pieces.map(item => ({ item, before: { ...item } })), moved: false };
+  };
+  const fixtureSetTo = (d, raw) => {
+    const { frame, pieces, was } = d;
+    let dAlong = (raw.x - d.at.x) * frame.ux + (raw.z - d.at.z) * frame.uz;
+    // THE SIDES CATCH: the nearest of any piece's sides to a neighbour's
+    // side outside the set, within an inch.
+    if (snapOn && board !== 'toy') {
+      let best = null, bestD = SIDE_SNAP_FT + 1e-9;
+      pieces.forEach((p, i) => {
+        const half = (Number(p.width) || 0) / 2;
+        window.DraftFixtureGeometry.runMates(fixtures(), p)
+          .filter(o => o.kind !== 'island' && !pieces.includes(o)).forEach(o => {
+            const o0 = Number(o.offset) - Number(o.width) / 2, o1 = Number(o.offset) + Number(o.width) / 2;
+            [o1 + half, o0 - half].forEach(t => {
+              const shift = t - was[i];
+              if (Math.abs(shift - dAlong) < bestD) { bestD = Math.abs(shift - dAlong); best = shift; }
+            });
+          });
+      });
+      if (best != null) dAlong = best;
+    }
+    // INSIDE THE WALL, all of them.
+    const lo = Math.max(...pieces.map((p, i) => (Number(p.width) || 0) / 2 - was[i]));
+    const hi = Math.min(...pieces.map((p, i) => frame.len - (Number(p.width) || 0) / 2 - was[i]));
+    dAlong = Math.min(Math.max(dAlong, lo), Math.max(hi, lo));
+    pieces.forEach((p, i) => { p.offset = was[i] + dAlong; });
+    d.moved = Math.abs(dAlong) > 1e-9;
   };
   // A FIXTURE LET GO, from the SELECT drag or the MOVE verb alike.
   // ONE GESTURE, ONE UNDO: a 'props' step restores each record in place,
@@ -35640,6 +35814,7 @@
     undoStack.push({ kind: 'props', edits });
     markDirty();
     showSelectionProps();
+    renderObjProp();
     paint();
   };
   const islandPiecePatches = (island, offset, width) => {
@@ -35683,6 +35858,16 @@
       box.append(propSelect('BOWLS', [['double', 'DOUBLE'], ['single', 'SINGLE'], ['right', 'DOUBLE, BIG RIGHT 60/40']],
         agreedOn(items, f => R2.sinkBowlsOf(f)), id => {
           commitFixtureEdits(items.map(f => ({ item: f, patch: { bowls: id } })));
+        }));
+    }
+    // UPPERS ON OR OFF over each lower piece, as wide as it (Movie, 24 Oct:
+    // "allow the lower cabinets to turn on or off upper cabinet that would
+    // match the width. oh ya also above the fridge too"). ON until turned off.
+    const KU = window.DraftFixtureKinds;
+    if (KU?.takesUppers && items.every(f => KU.takesUppers(f))) {
+      box.append(propSelect('UPPERS', [['on', 'ON'], ['off', 'OFF']],
+        agreedOn(items, f => (f.uppers === false ? 'off' : 'on')), id => {
+          commitFixtureEdits(items.map(f => ({ item: f, patch: { uppers: id === 'off' ? false : null } })));
         }));
     }
     if (items.every(f => f.kind === 'island')) {
@@ -35763,6 +35948,88 @@
     showToolProps(activeTool);
   };
   selectionWatchers.push(showSelectionProps);
+
+  // ── OBJ / PROP (Movie, 24 Oct) ────────────────────────────────────────
+  //
+  // "i'd like to be able to click on the FIXTURES / CABINETS and items like
+  // that in a different window ... then open up the window with the top and
+  // side views and properties to change down below" -- "call that tab OBJ /
+  // PROP". The tab hangs under the top bar over the right rail and opens and
+  // shuts the window; a click on a fixture opens it on that piece. TOP is
+  // the sheet's own painter in the window's frame; FRONT, LEFT and RIGHT are
+  // the traced faces (objprop-views.js); the piece's PROPERTIES go under
+  // them, the same fields the left pane shows.
+  const objTab = document.getElementById('objprop-tab');
+  const objWin = document.getElementById('objprop');
+  let objOpen = false;
+  const objPieces = () => selection.filter(entry => entry.type === 'fixture').map(entry => entry.item);
+  const seatObjProp = () => {
+    if (!objTab || !objWin) return;
+    const rail = document.getElementById('right-rail');
+    const box = rail && !rail.hidden ? rail.getBoundingClientRect() : null;
+    const right = box && box.width ? Math.max(0, window.innerWidth - box.right) : 48;
+    objTab.style.right = `${right + 8}px`;
+    objWin.style.right = `${right}px`;
+    objWin.style.top = `${objTab.getBoundingClientRect().bottom || 60}px`;
+  };
+  const drawObjViews = items => {
+    const V = window.DraftObjViews, R = window.DraftRender2D, FG = window.DraftFixtureGeometry;
+    const fx = items[0] || null;
+    objWin.querySelectorAll('[data-objprop-view]').forEach(cv => {
+      const view = cv.dataset.objpropView;
+      const dpr = window.devicePixelRatio || 1;
+      const w = cv.clientWidth || 140, h = cv.clientHeight || 110;
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      const c = cv.getContext('2d');
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, w, h);
+      if (!fx || !V || !R || !FG) return;
+      const box = { x: 0, y: 0, w, h };
+      if (view === 'top') {
+        const env = fixturePaintEnv();
+        const geo = env.fixtureGeometry(fx);
+        if (!geo || !geo.frame) return;
+        const { toS } = V.topFrame(geo, box);
+        const wall = (drawing?.walls || []).find(wl => wl.id === fx.wallId);
+        R.drawFixture2D(c, toS, fx, {}, wall, { ...env, meldCounters: false });
+        if (env.hasUppers(fx) && R.drawUpperCabinets2D) R.drawUpperCabinets2D(c, toS, fx, wall, { ...env, meldCounters: false });
+        return;
+      }
+      V.drawFace(c, V.faceOf(fx, view, window.DraftFixtureProfiles), box,
+        { line: skin['draw-fixture'], ground: fixtureFill(), text: skin['ink-quiet'] || skin['draw-fixture'] });
+    });
+  };
+  const renderObjProp = () => {
+    if (!objWin || !objOpen) return;
+    const items = objPieces();
+    const title = objWin.querySelector('[data-objprop-title]');
+    const props = objWin.querySelector('[data-objprop-props]');
+    title.textContent = items.length ? `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}` : 'PICK A FIXTURE OR CABINET';
+    props.replaceChildren(...(items.length ? [fixturePropsNode(items)] : []));
+    drawObjViews(items);
+  };
+  const setObjOpen = on => {
+    if (!objTab || !objWin) return;
+    objOpen = !!on;
+    objWin.hidden = !objOpen;
+    objTab.setAttribute('aria-expanded', String(objOpen));
+    objTab.textContent = `OBJ / PROP ${objOpen ? '\u25B4' : '\u25BE'}`;
+    seatObjProp();
+    renderObjProp();
+  };
+  if (objTab) {
+    objTab.hidden = false;
+    objTab.textContent = 'OBJ / PROP \u25BE';
+    objTab.addEventListener('click', () => setObjOpen(!objOpen));
+    window.addEventListener('resize', seatObjProp);
+    seatObjProp();
+  }
+  // A CLICK ON A FIXTURE OPENS IT; anything else leaves the window as it is,
+  // saying what to pick.
+  selectionWatchers.push(() => {
+    if (objPieces().length && !objOpen) { setObjOpen(true); return; }
+    renderObjProp();
+  });
 
   // ── THE ROOF PANEL ────────────────────────────────────────────────────────
   //
@@ -38600,6 +38867,20 @@
         // The grab answers for a selected LINE now as well, and a line is not
         // a bone: BREAK HERE would offer to put a joint in one.
         offerBoneChoice(md.body, md.grab);
+      } else if (e && !e.shiftKey && activeTool !== 'assembly') {
+        // A PRESS ON WHAT IS ALREADY IN HAND, let go where it was, IS THE
+        // CLICK AGAIN: it takes the next thing under it (pickUnder).
+        const rect = canvas.getBoundingClientRect();
+        // A HANDLE TAPPED FIRST KEEPS ITS WALL, as it always did: only a press
+        // again on the same spot steps off a corner handle.
+        const under = pickUnder(e.clientX - rect.left, e.clientY - rect.top);
+        const handle = md.kind === 'corner' || md.kind === 'roomcorner';
+        if ((under.again || !handle) && under.hit && !selection.some(entry => entry.item === under.hit.item)) {
+          wallPicked = under.hit.type === 'wall' ? under.hit.item : null;
+          setSelection(withGroup(under.hit));
+          sayPickUnder(under);
+          paint();
+        }
       }
       moveDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
@@ -38658,7 +38939,11 @@
     // wall gets no pan they can see.
     if (dragging.moved <= 4 && e) {
       const rect = canvas.getBoundingClientRect();
-      const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+      // A PLAIN CLICK AGAIN ON THE SAME SPOT TAKES THE NEXT THING UNDER IT
+      // (pickUnder); a shift-click or an ASSEMBLY click keeps the top one.
+      const plainClick = !e.shiftKey && activeTool !== 'assembly';
+      const under = plainClick ? pickUnder(e.clientX - rect.left, e.clientY - rect.top) : null;
+      const hit = plainClick ? under.hit : hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
       // SHIFT ADDS OR REMOVES, which is what the mode help line promises and
       // the only way to build a selection of more than one by clicking. A
       // shift-click on something already selected takes it OUT -- the old
@@ -38718,6 +39003,7 @@
         // picks the whole WC, and the verb still needs to know which wall.
         wallPicked = hit?.type === 'wall' ? hit.item : null;
         setSelection(roofHit && !hit ? [{ type: 'roof', item: roofHit }] : withGroup(hit));
+        if (under) sayPickUnder(under);
       }
       paint();
     }

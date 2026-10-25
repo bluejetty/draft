@@ -2326,6 +2326,9 @@ suite('upperFrontOff2D', 'the uppers\' front line is 12" off the back, toward th
   expect('a 24" base: 12" out', R.upperFrontOff2D({ backOff: 0.25, frontOff: 2.25 }), 1.25);
   expect('the other side of its wall too', R.upperFrontOff2D({ backOff: -0.25, frontOff: -2.25 }), -1.25);
   expect('a shallower piece: its own front', R.upperFrontOff2D({ backOff: 0, frontOff: 0.5 }), 0.5);
+  // Movie, 24 Oct: "the fridge upper cabinet should be 18" deep".
+  expect('over a fridge: 18" out', R.upperFrontOff2D({ backOff: 0.25, frontOff: 2.75 }, { kind: 'fridge' }), 1.75);
+  expect('over a 30" fridge too', R.upperFrontOff2D({ backOff: 0.25, frontOff: 2.25 }, { kind: 'fridge30' }), 1.75);
 });
 const runEnv = (fixtures, uppers = () => true) => ({
   fixtureGeometry: f => ({ frame: meldFrame, alongStart: f.offset - f.width / 2, alongEnd: f.offset + f.width / 2, backOff: 0.25, frontOff: 2.25 }),
@@ -2336,10 +2339,16 @@ const RUN = [{ id: 'cab', kind: 'cabinet', wallId: 'w', side: 1, offset: 4, widt
   { id: 'sk', kind: 'sinkbase', wallId: 'w', side: 1, offset: 1, width: 2 },
   { id: 'far', kind: 'stove', wallId: 'other', side: 1, offset: 6, width: 2 }];
 const spanText = spans => spans.map(([a, b]) => `${a.toFixed(1)}-${b.toFixed(1)}`).join(' ');
-suite('upperSpans2D', 'a run\'s uppers stop at a sink and round a stove, which says its own', R => {
+suite('upperSpans2D', 'a run\'s uppers are cut round each piece standing in it, which says its own or none', R => {
   expect('the cabinet run, less the sink base and the stove', spanText(R.upperSpans2D(RUN[0], RUN, runEnv(RUN))), '2.0-3.0 5.0-8.0');
   expect('the stove keeps its own', spanText(R.upperSpans2D(RUN[1], RUN, runEnv(RUN))), '3.0-5.0');
   expect('a piece with no uppers has none to say', R.upperSpans2D(RUN[0], RUN, runEnv(RUN, () => false)).length, 0);
+  // Every piece hangs its own now (Movie, 24 Oct: "All lowers, all ON").
+  expect('the sink base says its own', spanText(R.upperSpans2D(RUN[2], RUN, runEnv(RUN))), '0.0-2.0');
+  // Switched off, it says none -- and the run's are still cut round it.
+  const off = f => f.id !== 'sk';
+  expect('switched off, the sink base has none', R.upperSpans2D(RUN[2], RUN, runEnv(RUN, off)).length, 0);
+  expect('nor does the run hang any over it', spanText(R.upperSpans2D(RUN[0], RUN, runEnv(RUN, off))), '2.0-3.0 5.0-8.0');
 });
 suite('counterSpans2D', 'a cabinet run under the counter is said either side of a stove standing in it', R => {
   expect('two runs either side', spanText(R.counterSpans2D(RUN[0], RUN, runEnv(RUN))), '0.0-3.0 5.0-8.0');
@@ -4011,7 +4020,7 @@ function coverage() {
     ['drawBeam2D does not say a beam above is above',
       src => src.replace("above ? ' ABOVE' : ''", "''")],
     ['drawUpperCabinets2D draws the uppers as deep as the base',
-      src => src.replace('const depth = Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));',
+      src => src.replace('const depth = Math.min(upperDepthFt(fixture), Math.abs(geo.frontOff - geo.backOff));',
         'const depth = Math.abs(geo.frontOff - geo.backOff);')],
     ['drawUpperCabinets2D draws the uppers solid',
       src => src.replace('    ctx.setLineDash([...OVERHEAD_DASH]);\n    ctx.beginPath();', '    ctx.beginPath();')],

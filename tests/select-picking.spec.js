@@ -103,7 +103,9 @@ test('the bar hangs under the top bar on the left edge, clear of the tabs, and g
   const strip = await page.locator('#strip').boundingBox();
   expect(box.x, 'flush left').toBe(0);
   expect(box.y, 'right under the top bar').toBeGreaterThanOrEqual(strip.y + strip.height);
-  expect(box.y, 'and not far under it').toBeLessThan(strip.y + strip.height + 12);
+  // ...and since 24 Oct on the AUTO DIMS row, under the strip's words
+  // (select-bar-seat.spec.js): no further down than that row.
+  expect(box.y, 'and not far under it').toBeLessThan(strip.y + strip.height + 24);
   expect(box.y + box.height, 'clear of the tabs').toBeLessThanOrEqual(tab.y - 8);
   // A FIFTH KEY GOES BESIDE THE FOURTH.
   await page.evaluate(() => {

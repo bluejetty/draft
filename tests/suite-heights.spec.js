@@ -57,7 +57,7 @@ for (const [kind, ft, said] of [['residential', 8, "8'-0\""], ['commercial', 10,
     expect(d.walls[0].topHeight, `the ${said} stand-in`).toBe(ft);
     await h.armFromRail(page, 'select');
     await page.mouse.click(...at(0, 0));
-    await page.locator('#props-tab').click();
+    await h.showLeftPane(page, 'properties');
     await expect(page.locator('[data-suite-height-note]')).toContainText('SET WHEN PLACED');
     await expect(page.locator('[data-suite-height-note]')).toContainText(said);
   });

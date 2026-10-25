@@ -1114,13 +1114,18 @@ if (!window.DraftRender2D) {
   // through the same fixtureGeometry the piece itself was drawn by, so the
   // uppers sit exactly over it on either face of the wall.
   const UPPER_CABINET_DEPTH_FT = 1;
+  // THE CABINET OVER A FRIDGE IS DEEPER (Movie, 24 Oct: "the fridge upper
+  // cabinet should be 18" deep (rather than typical 12 ")").
+  const FRIDGE_UPPER_DEPTH_FT = 1.5;
+  const upperDepthFt = fixture => (fixture && (fixture.kind === 'fridge' || fixture.kind === 'fridge30')
+    ? FRIDGE_UPPER_DEPTH_FT : UPPER_CABINET_DEPTH_FT);
   function drawUpperCabinets2D(ctx, toS, fixture, wall, env) {
     // MELDED, drawCounters2D draws every run of uppers as one.
     if (env.meldCounters === true) return;
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo || geo.tub) return;
     const dirC = geo.frontOff >= geo.backOff ? 1 : -1;
-    const depth = Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
+    const depth = Math.min(upperDepthFt(fixture), Math.abs(geo.frontOff - geo.backOff));
     const front = geo.backOff + dirC * depth;
     const P = (along, across) => toS(geo.frame.at(along, across));
     const c = [P(geo.alongStart, geo.backOff), P(geo.alongEnd, geo.backOff),
@@ -1566,14 +1571,15 @@ if (!window.DraftRender2D) {
     }
     return without(geo.alongStart, geo.alongEnd, cuts).map(([a0, a1]) => geoRect(geo, a0, a1, back, front));
   }
-  // THE UPPERS OVER A PIECE: 12" off the wall, both legs for the CORNER --
-  // and none over a sink or a dishwasher standing on the same run (Movie, 24
-  // Oct: "the uppers shouldn't be on the dishwasher and the sink").
-  const NO_UPPER_KINDS = Object.freeze(['sink', 'sinkbase', 'dish']);
+  // THE UPPERS OVER A PIECE: 12" off the wall (18" over a fridge), both
+  // legs for the CORNER -- cut round every piece standing in a cabinet run,
+  // which hangs its own or none by its UPPERS switch (Movie, 24 Oct: "allow
+  // the lower cabinets to turn on or off upper cabinet that would match the
+  // width").
   function upperRings(fixture, geo, cuts = []) {
     if (!geo || geo.tub) return [];
     const dir = geo.frontOff >= geo.backOff ? 1 : -1;
-    const deep = Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
+    const deep = Math.min(upperDepthFt(fixture), Math.abs(geo.frontOff - geo.backOff));
     const rings = without(geo.alongStart, geo.alongEnd, cuts)
       .map(([a0, a1]) => geoRect(geo, a0, a1, geo.backOff, geo.backOff + dir * deep));
     if (fixture.kind === 'cornerbase' && geo.cornerAlong != null) {
@@ -1583,30 +1589,32 @@ if (!window.DraftRender2D) {
     return rings;
   }
   // THE UPPERS OVER ONE PIECE, as spans along its wall: what drawCounters2D
-  // hangs over it, less a sink or dishwasher on the same run -- for the
-  // width mark each run of uppers carries (Movie, 24 Oct).
-  // An appliance standing in a cabinet run says its own uppers' width, so
-  // the run's are cut round it rather than said twice over it.
-  const APPLIANCE_UPPER_KINDS = Object.freeze(['stove', 'fridge', 'fridge30']);
-  const spansOnRun = (fixture, fixtures, kinds, env) => {
-    const side = fixture.side === -1 ? -1 : 1;
-    return (fixtures || []).filter(o => o && o !== fixture && kinds.includes(o.kind) && sameHost(o, fixture)
-      && (o.side === -1 ? -1 : 1) === side)
+  // hangs over it -- for the width mark each run of uppers carries (Movie,
+  // 24 Oct). Every piece standing in a cabinet run says its own uppers'
+  // width, or has none, so the run's are cut round it rather than said
+  // twice over it.
+  const sameRun = (o, fixture) => sameHost(o, fixture)
+    && (o.side === -1 ? -1 : 1) === (fixture.side === -1 ? -1 : 1)
+    && Math.abs((Number(o.standoff) || 0) - (Number(fixture.standoff) || 0)) < 0.01;
+  const spansOnRun = (fixture, fixtures, kinds, env) =>
+    (fixtures || []).filter(o => o && o !== fixture && kinds.includes(o.kind) && sameRun(o, fixture))
       .map(o => env.fixtureGeometry(o)).filter(Boolean).map(g => [g.alongStart, g.alongEnd]);
-  };
+  // WHAT CUTS A PIECE'S UPPERS: for a cabinet run, every other piece
+  // standing in it; a piece on its own is cut by nothing.
+  const upperCutsOn = (fixture, fixtures, env) => (fixture.kind !== 'cabinet' ? []
+    : (fixtures || []).filter(o => o && o !== fixture && o.kind !== 'cabinet' && o.kind !== 'island' && sameRun(o, fixture))
+      .map(o => env.fixtureGeometry(o)).filter(Boolean).map(g => [g.alongStart, g.alongEnd]));
   function upperSpans2D(fixture, fixtures, env) {
     if (!fixture || typeof env.hasUppers !== 'function' || !env.hasUppers(fixture)) return [];
     const geo = env.fixtureGeometry(fixture);
     if (!geo || geo.tub) return [];
-    const kinds = APPLIANCE_UPPER_KINDS.includes(fixture.kind) ? NO_UPPER_KINDS
-      : NO_UPPER_KINDS.concat(APPLIANCE_UPPER_KINDS);
-    return without(geo.alongStart, geo.alongEnd, spansOnRun(fixture, fixtures, kinds, env));
+    return without(geo.alongStart, geo.alongEnd, upperCutsOn(fixture, fixtures, env));
   }
   // WHERE THE UPPERS' FRONT LINE RUNS over a piece, across its wall: 12"
-  // off the back, or the piece's own depth if it is shallower.
-  function upperFrontOff2D(geo) {
+  // off the back (18" over a fridge), or the piece's own depth if shallower.
+  function upperFrontOff2D(geo, fixture = null) {
     const dir = geo.frontOff >= geo.backOff ? 1 : -1;
-    return geo.backOff + dir * Math.min(UPPER_CABINET_DEPTH_FT, Math.abs(geo.frontOff - geo.backOff));
+    return geo.backOff + dir * Math.min(upperDepthFt(fixture), Math.abs(geo.frontOff - geo.backOff));
   }
   // A BASE PIECE'S RUNS UNDER THE COUNTER: the piece less a stove, fridge,
   // pantry or full-height cabinet standing in it -- each run says its width.
@@ -1653,7 +1661,7 @@ if (!window.DraftRender2D) {
         const geo = env.fixtureGeometry(fx);
         const cuts = spansOn(fx, NO_COUNTER_KINDS);
         counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT, cuts));
-        if (typeof env.hasUppers === 'function' && env.hasUppers(fx)) uppers.push(...upperRings(fx, geo, spansOn(fx, NO_UPPER_KINDS)));
+        if (typeof env.hasUppers === 'function' && env.hasUppers(fx)) uppers.push(...upperRings(fx, geo, upperCutsOn(fx, list, env)));
       });
       stroke(outlineSegments(counters, blockers), false);
       stroke(outlineSegments(uppers, blockers), true);

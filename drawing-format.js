@@ -523,6 +523,9 @@ if (!window.DraftDrawingFormat) {
         // option"): 'single', 'double', or 'right' -- a double with the
         // bigger bowl, 60/40, on the right. No key is how it always drew.
         ...((kind === 'sinkbase' || kind === 'sink') && SINK_BOWLS.includes(fixture?.bowls) ? { bowls: fixture.bowls } : {}),
+        // ITS UPPERS SWITCHED OFF (Movie, 24 Oct: "allow the lower cabinets
+        // to turn on or off upper cabinet"). Only OFF is written; no key is ON.
+        ...(fixture?.uppers === false ? { uppers: false } : {}),
       };
     }), env.drops).filter(Boolean);
 

@@ -16,8 +16,8 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/hologram-units.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html', name: 'a click on a hologram picks nothing',
-    find: "      const holo = hologramPickAt(worldPt);\n      if (holo) return { type: 'hologram', item: holo };",
-    with: "      const holo = null;\n      if (holo) return { type: 'hologram', item: holo };",
+    find: "      const holo = hologramPickAt(worldPt);\n      if ((holo) && take({ type: 'hologram', item: holo })) return out;",
+    with: "      const holo = null;\n      if ((holo) && take({ type: 'hologram', item: holo })) return out;",
     test: "a click on a suite's own wall picks the whole suite" },
   { file: 'MODEL.html', name: 'the box passes holograms by',
     find: "        if (segs.length) out.push({ type: 'hologram', item, parts: segs, open: true });",
