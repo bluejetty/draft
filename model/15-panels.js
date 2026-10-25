@@ -2512,7 +2512,16 @@
       dimLastLine = { at: { x: at.x, z: at.z }, made, step, when: Date.now(), count: (dimLastLine?.count || 0) + 1,
         // EVERY LINE OF THIS STRING, for ESC to take back.
         lines: [...(dimLastLine?.lines || []), { made, step }] };
-      sayOnStrip(`DIMENSION — ${made.length} placed. Click again for another line of the same points, or SPACE, ENTER or the right button to finish.`);
+      // A LINE PLACED IS A LINE SEEN (Movie, 24 Oct: "the LEFT CLICK to place
+      // the dimension line isn't working still" -- it was placing them, with
+      // HAND DIMS switched off, so each one went down out of sight). Placing
+      // one puts HAND DIMS back on, and says so.
+      const wasHidden = dimsHidden.hand;
+      if (wasHidden) {
+        dimsHidden = { ...dimsHidden, hand: false };
+        try { localStorage.setItem('model.dimsHidden', JSON.stringify(dimsHidden)); } catch (e) {}
+      }
+      sayOnStrip(`DIMENSION — ${made.length} placed${wasHidden ? ' (HAND DIMS was off — turned back on so you can see them)' : ''}. Click again for another line of the same points, or SPACE, ENTER or the right button to finish.`);
       markDirty();
       paint();
       return;
@@ -2540,6 +2549,15 @@
   // string up and says where the click goes.
   const dimOnceEnds = () => {
     dimLinesStale();
+    // AND THE LINE UNDER THE CURSOR GOES DOWN FIRST (Movie, 25 Oct: "unless
+    // the user presses ESC (there will be no dimension shown for that case)
+    // but if they press anything else to end the dimension line placing
+    // sequence, the last line will be placed before the sequence finishes").
+    // Not where it measures nothing; dimPress already refuses the spot of the
+    // line just placed, so it is never laid twice.
+    if (dimPlacing && cursorWorld && dimString(dimPoints, cursorWorld).length) {
+      dimPress(cursorWorld);
+    }
     if (dimPlacing && !dimLastLine) {
       sayOnStrip(`DIMENSION — ${Math.max(dimPoints.length - 1, 1)} to place: click where the string goes (Esc abandons it).`);
       return true;
