@@ -840,7 +840,9 @@
     || activeTool === 'dimension'
     // STRETCH's box follows the cursor from its first corner, and the ghost
     // from the base point.
-    || (activeTool === 'stretch' && !!stretchState.a);
+    || (activeTool === 'stretch' && !!stretchState.a)
+    // A STAIR FROM ITS FIRST STEP, at its real length.
+    || (activeTool === 'stair' && !!stairHand.at);
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the

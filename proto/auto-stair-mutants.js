@@ -144,9 +144,9 @@ const MUTANTS = [
     test: 'the button is greyed with no outline to descend from, and says why' },
   { file: 'model/16-gestures-undo.js',
     name: 'a press with STAIR armed is swallowed in silence',
-    find: "      sayOnStrip('STAIR places through AUTO STAIR for now — hand placement is next. One already placed moves: pick it with SELECT and drag.');",
-    with: '      ;',
-    test: 'a click with STAIR armed says hand placement is next' },
+    find: "    if (activeTool === 'stair') { stairHandPress(at); return; }",
+    with: "    if (activeTool === 'stair') { return; }",
+    test: 'a click with STAIR armed is the first step' },
 ];
 
 const run = grep => {

@@ -3526,6 +3526,177 @@
     };
   };
 
+  // ── A STAIR BY HAND (Movie, 25 Oct) ───────────────────────────────────
+  //
+  // "i can't insert a new set of stairs when i use the STAIR command button"
+  // -- the tool had pointed at AUTO STAIR since it was made. Asked how, he
+  // chose a popup ("give them a popup choice": STRAIGHT, L or U, the hand it
+  // turns, the width) and both directions: DOWN from the floor in view, or UP
+  // from it to the floor above ("yes B - we'll try it out").
+  //
+  // TWO PRESSES, as a wall's run: the first step, then the way it runs. The
+  // flight follows the cursor at its real length between them. Whichever way
+  // it is placed, the record is the downward one on the floor it comes down
+  // from (stair-place.js), so its well is cut and its open side framed as an
+  // AUTO STAIR flight's are, by the same two calls, and one UNDO takes the
+  // three back.
+  const stairPickCard = document.querySelector('[data-stair-pick]');
+  let stairHand = { shape: 'straight', turn: 'right', up: false, widthIn: 36, at: null };
+  // THE FLOOR A FLIGHT PLACED FROM HERE IS FILED ON: this one going DOWN; the
+  // one above going UP -- from the basement plan, the lowest floor.
+  const stairHandLevel = (up = stairHand.up) => {
+    const ids = stairFloorLevels().map(level => Number(level.id));
+    const here = Number(activeLevelId());
+    if (!up) return ids.includes(here) ? here : null;
+    if (here === 1) return ids.length ? ids[0] : null;
+    const i = ids.indexOf(here);
+    return i >= 0 && i + 1 < ids.length ? ids[i + 1] : null;
+  };
+  const stairHandLayout = () => {
+    const levelId = stairHandLevel();
+    const SG = window.DraftStairGeometry;
+    const descent = levelId == null ? null : SG.stairDescent(levelId, stairLevels());
+    return descent && descent.riseFt > 0 ? { levelId, layout: SG.stairLayout(descent.riseFt) } : null;
+  };
+  const stairHandShaped = toward => {
+    const ready = stairHandLayout();
+    if (!ready || !stairHand.at || !toward) return null;
+    const shaped = window.DraftStairPlace.stairFromAim(window.DraftStairGeometry, {
+      at: stairHand.at, toward, layout: ready.layout, shape: stairHand.shape, turn: stairHand.turn,
+      widthFt: stairHand.widthIn / 12, up: stairHand.up,
+    });
+    return shaped ? { ...ready, shaped } : null;
+  };
+  const stairHandSay = () => {
+    const way = stairHand.up ? 'UP to the floor above' : 'DOWN from this floor';
+    const first = stairHand.up ? 'the bottom step' : 'the top step';
+    return stairHand.at
+      ? `STAIR ${stairHand.shape.toUpperCase()} ${way} -- point the way it runs and click to place (Esc cancels).`
+      : `STAIR ${stairHand.shape.toUpperCase()} ${way} -- click ${first}.`;
+  };
+  const syncStairPick = () => {
+    if (!stairPickCard) return;
+    stairPickCard.querySelectorAll('[data-stair-shape]').forEach(btn =>
+      btn.setAttribute('aria-pressed', String(btn.dataset.stairShape === stairHand.shape)));
+    stairPickCard.querySelectorAll('[data-stair-turn]').forEach(btn =>
+      btn.setAttribute('aria-pressed', String(btn.dataset.stairTurn === stairHand.turn)));
+    stairPickCard.querySelectorAll('[data-stair-dir]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String((btn.dataset.stairDir === 'up') === stairHand.up));
+      btn.disabled = stairHandLevel(btn.dataset.stairDir === 'up') == null;
+    });
+    const turns = stairPickCard.querySelector('[data-stair-turns]');
+    if (turns) turns.hidden = stairHand.shape === 'straight';
+    const said = stairPickCard.querySelector('[data-stair-pick-say]');
+    if (said) said.textContent = stairHandSay();
+  };
+  const stairHandPress = at => {
+    if (stairHandLevel() == null) {
+      sayOnStrip(stairHand.up ? 'STAIR UP: there is no floor above this one to go up to.'
+        : 'STAIR DOWN: this level is no floor a stair comes down from -- pick UP FROM HERE.');
+      return;
+    }
+    const snap = drawSnap(at);
+    const p = snap.pt ? { x: snap.pt.x, z: snap.pt.z } : { x: at.x, z: at.z };
+    if (!stairHand.at) {
+      stairHand.at = p;
+      sayOnStrip(stairHandSay());
+      syncStairPick();
+      paint();
+      return;
+    }
+    commitHandStair(p);
+  };
+  const commitHandStair = toward => {
+    const made = stairHandShaped(toward);
+    if (!made) { sayOnStrip('STAIR -- point away from the first step, then click.'); return; }
+    const SG = window.DraftStairGeometry;
+    const { levelId, layout, shaped } = made;
+    if (!Array.isArray(drawing.stairs)) drawing.stairs = [];
+    const others = new Set(drawing.stairs.map(stair => stair.id));
+    const stair = {
+      id: newStructureId(drawing.stairs),
+      start: shaped.start, end: shaped.end,
+      levelId, view: 'plan',
+      widthFt: stairHand.widthIn / 12,
+      riseFt: layout.riseFt, risers: layout.risers, treadRunIn: SG.STAIR_TREAD_RUN_IN,
+      rail: stairRailSide, shape: shaped.shape, turn: shaped.turn, winders: 0,
+    };
+    drawing.stairs.push(stair);
+    // ITS WELL AND ITS OPEN SIDE, as AUTO STAIR's flights get them -- this
+    // flight's only: every other stair is served.
+    const cut = buildStairOpenings(others);
+    const framed = placeStairSideFraming([stair]);
+    undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
+      items: [{ list: drawing.stairs, item: stair }, ...cut.placed, ...framed.placed], restored: [] });
+    stairHand.at = null;
+    markDirty();
+    const well = cut.cut ? 'its well cut' : cut.refused.length ? `NO well cut -- ${cut.refused.join('; ')}` : 'no floor to cut a well in';
+    sayOnStrip(`STAIR placed -- ${layout.risers} risers ${stairHand.up ? 'up to' : 'down from'} ${namedLevel(levelId)}, ${well}`
+      + `${cut.nudges.length ? `, nudged ${cut.nudges.join(', ')} clear` : ''}. UNDO takes it back; click the next stair's first step.`);
+    syncStairPick();
+    buildChrome();
+    paint();
+  };
+  // THE FLIGHT IN HAND, in the preview's ink: its runs and its landing.
+  const paintStairHandPreview = () => {
+    if (activeTool !== 'stair' || !stairHand.at || !cursorWorld) return;
+    const made = stairHandShaped(cursorWorld);
+    if (!made) return;
+    const outline = window.DraftStairPlace.stairOutline(window.DraftStairGeometry, made.shaped, made.layout);
+    ctx.save();
+    ctx.strokeStyle = skin['draw-dim'] || '#4ad';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    [...outline.runs, ...(outline.landing ? [outline.landing] : [])].forEach(ring => {
+      ctx.beginPath();
+      ring.forEach((p, i) => { const s2 = toS(p); if (i) ctx.lineTo(s2.x, s2.y); else ctx.moveTo(s2.x, s2.y); });
+      ctx.closePath();
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    outline.walk.forEach((p, i) => { const s2 = toS(p); if (i) ctx.lineTo(s2.x, s2.y); else ctx.moveTo(s2.x, s2.y); });
+    ctx.stroke();
+    ctx.restore();
+  };
+  stairPickCard?.querySelectorAll('[data-stair-shape]').forEach(btn => btn.addEventListener('click', () => {
+    stairHand.shape = btn.dataset.stairShape; syncStairPick(); sayOnStrip(stairHandSay()); paint();
+  }));
+  stairPickCard?.querySelectorAll('[data-stair-turn]').forEach(btn => btn.addEventListener('click', () => {
+    stairHand.turn = btn.dataset.stairTurn; syncStairPick(); paint();
+  }));
+  stairPickCard?.querySelectorAll('[data-stair-dir]').forEach(btn => btn.addEventListener('click', () => {
+    stairHand.up = btn.dataset.stairDir === 'up'; stairHand.at = null; syncStairPick(); sayOnStrip(stairHandSay()); paint();
+  }));
+  stairPickCard?.querySelector('[data-stair-width]')?.addEventListener('change', e => {
+    const inches = Math.round(Number(e.target.value));
+    stairHand.widthIn = Number.isFinite(inches) ? Math.min(72, Math.max(30, inches)) : 36;
+    e.target.value = String(stairHand.widthIn);
+    paint();
+  });
+  stairPickCard?.querySelector('[data-stair-width]')?.addEventListener('keydown', e => e.stopPropagation());
+  stairPickCard?.querySelector('[data-stair-pick-close]')?.addEventListener('click', () => { stairPickCard.hidden = true; });
+  // UP BY DEFAULT ON A LEVEL NO STAIR COMES DOWN FROM (the basement plan),
+  // DOWN everywhere else; the card comes up with the tool and goes with it.
+  toolListeners.push(next => {
+    stairHand.at = null;
+    if (!stairPickCard) return;
+    if (next !== 'stair') { stairPickCard.hidden = true; return; }
+    if (stairHandLevel(false) == null && stairHandLevel(true) != null) stairHand.up = true;
+    if (stairHandLevel(true) == null && stairHandLevel(false) != null) stairHand.up = false;
+    stairPickCard.hidden = false;
+    syncStairPick();
+    sayOnStrip(stairHandSay());
+  });
+  // ENTER OR SPACE PLACES IT WHERE IT POINTS, as a click does.
+  window.addEventListener('keydown', e => {
+    if (activeTool !== 'stair' || !stairHand.at || !cursorWorld) return;
+    if (e.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(e.target.tagName)) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    commitHandStair(cursorWorld);
+  });
+
   // ── A BILEVEL'S TWO FLIGHTS ────────────────────────────────────────────
   //
   // Movie, 2 Oct: from the landing "2 sets of stairs 1 going to main fl and

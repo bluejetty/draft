@@ -2133,6 +2133,8 @@
         if (activeTool === 'fixture' && washroomPreset && cursorWorld) paintWashroomPreview();
         // THE DIMENSION STRING IN HAND.
         if (activeTool === 'dimension') paintDimPreview();
+        // THE STAIR IN HAND, at its real length.
+        if (activeTool === 'stair') paintStairHandPreview();
         // THE ROOF NODE IN HAND (MOVE).
         paintRoofMoveNode();
         // THE KITCHEN IN HAND, in the corner within reach of the cursor.
