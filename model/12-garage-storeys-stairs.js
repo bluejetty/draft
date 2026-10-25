@@ -3541,7 +3541,8 @@
   // AUTO STAIR flight's are, by the same two calls, and one UNDO takes the
   // three back.
   const stairPickCard = document.querySelector('[data-stair-pick]');
-  let stairHand = { shape: 'straight', turn: 'right', up: false, widthIn: 36, at: null };
+  let stairHand = { shape: 'straight', turn: 'right', up: false,
+    widthIn: Math.max(36, window.DraftStairGeometry?.STAIR_MIN_WIDTH_IN || 36), at: null };
   // THE FLOOR A FLIGHT PLACED FROM HERE IS FILED ON: this one going DOWN; the
   // one above going UP -- from the basement plan, the lowest floor.
   const stairHandLevel = (up = stairHand.up) => {
@@ -3586,6 +3587,12 @@
     });
     const turns = stairPickCard.querySelector('[data-stair-turns]');
     if (turns) turns.hidden = stairHand.shape === 'straight';
+    // THE WIDTH IT WILL PLACE, never under the office's least.
+    const width = stairPickCard.querySelector('[data-stair-width]');
+    if (width && document.activeElement !== width) {
+      width.min = String(window.DraftStairGeometry.STAIR_MIN_WIDTH_IN);
+      width.value = String(stairHand.widthIn);
+    }
     const said = stairPickCard.querySelector('[data-stair-pick-say]');
     if (said) said.textContent = stairHandSay();
   };
@@ -3670,7 +3677,9 @@
   }));
   stairPickCard?.querySelector('[data-stair-width]')?.addEventListener('change', e => {
     const inches = Math.round(Number(e.target.value));
-    stairHand.widthIn = Number.isFinite(inches) ? Math.min(72, Math.max(30, inches)) : 36;
+    // NEVER UNDER THE OFFICE'S LEAST (STANDARDS, STAIRS).
+    const least = window.DraftStairGeometry.STAIR_MIN_WIDTH_IN;
+    stairHand.widthIn = Number.isFinite(inches) ? Math.min(72, Math.max(least, inches)) : Math.max(36, least);
     e.target.value = String(stairHand.widthIn);
     paint();
   });
@@ -3705,7 +3714,8 @@
   // cut again where the stair now stands and its framing laid again, and one
   // UNDO for the lot. A stair the drafter has touched is his, not AUTO
   // STAIR's suggestion any more.
-  const STAIR_MIN_WIDTH_IN = 36;
+  // THE OFFICE'S LEAST WIDTH (STANDARDS, STAIRS; 36" by default).
+  const stairMinWidthIn = () => window.DraftStairGeometry.STAIR_MIN_WIDTH_IN;
   const editStair = (stair, change) => {
     const before = { ...stair, start: { ...stair.start }, end: { ...stair.end },
       ...(stair.lock ? { lock: JSON.parse(JSON.stringify(stair.lock)) } : {}) };
@@ -3738,8 +3748,8 @@
   // the flight grows away from it; free on both sides, it grows both ways.
   const setStairWidth = (stair, inches) => {
     const want = Math.round(Number(inches) * 8) / 8;
-    if (!(want >= STAIR_MIN_WIDTH_IN)) {
-      sayOnStrip(`STAIR WIDTH -- ${STAIR_MIN_WIDTH_IN}" at the least.`);
+    if (!(want >= stairMinWidthIn())) {
+      sayOnStrip(`STAIR WIDTH -- ${stairMinWidthIn()}" at the least.`);
       return false;
     }
     return editStair(stair, st => {

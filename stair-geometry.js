@@ -26,11 +26,45 @@
 // it an object literal.
 if (!window.DraftStairGeometry) {
 (() => {
-  const STAIR_MAX_RISER_IN = 7.875;    // 7 7/8" maximum riser (200 mm)
-  // AND A FLOOR UNDER IT (Movie, 25 Oct: "make min rise 6""): the shortest
-  // riser the drafter's - / + may make.
-  const STAIR_MIN_RISER_IN = 6;
-  const STAIR_TREAD_RUN_IN = 10;       // 10" run per tread
+  // ── THE OFFICE'S STAIR NUMBERS (Movie, 25 Oct) ─────────────────────────
+  //
+  // "is stair limitations set up in STANDARDS, we should allow that to change
+  // too in STANDARDS" -- MAX RISER 7 7/8" (200 mm, "use that measurement"),
+  // MIN RISER 6" ("make min rise 6""), TREAD RUN 10", MIN WIDTH 36", MIN
+  // HEADROOM 6'-10". These are the defaults; the STANDARDS package's
+  // `stairStandards` overrides them, read once the first time a stair asks
+  // (a STANDARDS change on its own page reaches a page when it next opens).
+  // Each is clamped to a span a real stair keeps to, and the least riser
+  // never above the most.
+  const STAIR_STANDARD_DEFAULTS = Object.freeze({
+    maxRiserIn: 7.875, minRiserIn: 6, treadRunIn: 10, minWidthIn: 36, headroomIn: 82,
+  });
+  const STAIR_STANDARD_SPANS = Object.freeze({
+    maxRiserIn: [4, 12], minRiserIn: [3, 12], treadRunIn: [7, 16], minWidthIn: [24, 72], headroomIn: [72, 120],
+  });
+  const normaliseStairStandards = raw => {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const out = {};
+    Object.keys(STAIR_STANDARD_DEFAULTS).forEach(key => {
+      const v = Number(src[key]);
+      const [lo, hi] = STAIR_STANDARD_SPANS[key];
+      out[key] = Number.isFinite(v) && v > 0 ? Math.min(hi, Math.max(lo, v)) : STAIR_STANDARD_DEFAULTS[key];
+    });
+    if (out.minRiserIn > out.maxRiserIn) out.minRiserIn = out.maxRiserIn;
+    return Object.freeze(out);
+  };
+  let standards = null;
+  const stairStandards = () => {
+    if (!standards) {
+      let raw = null;
+      try { raw = window.DraftProfileManager?.getActive?.('standards')?.content?.model?.stairStandards; } catch { raw = null; }
+      standards = normaliseStairStandards(raw);
+    }
+    return standards;
+  };
+  // A PAGE OR A SPEC HANDING IT ITS OWN: the STANDARDS page as it edits, a
+  // harness checking a non-default office.
+  const useStairStandards = raw => { standards = normaliseStairStandards(raw); return standards; };
   const STAIR_RISER_FACE_IN = 11;      // nosing to riser face
   const STAIR_LANDING_MIN_FT = 3;      // 36" x 36" minimum CLEAR landing
   const STAIR_LANDING_DRYWALL_IN = 0.5; // finish allowance at a walled landing edge
@@ -54,17 +88,17 @@ if (!window.DraftStairGeometry) {
   const stairLayout = (riseFt, count = null) => {
     const riseIn = Math.max(0, (riseFt || 0) * 12);
     const risers = Number.isInteger(count) && count > 0 ? count
-      : Math.max(1, Math.ceil(riseIn / STAIR_MAX_RISER_IN));
+      : Math.max(1, Math.ceil(riseIn / stairStandards().maxRiserIn));
     const riserIn = riseIn / risers;
     const treads = Math.max(1, risers - 1);
-    return { riseFt: riseIn / 12, risers, riserIn, treads, runFt: treads * STAIR_TREAD_RUN_IN / 12 };
+    return { riseFt: riseIn / 12, risers, riserIn, treads, runFt: treads * stairStandards().treadRunIn / 12 };
   };
 
   // The 36" landing is CLEAR: measured to the nosing of the run above
   // (which projects ~1" over it) with 1/2" of drywall at a walled edge.
   const stairLandFt = (widthFt) => {
     const clearFt = STAIR_LANDING_MIN_FT
-      + (STAIR_RISER_FACE_IN - STAIR_TREAD_RUN_IN + STAIR_LANDING_DRYWALL_IN) / 12;
+      + (STAIR_RISER_FACE_IN - stairStandards().treadRunIn + STAIR_LANDING_DRYWALL_IN) / 12;
     return Math.max(clearFt, widthFt);
   };
 
@@ -115,7 +149,7 @@ if (!window.DraftStairGeometry) {
   };
   // HOW MANY RISERS A RISE MAY TAKE: the fewest that keep each under the
   // maximum, the most that keep each over the minimum. Null with no rise.
-  const stairRiserRange = (riseFt, { maxIn = STAIR_MAX_RISER_IN, minIn = STAIR_MIN_RISER_IN } = {}) => {
+  const stairRiserRange = (riseFt, { maxIn = stairStandards().maxRiserIn, minIn = stairStandards().minRiserIn } = {}) => {
     const riseIn = (riseFt || 0) * 12;
     if (!(riseIn > 0)) return null;
     const fewest = Math.max(1, Math.ceil(riseIn / maxIn - 1e-9));
@@ -157,7 +191,7 @@ if (!window.DraftStairGeometry) {
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
     const len = Math.hypot(dx, dz) || 1;
     const d = { x: dx / len, z: dz / len };
-    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const runStep = stairStandards().treadRunIn / 12;
     const S = { x: stair.start.x, z: stair.start.z };
     // Rail bars sit STAIR_RAIL_INSET_FT inside the stringer on the picked
     // side(s), and stay continuous through a turn: on the run edges they
@@ -256,7 +290,7 @@ if (!window.DraftStairGeometry) {
   // it answerable from any board.
   const stairEndFor = (stair, layout) => {
     const split = stairShapeSplit(stair, layout);
-    const lenFt = split ? split.t1 * STAIR_TREAD_RUN_IN / 12 : layout.runFt;
+    const lenFt = split ? split.t1 * stairStandards().treadRunIn / 12 : layout.runFt;
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
     const len = Math.hypot(dx, dz) || 1;
     return {
@@ -311,9 +345,17 @@ if (!window.DraftStairGeometry) {
     stairShapeSplit,
     stairEndFor,
     stairPlanParts,
-    STAIR_MAX_RISER_IN,
-    STAIR_MIN_RISER_IN,
-    STAIR_TREAD_RUN_IN,
+    // READ LIVE, so every painter and every page follows the office's numbers
+    // without holding a copy of its own.
+    get STAIR_MAX_RISER_IN() { return stairStandards().maxRiserIn; },
+    get STAIR_MIN_RISER_IN() { return stairStandards().minRiserIn; },
+    get STAIR_TREAD_RUN_IN() { return stairStandards().treadRunIn; },
+    get STAIR_MIN_WIDTH_IN() { return stairStandards().minWidthIn; },
+    get STAIR_HEADROOM_IN() { return stairStandards().headroomIn; },
+    STAIR_STANDARD_DEFAULTS,
+    normaliseStairStandards,
+    stairStandards,
+    useStairStandards,
     STAIR_RISER_FACE_IN,
     STAIR_LANDING_MIN_FT,
     STAIR_LANDING_DRYWALL_IN,
