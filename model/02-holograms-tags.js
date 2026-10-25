@@ -246,10 +246,12 @@
     // file still show as rings.
     const lineLock = traceMoving?.hologram ? traceMoving.lineLock : null;
     let litLines = 0;
+    const drawnLines = [];
     holograms().filter(holo => !holo.hidden).forEach(holo => {
       const held = !!lock && traceMoving.underlay === holo;
       const ink = H().colourOf?.(holo, drawing)?.ink || null;
       (H().suiteEndLines?.(holo, activeLevelId()) || []).forEach(L => {
+        drawnLines.push({ L, holo, ink: ink || SUPER_NODE_INK });
         const bright = !!lineLock && ((traceMoving.underlay === holo && lineLock.mine.end === L.end)
           || (lineLock.other === holo && lineLock.line.end === L.end));
         if (bright) litLines += 1;
@@ -269,7 +271,41 @@
         else if (!n.auto || lit) superDot(n.point, { ring: true, ink, bright: lit });
       });
     });
+    // JOINED, THE TWO COLOURS TAKE TURNS (Movie, 25 Oct: "when the 2 suites
+    // joine rather than overlapping the lines make a new line that has both
+    // colors but is dashed one color and then back to the other color" --
+    // "to notify the user they are connected too, if they are both solid
+    // they aren't connected precisely"). Two suites' end lines that face
+    // each other and lie on one line, to a hundredth of a foot, are redrawn
+    // over the stretch they share: one colour solid, the other dashed on it.
+    let joined = 0;
+    drawnLines.forEach((p, i) => drawnLines.slice(i + 1).forEach(q => {
+      if (p.holo === q.holo) return;
+      const { L } = p, M = q.L;
+      if (L.n.x * M.n.x + L.n.z * M.n.z > -0.999) return;
+      if (Math.abs((M.a.x - L.a.x) * L.n.x + (M.a.z - L.a.z) * L.n.z) > 0.01) return;
+      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };
+      const along = pt => (pt.x - L.ea.x) * u.x + (pt.z - L.ea.z) * u.z;
+      const reach = Math.hypot(L.eb.x - L.ea.x, L.eb.z - L.ea.z);
+      const t0 = Math.max(0, Math.min(along(M.ea), along(M.eb)));
+      const t1 = Math.min(reach, Math.max(along(M.ea), along(M.eb)));
+      if (t1 - t0 <= 0.01) return;
+      joined += 1;
+      const a = toS({ x: L.ea.x + u.x * t0, z: L.ea.z + u.z * t0 });
+      const b = toS({ x: L.ea.x + u.x * t1, z: L.ea.z + u.z * t1 });
+      ctx.save();
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'butt';
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = p.ink;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = q.ink;
+      ctx.setLineDash([9, 9]);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.restore();
+    }));
     if (!thumbTarget) {
+      canvas.dataset.joinedLines = String(joined);
       canvas.dataset.suiteLines = String(litLines);
       if (lineLock) canvas.dataset.lineLock = `${lineLock.other.id}:${lineLock.line.end}`;
       else delete canvas.dataset.lineLock;

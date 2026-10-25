@@ -51,6 +51,14 @@ const MUTANTS = [
     find: "    if (!(isSuite(holo) || isSuiteFile(holo) || own)) return [];",
     with: "    if (!(isSuite(holo) || isSuiteFile(holo))) return [];",
     test: 'blue hologram' },
+  { file: 'model/02-holograms-tags.js', name: 'joined lines drawn as two solids',
+    find: "      if (t1 - t0 <= 0.01) return;\n      joined += 1;",
+    with: "      if (true) return;\n      joined += 1;",
+    test: 'within 6"' },
+  { file: 'model/02-holograms-tags.js', name: 'lines a little apart drawn joined',
+    find: "      if (Math.abs((M.a.x - L.a.x) * L.n.x + (M.a.z - L.a.z) * L.n.z) > 0.01) return;",
+    with: "      if (Math.abs((M.a.x - L.a.x) * L.n.x + (M.a.z - L.a.z) * L.n.z) > 50) return;",
+    test: 'do not quite meet' },
 ];
 const run = name => {
   try {

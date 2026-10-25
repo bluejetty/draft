@@ -103,6 +103,21 @@ test('within 6": the bottom line meets the suite below\'s top line -- one line -
   expect(d.holograms[0].x, 'the jog is kept').toBeCloseTo(2, 1);
   const [, bottom] = await lines(page, 'h1');
   expect(bottom.z).toBeCloseTo((await lines(page, 'h2'))[0].z, 6);
+  // JOINED: the shared stretch is drawn in both colours, turn about.
+  await expect(page.locator('#plan')).toHaveAttribute('data-joined-lines', '1');
+});
+
+test('lines that do not quite meet stay solid: nothing is drawn joined', async ({ page }) => {
+  await open(page, plan({ z: 40 }));
+  await expect(page.locator('#plan')).toHaveAttribute('data-joined-lines', '0');
+  // Put exactly on, they join.
+  await page.evaluate(() => {
+    const [h1, h2] = drawing.holograms;
+    const gap = window.DraftHologram.suiteEndLines(h2, activeLevelId())[0].a.z
+      - window.DraftHologram.suiteEndLines(h1, activeLevelId())[1].a.z;
+    h1.z += gap; paint();
+  });
+  await expect(page.locator('#plan')).toHaveAttribute('data-joined-lines', '1');
 });
 
 test('a foot short, nothing catches', async ({ page }) => {
@@ -153,6 +168,7 @@ test('a press on a suite\'s line picks it up and drags it -- no card, no MOVE; a
   await page.waitForTimeout(150);
   await page.mouse.move(...at(now.x1 - 1 + 3, now.z + 3), { steps: 4 });
   await page.waitForTimeout(150);
+  expect(await page.evaluate(() => traceMoving), 'nothing left in hand').toBeNull();
   d = await saved(page);
   expect(d.holograms[0].z).toBeCloseTo(gap, 4);
   expect(d.holograms[0].x).toBeCloseTo(1, 1);
