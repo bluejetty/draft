@@ -2293,6 +2293,11 @@
       sayOnStrip(`${file.name} is not a drawing this page can read.`);
       return null;
     }
+    // A .draft SAVED WITH ITS UNDERLAY PICTURES PACKED IN (Movie, 25 Oct)
+    // brings its drawing, not them: a hologram is kept whole inside this
+    // drawing, and megabytes of someone else's tracing photos would ride in
+    // every save.
+    if (parsed && typeof parsed === 'object') delete parsed.underlayFiles;
     const check = F.checkEnvelope(parsed);
     if (!check.ok) {
       sayOnStrip(check.reason === 'version'
