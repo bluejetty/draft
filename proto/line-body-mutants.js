@@ -21,7 +21,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-line-like-wall.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the body grab asks for a WALL again: a line is stuck in the middle',
     // ANCHORED ON THE PICK AND ITS GUARD, which segmentBodyAt alone has in
     // this spelling: cornerAt's copy is followed by its own filter note and
@@ -32,14 +32,14 @@ const MUTANTS = [
       + '    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;',
     test: 'a selected LINE drags by its BODY' },
 
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the selection rule goes: every press near any line moves it '
       + 'instead of sliding the sheet',
     find: '    const selectedSeg = selectedSegment() || fixedWall();',
     with: '    const selectedSeg = selectedSegment() || lines()[0];',
     test: 'an UNSELECTED line is not dragged by a press on its body' },
 
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the body drag moves ONE end, so a line dragged by its middle '
       + 'swings instead of travelling',
     find: '  const movingEnds = wall => [wall.start, wall.end];',
@@ -47,7 +47,7 @@ const MUTANTS = [
     test: 'a selected LINE drags by its BODY' },
 
   // ── AND THE FILTER THAT SHUTS THE LINE OUT ──────────────────────────────
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the type filter does not reach the BODY grab: WALL is engaged and '
       + 'a line still drags by its middle',
     find: "    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;\n"
@@ -55,7 +55,7 @@ const MUTANTS = [
     with: '    const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);',
     test: 'nor by its BODY' },
 
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'nor the END grab: WALL is engaged and a line still drags by its end',
     find: "    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;\n"
       + '    const G = window.DraftGeometry2D;',

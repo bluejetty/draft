@@ -16,7 +16,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/roof-cricket.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/12-garage-storeys-stairs.js',
     name: 'the build cuts the cricket again: a 45 at the inside corner',
     find: '    const cut = notched || plain;',
     with: "    const cut = G.cricketRing((notched || plain).points, (notched || plain).edges, (notched || plain).edgeOverhang, { needsCricket: () => true }) || notched || plain;",

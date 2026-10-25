@@ -17,7 +17,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/floor-joist-callouts.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'MODEL never paints the callouts on its floor view',
     find: '    paintJoistCallouts(belowBeams, env);\n',
     with: '',

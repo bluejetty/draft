@@ -9,7 +9,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPECS = ['tests/model-html-point-drag-instruments.spec.js'];
 const MUTANTS = [
-  { file: 'MODEL.html', name: "a dragged wall goes free with the T-square lit", spec: 'tests/model-html-point-drag-instruments.spec.js',
+  { file: 'model/16-gestures-undo.js', name: "a dragged wall goes free with the T-square lit", spec: 'tests/model-html-point-drag-instruments.spec.js',
     find: "          if (tsquareOn && board !== 'toy' && md.body?.start && md.body?.end) {\n",
     with: "          if (false && tsquareOn && board !== 'toy' && md.body?.start && md.body?.end) {\n",
     test: "T-square lit: a dragged wall slides square across its own run" },

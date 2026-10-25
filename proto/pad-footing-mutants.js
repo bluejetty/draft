@@ -21,12 +21,12 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'THE DEFECT THIS FIXED: no pad is drawn under any column',
     find: '    if (activeViewId() === \'foundation\' && B) {',
     with: '    if (false) {',
     test: 'a built foundation draws a pad under every telepost' },
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'the buried pad is drawn on every plan, not just the foundation',
     find: '    if (activeViewId() === \'foundation\' && B) {',
     with: '    if (B) {',
@@ -38,7 +38,7 @@ const MUTANTS = [
     // The house the spec builds has no piles, so this has nothing to bend
     // there. The harness does: "a drawing of only piles has no pad groups".
     harness: 'proto/pad-footing-harness.js' },
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'the openings drawn are the level\'s OWN, not the floor above it',
     find: '    const carried = floorCarriedBy(activeLevelId());',
     with: '    const carried = { id: activeLevelId() };',
@@ -50,13 +50,13 @@ const MUTANTS = [
   // is guarded. This one is the plausible bug instead -- falling back to the
   // level itself when there is nothing above it, which draws a real plan with
   // the wrong holes on it.
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'nothing above falls back to the level itself, so the top storey '
       + 'draws its own openings as though they were overhead',
     find: '    const carried = floorCarriedBy(activeLevelId());',
     with: '    const carried = floorCarriedBy(activeLevelId()) || { id: activeLevelId() };',
     test: 'the top storey has nothing overhead to draw' },
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'THE DEFECT THIS FIXED: every pile back to one hard-coded diameter',
     find: '      footing: B ? B.footingFor(column.footing) : null,',
     with: '      footing: /pile/i.test(String(column.footing || \'\')) ? { pile: true, sizeIn: 6, label: column.footing } : null,',

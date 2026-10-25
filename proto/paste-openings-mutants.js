@@ -14,17 +14,17 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/paste-openings.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/08-structure-roof.js',
     name: 'a pasted window still names the wall it left',
     find: "        copy.wallId = wallIds.get(String(raw.wallId));\n",
     with: "",
     test: 'the suite pasted on the BONEYARD brings its window and its toilet, hung on the pasted walls' },
-  { file: 'MODEL.html',
+  { file: 'model/08-structure-roof.js',
     name: 'a fixture is not carried',
     find: "  const NOT_COPIED = new Set(['stair', 'roof', 'roomtag', 'note']);\n",
     with: "  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag', 'note']);\n",
     test: 'the suite pasted on the BONEYARD brings its window and its toilet, hung on the pasted walls' },
-  { file: 'MODEL.html',
+  { file: 'model/08-structure-roof.js',
     name: 'an orphan window is pasted anyway',
     find: "        if (!wallIds.has(String(raw.wallId))) return;\n",
     with: "",

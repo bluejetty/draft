@@ -14,19 +14,19 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/suite-to-suite-snap.spec.js';
 const MUTANTS = [
-  { file: 'MODEL.html', name: 'another hologram\'s corner rings are not magnetic',
+  { file: 'model/02-holograms-tags.js', name: 'another hologram\'s corner rings are not magnetic',
     find: "    others.forEach(other => hologramSuperNodes(other).forEach(b => offer(b, other)));\n",
     with: "",
     test: 'within 4"' },
-  { file: 'MODEL.html', name: 'a caught pair does not hold',
+  { file: 'model/02-holograms-tags.js', name: 'a caught pair does not hold',
     find: "      if (kept && kept.d <= SUPER_NODE_HOLD_FT) return kept;\n",
     with: "",
     test: 'holds through a wobble' },
-  { file: 'MODEL.html', name: 'a caught pair never lets go',
+  { file: 'model/02-holograms-tags.js', name: 'a caught pair never lets go',
     find: "      if (kept && kept.d <= SUPER_NODE_HOLD_FT) return kept;\n",
     with: "      if (kept) return kept;\n",
     test: 'holds through a wobble' },
-  { file: 'MODEL.html', name: 'a blue hologram\'s rings are passed by',
+  { file: 'model/02-holograms-tags.js', name: 'a blue hologram\'s rings are passed by',
     find: "    const others = holograms().filter(o => o !== holo && !o.hidden);\n",
     with: "    const others = holograms().filter(o => o !== holo && !o.hidden && o.mode === 'suite');\n",
     test: 'blue hologram' },

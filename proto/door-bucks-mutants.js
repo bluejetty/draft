@@ -15,12 +15,12 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/door-bucks.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'MODEL never paints the bucks',
     find: '        paintDoorBucks();\n',
     with: '',
     test: 'MODEL: the FOUNDATION view cuts a buck at the man door and the overhead door, the basement plan none' },
-  { file: 'MODEL.html',
+  { file: 'model/02-holograms-tags.js',
     name: 'MODEL cuts the bucks on the basement plan too',
     find: "    const onFoundation = activeViewId() === 'foundation';",
     with: '    const onFoundation = true;',

@@ -147,6 +147,9 @@ const ROWS = [
     keeps: ['id', 'body', 'end'] },
 ];
 
+// MODEL.html's load block lives in the page's last script part since stage 2
+// of the split.
+const LOAD_BLOCK_FILE = 'model/17-boot-save.js';
 function runChecks(quiet) {
 passed = 0;
 failures = [];
@@ -193,7 +196,7 @@ for (const row of ROWS) {
 // starts calling one, this goes red and the board gets updated -- which is the
 // only way a measurement stays true after the thing it measured has changed.
 const LOAD_BLOCK = (() => {
-  const src = readSubject('MODEL.html');
+  const src = readSubject(LOAD_BLOCK_FILE);
   const at = src.indexOf('    drawing = {');
   if (at < 0) return null;
   const end = src.indexOf('\n    };', at);
@@ -277,15 +280,15 @@ const MUTATIONS = [
     c => c.replace("if (end !== 'none' && Math.hypot(text.x - anchor.x,"
       + ' text.z - anchor.z) < 0.001) return null;', '')],
 
-  ['the load block stops normalising walls', 'MODEL.html',
+  ['the load block stops normalising walls', LOAD_BLOCK_FILE,
     c => c.replace('walls: F.walls(parsed.walls, levelIds, {',
       'walls: (parsed.walls, levelIds, {')],
 
-  ['the load block starts normalising notes, and the finding rots', 'MODEL.html',
+  ['the load block starts normalising notes, and the finding rots', LOAD_BLOCK_FILE,
     c => c.replace('board: F.board(parsed.board),',
       'board: F.board(parsed.board),\n      notes: F.notes(parsed.notes, levelIds),')],
 
-  ['the load block is renamed, so there is nothing to read', 'MODEL.html',
+  ['the load block is renamed, so there is nothing to read', LOAD_BLOCK_FILE,
     c => c.replace('    drawing = {', '    drawing =  {')],
 ];
 

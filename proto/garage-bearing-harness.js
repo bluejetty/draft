@@ -2147,7 +2147,7 @@ function run(win) {
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
   // and no amount of arithmetic here can observe it.
-  const modelSrc = fs.readFileSync(path.join(ROOT, 'MODEL.html'), 'utf8');
+  const modelSrc = require('./model-page-source.js').modelPageSource(ROOT);
   check('MODEL.html ASKS for the drop rather than holding a copy',
     modelSrc.includes('DraftCutView.garageSillDropFt('),
     modelSrc.includes('GARAGE_SILL_BELOW_HOUSE_FT') ? 'still holds its own constant' : 'asks');

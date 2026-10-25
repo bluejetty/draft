@@ -14,15 +14,15 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/brush-arms-tool.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html', name: 'the tool is not armed',
+  { file: 'model/13-suites-trim-follow.js', name: 'the tool is not armed',
     find: "        setTool('fenestration');\n",
     with: "",
     test: 'a door lifted arms FENESTRATION wearing it, and a press on bare wall puts one there' },
-  { file: 'MODEL.html', name: 'the OPENING row is not told',
+  { file: 'model/13-suites-trim-follow.js', name: 'the OPENING row is not told',
     find: "        fenestrationType = brushLoad.props.type === 'window' ? 'window' : 'door';\n",
     with: "        fenestrationType = 'window';\n",
     test: 'a door lifted arms FENESTRATION wearing it, and a press on bare wall puts one there' },
-  { file: 'MODEL.html', name: 'an opening pressed under the tool is placed beside',
+  { file: 'model/16-gestures-undo.js', name: 'an opening pressed under the tool is placed beside',
     find: "        if (hit?.type === 'fenestration') { brushDust(hit); return; }\n",
     with: "",
     test: 'and a press on an existing window gives it the door\'s properties instead of placing beside it' },

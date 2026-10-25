@@ -15,19 +15,19 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/hologram-floor.spec.js';
 const MUTANTS = [
-  { file: 'MODEL.html', name: 'brought in where its own file has it, not on the floor in view',
+  { file: 'model/13-suites-trim-follow.js', name: 'brought in where its own file has it, not on the floor in view',
     find: "    if (map && !sameMap(holo, map)) holo.levelMap = map;",
     with: "    void map;",
     test: 'on 2ND FL' },
-  { file: 'MODEL.html', name: 'the floor in view read one up',
+  { file: 'model/13-suites-trim-follow.js', name: 'the floor in view read one up',
     find: "    const map = here >= 0 ? suiteMapFor(holo, here) : null;",
     with: "    const map = here >= 0 ? suiteMapFor(holo, here + 1) : null;",
     test: 'on MAIN FL' },
-  { file: 'MODEL.html', name: 'a shelf-only drawing left on the shelf',
+  { file: 'model/13-suites-trim-follow.js', name: 'a shelf-only drawing left on the shelf',
     find: "    if (!window.DraftDrawingFormat.suiteKind(parsed?.suiteKind) && !onlyOnShelves(parsed)) return parsed;",
     with: "    if (!window.DraftDrawingFormat.suiteKind(parsed?.suiteKind)) return parsed;",
     test: 'only on a shelf' },
-  { file: 'MODEL.html', name: 'one wall on a floor counted as all on shelves',
+  { file: 'model/13-suites-trim-follow.js', name: 'one wall on a floor counted as all on shelves',
     find: "    return list.length > 0 && list.every(w => Number(w?.levelId) < 0);",
     with: "    return list.length > 0 && list.some(w => Number(w?.levelId) < 0);",
     test: 'keeps what it parked' },

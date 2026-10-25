@@ -79,7 +79,7 @@ const MUTANTS = [
     with: '  #settings-corner { display:flex; align-items:center; gap:6px; flex:0 0 auto;\n'
       + '    position:relative; z-index:2; margin-right:-70px; }' },
 
-  { file: 'MODEL.html',
+  { file: 'model/05-props-shelves-rail.js',
     name: 'the boxes are honest and the PRESS is eaten — a tap aimed at '
       + 'IMPERIAL lands on IMPERIAL and changes nothing',
     find: '    const wanted = b.dataset.units === \'metric\';\n'

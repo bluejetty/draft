@@ -12,15 +12,15 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/beam-copy.spec.js';
 const MUTANTS = [
-  { file: 'MODEL.html', name: 'the posts stay behind',
+  { file: 'model/08-structure-roof.js', name: 'the posts stay behind',
     find: "        columnsOnBeam(piece).forEach(post => { if (!has(post)) out.push({ type: 'column', item: post }); });\n",
     with: '',
     test: 'COPY on one piece takes the whole row' },
-  { file: 'MODEL.html', name: 'COPY takes only the selection again',
+  { file: 'model/08-structure-roof.js', name: 'COPY takes only the selection again',
     find: "    held = copiedEntries()\n",
     with: "    held = selection.slice()\n",
     test: 'COPY on one piece takes the whole row' },
-  { file: 'MODEL.html', name: 'a paste has no UNDO',
+  { file: 'model/08-structure-roof.js', name: 'a paste has no UNDO',
     find: "    undoStack.push({ kind: 'built', walls: landed.filter(e => e.type === 'wall').map(e => e.item),",
     with: "    void ({ kind: 'built', walls: landed.filter(e => e.type === 'wall').map(e => e.item),",
     test: 'one UNDO takes the whole paste back' },

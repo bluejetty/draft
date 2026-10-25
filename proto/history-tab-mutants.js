@@ -12,17 +12,17 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/history-tab.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/17-boot-save.js',
     name: 'an edit makes no version',
     find: "    historyNoteEdit();\n    if (dirty) return;\n",
     with: "    if (dirty) return;\n",
     test: 'UNDO / REDO hangs under NOTES / CALC and lists the session\'s versions, newest first, CURRENT on top' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the newest version is not called CURRENT',
     find: "      what.textContent = i === n - 1 ? `CURRENT \\u00B7 ${entry.label}` : entry.label;\n",
     with: "      what.textContent = entry.label;\n",
     test: 'UNDO / REDO hangs under NOTES / CALC and lists the session\'s versions, newest first, CURRENT on top' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'a jump leaves the cursor where it was',
     find: "      versions.cursor = index;\n",
     with: "",
@@ -31,17 +31,17 @@ const MUTANTS = [
   // guards a dirty mark that changed nothing, and no gesture on the page
   // makes one today -- every release checks `moved` before it marks. It
   // stays as a defence; a row on it would only ever survive.
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'an edit on an older version keeps the versions after it',
     find: "    versions.entries.length = versions.cursor + 1;\n",
     with: "",
     test: 'drawing on an older version drops the versions after it' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'Ctrl+Y steps nowhere',
     find: "      if (versions.cursor < versions.entries.length - 1) { e.preventDefault(); historyStep(1); }\n",
     with: "",
     test: 'Ctrl+Z with no fine-grained undo left steps back a version; Ctrl+Y steps forward' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'Ctrl+Z with nothing to undo does nothing',
     find: "        if (versions.cursor > 0) { e.preventDefault(); historyStep(-1); }\n",
     with: "",

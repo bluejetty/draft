@@ -13,19 +13,19 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-html-site-point.spec.js';
 const MUTANTS = [
-  { file: 'MODEL.html', name: 'the shelf keeps its first-click datum',
+  { file: 'model/01-skin-view.js', name: 'the shelf keeps its first-click datum',
     find: "const shelf = boneyardActive ? boneyardLevelId() : null;",
     with: "const shelf = null;",
     test: 'on a shelf the target' },
-  { file: 'MODEL.html', name: 'the shelf\'s walls read as boneyard, skipped',
+  { file: 'model/01-skin-view.js', name: 'the shelf\'s walls read as boneyard, skipped',
     find: "\n          .map(w => ({ ...w, levelId: 3 }));",
     with: ";",
     test: 'follows the suite moved' },
-  { file: 'MODEL.html', name: 'no gold node on the plan',
+  { file: 'model/02-holograms-tags.js', name: 'no gold node on the plan',
     find: "gold: n.id === goldId })",
     with: "gold: false })",
     test: 'super node on the target' },
-  { file: 'MODEL.html', name: 'no gold ring on a suite hologram',
+  { file: 'model/02-holograms-tags.js', name: 'no gold ring on a suite hologram',
     find: "gold: n.registration === true })",
     with: "gold: false })",
     test: 'corner ring on its own target' },

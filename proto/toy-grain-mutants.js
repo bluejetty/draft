@@ -23,49 +23,49 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'THE GRAIN WITH NO HOUSE: a level with no outline is gridded anyway',
     find: '    const pts = house && house.points;\n    if (!pts || pts.length < 3) return null;',
     with: '    const pts = (house && house.points && house.points.length >= 3) ? house.points\n      : [{ x: -10, z: -10 }, { x: 10, z: -10 }, { x: 10, z: 10 }, { x: -10, z: 10 }];',
     test: 'with no outline on the level the foot rule stands too' },
 
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'THE GRID IS THE WORLD\'S: a house off the world\'s foot marks gets the wrong grid',
     find: '      x: Math.min(...pts.map(p => Number(p.x))),\n      z: Math.min(...pts.map(p => Number(p.z))) } };',
     with: '      x: 0,\n      z: 0 } };',
     test: 'the grid is the exterior corners, not the world origin' },
 
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'THE HARD LINES ARE FORGOTTEN: the grid wins at the face',
     find: '    return best ? best.c : grid;',
     with: '    return grid;',
     test: 'cut at its inside face' },
 
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'THE FACE IS THE WALL\'S LINE: every interior wall runs 5½" into the exterior wall',
     find: '      const faceAcross = inside ? frame.endOff : frame.startOff;',
     with: '      const faceAcross = inside ? frame.startOff : frame.endOff;',
     test: 'cut at its inside face' },
 
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'a floor opening\'s edge is not a hard line',
     find: '      if (Number(opening.levelId) !== Number(levelId) || opening.hostType !== \'floor\') return;',
     with: '      return;',
     test: 'the edge of a floor opening is a hard line' },
 
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/10-tracking-garage.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'THE GRAIN LEAKS OUTSIDE THE HOUSE: a run beside it is gridded too',
     find: '    if (grain && inHouse(grain, free) && (!drawStart || inHouse(grain, drawStart))) {',
     with: '    if (grain) {',
     test: 'outside the house, and with no house on the level' },
 
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/11-floor-openings-fixtures.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'cabinets are measured from the wall\'s start, so one cannot sit flush in the far corner',
     find: '    const datum = placement.along <= len / 2 ? 0 : len;',
     with: '    const datum = 0;',
     test: 'a cabinet run lands on the half foot from the nearer corner' },
 
-  { file: 'MODEL.html', spec: 'tests/model-toy-grain.spec.js',
+  { file: 'model/11-floor-openings-fixtures.js', spec: 'tests/model-toy-grain.spec.js',
     name: 'THE LEAK: cabinets are gridded on DRAFTING too',
     find: '    if (board !== \'toy\' || !kind.casework || !Q) return placement.along;',
     with: '    if (!kind.casework || !Q) return placement.along;',

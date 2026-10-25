@@ -20,7 +20,7 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the gesture stops writing a bone at all',
     // RE-POINTED. The call grew an `if (bone)` guard -- commitWall takes
     // `bone: false` for a run that brings its own outline (the autobuilt
@@ -29,19 +29,19 @@ const MUTANTS = [
     find: "    if (bone) extendToyBone(startPt, endPt, levelId);",
     with: '',
     test: 'acceptance 2b' },
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the bone is written on DRAFTING too, changing every drawing',
     find: "    if (board !== 'toy') return;\n    const same = sameSpot;",
     with: '    const same = sameSpot;',
     test: 'DRAFTING house is still walls alone' },
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'a one- or two-point bone reaches the file and the reader drops it',
     find: '    if (bone === pendingBone && bone.points.length >= 3) {',
     with: '    if (bone === pendingBone) {',
     // RE-AIMED at the check written for it: a four-corner run passes three
     // points either way, so only a run that STOPS at one wall can see this.
     test: 'one wall in TOY is not yet a bone' },
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'THE POLYGON NOBODY DREW: any run joins any bone on the level',
     find: "    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId\n      && endsAt(o, from)) || null;",
     with: "    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId) || null;",
@@ -65,7 +65,7 @@ const MUTANTS = [
   // an unfinished one. The day drawPress stops refusing that -- or the day the
   // refusal is relaxed for a second footprint -- the branch becomes reachable
   // and this mutation is worth restoring.
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the bone claims a master it never came from',
     // RE-POINTED. The id is no longer minted here -- it is assigned when the
     // bone is committed -- so the anchor now carries `id: null`. The
@@ -78,22 +78,22 @@ const MUTANTS = [
   // Each is one deleted line from silently not happening, and the notice-slot
   // bug is why they are here rather than on a list: a refusal that sets text
   // and is overwritten passes every check that inspects state.
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'THE REFUSAL NEVER FIRES: a disconnected run is allowed while one is open',
     find: "      if (activeTool === 'wall' && toyRunRefused(drawPoint(at))) return;",
     with: '',
     test: 'refuses a new one' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the refusal refuses but says nothing',
     find: "    sayOnStrip('finish or cancel the run you started — Esc cancels');",
     with: '',
     test: 'refuses a new one' },
-  { file: 'MODEL.html',
+  { file: 'model/13-suites-trim-follow.js',
     name: 'THE NOTICE IS OVERWRITTEN AGAIN: stripRefresh stops preferring it',
     find: '    stripMessage.textContent = stripNotice || (rulerOn',
     with: '    stripMessage.textContent = (rulerOn',
     test: 'refuses a new one' },
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'Escape stops cancelling, so the refusal names a way out that is gone',
     // RE-ANCHORED 27 SEP. Escape and the right mouse button now share one
     // list of half-finished gestures (cancelGestures), and the bone's cancel
@@ -102,7 +102,7 @@ const MUTANTS = [
     find: '    if (pendingBone) { pendingBone = null; sayOnStrip(\'run cancelled\'); }',
     with: '',
     test: 'Escape cancels' },
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the notice sticks, sitting over a gesture that has since succeeded',
     // A COMMENT WAS NOT A MUTANT. The first version of this entry appended a
     // comment line and changed no behaviour at all -- it would have survived

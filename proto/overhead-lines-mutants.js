@@ -17,17 +17,17 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/overhead-lines.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'MODEL never draws the overhead lines',
     find: '        paintOverheadLines();\n',
     with: '',
     test: 'MODEL: the walls plan hangs the cantilever above and the roof over it; the floor layout nothing' },
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'MODEL draws the overhead lines on the floor layout too',
     find: "    const onWallsPlan = activeViewId() === 'plan';",
     with: '    const onWallsPlan = true;',
     test: 'MODEL: the walls plan hangs the cantilever above and the roof over it; the floor layout nothing' },
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'MODEL reads the roofs as hanging over every floor',
     find: '      roofs: drawing?.roofs || [],\n    }) : { cantilevers: [], overhangs: [] };',
     with: '      roofs: (drawing?.roofs || []).map(roof => ({ ...roof, sourceLevelId: activeLevelId() })),\n    }) : { cantilevers: [], overhangs: [] };',

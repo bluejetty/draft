@@ -13,7 +13,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-site-turned-lot.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/10-tracking-garage.js',
     name: 'the card reads the house along x and z whichever way the plan is turned (the 16 Oct lot)',
     find: "  const lotHouseBox = () => LS.houseBoxOf(drawing?.outlines, drawing?.planTurn || 0);",
     with: "  const lotHouseBox = () => LS.houseBoxOf(drawing?.outlines, 0);",

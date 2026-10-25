@@ -42,7 +42,7 @@ const MUTANTS = [
   // back. A check that only said "not taken back by the master" passed under
   // BOTH -- riding also differs from the master -- which is why the check now
   // asserts the absolute coordinate.
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the override RIDES at its offset instead of freezing (DC\'s branch back)',
     find: '        if (overridden.has(pt.srcId)) return;',
     with: `        if (overridden.has(pt.srcId)) {
@@ -57,61 +57,61 @@ const MUTANTS = [
   // dropped: every point stops following, not just the hand-moved one. That
   // fails as "the outline no longer follows its master at all" and is caught
   // by the untouched-corner assertion in the same check.
-  { file: 'MODEL.html',
+  { file: 'model/07-walls-magnet.js',
     name: 'the freeze is over-broad: EVERY point stops following, not just the overridden one',
     find: '        if (overridden.has(pt.srcId)) return;',
     with: '        return;',
     test: '§5a: a hand-moved point FREEZES' },
 
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'THE SHELF IS NOT A WORKSPACE: the level geometry never goes away',
     find: '    if (boneyardActive) return boneyardLevelId();',
     with: '    if (false) return boneyardLevelId();',
     test: 'the BONEYARD card selects, and the level geometry goes' },
 
-  { file: 'MODEL.html',
+  { file: 'model/05-props-shelves-rail.js',
     name: 'the shelf allocator counts rows, so a new shelf adopts old geometry',
     find: '    const next = Math.max(\n      Number.isInteger(drawing.nextBoneyardShelfId) ? drawing.nextBoneyardShelfId : 1,\n      ...list.map(s => Number(s.id) + 1), 2);',
     with: '    const next = list.length + 1;',
     test: 'a shelf added to a gapped list takes a FREE id' },
 
-  { file: 'MODEL.html',
+  { file: 'model/08-structure-roof.js',
     name: 'PASTE KEEPS THE SOURCE ID, which is the duplicate-id family again',
     find: "      const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };",
     with: '      const copy = { ...rest, id: raw.id, levelId: owner };',
     test: 'copy a wall from a level, paste it on a shelf' },
 
-  { file: 'MODEL.html',
+  { file: 'model/08-structure-roof.js',
     name: 'PASTE DOES NOT RE-OWN: the copy lands back on the level it came from',
     find: "      const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };",
     with: '      const copy = { ...rest, id: newDrawingItemId(type), levelId: raw.levelId };',
     test: 'copy a wall from a level, paste it on a shelf' },
 
-  { file: 'MODEL.html',
+  { file: 'model/08-structure-roof.js',
     name: 'PASTE MOVES rather than copies: the original is taken off the plan',
     find: '      drawing[key] = drawing[key] || [];\n      drawing[key].push(copy);',
     with: '      drawing[key] = (drawing[key] || []).filter(x => x.id !== raw.id);\n      drawing[key].push(copy);',
     test: 'copy a wall from a level, paste it on a shelf' },
 
-  { file: 'MODEL.html',
+  { file: 'model/01-skin-view.js',
     name: 'the shelf list is STORED not derived, so an old drawing shows none',
     find: '  const shelves = () => window.DraftDrawingFormat.boneyardShelves(drawing?.boneyardShelves);',
     with: '  const shelves = () => (drawing?.boneyardShelves || []);',
     test: 'a drawing saved before shelves existed loads with the single default' },
 
-  { file: 'MODEL.html',
+  { file: 'model/05-props-shelves-rail.js',
     name: 'the sync pass does not know the boneyard, so the card never lights',
     find: "      if (card.dataset.boneyard !== undefined) {\n        card.toggleAttribute('data-active', boneyardActive);\n        return;\n      }",
     with: '      /* mutant */',
     test: 'the BONEYARD card selects, and the level geometry goes' },
 
-  { file: 'MODEL.html',
+  { file: 'model/05-props-shelves-rail.js',
     name: 'leaving for a level does not leave the boneyard: both look active',
     find: '    boneyardActive = false;\n    params.set(\'level\', String(id));',
     with: "    params.set('level', String(id));",
     test: 'leaving the boneyard puts the level geometry back' },
 
-  { file: 'MODEL.html',
+  { file: 'model/03-plan-paint.js',
     name: 'PASTE READS THE SELECTION, so it is dead exactly when it is wanted',
     find: '      pasteButton.hidden = !held.length || !!activeCut() || modalUp();',
     with: '      pasteButton.hidden = !selection.length || !!activeCut() || modalUp();',

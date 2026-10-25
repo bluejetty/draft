@@ -29,7 +29,7 @@ const MUTANTS = [
     find: "            if (lo == null || Math.abs(ask) < Math.abs(lo)) lo = ask;\n",
     with: "            if (ask > 0 && (lo == null || Math.abs(ask) < Math.abs(lo))) lo = ask;\n",
     test: 'a vanity run pressed from the corner' },
-  { file: 'MODEL.html', name: 'a press by the corner is held off by the header bearing',
+  { file: 'model/11-floor-openings-fixtures.js', name: 'a press by the corner is held off by the header bearing',
     find: "    const clamped = intoCorner != null ? { offset: intoCorner } : G.clampOpeningToWall(",
     with: "    const clamped = false ? { offset: intoCorner } : G.clampOpeningToWall(",
     test: 'a shower pressed by the corner' },

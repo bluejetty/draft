@@ -26,31 +26,31 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-level-lock.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'the shared corner is moved TWICE: uniquePoints replaced by a plain walk',
     find: `    const points = window.DraftLevelLock.uniquePoints(items);`,
     with: `    const points = (items || []).flatMap(i => (i.points || [i.start, i.end, i.point]).filter(Boolean));`,
     test: 'a corner shared by two walls of one assembly moves ONCE' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the siblings never move: the delta is dropped on release',
     find: `          applyLevelLockDelta(md.group, a.vtx.x - a.x, a.vtx.z - a.z);`,
     with: `          applyLevelLockDelta(md.group, 0, 0);`,
     test: 'moves its locked siblings the same delta' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'the MOVER is moved twice: the lock delta is applied to it as well',
     find: `    const siblings = levelLockSiblings(group);`,
     with: `    const siblings = [group, ...levelLockSiblings(group)];`,
     test: 'the mover moves ONCE' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'the sibling lookup is LEVEL-FILTERED, so a lock across floors moves nothing',
     find: `      moved += translateItemsBy(itemsOfGroupAnywhere(sibling), dx, dz);`,
     with: `      moved += translateItemsBy(itemsOfGroup(sibling).map(e => e.item), dx, dz);`,
     test: 'moves its locked siblings the same delta' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'a LOCK OF ONE is allowed: the page counts members itself instead of asking',
     find: `    const lock = window.DraftLevelLock.makeLock(
       \`lock-\${nextId}\`, name, (chosen || []).map(group => group?.id));
@@ -60,7 +60,7 @@ const MUTANTS = [
     if (!lock.members.length) return null;`,
     test: 'a lock of one is refused' },
 
-  { file: 'MODEL.html',
+  { file: 'model/06-selection-pick.js',
     name: 'BREAK marks the lock instead of removing it',
     find: `    drawing.levelLocks = window.DraftLevelLock.breakLock(levelLocks(), lock.id);
     if (drawing.levelLocks.length === before) return false;`,
@@ -69,20 +69,20 @@ const MUTANTS = [
     if (false) return false;`,
     test: 'BREAK removes the lock outright' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'a DRAG breaks the lock, so distance becomes consent',
     find: `        if (md.kind === 'group' && md.group && md.before.length) {`,
     with: `        if (md.kind === 'group' && md.group && md.before.length
             && (drawing.levelLocks = [])) {`,
     test: 'a drag never breaks a lock' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'the rigid drag never arms, so the whole gesture is dead',
     find: `      if (rigidGroup) {`,
     with: `      if (false && rigidGroup) {`,
     test: 'moves its locked siblings the same delta' },
 
-  { file: 'MODEL.html',
+  { file: 'model/16-gestures-undo.js',
     name: 'UNDO forgets the siblings: one Ctrl+Z restores half the move',
     // THE PUSH BECAME TWO LINES when the move step grew a name: §6's answer
     // and the dimension re-lay are both written INTO the step after it has
