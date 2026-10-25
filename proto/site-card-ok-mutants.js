@@ -68,7 +68,7 @@ const MUTANTS = [
     with: "    draw.classList.toggle('lot-ok-target', !!takes);",
     test: 'it stops glowing once he presses another button' },
 
-  { file: 'MODEL.html',
+  { file: 'model.css',
     name: 'the glow is named and not drawn: the class goes on and the rule '
       + 'behind it is gone',
     find: '  #lot-pick [data-lot-pick-draw].lot-ok-target {\n'
@@ -90,7 +90,7 @@ const MUTANTS = [
     with: "  const STANDARD_LOT_TIER = 'S';",
     test: 'with nothing drawn yet, OK still has an answer' },
 
-  { file: 'MODEL.html',
+  { file: 'model.css',
     name: 'the OK is a small button in the row with the rest, not the way '
       + 'through across the bottom',
     find: '  #lot-pick .lot-ok { display:block; width:100%; margin-top:10px;',

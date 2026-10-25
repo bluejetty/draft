@@ -139,7 +139,9 @@ function fallbackChecks(sink) {
 
   const pages = require('fs')
     .readdirSync(require('path').join(__dirname, '..'))
-    .filter(f => f.endsWith('.html')).sort();
+    // A PAGE'S OWN STYLESHEET IS THE PAGE: MODEL.html's <style> block moved
+    // into model.css (stage 1 of the split), its fallbacks with it.
+    .filter(f => f.endsWith('.html') || f.endsWith('.css')).sort();
   sink('the scan reaches the pages', pages.length >= 5, `${pages.length} on disk`);
 
   let declaredAnywhere = 0;
@@ -156,7 +158,7 @@ function fallbackChecks(sink) {
     `${declaredAnywhere} declarations`);
   // The floor: MODEL carried eight on 30 Sep. A count alone survives a swap.
   sink('MODEL.html still carries its pre-boot fallbacks',
-    rolesIn(readPage('MODEL.html')).length >= 8);
+    rolesIn(readPage('MODEL.html') + readPage('model.css')).length >= 8);
 }
 fallbackChecks(check);
 

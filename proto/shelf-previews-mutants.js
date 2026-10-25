@@ -11,7 +11,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/shelf-previews.spec.js';
 
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'model.css',
     name: 'the row stands off the axis',
     find: "  #shelf-strip { position:absolute; left:0; bottom:calc(100% - 14px); transform:translateX(-50%);\n",
     with: "  #shelf-strip { position:absolute; left:0; bottom:calc(100% - 14px); transform:none;\n",
