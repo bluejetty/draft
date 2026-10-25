@@ -1117,16 +1117,25 @@
           // A WALL'S NODE TAKES THE CORNER AS ITSELF; a face corner (the
           // inside corner of two walls, say) takes it at its offset from the
           // nearest wall end, so the floor follows that wall too.
-          const caught = cornerSnap(raw, md.points[md.index]);
-          let pt = caught;
-          if (!pt) {
-            const faces = wallFaceNodes();
-            const face = window.DraftGeometry2D.nearestVertex(faces, raw, CORNER_SNAP_PX / view.scale);
-            if (face) {
-              const link = roomLinkAt(face);
-              pt = { x: face.x, z: face.z, ...(link ? { link } : {}) };
-            } else pt = { x, z };
-          }
+          // THE NEARER OF THE TWO WINS (Movie, 25 Oct: "i had a hard time
+          // getting the flooring area shape to locate exactly onto the inside
+          // corner"): the wall's centre node used to be asked first, so a
+          // corner taken into an inside corner went to the middle of the wall
+          // a couple of inches away whenever the node was in reach too.
+          // AND FROM AS FAR AS THE MOVE'S MAGNET REACHES (14 px), not the 4 px
+          // a drawn point snaps from, with the circle on what it will take
+          // (paintSnapNode) -- "similar" to the MOVE, as he asked.
+          const reach = Math.max(CORNER_SNAP_PX, NODE_PULL_PX) / view.scale;
+          const caught = window.DraftGeometry2D.nearestVertex(snapCandidates([md.points[md.index]]), raw, reach);
+          const face = window.DraftGeometry2D.nearestVertex(wallFaceNodes(), raw, reach);
+          const far = q => (q ? Math.hypot(q.x - raw.x, q.z - raw.z) : Infinity);
+          let pt;
+          if (face && far(face) < far(caught)) {
+            const link = roomLinkAt(face);
+            pt = { x: face.x, z: face.z, ...(link ? { link } : {}) };
+          } else pt = caught || { x, z };
+          md.lit = face && far(face) < far(caught) ? { pt: { x: face.x, y: 0, z: face.z }, corner: face, node: false }
+            : caught ? { pt: { x: caught.x, y: 0, z: caught.z }, corner: caught, node: true } : null;
           // A SHAPE'S OR FLOOR'S CORNER TAKES THE NUMBERS ONLY: no node, no link.
           if (md.loopKind !== 'roomtag') pt = md.loopKind === 'floor' ? { x: pt.x, y: 0, z: pt.z } : { x: pt.x, z: pt.z };
           md.points = md.points.map((p, i) => (i === md.index ? pt : p));

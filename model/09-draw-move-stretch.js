@@ -1235,6 +1235,42 @@
         columnsOnBeam(item, (drawing.beams || []).filter(b => !chosen.has(b))).map(c => c.point)),
     ])].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
   };
+  // THE POINT A MOVE TAKES HOLD OF (Movie, 25 Oct: "i'd like to pick the
+  // point where i scroll over, the 'node or intersection' is given a
+  // CIRCLE, if there is a CIRCLE and i click the circle it click on the
+  // exact intersection or node and allow me to place that node EXACTLY onto
+  // another intersection or node in the same way" -- after "i'd like to
+  // snap the inside corner of the WC and move it to the inside corner where
+  // the 2x6 wall meets the 2x4 wall ... i get it off a little each time").
+  // A press used to take hold wherever it fell, a few inches off the corner
+  // he aimed at, and the move carried that miss to the corner it landed on;
+  // and the WC's inside FACE corners were never among the points a move
+  // seeks with. Now: every point the selection carries, and the face corners
+  // of its walls -- inside and outside -- within 14 px of the hand; the press
+  // takes that exact point, and the hand's catch then lands it exactly on the
+  // node or face corner it is dropped on.
+  const MOVE_GRAB_PX = 14;
+  const moveGrabPoints = () => {
+    const entries = selectionEntries();
+    const pts = carriedPoints(entries).map(v => ({ x: v.x, z: v.z, node: true }));
+    const G = window.DraftGeometry2D;
+    const ws = entries.filter(e => e.type === 'wall').map(e => e.item);
+    if (G?.wallFaceCorners && ws.length) {
+      G.wallFaceCorners(ws, openingThicknessFt()).forEach(c => pts.push({ x: c.x, z: c.z, node: false }));
+    }
+    return pts;
+  };
+  const moveGrabAt = at => {
+    if (!at || !selection.length) return null;
+    const r = MOVE_GRAB_PX / view.scale;
+    let best = null;
+    moveGrabPoints().forEach(p => {
+      const d = Math.hypot(p.x - at.x, p.z - at.z);
+      // A NODE BEATS A FACE CORNER AT THE SAME DISTANCE, as the magnet has it.
+      if (d <= r && (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) < 1e-9 && p.node && !best.p.node))) best = { d, p };
+    });
+    return best ? best.p : null;
+  };
   const selectionMoveSet = () => {
     const entries = selectionEntries();
     const chosen = new Set(entries.map(entry => entry.item));
@@ -1621,7 +1657,9 @@
         canvas.setPointerCapture(event.pointerId);
         return;
       }
-      moveState.drag = { kind: 'selection', at, set: selectionMoveSet(), moved: false };
+      const grab = moveGrabAt(at);
+      moveState.drag = { kind: 'selection', at: grab ? { x: grab.x, z: grab.z } : at, grab: grab || null,
+        set: selectionMoveSet(), moved: false };
       canvas.setPointerCapture(event.pointerId);
       return;
     }
@@ -1716,9 +1754,24 @@
       if (footOn && Q && !d.set.across) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
       if (!d.set.across && snapOn && board !== 'toy') {
         d.magnet ||= magnetExcluding(d.set.points);
-        const seek = moveSeek(d, dx, dz, axis);
-        d.lit = seek?.lit || null;
-        if (seek) { dx = seek.dx; dz = seek.dz; }
+        // A POINT TAKEN HOLD OF LANDS ON THE NEAREST NODE OR FACE CORNER, by
+        // distance alone. The magnet's own rule lets a node outrank a nearer
+        // face corner, so the WC's inside corner, dropped on the inside
+        // corner of the house, went to the 2x6's centre node an inch or two
+        // away instead -- "off a little each time". Within the node's reach;
+        // past it the usual seek.
+        const grabbed = d.grab && !axis
+          ? nearestWithin([...d.magnet.nodes, ...d.magnet.corners],
+            { x: d.at.x + dx, z: d.at.z + dz }, NODE_PULL_PX)
+          : null;
+        if (grabbed) {
+          dx = grabbed.x - d.at.x; dz = grabbed.z - d.at.z;
+          d.lit = { pt: { x: grabbed.x, y: 0, z: grabbed.z }, corner: grabbed, node: d.magnet.nodes.includes(grabbed) };
+        } else {
+          const seek = moveSeek(d, dx, dz, axis);
+          d.lit = seek?.lit || null;
+          if (seek) { dx = seek.dx; dz = seek.dz; }
+        }
       }
       d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
       d.dx = dx; d.dz = dz;
