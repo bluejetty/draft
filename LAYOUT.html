@@ -636,9 +636,12 @@
     border:1px solid var(--edge-panel); border-radius:4px; background: var(--surface-chip); cursor:pointer;
     color: var(--ink-primary); font: 600 11px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; }
   #lay-logo-grid button.on { border-color: var(--accent-mark); color: var(--accent-mark); }
+  /* EACH LOGO ON THE WHITE IT PRINTS ON, whatever the skin: a mark with a
+     transparent ground read against a night panel is not the mark the
+     sheet will carry. */
   #lay-logo-grid img { width:100%; height:52px; object-fit:contain; background:#fff; }
   #lay-logo-grid .lay-logo-none { height:52px; width:100%; display:flex; align-items:center; justify-content:center;
-    background:#fff; color:#555; }
+    color: var(--ink-quiet); }
   .lay-logo-foot { display:flex; align-items:center; gap:10px; margin-top:12px; }
   .lay-logo-foot button { border:1px solid var(--accent); background-color: var(--accent); color: var(--accent-ink);
     font: 600 12px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; padding:7px 12px; cursor:pointer; }

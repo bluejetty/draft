@@ -126,6 +126,9 @@ const SUBJECTS = Object.freeze([
       '#b04050': 'the profile dialog said no, and a failed sheet save -- no '
         + 'role for a failure message either. MODEL.html keeps the same value '
         + 'on .sel-help',
+      '#fff': 'the paper under each logo in the LOGO picker (Movie, 25 Oct): '
+        + 'a mark is shown on the white it prints on, on every skin, or a '
+        + 'transparent one reads against a night panel as a different mark',
       'rgba(0,0,0,0.35)': 'the modal scrim and the dialog shadow. '
         + 'shell-bars.css names this exact value as one of the four literals '
         + 'that survive its own palette, for the same reason: black at 35% '
@@ -288,7 +291,7 @@ check('the allowlists are exactly the ones recorded here',
     .join('\n')).join('\n'),
   [
     'PROJECT.html/anywhere on the page: #557a46 #a06035 rgba(160,96,53,.08)',
-    'LAYOUT.html/its stylesheet: #557a46 #b04050 rgba(0,0,0,0.35)',
+    'LAYOUT.html/its stylesheet: #557a46 #b04050 #fff rgba(0,0,0,0.35)',
     'LAYOUT.html/its canvas painter: #1d1f20 #5980a6 #ffffff rgba(0,0,0,0.22) '
       + 'rgba(29,31,32,0.18) rgba(29,31,32,0.25) rgba(29,31,32,0.45)',
     'SETTINGS.html/its stylesheet: ',

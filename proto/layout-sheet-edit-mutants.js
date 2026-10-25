@@ -59,9 +59,14 @@ const MUTANTS = [
     test: 'logo opens the picker' },
   { file: 'LAYOUT.html',
     name: 'an uploaded logo keeps its margin',
-    find: "          const box = trimBox(g, c.width, c.height);",
-    with: "          const box = { x: 0, y: 0, w: c.width, h: c.height };",
+    find: "      const box = trimBox(c.getContext('2d'), c.width, c.height);",
+    with: "      const box = { x: 0, y: 0, w: c.width, h: c.height };",
     test: 'logo opens the picker' },
+  { file: 'logo-file.js',
+    name: 'a PDF is read as a picture, which it is not',
+    find: "  const toCanvas = (file, maxPx = 512) => (isPdf(file) ? fromPdf(file, maxPx) : fromImage(file, maxPx));",
+    with: "  const toCanvas = (file, maxPx = 512) => fromImage(file, maxPx);",
+    test: 'takes a PDF' },
 ];
 
 const run = name => {
