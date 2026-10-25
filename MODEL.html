@@ -904,6 +904,29 @@
     </div>
   </div>
 </div>
+<!-- A STAIR BY HAND (Movie, 25 Oct: "give them a popup choice"): the shape,
+     the hand it turns, up or down from this floor, its width -- then a press
+     on the first step and a press the way it runs. -->
+<div id="stair-pick" data-stair-pick hidden role="dialog" aria-label="Place a stair by hand">
+  <div class="promote-card">
+    <p><b>PLACE A STAIR</b><br><span data-stair-pick-say>Click the first step, point the way it runs, click to place.</span></p>
+    <div class="promote-row">
+      <button type="button" data-stair-shape="straight">STRAIGHT</button>
+      <button type="button" data-stair-shape="L">L</button>
+      <button type="button" data-stair-shape="U">U</button>
+    </div>
+    <div class="promote-row" data-stair-turns>
+      <button type="button" data-stair-turn="left">TURN LEFT</button>
+      <button type="button" data-stair-turn="right">TURN RIGHT</button>
+    </div>
+    <div class="promote-row">
+      <button type="button" data-stair-dir="down">DOWN FROM HERE</button>
+      <button type="button" data-stair-dir="up">UP FROM HERE</button>
+    </div>
+    <div class="gable-ask-row"><span>WIDTH (INCHES)</span><input type="number" id="stair-width" data-stair-width value="36" min="30" max="72" step="1"></div>
+    <div class="promote-row"><button type="button" data-stair-pick-close>DONE</button></div>
+  </div>
+</div>
 <!-- THE GABLE ROOF'S QUESTIONS (Movie, 22 Oct: "for this one ASK overhang
      (and pitch)"), once its two bearing lines are down. -->
 <div id="gable-ask" data-gable-ask hidden role="dialog" aria-label="Gable roof overhangs and pitch">
@@ -1131,6 +1154,9 @@
      sits here rather than earlier or later for any load-order reason. -->
 <script src="./level-lock.js"></script>
 <script src="./stair-geometry.js"></script>
+<!-- A stair placed by hand: the downward record for a press, an aim, a shape
+     and UP or DOWN (Movie, 25 Oct). Pure, beside the geometry it reads. -->
+<script src="./stair-place.js"></script>
 <script src="./stair-section.js"></script>
 <script src="./fixture-profiles.js"></script>
 <!-- What a picked photo or PDF is, and the scale printed on it -- the TRACE

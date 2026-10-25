@@ -841,7 +841,9 @@
   // inward so i can delete some of the dimensions on it for new dimension
   // line"): its id is a whole number too, so the paste gives it one of its own
   // (newDimensionId) rather than the string every other copy takes.
-  const NOT_COPIED = new Set(['stair', 'roof', 'roomtag', 'note']);
+  // A STAIR COPIES (Movie, 25 Oct: "Should Ctrl+C / Ctrl+V copy stairs too? yes"),
+  // its well and open side cut and framed again where the copy lands.
+  const NOT_COPIED = new Set(['roof', 'roomtag', 'note']);
 
   // DELETE A POINT, NOT THE LINE (Movie, 20 Oct): "rather than the dimension
   // line disappearing only that 'point' will no longer be measured and the
@@ -1067,6 +1069,21 @@
         copy.start = { ...copy.start, x: copy.start.x + out.x, z: copy.start.z + out.z };
         copy.end = { ...copy.end, x: copy.end.x + out.x, z: copy.end.z + out.z };
       }
+      // A STAIR'S COPY: a whole-number id (the format reads no other), on the
+      // floor it came down from, the drafter's rather than AUTO STAIR's, and
+      // one stair's width and a foot to its right -- laid on the original its
+      // well would be the same hole.
+      if (type === 'stair') {
+        copy.id = newStructureId(drawing.stairs || []);
+        copy.levelId = raw.levelId;
+        delete copy.auto;
+        const dx = copy.end.x - copy.start.x, dz = copy.end.z - copy.start.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const by = (Number(copy.widthFt) || 3) + 1;
+        const side = { x: -dz / len * by, z: dx / len * by };
+        copy.start = { ...copy.start, x: copy.start.x + side.x, z: copy.start.z + side.z };
+        copy.end = { ...copy.end, x: copy.end.x + side.x, z: copy.end.z + side.z };
+      }
       ['start', 'end', 'point', 'anchor'].forEach(field => {
         if (!copy[field] || typeof copy[field] !== 'object') return;
         const { srcId: _s, offX: _ox, offZ: _oz, ...pt } = copy[field];
@@ -1083,10 +1100,18 @@
       landed.push({ type, item: copy });
     });
     if (!landed.length) return 0;
+    // A PASTED STAIR'S WELL AND OPEN SIDE, as a placed one's: only the copies,
+    // every stair already there is served.
+    const pastedStairs = landed.filter(e => e.type === 'stair').map(e => e.item);
+    const stairBuilt = [];
+    if (pastedStairs.length) {
+      const served = new Set((drawing.stairs || []).filter(st => !pastedStairs.includes(st)).map(st => st.id));
+      stairBuilt.push(...buildStairOpenings(served).placed, ...placeStairSideFraming(pastedStairs).placed);
+    }
     // ONE UNDO TAKES THE PASTE BACK, every piece of it.
     undoStack.push({ kind: 'built', walls: landed.filter(e => e.type === 'wall').map(e => e.item),
       outlines: [], openings: [],
-      items: landed.filter(e => e.type !== 'wall').map(({ type, item }) => ({ list: drawing[SELECTION_LISTS[type]], item })) });
+      items: [...landed.filter(e => e.type !== 'wall').map(({ type, item }) => ({ list: drawing[SELECTION_LISTS[type]], item })), ...stairBuilt] });
     markDirty();
     // SELECTED WHERE IT LANDED, so the drafter can see what he just put down
     // and move it without hunting for it.

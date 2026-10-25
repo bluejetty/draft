@@ -853,6 +853,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // RESCALE's own row (Movie, 23 Oct): its hint is words, its one
             // press DONE.
             'DONE',
+            // THE STAIR'S POPUP (Movie, 25 Oct: "give them a popup choice"):
+            // the shape, the hand it turns, which way from this floor, and
+            // DONE. The choices set what the STAIR tool's two presses make;
+            // the presses make the stair, and AUTO STAIR made stairs already,
+            // so no absence row moves.
+            'STRAIGHT', 'L', 'U', 'TURN LEFT', 'TURN RIGHT', 'DOWN FROM HERE', 'UP FROM HERE', 'DONE',
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
             // one answer.
             'OK',
@@ -1092,7 +1098,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'lot-w', 'lot-d',
             // THE GABLE ROOF'S TWO QUESTIONS (Movie, 22 Oct: "ASK overhang
             // (and pitch)"): sizes for the roof the ROOF tool makes.
-            'gable-eave', 'gable-pitch'].sort(),
+            'gable-eave', 'gable-pitch',
+            // AND THE STAIR'S WIDTH (25 Oct): a size for the stair it places.
+            'stair-width'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as

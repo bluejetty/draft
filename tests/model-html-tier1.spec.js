@@ -550,6 +550,9 @@ test.describe('MODEL.html tier 1', () => {
       // disagreeing about what a lock does. No dependency of its own; it is
       // arithmetic over ids and points.
       './level-lock.js', './stair-geometry.js',
+      // A STAIR BY HAND (Movie, 25 Oct): the downward record for a press, an
+      // aim, a shape and UP or DOWN. Pure, beside the geometry it reads.
+      './stair-place.js',
       // THE STAIR WORKSPACE'S TWO PANES (Movie, 7 Oct): the painter MODEL.dc.html
       // drew its STAIR layer with, moved out so both pages draw one copy.
       './stair-section.js', './fixture-profiles.js', './pdf-scan.js',

@@ -329,10 +329,12 @@
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || elevLineStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
-      || stretchState.a);
+      || stretchState.a || stairHand.at);
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
     if (dimPlacing) dimAbandon();
+    // A STAIR IN HAND goes; the tool stays up for the next first step.
+    if (stairHand.at) { stairHand.at = null; syncStairPick(); }
     dimPoints = [];
     dimPlacing = false;
     rulerFrom = null;
@@ -652,14 +654,9 @@
     // preventDefault, or the press's own focus change lands after the handler
     // and takes the NAME box's focus straight back off it.
     if (activeTool === 'roomtag') { e.preventDefault(); placeRoomTag(at); return; }
-    // STAIR HAS NO HAND PLACEMENT YET, and a tool that swallows a press in
-    // silence is worse than one that refuses it: the drafter reads the click
-    // as landing and the stair as failing to draw. Movie's own ordering --
-    // "AUTO STAIR in the STAIR properties panel, THEN a placement system".
-    if (activeTool === 'stair') {
-      sayOnStrip('STAIR places through AUTO STAIR for now — hand placement is next. One already placed moves: pick it with SELECT and drag.');
-      return;
-    }
+    // STAIR, BY HAND (Movie, 25 Oct): the first step, then the way it runs
+    // (stairHandPress). AUTO STAIR stays in its properties panel.
+    if (activeTool === 'stair') { stairHandPress(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'node') { superNodePress(at); return; }
     if (activeTool === 'stretch') { stretchPress(at); return; }

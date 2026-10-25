@@ -623,12 +623,13 @@ test('one Ctrl+Z takes the stairs and their openings with the house',
       'the undo left a hole in a floor with no stair through it').toBe(0);
   });
 
-// ── THE TOOL SAYS WHAT IT CANNOT DO YET ────────────────────────────────────
+// ── ONE PRESS WITH STAIR ARMED IS A FIRST STEP, NOT A STAIR ────────────────
 //
-// Hand placement is the second half of this task. A tool that swallows a press
-// in silence is worse than one that refuses it: the drafter reads the click as
-// landing and the stair as failing to draw.
-test('a click with STAIR armed says hand placement is next', async ({ page }) => {
+// Hand placement is the second half of this task, and it came (Movie, 25 Oct:
+// tests/stair-hand.spec.js). One press is the flight's first step; the tool
+// says what the next press does and places nothing until then -- a tool that
+// swallowed the press in silence was the failure this test was first for.
+test('a click with STAIR armed is the first step, and says what comes next', async ({ page }) => {
   await open(page, empty({ outlines: [rect()] }));
   await armStair(page);
   // planFrame, NOT clickWorld. helpers.clickWorld presses
@@ -648,8 +649,8 @@ test('a click with STAIR armed says hand placement is next', async ({ page }) =>
   // #strip-message, NOT #strip. sayOnStrip writes into the SPAN
   // (MODEL.html:1149, `data-strip-message`); #strip is the whole top bar, so
   // asserting on it matched SETTINGS and STANDARDS and nothing the page said.
-  await expect(page.locator('#strip-message')).toContainText('AUTO STAIR');
+  await expect(page.locator('#strip-message')).toContainText('point the way it runs');
   await saveNow(page);
   expect(((await savedFile(page)).stairs || []).length,
-    'the click placed a stair the tool has no gesture for').toBe(0);
+    'one press placed a whole stair').toBe(0);
 });

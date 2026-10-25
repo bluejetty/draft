@@ -1323,6 +1323,10 @@
      tool's own edge flip is pressed on. */
   #roof-pick { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
   #roof-pick[hidden] { display:none; }
+  #stair-pick { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
+  #stair-pick[hidden] { display:none; }
+  #stair-pick button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  #stair-pick [data-stair-turns][hidden] { display:none; }
   #gable-ask { position:fixed; top:240px; left:30px; max-width:300px; z-index:6; }
   #gable-ask[hidden] { display:none; }
   .gable-ask-row { display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0; font-size:10px; }
