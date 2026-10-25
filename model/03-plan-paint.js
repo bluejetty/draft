@@ -1526,6 +1526,7 @@
       // kept on this level in the file.
       const pick = document.createElement('select');
       pick.className = 'sel-chip';
+      pick.id = 'dim-scale';
       pick.dataset.dimScale = '';
       pick.title = 'DIM SCALE -- how big the dimension figures are: the LAYOUT sheet\'s scale, or one you pick';
       pick.append(new Option('', ''));
