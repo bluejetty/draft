@@ -20,7 +20,7 @@ const MUTANTS = [
     find: "      const open = lit || all.length === 1 || (hologramOpenId === holo.id && !selection.some(e => e.type === 'hologram'));",
     with: "      const open = true;",
     test: 'only the picked one' },
-  { file: 'MODEL.html', name: 'the file cards stacked, one column',
+  { file: 'model.css', name: 'the file cards stacked, one column',
     find: "    grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); max-height:62vh; overflow:auto; }",
     with: "    grid-template-columns:1fr; max-height:62vh; overflow:auto; }",
     test: 'side by side' },

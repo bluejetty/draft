@@ -37,7 +37,7 @@ const MUTANTS = [
     find: "        try { localStorage.setItem('draft.notepad.size', JSON.stringify(notesSize)); } catch (err) {}\n",
     with: "",
     test: "the pad pulls out by its left, top and bottom edges, to the right half of the page; LEVELS keeps its width; a reload keeps the size" },
-  { file: 'MODEL.html', name: "the tab is capped short again and the label breaks in two",
+  { file: 'model.css', name: "the tab is capped short again and the label breaks in two",
     find: "    border-radius:4px 0 0 4px; writing-mode:vertical-lr; max-height:32vh;\n    white-space:nowrap;\n",
     with: "    border-radius:4px 0 0 4px; writing-mode:vertical-lr; max-height:14vh;\n",
     test: 'at a 768 window the tab reads on one line, as wide as LEVELS / LAYERS' },

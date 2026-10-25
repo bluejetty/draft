@@ -56,19 +56,19 @@ const MUTANTS = [
     with: "      el.textContent = '';",
     test: 'wears the wallet' },
 
-  { file: 'MODEL.html',
+  { file: 'model.css',
     name: 'the row is left-packed, so the arrows point at nothing',
     find: '    display:flex; align-items:center; justify-content:space-between; gap:1%;\n    pointer-events:none; }\n  #dt-banners[hidden]',
     with: '    display:flex; align-items:center; justify-content:flex-start; gap:1%;\n    pointer-events:none; }\n  #dt-banners[hidden]',
     test: 'the arrows meet the bone' },
 
-  { file: 'MODEL.html',
+  { file: 'model.css',
     name: 'ROUGH keeps the press hidden: the arrows meet an empty gap',
     find: '  html[data-theme="rough"] #dt-banners:not([hidden]) ~ #dt-bone { display:block; }',
     with: '  html[data-theme="rough"] #dt-banners:not([hidden]) ~ #dt-bone { display:none; }',
     test: 'on ROUGH the house press stands between the banners' },
 
-  { file: 'MODEL.html',
+  { file: 'model.css',
     name: 'ROUGH\'s shelf keeps the whole sheet and the row lands on the tiles',
     find: '  html[data-theme="rough"] #dt-tiles { left:6%; top:13%; width:88%; height:56%; }',
     with: '  html[data-theme="rough"] #dt-tiles { left:6%; top:13%; width:88%; height:72%; }',

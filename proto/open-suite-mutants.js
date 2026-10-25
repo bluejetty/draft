@@ -20,7 +20,7 @@ const MUTANTS = [
     find: "    if (source) editOnShelf({ name: file.name.replace(/\\.[^.]+$/, ''), source });",
     with: "    if (source) {}",
     test: 'OPEN SUITE opens' },
-  { file: 'MODEL.html', name: 'its line sits beside the head: the shelves jump under a rename',
+  { file: 'model.css', name: 'its line sits beside the head: the shelves jump under a rename',
     find: "  .lv-card[data-boneyard] { flex-wrap:wrap; }\n",
     with: "",
     test: 'renames' },
