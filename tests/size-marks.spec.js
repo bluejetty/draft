@@ -255,7 +255,7 @@ test('a sink base\'s BOWLS are picked in PROPERTIES and saved', async ({ page })
   const { at } = await open(page, drawing(), '/MODEL.html?level=3&left=1&lpane=build');
   await page.mouse.click(...at(23, 20 + 1.2));
   await page.waitForTimeout(150);
-  const pick = page.locator('[data-prop-select="bowls"]');
+  const pick = page.locator('#props-slot [data-prop-select="bowls"]');
   await expect(pick).toBeVisible();
   await expect(pick).toHaveValue('double');
   await pick.selectOption('right');

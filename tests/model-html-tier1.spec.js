@@ -321,6 +321,9 @@ test.describe('MODEL.html tier 1', () => {
       // closets.js -- so the catalogue names them rather than restating them,
       // and proto/fixture-kinds-harness.js fails if it ever stops doing that.
       './fixture-kinds.js',
+      // OBJ / PROP's views of the piece in hand (Movie, 24 Oct): pure, the
+      // traced faces fitted to its size.
+      './objprop-views.js',
       // Movie's two default washrooms (9 Oct), dropped whole by the FIXTURE
       // tool; pure layout, read at the press.
       './washroom-presets.js',

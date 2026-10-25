@@ -13607,7 +13607,7 @@
       }
     }
     lastPick = { sx, sy };
-    return { hit: hits[at] || null, at, of: hits.length };
+    return { hit: hits[at] || null, at, of: hits.length, again: !!again };
   };
   // WHAT IS IN HAND, SAID: which of how many, so the drafter sees there is
   // more under it and what each one is.
@@ -38871,8 +38871,11 @@
         // A PRESS ON WHAT IS ALREADY IN HAND, let go where it was, IS THE
         // CLICK AGAIN: it takes the next thing under it (pickUnder).
         const rect = canvas.getBoundingClientRect();
+        // A HANDLE TAPPED FIRST KEEPS ITS WALL, as it always did: only a press
+        // again on the same spot steps off a corner handle.
         const under = pickUnder(e.clientX - rect.left, e.clientY - rect.top);
-        if (under.hit && !selection.some(entry => entry.item === under.hit.item)) {
+        const handle = md.kind === 'corner' || md.kind === 'roomcorner';
+        if ((under.again || !handle) && under.hit && !selection.some(entry => entry.item === under.hit.item)) {
           wallPicked = under.hit.type === 'wall' ? under.hit.item : null;
           setSelection(withGroup(under.hit));
           sayPickUnder(under);
