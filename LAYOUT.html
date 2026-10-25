@@ -641,7 +641,8 @@
      only way to take a viewport off a sheet, and an iPad has none. A word
      rather than an icon, as MODEL's DELETE is. */
   .strip-history[data-delete-viewport], .strip-history[data-fit-window],
-  .strip-history[data-edit-in-model] { font-family: var(--font-ui); font-size:11px;
+  .strip-history[data-edit-in-model], .strip-history[data-copy-viewport],
+  .strip-history[data-paste-viewport] { font-family: var(--font-ui); font-size:11px;
     font-weight:600; letter-spacing:0.06em; padding:0 8px; }
   .strip-history[hidden] { display:none; }
   /* THE NAV CLUSTER'S RULES CAME OUT WITH IT. MODEL · LAYOUT · PROJECT ·
@@ -1025,6 +1026,14 @@
       title="Put the selected viewport's window back to fit its drawing" aria-label="Fit the window to the drawing">FIT WINDOW</button>
     <button type="button" data-delete-viewport class="strip-history" hidden
       title="Take the selected viewport off the sheet" aria-label="Delete the selected viewport">DELETE</button>
+    <!-- COPY AND PASTE A VIEWPORT (Movie, 25 Oct: "IN THE LAYOUT Area i'd
+         like to copy a layout viewport from one page and then paste it on a
+         different page"). COPY while one is selected; PASTE once one is
+         held, onto whichever sheet is open. Ctrl+C / Ctrl+V do the same. -->
+    <button type="button" data-copy-viewport class="strip-history" hidden
+      title="Copy the selected viewport (Ctrl+C)" aria-label="Copy the selected viewport">COPY</button>
+    <button type="button" data-paste-viewport class="strip-history" hidden
+      title="Paste the copied viewport onto this sheet (Ctrl+V)" aria-label="Paste the copied viewport onto this sheet">PASTE</button>
   </div>
   <span data-sheet-readout></span>
   <!-- THE PROFILE PAIR RIDES HERE NOW, where the nav cluster used to. The
@@ -1408,6 +1417,8 @@ class Component extends PageLogic {
     // The sheet's undo stack. `_layoutSnapshot` is the sheet as it stands
     // right now; `past` is what it was before each change.
     this._layoutHistory = { past: [], future: [] };
+    // THE VIEWPORT COPY, held while the page is open (COPY / PASTE).
+    this._viewportClipboard = null;
     this._layoutSnapshot = null;
     this._restoringLayout = false;
     this._planBoundsByLevel = new Map();
@@ -3257,6 +3268,13 @@ class Component extends PageLogic {
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
       const key = String(e.key || '').toLowerCase();
       if (key === 'z' && !e.shiftKey) { e.preventDefault(); this._undoLayout(); return; }
+      // AND CTRL+C / CTRL+V A VIEWPORT, as the strip's COPY and PASTE.
+      if (key === 'c' && this.state.editInModel == null && this.state.selectedViewportId != null) {
+        e.preventDefault(); this._copySelectedViewport(); return;
+      }
+      if (key === 'v' && this.state.editInModel == null && this._viewportClipboard) {
+        e.preventDefault(); this._pasteViewport(); return;
+      }
       if (key === 'y' || (key === 'z' && e.shiftKey)) {
         e.preventDefault(); this._redoLayout(); return;
       }
@@ -3299,6 +3317,42 @@ class Component extends PageLogic {
       }),
       auto: false,
     }, () => { this._persistLayout(); this._draw(); });
+  }
+
+  // ── COPY AND PASTE A VIEWPORT (Movie, 25 Oct) ─────────────────────────
+  //
+  // "copy a layout viewport from one page and then paste it on a different
+  // page". COPY holds the selected viewport as it stands -- its drawing, its
+  // scale, its window, where it sits on the sheet; PASTE puts a new one with
+  // the next id on the sheet that is open, in the same place, and selects it
+  // so it can be dragged. Pasted onto the sheet it came from it stands half
+  // an inch down and right of the one it copies, so it can be seen. One
+  // UNDO takes it off again. The copy is held while the page is open.
+  _copySelectedViewport() {
+    const viewport = this.state.viewports.find(v => v.id === this.state.selectedViewportId);
+    if (!viewport) return false;
+    this._viewportClipboard = JSON.parse(JSON.stringify(viewport));
+    // PASTE comes up now: the panel is painted on a set state.
+    this.setState({}, () => this._draw());
+    return true;
+  }
+
+  _pasteViewport() {
+    const held = this._viewportClipboard;
+    if (!held) return false;
+    const sheet = this.state.activeSheet;
+    const STEP_IN = 0.5;
+    let { xIn, yIn } = held;
+    const taken = (x, y) => this._sheetViewports(sheet).some(v => Math.abs(v.xIn - x) < 1e-6 && Math.abs(v.yIn - y) < 1e-6);
+    while (Number.isFinite(xIn) && Number.isFinite(yIn) && taken(xIn, yIn)) { xIn += STEP_IN; yIn += STEP_IN; }
+    const viewport = { ...JSON.parse(JSON.stringify(held)), id: this.state.nextViewportId, sheet, xIn, yIn };
+    this.setState({
+      viewports: [...this.state.viewports, viewport],
+      nextViewportId: viewport.id + 1,
+      selectedViewportId: viewport.id,
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); });
+    return true;
   }
 
   // ONE DELETE, whichever control pressed it: the key and the strip's button
@@ -3692,6 +3746,8 @@ class Component extends PageLogic {
     document.querySelector('[data-layout-remove-sheet]').disabled = this._sheetCount() <= 1;
     // ON SCREEN EXACTLY WHILE THERE IS SOMETHING TO DELETE, as MODEL's is.
     document.querySelector('[data-delete-viewport]').hidden = this.state.selectedViewportId == null;
+    document.querySelector('[data-copy-viewport]').hidden = this.state.selectedViewportId == null;
+    document.querySelector('[data-paste-viewport]').hidden = !this._viewportClipboard;
     // EDIT IN MODEL on the same terms: there is a drawing to go to exactly
     // while a viewport is selected. A viewport whose drawing has gone --
     // a section whose cut was deleted -- is deliberately NOT hidden here:
@@ -4421,6 +4477,8 @@ class Component extends PageLogic {
     on('[data-undo]', 'click', () => this._undoLayout());
     on('[data-redo]', 'click', () => this._redoLayout());
     on('[data-delete-viewport]', 'click', () => this._deleteSelectedViewport());
+    on('[data-copy-viewport]', 'click', () => this._copySelectedViewport());
+    on('[data-paste-viewport]', 'click', () => this._pasteViewport());
     on('[data-north-button]', 'click', () => this._openNorth());
     on('[data-fit-window]', 'click', () => this._fitSelectedWindow());
     // The strip's press and the mouse's double-click open the one dialog.
