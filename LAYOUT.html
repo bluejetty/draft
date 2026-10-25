@@ -3592,10 +3592,15 @@ class Component extends PageLogic {
     return SCALES[0].pif;
   }
 
+  // THE SCALE LIST'S RUNG, OR THE LARGEST THAT FITS IF THAT ONE DOES NOT:
+  // the drafter's working scale (1/4" unless picked otherwise) is never
+  // overridden by something bigger, and a view too long for it walks down
+  // the sheet set's own ladder, engineer's scales included.
   _pickedPif(view) {
+    const working = SCALES[this.state.activeScale].pif;
     const foot = this._viewFootprintFt(view);
-    if (!foot) return SCALES[this.state.activeScale].pif;
-    return this._autoScaleFor([{ ...view, wFt: foot.wFt, hFt: foot.hFt }], this._composeRegionIn());
+    if (!foot) return working;
+    return Math.min(working, this._autoScaleFor([{ ...view, wFt: foot.wFt, hFt: foot.hFt }], this._composeRegionIn()));
   }
 
   _placeViewport(ptIn) {

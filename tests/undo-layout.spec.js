@@ -71,6 +71,8 @@ test('a placed viewport can be taken back, and put back again', async ({ page })
 
   await waitForSheetSave(page, async () => {
     await page.getByRole('button', { name: /ADD VIEWPORT/i }).click();
+    // It asks what first (Movie, 25 Oct); the floor plan, then the sheet.
+    await page.locator('[data-add-pick^="plan:"]').first().click();
     await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.45);
   });
   expect((await storedLayout(page)).viewports, 'the viewport landed').toHaveLength(dealt + 1);
