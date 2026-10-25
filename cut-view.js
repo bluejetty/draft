@@ -7808,7 +7808,23 @@ if (!window.DraftCutView) {
 
     // Grade, heavy, straight across the sheet — the exposed concrete stands
     // on it and everything below it reads dashed.
-    if (hologramPass(opts)) return true;
+    //
+    // ── A HOLOGRAM'S PASS GIVES ITS CLIP BACK ON THE WAY OUT ─────────────
+    //
+    // Movie, 25 Oct: "something is the matter with the elevations ... now i
+    // can't see any elevations (in the LAYOUT area". A hologram's pass is
+    // always PINNED and never fitted, so it took the margin clip above --
+    // and left here without the restore at the bottom. A suite paints
+    // straight onto the sheet, so every suite on the drawing left one more
+    // save and one more clip on LAYOUT's canvas: screen margins (64px a
+    // side) cut into a viewport an inch or two high, which on E1 left a
+    // strip of window tags and on everything drawn after it -- E2, the next
+    // viewport, the same canvas -- nothing at all. Twenty-two suites, no
+    // elevations. The drawing's own lines were being drawn the whole time.
+    if (hologramPass(opts)) {
+      if (pinClip) ctx.restore();
+      return true;
+    }
     runOverlay(opts, { x0, y0, pxPerFt, uMin, yTop });
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
     ctx.beginPath();
