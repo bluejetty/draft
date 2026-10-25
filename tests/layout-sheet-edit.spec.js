@@ -219,6 +219,9 @@ test('+ ADD VIEWPORT asks what -- plans, elevations, sections -- then the next p
 test('a double press on the titleblock\'s logo opens the picker: pick one, or add a picture of your own', async ({ page }) => {
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
+  // Off the SITE PLAN sheet, whose lot card stands in the corner over the
+  // titleblock until it is answered.
+  await page.locator('[data-layout-sheet="2"]').click();
   const logo = await hitOf(page, 'layoutLogoHit');
   expect(logo, 'the strip says where its logo cell is').toBeTruthy();
   await page.mouse.dblclick(...await deskPoint(page, ...centre(logo)));
@@ -271,7 +274,10 @@ for (const [name, mimeType, bytes, ratio] of [
     await expect(page.locator('[data-logo-upload]')).toHaveAttribute('accept', /\.bmp/);
     await expect(page.locator('[data-logo-upload]')).toHaveAttribute('accept', /\.ico/);
     await expect(page.locator('[data-logo-upload]')).toHaveAttribute('accept', /\.avif/);
-    const logo = await hitOf(page, 'layoutLogoHit');
+    // Off the SITE PLAN sheet, whose lot card stands in the corner over the
+  // titleblock until it is answered.
+  await page.locator('[data-layout-sheet="2"]').click();
+  const logo = await hitOf(page, 'layoutLogoHit');
     await page.mouse.dblclick(...await deskPoint(page, ...centre(logo)));
     await page.locator('[data-logo-upload]').setInputFiles({ name, mimeType, buffer: bytes() });
     await expect(page.locator('[data-logo-note]')).toContainText('COMPANY 01 added', { timeout: 15000 });
