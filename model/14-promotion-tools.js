@@ -1391,10 +1391,28 @@
   }
   // EVERY KEY PRESS COMES HERE -- the column, the bar and the letters -- so
   // they cannot disagree about what a press means.
+  // S TOGGLES (Movie, 25 Oct: "try S to toggle from tool to select"): from a
+  // tool, S is SELECT and the tool is remembered; S again in SELECT brings that
+  // tool back up. The bar's SELECT keeps its own job, picking one kind.
+  let toolBeforeSelect = null;
+  const toolName = id => window.DraftToolRoster?.TOOLS.find(t => t.id === id)?.name || id;
   function pressToolKey(id, fromBar = false) {
     if (id === RESTING_TOOL) {
       if (selectPicking) { setSelectPicking(false); return; }
+      if (!fromBar && activeTool === RESTING_TOOL && toolBeforeSelect
+        && window.DraftToolRoster?.availableOn(toolBeforeSelect, board)) {
+        const back = toolBeforeSelect;
+        toolBeforeSelect = null;
+        setTool(back);
+        sayOnStrip(`${toolName(back).toUpperCase()} — back up. S for SELECT again.`);
+        return;
+      }
+      const was = activeTool;
       setTool(RESTING_TOOL);
+      if (!fromBar && was !== RESTING_TOOL) {
+        toolBeforeSelect = was;
+        sayOnStrip(`SELECT — S again goes back to ${toolName(was).toUpperCase()}.`);
+      }
       if (fromBar) setSelectPicking(true);
       return;
     }

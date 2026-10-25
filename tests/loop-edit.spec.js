@@ -163,3 +163,20 @@ test('Ctrl+C copies what is picked and Ctrl+V pastes it, as the foot\'s COPY and
   await page.waitForTimeout(120);
   expect((await saved(page)).shapes, 'the copy pasted beside the original').toHaveLength(2);
 });
+
+// S TOGGLES (Movie, 25 Oct: "try S to toggle from tool to select"): from a
+// tool, S is SELECT; S again brings the tool back.
+test('S from WALL is SELECT, and S again brings WALL back up', async ({ page }) => {
+  await open(page, 3);
+  await h.armFromRail(page, 'wall');
+  await expect(page.locator('[data-tool-key="wall"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('s');
+  await expect(page.locator('[data-tool-key="wall"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(strip(page)).toContainText('S again goes back to WALL');
+  await page.keyboard.press('s');
+  await expect(page.locator('[data-tool-key="wall"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(strip(page)).toContainText('WALL — back up');
+  // AND ONCE BACK, S IS SELECT AGAIN: the toggle goes round.
+  await page.keyboard.press('s');
+  await expect(page.locator('[data-tool-key="wall"]')).toHaveAttribute('aria-pressed', 'false');
+});

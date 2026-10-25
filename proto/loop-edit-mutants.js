@@ -53,6 +53,11 @@ const MUTANTS = [
     find: "      if (e.key.toLowerCase() === 'c') { copySelection(); paint(); } else pasteHeld();\n",
     with: "      if (e.key.toLowerCase() === 'c') { copySelection(); paint(); }\n",
     test: 'Ctrl+C copies what is picked' },
+  { file: 'model/14-promotion-tools.js',
+    name: 'S in SELECT does nothing, as it did',
+    find: "      if (!fromBar && activeTool === RESTING_TOOL && toolBeforeSelect\n",
+    with: "      if (false && toolBeforeSelect\n",
+    test: 'S from WALL is SELECT' },
 ];
 
 
