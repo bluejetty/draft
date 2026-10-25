@@ -261,3 +261,29 @@ test('a dropped WC brings its tag, shaped to the room\'s inside and tiled; one U
   expect(tagNamed(d, 'WC 2')).toBeUndefined();
   expect(d.walls).toHaveLength(4);
 });
+
+test('MOVE on a floor tied to walls that stay takes every corner with it, its area kept; UNDO ties them back', async ({ page }) => {
+  // Movie, 25 Oct: "the bathroom floor acting weird" -- a WC's tiled floor
+  // moved off its walls tore into a band: the tied corners went back to the
+  // walls, the free ones went with the move.
+  const d0 = drawing();
+  d0.roomTags = [{ id: 1, at: { x: 6, z: 2 }, levelId: 3, view: 'plan', name: 'WC', areaSqFt: 0, stamped: true,
+    flooring: { type: 'tile' },
+    points: [{ x: 0.15, z: 0.15, link: { wallId: 'n', end: 'start', dx: 0.15, dz: 0.15 } },
+      { x: 11.85, z: 0.15, link: { wallId: 'n', end: 'end', dx: -0.15, dz: 0.15 } },
+      { x: 11.85, z: 4 }, { x: 0.15, z: 4 }] }];
+  const { at } = await open(page, d0);
+  await page.keyboard.press('s');
+  await click(page, at, [6, 2]);
+  await page.locator('#model-move').click();
+  await drag(page, at, [6, 2], [6, 22]);
+  await page.waitForTimeout(150);
+  let tag = tagNamed(await saved(page), 'WC');
+  expect(xz(tag.points), 'every corner 20 ft down').toEqual([[0.15, 20.15], [11.85, 20.15], [11.85, 24], [0.15, 24]]);
+  expect(tag.points.some(p => p.link), 'let go of the walls that stayed').toBe(false);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  tag = tagNamed(await saved(page), 'WC');
+  expect(xz(tag.points)).toEqual([[0.15, 0.15], [11.85, 0.15], [11.85, 4], [0.15, 4]]);
+  expect(tag.points[0].link?.wallId, 'tied back').toBe('n');
+});

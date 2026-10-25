@@ -5,7 +5,8 @@
 // tread longer or shorter and its well cut again, one UNDO for it; WIDTH,
 // never under 36", growing away from a wall it lies on; the width said on
 // the plan's first dropped step and changed there by a double-click; and the
-// shower's size mark inside its lip. Each row breaks one line, runs the one
+// shower's size mark inside its lip; and a WC floor MOVEd off its walls
+// letting go of them rather than tearing. Each row breaks one line, runs the one
 // test that should notice, and restores from HEAD.
 //
 //   node proto/stair-objprop-mutants.js
@@ -15,7 +16,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/stair-objprop.spec.js';
 const SHOWER = 'tests/fixture-size-mark.spec.js';
-const SPECS = [SPEC, SHOWER];
+const SPECS = [SPEC, SHOWER, 'tests/room-shape.spec.js'];
 
 const MUTANTS = [
   { file: 'model/15-panels.js',
@@ -94,6 +95,12 @@ const MUTANTS = [
     with: "          take(fx, label, draw(lineAt(geo, a0, a1, geo.frontOff, -SIZE_MARK_OFF_PX), label));\n",
     spec: 'tests/fixture-size-mark.spec.js',
     test: 'inside its lip' },
+  { file: 'model/09-draw-move-stretch.js',
+    name: 'a moved floor stays tied to walls that stay',
+    find: "          if (!pt.link || chosen.has(linkWall(pt))) return;\n          detached.push({ wall: item.points, key: index, orig: pt });\n          item.points[index] = { x: pt.x, z: pt.z };\n        });\n        return;\n      }\n      if (type !== 'wall') return;\n      ['start', 'end'].forEach(key => {\n        if (!held.has(item[key]) || pinned.has(item[key])) return;",
+    with: "          return;\n        });\n        return;\n      }\n      if (type !== 'wall') return;\n      ['start', 'end'].forEach(key => {\n        if (!held.has(item[key]) || pinned.has(item[key])) return;",
+    spec: 'tests/room-shape.spec.js',
+    test: 'MOVE on a floor tied' },
 ];
 
 const run = (name, spec = SPECS.join(' ')) => {

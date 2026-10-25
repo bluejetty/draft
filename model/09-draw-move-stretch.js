@@ -1227,6 +1227,19 @@
     const pinned = new Set(slide ? anchorsOf(owners[0]).map(a => a.vtx) : []);
     const detached = [];
     entries.forEach(({ type, item }) => {
+      if (type === 'roomtag' && roomShapeOf(item)) {
+        // A ROOM SHAPE MOVED OFF WALLS THAT STAY LETS GO OF THEM (Movie, 25
+        // Oct: "the bathroom floor acting weird"), as a turn does: a corner
+        // linked to a wall left behind was pulled back to it on the next
+        // paint while its unlinked neighbours went, and the WC's floor tore
+        // into a band. A corner on a wall that moves too keeps its link.
+        item.points.forEach((pt, index) => {
+          if (!pt.link || chosen.has(linkWall(pt))) return;
+          detached.push({ wall: item.points, key: index, orig: pt });
+          item.points[index] = { x: pt.x, z: pt.z };
+        });
+        return;
+      }
       if (type !== 'wall') return;
       ['start', 'end'].forEach(key => {
         if (!held.has(item[key]) || pinned.has(item[key])) return;
