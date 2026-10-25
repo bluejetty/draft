@@ -27,6 +27,11 @@ const MUTANTS = [
     find: "      if (!(across > lo + clear && across < hi - clear)) continue;\n",
     with: "      if (!(across > lo - 0.25 && across < hi + 0.25)) continue;\n",
     test: 'a click on a face' },
+  { file: 'model/15-panels.js',
+    name: 'the both-faces dimension stays behind when the wall moves (Movie, 25 Oct)',
+    find: "        points: [{ x: base.x + nx * lo, z: base.z + nz * lo, ref: { ...ref } },\n          { x: base.x + nx * hi, z: base.z + nz * hi, ref: { ...ref } }] };\n",
+    with: "        points: [{ x: base.x + nx * lo, z: base.z + nz * lo },\n          { x: base.x + nx * hi, z: base.z + nz * hi }] };\n",
+    test: 'takes its both-faces dimension' },
 ];
 
 

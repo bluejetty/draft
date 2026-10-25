@@ -2444,8 +2444,15 @@
       if (!(across > lo + clear && across < hi - clear)) continue;
       const base = { x: w.start.x + dx * t, z: w.start.z + dz * t };
       const nx = -dz / len, nz = dx / len;
+      // TIED TO THE WALL (Movie, 25 Oct: "when the WALL is selected in the
+      // middle and both sides dimensioned can those dimensions 'STICK to the
+      // wall"): both points remember the wall's start node, and followDimLinks
+      // carries them along the string as that node moves -- a wall dragged
+      // across takes its thickness dimension with it.
+      const ref = { wallId: String(w.id), end: 'start', x: w.start.x, z: w.start.z };
       return { wall: w, thicknessFt: hi - lo,
-        points: [{ x: base.x + nx * lo, z: base.z + nz * lo }, { x: base.x + nx * hi, z: base.z + nz * hi }] };
+        points: [{ x: base.x + nx * lo, z: base.z + nz * lo, ref: { ...ref } },
+          { x: base.x + nx * hi, z: base.z + nz * hi, ref: { ...ref } }] };
     }
     return null;
   };
