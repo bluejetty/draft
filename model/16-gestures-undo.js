@@ -2379,6 +2379,8 @@
         b.vtx.x = b.x;
         b.vtx.z = b.z;
         if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
+        // A ROOM CORNER'S LINK, as it was before the turn or the flip.
+        if (b.link) b.vtx.link = b.link;
       });
       step.detached.forEach(d => { d.wall[d.key] = d.orig; });
       (step.wells || []).forEach(w => { w.hole.points = w.points; });
