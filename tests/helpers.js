@@ -687,7 +687,9 @@ const TOOL_PANE = Object.freeze({
 });
 
 const LEFT_TAB = Object.freeze({
-  drafting: '#left-tab', build: '#build-tab', properties: '#props-tab',
+  // PROPERTIES has no tab of its own since 25 Oct: it stands under either
+  // tool pane, so asking for it opens the rail on whichever is up.
+  drafting: '#left-tab', build: '#build-tab',
 });
 
 // BRINGS A TAB UP WITHOUT TOGGLING IT OFF. Pressing the tab that is already
@@ -695,6 +697,11 @@ const LEFT_TAB = Object.freeze({
 // a helper that clicked unconditionally would close the rail exactly when it
 // was already where the caller wanted it.
 async function showLeftPane(page, pane) {
+  if (pane === 'properties') {
+    if (await page.locator('#left-rail').isHidden()) await page.locator('#left-tab').click();
+    await expect(page.locator('#left-rail')).toBeVisible();
+    return;
+  }
   const tab = page.locator(LEFT_TAB[pane] || LEFT_TAB.drafting);
   const open = !(await page.locator('#left-rail').isHidden());
   const up = await tab.getAttribute('aria-selected') === 'true';

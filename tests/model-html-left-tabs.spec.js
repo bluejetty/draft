@@ -58,12 +58,17 @@ const shownPanes = page => page.evaluate(() =>
   [...document.querySelectorAll('[data-left-pane]')]
     .filter(el => !el.hidden).map(el => el.dataset.leftPane));
 
-test('the left edge carries three tabs, named as Movie named them', async ({ page }) => {
+test('the left edge carries two tabs, and no PROPERTIES tab', async ({ page }) => {
+  // Movie, 25 Oct: "keep the properties at the bottom of the BUILD and DRAFT
+  // areas ... just leave them ON ... and we won't need the left side
+  // PROPERTIES tab".
   await open(page);
-  for (const [, id, label] of [...TOOL_TABS, ['properties', 'props-tab', 'PROPERTIES']]) {
+  for (const [, id, label] of TOOL_TABS) {
     await expect(page.locator(`#${id}`), `${id} is on the edge`).toBeVisible();
     await expect(page.locator(`#${id}`)).toHaveText(label);
   }
+  await expect(page.locator('#props-tab')).toHaveCount(0);
+  await expect(page.locator('.rail-tab[data-left-pane-tab]')).toHaveCount(2);
 });
 
 test('each block is on the tab its tools are for', async ({ page }) => {
@@ -108,29 +113,17 @@ test('and PROPERTIES stands open beside either of them', async ({ page }) => {
     const up = await shownPanes(page);
     expect(up, `${pane} and PROPERTIES are both on the rail`)
       .toEqual(expect.arrayContaining([pane, 'properties']));
-    await expect(page.locator('#props-tab')).toHaveAttribute('aria-selected', 'true');
   }
 });
 
-test('the PROPERTIES tab toggles itself and leaves the tool tab alone',
+test('PROPERTIES stays on under either tab, even from an old link that shut it',
   async ({ page }) => {
-    await open(page, { pane: 'build' });
-    // THE LINE, NOT THE BOX. Nothing is selected, so the box is correctly
-    // hidden and NOTHING SELECTED is what is standing in for it -- asserting
-    // the box here would be asking the pane to show something it is right to
-    // be hiding.
-    await expect(page.locator('[data-props-empty]')).toBeVisible();
-
-    await page.locator('#props-tab').click();
-    expect(await shownPanes(page), 'PROPERTIES went down').toEqual(['build']);
-    await expect(page.locator('#build-tab'),
-      'and BUILD is still the tool tab in view').toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#left-rail'),
-      'shutting PROPERTIES does not shut the rail').toBeVisible();
-
-    await page.locator('#props-tab').click();
-    expect(await shownPanes(page), 'and it comes back beside BUILD')
+    await open(page, { pane: 'build', props: false });
+    expect(await shownPanes(page), 'lprops=0 means nothing now')
       .toEqual(expect.arrayContaining(['build', 'properties']));
+    await page.locator('#left-tab').click();
+    expect(await shownPanes(page), 'and it comes with DRAFTING too')
+      .toEqual(expect.arrayContaining(['drafting', 'properties']));
   });
 
 test('pressing the open tool tab shuts the rail; the other swaps it', async ({ page }) => {
@@ -145,13 +138,14 @@ test('pressing the open tool tab shuts the rail; the other swaps it', async ({ p
   await expect(page.locator('#left-rail'), 'the open tool tab shuts it').toBeHidden();
 });
 
-test('both facts survive a reload, because both are in the URL', async ({ page }) => {
-  await open(page, { pane: 'build', props: false });
+test('the tool tab survives a reload, because it is in the URL', async ({ page }) => {
+  await open(page, { pane: 'build' });
   await page.reload();
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
   await expect(page.locator('#build-tab')).toHaveAttribute('aria-selected', 'true');
-  expect(await shownPanes(page), 'PROPERTIES stayed down').toEqual(['build']);
+  expect(await shownPanes(page), 'PROPERTIES still under it')
+    .toEqual(expect.arrayContaining(['build', 'properties']));
 });
 
 test('an unknown lpane opens on DRAFTING rather than on a blank rail', async ({ page }) => {
@@ -239,24 +233,11 @@ test('a build tool opens its own controls WITHOUT the drafter moving tab',
       'the drafter never left BUILD').toHaveAttribute('aria-selected', 'true');
   });
 
-test('with PROPERTIES shut, its tab says there is something behind it',
+test('arming a tool fills the box under the tab the drafter is on',
   async ({ page }) => {
-    // THE DOT IS ONLY LOAD-BEARING WHEN THE PANE IS DOWN. Open, the panel
-    // speaks for itself; shut, nothing else would tell him the tool he just
-    // armed put its controls somewhere.
-    await open(page, { pane: 'build', props: false });
-    await expect(page.locator('#props-tab')).not.toHaveAttribute('data-has-props', /.*/);
-
+    await open(page, { pane: 'build' });
     await page.locator('[data-tool-key="roof"]').click();
-    await page.waitForTimeout(200);
-
-    // THE BOX'S OWN STATE, NOT ITS VISIBILITY: the pane above it is down on
-    // purpose, so `toBeHidden()` would be true whatever the page did -- the
-    // assertion would pass against a page that never filled the box at all.
-    expect(await page.locator('[data-props-box]').evaluate(el => el.hidden),
-      'the roof panel filled the box').toBe(false);
-    await expect(page.locator('#props-tab'),
-      'so its tab says so').toHaveAttribute('data-has-props', '');
+    await expect(page.locator('[data-props-box]'), 'the roof panel, in view under BUILD').toBeVisible();
     await expect(page.locator('#build-tab'),
       'and the drafter is still on BUILD').toHaveAttribute('aria-selected', 'true');
   });

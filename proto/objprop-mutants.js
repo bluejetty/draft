@@ -10,7 +10,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
-const SPEC = 'tests/objprop.spec.js';
+const SPEC = 'tests/objprop.spec.js tests/model-html-left-tabs.spec.js';
 
 const MUTANTS = [
   { file: 'MODEL.html',
@@ -43,6 +43,13 @@ const MUTANTS = [
     find: "      map.push(view === 'right' ? (a => a * k) : (a => depthIn - a * k));\n",
     with: "      map.push(a => a * k);\n",
     test: 'the faces' },
+  // AND THE LEFT PROPERTIES TAB IS GONE, its box always on under BUILD and
+  // DRAFTING (Movie, 25 Oct).
+  { file: 'MODEL.html',
+    name: 'an old lprops=0 link shuts PROPERTIES again',
+    find: "  const propsShowing = () => true;\n",
+    with: "  const propsShowing = () => params.get('lprops') !== '0';\n",
+    test: 'stays on under either tab' },
 ];
 
 const run = name => {

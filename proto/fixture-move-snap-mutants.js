@@ -32,14 +32,26 @@ const MUTANTS = [
     test: 'within an inch' },
   { file: 'MODEL.html',
     name: 'the side goes to the half inch off it, not to it',
-    find: "      [o1 + half, o0 - half].forEach(t => {\n",
-    with: "      [o1 + half + 1 / 24, o0 - half - 1 / 24].forEach(t => {\n",
+    find: "o1 = Number(o.offset) + Number(o.width) / 2;\n      [o1 + half, o0 - half].forEach(t => {\n",
+    with: "o1 = Number(o.offset) + Number(o.width) / 2;\n      [o1 + half + 1 / 24, o0 - half - 1 / 24].forEach(t => {\n",
     test: 'within an inch' },
   { file: 'MODEL.html',
     name: 'the SELECT drag takes no catch',
     find: "      const at = FG.slideClamp(sideSnap(fixture, md.was.offset + dAlong, half), half, bounds, blocks);\n",
     with: "      const at = FG.slideClamp(md.was.offset + dAlong, half, bounds, blocks);\n",
     test: 'SELECT drag' },
+  // ...AND AN ASSEMBLY OF PIECES (Movie, 25 Oct: "ONE at a time unless the
+  // user connects 2 with Y ASSEMBLY (2 or mor)").
+  { file: 'MODEL.html',
+    name: 'a Y assembly of pieces moves one piece at a time',
+    find: "      const set = fixtureSetSlide(at);\n",
+    with: "      const set = null;\n",
+    test: 'two pieces joined' },
+  { file: 'MODEL.html',
+    name: 'a kitchen preset\'s pieces all move together',
+    find: "    if ((owner.members || []).some(m => m.type !== 'fixture')) return null;\n",
+    with: "",
+    test: 'kitchen preset' },
 ];
 
 const run = name => {

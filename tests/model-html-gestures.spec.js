@@ -632,8 +632,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // and not this one; the census found it the moment anything else
           // touched the list. Declared now rather than after a third one.
           // AND AN EIGHTH TIME, with the left rail's tabs (Movie, 29 Sep:
-          // "i'd like to spit it into multiple tabs"). `build-tab` and
-          // `props-tab` join `left-tab`, which is the DRAFTING tab now.
+          // "i'd like to spit it into multiple tabs"). `build-tab` joins
+          // `left-tab`, which is the DRAFTING tab now. (`props-tab` went on 25
+          // Oct: PROPERTIES stands always on under either pane.)
           //
           // NO ABSENCE ROW MOVES, and the verdict is the one this list
           // already reached for the two sidebar tabs: a tab opens a pane and
@@ -650,7 +651,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // told me twice. What I did differently the second time was
           // enumerate every spec that references a tool key and check each
           // one, rather than predict which would break.
-          buttons: ['left-tab', 'build-tab', 'props-tab', 'right-tab',
+          buttons: ['left-tab', 'build-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             // THE SUITE'S TWO TILES (Movie, 20 Oct), standing in the family
             // row close together: each starts a suite on the BONEYARD, a door

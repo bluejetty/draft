@@ -15,7 +15,7 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-const LEFT = ['left-tab', 'build-tab', 'props-tab'], RIGHT = ['right-tab', 'notes-tab', 'history-tab'];
+const LEFT = ['left-tab', 'build-tab'], RIGHT = ['right-tab', 'notes-tab', 'history-tab'];
 // What the stylesheets themselves declare for a selector, read off the CSSOM.
 const declared = (page, selector, prop) => page.evaluate(({ selector, prop }) => {
   const out = [];
