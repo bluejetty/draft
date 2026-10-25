@@ -790,6 +790,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // and a version put back on the sheet is a drawing the drafter
             // already made -- nothing new, so no absence row moves.
             'history-tab',
+            // OBJ / PROP (Movie, 24 Oct): `objprop-tab` opens a window on the
+            // picked fixture -- its views and the same PROPERTIES the left
+            // pane edits. It changes a piece already placed and makes nothing,
+            // so no absence row moves.
+            'objprop-tab',
             // ROTATE (Movie, 18 Oct: "i also need a ROTATE command"): it turns
             // what is already drawn about its own middle and makes nothing,
             // so no absence row moves -- the same verdict COPY and DELETE got.

@@ -1295,6 +1295,30 @@
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
   #shelf-tab:hover { color: var(--accent); border-color: var(--accent); }
+  /* OBJ / PROP: the SHELF tab turned upside down, hanging under the top bar
+     over the right rail, and the window it drops (Movie, 24 Oct). */
+  #objprop-tab { position:fixed; z-index:45; top:var(--strip-h, 44px); height:16px; box-sizing:border-box;
+    padding:0 10px; font-size:8px; letter-spacing:.08em; line-height:14px; cursor:pointer;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-top:none; border-radius:0 0 6px 6px; }
+  #objprop-tab:hover, #objprop-tab[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+  #objprop-tab[hidden], #objprop[hidden] { display:none; }
+  #objprop { position:fixed; z-index:45; width:300px; box-sizing:border-box; padding:6px;
+    max-height:calc(100vh - var(--strip-h, 44px) - 80px); overflow:auto;
+    /* SOLID: the rail's cards and the dock must not show through it. */
+    background-color: var(--surface-page, #111);
+    background-image: linear-gradient(var(--surface-panel), var(--surface-panel));
+    border:1px solid var(--accent); border-radius:0 0 4px 4px;
+    font-family: var(--font-ui); }
+  #objprop .objprop-title { font-size:10px; font-weight:600; letter-spacing:.08em; color: var(--ink-primary);
+    text-transform:uppercase; padding:0 2px 5px; }
+  #objprop .objprop-views { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  #objprop figure { margin:0; border:1px solid var(--edge-panel); border-radius:3px; }
+  #objprop canvas { display:block; width:100%; height:110px; }
+  #objprop figcaption { font-size:8px; letter-spacing:.08em; color: var(--ink-quiet);
+    padding:2px 4px; border-top:1px solid var(--edge-panel); }
+  #objprop .objprop-props { padding-top:6px; }
   /* OPEN SUITE AND SAVE AS SUITE EITHER SIDE OF THE TAB (Movie, 23 Oct),
      the tab's own size, and only while the sheet shows a shelf. Equal
      widths, so the tab between them stays centred on the bone. */
@@ -1925,6 +1949,23 @@
     <div class="np-grip" data-notes-grip="bottom" title="Drag to make the pad taller"></div>
   </div>
 </aside>
+<!-- OBJ / PROP (Movie, 24 Oct): "click on the FIXTURES / CABINETS and items
+     like that in a different window ... (make it similar to the 'SHELF'
+     tabs but upside down ... then open up the window with the top and side
+     views and properties to change down below" -- "call that tab OBJ /
+     PROP". A tab hanging under the top bar over the right rail; the window
+     drops from it. objprop-views.js draws the views. -->
+<button id="objprop-tab" type="button" data-objprop-tab aria-expanded="false" hidden>OBJ / PROP</button>
+<section id="objprop" data-objprop aria-label="OBJ / PROP" hidden>
+  <div class="objprop-title" data-objprop-title>PICK A FIXTURE OR CABINET</div>
+  <div class="objprop-views">
+    <figure><canvas data-objprop-view="top"></canvas><figcaption>TOP</figcaption></figure>
+    <figure><canvas data-objprop-view="front"></canvas><figcaption>FRONT</figcaption></figure>
+    <figure><canvas data-objprop-view="left"></canvas><figcaption>LEFT</figcaption></figure>
+    <figure><canvas data-objprop-view="right"></canvas><figcaption>RIGHT</figcaption></figure>
+  </div>
+  <div class="objprop-props" data-objprop-props></div>
+</section>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 
 
@@ -2590,6 +2631,7 @@
      the same cabinet: it DREW fixtures long before it could place one, and
      a kitchen is seven of them. See ORDER-tiers-of-assembly.md. -->
 <script src="./fixture-kinds.js"></script>
+<script src="./objprop-views.js"></script>
 <!-- Movie's two default washrooms (9 Oct), dropped whole by the FIXTURE tool. -->
 <script src="./washroom-presets.js"></script>
 <script src="./kitchen-presets.js"></script>
@@ -6064,18 +6106,13 @@
   // its OWN level and view filtering while it scans (fixture-geometry.js).
   // Handing it a pre-filtered list would be filtering twice and would drop the
   // foundation wall a ground-floor tub can legitimately end against.
-  const paintFixtures = () => {
-    const R = window.DraftRender2D;
+  // WHAT THE FIXTURE PAINTER IS HANDED, the sheet's and the OBJ / PROP
+  // window's alike, so the two cannot draw a piece two ways.
+  const fixturePaintEnv = () => {
     const FG = window.DraftFixtureGeometry;
     const CL = window.DraftClosets;
-    const missing = [!R && 'render-2d.js', !FG && 'fixture-geometry.js',
-      !CL && 'closets.js'].filter(Boolean);
-    if (missing.length) {
-      throw new Error(`MODEL.html: cannot paint fixtures, ${missing.join(' and ')} `
-        + 'did not load. Check the script order in the page head.');
-    }
     const all = drawing?.walls || [];
-    const env = {
+    return {
       fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
       wallCross: (a, frame, b) => FG.wallCross(a, frame, b),
       wallFrame: wl => FG.wallFrame(wl),
@@ -6093,6 +6130,19 @@
       meldCounters: true,
       hasUppers: fixture => !!window.DraftFixtureKinds?.hasUppers(fixture),
     };
+  };
+  const paintFixtures = () => {
+    const R = window.DraftRender2D;
+    const FG = window.DraftFixtureGeometry;
+    const CL = window.DraftClosets;
+    const missing = [!R && 'render-2d.js', !FG && 'fixture-geometry.js',
+      !CL && 'closets.js'].filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint fixtures, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    const all = drawing?.walls || [];
+    const env = fixturePaintEnv();
     // options is {} for the same reason it is on notes: preview and selected
     // are states of the fixture TOOL, and this page has no tools.
     const K = window.DraftFixtureKinds;
@@ -35692,6 +35742,7 @@
     undoStack.push({ kind: 'props', edits });
     markDirty();
     showSelectionProps();
+    renderObjProp();
     paint();
   };
   const islandPiecePatches = (island, offset, width) => {
@@ -35825,6 +35876,88 @@
     showToolProps(activeTool);
   };
   selectionWatchers.push(showSelectionProps);
+
+  // ── OBJ / PROP (Movie, 24 Oct) ────────────────────────────────────────
+  //
+  // "i'd like to be able to click on the FIXTURES / CABINETS and items like
+  // that in a different window ... then open up the window with the top and
+  // side views and properties to change down below" -- "call that tab OBJ /
+  // PROP". The tab hangs under the top bar over the right rail and opens and
+  // shuts the window; a click on a fixture opens it on that piece. TOP is
+  // the sheet's own painter in the window's frame; FRONT, LEFT and RIGHT are
+  // the traced faces (objprop-views.js); the piece's PROPERTIES go under
+  // them, the same fields the left pane shows.
+  const objTab = document.getElementById('objprop-tab');
+  const objWin = document.getElementById('objprop');
+  let objOpen = false;
+  const objPieces = () => selection.filter(entry => entry.type === 'fixture').map(entry => entry.item);
+  const seatObjProp = () => {
+    if (!objTab || !objWin) return;
+    const rail = document.getElementById('right-rail');
+    const box = rail && !rail.hidden ? rail.getBoundingClientRect() : null;
+    const right = box && box.width ? Math.max(0, window.innerWidth - box.right) : 48;
+    objTab.style.right = `${right + 8}px`;
+    objWin.style.right = `${right}px`;
+    objWin.style.top = `${objTab.getBoundingClientRect().bottom || 60}px`;
+  };
+  const drawObjViews = items => {
+    const V = window.DraftObjViews, R = window.DraftRender2D, FG = window.DraftFixtureGeometry;
+    const fx = items[0] || null;
+    objWin.querySelectorAll('[data-objprop-view]').forEach(cv => {
+      const view = cv.dataset.objpropView;
+      const dpr = window.devicePixelRatio || 1;
+      const w = cv.clientWidth || 140, h = cv.clientHeight || 110;
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+      const c = cv.getContext('2d');
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, w, h);
+      if (!fx || !V || !R || !FG) return;
+      const box = { x: 0, y: 0, w, h };
+      if (view === 'top') {
+        const env = fixturePaintEnv();
+        const geo = env.fixtureGeometry(fx);
+        if (!geo || !geo.frame) return;
+        const { toS } = V.topFrame(geo, box);
+        const wall = (drawing?.walls || []).find(wl => wl.id === fx.wallId);
+        R.drawFixture2D(c, toS, fx, {}, wall, { ...env, meldCounters: false });
+        if (env.hasUppers(fx) && R.drawUpperCabinets2D) R.drawUpperCabinets2D(c, toS, fx, wall, { ...env, meldCounters: false });
+        return;
+      }
+      V.drawFace(c, V.faceOf(fx, view, window.DraftFixtureProfiles), box,
+        { line: skin['draw-fixture'], ground: fixtureFill(), text: skin['ink-quiet'] || skin['draw-fixture'] });
+    });
+  };
+  const renderObjProp = () => {
+    if (!objWin || !objOpen) return;
+    const items = objPieces();
+    const title = objWin.querySelector('[data-objprop-title]');
+    const props = objWin.querySelector('[data-objprop-props]');
+    title.textContent = items.length ? `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}` : 'PICK A FIXTURE OR CABINET';
+    props.replaceChildren(...(items.length ? [fixturePropsNode(items)] : []));
+    drawObjViews(items);
+  };
+  const setObjOpen = on => {
+    if (!objTab || !objWin) return;
+    objOpen = !!on;
+    objWin.hidden = !objOpen;
+    objTab.setAttribute('aria-expanded', String(objOpen));
+    objTab.textContent = `OBJ / PROP ${objOpen ? '\u25B4' : '\u25BE'}`;
+    seatObjProp();
+    renderObjProp();
+  };
+  if (objTab) {
+    objTab.hidden = false;
+    objTab.textContent = 'OBJ / PROP \u25BE';
+    objTab.addEventListener('click', () => setObjOpen(!objOpen));
+    window.addEventListener('resize', seatObjProp);
+    seatObjProp();
+  }
+  // A CLICK ON A FIXTURE OPENS IT; anything else leaves the window as it is,
+  // saying what to pick.
+  selectionWatchers.push(() => {
+    if (objPieces().length && !objOpen) { setObjOpen(true); return; }
+    renderObjProp();
+  });
 
   // ── THE ROOF PANEL ────────────────────────────────────────────────────────
   //
