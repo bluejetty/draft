@@ -198,8 +198,10 @@ test('+ ADD VIEWPORT asks what -- plans, elevations, sections -- then the next p
   await page.locator('[data-layout-add-viewport]').click();
   await expect(page.locator('[data-add-pick]')).toHaveText(['MAIN FL PLAN', 'FOUNDATION PLAN',
     'ELEVATION E1', 'ELEVATION E2', 'ELEVATION E3', 'ELEVATION E4', 'SECTION S1']);
+  // Armed at once, as it always was; the pick only changes what comes in.
+  await expect(page.locator('[data-layout-add-viewport]')).toHaveText(/CLICK THE SHEET/i);
   await page.locator('[data-add-pick="elevation:E2"]').click();
-  await expect(page.locator('[data-add-menu]')).toBeHidden();
+  await expect(page.locator('[data-add-pick="elevation:E2"]')).toHaveClass(/\bon\b/);
   await expect(page.locator('[data-layout-add-viewport]')).toHaveText(/CLICK THE SHEET/i);
   const seq = await saveSeq(page);
   await page.mouse.click(...await deskPoint(page, 7, 5));
@@ -211,6 +213,7 @@ test('+ ADD VIEWPORT asks what -- plans, elevations, sections -- then the next p
   // At a rung that fits the paper -- 26' deep, so it is not crammed to the floor of the ladder.
   expect(made.pif).toBeGreaterThanOrEqual(1 / 8);
   await expect(page.locator('[data-layout-add-viewport]')).toHaveText(/ADD VIEWPORT/i);
+  await expect(page.locator('[data-add-menu]'), 'the list goes with the placing').toBeHidden();
 });
 
 test('a double press on the titleblock\'s logo opens the picker: pick one, or add a picture of your own', async ({ page }) => {
