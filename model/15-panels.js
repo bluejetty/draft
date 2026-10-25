@@ -2662,15 +2662,11 @@
   // string up and says where the click goes.
   const dimOnceEnds = () => {
     dimLinesStale();
-    // AND THE LINE UNDER THE CURSOR GOES DOWN FIRST (Movie, 25 Oct: "unless
-    // the user presses ESC (there will be no dimension shown for that case)
-    // but if they press anything else to end the dimension line placing
-    // sequence, the last line will be placed before the sequence finishes").
-    // Not where it measures nothing; dimPress already refuses the spot of the
-    // line just placed, so it is never laid twice.
-    if (dimPlacing && cursorWorld && dimString(dimPoints, cursorWorld).length) {
-      dimPress(cursorWorld);
-    }
+    // ONLY A LEFT CLICK LAYS A LINE (Movie, 25 Oct: "on the last dimension
+    // line when the user presses SPACE or ENTER to close it off. don't add
+    // another dimension line ... just leave the LEFT CLICK produced dims").
+    // The key or the button that ends the lines lays none of its own; the
+    // earlier rule that laid one at the mouse first is gone.
     if (dimPlacing && !dimLastLine) {
       sayOnStrip(`DIMENSION — ${Math.max(dimPoints.length - 1, 1)} to place: click where the string goes (Esc abandons it).`);
       return true;

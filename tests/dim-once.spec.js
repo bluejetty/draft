@@ -77,10 +77,9 @@ test('SPACE once ends the points; ENTER once finishes the lines, keeping every l
   expect(new Set(made.map(x => r2(x.start.z))).size, 'on two rows').toBe(2);
 });
 
-// THE LAST END PLACES WHERE THE MOUSE IS (Movie, 25 Oct: "if they press
-// anything else to end the dimension line placing sequence, the last line will
-// be placed before the sequence finishes"): only Esc puts nothing down.
-test('the RIGHT button ends the points, and the next one places a line where the mouse is and finishes', async ({ page }) => {
+// THE LAST END LAYS NOTHING OF ITS OWN (Movie, 25 Oct: "don't add another
+// dimension line ... just leave the LEFT CLICK produced dims").
+test('the RIGHT button ends the points, and the next one finishes with only the clicked line', async ({ page }) => {
   const { at } = await open(page);
   await armDimension(page);
   await press(page, at, -10, -10);
@@ -91,9 +90,9 @@ test('the RIGHT button ends the points, and the next one places a line where the
   await press(page, at, 3, -4, 'right');
   await expect(strip(page), 'and finishes the lines').toContainText('done');
   const made = hand(await saved(page));
-  expect(made, 'the clicked line and the one at the mouse').toHaveLength(2);
-  made.forEach(x => expect([r2(x.start.x), r2(x.end.x)].sort((p, q) => p - q)).toEqual([-10, 10]));
-  expect(new Set(made.map(x => r2(x.start.z))).size, 'on two rows').toBe(2);
+  expect(made, 'the clicked line alone, none at the mouse').toHaveLength(1);
+  expect([r2(made[0].start.x), r2(made[0].end.x)].sort((p, q) => p - q)).toEqual([-10, 10]);
+  expect(r2(made[0].start.z), 'on the clicked row').toBeCloseTo(-8, 0);
 });
 
 test('ESC alone abandons the string: the points go, and the next press starts afresh', async ({ page }) => {
@@ -121,17 +120,16 @@ test('one point and ENTER: the strip asks for two at least, and the right button
   await expect(strip(page)).toContainText('2 points');
 });
 
-// A SECOND END BEFORE ANY LINE IS DOWN PLACES THE ONE LINE AT THE MOUSE AND
-// IS DONE (Movie, 25 Oct: "if they use the SPACE ENTER or RIGHT CLICK the next
-// one, the line will be placed in that location and that's it"). It used to
-// wait for a click (23 Oct: "it just ESC's and nothing appears"); either way
-// only Esc throws the string away.
+// A SECOND END BEFORE ANY LINE IS DOWN LAYS NOTHING AND WAITS FOR THE CLICK
+// (Movie, 25 Oct: "just leave the LEFT CLICK produced dims"; and 23 Oct, of
+// a string that vanished: "it just ESC's and nothing appears") -- only Esc
+// throws the string away.
 for (const [name, end] of [
   ['SPACE', page => page.keyboard.press(' ')],
   ['ENTER', page => page.keyboard.press('Enter')],
   ['the right button', (page, at) => press(page, at, 0, -6, 'right')],
 ]) {
-  test(`ending the points, then ${name} with the mouse on a row: one line there, and done`, async ({ page }) => {
+  test(`ending the points, then ${name} before any line: nothing laid, the click still to come`, async ({ page }) => {
     const { at } = await open(page);
     await armDimension(page);
     await press(page, at, -10, -10);
@@ -141,9 +139,13 @@ for (const [name, end] of [
     await page.mouse.move(...at(0, -6));
     await page.waitForTimeout(80);
     await end(page, at);
+    await expect(strip(page), 'still asking for the click').toContainText('click where the string goes');
+    expect(hand(await saved(page)), 'nothing at the mouse').toHaveLength(0);
+    await press(page, at, 0, -7);
+    await end(page, at);
     await expect(strip(page)).toContainText('done');
     const made = hand(await saved(page));
     expect(made).toHaveLength(1);
-    expect(r2(made[0].start.z), 'on the row the mouse was on').toBeCloseTo(-6, 0);
+    expect(r2(made[0].start.z), 'on the clicked row').toBeCloseTo(-7, 0);
   });
 }
