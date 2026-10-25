@@ -1275,6 +1275,20 @@
   const isOwnNode = v => [...walls(), ...lines()].some(seg => [seg.start, seg.end]
     .some(e => e && Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6))
     || loopCorners().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6);
+  // Worked out once per drawing change, level and hologram placing, not on
+  // every move of the mouse: a plan of twenty suites is a lot of walls.
+  let holoSnapCache = { key: null, list: [] };
+  const hologramSnapNodes = () => {
+    const shown = holograms().filter(holo => !holo.hidden);
+    if (!shown.length) return [];
+    const key = `${modelEpoch}|${activeLevelId()}|${shown.map(holo => `${holo.id},${holo.x},${holo.z},${holo.angleDeg},${holo.flip === true}`).join(';')}`;
+    if (holoSnapCache.key === key) return holoSnapCache.list;
+    const list = shown.flatMap(holo => [...hologramSuperNodes(holo).map(n => n.point), ...hologramCorners(holo)])
+      .filter(v => v && Number.isFinite(v.x) && Number.isFinite(v.z))
+      .map(v => ({ x: v.x, y: 0, z: v.z }));
+    holoSnapCache = { key, list };
+    return list;
+  };
   const nodeEnds = ({ faces = true } = {}) => {
     const out = [];
     [...walls(), ...lines()].forEach(seg => [seg.start, seg.end].forEach(v => {
@@ -1295,6 +1309,14 @@
     // corner node the use can 'connect' them"): a wall drawn or dragged to
     // one lands on it, and rides the fixture after (fixtureLinks).
     fixtureGapNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
+    // AND A HOLOGRAM'S CORNERS (Movie, 25 Oct: "i'd like to snap the
+    // startpoint of my line to the corner of the hologram (if i go withing the
+    // purple ring, and click to set a new node i'd like it to be placed
+    // exactly where the node circled by the purple ring"): its coloured
+    // corner rings and its walls' own ends, every tool, as nodes.
+    hologramSnapNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
     // AND THE TRACE IN HAND'S FIRST CORNER, once it can be closed on (Movie,
