@@ -60,6 +60,11 @@ const MUTANTS = [
     find: "        const out = { x: -dz / len * 2, z: dx / len * 2 };\n",
     with: "        const out = { x: 0, z: 0 };\n",
     test: 'COPIED and PASTED' },
+  { file: 'model/15-panels.js',
+    name: 'a line placed with HAND DIMS off stays hidden (Movie, 25 Oct: "LEFT CLICK ... isn\'t working")',
+    find: "      const wasHidden = dimsHidden.hand;\n",
+    with: "      const wasHidden = false;\n",
+    test: 'with HAND DIMS off, placing a line turns them back on' },
 ];
 const run = name => {
   try {

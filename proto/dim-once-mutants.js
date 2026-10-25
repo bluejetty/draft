@@ -32,10 +32,10 @@ const MUTANTS = [
     with: "    rulerFrom = null;\n",
     test: 'ESC alone abandons the string' },
   { file: 'model/15-panels.js',
-    name: 'a second end before any line throws the string away',
-    find: "    if (dimPlacing && !dimLastLine) {\n",
+    name: 'the last end places nothing at the mouse (Movie, 25 Oct)',
+    find: "    if (dimPlacing && cursorWorld && dimString(dimPoints, cursorWorld).length) {\n",
     with: "    if (false) {\n",
-    test: 'does not throw the string away' },
+    test: 'one line there, and done' },
 ];
 
 const run = name => {

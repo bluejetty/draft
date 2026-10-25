@@ -236,3 +236,25 @@ test('UNDO of the line just placed ends the lines: the next press is a fresh str
   await expect(page.locator('#strip-message')).toContainText('the next point');
   expect(hand(await saved(page)), 'the line undone, no new one laid').toHaveLength(0);
 });
+
+// A LINE PLACED IS A LINE SEEN (Movie, 24 Oct: "the LEFT CLICK to place the
+// dimension line isn't working still"). It was placing them -- with HAND DIMS
+// switched off, a choice the page remembers, so each went down out of sight.
+// Placing one puts HAND DIMS back on and says so.
+test('with HAND DIMS off, placing a line turns them back on and says so', async ({ page }) => {
+  await open(page, drawing(RUN));
+  await page.evaluate(() => localStorage.setItem('model.dimsHidden', JSON.stringify({ auto: false, hand: true })));
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  const { at } = await frame(page);
+  await armDimension(page);
+  await expect(page.locator('[data-dims-show="hand"]'), 'HAND DIMS starts off').toHaveAttribute('aria-pressed', 'false');
+  await press(page, at, [0, 0]);
+  await press(page, at, [4, 0]);
+  await page.keyboard.press('Enter');
+  await press(page, at, [2, -1.5]);
+  await expect(page.locator('#strip-message')).toContainText('HAND DIMS was off');
+  await expect(page.locator('[data-dims-show="hand"]'), 'and is on now').toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('model.dimsHidden')).hand), 'remembered on').toBe(false);
+  expect(hand(await saved(page))).toHaveLength(1);
+});

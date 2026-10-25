@@ -77,7 +77,10 @@ test('SPACE once ends the points; ENTER once finishes the lines, keeping every l
   expect(new Set(made.map(x => r2(x.start.z))).size, 'on two rows').toBe(2);
 });
 
-test('the RIGHT button ends the points and finishes the lines; it abandons nothing', async ({ page }) => {
+// THE LAST END PLACES WHERE THE MOUSE IS (Movie, 25 Oct: "if they press
+// anything else to end the dimension line placing sequence, the last line will
+// be placed before the sequence finishes"): only Esc puts nothing down.
+test('the RIGHT button ends the points, and the next one places a line where the mouse is and finishes', async ({ page }) => {
   const { at } = await open(page);
   await armDimension(page);
   await press(page, at, -10, -10);
@@ -88,8 +91,9 @@ test('the RIGHT button ends the points and finishes the lines; it abandons nothi
   await press(page, at, 3, -4, 'right');
   await expect(strip(page), 'and finishes the lines').toContainText('done');
   const made = hand(await saved(page));
-  expect(made).toHaveLength(1);
-  expect([r2(made[0].start.x), r2(made[0].end.x)].sort((a, b) => a - b)).toEqual([-10, 10]);
+  expect(made, 'the clicked line and the one at the mouse').toHaveLength(2);
+  made.forEach(x => expect([r2(x.start.x), r2(x.end.x)].sort((p, q) => p - q)).toEqual([-10, 10]));
+  expect(new Set(made.map(x => r2(x.start.z))).size, 'on two rows').toBe(2);
 });
 
 test('ESC alone abandons the string: the points go, and the next press starts afresh', async ({ page }) => {
@@ -117,21 +121,29 @@ test('one point and ENTER: the strip asks for two at least, and the right button
   await expect(strip(page)).toContainText('2 points');
 });
 
-// A SECOND END BEFORE ANY LINE IS DOWN KEEPS THE STRING (Movie, 23 Oct: "it
-// doesn't produce the dimension at the very end it just ESC's and nothing
-// appears"): only Esc throws it away.
-test('SPACE twice, or the right button twice, does not throw the string away before a line is placed', async ({ page }) => {
-  const { at } = await open(page);
-  await armDimension(page);
-  await press(page, at, -10, -10);
-  await press(page, at, 10, -10);
-  await page.keyboard.press(' ');
-  await page.keyboard.press(' ');
-  await press(page, at, 5, -5, 'right');
-  await expect(strip(page), 'still waiting for the line').toContainText('click where the string goes');
-  await press(page, at, 0, -8);
-  await expect(strip(page)).toContainText('1 placed');
-  await page.keyboard.press('Enter');
-  await expect(strip(page)).toContainText('done');
-  expect(hand(await saved(page))).toHaveLength(1);
-});
+// A SECOND END BEFORE ANY LINE IS DOWN PLACES THE ONE LINE AT THE MOUSE AND
+// IS DONE (Movie, 25 Oct: "if they use the SPACE ENTER or RIGHT CLICK the next
+// one, the line will be placed in that location and that's it"). It used to
+// wait for a click (23 Oct: "it just ESC's and nothing appears"); either way
+// only Esc throws the string away.
+for (const [name, end] of [
+  ['SPACE', page => page.keyboard.press(' ')],
+  ['ENTER', page => page.keyboard.press('Enter')],
+  ['the right button', (page, at) => press(page, at, 0, -6, 'right')],
+]) {
+  test(`ending the points, then ${name} with the mouse on a row: one line there, and done`, async ({ page }) => {
+    const { at } = await open(page);
+    await armDimension(page);
+    await press(page, at, -10, -10);
+    await press(page, at, 10, -10);
+    await page.keyboard.press(' ');
+    await expect(strip(page)).toContainText('click where the string goes');
+    await page.mouse.move(...at(0, -6));
+    await page.waitForTimeout(80);
+    await end(page, at);
+    await expect(strip(page)).toContainText('done');
+    const made = hand(await saved(page));
+    expect(made).toHaveLength(1);
+    expect(r2(made[0].start.z), 'on the row the mouse was on').toBeCloseTo(-6, 0);
+  });
+}
