@@ -2344,6 +2344,38 @@
     const p = snap.pt || cornerSnap(at, []) || at;
     return { x: p.x, z: p.z, ...(snap.pt || cornerSnap(at, []) ? dimLinkAt(p) : {}) };
   };
+  // ONE CLICK IN THE MIDDLE OF A WALL TAKES BOTH ITS FACES (Movie, 25 Oct:
+  // "when the use DOUBLE CLICKS on a wall, the dimension will choose BOTH
+  // sides of the wall and show the dimension between (usually 3 1/2" or
+  // 5 1/2")" -- then "how about if the user clicks in the middle of a wall it
+  // does that ... one click not 2"). Inside the wall's body and clear of both
+  // faces by a few pixels; a node, a corner or an opening's dot near the
+  // click still wins, and a click on a face is that face alone. The two
+  // points stand straight across the wall from the click.
+  const DIM_FACE_CLEAR_PX = 3;
+  const dimWallFacesAt = at => {
+    if (board === 'toy' || refPoint(at) || openingCentreAt(at) || cornerSnap(at, [])) return null;
+    const TE = window.DraftTrimExtend;
+    if (!TE) return null;
+    const clear = DIM_FACE_CLEAR_PX / view.scale;
+    const thick = openingThicknessFt();
+    for (const w of walls()) {
+      if (!w.start || !w.end) continue;
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-6) continue;
+      const t = ((at.x - w.start.x) * dx + (at.z - w.start.z) * dz) / (len * len);
+      if (t <= 0 || t >= 1) continue;
+      const across = ((at.x - w.start.x) * -dz + (at.z - w.start.z) * dx) / len;
+      const [lo, hi] = TE.faceOffsets(w, thick(w));
+      if (!(across > lo + clear && across < hi - clear)) continue;
+      const base = { x: w.start.x + dx * t, z: w.start.z + dz * t };
+      const nx = -dz / len, nz = dx / len;
+      return { wall: w, thicknessFt: hi - lo,
+        points: [{ x: base.x + nx * lo, z: base.z + nz * lo }, { x: base.x + nx * hi, z: base.z + nz * hi }] };
+    }
+    return null;
+  };
   // ── A HAND DIMENSION STAYS ON ITS NODE (Movie, 18 Oct: "i moved thenode
   // but the dim didn't follow the node it should be linked too") ──────────
   //
@@ -2523,6 +2555,14 @@
       }
       sayOnStrip(`DIMENSION — ${made.length} placed${wasHidden ? ' (HAND DIMS was off — turned back on so you can see them)' : ''}. Click again for another line of the same points, or SPACE, ENTER or the right button to finish.`);
       markDirty();
+      paint();
+      return;
+    }
+    const faces = dimWallFacesAt(at);
+    if (faces) {
+      dimPoints.push(...faces.points);
+      sayOnStrip(`DIMENSION — both faces of the wall (${window.DraftFormatters.formatArchitecturalInches(faces.thicknessFt * 12)}), `
+        + `${dimPoints.length} points: the next, or SPACE, ENTER or the right button to end the string`);
       paint();
       return;
     }
