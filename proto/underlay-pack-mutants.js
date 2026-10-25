@@ -30,7 +30,7 @@ const MUTANTS = [
     name: 'a drawing with no pictures still gets the key',
     find: "    if (!Object.keys(packed).length) return contents;",
     with: "    if (false) return contents;",
-    test: 'no underlays saves as it always did' },
+    test: 'no underlay pictures to hand' },
 ];
 
 const run = name => {

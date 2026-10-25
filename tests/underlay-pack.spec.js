@@ -67,14 +67,15 @@ test('SAVE AS packs the picture under the plan into the file; OPEN on a bare bro
   expect(await page.evaluate(() => drawing.underlays.map(u => u.id))).toEqual(['ul-1']);
 });
 
-test('a drawing with no underlays saves as it always did', async ({ page }) => {
+test('a drawing with no underlay pictures to hand saves as it always did', async ({ page }) => {
   await page.addInitScript(() => {
     try { delete window.showSaveFilePicker; } catch { window.showSaveFilePicker = undefined; }
   });
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => window.SharedFileStore.saveSharedFile(
     new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket),
-  { bucket: BUCKET, f: { ...DRAWING, underlays: [] } });
+  // The underlay is named but its picture was never in this browser.
+  { bucket: BUCKET, f: DRAWING });
   await page.goto('/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.locator('#file-save-as').click();
