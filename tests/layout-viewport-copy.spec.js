@@ -156,3 +156,26 @@ test('Ctrl+C and Ctrl+V do the same; pasted onto its own sheet it stands half an
   expect(again).toHaveLength(dealt.viewports.length + 2);
   expect(Math.max(...again.map(v => v.xIn - plan.xIn))).toBeCloseTo(1, 6);
 });
+
+// LEFT OF THE BONE (Movie, 25 Oct, marked in GIMP): the commands that come
+// up with a selected viewport -- and UNDO / REDO with them -- stand on the
+// status row just left of the bone trio, not out at the right.
+test('the commands stand on the status row just left of the bone, clear of it', async ({ page }) => {
+  await openLayout(page, boneDrawing());
+  await waitForCompose(page);
+  const plan = (await savedLayout(page)).viewports.find(v => v.kind === 'plan' && v.levelId === 3);
+  await pickViewport(page, plan);
+  await page.locator('[data-copy-viewport]').click();
+  const box = sel => page.locator(sel).boundingBox();
+  const [trio, row, undo, paste, edit] = await Promise.all([box('#dt-trio'), box('#lay-status-bar'),
+    box('[data-undo]'), box('[data-paste-viewport]'), box('[data-edit-in-model]')]);
+  const gap = trio.x - (paste.x + paste.width);
+  expect(gap, 'the last command ends just short of the bone').toBeGreaterThanOrEqual(4);
+  expect(gap).toBeLessThanOrEqual(30);
+  expect(undo.x, 'UNDO leads the cluster').toBeLessThan(edit.x);
+  for (const b of [undo, paste]) {
+    expect(b.y + b.height / 2).toBeGreaterThan(row.y);
+    expect(b.y + b.height / 2).toBeLessThan(row.y + row.height);
+  }
+  expect(undo.x, 'and clear of SAVED at the left').toBeGreaterThan(row.x + 120);
+});

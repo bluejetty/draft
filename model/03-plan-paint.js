@@ -123,7 +123,63 @@
   // colours. Small, but the label is the one place this page can silently
   // diverge from the product, so the polarity below is copied and not
   // rewritten.
+  // ── HOW BIG THE FIGURES ARE (Movie, 25 Oct) ──────────────────────────
+  //
+  // "the dimension text is pretty small ... it would be nice if the
+  // dimension text was approx [the background drawing's] size", and, asked
+  // to choose, "lock it in with the layout scale if possible ... maybe have
+  // a secondary method to change the scale (not linked to the layout view)".
+  //
+  // A FIGURE IS A SIZE ON THE PAPER, so on the plan it is a size in feet and
+  // grows and shrinks with the walls, like the underlay's own lettering. 1/8"
+  // printed is the drafter's dimension text; at 1/4" = 1' that is 6" of
+  // building, which is what his underlay's figures measure.
+  //
+  // THE SCALE IS THE LEVEL'S SHEET: the most detailed plan viewport of this
+  // level in LAYOUT. Not the first: his sheet set leads with the level at
+  // 1" = 30' beside the site plan, where 1/8" of figure is 3'-9" of house,
+  // and the drawing he dimensions is the one at the working scale. His own
+  // pick, DIM SCALE beside AUTO DIMS / HAND
+  // DIMS, wins over it and is kept per level in the file (`dimScales`, at the
+  // top of the drawing -- LAYOUT rewrites `layout` from its own state and
+  // would drop a key put there). No sheet and no pick reads 1/4" = 1'.
+  //
+  // NEVER UNREADABLE: zoomed right out the figure stops at 7px rather than
+  // shrinking to a smear.
+  const DIM_TEXT_PAPER_IN = 1 / 8;
+  const DIM_TEXT_EM_PER_CAP = 1.4;   // render-2d's NOTE_EM_PER_CAP
+  const DIM_TEXT_MIN_PX = 7;
+  const DIM_TEXT_DEFAULT_PIF = 1 / 4;
+  const DIM_SCALE_CHOICES = [
+    ['1/16"', 1 / 16], ['3/32"', 3 / 32], ['1/8"', 1 / 8], ['3/16"', 3 / 16], ['1/4"', 1 / 4],
+    ['3/8"', 3 / 8], ['1/2"', 1 / 2], ['3/4"', 3 / 4], ['1"', 1],
+    ['1"=10\'', 1 / 10], ['1"=20\'', 1 / 20], ['1"=30\'', 1 / 30], ['1"=40\'', 1 / 40],
+  ];
+  const dimScaleLabel = pif => {
+    const listed = DIM_SCALE_CHOICES.find(([, p]) => Math.abs(p - pif) < 1e-9);
+    if (listed) return listed[0];
+    return pif < 1 / 8 ? `1"=${Math.round(1 / pif)}'` : `${+(pif).toFixed(3)}"`;
+  };
+  const dimLayoutPif = levelId => {
+    const pifs = (drawing?.layout?.viewports || [])
+      .filter(v => v && v.kind === 'plan' && Number(v.levelId) === Number(levelId) && v.pif > 0)
+      .map(v => v.pif);
+    return pifs.length ? Math.max(...pifs) : null;
+  };
+  const dimOwnPif = levelId => {
+    const pif = Number(drawing?.dimScales?.[levelId]);
+    return pif > 0 ? pif : null;
+  };
+  const dimScalePif = (levelId = activeLevelId()) =>
+    dimOwnPif(levelId) || dimLayoutPif(levelId) || DIM_TEXT_DEFAULT_PIF;
+  const dimTextScale = () => {
+    const capFt = DIM_TEXT_PAPER_IN / dimScalePif();
+    const px = capFt * view.scale * DIM_TEXT_EM_PER_CAP;
+    return Math.max(DIM_TEXT_MIN_PX, px) / 11;
+  };
+
   const dimensionEnv = () => ({
+    textScale: dimTextScale(),
     // IMPERIAL IS THE FALL-THROUGH, DELIBERATELY -- MODEL.dc.html:8058 reads
     // `units !== 'metric'`, not `units === 'imperial'`. Nothing normalises
     // `units`: drawing-format.js has no rule for it, so it arrives here raw
@@ -1464,6 +1520,27 @@
         });
         dimsShowBox.append(btn);
       });
+      // DIM SCALE (Movie, 25 Oct: "a secondary method to change the scale
+      // (not linked to the layout view)"). The first choice follows the
+      // level's LAYOUT sheet and says which scale that is; any other is his,
+      // kept on this level in the file.
+      const pick = document.createElement('select');
+      pick.className = 'sel-chip';
+      pick.id = 'dim-scale';
+      pick.dataset.dimScale = '';
+      pick.title = 'DIM SCALE -- how big the dimension figures are: the LAYOUT sheet\'s scale, or one you pick';
+      pick.append(new Option('', ''));
+      DIM_SCALE_CHOICES.forEach(([label, pif]) => pick.append(new Option(`DIM ${label}`, String(pif))));
+      pick.addEventListener('change', () => {
+        if (!drawing) return;
+        const id = activeLevelId();
+        const next = { ...(drawing.dimScales || {}) };
+        if (pick.value) next[id] = Number(pick.value); else delete next[id];
+        drawing.dimScales = next;
+        markDirty();
+        paint();
+      });
+      dimsShowBox.append(pick);
       dock.append(dimsShowBox);
     }
     const any = dimensions().length > 0 || activeTool === 'dimension';
@@ -1472,6 +1549,15 @@
     dimsShowBox.querySelectorAll('[data-dims-show]').forEach(btn => {
       btn.setAttribute('aria-pressed', String(!dimsHidden[btn.dataset.dimsShow]));
     });
+    const pick = dimsShowBox.querySelector('[data-dim-scale]');
+    if (pick) {
+      const id = activeLevelId();
+      const own = dimOwnPif(id);
+      const sheet = dimLayoutPif(id);
+      pick.options[0].textContent = `DIM: ${sheet ? 'LAYOUT' : 'DEFAULT'} ${dimScaleLabel(sheet || DIM_TEXT_DEFAULT_PIF)}`;
+      const match = own && DIM_SCALE_CHOICES.find(([, pif]) => Math.abs(pif - own) < 1e-9);
+      pick.value = match ? String(match[1]) : '';
+    }
     const w = dimsShowBox.offsetWidth, hgt = dimsShowBox.offsetHeight;
     dimsShowBox.style.left = `${c.x - DOCK_CHIP / 2 - 10 - w}px`;
     dimsShowBox.style.top = `${midY - hgt / 2}px`;

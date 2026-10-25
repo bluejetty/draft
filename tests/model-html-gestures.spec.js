@@ -1038,7 +1038,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'Rough Drafter — entry page',
             'CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT',
           ].sort(),
-          selects: ['file-ext'],
+          // DIM SCALE beside AUTO DIMS / HAND DIMS (Movie, 25 Oct): how big
+          // the dimension figures are -- the LAYOUT sheet's scale or one he
+          // picks. It sizes lettering and builds nothing, so no absence row
+          // moves.
+          selects: ['dim-scale', 'file-ext'],
           // THE LENGTH BOX and the SAVE AS name, plus ONE file input -- the
           // drawing picker OPEN hangs on. It is named here rather than
           // counted because this row is what the INSERT UNDERLAY absence
