@@ -1754,24 +1754,9 @@
       if (footOn && Q && !d.set.across) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
       if (!d.set.across && snapOn && board !== 'toy') {
         d.magnet ||= magnetExcluding(d.set.points);
-        // A POINT TAKEN HOLD OF LANDS ON THE NEAREST NODE OR FACE CORNER, by
-        // distance alone. The magnet's own rule lets a node outrank a nearer
-        // face corner, so the WC's inside corner, dropped on the inside
-        // corner of the house, went to the 2x6's centre node an inch or two
-        // away instead -- "off a little each time". Within the node's reach;
-        // past it the usual seek.
-        const grabbed = d.grab && !axis
-          ? nearestWithin([...d.magnet.nodes, ...d.magnet.corners],
-            { x: d.at.x + dx, z: d.at.z + dz }, NODE_PULL_PX)
-          : null;
-        if (grabbed) {
-          dx = grabbed.x - d.at.x; dz = grabbed.z - d.at.z;
-          d.lit = { pt: { x: grabbed.x, y: 0, z: grabbed.z }, corner: grabbed, node: d.magnet.nodes.includes(grabbed) };
-        } else {
-          const seek = moveSeek(d, dx, dz, axis);
-          d.lit = seek?.lit || null;
-          if (seek) { dx = seek.dx; dz = seek.dz; }
-        }
+        const seek = moveSeek(d, dx, dz, axis);
+        d.lit = seek?.lit || null;
+        if (seek) { dx = seek.dx; dz = seek.dz; }
       }
       d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
       d.dx = dx; d.dz = dz;
