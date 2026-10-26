@@ -225,6 +225,19 @@ if (!window.DraftProfileManager) {
   const DEFAULT_SNAP_ZONE = 4;
   const SNAP_ZONE_RANGE = Object.freeze({ min: 1, max: 60 });
 
+  // SNAP STRENGTH (Movie, 26 Oct, the one snapping rule): MODEL's reaches
+  // are inches on the plan -- a node 2", a face corner 1 1/2", a line 1" --
+  // and this scales the whole set. Four steps, not a free number: "a bit
+  // looser" and "a bit tighter" are what anyone asks of a snap. Stored as
+  // the multiplier under its own name; the old `snapStrength` key held the
+  // three-number zone and is read only as the zone's legacy.
+  const SNAP_REACH_CHOICES = Object.freeze([0.5, 0.75, 1, 1.5]);
+  const DEFAULT_SNAP_REACH = 1;
+  const normaliseSnapReach = value => {
+    const raw = value == null || value === '' ? NaN : Number(value);
+    return SNAP_REACH_CHOICES.includes(raw) ? raw : DEFAULT_SNAP_REACH;
+  };
+
   // Drafter identity: shown at the top of Settings and destined for the
   // titleblock on printed sheets. Free text, kept to a sane length.
   const normaliseDrafter = value => {
@@ -536,6 +549,9 @@ if (!window.DraftProfileManager) {
     DEFAULT_SNAP_ZONE,
     SNAP_ZONE_RANGE,
     normaliseSnapZone,
+    SNAP_REACH_CHOICES,
+    DEFAULT_SNAP_REACH,
+    normaliseSnapReach,
   };
   window.DraftDrafter = {
     normaliseDrafter,

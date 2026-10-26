@@ -130,7 +130,7 @@
        PROJECT.html and STANDARDS.html both name --ink-primary on their inputs
        for this reason; this is the same line, and the palette moves all three
        together. */
-    .snap-row input { width:64px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
+    .snap-row input, .snap-row select { width:64px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
     .snap-row input:focus { border-color:var(--accent-mark); outline:2px solid color-mix(in srgb, var(--accent-mark) 18%, transparent); outline-offset:1px; }
     .snap-row .px { color:var(--ink-secondary); font-size:11px; }
     .snap-default { color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; }
@@ -179,9 +179,9 @@
       <p class="layout-note" id="layout-note">Pick a preset to fill the bindings below with the closest match to that application; every key stays editable afterwards.</p>
     </div>
     <details class="advanced">
-      <summary>Snap zone</summary>
-      <p class="advanced-note">One number rules every snap: how close the cursor must be, in screen pixels, before a node, midpoint, or polar ray catches it. The wider magnetic pull and the close-the-outline radius scale from the same number. Larger catches from farther away; smaller only snaps when the cursor is nearly on the point. Saved with your keyboard settings.</p>
-      <div class="snap-row"><label for="snap-zone">Snap zone</label><input type="number" id="snap-zone" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" id="snap-zone-default"></span></div>
+      <summary>Snap strength</summary>
+      <p class="advanced-note">One rule for every snap, measured on the plan: a wall end or node catches from 2&quot;, a face corner or crossing from 1&frac12;&quot;, a line or tracking line from 1&quot;, a suite lining up from 3&quot; &mdash; never under 4 px or over 30 px on the screen, so zoom in to hit the small things. Snap strength scales the whole set. Hold CTRL while drawing or dragging for no snapping at all. Saved with your keyboard settings.</p>
+      <div class="snap-row"><label for="snap-reach">Snap strength</label><select id="snap-reach" data-snap-reach></select><span class="snap-default" id="snap-reach-default"></span></div>
       <div class="snap-row"><label for="suggest-stairs">Stair suggestions</label><input type="checkbox" id="suggest-stairs" data-suggest-stairs></div>
       <div class="snap-row"><label for="auto-windows">Auto windows</label><input type="checkbox" id="auto-windows" data-auto-windows></div>
       <p class="advanced-note">BUILD HOUSE deals windows onto the exterior walls by the office siting rules &mdash; front and back maximized, one side left bare until the site plan says which. Every one is an ordinary window you can move, resize or delete; the bone only ever deals the first hand. Off means every window is yours to place.</p>
@@ -262,6 +262,7 @@
       // carries over as the one snap zone.
       let snapZone = snaps.normaliseSnapZone(
         active?.content?.model?.snapZone ?? active?.content?.model?.snapStrength);
+      let snapReach = snaps.normaliseSnapReach(active?.content?.model?.snapReach);
       let suggestStairs = active?.content?.model?.suggestStairs !== false;
       const suggestStairsBox = document.querySelector('[data-suggest-stairs]');
       suggestStairsBox.checked = suggestStairs;
@@ -397,7 +398,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, autoWindows } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, snapReach, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, autoWindows } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -416,18 +417,24 @@
         });
       });
 
+      // SNAP STRENGTH (Movie, 26 Oct): replaces the snap-zone pixels, which
+      // MODEL never read. The zone itself is still kept in the package for
+      // the old page.
+      const reachPick = document.querySelector('#snap-reach');
+      reachPick.innerHTML = snaps.SNAP_REACH_CHOICES.map(v =>
+        `<option value="${v}">${Math.round(v * 100)}%</option>`).join('');
       const renderSnaps = () => {
-        document.querySelector('#snap-zone').value = snapZone;
-        document.querySelector('#snap-zone-default').textContent = `default ${snaps.DEFAULT_SNAP_ZONE}`;
+        reachPick.value = String(snapReach);
+        document.querySelector('#snap-reach-default').textContent = `default ${Math.round(snaps.DEFAULT_SNAP_REACH * 100)}%`;
       };
-      document.querySelector('#snap-zone').addEventListener('change', event => {
-        snapZone = snaps.normaliseSnapZone(event.target.value);
-        saveActive('Snap zone saved locally.');
+      reachPick.addEventListener('change', event => {
+        snapReach = snaps.normaliseSnapReach(event.target.value);
+        saveActive('Snap strength saved locally.');
         renderSnaps();
       });
       document.querySelector('#snap-reset').addEventListener('click', () => {
-        snapZone = snaps.normaliseSnapZone(null);
-        saveActive('Default snap zone restored.');
+        snapReach = snaps.normaliseSnapReach(null);
+        saveActive('Default snap strength restored.');
         renderSnaps();
       });
 
@@ -458,7 +465,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, autoWindows } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, snapReach, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, autoWindows } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
@@ -481,6 +488,7 @@
           packageName = pkg.name;
           bindings = keyboard.resolveKeybindings(model.keybindings);
           snapZone = snaps.normaliseSnapZone(model.snapZone);
+          snapReach = snaps.normaliseSnapReach(model.snapReach);
           drafter = drafterTools.normaliseDrafter(model.drafter);
           tourRoofIncrements = window.DraftTour.normaliseTourRoofIncrements(model.tourRoofIncrements);
           boneReveal = model.boneReveal !== false;

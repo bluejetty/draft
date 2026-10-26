@@ -930,6 +930,7 @@
     angleBox.classList.toggle('locked', angleLockDeg() != null);
     scaleChip.classList.toggle('lit', footOn);
     snapChip?.classList.toggle('lit', snapOn);
+    snapChip?.classList.toggle('held-off', snapHeldOff);
     trackChip?.classList.toggle('lit', trackOn);
     snapChip?.setAttribute('aria-pressed', String(snapOn));
     trackChip?.setAttribute('aria-pressed', String(trackOn));
@@ -1018,12 +1019,13 @@
     // Found by the check asserting the message was VISIBLE rather than that
     // the code had set it, which is the difference between the two halves of
     // every failure today.
-    stripMessage.textContent = stripNotice || (rulerOn
+    const said = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
       : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point · double-click, ENTER or SPACE twice, or ESC ends the run' : 'first point'}`
         + (angleLockDeg() != null ? ` · ANGLE LOCKED ${angleLockDeg()}°` : '')
         : (activeTool === 'outline'
           ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));
+    stripMessage.textContent = snapHeldOff ? `SNAP OFF (CTRL)${said ? ` · ${said}` : ''}` : said;
     // Last, and from here rather than from the pointer handlers, so the label
     // goes out the moment the run does -- every path that ends a run already
     // calls stripRefresh, and a length still on screen after the gesture is
@@ -1102,6 +1104,27 @@
     sayOnStrip(`SNAP ${snapOn ? 'on — a point near a node lands on it' : 'off'}`);
     stripRefresh(); paint();
   });
+  // ── CTRL HELD = NO SNAPPING (Movie, 26 Oct) ───────────────────────────
+  //
+  // "can it be SHIFT? or CTL ?" -- Ctrl, only while it is down: drawing,
+  // dimensions, corner drags, MOVE and suites all put the point exactly
+  // where the hand is (reachFt reaches nothing), and letting go snaps
+  // again at once, mid-drag included. The T-square, protractor, foot and
+  // typed lengths are not snaps and keep working. The SNAP chip dims and
+  // the strip says so; the chip's own on/off is not touched. A Ctrl+letter
+  // shortcut holds it off for the moment the key is down, which is nothing.
+  // The pointer's own ctrlKey is read too, so a key let go while the page
+  // had no focus cannot leave the snap off.
+  const holdSnapOff = held => {
+    if (snapHeldOff === held) return;
+    snapHeldOff = held;
+    stripRefresh(); paint();
+  };
+  window.addEventListener('keydown', e => { if (e.key === 'Control') holdSnapOff(true); }, true);
+  window.addEventListener('keyup', e => { if (e.key === 'Control') holdSnapOff(false); }, true);
+  window.addEventListener('blur', () => holdSnapOff(false));
+  ['pointerdown', 'pointermove'].forEach(type =>
+    window.addEventListener(type, e => holdSnapOff(!!e.ctrlKey), true));
   trackChip?.addEventListener('click', () => {
     trackOn = !trackOn; keepLight('trackLight', trackOn);
     sayOnStrip(`TRACK ${trackOn ? 'on — the cross lines square to a node, and a point near one lands on it' : 'off'}`);

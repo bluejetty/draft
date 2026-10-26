@@ -1246,10 +1246,10 @@
   // he aimed at, and the move carried that miss to the corner it landed on;
   // and the WC's inside FACE corners were never among the points a move
   // seeks with. Now: every point the selection carries, and the face corners
-  // of its walls -- inside and outside -- within 14 px of the hand; the press
-  // takes that exact point, and the hand's catch then lands it exactly on the
-  // node or face corner it is dropped on.
-  const MOVE_GRAB_PX = 14;
+  // of its walls -- inside and outside -- within a node's reach of the hand
+  // (2", 4 to 30 px: the one snapping rule, Movie 26 Oct); the press takes
+  // that exact point, and the hand's catch then lands it exactly on the node
+  // or face corner it is dropped on.
   const moveGrabPoints = () => {
     const entries = selectionEntries();
     const pts = carriedPoints(entries).map(v => ({ x: v.x, z: v.z, node: true }));
@@ -1262,11 +1262,11 @@
   };
   const moveGrabAt = at => {
     if (!at || !selection.length) return null;
-    const r = MOVE_GRAB_PX / view.scale;
+    const r = reachFt(NODE_REACH);
     let best = null;
     moveGrabPoints().forEach(p => {
       const d = Math.hypot(p.x - at.x, p.z - at.z);
-      // A NODE BEATS A FACE CORNER AT THE SAME DISTANCE, as the magnet has it.
+      // PLAIN NEAREST; a node beats a face corner only at the same distance.
       if (d <= r && (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) < 1e-9 && p.node && !best.p.node))) best = { d, p };
     });
     return best ? best.p : null;
@@ -1752,7 +1752,7 @@
       // the axis is the hand's, and before the magnet, so a catch still wins.
       const Q = window.DraftToyConstraints;
       if (footOn && Q && !d.set.across) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
-      if (!d.set.across && snapOn && board !== 'toy') {
+      if (!d.set.across && snapLive() && board !== 'toy') {
         d.magnet ||= magnetExcluding(d.set.points);
         const seek = moveSeek(d, dx, dz, axis);
         d.lit = seek?.lit || null;
@@ -1766,7 +1766,7 @@
       return;
     }
     // A WHOLE ROOF SEEKS by its corners, the way a selection does.
-    if (d.kind === 'roof' && snapOn && board !== 'toy') {
+    if (d.kind === 'roof' && snapLive() && board !== 'toy') {
       const carried = d.targets.flatMap(r => [...r.points, ...(r.footprint || [])]);
       const seek = pointsSeek(d.befores.flatMap(b => b.points), dx, dz, (d.magnet ||= magnetExcluding(carried)));
       d.lit = seek?.lit || null;
@@ -1791,7 +1791,7 @@
         // A ROOF'S CORNER IN HAND reads the three tiers and the cross lines,
         // never itself: its own place is kept out of the magnet.
         const own = b.points[d.node];
-        const magnet = snapOn && board !== 'toy' ? (d.magnet ||= magnetExcluding([own])) : null;
+        const magnet = snapLive() && board !== 'toy' ? (d.magnet ||= magnetExcluding([own])) : null;
         const hit = magnet ? dragMagnetAt(at, own, magnet) : null;
         d.lit = hit || null;
         const snap = hit?.pt || trackSnap(at, [own])?.pt || null;

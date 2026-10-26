@@ -466,6 +466,9 @@
     color: var(--ink-secondary); cursor:pointer; }
   .chip:hover { border-color: var(--edge-panel); }
   .chip.lit { color: var(--accent); border-color: var(--accent); }
+  /* SNAP HELD OFF BY CTRL (Movie, 26 Oct): dimmed while the key is down,
+     its own on/off left as it was. */
+  .chip.held-off { opacity: 0.35; }
   /* ARMED IS NOT LOADED, and the brush is the one instrument where the two
      come apart: up and empty it takes every press and changes nothing, up and
      loaded it repaints what it touches. One outline for "this is taking your

@@ -18,7 +18,7 @@ const SPEC = 'tests/snap-track.spec.js';
 const MUTANTS = [
   { file: 'model/07-walls-magnet.js',
     name: 'the node snap reaches nowhere',
-    find: "    const r = pullFt(NODE_SNAP_PX);\n",
+    find: "    const r = reachFt(NODE_REACH);\n",
     with: "    const r = 0;\n",
     test: 'SNAP: a press near a wall end lands exactly on it, and the orange donut marks it first' },
   { file: 'model/10-tracking-garage.js',

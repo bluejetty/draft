@@ -20,7 +20,7 @@ const MUTANTS = [
     test: 'a dragged wall slides across its run until its face lines up with another wall\'s, and both faces glow' },
   { file: 'model/07-walls-magnet.js',
     name: 'a face passes no node',
-    find: '      point(magnet.nodes, NODE_PULL_PX, true);\n',
+    find: '      point(magnet.nodes, NODE_REACH, true);\n',
     with: '',
     test: 'a dragged wall\'s face passes through a node, and takes the orange' },
   { file: 'model/16-gestures-undo.js',

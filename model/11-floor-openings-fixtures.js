@@ -1235,7 +1235,7 @@
   // off TOY, as every other catch.
   const SIDE_SNAP_FT = 1 / 12;
   const sideSnap = (fixture, target, half) => {
-    if (!snapOn || board === 'toy') return target;
+    if (!snapLive() || board === 'toy') return target;
     let best = target, bestD = SIDE_SNAP_FT + 1e-9;
     window.DraftFixtureGeometry.runMates(fixtures(), fixture).filter(o => o.kind !== 'island').forEach(o => {
       const o0 = Number(o.offset) - Number(o.width) / 2, o1 = Number(o.offset) + Number(o.width) / 2;
@@ -1371,7 +1371,7 @@
     let dAlong = (raw.x - d.at.x) * frame.ux + (raw.z - d.at.z) * frame.uz;
     // THE SIDES CATCH: the nearest of any piece's sides to a neighbour's
     // side outside the set, within an inch.
-    if (snapOn && board !== 'toy') {
+    if (snapLive() && board !== 'toy') {
       let best = null, bestD = SIDE_SNAP_FT + 1e-9;
       pieces.forEach((p, i) => {
         const half = (Number(p.width) || 0) / 2;

@@ -1007,7 +1007,8 @@
         follow: anchorFollowers(before, corner ? null : body),
         sx: e.clientX, sy: e.clientY, active: false,
       };
-      if (corner && (e.altKey || e.ctrlKey) && board !== 'toy') detachCorner(moveDrag, corner);
+      // ALT ONLY (Movie, 26 Oct): CTRL held is snapping off now.
+      if (corner && e.altKey && board !== 'toy') detachCorner(moveDrag, corner);
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -1122,12 +1123,11 @@
           // corner"): the wall's centre node used to be asked first, so a
           // corner taken into an inside corner went to the middle of the wall
           // a couple of inches away whenever the node was in reach too.
-          // AND FROM AS FAR AS THE MOVE'S MAGNET REACHES (14 px), not the 4 px
-          // a drawn point snaps from, with the circle on what it will take
-          // (paintSnapNode) -- "similar" to the MOVE, as he asked.
-          const reach = Math.max(CORNER_SNAP_PX, NODE_PULL_PX) / view.scale;
-          const caught = window.DraftGeometry2D.nearestVertex(snapCandidates([md.points[md.index]]), raw, reach);
-          const face = window.DraftGeometry2D.nearestVertex(wallFaceNodes(), raw, reach);
+          // ONE SNAPPING RULE (Movie, 26 Oct): a node from 2", a face corner
+          // from 1 1/2", each held between 4 and 30 px on the screen, with the
+          // circle on what it will take (paintSnapNode).
+          const caught = window.DraftGeometry2D.nearestVertex(snapCandidates([md.points[md.index]]), raw, reachFt(NODE_REACH));
+          const face = window.DraftGeometry2D.nearestVertex(wallFaceNodes(), raw, reachFt(CORNER_REACH));
           const far = q => (q ? Math.hypot(q.x - raw.x, q.z - raw.z) : Infinity);
           let pt;
           if (face && far(face) < far(caught)) {
@@ -1328,7 +1328,7 @@
           const fixed = tsquareOn ? squaredAxis(from, raw) : null;
           // THE MAGNET ON A DRAG TOO, with SNAP lit off TOY: the corners and
           // faces of every wall the node does not belong to.
-          const magnet = snapOn && board !== 'toy' ? (md.magnet ||= dragMagnet(grabbed.vtx)) : null;
+          const magnet = snapLive() && board !== 'toy' ? (md.magnet ||= dragMagnet(grabbed.vtx)) : null;
           const hit = fixed
             ? axisMagnet(wanted, fixed, grabbed.vtx, magnet)
             : dragMagnetAt(wanted, grabbed.vtx, magnet);
@@ -1416,7 +1416,7 @@
           // rule ("a snap that lands on a real corner is the one case where
           // the foot gives way").
           const ends = !toy && !footOn ? wallSnapDelta(md.before, dx, dz) : null;
-          const seek = !toy && !ends && snapOn ? wallFaceSeek(md, dx, dz) : null;
+          const seek = !toy && !ends && snapLive() ? wallFaceSeek(md, dx, dz) : null;
           md.lit = seek ? seek.lit : null;
           md.cursor = raw;
           if (toy) { dx = toy.dx; dz = toy.dz; }

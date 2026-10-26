@@ -2399,7 +2399,7 @@
   };
   const openingCentreAt = at => {
     if (!at) return null;
-    const r = pullFt(NODE_PULL_PX);
+    const r = reachFt(NODE_REACH);
     let best = null;
     openingsOn(walls()).forEach(({ opening }) => {
       const c = openingCentre(opening);
