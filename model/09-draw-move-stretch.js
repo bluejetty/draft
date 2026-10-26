@@ -86,7 +86,7 @@
     if (type === 'fixture' || type === 'fenestration') return [];
     if (type === 'roomtag') return [item.at, ...(roomShapeOf(item) || [])].filter(Boolean);
     if (type === 'note') return [item.anchor, item.text].filter(Boolean);
-    if (type === 'column' || type === 'superNode') return item.point ? [item.point] : [];
+    if (type === 'column') return item.point ? [item.point] : [];
     if (Array.isArray(item.points)) {
       return [...item.points, ...(type === 'roof' && Array.isArray(item.footprint) ? item.footprint : [])];
     }
@@ -1370,7 +1370,7 @@
   //   - a door, window or fixture on a stretched wall keeps its distance from
   //     the end that stays -- one inside the box rides the end that moves;
   //   - one UNDO puts it all back.
-  const STRETCH_WHOLE = new Set(['stair', 'column', 'roomtag', 'note', 'superNode']);
+  const STRETCH_WHOLE = new Set(['stair', 'column', 'roomtag', 'note']);
   const stretchBox = () => {
     const { a, b } = stretchState;
     if (!a || !b) return null;
@@ -1872,7 +1872,7 @@
       const holos = d.set.holos || [];
       const suite = !d.set.points.length && holos.find(holo => holo.mode === 'suite');
       if (suite && H()?.suiteSnap) {
-        const slide = H().suiteSnap(drawing, suite, activeLevelId());
+        const slide = H().suiteSnap(drawing, suite, activeLevelId(), reachFt('suite'));
         if (slide.x || slide.z) {
           holos.forEach(holo => { holo.x += slide.x; holo.z += slide.z; });
           d.dx = (d.dx || 0) + slide.x; d.dz = (d.dz || 0) + slide.z;

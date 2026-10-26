@@ -911,9 +911,6 @@
     .filter(b => onActiveLevel().byLevel(b) && onActiveLevel().onPlan(b));
   const columns = () => (drawing?.columns || [])
     .filter(c => onActiveLevel().byLevel(c) && onActiveLevel().onPlan(c));
-  // SUPER NODES take the same rule: a marker on a level's plan.
-  const superNodes = () => (drawing?.superNodes || [])
-    .filter(n => onActiveLevel().byLevel(n) && onActiveLevel().onPlan(n));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
   // are the room and garage footprints, level-wide, so no view filter.
   // ON THE BONEYARD THE MASTERS ARE THE SHELF'S CONTENTS. A master lives in

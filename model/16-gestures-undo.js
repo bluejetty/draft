@@ -704,7 +704,6 @@
     // (stairHandPress). AUTO STAIR stays in its properties panel.
     if (activeTool === 'stair') { stairHandPress(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
-    if (activeTool === 'node') { superNodePress(at); return; }
     if (activeTool === 'stretch') { stretchPress(at); return; }
     if (activeTool === 'dimension') { dimPress(at); return; }
     if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
@@ -1510,7 +1509,7 @@
       // AND WHEN THE SNAP UNDER THE CURSOR CHANGES, with no run in hand yet:
       // the orange donut has to come and go over a node before the first
       // press, and nothing else repaints there.
-      else if (drawsRun() || activeTool === 'outline' || activeTool === 'node') {
+      else if (drawsRun() || activeTool === 'outline') {
         const snap = drawSnap(at);
         const key = snap.pt ? `${snap.pt.x},${snap.pt.z},${snap.node ? 'n' : snap.bullseye ? 'b' : 'r'}` : '';
         if (key !== lastSnapKey) { lastSnapKey = key; paint(); }
@@ -2196,7 +2195,7 @@
     ['notes', 'note'], ['stairs', 'stair'], ['columns', 'column'], ['beams', 'beam'],
     ['shapes', 'shape'], ['outlines', 'outline'], ['roomTags', 'room tag'], ['groups', 'assembly'],
     ['levels', 'level'], ['holograms', 'hologram'], ['underlays', 'picture'],
-    ['superNodes', 'super node'], ['cuts', 'section']];
+    ['cuts', 'section']];
   // NAMED versions, NOT history: window.history is the URL bar's, and a
   // local by that name shadowed it (syncUrl's replaceState went missing).
   const versions = { entries: [], cursor: -1, muted: false, pending: false };

@@ -962,9 +962,6 @@
     }
     // A LOOP BEING TRACED -- outline, floor, shape -- reads the magnet too.
     const tracesLoop = activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape'
-      // A SUPER NODE BEING PLACED reads the magnet the same way: it lands on
-      // a node, a face corner or a line end exactly ("to place the first one").
-      || activeTool === 'node'
       // AND THE SINGLE SLOPE ROOF'S OUTLINE (Movie, 21 Oct), so its first
       // corner glows under the hand as the house outline's does.
       || shedTracing();

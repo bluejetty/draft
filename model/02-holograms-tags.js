@@ -86,7 +86,7 @@
     z: (Number(holo.pivotZ) || 0) + (Number(holo.z) || 0) });
   const hologramCorners = holo => hologramWallsHere(holo).flatMap(w => [w.start, w.end]);
 
-  // ── SUPER NODES (Movie, 20 Oct) ───────────────────────────────────────
+  // ── SUPER NODES (Movie, 20 Oct), and their going (26 Oct) ─────────────
   //
   // "i have another idea for the suites to make it easier to place as
   // holograms. can i make special 'NODES' -- make a NODE command in the
@@ -100,47 +100,15 @@
   // nodes but secondarily (to place the first one)"; "corner SUPER nodes
   // GREEN / BLUE / TURQOISE BRIGHT".
   //
-  // A super node is a marker on a level: it never prints (plan-composition
-  // knows nothing of it, and PRINTSCREEN shoots with `presenting` up). The
-  // SUPERNODE key (N, the old NODE / ARC slot) places one where the magnet
-  // would put a drawn point -- a node, a face corner, a line end, a cross
-  // line -- so it lands on the wall line exactly. A suite hologram's super nodes, moved by its placement,
-  // click onto the house's: within SUPER_NODE_PULL_FT the nearest pair
-  // coincides, and the face slide is not asked.
-  const SUPER_NODE_PULL_FT = 4 / 12;
-  const SUPER_NODE_HOLD_FT = 8 / 12;
-  // A SUITE'S END LINE PULLS THE NEXT SUITE'S ON from six inches across --
-  // the shell wall's own reach (hologram.js suiteSnap).
-  const SUITE_LINE_PULL_FT = 0.5;
-  const SUPER_NODE_SHOW_FT = 6;
+  // NO SUPERNODE ANY MORE (Movie, 26 Oct: "maybe we can get rid of that, it
+  // didn't work that good"): no N tool, no turquoise dots, no suite caught
+  // by a house node. A suite meets a suite by its end lines and the shell
+  // by its walls, both from 3" (reachFt('suite')); the gold registration
+  // corner stays. Old files' superNodes are read past and not saved.
+  // PRINTSCREEN shoots with `presenting` up, and no marker paints then.
+  let presenting = false;
   const SUPER_NODE_INK = '#1ef2ff';
   const SUPER_NODE_GLOW = 'rgba(30, 242, 255, 0.95)';
-  let presenting = false;
-  const superNodeAt = worldPt => {
-    const reach = Math.max(SELECT_GRAB_PX / view.scale, 0.5);
-    let best = null, bestD = reach;
-    superNodes().forEach(n => {
-      const d = Math.hypot(n.point.x - worldPt.x, n.point.z - worldPt.z);
-      if (d < bestD) { best = n; bestD = d; }
-    });
-    return best;
-  };
-  const superNodePress = at => {
-    if (!drawing) return;
-    const snap = board !== 'toy' ? drawSnap(at) : {};
-    const caught = snap.pt || cornerSnap(at, []);
-    const p = caught || at;
-    const { levelId } = onActiveLevel();
-    if (!Array.isArray(drawing.superNodes)) drawing.superNodes = [];
-    const record = { id: newDrawingItemId('superNode'), point: { x: p.x, y: 0, z: p.z },
-      levelId, view: activeViewId() || 'plan' };
-    drawing.superNodes.push(record);
-    undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
-      items: [{ list: drawing.superNodes, item: record }] });
-    markDirty();
-    sayOnStrip(`SUPERNODE placed${caught ? ' on the corner' : ''} -- a suite's super nodes click onto these. UNDO takes it back.`);
-    paint();
-  };
   // A HOLOGRAM'S SUPER NODES, placed, on this level.
   const hologramSuperNodes = holo => (H()?.suiteSuperNodes ? H().suiteSuperNodes(holo, activeLevelId()) : []);
   // THE COLOUR A SHELF'S SUITE WEARS ON THE PLAN: that of the hologram file
@@ -152,51 +120,10 @@
     const twin = holograms().find(holo => String(H().fileOf(holo) || '').trim().toUpperCase() === name);
     return twin ? H().colourOf(twin, drawing) : null;
   };
-  // THE PAIR THAT HAS A HOLOGRAM IN HAND: its nearest super node to a house
-  // super node, or to ANOTHER HOLOGRAM'S CORNER RING (Movie, 23 Oct: "when
-  // they come close to another suite circle corner node can they 'GLOW' and
-  // be 'MAGNETIC SNAP (no matter where the cursor is grabbing or placing the
-  // SUITE ... within about 4" radius 8" diameter (pretty strong" -- the
-  // house's too, "switch both to 4"", and "all suites attrached and glow for
-  // all other suites"), as `{ dx, dz, mine, house, other }` -- the slide that
-  // puts them together; `other` the hologram whose ring it is -- or null.
-  // Corner to corner, never the cursor. A pair already caught (`was`) HOLDS
-  // until the hand takes it past SUPER_NODE_HOLD_FT, so a wobble does not
-  // knock it off.
-  const superNodeLock = (holo, was = null) => {
-    const mine = hologramSuperNodes(holo);
-    if (!mine.length) return null;
-    const others = holograms().filter(o => o !== holo && !o.hidden);
-    const pair = (a, b, other) => ({ dx: b.point.x - a.point.x, dz: b.point.z - a.point.z,
-      mine: a, house: b, other, d: Math.hypot(b.point.x - a.point.x, b.point.z - a.point.z) });
-    if (was) {
-      const a = mine.find(n => n.id === was.mine.id);
-      const b = was.other ? (others.includes(was.other) ? hologramSuperNodes(was.other).find(n => n.id === was.house.id) : null)
-        : superNodes().find(n => n === was.house);
-      const kept = a && b ? pair(a, b, was.other || null) : null;
-      if (kept && kept.d <= SUPER_NODE_HOLD_FT) return kept;
-    }
-    let best = null;
-    const offer = (b, other) => mine.forEach(a => {
-      const p = pair(a, b, other);
-      if (p.d <= SUPER_NODE_PULL_FT && (!best || p.d < best.d)) best = p;
-    });
-    superNodes().forEach(b => offer(b, null));
-    // NOT ANOTHER SUITE'S CORNERS ANY MORE (Movie, 25 Oct: "the RINGS on the
-    // corners don't work that great"): suite meets suite by their end
-    // lines (hologram.js suiteLineSnap); the house's own super nodes still
-    // catch a suite's corner.
-    return best;
-  };
   // GOLD ON THE REGISTRATION CORNER (Movie, 22 Oct: "make that SUPERNODE
-  // corner gold to match"): the super node standing on the gold target's
-  // corner wears the target's own ink, so the corner that lines up reads at
-  // a glance -- the plan's by the target, a suite hologram's by its file's.
-  const REGISTRATION_NODE_FT = 1;
-  const onRegistration = pt => {
-    const d = siteDatumNow();
-    return !!d && Math.hypot(pt.x - d.x, pt.z - d.z) <= REGISTRATION_NODE_FT;
-  };
+  // corner gold to match"): the corner standing on the gold target wears
+  // the target's own ink, so the corner that lines up reads at a glance --
+  // a suite hologram's and a shelf's (hologram.js registered).
   let goldDots = 0;   // how many came out gold this paint, for the specs
   // `ink` names a colour of the node's own -- a hologram's corners wear
   // their file's colour (Movie, 23 Oct) -- and gold still wins.
@@ -226,13 +153,7 @@
   // `data-super-lock` names the house node holding it.
   const paintSuperNodes = () => {
     if (presenting || !drawing) return;
-    const lock = traceMoving?.hologram ? traceMoving.superLock : null;
     goldDots = 0;
-    // THE ONE GOLD NODE ON THE PLAN: the nearest to the target, within reach.
-    const goldId = superNodes().filter(n => onRegistration(n.point))
-      .sort((a, b) => Math.hypot(a.point.x - siteDatumNow().x, a.point.z - siteDatumNow().z)
-        - Math.hypot(b.point.x - siteDatumNow().x, b.point.z - siteDatumNow().z))[0]?.id;
-    superNodes().forEach(n => superDot(n.point, { bright: !!lock && lock.house === n, gold: n.id === goldId }));
     // A HOLOGRAM'S CORNERS IN ITS FILE'S COLOUR (Movie, 23 Oct: "make the
     // AQUA corner NODES on the imported suite/shelfs ... match the chart for
     // each unit type" -- "will be easier for a user to identify them"). The
@@ -241,14 +162,11 @@
     // A SUITE'S END LINES, NOT ITS CORNER RINGS (Movie, 25 Oct): a line on
     // its top and bottom, in its file's colour, 2 ft past each corner so it
     // is easy to see and to grab; the pair a held suite has caught, bright.
-    // The gold registration corner keeps its dot, a corner the house's own
-    // super node holds lights, and super nodes drawn in the suite's own
-    // file still show as rings.
+    // The gold registration corner keeps its ring; nothing else does now.
     const lineLock = traceMoving?.hologram ? traceMoving.lineLock : null;
     let litLines = 0;
     const drawnLines = [];
     holograms().filter(holo => !holo.hidden).forEach(holo => {
-      const held = !!lock && traceMoving.underlay === holo;
       const ink = H().colourOf?.(holo, drawing)?.ink || null;
       (H().suiteEndLines?.(holo, activeLevelId()) || []).forEach(L => {
         drawnLines.push({ L, holo, ink: ink || SUPER_NODE_INK });
@@ -266,9 +184,7 @@
         ctx.restore();
       });
       hologramSuperNodes(holo).forEach(n => {
-        const lit = held && lock.mine.id === n.id;
-        if (n.registration === true) superDot(n.point, { ring: true, ink, bright: lit, gold: true });
-        else if (!n.auto || lit) superDot(n.point, { ring: true, ink, bright: lit });
+        if (n.registration === true) superDot(n.point, { ring: true, ink, gold: true });
       });
     });
     // JOINED, THE TWO COLOURS TAKE TURNS (Movie, 25 Oct: "when the 2 suites
@@ -315,11 +231,8 @@
     // file named for the shelf -- so the square and the copies read as one
     // unit type at a glance. A shelf no copy has come from yet keeps the
     // plain aqua.
-    // AND NOT WHEN THE SHELF HAS SUPER NODES OF ITS OWN: those replace the
-    // four corners, as a suite's own do (suiteSuperNodes), and are drawn
-    // above as the house's are, the one on the target gold.
     const shelfLevel = activeLevelId();
-    if (shelfLevel < 0 && !superNodes().length && H()?.shelfSuperNodes) {
+    if (shelfLevel < 0 && H()?.shelfSuperNodes) {
       const ink = shelfColourOf(shelves().find(sh => -Number(sh.id) === shelfLevel))?.ink || null;
       H().shelfSuperNodes(walls(), shelfLevel, drawing?.planTurn || 0).forEach(n => superDot(n.point, { ring: true, gold: n.registration === true, ink }));
     }
@@ -327,28 +240,6 @@
     // through here too now, and must not write over what the sheet said.
     if (thumbTarget) return;
     canvas.dataset.goldSuperNodes = String(goldDots);
-    if (lock) canvas.dataset.superLock = JSON.stringify([Number(lock.house.point.x.toFixed(4)), Number(lock.house.point.z.toFixed(4))]);
-    else delete canvas.dataset.superLock;
-  };
-  // WHILE A HOLOGRAM IS IN HAND, the house super nodes within reach of its
-  // own glow faintly, so he can see what is magnetic before it catches.
-  const paintSuperNodeGlow = holo => {
-    if (presenting) return;
-    const mine = hologramSuperNodes(holo);
-    if (!mine.length) return;
-    superNodes().forEach(n => {
-      const near = mine.some(a => Math.hypot(a.point.x - n.point.x, a.point.z - n.point.z) <= SUPER_NODE_SHOW_FT);
-      if (near) superDot(n.point, { faint: true, ring: true });
-    });
-    // AND EVERY OTHER HOLOGRAM'S CORNER RINGS: the ones it could click
-    // onto, glowing before they catch.
-    holograms().filter(o => o !== holo && !o.hidden).forEach(o => {
-      const ink = H().colourOf?.(o, drawing)?.ink || null;
-      hologramSuperNodes(o).forEach(n => {
-        const near = mine.some(a => Math.hypot(a.point.x - n.point.x, a.point.z - n.point.z) <= SUPER_NODE_SHOW_FT);
-        if (near) superDot(n.point, { faint: true, ring: true, ink });
-      });
-    });
   };
   const paintHolograms = () => {
     // The HOLOGRAM chip lit while any is loaded -- after an UNDO, an open.
@@ -373,7 +264,7 @@
         const at = (p, o) => toS({ x: p.x + n.x * o, z: p.z + n.z * o });
         return [at(w.start, startOff), at(w.end, startOff), at(w.end, endOff), at(w.start, endOff)];
       };
-      const near = H().suiteNear(drawing, inHand, activeLevelId(), 0.5);
+      const near = H().suiteNear(drawing, inHand, activeLevelId(), reachFt('suite'));
       ctx.save();
       ctx.lineWidth = 2.5;
       near.forEach(n => {
@@ -399,10 +290,6 @@
         sayOnStrip(`That suite wall is ${f(odd.suiteIn)} and the shell wall ${f(odd.shellIn)} -- both faces have to line up, so no windows cut there. Make them one thickness.`);
       }
     }
-    // THE SUPER NODES IN REACH GLOW WHILE A HOLOGRAM IS IN HAND, and the
-    // pair that has it bright (Movie, 20 Oct: "corner SUPER nodes GREEN /
-    // BLUE / TURQOISE BRIGHT").
-    if (inHand) paintSuperNodeGlow(inHand);
     // DEMO PART's first click, so the drafter can see where the cut starts.
     if (drew && hologramPartStart) {
       const at = toS(hologramPartStart.at);

@@ -1019,13 +1019,13 @@
     // Found by the check asserting the message was VISIBLE rather than that
     // the code had set it, which is the difference between the two halves of
     // every failure today.
-    const said = stripNotice || (rulerOn
+    const routine = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
       : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point · double-click, ENTER or SPACE twice, or ESC ends the run' : 'first point'}`
         + (angleLockDeg() != null ? ` · ANGLE LOCKED ${angleLockDeg()}°` : '')
         : (activeTool === 'outline'
           ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));
-    stripMessage.textContent = snapHeldOff ? `SNAP OFF (CTRL)${said ? ` · ${said}` : ''}` : said;
+    stripMessage.textContent = snapHeldOff ? `SNAP OFF (CTRL)${routine ? ` · ${routine}` : ''}` : routine;
     // Last, and from here rather than from the pointer handlers, so the label
     // goes out the moment the run does -- every path that ends a run already
     // calls stripRefresh, and a length still on screen after the gesture is
@@ -2802,34 +2802,19 @@
     const to = traceMovedPoint(m.from, at);
     m.underlay.x = m.before.x + (to.x - m.from.x);
     m.underlay.z = m.before.z + (to.z - m.from.z);
-    // ITS SUPER NODES CLICK ONTO THE HOUSE'S FIRST (Movie, 20 Oct: "super
-    // high power nodes very SNAP Magnetic ... they will attach to the other
-    // SUPER NODES"): a suite's super node within a foot of a house super
-    // node pulls the suite until the two coincide, and the face slide below
-    // is not asked. A blue hologram's are read too, so the strip can say it
-    // would have caught had it been a SUITE.
-    // EVERY HOLOGRAM'S, blue too (Movie, 23 Oct: "all suites attrached"),
-    // and before every other snap: "the corner rings should take priority".
-    m.superLock = m.hologram ? superNodeLock(m.underlay, m.superLock) : null;
-    if (m.superLock) {
-      // AND NOT OFF THE SQUARE, the face slide's own rule below.
-      const held = squaredAxis(m.from, at);
-      m.underlay.x += held === 'x' ? 0 : m.superLock.dx;
-      m.underlay.z += held === 'z' ? 0 : m.superLock.dz;
-    }
     // A SUITE SNAPS ONTO THE SHELL (Movie, 18 Oct: "when they go close to
-    // lining them up it snaps to make it easy for them"): within 6" of a
-    // shell wall's faces lining up with its own, it slides the rest -- when
-    // no super node has it.
+    // lining them up it snaps to make it easy for them"): within 3" of a
+    // shell wall's faces lining up with its own (the one snapping rule,
+    // reachFt('suite'), Movie 26 Oct: "both at 3""), it slides the rest.
     // ITS END LINES MEET THE NEXT SUITE'S (Movie, 25 Oct, the rings
     // replaced by a line on each end: "should line up to become one line").
     // Across the lines only: along them the suite stays free to jog in or
     // out, which the shell wall's snap just below settles -- "lock into the
     // ext wall to ext wall (to show the windows and doors)".
     m.lineLock = null;
-    if (m.hologram && !m.superLock && H()?.suiteLineSnap) {
+    if (m.hologram && H()?.suiteLineSnap) {
       const lock = H().suiteLineSnap(m.underlay, holograms().filter(o => o !== m.underlay && !o.hidden),
-        activeLevelId(), SUITE_LINE_PULL_FT);
+        activeLevelId(), reachFt('suite'));
       if (lock) {
         const held = squaredAxis(m.from, at);
         m.underlay.x += held === 'x' ? 0 : lock.dx;
@@ -2837,8 +2822,8 @@
         m.lineLock = lock;
       }
     }
-    if (m.hologram && m.underlay.mode === 'suite' && !m.superLock && H()?.suiteSnap) {
-      const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), 0.5);
+    if (m.hologram && m.underlay.mode === 'suite' && H()?.suiteSnap) {
+      const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), reachFt('suite'));
       // A LINE THAT HAS IT KEEPS IT: the shell's slide is taken along the
       // line only, never back across what the line just lined up.
       if (m.lineLock) {
@@ -2859,7 +2844,7 @@
     // "the suite wall isn't SNAPPING or GLOWING to show they line up ... and
     // the window holes too").
     if (m.hologram && m.underlay.mode !== 'suite' && H()?.suiteNear
-      && H().suiteNear(drawing, { ...m.underlay, mode: 'suite' }, activeLevelId(), 0.5).length) {
+      && H().suiteNear(drawing, { ...m.underlay, mode: 'suite' }, activeLevelId(), reachFt('suite')).length) {
       sayOnStrip('This hologram is blue, so it does not snap. Set it to SUITE on the HOLOGRAM card: it snaps, its lined-up walls glow, and its windows cut the shell wall.');
     }
     paint();

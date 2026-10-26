@@ -348,7 +348,7 @@
   // offers the slide across the shell wall that lines them up. The nearest
   // is taken, then the nearest across a second direction, so a suite in a
   // corner of the shell lines up both ways. Returns the slide, { x, z }.
-  const suiteSnap = (saved, holo, levelId, reachFt = 0.5) => {
+  const suiteSnap = (saved, holo, levelId, reachFt = 0.25) => {
     const none = { x: 0, z: 0 };
     if (!isSuite(holo) || !window.DraftGeometry2D || !window.DraftWallTypes) return none;
     const hosts = hostWalls(saved).filter(w => w?.levelId === levelId).map(wallFrame).filter(Boolean);
@@ -382,7 +382,7 @@
   // wall on this level a suite wall runs beside, faces within `reachFt`:
   // whether both faces line up (it will cut), or the two are not one
   // thickness and never can.
-  const suiteNear = (saved, holo, levelId, reachFt = 0.5) => {
+  const suiteNear = (saved, holo, levelId, reachFt = 0.25) => {
     if (!isSuite(holo) || !window.DraftGeometry2D || !window.DraftWallTypes) return [];
     const hosts = hostWalls(saved).filter(w => w?.levelId === levelId).map(wallFrame).filter(Boolean);
     const walls = placed(holo, { walls: (parts(holo).existing.walls || []).filter(w => w?.levelId === levelId) }).walls;
@@ -405,11 +405,11 @@
   // 20 Oct: "place them on the corners of the suites where they will attach
   // to the other SUPER NODES"), on this level. Any hologram's, in fact: a
   // blue one's are read too, so the page can say it would have caught.
+  // ITS FOUR CORNERS ONLY now (Movie, 26 Oct: SUPERNODE removed): super
+  // nodes an old suite file carries are read past.
   const suiteSuperNodes = (holo, levelId) => {
     const existing = parts(holo).existing;
-    const own = (existing.superNodes || []).filter(n => n?.point && Number(n.levelId) === Number(levelId));
-    const auto = own.length ? [] : (isSuite(holo) || isSuiteFile(holo)) ? cornerSuperNodes(existing.walls, levelId) : [];
-    const mine = own.length ? own : auto;
+    const mine = (isSuite(holo) || isSuiteFile(holo)) ? cornerSuperNodes(existing.walls, levelId) : [];
     if (!mine.length) return [];
     return placed(holo, { superNodes: registered(mine, existing.walls, levelId, holo?.source?.planTurn || 0) }).superNodes;
   };
@@ -461,10 +461,8 @@
   // file has them; a plain hologram (an existing house) has none.
   const suiteEndLines = (holo, levelId) => {
     const existing = parts(holo).existing;
-    // WHAT HAD RINGS HAS LINES: a suite, a suite file still blue, or any
-    // hologram whose file carries super nodes of its own on this level.
-    const own = (existing.superNodes || []).some(n => n?.point && Number(n.levelId) === Number(levelId));
-    if (!(isSuite(holo) || isSuiteFile(holo) || own)) return [];
+    // WHAT HAD RINGS HAS LINES: a suite, or a suite file still blue.
+    if (!(isSuite(holo) || isSuiteFile(holo))) return [];
     const corners = cornerSuperNodes(existing.walls, levelId);
     if (corners.length !== 4) return [];
     const p = placed(holo, { superNodes: corners }).superNodes.map(n => n.point);
@@ -494,7 +492,7 @@
   // place being the shell wall's to set ("lock into the ext wall to ext
   // wall (to show the windows and doors)"). The nearest pair wins. Returns
   // { dx, dz, mine, line, other } or null.
-  const suiteLineSnap = (holo, others, levelId, reachFt = 0.5) => {
+  const suiteLineSnap = (holo, others, levelId, reachFt = 0.25) => {
     const mine = suiteEndLines(holo, levelId);
     if (!mine.length) return null;
     let best = null;
