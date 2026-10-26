@@ -106,15 +106,16 @@ test('a suite wall that does not line up face for face shares nothing', async ({
   expect(await hostOpenings(page, thin)).toEqual([]);
 });
 
-test('a suite dragged within 6" of lining up snaps onto the shell, both ways in a corner', async ({ page }) => {
-  await open(page, shell({ x: 0.3, z: -0.4 }));
+// THREE INCHES now (Movie, 26 Oct, the one snap rule: "both at 3"").
+test('a suite dragged within 3" of lining up snaps onto the shell, both ways in a corner', async ({ page }) => {
+  await open(page, shell({ x: 0.1, z: -0.15 }));
   const d = await saved(page);
-  const got = await page.evaluate(d => window.DraftHologram.suiteSnap(d, d.holograms[0], 3, 0.5), d);
-  expect(got.x).toBeCloseTo(-0.3, 6);
-  expect(got.z).toBeCloseTo(0.4, 6);
+  const got = await page.evaluate(d => window.DraftHologram.suiteSnap(d, d.holograms[0], 3, 0.25), d);
+  expect(got.x).toBeCloseTo(-0.1, 6);
+  expect(got.z).toBeCloseTo(0.15, 6);
   // Out of reach, nothing.
   const far = await page.evaluate(d => window.DraftHologram.suiteSnap(d,
-    { ...d.holograms[0], x: 2, z: 2 }, 3, 0.5), d);
+    { ...d.holograms[0], x: 2, z: 2 }, 3, 0.25), d);
   expect([far.x, far.z]).toEqual([0, 0]);
   // And MOVE on the card drags it there.
   await page.locator('[data-mode-hologram]').click();

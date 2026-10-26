@@ -105,46 +105,53 @@ test('node and midpoint pull follow the settings', async ({ page }) => {
   await expect(page.locator('[data-model-magnet]')).toBeVisible();
 });
 
-test('the Settings page edits and saves the one snap zone', async ({ page }) => {
+// SNAP STRENGTH (Movie, 26 Oct, the one snap rule) replaces the snap-zone
+// pixels on the Settings page: four steps that scale every reach MODEL has.
+test('the Settings page edits and saves the snap strength', async ({ page }) => {
   await page.goto('/SETTINGS.html');
-
-  const dflt = await page.evaluate(() => window.DraftSnapZone.DEFAULT_SNAP_ZONE);
   await page.locator('.advanced summary').click();
-  await expect(page.locator('#snap-zone')).toHaveValue(String(dflt));
-  // The old per-snap inputs are gone — one number rules them all.
+  const pick = page.locator('#snap-reach');
+  await expect(pick).toHaveValue('1');
+  await expect(pick.locator('option')).toHaveText(['50%', '75%', '100%', '150%']);
+  // The pixel box and the old per-snap inputs are gone.
+  await expect(page.locator('#snap-zone')).toHaveCount(0);
   await expect(page.locator('#snap-node')).toHaveCount(0);
-  await expect(page.locator('#snap-midpoint')).toHaveCount(0);
-  await expect(page.locator('#snap-polar')).toHaveCount(0);
 
-  await page.locator('#snap-zone').fill('9');
-  await page.locator('#snap-zone').blur();
-
+  await pick.selectOption('1.5');
   const stored = await page.evaluate(() =>
-    window.DraftProfileManager.getActive('settings')?.content?.model?.snapZone);
-  expect(stored).toBe(9);
-
-  // Out-of-range values clamp instead of saving nonsense.
-  await page.locator('#snap-zone').fill('500');
-  await page.locator('#snap-zone').blur();
-  await expect(page.locator('#snap-zone')).toHaveValue('60');
+    window.DraftProfileManager.getActive('settings')?.content?.model?.snapReach);
+  expect(stored).toBe(1.5);
+  await page.reload();
+  await page.locator('.advanced summary').click();
+  await expect(page.locator('#snap-reach')).toHaveValue('1.5');
 });
 
-test('a legacy snap-strength profile migrates to the snap zone', async ({ page }) => {
+test('a strength that is not one of the four reads as 100%', async ({ page }) => {
   await page.goto('/SETTINGS.html');
-
   await page.evaluate(() => {
     const active = window.DraftProfileManager.getActive('settings');
-    const pkg = window.DraftProfileManager.createPackage(
-      'settings', active?.name || 'test',
-      { model: { snapStrength: { node: 12, midpoint: 3, polar: 7 } } },
-    );
-    window.DraftProfileManager.saveActive(pkg);
+    window.DraftProfileManager.saveActive(window.DraftProfileManager.createPackage(
+      'settings', active?.name || 'test', { model: { snapReach: 7 } }));
   });
   await page.reload();
-
-  // The legacy node value carries over as the one zone.
   await page.locator('.advanced summary').click();
-  await expect(page.locator('#snap-zone')).toHaveValue('12');
+  await expect(page.locator('#snap-reach')).toHaveValue('1');
+});
+
+test('MODEL reads the strength: at 150% every reach is half again as long', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await page.goto('/MODEL.html');
+  await page.waitForFunction(() => typeof reachFt === 'function');
+  const plain = await page.evaluate(() => reachFt('suite'));
+  await page.evaluate(() => {
+    const active = window.DraftProfileManager.getActive('settings');
+    window.DraftProfileManager.saveActive(window.DraftProfileManager.createPackage(
+      'settings', active?.name || 'test', { model: { snapReach: 1.5 } }));
+  });
+  await page.reload();
+  await page.waitForFunction(() => typeof reachFt === 'function');
+  expect(plain).toBeCloseTo(0.25, 6);
+  expect(await page.evaluate(() => reachFt('suite'))).toBeCloseTo(0.375, 6);
 });
 
 test('the Settings page saves the drafter name and phone', async ({ page }) => {

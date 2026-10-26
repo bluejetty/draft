@@ -77,11 +77,13 @@ test('a LINE started a hair off an interior wall\'s face starts ON the face, and
   expect(Math.abs(line.start.x - 5)).toBeLessThan(0.1);
 });
 
-test('the inside corner pulls harder than the face: 10px along the face still lands on the corner', async ({ page }) => {
+// A POINT BEATS A LINE (Movie, 26 Oct, the one snap rule): within the
+// corner's 1 1/2" the corner has the hand, though the face is nearer.
+test('the inside corner pulls harder than the face: 1.2" along the face still lands on the corner', async ({ page }) => {
   await open(page, drawing(L));
-  const { at, scale } = await frame(page);
+  const { at } = await frame(page);
   await armLine(page);
-  const off = 10 / scale;
+  const off = 1.2 / 12;
   const pt = [10 - HALF - off, HALF + 0.01];
   await page.mouse.move(...at(...pt));
   await page.waitForTimeout(80);

@@ -38,11 +38,11 @@ async function open(page, level) {
   await page.keyboard.press('0');
   await page.waitForTimeout(300);
 }
-// Where a point an inch and a half (well inside every reach's floor) off
-// `p` lands, and the target itself.
+// Where a point an inch or so off the target lands -- inside the roof's
+// corner, so the nearest point of either edge is not the corner itself.
 const catchNear = (page, which) => page.evaluate(which => {
   const t = which === 'target' ? siteDatumNow() : drawing.roofs[0].points[1];
-  const got = drawSnap({ x: t.x + 0.07, z: t.z - 0.05 });
+  const got = drawSnap(which === 'target' ? { x: t.x + 0.07, z: t.z - 0.05 } : { x: t.x - 0.07, z: t.z + 0.05 });
   return { t: [t.x, t.z], got: got.pt ? [got.pt.x, got.pt.z] : null };
 }, which);
 const close = (a, b) => a && Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-6;
@@ -61,18 +61,27 @@ test('on the SITE the roof\'s corners catch a point exactly', async ({ page }) =
 
 test('on the SITE the roof\'s edges are lines to land on', async ({ page }) => {
   await open(page, 8);
-  const got = await page.evaluate(() => drawSnap({ x: 20, z: -2 + 0.04 }).pt);
+  // The edge's own catch, not the tracking ray from its corners that
+  // happens to run along it.
+  const got = await page.evaluate(() => {
+    const s = drawSnap({ x: 20, z: -2 + 0.04 });
+    return { ...s.pt, face: Boolean(s.face) };
+  });
+  expect(got.face, 'caught by the edge').toBe(true);
   expect(got.z).toBeCloseTo(-2, 6);
   expect(got.x).toBeCloseTo(20, 1);
 });
 
-test('on a floor plan the target is a node too', async ({ page }) => {
+// ON A FLOOR PLAN THE TARGET IS THE HOUSE'S OWN OUTSIDE CORNER, worked out
+// from the walls: a face corner catches there already, and a node of its own
+// would catch a wall dragged by that very corner.
+test('on a floor plan the target is no node of its own', async ({ page }) => {
   await open(page, 3);
   const nodes = await page.evaluate(() => {
     const t = siteDatumNow();
     return nodeEnds({ faces: false }).some(v => Math.abs(v.x - t.x) < 1e-6 && Math.abs(v.z - t.z) < 1e-6);
   });
-  expect(nodes).toBe(true);
+  expect(nodes).toBe(false);
 });
 
 test('a roof on the ROOF level is no node on the MAIN FL', async ({ page }) => {

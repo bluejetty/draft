@@ -23,10 +23,10 @@ const EMPTY = { walls: [], lines: [], floors: [], roofs: [], fenestrations: [], 
 const SUITE = { version: 1, levels: LEVELS, activeLevelIdx: 2, ...EMPTY,
   walls: [W('s1', [0, 0], [20, 0]), W('s2', [20, 0], [20, 15]), W('s3', [20, 15], [0, 15]), W('s4', [0, 15], [0, 0])],
   fenestrations: [WIN('w1', 's1', 8)] };
-const shell = ({ holo = {}, superNodes = [], holograms = true } = {}) => ({
+const shell = ({ holo = {}, superNodes = [], holograms = true, drop = 0 } = {}) => ({
   version: 1, board: 'drafting', planTurn: 0, levels: LEVELS, activeLevelIdx: 2, ...EMPTY,
   nextDrawingItemId: 20,
-  walls: [W('a', [0, 0], [60, 0]), W('b', [60, 0], [60, 30]), W('c', [60, 30], [0, 30]), W('d', [0, 30], [0, 0])],
+  walls: [W('a', [0, drop], [60, drop]), W('b', [60, drop], [60, 30]), W('c', [60, 30], [0, 30]), W('d', [0, 30], [0, drop])],
   superNodes,
   holograms: holograms ? [{ id: 'h1', name: 'suite-a', mode: 'suite', x: 20, z: 0, angleDeg: 0, pivotX: 10, pivotZ: 7.5,
     source: SUITE, ...holo }] : [] });
@@ -117,7 +117,10 @@ test('a press away from the corners holds the suite loosely, as before', async (
 });
 
 test('T-square lit: the corner\'s catch moves the suite along the hand\'s axis only', async ({ page }) => {
-  const { at } = await open(page, shell());
+  // The shell an inch lower: its corner is an inch off the line the suite
+  // runs along, so the catch would pull it down that inch; the square keeps
+  // it on its line.
+  const { at } = await open(page, shell({ drop: 1 / 12 }));
   await lightTsquare(page);
   await dragSuite(page, at, [20 - OUT, -OUT], [-OUT + 1 / 12, -OUT + 0.6 / 12]);
   const d = await saved(page);

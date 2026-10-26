@@ -112,8 +112,9 @@ test('a floor traced by hand lands a corner on the outline\'s, and a shape\'s co
   for (const [x, z] of [[10, 0], [16, 0], [16, 6], [20, 10]]) await onSheet(x, z);
   await page.locator('[data-tool-key="floor"]').click();
   await expect(page.locator('[data-tool-key="floor"]')).toHaveAttribute('aria-pressed', 'true');
-  // 4 px off the outline's corner: on it. Then three free corners and home.
-  await page.mouse.click(...at(10 + 4 / 22, 4 / 22));
+  // 2 px each way off the outline's corner (inside a node's 2"): on it.
+  // Then three free corners and home.
+  await page.mouse.click(...at(10 + 2 / 22, 2 / 22));
   await page.mouse.click(...at(16, 0));
   await page.mouse.click(...at(16, 6));
   await page.mouse.click(...at(10, 6));
@@ -124,7 +125,7 @@ test('a floor traced by hand lands a corner on the outline\'s, and a shape\'s co
   expect([r3(floor.points[0].x), r3(floor.points[0].z)]).toEqual([10, 0]);
   // A SHAPE's corner finds the floor's corner at (16, 6).
   await h.selectTool(page, 'Shape');
-  await page.mouse.click(...at(16 + 4 / 22, 6 + 4 / 22));
+  await page.mouse.click(...at(16 + 2 / 22, 6 + 2 / 22));
   await page.mouse.click(...at(20, 6));
   await page.mouse.click(...at(20, 10));
   await page.mouse.click(...at(16, 10));
@@ -144,9 +145,10 @@ test('MOVE carries a floor onto the outline\'s corner by whichever corner comes 
   await page.waitForTimeout(100);
   await expect(page.locator('#model-move')).toBeVisible();
   await page.locator('#model-move').click();
-  // Towards the outline's corner: the floor's first corner stops 5 px short
-  // of it and is pulled on; the floor keeps its 4 x 4.
-  await dragFrom(page, at, [14, 4], [14 - 2 + 5 / 40, 4 - 2 + 5 / 40]);
+  // Towards the outline's corner: the floor's first corner stops 3 px short
+  // each way (1.3", inside a node's 2") and is pulled on; the floor keeps
+  // its 4 x 4.
+  await dragFrom(page, at, [14, 4], [14 - 2 + 3 / 40, 4 - 2 + 3 / 40]);
   expect(await magnet(page)).toEqual({ kind: 'node', at: [10, 0] });
   await page.mouse.up();
   await page.waitForTimeout(100);
@@ -192,10 +194,11 @@ test('a roof node dragged lands on another roof\'s corner, and never on itself',
   await expect(page.locator('#strip-message')).toContainText('Node moved');
   let rb = (await saved(page)).roofs.find(r => r.id === 'rb');
   expect([r3(rb.points[3].x), r3(rb.points[3].z)]).toEqual([13.3, 8.3]);
-  // THEN THE LANDING: its top-left node to 2.4" off roof A's top-right
-  // corner, and on it. (The save's Escape put MOVE down: arm it again.)
+  // THEN THE LANDING: its top-left node to 1.4" off roof A's top-right
+  // corner (inside a node's 2"), and on it. (The save's Escape put MOVE
+  // down: arm it again.)
   await armOnB();
-  await dragFrom(page, at, [13, 0], [10.2, 0.2]);
+  await dragFrom(page, at, [13, 0], [10.08, 0.08]);
   expect(await magnet(page)).toEqual({ kind: 'node', at: [10, 0] });
   await page.mouse.up();
   await page.waitForTimeout(100);

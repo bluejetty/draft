@@ -772,9 +772,11 @@
     return out;
   };
 
-  const cornerSnap = (worldPt, moving) =>
-    window.DraftGeometry2D.nearestVertex(
-      snapCandidates([moving]), worldPt, reachFt(NODE_REACH));
+  // SNAP OFF, OR CTRL HELD, AND THE POINT GOES WHERE THE HAND IS (Movie, 26
+  // Oct, the one snap rule): this catch too, now that it reaches a node's 2".
+  const cornerSnap = (worldPt, moving) => (snapLive()
+    ? window.DraftGeometry2D.nearestVertex(snapCandidates([moving]), worldPt, reachFt(NODE_REACH))
+    : null);
 
   // ── SNAP AND TRACK (Movie, 17 Oct) ──────────────────────────────────────
   //
@@ -1363,28 +1365,28 @@
     if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
-    // AND THE REGISTRATION TARGET, on every level, and on the SITE the roof
-    // drawn over it (Movie, 26 Oct: "the roof plan doesn't seem to have NODE
-    // SNAPS working - i really would like the REGISTRATION TARGET to have a
-    // node snap so i can position the property site plan properly").
+    // AND ON THE SITE, THE REGISTRATION TARGET and the roof drawn over it
+    // (Movie, 26 Oct: "the roof plan doesn't seem to have NODE SNAPS working
+    // - i really would like the REGISTRATION TARGET to have a node snap so i
+    // can position the property site plan properly").
     siteSnapNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
     return out;
   };
-  // THE GOLD TARGET is a node wherever it stands; the SITE shows the house
-  // by its roof, whose corners live on the ROOF level, so there they are
-  // the house's nodes. A shelf's target belongs to the shelf, and is one too.
+  // ON THE SITE ONLY. There the house is shown by its roof, whose corners
+  // live on the ROOF level, so they are the house's nodes, and the gold
+  // target is one with them. On a floor plan the target is worked out from
+  // the walls -- it is the house's own outside corner, a corner that catches
+  // already -- and a wall dragged there would be caught by its own corner.
   const siteSnapNodes = () => {
-    if (!drawing) return [];
+    if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];
     const out = [];
     const target = siteDatumNow();
     if (target && Number.isFinite(target.x) && Number.isFinite(target.z)) out.push({ x: target.x, y: 0, z: target.z });
-    if (Number(activeLevelId()) === SITE_SNAP_LEVEL) {
-      (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {
-        if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);
-      }));
-    }
+    (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);
+    }));
     return out;
   };
   // THE FIXTURE CORNERS A FLOOR OR SHAPE CATCHES: the four of each piece's

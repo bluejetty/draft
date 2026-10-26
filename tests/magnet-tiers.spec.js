@@ -13,11 +13,9 @@
 // furthest, the yellow corner a little less, the neon face least -- and a
 // crossing of two runs with no node there is a yellow corner too.
 //
-// "SLIGHTLY LESS MAGNETIC" IS MEASURED, not ordered. Between a node and a
-// corner both in reach the one nearer as a share of its own reach wins, so
-// at one distance the orange takes the hand and a corner close by beats a
-// node further off. Tier first would have left every inside corner
-// unreachable beside its own node at most zooms.
+// "SLIGHTLY LESS MAGNETIC" IS A SHORTER REACH (Movie, 26 Oct, the one snap
+// rule): a node 2", a corner 1 1/2", a face 1", and of those in reach the
+// nearest wins.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -100,26 +98,26 @@ const inkAt = (page, x, z) => page.evaluate(([wx, wz]) => {
 const tierOf = ink => (ink.b > 120 ? 'none'
   : ink.g < 200 ? 'orange' : ink.r > 235 && ink.b < 60 ? 'yellow' : 'neon');
 
-test('a node pulls harder than a crossing that acts like one; a crossing close by still wins', async ({ page }) => {
+// THE ONE SNAP RULE (Movie, 26 Oct): each catches from its own reach in
+// inches on the plan -- a node 2", a corner that acts like one 1 1/2" -- and
+// of those in reach the nearest wins. At 52 px a foot that is 8.7 px for the
+// node and 6.5 for the crossing, and the two here stand 18 px apart.
+test('a node reaches 2", a crossing that acts like one 1 1/2"; a press lands on the one it is in reach of', async ({ page }) => {
   await open(page, FIXTURE);
   const { at } = await zoomTo(page, 52);
   await armLine(page);
-  // 0.35 ft is 18 px here. 7 px from the crossing, 11 from the node: the
-  // crossing is nearer as a share of its reach (0.64 of 11 px) than the node
-  // is of its own (0.79 of 14), so the crossing wins -- it is only
-  // "slightly" weaker.
-  await hoverPx(page, at, CROSS, 7, 0);
-  expect(await magnet(page)).toEqual({ kind: 'corner', at: [CROSS.x, CROSS.z] });
-  // 10 px from the crossing, 8 from the node: the node wins (0.57 to 0.91).
-  await hoverPx(page, at, CROSS, 10, 0);
-  expect(await magnet(page)).toEqual({ kind: 'node', at: [r3(NODE.x), 0] });
-  // 9 px from each: the same distance, and the orange is the stronger.
-  await hoverPx(page, at, CROSS, 9, 0);
-  expect(await magnet(page)).toEqual({ kind: 'node', at: [r3(NODE.x), 0] });
-  // 4 px from the crossing, 14 from the node: the crossing, and a press
-  // lands a line's start exactly on it.
+  // 4 px from the crossing (an inch), 14 from the node: the crossing.
   await hoverPx(page, at, CROSS, 4, 0);
   expect(await magnet(page)).toEqual({ kind: 'corner', at: [CROSS.x, CROSS.z] });
+  // 7.5 px from the crossing (1.7"), 10.5 from the node (2.4"): past both.
+  await hoverPx(page, at, CROSS, 7.5, 0);
+  expect(await magnet(page)).toBeNull();
+  // 10 px from the crossing, 8 from the node (1.85"): the node.
+  await hoverPx(page, at, CROSS, 10, 0);
+  expect(await magnet(page)).toEqual({ kind: 'node', at: [r3(NODE.x), 0] });
+  // Back to an inch off the crossing, and a press lands a line's start
+  // exactly on it.
+  await hoverPx(page, at, CROSS, 4, 0);
   await page.mouse.click(...at(CROSS.x + 4 / 52, CROSS.z));
   await page.mouse.click(...at(5, -2));
   await page.keyboard.press('Escape');

@@ -6,7 +6,7 @@
 // really would like the REGISTRATION TARGET to have a node snap so i can
 // position the property site plan properly". Four seams: the target a node,
 // the roof's corners on the SITE, its edges on the SITE, and those corners
-// kept off the floor plans.
+// kept off the floor plans, the target with them.
 //
 // Run: node proto/site-target-snap-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -23,8 +23,8 @@ const MUTANTS = [
     test: 'the registration target catches a point exactly' },
   { file: 'model/07-walls-magnet.js',
     name: 'the SITE has no roof corners',
-    find: "    if (Number(activeLevelId()) === SITE_SNAP_LEVEL) {\n      (drawing.roofs || [])",
-    with: "    if (false) {\n      (drawing.roofs || [])",
+    find: "    (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {\n      if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);\n    }));\n",
+    with: "",
     test: 'on the SITE the roof\'s corners catch a point exactly' },
   { file: 'model/07-walls-magnet.js',
     name: 'the SITE has no roof edges',
@@ -32,10 +32,10 @@ const MUTANTS = [
     with: "...loopEdges()])] };",
     test: 'on the SITE the roof\'s edges are lines to land on' },
   { file: 'model/07-walls-magnet.js',
-    name: 'the roof\'s corners catch on every level',
-    find: "    if (Number(activeLevelId()) === SITE_SNAP_LEVEL) {\n      (drawing.roofs || [])",
-    with: "    if (true) {\n      (drawing.roofs || [])",
-    test: 'a roof on the ROOF level is no node on the MAIN FL' },
+    name: 'the target and the roof catch on every level',
+    find: "    if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];\n",
+    with: "    if (!drawing) return [];\n",
+    test: 'no node' },
 ];
 
 const run = name => {
