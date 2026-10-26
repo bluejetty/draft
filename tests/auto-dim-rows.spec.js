@@ -62,7 +62,7 @@ test('DELETE on one piece of a row takes the row off that side, and the rows out
   await page.locator('[data-dims-show="auto"]').click();
   const before = await westRows(page);
   await page.evaluate(() => {
-    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-INT' && autoDimSide(x) === 'W');
+    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
     setSelection([{ type: 'dimension', item: d }]);
   });
   await page.keyboard.press('Delete');
@@ -83,7 +83,7 @@ test('ROWS puts it back, the rows step out again; UNDO takes the put-back away',
   await page.locator('[data-dims-show="auto"]').click();
   const full = await westRows(page);
   await page.evaluate(() => {
-    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-INT' && autoDimSide(x) === 'W');
+    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
     setSelection([{ type: 'dimension', item: d }]);
   });
   await page.keyboard.press('Delete');
@@ -94,6 +94,10 @@ test('ROWS puts it back, the rows step out again; UNDO takes the put-back away',
   expect(await westRows(page)).toEqual(full);
   await page.evaluate(() => { undoOnce(); paint(); });
   expect((await westRows(page)).map(r => r[1])).toEqual(['A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS']);
+  // And the level remembers it is off again, so AUTO DIMS keeps it off.
+  await page.evaluate(() => { pressAutoDims(); });
+  expect((await westRows(page)).map(r => r[1])).toEqual(['A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS']);
+  await page.evaluate(() => { undoOnce(); paint(); });
   await page.evaluate(() => { undoOnce(); paint(); });
   expect(await westRows(page), 'and the DELETE undoes too').toEqual(full);
 });
@@ -102,7 +106,7 @@ test('a row taken off stays off through a save and a reload', async ({ page }) =
   await onShelf(page);
   await page.locator('[data-dims-show="auto"]').click();
   await page.evaluate(() => {
-    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-OVR' && autoDimSide(x) === 'W');
+    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-OVR' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
     setSelection([{ type: 'dimension', item: d }]);
   });
   await page.keyboard.press('Delete');
