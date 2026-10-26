@@ -275,3 +275,50 @@ test('project and drafter words flow into the strip', async ({ page }) => {
   const worded = await inkAround(page, STRIP_X, WORDS_MID_Y, 0.55);
   expect(worded).toBeGreaterThan(bare + 100);
 });
+
+// THIS SHEET ONLY (Movie, 26 Oct: "can we allow the user to change the main
+// TB, but also allow a little checkbox to make the page allowed to use a
+// different TB type ... I'd like to use the BAND version on the SITE PLAN
+// and the SIDE version on the other plans"). Ticked, the menu sets the sheet
+// in front of him; the others keep the main frame; unticked, the sheet goes
+// back to the main one. Kept in the file, and through a RE-DEAL.
+test('THIS SHEET ONLY gives one sheet its own frame; the rest keep the main one', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LSQUARE01'));
+  const own = page.locator('[data-layout-own-frame]');
+  await expect(own).not.toBeChecked();
+  await page.locator('[data-layout-sheet="1"]').click();
+  await withLayoutSave(page, () => own.check());
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LBAND01'));
+  let layout = (await savedDrawing(page)).layout;
+  expect(layout.titleblock, 'the main frame stays').toBe('LSQUARE01');
+  expect(layout.sheets[0].titleblock).toBe('LBAND01');
+  // The band on sheet 1: its numeral cell inked at the bottom right.
+  expect(await inkAround(page, 0.5 + 16 * 0.94, STRIP_MID_Y, 0.6)).toBeGreaterThan(30);
+  // Sheet 2 still wears the side strip, and its box is unticked.
+  await page.locator('[data-layout-sheet="2"]').click();
+  await expect(own).not.toBeChecked();
+  await expect(frameMenu(page)).toHaveValue('LSQUARE01');
+  expect(await inkAround(page, STRIP_X, SHEET_MID_Y, 0.4)).toBeGreaterThan(30);
+  // Changing the main frame from sheet 2 leaves sheet 1's own alone.
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LROUND01'));
+  layout = (await savedDrawing(page)).layout;
+  expect(layout.titleblock).toBe('LROUND01');
+  expect(layout.sheets[0].titleblock).toBe('LBAND01');
+  // Kept through a reload and a RE-DEAL.
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+  await page.locator('[data-layout-sheet="1"]').click();
+  await expect(own).toBeChecked();
+  await expect(frameMenu(page)).toHaveValue('LBAND01');
+  page.once('dialog', dialog => dialog.accept());
+  await withLayoutSave(page, () => page.locator('[data-layout-deal-sheets]').click());
+  layout = (await savedDrawing(page)).layout;
+  expect(layout.sheets.find(sh => sh.title === (layout.sheets[0].title))?.titleblock).toBe('LBAND01');
+  // Unticked, sheet 1 wears the main frame again.
+  await page.locator('[data-layout-sheet="1"]').click();
+  await withLayoutSave(page, () => own.uncheck());
+  layout = (await savedDrawing(page)).layout;
+  expect(layout.sheets[0].titleblock).toBeUndefined();
+  await expect(frameMenu(page)).toHaveValue('LROUND01');
+});

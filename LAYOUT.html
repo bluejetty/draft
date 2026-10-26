@@ -337,6 +337,10 @@
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; }
   .lay-new-row button[data-new-save] { border-color: var(--accent); background-color: var(--accent); color: var(--accent-ink); }
   #lay-new [data-new-cancel] { display:block; width:100%; margin-top:6px; color: var(--ink-secondary); }
+  .lay-own-frame { display:flex; align-items:center; gap:6px; margin:2px 0 6px;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px; font-weight:600;
+    letter-spacing:0.06em; color: var(--ink-secondary); cursor:pointer; }
+  .lay-own-frame input { margin:0; accent-color: var(--accent); }
   #lay-saveas-scrim { position:fixed; inset:0; z-index:50; display:flex;
     align-items:flex-start; justify-content:center; padding-top:78px;
     background:rgba(0,0,0,0.35); }
@@ -958,6 +962,12 @@
         <span>Titleblock</span>
         <select class="lay-pick-menu" data-layout-frame aria-label="Titleblock style"></select>
       </div>
+      <!-- THIS SHEET ONLY (Movie, 26 Oct: "allow the user to change the main
+           TB, but also allow a little checkbox to make the page allowed to
+           use a different TB type" -- the BAND on the SITE PLAN, the side
+           strip on the rest). Ticked, the menu above sets this sheet's own;
+           unticked, the sheet wears the main one again. -->
+      <label class="lay-own-frame"><input type="checkbox" data-layout-own-frame> THIS SHEET ONLY</label>
       <div data-titleblock-list></div>
     </div>
     <div class="lay-section" data-logo-section hidden>
@@ -2069,7 +2079,7 @@ class Component extends PageLogic {
 
   // The paper a viewport may use: inside the margins, less the titleblock's
   // strip or band.
-  _composeRegionIn() {
+  _composeRegionIn(sheet = this.state.activeSheet, frame = null) {
     const { paperKey, orientation } = this.state;
     const paper = PAPER_SIZES[paperKey];
     const pw = orientation === 'landscape' ? paper.h : paper.w;
@@ -2081,7 +2091,10 @@ class Component extends PageLogic {
     // ones we need now"). The letter sheet used to keep a plain placeholder
     // strip because there was no block measured for it; there is a set for
     // each of the four sheets now, and each frame carries its own width.
-    const style = window.DraftTitleblock ? this._titleblockStyle() : null;
+    const T = window.DraftTitleblock;
+    const style = !T ? null : frame
+      ? T.compose(T.frameOnSheet(frame, paperKey, orientation), this.state.titleblockMark, this._companyLogos())
+      : this._titleblockStyle(sheet);
     if (style?.placement === 'right') w -= style.stripWIn;
     else if (style) h -= style.bandHIn;
     // CLEAR OF THE ROUNDED CORNERS (Movie, 12 Oct: "the viewport shouldn't go
@@ -2252,10 +2265,17 @@ class Component extends PageLogic {
       && views.every(view => view.kind === 'plan' && !isSiteView(view));
     const sharedPif = sheetPlan.filter(({ views }) => buildingPlan(views))
       .reduce((smallest, { views }) => Math.min(smallest, this._autoScaleFor(views, region)), Infinity);
+    // A SHEET THAT WORE ITS OWN FRAME KEEPS IT through a re-deal, found by
+    // its title, and is laid out inside that frame.
+    const ownByTitle = new Map(this.state.sheets.filter(sh => sh?.titleblock && sh.title)
+      .map(sh => [sh.title, sh.titleblock]));
+    const mainRegion = region;
     // Sheet numbering follows the order: sheet 1 is the first dealt.
-    sheetPlan.forEach(({ views }, index) => {
+    sheetPlan.forEach(({ views, title }, index) => {
       const sheet = index + 1;
       if (!views.length) return;
+      const ownFrame = ownByTitle.get(title);
+      const region = ownFrame ? this._composeRegionIn(sheet, ownFrame) : mainRegion;
       // ELEVATIONS AND SECTIONS IN BIG WINDOWS (Movie, 12 Oct): each one
       // gets its share of the sheet as its window, the drawing centred in
       // it with the spare paper round it, and its title centred under it.
@@ -2331,7 +2351,7 @@ class Component extends PageLogic {
     });
     this.setState({
       viewports,
-      sheets: sheetPlan.map(({ title }) => ({ title })),
+      sheets: sheetPlan.map(({ title }) => ({ title, ...(ownByTitle.has(title) ? { titleblock: ownByTitle.get(title) } : {}) })),
       nextViewportId: nextId,
       selectedViewportId: null,
       activeSheet: 1,
@@ -2544,15 +2564,35 @@ class Component extends PageLogic {
   // re-asked against the paper in force, so a drawing saved on 11x17 and
   // reopened on letter gets the LETTER frame of the SAME SHAPE rather than a
   // strip measured for a sheet twice the size.
-  _titleblockStyle() {
+  _titleblockStyle(sheet = this.state.activeSheet) {
     const T = window.DraftTitleblock;
     if (!T) return null;
-    return T.compose(this._frameForSheet(), this.state.titleblockMark, this._companyLogos());
+    return T.compose(this._frameForSheet(sheet), this.state.titleblockMark, this._companyLogos());
   }
 
-  _frameForSheet() {
+  // A SHEET MAY WEAR ITS OWN FRAME (THIS SHEET ONLY): `titleblock` on its
+  // entry in `sheets`; every other sheet wears the main one. Either is
+  // matched to the paper the same way.
+  _ownFrame(sheet = this.state.activeSheet) {
+    return this.state.sheets[sheet - 1]?.titleblock || null;
+  }
+
+  _frameForSheet(sheet = this.state.activeSheet) {
     return window.DraftTitleblock
-      .frameOnSheet(this.state.titleblock, this.state.paperKey, this.state.orientation);
+      .frameOnSheet(this._ownFrame(sheet) || this.state.titleblock, this.state.paperKey, this.state.orientation);
+  }
+
+  // THE SHEET'S OWN FRAME SET OR LET GO (`id` null): the sheets list filled
+  // out to this one, as a rename does.
+  _setOwnFrame(id, sheet = this.state.activeSheet) {
+    const count = Math.max(this._sheetCount(), sheet);
+    const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
+    const { titleblock: _was, ...rest } = sheets[sheet - 1];
+    sheets[sheet - 1] = id ? { ...rest, titleblock: id } : rest;
+    this.setState({ sheets, auto: false }, () => {
+      this._draw();
+      this._persistLayout();
+    });
   }
 
   // Every mark on offer: the two that ship, then this office's own.
@@ -2829,7 +2869,7 @@ class Component extends PageLogic {
     // solid ink with the CLAY sheet's quite-rounded corners. Everything else
     // keeps the faint dashed margin guide.
     const mPx = 0.5 * zoom;
-    const style = window.DraftTitleblock ? this._titleblockStyle() : null;
+    const style = window.DraftTitleblock ? this._titleblockStyle(sheet) : null;
     const inner = { x: panX + mPx, y: panY + mPx, w: pxW - mPx * 2, h: pxH - mPx * 2 };
     if (style?.placement === 'right') {
       const r = (style.cornerRadiusIn ?? window.DraftTitleblock.CORNER_RADIUS_IN) * zoom;
@@ -3937,9 +3977,15 @@ class Component extends PageLogic {
     };
     if (showTitleblocks) {
       const T = window.DraftTitleblock;
+      const own = this._ownFrame();
       menu('[data-layout-frame]',
         T.framesFor(paperKey, orientation).map(f => ({ key: f.id, label: f.label })),
-        this._frameForSheet(), id => this._setTitleblock(id));
+        this._frameForSheet(), id => (own ? this._setOwnFrame(id) : this._setTitleblock(id)));
+      const ownBox = document.querySelector('[data-layout-own-frame]');
+      if (ownBox) {
+        ownBox.checked = !!own;
+        ownBox.onchange = () => this._setOwnFrame(ownBox.checked ? this._frameForSheet() : null);
+      }
       menu('[data-layout-mark]',
         this._titleblockMarks().map(m => ({ key: m.id, label: m.label })),
         this.state.titleblockMark, id => this._setTitleblockMark(id));
@@ -4292,7 +4338,7 @@ class Component extends PageLogic {
     this._thumbQueue = [...grid.querySelectorAll('[data-sheet-thumb]')].filter(button => {
       const sheet = Number(button.dataset.sheetThumb);
       const canvas = button.querySelector('canvas');
-      button.dataset.thumbKey = JSON.stringify([paperKey, orientation, titleblock, this._sheetTitle(sheet),
+      button.dataset.thumbKey = JSON.stringify([paperKey, orientation, titleblock, this._ownFrame(sheet), this._sheetTitle(sheet),
         this._sheetViewports(sheet), this._drawingGen, canvas.clientWidth, canvas.clientHeight]);
       // RECORDED WHEN PAINTED, not when queued: this runs on every state
       // change, and a queue rebuilt mid-way must still hold whatever the
