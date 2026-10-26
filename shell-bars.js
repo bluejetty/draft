@@ -1112,7 +1112,7 @@ ${trio(true)}
     project: Object.freeze(['file-new', 'save']),
     'ext-finish': Object.freeze(['file-new']),
     boneyard: Object.freeze([]),
-    construction: Object.freeze(['file-new']),
+    construction: Object.freeze(['file-new', 'file-open', 'save', 'file-save-as', 'file-ext']),
     specs: Object.freeze([]),
     'real-estate': Object.freeze([]),
   });

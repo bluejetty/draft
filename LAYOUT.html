@@ -325,7 +325,7 @@
   #lay-new-scrim { position:fixed; inset:0; z-index:50; display:flex;
     align-items:flex-start; justify-content:center; padding-top:78px;
     background:rgba(0,0,0,0.35); }
-  #lay-new { width:min(400px, calc(100vw - 32px)); border:1px solid var(--edge-panel);
+  #lay-new, #lay-saveas { width:min(400px, calc(100vw - 32px)); border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     box-shadow:0 16px 44px rgba(0,0,0,0.35); padding:18px; color: var(--ink-primary); }
   #lay-new-title { font-family:'Barlow Condensed', system-ui, sans-serif;
@@ -337,6 +337,16 @@
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; }
   .lay-new-row button[data-new-save] { border-color: var(--accent); background-color: var(--accent); color: var(--accent-ink); }
   #lay-new [data-new-cancel] { display:block; width:100%; margin-top:6px; color: var(--ink-secondary); }
+  #lay-saveas-scrim { position:fixed; inset:0; z-index:50; display:flex;
+    align-items:flex-start; justify-content:center; padding-top:78px;
+    background:rgba(0,0,0,0.35); }
+  #lay-saveas-scrim[hidden], #lay-new-scrim[hidden] { display:none; }
+  .lay-new-heading { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
+  .lay-new-hint { margin-top:5px; font-size:12px; line-height:1.45; color: var(--ink-secondary); }
+  #lay-saveas-name { display:block; width:100%; box-sizing:border-box; margin-top:10px; height:30px; padding:0 8px;
+    border:1px solid var(--edge-panel); background-color: var(--surface-chip); color: var(--ink-primary);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:13px; }
   #lay-print-message { margin-top:10px; font-size:11px; line-height:1.4; color: var(--ink-secondary); }
   #lay-print-message.lay-bad { color:#b04050; }
 
@@ -850,13 +860,26 @@
      area". -->
 <div id="lay-new-scrim" hidden>
   <div id="lay-new" role="dialog" aria-modal="true" aria-labelledby="lay-new-title">
-    <div id="lay-new-title">New drawing</div>
-    <div id="lay-new-description">NEW clears this drawing and its sheets from this browser. Save a copy to your computer first?</div>
+    <div id="lay-new-title" data-new-title>New drawing</div>
+    <div id="lay-new-description" data-new-description>NEW clears this drawing and its sheets from this browser. Save a copy to your computer first?</div>
     <div class="lay-new-row">
       <button type="button" data-new-save>SAVE CURRENT</button>
       <button type="button" data-new-discard>DISCARD</button>
     </div>
     <button type="button" data-new-cancel>Cancel</button>
+  </div>
+</div>
+
+<!-- SAVE AS, this page's own card in the NEW card's dress. -->
+<div id="lay-saveas-scrim" data-lay-saveas hidden>
+  <div id="lay-saveas" role="dialog" aria-modal="true" aria-labelledby="lay-saveas-title">
+    <div id="lay-saveas-title" class="lay-new-heading">Save a copy as</div>
+    <div class="lay-new-hint">The drawing with its sheets, as MODEL's SAVE AS writes it.</div>
+    <input id="lay-saveas-name" data-lay-saveas-name type="text" spellcheck="false" autocomplete="off" aria-label="File name" />
+    <div class="lay-new-row">
+      <button type="button" data-new-save data-lay-saveas-go>SAVE</button>
+      <button type="button" data-lay-saveas-cancel>CANCEL</button>
+    </div>
   </div>
 </div>
 
@@ -5014,38 +5037,187 @@ page.componentDidMount();
   // SAVE CURRENT HANDS OVER THE STORED FILE ITSELF, the same text MODEL's
   // own save writes to the store and to disk, under MODEL's file name -- so
   // the copy opens in MODEL exactly as the drawing was.
+  // ── THE FILE ROW, ALL OF IT (Movie, 26 Oct: "the OPEN / NEW / SAVE AS
+  // etc buttons top right don't seem to work in the construction layout
+  // area ... i think after i arranged the layouts last time i saved them and
+  // they might not have been saved") ──────────────────────────────────────
+  //
+  // THE SHEETS ARE PART OF THE DRAWING: every change here is written into
+  // the stored drawing's `layout` (_persistLayout), so a file saved from
+  // MODEL carries them too. These buttons now say so from this page:
+  //   SAVE     finishes any write still in flight, and says SAVED.
+  //   SAVE AS  the stored drawing, sheets and all, to a file under a name
+  //            he picks -- with its underlay pictures packed in, as MODEL's
+  //            SAVE AS writes it, so either page's copy opens in the other.
+  //   OPEN     a drawing file in place of this one (save or discard first,
+  //            as NEW asks), its pictures unpacked, and the page re-read.
+  //   NEW      as before: MODEL's `?new=1`, back here onto empty sheets.
   const fileNew = document.getElementById('file-new');
+  const fileOpen = document.getElementById('file-open');
+  const fileSave = document.getElementById('save');
+  const fileSaveAs = document.getElementById('file-save-as');
+  const fileExt = document.getElementById('file-ext');
+  const fileInput = document.getElementById('file-input');
   const newScrim = document.getElementById('lay-new-scrim');
-  if (fileNew && newScrim) {
-    fileNew.disabled = false;
-    fileNew.classList.remove('dormant');
-    fileNew.title = 'NEW — save or discard this drawing, then start a blank one here';
-    const goNew = () => {
-      window.location.href = './MODEL.html?new=1&then=layout&asked=1';
-    };
+  const saveAsScrim = document.querySelector('[data-lay-saveas]');
+  const saveAsName = document.querySelector('[data-lay-saveas-name]');
+  const wake = (button, title) => {
+    if (!button) return;
+    button.disabled = false;
+    button.classList.remove('dormant');
+    button.removeAttribute('aria-disabled');
+    if (title) button.title = title;
+  };
+  const extension = () => (fileExt && fileExt.value) || 'draft';
+  const fileName = () => window.DraftDrawingFormat.drawingFileName(extension());
+  // EVERY SHEET CHANGE WRITTEN BEFORE ANYTHING READS THE STORE.
+  const settle = async () => { try { await page._saveQueue; } catch { /* said at the foot */ } };
+  const blobUrl = blob => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+  // THE STORED DRAWING'S TEXT, its underlay pictures packed in as MODEL's
+  // withUnderlayFiles does (`underlayFiles`, a data URL by underlay id).
+  const storedText = async () => {
+    await settle();
+    let text = null;
+    try {
+      const file = await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+      text = file ? await file.text() : null;
+    } catch { text = null; }
+    if (!text) return null;
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch { return text; }
+    const list = (parsed?.underlays || []).filter(u => u && u.id != null);
+    if (!list.length || !window.SharedFileStore.loadNamedFile) return text;
+    const packed = {};
+    for (const u of list) {
+      try {
+        const pic = await window.SharedFileStore.loadNamedFile(u.id, 'underlays');
+        if (pic) packed[u.id] = { name: pic.name || String(u.id), dataUrl: await blobUrl(pic) };
+      } catch (error) { console.warn(`LAYOUT: underlay ${u.id} could not be packed:`, error); }
+    }
+    return Object.keys(packed).length ? JSON.stringify({ ...parsed, underlayFiles: packed }) : text;
+  };
+  const download = (text, name) => {
+    const url = URL.createObjectURL(new File([text], name, { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+  const saveCurrent = async () => {
+    const text = await storedText();
+    if (text) download(text, fileName());
+    return !!text;
+  };
+
+  // ── NEW / OPEN: SAVE CURRENT OR DISCARD FIRST, ONE CARD FOR BOTH ──
+  // NEW: MODEL owns what a blank drawing is, so the clearing is its
+  // `?new=1`, the hand-off PROJECT and EXT. FINISH already make;
+  // `then=layout` brings the drafter straight back here, onto empty sheets.
+  // The question is asked HERE, and `asked=1` tells MODEL not to ask again.
+  // OPEN: the file picker, once the drawing in hand is saved or let go.
+  const goNew = () => {
+    window.location.href = './MODEL.html?new=1&then=layout&asked=1';
+  };
+  let afterAsk = goNew;
+  const newTitle = newScrim?.querySelector('[data-new-title]');
+  const newText = newScrim?.querySelector('[data-new-description]');
+  const ask = (title, text, then) => {
+    if (newTitle) newTitle.textContent = title;
+    if (newText) newText.textContent = text;
+    afterAsk = then;
+    newScrim.hidden = false;
+  };
+  if (newScrim) {
     const close = () => { newScrim.hidden = true; };
-    fileNew.addEventListener('click', () => { newScrim.hidden = false; });
     newScrim.querySelector('[data-new-cancel]').addEventListener('click', close);
     newScrim.addEventListener('click', event => { if (event.target === newScrim) close(); });
-    newScrim.querySelector('[data-new-discard]').addEventListener('click', () => { close(); goNew(); });
+    newScrim.querySelector('[data-new-discard]').addEventListener('click', () => { close(); afterAsk(); });
     newScrim.querySelector('[data-new-save]').addEventListener('click', async () => {
-      let text = null;
-      try {
-        const file = await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
-        text = file ? await file.text() : null;
-      } catch { text = null; }
-      if (text) {
-        const name = window.DraftDrawingFormat.drawingFileName('draft');
-        const url = URL.createObjectURL(new File([text], name, { type: 'application/json' }));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = name;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 0);
-      }
+      await saveCurrent();
       close();
       // A beat for the download to start before the page goes.
-      setTimeout(goNew, 300);
+      setTimeout(afterAsk, 300);
+    });
+  }
+  if (fileNew && newScrim) {
+    wake(fileNew, 'NEW — save or discard this drawing, then start a blank one here');
+    fileNew.addEventListener('click', () => ask('New drawing',
+      'NEW clears this drawing and its sheets from this browser. Save a copy to your computer first?', goNew));
+  }
+  if (fileOpen && fileInput && newScrim) {
+    wake(fileOpen, 'OPEN — open a drawing file, its sheets with it');
+    fileOpen.addEventListener('click', () => ask('Open a drawing',
+      'OPEN replaces this drawing and its sheets in this browser. Save a copy to your computer first?',
+      () => fileInput.click()));
+    fileInput.addEventListener('change', async event => {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      let parsed;
+      try { parsed = JSON.parse(await file.text()); } catch { parsed = null; }
+      if (!parsed || typeof parsed !== 'object') {
+        page.setState({ persistenceStatus: 'UNSAVED', persistenceError: 'That file is not a drawing' });
+        return;
+      }
+      // ITS PICTURES BACK INTO THIS BROWSER'S STORE, as MODEL's OPEN does.
+      const packed = parsed.underlayFiles;
+      if (packed && typeof packed === 'object') {
+        for (const [id, entry] of Object.entries(packed)) {
+          if (!entry || typeof entry.dataUrl !== 'string' || !entry.dataUrl.startsWith('data:')) continue;
+          try {
+            const blob = await (await fetch(entry.dataUrl)).blob();
+            await window.SharedFileStore.saveNamedFile(new File([blob], id, { type: blob.type }), 'underlays');
+          } catch (error) { console.warn(`LAYOUT: underlay ${id} could not be unpacked:`, error); }
+        }
+      }
+      delete parsed.underlayFiles;
+      await settle();
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(parsed)], 'model-drawing.json', { type: 'application/json' }), MODEL_STORAGE_BUCKET);
+      window.location.reload();
+    });
+  }
+
+  // ── SAVE: nothing held back, and said so ──
+  if (fileSave) {
+    wake(fileSave, 'SAVE — the sheets are written into the drawing in this browser; SAVE AS puts a copy on your computer');
+    fileSave.addEventListener('click', async () => {
+      page._persistLayout();
+      await settle();
+    });
+  }
+
+  // ── SAVE AS: a name, then the file ──
+  if (fileExt) wake(fileExt);
+  if (fileSaveAs && saveAsScrim && saveAsName) {
+    wake(fileSaveAs, 'SAVE AS — download the drawing and its sheets under a name you pick');
+    const close = () => { saveAsScrim.hidden = true; };
+    fileSaveAs.addEventListener('click', () => {
+      saveAsName.value = fileName();
+      saveAsScrim.hidden = false;
+      saveAsName.focus();
+      saveAsName.select();
+    });
+    const go = async () => {
+      let name = saveAsName.value.trim() || fileName();
+      if (!/\.(draft|json|model|plan)$/i.test(name)) name += `.${extension()}`;
+      close();
+      const text = await storedText();
+      if (text) download(text, name);
+      else page.setState({ persistenceStatus: 'UNSAVED', persistenceError: 'No drawing to save' });
+    };
+    saveAsScrim.querySelector('[data-lay-saveas-go]').addEventListener('click', go);
+    saveAsScrim.querySelector('[data-lay-saveas-cancel]').addEventListener('click', close);
+    saveAsScrim.addEventListener('click', event => { if (event.target === saveAsScrim) close(); });
+    saveAsName.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); go(); }
+      else if (event.key === 'Escape') { event.preventDefault(); close(); }
     });
   }
 })();
