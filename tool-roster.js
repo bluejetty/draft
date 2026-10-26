@@ -45,12 +45,9 @@
     // destination.
     { id: 'move',         name: 'MOVE',         group: 'draw',  kind: 'contextual', command: 'move' },
     { id: 'stretch',      name: 'STRETCH',      group: 'draw',  kind: 'contextual', command: 'stretch' },
-    // SUPERNODE (Movie, 20 Oct: "make a NODE command in the drafting menu,
-    // and those will be super high power nodes very SNAP Magnetic" -- one
-    // word, SUPERNODE, his spelling) takes the old page's NODE / ARC slot
-    // and its N: that key armed nothing on this page, and a thirteenth
-    // DRAFTING key put the column a row past the rail at 1366x768.
-    { id: 'node',         name: 'SUPERNODE',    group: 'draw',  kind: 'contextual', command: 'node' },
+    // SUPERNODE (Movie, 20 Oct) stood here on the old NODE / ARC slot and
+    // its N, and is gone (26 Oct: "maybe we can get rid of that, it didn't
+    // work that good").
     { id: 'line',         name: 'LINE',         group: 'draw',  kind: 'contextual', command: 'line' },
     { id: 'shape',        name: 'SHAPE',        group: 'draw',  kind: 'contextual', command: 'shape' },
     { id: 'dimension',    name: 'DIMENSION',    group: 'draw',  kind: 'contextual', command: 'dimension' },

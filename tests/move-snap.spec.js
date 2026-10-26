@@ -116,8 +116,9 @@ const orangeish = ink => ink.r > ink.g + 25 && ink.g > ink.b + 25;
 test('MOVE armed, nothing pressed: the node under the hand glows and is named, the nodes near it glow faintly, and a new selection reads a new magnet', async ({ page }) => {
   const { at } = await open(page);
   await armMove(page, at);
-  // Four pixels off H's end: the node, before any press.
-  await page.mouse.move(at(20, 14)[0] + 4, at(20, 14)[1] + 3);
+  // Two pixels each way off H's end (an inch and a half at 20 px a foot,
+  // inside a node's 2"): the node, before any press.
+  await page.mouse.move(at(20, 14)[0] + 2, at(20, 14)[1] + 2);
   await page.waitForTimeout(120);
   expect(await magnet(page), 'the hand over a node, no press').toEqual({ kind: 'node', at: [20, 14] });
   expect(orangeish(await inkAt(page, 20 + 8 / 20, 14)), 'its donut, orange').toBe(true);
@@ -128,7 +129,7 @@ test('MOVE armed, nothing pressed: the node under the hand glows and is named, t
   expect(await magnet(page), 'over nothing').toBeNull();
   // THE WC'S OWN NODE IS NO MAGNET FOR THE WC -- and is one for the line
   // picked next: the magnet is read again for the new selection.
-  await page.mouse.move(at(8, 0)[0] + 4, at(8, 0)[1] + 3);
+  await page.mouse.move(at(8, 0)[0] + 2, at(8, 0)[1] + 2);
   await page.waitForTimeout(120);
   expect(await magnet(page), 'its own corner pulls nothing').toBeNull();
   await page.keyboard.press('Escape');
@@ -137,7 +138,7 @@ test('MOVE armed, nothing pressed: the node under the hand glows and is named, t
   await page.locator('#model-move').click();
   // (Its far end, from the open side: a wall's end has two face corners an
   // inch or two off the node, and the node has to be the nearer.)
-  await page.mouse.move(at(0, 0)[0] + 4, at(0, 0)[1]);
+  await page.mouse.move(at(0, 0)[0] + 2, at(0, 0)[1]);
   await page.waitForTimeout(120);
   expect(await magnet(page), 'with H in hand, the WC\'s corner is a node').toEqual({ kind: 'node', at: [0, 0] });
 });
@@ -145,9 +146,9 @@ test('MOVE armed, nothing pressed: the node under the hand glows and is named, t
 test('dragging with the hand over a node puts the grab point exactly on it', async ({ page }) => {
   const { at } = await open(page);
   await armMove(page, at);
-  // Grabbed at (4, 3), the hand ends a quarter foot off H's end: the grab
-  // point goes onto the node and the assembly comes with it.
-  await dragFrom(page, at, [4, 3], [20.2, 14.15]);
+  // Grabbed at (4, 3), the hand ends an inch and a half off H's end: the
+  // grab point goes onto the node and the assembly comes with it.
+  await dragFrom(page, at, [4, 3], [20.1, 14.08]);
   expect(await magnet(page)).toEqual({ kind: 'node', at: [20, 14] });
   await release(page);
   const d = await saved(page);
@@ -187,7 +188,10 @@ test('T-square lit, moving across: a carried corner stops level with a node far 
 });
 
 test('and the hand\'s own line-up wins over a carried corner\'s nearer one', async ({ page }) => {
-  const { at } = await open(page);
+  await open(page);
+  // ZOOMED OUT TO 10 PX A FOOT, where the 4 px floor reaches 0.4 ft: both
+  // the hand and the corner are in reach of a node.
+  const { at } = await zoomTo(page, 10);
   await armMove(page, at);
   await lightTsquare(page);
   // The hand at x = 20.3, three tenths off H's end; the WC's corner at
@@ -205,15 +209,15 @@ test('SNAP off: no catch, no glow, the hand goes where it went', async ({ page }
   const { at } = await open(page);
   await snapOff(page);
   await armMove(page, at);
-  await page.mouse.move(at(20, 14)[0] + 4, at(20, 14)[1] + 3);
+  await page.mouse.move(at(20, 14)[0] + 2, at(20, 14)[1] + 2);
   await page.waitForTimeout(120);
   expect(await magnet(page), 'nothing lit on hover').toBeNull();
-  await dragFrom(page, at, [4, 3], [20.2, 14.15]);
+  await dragFrom(page, at, [4, 3], [20.1, 14.08]);
   expect(await magnet(page), 'nothing lit in the drag').toBeNull();
   await release(page);
   const d = await saved(page);
-  expect(wall(d, 'wc1').start.x, 'free').toBeCloseTo(16.2, 1);
-  expect(wall(d, 'wc1').start.z).toBeCloseTo(11.15, 1);
+  expect(wall(d, 'wc1').start.x, 'free').toBeCloseTo(16.1, 1);
+  expect(wall(d, 'wc1').start.z).toBeCloseTo(11.08, 1);
 });
 
 test('a typed LENGTH after a snapped drag measures from the start along the snapped way', async ({ page }) => {

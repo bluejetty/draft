@@ -930,6 +930,7 @@
     angleBox.classList.toggle('locked', angleLockDeg() != null);
     scaleChip.classList.toggle('lit', footOn);
     snapChip?.classList.toggle('lit', snapOn);
+    snapChip?.classList.toggle('held-off', snapHeldOff);
     trackChip?.classList.toggle('lit', trackOn);
     snapChip?.setAttribute('aria-pressed', String(snapOn));
     trackChip?.setAttribute('aria-pressed', String(trackOn));
@@ -1018,12 +1019,13 @@
     // Found by the check asserting the message was VISIBLE rather than that
     // the code had set it, which is the difference between the two halves of
     // every failure today.
-    stripMessage.textContent = stripNotice || (rulerOn
+    const routine = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
       : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point · double-click, ENTER or SPACE twice, or ESC ends the run' : 'first point'}`
         + (angleLockDeg() != null ? ` · ANGLE LOCKED ${angleLockDeg()}°` : '')
         : (activeTool === 'outline'
           ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));
+    stripMessage.textContent = snapHeldOff ? `SNAP OFF (CTRL)${routine ? ` · ${routine}` : ''}` : routine;
     // Last, and from here rather than from the pointer handlers, so the label
     // goes out the moment the run does -- every path that ends a run already
     // calls stripRefresh, and a length still on screen after the gesture is
@@ -1102,6 +1104,31 @@
     sayOnStrip(`SNAP ${snapOn ? 'on — a point near a node lands on it' : 'off'}`);
     stripRefresh(); paint();
   });
+  // ── CTRL HELD = NO SNAPPING (Movie, 26 Oct) ───────────────────────────
+  //
+  // "can it be SHIFT? or CTL ?" -- Ctrl, only while it is down: drawing,
+  // dimensions, corner drags, MOVE and suites all put the point exactly
+  // where the hand is (reachFt reaches nothing), and letting go snaps
+  // again at once, mid-drag included. The T-square, protractor, foot and
+  // typed lengths are not snaps and keep working. The SNAP chip dims and
+  // the strip says so; the chip's own on/off is not touched. A Ctrl+letter
+  // shortcut holds it off for the moment the key is down, which is nothing.
+  // The pointer's own ctrlKey is read too, so a key let go while the page
+  // had no focus cannot leave the snap off.
+  const holdSnapOff = held => {
+    if (snapHeldOff === held) return;
+    snapHeldOff = held;
+    stripRefresh();
+    // REPAINTED ONLY WHEN A CATCH IS SHOWING, the one thing Ctrl changes on
+    // the sheet: a repaint on every Ctrl went out between the keys of a
+    // Ctrl+Z and drew the sheet as it stood before the undo.
+    if (['data-snap-magnet', 'data-snap-node', 'data-move-grab'].some(a => canvas.hasAttribute(a))) paint();
+  };
+  window.addEventListener('keydown', e => { if (e.key === 'Control') holdSnapOff(true); }, true);
+  window.addEventListener('keyup', e => { if (e.key === 'Control') holdSnapOff(false); }, true);
+  window.addEventListener('blur', () => holdSnapOff(false));
+  ['pointerdown', 'pointermove'].forEach(type =>
+    window.addEventListener(type, e => holdSnapOff(!!e.ctrlKey), true));
   trackChip?.addEventListener('click', () => {
     trackOn = !trackOn; keepLight('trackLight', trackOn);
     sayOnStrip(`TRACK ${trackOn ? 'on — the cross lines square to a node, and a point near one lands on it' : 'off'}`);
@@ -2743,19 +2770,68 @@
     }));
     return best?.holo || null;
   };
+  // THE CORNER A PRESS WOULD TAKE, cyan under SELECT before any press: a
+  // repaint only when the corner under the hand changes.
+  let suiteHoverKey = '';
+  canvas.addEventListener('pointermove', event => {
+    // Armed from the card's MOVE with nothing pressed yet: that suite's
+    // corners only. Otherwise under SELECT: any suite's. Read from the
+    // event itself -- this may run before the page's own cursor has moved.
+    const armed = traceMoving?.hologram && !traceMoving.from;
+    if (traceMoving ? !armed : activeTool !== RESTING_TOOL) return;
+    const at = tracePoint(event);
+    const g = armed ? suiteGrabAt(traceMoving.underlay, at)
+      : holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, at)).find(Boolean);
+    const key = g ? `${g.x},${g.z}` : '';
+    if (key !== suiteHoverKey) { suiteHoverKey = key; requestAnimationFrame(() => paint()); }
+  });
   window.addEventListener('pointerdown', event => {
     if (traceMoving || event.target !== canvas || event.button !== 0) return;
     if (activeTool !== RESTING_TOOL) return;
-    const holo = suiteLineAt(event);
+    const at = tracePoint(event);
+    const holo = suiteLineAt(event) || holograms().filter(h => !h.hidden).find(h => suiteGrabAt(h, at));
     if (!holo) return;
     traceMoving = { underlay: holo, from: null, before: null, hologram: true, grabbed: true };
     sayOnStrip(traceMoveWord(traceMoving));
   }, true);
+  // A SUITE IS HELD BY ITS CORNER (Movie, 26 Oct, the grab rule: "whole-
+  // thing drags grab the nearest own corner within reach"): a press within
+  // a node's reach of one of its four corners takes that corner exactly,
+  // cyan under the hand before the press; the corner then lands exactly on
+  // a house node or face corner it is brought to (suitePointLock), before
+  // the end lines and the shell are asked -- a point beats a line. A press
+  // away from the corners holds the suite loosely, as before.
+  const suiteGrabAt = (holo, at) => {
+    if (!holo || !at || !H()?.suiteSuperNodes) return null;
+    const r = reachFt(NODE_REACH);
+    let best = null;
+    H().suiteSuperNodes(holo, activeLevelId()).forEach(n => {
+      const d = Math.hypot(n.point.x - at.x, n.point.z - at.z);
+      if (d <= r && (!best || d < best.d)) best = { d, p: { x: n.point.x, z: n.point.z } };
+    });
+    return best ? best.p : null;
+  };
+  // THE CORNER IN HAND ON A HOUSE NODE OR FACE CORNER, `{ dx, dz, lit }`, or
+  // null. The house's points only: suite meets suite by the end lines.
+  const suitePointLock = m => {
+    if (!m.grab || !snapLive() || board === 'toy') return null;
+    const at = { x: m.grab.x + (m.underlay.x - m.before.x), z: m.grab.z + (m.underlay.z - m.before.z) };
+    m.magnet ||= { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: [] };
+    const hit = pointCatch(at, m.magnet);
+    return hit ? { dx: hit.land.x - at.x, dz: hit.land.z - at.z, lit: hit } : null;
+  };
   window.addEventListener('pointerdown', event => {
     if (!traceMoving || event.target !== canvas || event.button !== 0) return;
     event.stopImmediatePropagation();
     event.preventDefault();
     traceMoving.from = tracePoint(event);
+    // A PICTURE IS HELD BY THE POINT PRESSED ON IT (Movie, 26 Oct: the
+    // REGISTRATION TARGET a node "so i can position the property site plan
+    // properly"): that point lands exactly on a node it is brought to.
+    traceMoving.grab = traceMoving.hologram ? suiteGrabAt(traceMoving.underlay, traceMoving.from)
+      : { x: traceMoving.from.x, z: traceMoving.from.z };
+    if (traceMoving.grab) traceMoving.from = { ...traceMoving.from, x: traceMoving.grab.x, z: traceMoving.grab.z };
+    traceMoving.magnet = null;
     // A WHOLE COPY, because UNDO's 'props' step restores the record to exactly
     // its copy and drops any key the copy lacks -- an { x, z } here undid a
     // MOVE by deleting the picture's id, level and kind with it.
@@ -2779,34 +2855,25 @@
     const to = traceMovedPoint(m.from, at);
     m.underlay.x = m.before.x + (to.x - m.from.x);
     m.underlay.z = m.before.z + (to.z - m.from.z);
-    // ITS SUPER NODES CLICK ONTO THE HOUSE'S FIRST (Movie, 20 Oct: "super
-    // high power nodes very SNAP Magnetic ... they will attach to the other
-    // SUPER NODES"): a suite's super node within a foot of a house super
-    // node pulls the suite until the two coincide, and the face slide below
-    // is not asked. A blue hologram's are read too, so the strip can say it
-    // would have caught had it been a SUITE.
-    // EVERY HOLOGRAM'S, blue too (Movie, 23 Oct: "all suites attrached"),
-    // and before every other snap: "the corner rings should take priority".
-    m.superLock = m.hologram ? superNodeLock(m.underlay, m.superLock) : null;
-    if (m.superLock) {
-      // AND NOT OFF THE SQUARE, the face slide's own rule below.
-      const held = squaredAxis(m.from, at);
-      m.underlay.x += held === 'x' ? 0 : m.superLock.dx;
-      m.underlay.z += held === 'z' ? 0 : m.superLock.dz;
-    }
     // A SUITE SNAPS ONTO THE SHELL (Movie, 18 Oct: "when they go close to
-    // lining them up it snaps to make it easy for them"): within 6" of a
-    // shell wall's faces lining up with its own, it slides the rest -- when
-    // no super node has it.
+    // lining them up it snaps to make it easy for them"): within 3" of a
+    // shell wall's faces lining up with its own (the one snapping rule,
+    // reachFt('suite'), Movie 26 Oct: "both at 3""), it slides the rest.
     // ITS END LINES MEET THE NEXT SUITE'S (Movie, 25 Oct, the rings
     // replaced by a line on each end: "should line up to become one line").
     // Across the lines only: along them the suite stays free to jog in or
     // out, which the shell wall's snap just below settles -- "lock into the
     // ext wall to ext wall (to show the windows and doors)".
+    m.pointLock = suitePointLock(m);
+    if (m.pointLock) {
+      const held = squaredAxis(m.from, at);
+      m.underlay.x += held === 'x' ? 0 : m.pointLock.dx;
+      m.underlay.z += held === 'z' ? 0 : m.pointLock.dz;
+    }
     m.lineLock = null;
-    if (m.hologram && !m.superLock && H()?.suiteLineSnap) {
+    if (m.hologram && !m.pointLock && H()?.suiteLineSnap) {
       const lock = H().suiteLineSnap(m.underlay, holograms().filter(o => o !== m.underlay && !o.hidden),
-        activeLevelId(), SUITE_LINE_PULL_FT);
+        activeLevelId(), reachFt('suite'));
       if (lock) {
         const held = squaredAxis(m.from, at);
         m.underlay.x += held === 'x' ? 0 : lock.dx;
@@ -2814,8 +2881,8 @@
         m.lineLock = lock;
       }
     }
-    if (m.hologram && m.underlay.mode === 'suite' && !m.superLock && H()?.suiteSnap) {
-      const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), 0.5);
+    if (m.hologram && m.underlay.mode === 'suite' && !m.pointLock && H()?.suiteSnap) {
+      const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), reachFt('suite'));
       // A LINE THAT HAS IT KEEPS IT: the shell's slide is taken along the
       // line only, never back across what the line just lined up.
       if (m.lineLock) {
@@ -2836,7 +2903,7 @@
     // "the suite wall isn't SNAPPING or GLOWING to show they line up ... and
     // the window holes too").
     if (m.hologram && m.underlay.mode !== 'suite' && H()?.suiteNear
-      && H().suiteNear(drawing, { ...m.underlay, mode: 'suite' }, activeLevelId(), 0.5).length) {
+      && H().suiteNear(drawing, { ...m.underlay, mode: 'suite' }, activeLevelId(), reachFt('suite')).length) {
       sayOnStrip('This hologram is blue, so it does not snap. Set it to SUITE on the HOLOGRAM card: it snaps, its lined-up walls glow, and its windows cut the shell wall.');
     }
     paint();
@@ -2871,6 +2938,8 @@
     if (m.grabbed) { endTraceMove(false); return; }
     m.from = null;
     m.before = null;
+    m.grab = null;
+    m.pointLock = null;
     sayOnStrip(traceMoveWord(m));
   }, true);
   window.addEventListener('click', event => {

@@ -68,7 +68,9 @@ test('a dimension put on the door\'s dot is linked to it, and follows the door w
   // From the west wall's corner to the door's dot, a HORIZ string, stood
   // four feet inside the wall.
   await click(page, at, -10, -10);
-  await click(page, at, 0.15, -10.1);
+  // An inch and a third off the door's dot: inside a node's 2" (the one
+  // snap rule, Movie 26 Oct), the dot takes it.
+  await click(page, at, 0.1, -10.05);
   await page.keyboard.press('Enter'); // once ends the points (Movie, 23 Oct)
   await click(page, at, -3, -6);
   let d = await saved(page);

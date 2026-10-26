@@ -1234,7 +1234,6 @@
     { id: 'dimension', label: 'DIM', aria: 'Grab only dimensions' },
     { id: 'beam', label: 'BEAM', aria: 'Grab only beams' },
     { id: 'column', label: 'COLUMN', aria: 'Grab only columns' },
-    { id: 'superNode', label: 'SNODE', aria: 'Grab only super nodes' },
   ];
   const filterHelp = () => (selectFilter === 'all'
     ? 'Nothing lit grabs everything. Press a type so Select only grabs that object — even under other geometry.'
@@ -1361,8 +1360,7 @@
   // did, and arming one ends the picking.
   const PICK_KINDS = { wall: 'wall', line: 'line', fenestration: 'fenestration', floor: 'floor',
     roof: 'roof', dormer: 'roof', column: 'column', beam: 'beam', stair: 'stair',
-    fixture: 'fixture', dimension: 'dimension', shape: 'shape', annotation: 'note', roomtag: 'roomtag',
-    node: 'superNode' };
+    fixture: 'fixture', dimension: 'dimension', shape: 'shape', annotation: 'note', roomtag: 'roomtag' };
   const BAR_KEYS = ['select', 'assembly', 'dimension', 'trim'];
   function syncPickGlow() {
     document.querySelectorAll('[data-tool-key], [data-bar-key]').forEach(btn => {
@@ -1379,8 +1377,7 @@
   function pickName() {
     if (selectFixtureKind) return (window.DraftFixtureKinds?.kindFor(selectFixtureKind)?.label || selectFixtureKind).toUpperCase();
     return selectFilter === 'fenestration' ? 'DOORS AND WINDOWS'
-      : selectFilter === 'superNode' ? 'SUPER NODES'
-        : selectFilter === 'note' ? 'NOTES' : `${selectFilter.toUpperCase()}S`;
+      : selectFilter === 'note' ? 'NOTES' : `${selectFilter.toUpperCase()}S`;
   }
   function setSelectPicking(on) {
     selectPicking = on;

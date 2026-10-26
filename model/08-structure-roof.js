@@ -797,8 +797,6 @@
     outline: 'outlines',
     column: 'columns',
     beam: 'beams',
-    // A SUPER NODE (Movie, 20 Oct): picked, moved and deleted like a column.
-    superNode: 'superNodes',
     // DELETE COMES FREE WITH THE ENTRY. deleteEntry splices out of whatever
     // list this names and pushes the undo step, so an opening needs no branch
     // of its own -- and the cascade the other way already worked: deleteWall

@@ -716,10 +716,11 @@
   // as it moves on, and the list empties when the run ends. The outline keeps
   // its own corners already.
   let wallRunNodes = [];
-  // FOUR PIXELS, the corner snap's own reach. Six was a whole foot on a house
-  // fitted to the sheet (6 px a foot), and a corner traced a foot off a line
-  // jumped on to it.
-  const RAY_HIT_PX = 4;
+  // THE CROSS LINES CATCH FROM 1" (Movie, 26 Oct, one snapping rule), held
+  // between 4 and 30 px on the screen like every other reach. A fixed six
+  // pixels was a whole foot on a house fitted to the sheet (6 px a foot), and
+  // a corner traced a foot off a line jumped on to it.
+  const rayHitPx = () => reachFt('track') * view.scale;
   const trackingNodes = () => {
     // AND THE HOUSE'S CORNERS WHILE THE GARAGE IS DRAWN (Movie, 6 Oct: "when
     // i draw the GARAGE shape can the HOUSE shape nodes also create the
@@ -760,11 +761,12 @@
     if (!cursor) return [];
     const c = toS(cursor);
     const lit = [];
+    const hit = rayHitPx();
     nodes.forEach((node, i) => {
       const p = toS(node);
       const dx = c.x - p.x, dy = c.y - p.y;
-      if (Math.abs(dy) <= RAY_HIT_PX && Math.abs(dx) > RAY_HIT_PX) lit.push({ i, dir: dx > 0 ? 0 : 180 });
-      if (Math.abs(dx) <= RAY_HIT_PX && Math.abs(dy) > RAY_HIT_PX) lit.push({ i, dir: dy > 0 ? 90 : 270 });
+      if (Math.abs(dy) <= hit && Math.abs(dx) > hit) lit.push({ i, dir: dx > 0 ? 0 : 180 });
+      if (Math.abs(dx) <= hit && Math.abs(dy) > hit) lit.push({ i, dir: dy > 0 ? 90 : 270 });
     });
     return lit;
   };
@@ -874,7 +876,7 @@
   let moveHoverCache = { key: '', magnet: null };
   const moveHover = () => {
     if (!moveState?.on || moveState.drag || moveState.roof || !selection.length || !cursorWorld) return null;
-    if (!snapOn || board === 'toy' || selection.every(e => e.type === 'beam')) return null;
+    if (!snapLive() || board === 'toy' || selection.every(e => e.type === 'beam')) return null;
     const key = `${modelEpoch}|${undoStack.length}|${selection.map(e => `${e.type}:${e.item?.id ?? ''}`).join(',')}`;
     if (moveHoverCache.key !== key) moveHoverCache = { key, magnet: magnetExcluding(carriedPoints(selectionEntries())) };
     return { magnet: moveHoverCache.magnet, lit: pointCatch(cursorWorld, moveHoverCache.magnet) };
@@ -920,6 +922,30 @@
       markMagnet(moveDrag.lit);
       return;
     }
+    // A SUITE HELD BY ITS CORNER (suiteGrabAt): the corner cyan in the
+    // hand, or what it has landed on; before the press, the corner a press
+    // would take -- with the suite in hand from its card's MOVE, or under
+    // SELECT over any suite.
+    const tm = (() => { try { return traceMoving; } catch { return null; } })();
+    const grabMark = p => canvas.setAttribute('data-move-grab', JSON.stringify([Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]));
+    if (tm?.from && tm.grab && tm.before) {
+      canvas.removeAttribute('data-snap-node');
+      const held = { x: tm.grab.x + tm.underlay.x - tm.before.x, y: 0, z: tm.grab.z + tm.underlay.z - tm.before.z };
+      if (tm.pointLock) paintDonut(tm.pointLock.lit.pt, tierOf(tm.pointLock.lit));
+      else paintDonut(held, 'grab');
+      grabMark(held);
+      markMagnet(tm.pointLock?.lit || null);
+      return;
+    }
+    const suiteHover = !cursorWorld || (tm && (!tm.hologram || tm.from)) ? null
+      : tm ? suiteGrabAt(tm.underlay, cursorWorld)
+        : activeTool === RESTING_TOOL ? holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, cursorWorld)).find(Boolean) : null;
+    if (suiteHover) {
+      canvas.removeAttribute('data-snap-node');
+      paintDonut({ x: suiteHover.x, y: 0, z: suiteHover.z }, 'grab');
+      grabMark(suiteHover);
+      return;
+    }
     // A FLOORING CORNER IN HAND shows the corner it will land on.
     if (moveDrag?.kind === 'roomcorner' && moveDrag.lit) {
       canvas.removeAttribute('data-snap-node');
@@ -960,9 +986,6 @@
     }
     // A LOOP BEING TRACED -- outline, floor, shape -- reads the magnet too.
     const tracesLoop = activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape'
-      // A SUPER NODE BEING PLACED reads the magnet the same way: it lands on
-      // a node, a face corner or a line end exactly ("to place the first one").
-      || activeTool === 'node'
       // AND THE SINGLE SLOPE ROOF'S OUTLINE (Movie, 21 Oct), so its first
       // corner glows under the hand as the house outline's does.
       || shedTracing();
@@ -1395,7 +1418,7 @@
     // pulled back on to it and lost -- the 1' step of Movie's MOD BILEVEL
     // garage, traced with the house fitted to the sheet (6 px a foot).
     if (first && outlineCorners.length >= 3
-      && Math.hypot(at.x - first.x, at.z - first.z) <= CORNER_SNAP_PX * 2 / view.scale) return { x: first.x, z: first.z };
+      && Math.hypot(at.x - first.x, at.z - first.z) <= reachFt(NODE_REACH)) return { x: first.x, z: first.z };
     if (corner) return { x: corner.x, z: corner.z };
     // SNAP AND TRACK, as a wall's point has them: a node, or the cross lines
     // -- the first corner's among them, so the loop can always be brought

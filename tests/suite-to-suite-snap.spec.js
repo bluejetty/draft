@@ -19,7 +19,7 @@ const LEVELS = [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 9
 const EMPTY = { walls: [], lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
   outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [], roomTags: [], columns: [],
   beams: [], boneyardOutlines: [], groups: [], levelLocks: [], underlays: [], superNodes: [] };
-// A 20 x 15 suite with a super node on each corner.
+// A 20 x 15 suite. (The super nodes an old file kept are ignored now.)
 const SUITE = { version: 1, levels: LEVELS, activeLevelIdx: 2, ...EMPTY,
   walls: [W('s1', [0, 0], [20, 0]), W('s2', [20, 0], [20, 15]), W('s3', [20, 15], [0, 15]), W('s4', [0, 15], [0, 0])],
   superNodes: [SN('c1', 0, 0), SN('c2', 20, 0), SN('c3', 20, 15), SN('c4', 0, 15)] };
@@ -89,12 +89,13 @@ test('the end lines: a top and a bottom, 2 ft past each corner; no corner rings'
   expect(wide[1] - wide[0]).toBeCloseTo(4, 6);
 });
 
-test('within 6": the bottom line meets the suite below\'s top line -- one line -- and the suite stays where the hand put it the other way', async ({ page }) => {
+// THREE INCHES now (Movie, 26 Oct, the one snap rule: suite lines "both at 3"").
+test('within 3": the bottom line meets the suite below\'s top line -- one line -- and the suite stays where the hand put it the other way', async ({ page }) => {
   const { at } = await open(page, plan());
   const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
-  // Down to three inches short of meeting, and two feet over: a jog.
+  // Down to two inches short of meeting, and two feet over: a jog.
   await grab(page, at, [10, 7.5]);
-  await to(page, at, [10 + 2, 7.5 + gap - 0.25]);
+  await to(page, at, [10 + 2, 7.5 + gap - 2 / 12]);
   expect(await lineLock(page), 'the suite below\'s top line has it').toBe('h2:top');
   expect(await page.locator('#plan').getAttribute('data-suite-lines'), 'both lines lit').toBe('2');
   await drop(page);
@@ -120,14 +121,14 @@ test('lines that do not quite meet stay solid: nothing is drawn joined', async (
   await expect(page.locator('#plan')).toHaveAttribute('data-joined-lines', '1');
 });
 
-test('a foot short, nothing catches', async ({ page }) => {
+test('six inches short, nothing catches', async ({ page }) => {
   const { at } = await open(page, plan());
   const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
   await grab(page, at, [10, 7.5]);
-  await to(page, at, [10, 7.5 + gap - 1]);
+  await to(page, at, [10, 7.5 + gap - 0.5]);
   expect(await lineLock(page)).toBeNull();
   await drop(page);
-  expect((await saved(page)).holograms[0].z).toBeCloseTo(gap - 1, 1);
+  expect((await saved(page)).holograms[0].z).toBeCloseTo(gap - 0.5, 1);
 });
 
 test('the corners no longer pull: corner to corner across, with the lines not facing, nothing catches', async ({ page }) => {
@@ -140,11 +141,13 @@ test('the corners no longer pull: corner to corner across, with the lines not fa
   await drop(page);
 });
 
+// A SUITE FILE STILL BLUE: its kind says suite (its stored super nodes used
+// to; SUPERNODE is gone).
 test('a blue hologram\'s lines catch too', async ({ page }) => {
-  const { at } = await open(page, plan({ mode: 'hologram' }));
+  const { at } = await open(page, plan({ mode: 'hologram', source: { ...SUITE, suiteKind: 'residential' } }));
   const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
   await grab(page, at, [10, 7.5]);
-  await to(page, at, [10, 7.5 + gap - 0.25]);
+  await to(page, at, [10, 7.5 + gap - 2 / 12]);
   expect(await lineLock(page)).toBe('h2:top');
   await drop(page);
 });

@@ -311,8 +311,6 @@
     if (filterAllows('beam')) beams().forEach(item => out.push({ type: 'beam', item, parts: seg(item), open: true }));
     if (filterAllows('column')) columns().filter(c => c.point)
       .forEach(item => out.push({ type: 'column', item, parts: [[item.point]], open: true }));
-    if (filterAllows('superNode')) superNodes()
-      .forEach(item => out.push({ type: 'superNode', item, parts: [[item.point]], open: true }));
     if (filterAllows('fenestration')) {
       openingsOn(walls()).forEach(({ opening, geometry }) =>
         out.push({ type: 'fenestration', item: opening, parts: [geometry.corners] }));
@@ -1153,12 +1151,6 @@
       const dimension = dimensionAt(worldPt);
       if ((dimension) && take({ type: 'dimension', item: dimension })) return out;
     }
-    // A SUPER NODE IS A DOT ON A CORNER, picked before the walls that meet
-    // there would take the click.
-    if (filterAllows('superNode')) {
-      const node = superNodeAt(worldPt);
-      if ((node) && take({ type: 'superNode', item: node })) return out;
-    }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
       if ((wall) && take({ type: 'wall', item: wall })) return out;
@@ -1296,7 +1288,7 @@
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
       fixture: fixtures(), stair: stairs(), roof: pickRoofs(), roomtag: roomTags(), shape: shapes(),
-      dimension: shownDimensions(), note: notes(), beam: beams(), column: columns(), superNode: superNodes(),
+      dimension: shownDimensions(), note: notes(), beam: beams(), column: columns(),
       hologram: holograms(), underlay: traceOn ? underlays() : [] };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
@@ -1397,7 +1389,7 @@
         });
         return;
       }
-      if (type === 'column' || type === 'superNode') {
+      if (type === 'column') {
         const c = toS(item.point);
         ctx.save();
         ctx.lineWidth = 3;

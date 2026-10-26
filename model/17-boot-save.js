@@ -162,9 +162,10 @@
       // one a deleted wall leaves behind -- a fixture hanging on no wall.
       beams: F.beams(parsed.beams, levelIds, { drops: refusedItems.beams }),
       columns: F.columns(parsed.columns, levelIds, { drops: refusedItems.columns }),
-      // AND ONLY WHEN THE FILE HAS THE KEY: readers normalise, writers never
-      // invent (model-seven-tools-data). The first SUPERNODE placed makes it.
-      ...(Array.isArray(parsed.superNodes) ? { superNodes: F.superNodes(parsed.superNodes, levelIds) } : {}),
+      // NO SUPER NODES (Movie, 26 Oct: SUPERNODE removed). An old file's are
+      // read past, and undefined is what JSON leaves out, so the next save
+      // drops them.
+      superNodes: undefined,
       shapes: F.shapes(parsed.shapes, levelIds, { drops: refusedItems.shapes }),
       fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };

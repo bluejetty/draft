@@ -160,11 +160,10 @@ test('on a turned drawing the shelf\'s gold corner is the one under the target, 
   expect(await page.locator('#plan').getAttribute('data-gold-super-nodes')).toBe('1');
 });
 
-test('a shelf with super nodes of its own shows those, not the four corners', async ({ page }) => {
-  // The same rule a suite has: its own super nodes replace the corners. The
-  // 1BDEN shelf gets one of its own on its target corner; its square draws
-  // that one gold and no green ring, and the sheet, standing on the shelf,
-  // counts one gold node, not two.
+test('a super node left on a shelf by an old file is ignored: the shelf keeps its four corners', async ({ page }) => {
+  // SUPERNODE IS GONE (Movie, 26 Oct). An old file's node on the 1BDEN
+  // shelf's target corner changes nothing: its square still draws the green
+  // corners, and the sheet, standing on the shelf, counts one gold node.
   const f = drawing();
   f.superNodes = [{ id: 'sn1', levelId: -1, view: 'plan', point: P(100 - 1.75 / 12, 52 + 1.75 / 12) }];
   await h.openModel(page, { webgl: false });
@@ -177,7 +176,7 @@ test('a shelf with super nodes of its own shows those, not the four corners', as
   if (await page.locator('#shelf-previews').isHidden()) await page.locator('#shelf-tab').click();
   const { green } = await inks(page);
   await page.waitForTimeout(300);
-  expect(await count(page.locator('.shelf-preview').nth(0).locator('canvas'), rgb(green)), 'no green corner in its square').toBe(0);
+  expect(await count(page.locator('.shelf-preview').nth(0).locator('canvas'), rgb(green)), 'its green corners still in its square').toBeGreaterThan(0);
   await page.locator('.shelf-preview').nth(0).click();
   await expect(page.locator('#readout')).toContainText('walls 4/');
   await page.waitForTimeout(300);

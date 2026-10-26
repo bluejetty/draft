@@ -14,16 +14,13 @@
   // x/z once carries every wall in every view that meets there. Nothing
   // iterates "the other walls", because there is no such list to get wrong.
   //
-  // The three distances are the old page's, measured rather than chosen:
+  // The two distances are the old page's, measured rather than chosen:
   //   grab  _findVertexHit, MODEL.dc.html:16589 — _magnetRadius() * 1.5,
   //         and _magnetRadius() is snapZone * 5 (MODEL.dc.html:16532)
-  //   snap  _nodeSnapRadius, MODEL.dc.html:16536 — snapZone flat
   //   arm   the node drag turns live past 4px of travel, MODEL.dc.html:10825
-  // snapZone is a setting this page has no UI for, so it reads the shipped
-  // default instead of inventing a number: 30px to grab, 4px to snap.
-  const SNAP_ZONE_PX = window.DraftSnapZone.DEFAULT_SNAP_ZONE;
-  const CORNER_GRAB_PX = SNAP_ZONE_PX * 5 * 1.5;
-  const CORNER_SNAP_PX = SNAP_ZONE_PX;
+  // 30px to pick a corner up. Where it SNAPS is the one snapping rule's
+  // (reachFt, below).
+  const CORNER_GRAB_PX = window.DraftSnapZone.DEFAULT_SNAP_ZONE * 5 * 1.5;
   const DRAG_ARM_PX = 4;
 
   // A BUILD HOUSE wall corner rides a BONEYARD master point: srcId names the
@@ -775,9 +772,11 @@
     return out;
   };
 
-  const cornerSnap = (worldPt, moving) =>
-    window.DraftGeometry2D.nearestVertex(
-      snapCandidates([moving]), worldPt, CORNER_SNAP_PX / view.scale);
+  // SNAP OFF, OR CTRL HELD, AND THE POINT GOES WHERE THE HAND IS (Movie, 26
+  // Oct, the one snap rule): this catch too, now that it reaches a node's 2".
+  const cornerSnap = (worldPt, moving) => (snapLive()
+    ? window.DraftGeometry2D.nearestVertex(snapCandidates([moving]), worldPt, reachFt(NODE_REACH))
+    : null);
 
   // ── SNAP AND TRACK (Movie, 17 Oct) ──────────────────────────────────────
   //
@@ -799,8 +798,6 @@
   // TARGET when the screen is clear (nothing on it) snap that node to within
   // 2.5ft radius of that point. (only when nothing is around, later on once
   // the user has drawn a line or wall, don't make it magnetic after that".
-  const NODE_SNAP_FT = 2 / 12;
-  const NODE_SNAP_PX = 6;
   const BULLSEYE_PULL_FT = 2.5;
   // AND THE CORNERS OF THE WALLS' FACES (Movie, 18 Oct: "can i make the EXT
   // WALL corner nodes (on the outline wall lines) ... so i can reference that
@@ -844,18 +841,16 @@
   // ORANGE is a wall's or a line's own end. YELLOW is a corner that acts
   // like one: a face corner (outside, inside, a free end's two), or where two
   // runs cross with no node there. NEON is a face line. Each tier pulls over
-  // its own reach, orange furthest. Between two POINTS in reach the stronger
-  // pull wins -- the one nearer as a share of its own reach -- so a yellow
-  // corner three pixels off the hand beats an orange node ten pixels off,
-  // and at one distance the orange wins: "slightly less magnetic", literally.
-  // (Tier first would have been simpler and wrong: a wall's inside corner
-  // stands 2 3/4" off its node, under 14 px at most zooms, and the yellow
-  // would never have been reachable beside the orange.) A face is a LINE and
-  // the hand is always on some point of it, so a point in reach beats a face
-  // every time -- #807's "more pull from the inside/outside corners".
-  const NODE_PULL_PX = 14;
-  const FACE_CORNER_PULL_PX = 11;
-  const FACE_LINE_PULL_PX = 7;
+  // its own reach, orange furthest. Between two POINTS in reach THE NEARER
+  // WINS, the orange on a tie (one snapping rule, Movie 26 Oct: plain
+  // nearest). A face is a LINE and the hand is always on some point of it,
+  // so a point in reach beats a face every time -- #807's "more pull from
+  // the inside/outside corners".
+  // THE KINDS OF TARGET a point can be caught by -- what each reaches is
+  // the one snap rule's (reachFt, below).
+  const NODE_REACH = 'node';
+  const CORNER_REACH = 'corner';
+  const LINE_REACH = 'line';
   // How near the cursor a magnet has to be to light up at all.
   const MAGNET_SHOW_PX = 48;
   let faceLineCache = { key: null, list: [] };
@@ -867,16 +862,48 @@
     faceLineCache = { key, list: G.wallFaceLines(walls(), openingThicknessFt()) };
     return faceLineCache.list;
   };
-  // A REACH IN PIXELS, FLOORED AND CEILINGED IN FEET. Two inches at least,
-  // because zoomed in a few pixels is less than a hand can find; SIX INCHES
-  // at most, because zoomed out a few pixels is a room -- at 6 px a foot (a
-  // house fitted to the sheet) 14 px is 2'-4", and a garage leg pressed two
-  // feet off the house's corner was pulled onto it, and a garage front
-  // drawn a foot north of the house's line (his MOD BILEVEL) was pulled
-  // onto the line. Movie's own measure was "a 4" dia 2" radius ... or a few
-  // pixels, whichever is more"; a drafter's deliberate foot is never a miss.
-  const MAGNET_REACH_MAX_FT = 0.5;
-  const pullFt = px => Math.min(MAGNET_REACH_MAX_FT, Math.max(NODE_SNAP_FT, px / view.scale));
+  // ── THE ONE SNAP RULE (Movie, 25-26 Oct) ─────────────────────────────
+  //
+  // Every catch on this page asks this one function how far it reaches.
+  // IN INCHES ON THE PLAN, not pixels: "i don't want to 'hit it' when i'm
+  // zoomed out, i want to zoom in and hit it so i know i hit the right
+  // thing" -- and "3" is too far i think more like 1.5 or 2"". A wall's end
+  // or node 2", a face corner or a crossing 1 1/2", a line or a tracking
+  // line 1", a suite lining up 3" ("both at 3""). Drawn on the screen that
+  // is never under 4 px ("can we have a snap on the floor") -- a hand right
+  // on top of a point still catches it, zoomed out or not -- and never over
+  // 30 px, so a corner close up does not grab from across the screen.
+  // SNAP STRENGTH (SETTINGS) scales the whole set; CTRL HELD switches every
+  // catch off until it is let go ("hold Ctrl ... and the point goes exactly
+  // where your mouse is").
+  const SNAP_REACH_IN = Object.freeze({ node: 2, corner: 1.5, line: 1, track: 1, suite: 3 });
+  const SNAP_FLOOR_PX = 4;
+  const SNAP_CEILING_PX = 30;
+  // CTRL HELD (13-suites-trim-follow.js): nothing reaches, so every catch
+  // below finds nothing and the point goes where the hand is.
+  var snapHeldOff = false;
+  const snapLive = () => snapOn && !snapHeldOff;
+  // Read once a page: SETTINGS is another page, and a change there is
+  // picked up the next time MODEL opens.
+  let snapStrengthRead = null;
+  const snapStrength = () => {
+    if (snapStrengthRead == null) {
+      const S = window.DraftSnapZone;
+      let stored;
+      try { stored = window.DraftProfileManager?.getActive?.('settings')?.content?.model?.snapReach; } catch { stored = null; }
+      snapStrengthRead = S?.normaliseSnapReach ? S.normaliseSnapReach(stored) : 1;
+    }
+    return snapStrengthRead;
+  };
+  const reachFt = kind => {
+    if (snapHeldOff) return -1;
+    const ft = (SNAP_REACH_IN[kind] || SNAP_REACH_IN.node) / 12 * snapStrength();
+    // A SUITE LINES UP BY THE BUILDING'S OWN TOLERANCE, in inches whatever
+    // the zoom; every other target by the floor and ceiling on the screen.
+    if (kind === 'suite') return ft;
+    const px = Math.min(SNAP_CEILING_PX, Math.max(SNAP_FLOOR_PX, ft * view.scale));
+    return px / view.scale;
+  };
   // ── EVERY RUN AND LOOP ON THE LEVEL FEEDS ONE MAGNET (Movie, 19 Oct) ──
   //
   // "id like the lines / walls / areas / floors/ roofs etc to all act in
@@ -902,9 +929,15 @@
     if (!drawing) return [];
     const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
     if (magnetSegCache.key === key) return magnetSegCache.list;
-    magnetSegCache = { key, list: [...wallFaceSegs(), ...bodySegs([...lines(), ...loopEdges()])] };
+    magnetSegCache = { key, list: [...wallFaceSegs(), ...bodySegs([...lines(), ...loopEdges(), ...siteRoofEdges()])] };
     return magnetSegCache.list;
   };
+  // ON THE SITE, THE ROOF'S EDGES are lines to land on too (siteSnapNodes).
+  const SITE_SNAP_LEVEL = 8;
+  const siteRoofEdges = () => (Number(activeLevelId()) === SITE_SNAP_LEVEL && drawing
+    ? (drawing.roofs || []).filter(r => Array.isArray(r?.points) && r.points.length >= 3)
+      .flatMap(r => r.points.map((p, i) => ({ start: p, end: r.points[(i + 1) % r.points.length] })))
+    : []);
   // WHERE RUNS CROSS WITH NO NODE THERE: yellow corners too, on this level.
   let crossingCache = { key: null, list: [] };
   const crossingNodes = () => {
@@ -918,8 +951,8 @@
   // EVERY YELLOW CORNER: the faces' corners and the crossings.
   const actLikeNodes = () => [...wallFaceNodes(), ...crossingNodes()];
   // THE STRONGER PULL between an orange node and a yellow corner in reach:
-  // nearer as a share of its own reach wins, the orange on a tie. `{ v,
-  // node }`, or null when neither reaches.
+  // the nearer wins, the orange on a tie. `{ v, node }`, or null when
+  // neither reaches.
   // WITHIN AN EIGHTH OF AN INCH, THAT CORNER (Movie, 24 Oct: "i have a hard
   // time to click on the outside of the 3.5" wall (maybe too close to the
   // other magnetic snapps, can we make it so if you are within 1/8" of a
@@ -929,6 +962,7 @@
   // meant, whatever pulls harder from further off.
   const EIGHTH_FT = 1 / 96;
   const cornerUnderHand = (at, nodes, corners) => {
+    if (snapHeldOff) return null;
     let best = null;
     [[nodes, true], [corners, false]].forEach(([list, node]) => (list || []).forEach(v => {
       const d = Math.hypot(v.x - at.x, v.z - at.z);
@@ -940,21 +974,23 @@
     const close = cornerUnderHand(at, nodes, corners);
     if (close) return close;
     const score = (list, px) => {
-      const r = pullFt(px);
+      const r = reachFt(px);
       let best = null;
       list.forEach(v => {
         const d = Math.hypot(v.x - at.x, v.z - at.z);
-        if (d <= r && (!best || d < best.d)) best = { d, v, share: d / r };
+        if (d <= r && (!best || d < best.d)) best = { d, v };
       });
       return best;
     };
-    const node = score(nodes, NODE_PULL_PX);
-    const corner = score(corners, FACE_CORNER_PULL_PX);
-    if (node && (!corner || node.share <= corner.share)) return { v: node.v, node: true };
+    // PLAIN NEAREST (Movie, 26 Oct, one snapping rule): each catches from its
+    // own reach, and of the two the closer one wins; the node a tie.
+    const node = score(nodes, NODE_REACH);
+    const corner = score(corners, CORNER_REACH);
+    if (node && (!corner || node.d <= corner.d)) return { v: node.v, node: true };
     return corner ? { v: corner.v, node: false } : null;
   };
   const nearestWithin = (list, at, px) => {
-    const r = pullFt(px);
+    const r = reachFt(px);
     let best = null;
     list.forEach(v => {
       const d = Math.hypot(v.x - at.x, v.z - at.z);
@@ -968,8 +1004,8 @@
     const t = Math.max(0, Math.min(1, ((at.x - seg.a.x) * dx + (at.z - seg.a.z) * dz) / len2));
     return { x: seg.a.x + t * dx, z: seg.a.z + t * dz };
   };
-  const nearestFace = (segs, at, px = FACE_LINE_PULL_PX) => {
-    const r = pullFt(px);
+  const nearestFace = (segs, at, px = LINE_REACH) => {
+    const r = reachFt(px);
     let best = null;
     segs.forEach(seg => {
       const p = faceFoot(seg, at);
@@ -980,7 +1016,7 @@
     return best;
   };
   // The magnets a point being drawn answers to; null when SNAP is off.
-  const drawMagnet = () => (snapOn && board !== 'toy'
+  const drawMagnet = () => (snapLive() && board !== 'toy'
     ? { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: magnetSegs() } : null);
   // A DRAGGED NODE answers to every wall but its own: the walls it is an end
   // of move with it, so their faces are not where they were. Worked out once
@@ -1043,15 +1079,14 @@
       const at = { x: b.x + dx, z: b.z + dz };
       const point = strongerPoint(at, magnet.nodes, magnet.corners);
       if (point) {
-        const r = pullFt(point.node ? NODE_PULL_PX : FACE_CORNER_PULL_PX);
-        offer(Math.hypot(point.v.x - at.x, point.v.z - at.z) / r, () => ({
+        offer(catchShare(Math.hypot(point.v.x - at.x, point.v.z - at.z), point.node ? NODE_REACH : CORNER_REACH), () => ({
           dx: dx + point.v.x - at.x, dz: dz + point.v.z - at.z,
           lit: { pt: { x: point.v.x, y: 0, z: point.v.z }, corner: point.v, node: point.node } }));
         return;
       }
       const face = nearestFace(magnet.segs, at);
       if (face) {
-        offer(face.d / pullFt(FACE_LINE_PULL_PX), () => ({
+        offer(catchShare(face.d, LINE_REACH), () => ({
           dx: dx + face.pt.x - at.x, dz: dz + face.pt.z - at.z,
           lit: { pt: { x: face.pt.x, y: 0, z: face.pt.z }, seg: face.seg } }));
       }
@@ -1081,7 +1116,12 @@
   // is taken along the axis only, so the assembly still goes straight, and
   // a dashed guide from the point to what it lined up with shows why it
   // stopped.
-  const catchShare = (d, px) => d / pullFt(px);
+  // ONE SNAPPING RULE (Movie, 26 Oct): each target catches from its own
+  // reach, and of everything in reach the nearest wins -- in plan feet, not
+  // as a share of the reach -- save that any point (a node, a corner) beats
+  // any line. Infinity is out of reach.
+  const LINE_LAST = 1e6;
+  const catchShare = (d, kind) => (d <= reachFt(kind) + 1e-9 ? d + (kind === LINE_REACH ? LINE_LAST : 0) : Infinity);
   // A point's 2-D catch: `{ land, pt, corner, node, share }` or `{ land, pt,
   // seg, share }`, `land` being where the point goes; null out of reach.
   const pointCatch = (at, magnet) => {
@@ -1090,11 +1130,11 @@
     if (point) {
       const d = Math.hypot(point.v.x - at.x, point.v.z - at.z);
       return { land: { x: point.v.x, z: point.v.z }, pt: { x: point.v.x, y: 0, z: point.v.z },
-        corner: point.v, node: point.node, share: catchShare(d, point.node ? NODE_PULL_PX : FACE_CORNER_PULL_PX) };
+        corner: point.v, node: point.node, share: catchShare(d, point.node ? NODE_REACH : CORNER_REACH) };
     }
     const face = nearestFace(magnet.segs || [], at);
     return face ? { land: { x: face.pt.x, z: face.pt.z }, pt: { x: face.pt.x, y: 0, z: face.pt.z },
-      seg: face.seg, share: catchShare(face.d, FACE_LINE_PULL_PX) } : null;
+      seg: face.seg, share: catchShare(face.d, LINE_REACH) } : null;
   };
   // The same point's catch measured along `axis` alone: a node first (the
   // orange wins a tie, as strongerPoint has it), then a corner, then a face
@@ -1107,19 +1147,19 @@
     let best = null;
     const offer = (gap, px, make) => {
       const share = catchShare(Math.abs(gap), px);
-      if (share <= 1 && (!best || share < best.share)) best = { share, gap, make };
+      if (share < Infinity && (!best || share < best.share)) best = { share, gap, make };
     };
     const point = (list, px, node) => list.forEach(v => offer(v[axis] - at[axis], px, gap => ({
       land: landed(gap), pt: { x: v.x, y: 0, z: v.z }, corner: v, node, guide: { from: landed(gap), to: { x: v.x, z: v.z } } })));
-    point(magnet.nodes || [], NODE_PULL_PX, true);
-    point(magnet.corners || [], FACE_CORNER_PULL_PX, false);
+    point(magnet.nodes || [], NODE_REACH, true);
+    point(magnet.corners || [], CORNER_REACH, false);
     if (!best) {
-      const slack = pullFt(NODE_PULL_PX);
+      const slack = reachFt(NODE_REACH);
       (magnet.segs || []).forEach(seg => {
         if (Math.abs(seg.a[axis] - seg.b[axis]) > 1e-6) return;
         const lo = Math.min(seg.a[other], seg.b[other]) - slack, hi = Math.max(seg.a[other], seg.b[other]) + slack;
         if (at[other] < lo || at[other] > hi) return;
-        offer(seg.a[axis] - at[axis], FACE_LINE_PULL_PX, gap => ({ land: landed(gap), pt: { ...landed(gap), y: 0 }, seg }));
+        offer(seg.a[axis] - at[axis], LINE_REACH, gap => ({ land: landed(gap), pt: { ...landed(gap), y: 0 }, seg }));
       });
     }
     return best ? { share: best.share, ...best.make(best.gap) } : null;
@@ -1149,9 +1189,9 @@
   // be magnetic for other wall surfaces/ nodes/ and 'act like' nodes". A wall
   // being dragged by its body carries its two faces, and each face feels
   // three pulls across the run: another wall's face it would line up with
-  // (neon, 7 px), a node it would pass through (orange, 14), a corner that
-  // acts like one (yellow, 11) -- the three tiers, by the same share-of-reach
-  // rule. The wall slides ACROSS its run by the shortfall and no further, so
+  // (neon, 1"), a node it would pass through (orange, 2"), a corner that
+  // acts like one (yellow, 1 1/2") -- the three tiers, by the one snapping
+  // rule (catchShare). The wall slides ACROSS its run by the shortfall and no further, so
   // the T-square's projection and the hand's travel along the run both stand.
   // A face lines up with a face only where the two run parallel; a point
   // pulls a face only where it stands within the wall's own length (a hair
@@ -1190,13 +1230,11 @@
       : { startOff: -t / 2, endOff: t / 2 };
     const along = pt => (pt.x - moved.x) * u.x + (pt.z - moved.z) * u.z;
     const across = pt => (pt.x - moved.x) * n.x + (pt.z - moved.z) * n.z;
-    const slack = pullFt(NODE_PULL_PX);
+    const slack = reachFt(NODE_REACH);
     let best = null;
     const offer = (gap, px, make) => {
-      const r = pullFt(px);
-      const d = Math.abs(gap);
-      if (d > r) return;
-      const share = d / r;
+      const share = catchShare(Math.abs(gap), px);
+      if (share === Infinity) return;
       if (!best || share < best.share) best = { share, gap, make };
     };
     [startOff, endOff].forEach(o => {
@@ -1208,7 +1246,7 @@
       magnet.segs.forEach(seg => {
         const sx = seg.b.x - seg.a.x, sz = seg.b.z - seg.a.z, sl = Math.hypot(sx, sz);
         if (sl < 1e-6 || Math.abs(u.x * sz - u.z * sx) / sl > 1e-3) return;
-        offer(across(seg.a) - o, FACE_LINE_PULL_PX, gap => {
+        offer(across(seg.a) - o, LINE_REACH, gap => {
           const own = ownAt(gap);
           return { seg, own, pt: { x: (own.a.x + own.b.x) / 2, y: 0, z: (own.a.z + own.b.z) / 2 } };
         });
@@ -1219,8 +1257,8 @@
         if (a < -slack || a > len + slack) return;
         offer(across(v) - o, px, gap => ({ corner: v, node, own: ownAt(gap), pt: { x: v.x, y: 0, z: v.z } }));
       });
-      point(magnet.nodes, NODE_PULL_PX, true);
-      point(magnet.corners, FACE_CORNER_PULL_PX, false);
+      point(magnet.nodes, NODE_REACH, true);
+      point(magnet.corners, CORNER_REACH, false);
     });
     if (!best) return null;
     return { dx: dx + n.x * best.gap, dz: dz + n.z * best.gap, lit: best.make(best.gap) };
@@ -1327,6 +1365,34 @@
     if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND THE BG STOREYS' WALL ENDS (Movie, 21 Oct: "i would like the NODES
+    // to work in the BG"): nodes like the level's own, so they are asked
+    // before the cross lines, not after.
+    bgWalls().forEach(w => [w.start, w.end].forEach(v => {
+      if (v && !out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    }));
+    // AND ON THE SITE, THE REGISTRATION TARGET and the roof drawn over it
+    // (Movie, 26 Oct: "the roof plan doesn't seem to have NODE SNAPS working
+    // - i really would like the REGISTRATION TARGET to have a node snap so i
+    // can position the property site plan properly").
+    siteSnapNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
+    return out;
+  };
+  // ON THE SITE ONLY. There the house is shown by its roof, whose corners
+  // live on the ROOF level, so they are the house's nodes, and the gold
+  // target is one with them. On a floor plan the target is worked out from
+  // the walls -- it is the house's own outside corner, a corner that catches
+  // already -- and a wall dragged there would be caught by its own corner.
+  const siteSnapNodes = () => {
+    if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];
+    const out = [];
+    const target = siteDatumNow();
+    if (target && Number.isFinite(target.x) && Number.isFinite(target.z)) out.push({ x: target.x, y: 0, z: target.z });
+    (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);
+    }));
     return out;
   };
   // THE FIXTURE CORNERS A FLOOR OR SHAPE CATCHES: the four of each piece's
@@ -1466,7 +1532,7 @@
     // THE EXACT CATCH TAKES THE SAME CEILING: six pixels at six a foot is a
     // foot, and a garage front drawn a foot off the house's corner (his MOD
     // BILEVEL) was taken for a press on it.
-    const r = pullFt(NODE_SNAP_PX);
+    const r = reachFt(NODE_REACH);
     const nearest = list => {
       let best = null;
       list.forEach(v => {
@@ -1489,7 +1555,7 @@
     && !floors().length && !outlines().length && !(drawing?.boneyardOutlines || []).length;
   const drawSnap = at => {
     if (!at) return {};
-    if (snapOn) {
+    if (snapLive()) {
       const node = snapNodeAt(at);
       if (node) return { pt: { x: node.x, y: 0, z: node.z }, node };
       if (board !== 'toy') {
@@ -1508,7 +1574,7 @@
   // point in hand: its own rays are no guide to where it should go.
   const trackSnap = (at, skip = [], nodes = null) => {
     if (!trackOn) return null;
-    const reach = RAY_HIT_PX / view.scale;
+    const reach = reachFt('track');
     const skipped = n => skip.some(s => Math.abs(s.x - n.x) < 1e-6 && Math.abs(s.z - n.z) < 1e-6);
     let bx = null, bz = null;
     (nodes || [...trackingNodes(), ...nodeEnds()]).forEach(n => {
@@ -1564,7 +1630,7 @@
     }
     if (!magnet) return null;
     const free = fixed === 'z' ? 'x' : 'z';
-    const r = pullFt(FACE_LINE_PULL_PX);
+    const r = reachFt(LINE_REACH);
     let best = null;
     magnet.segs.forEach(seg => {
       const d0 = seg.a[fixed] - worldPt[fixed], d1 = seg.b[fixed] - worldPt[fixed];
@@ -1658,7 +1724,7 @@
     const G = window.DraftGeometry2D;
     const moving = before.map(b => b.vtx);
     const candidates = snapCandidates(moving);
-    const r = CORNER_SNAP_PX / view.scale;
+    const r = reachFt(NODE_REACH);
     let best = null, bestD = Infinity;
     before.forEach(b => {
       const at = { x: b.x + dx, z: b.z + dz };

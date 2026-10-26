@@ -60,8 +60,9 @@ test('the WC taken by its inside corner lands exactly on the inside corner of a 
   await page.evaluate(() => document.activeElement?.blur?.());
   await page.keyboard.press('m');
   await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
-  // A few pixels off the corner: the circle sits on the corner exactly.
-  const off = 4 / (await h.planFrame(page)).scale;
+  // Two pixels each way off the corner (inside a node's reach, floored at
+  // 4 px): the circle sits on the corner exactly.
+  const off = 2 / (await h.planFrame(page)).scale;
   await page.mouse.move(...at(wc.x + off, wc.z + off), { steps: 3 });
   await page.waitForTimeout(100);
   const grab = JSON.parse(await page.locator('#plan').getAttribute('data-move-grab') || 'null');

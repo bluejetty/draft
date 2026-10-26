@@ -147,7 +147,9 @@ test('a face that catches moves the wall across to it and leaves the other axis 
   await page.mouse.click(...at(18, -14));
   await expect(page.locator('#delete')).toBeVisible();
   await lightFoot(page, true);
-  await drag(page, at(18, -14), at(23.4, -12.4));
+  // The hand 0.3 ft past the line: the near face 1.85" off it, inside the
+  // one snap rule's reach for a line (an inch, floored at 4 px).
+  await drag(page, at(18, -14), at(23.4, -12.3));
   const d = await saved(page);
   expect(wall(d, 'solo').start.x, 'five feet along, on the foot').toBeCloseTo(19, 6);
   expect(Math.abs(wall(d, 'solo').start.z + 12), 'a face on the line, half a 2x4 off its centre')
