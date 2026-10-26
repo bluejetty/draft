@@ -14,23 +14,22 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/layout-desk-tidy.spec.js tests/site-dims.spec.js';
 
-const AT_60 = 'at 1" = 60\' they stand 3/8" and 3/4" of paper off the property line';
 const MUTANTS = [
   { file: 'layout-plan.js',
     name: 'the rows ignore the scale they are laid out at',
     find: "  const siteDimFt = pif => SITE_DIM_PAPER_IN / (pif > 0 ? pif : SITE_DIM_DEFAULT_PIF);\n",
     with: "  const siteDimFt = pif => SITE_DIM_PAPER_IN / SITE_DIM_DEFAULT_PIF;\n",
-    test: AT_60 },
+    test: 'at 1" = 60\' they stand 3/8" and 3/4" of paper off the property line' },
   { file: 'layout-plan.js',
     name: 'the outer row a fixed two feet past the first, as before',
     find: "    const firstFt = siteDimFt(pif), outerFt = 2 * siteDimFt(pif);\n",
     with: "    const firstFt = siteDimFt(pif), outerFt = siteDimFt(pif) + 2;\n",
-    test: AT_60 },
+    test: 'at 1" = 60\' they stand 3/8" and 3/4" of paper off the property line' },
   { file: 'layout-plan.js',
     name: 'what the marks clear is the unscaled row',
     find: "  const siteDimReachFt = pif => 2 * siteDimFt(pif);\n",
     with: "  const siteDimReachFt = pif => 2 * siteDimFt();\n",
-    test: AT_60 },
+    test: 'at 1" = 60\' they stand 3/8" and 3/4" of paper off the property line' },
   { file: 'LAYOUT.html',
     name: 'a viewport does not hand its scale to the plan painter',
     find: "          pif: viewport.pif,\n        });\n",
