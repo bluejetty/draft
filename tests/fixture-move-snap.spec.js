@@ -77,6 +77,27 @@ test('its side goes to the cabinet\'s within an inch, and stays where it is let 
   expect(Math.abs(await offsetOf(page, 's') - 7.25)).toBeLessThan(0.05);
 });
 
+// THE ORANGE RING (Movie, 26 Oct, the one snap rule: fixtures show a small
+// orange ring when they snap): on the joint's front corner while the side
+// has caught, and gone once let go.
+test('a side that has caught shows the orange ring on the joint, and only while it holds', async ({ page }) => {
+  const { at, z } = await open(page);
+  await pickAndMove(page, at, z);
+  const magnet = async () => JSON.parse(await page.locator('#plan').getAttribute('data-snap-magnet') || 'null');
+  await page.mouse.move(...at(9, z));
+  await page.mouse.down();
+  await page.mouse.move(...at(9 - 1.95, z), { steps: 8 });
+  await page.waitForTimeout(80);
+  const lit = await magnet();
+  expect(lit?.kind, 'an orange node ring').toBe('node');
+  expect(lit.at[0], 'on the joint, the cabinet\'s right side').toBeCloseTo(5, 6);
+  // Dragged on 3" past the catch: nothing holds, nothing lit.
+  await page.mouse.move(...at(9 + 0.25, z), { steps: 4 });
+  await page.waitForTimeout(80);
+  expect(await magnet(), 'no catch, no ring').toBeNull();
+  await page.mouse.up();
+});
+
 test('the SELECT drag catches the same side', async ({ page }) => {
   const { at, z } = await open(page);
   await page.keyboard.press('s');

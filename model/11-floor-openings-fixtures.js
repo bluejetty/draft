@@ -1233,18 +1233,31 @@
   // to snap to the SIDE of the other CABINET when its within 1 inch"): the
   // pieces' own widths, never the half inch a wall stands them off. SNAP lit,
   // off TOY, as every other catch.
+  // `md.joint` keeps where the two meet, along the run, for the ring.
   const SIDE_SNAP_FT = 1 / 12;
-  const sideSnap = (fixture, target, half) => {
+  const sideSnap = (fixture, target, half, md = {}) => {
+    md.joint = null;
     if (!snapLive() || board === 'toy') return target;
     let best = target, bestD = SIDE_SNAP_FT + 1e-9;
     window.DraftFixtureGeometry.runMates(fixtures(), fixture).filter(o => o.kind !== 'island').forEach(o => {
       const o0 = Number(o.offset) - Number(o.width) / 2, o1 = Number(o.offset) + Number(o.width) / 2;
-      [o1 + half, o0 - half].forEach(t => {
+      [[o1 + half, o1], [o0 - half, o0]].forEach(([t, edge]) => {
         const d = Math.abs(t - target);
-        if (d < bestD) { bestD = d; best = t; }
+        if (d < bestD) { bestD = d; best = t; md.joint = edge; }
       });
     });
     return best;
+  };
+  // THE ORANGE RING ON A FIXTURE THAT CAUGHT (Movie, 26 Oct, the one snap
+  // rule: a small orange ring when a fixture snaps): on the joint's front
+  // corner, where the two sides meet. Null when nothing caught, or the
+  // slide was stopped short of the catch.
+  const fixtureLit = (md, caughtAt) => {
+    if (md.joint == null || Math.abs(Number(md.fixture.offset) - caughtAt) > 1e-6) return null;
+    const geo = window.DraftFixtureGeometry.fixtureGeometry(walls(), md.fixture);
+    if (!geo) return null;
+    const p = md.frame.at(md.joint, geo.frontOff);
+    return { pt: { x: p.x, y: 0, z: p.z }, node: true };
   };
   const setStandoff = (item, standoff) => { if (standoff > 0) item.standoff = standoff; else delete item.standoff; };
   const fixtureMoveTo = (md, raw) => {
@@ -1292,8 +1305,10 @@
       const blocks = runs(fixture) ? []
         : FG.runMates(fixtures(), fixture).filter(o => o.kind !== 'island' && !runs(o))
           .map(o => [Number(o.offset) - Number(o.width) / 2, Number(o.offset) + Number(o.width) / 2]);
-      const at = FG.slideClamp(sideSnap(fixture, md.was.offset + dAlong, half), half, bounds, blocks);
+      const caught = sideSnap(fixture, md.was.offset + dAlong, half, md);
+      const at = FG.slideClamp(caught, half, bounds, blocks);
       if (at != null) fixture.offset = at;
+      md.lit = fixtureLit(md, caught);
     }
     md.moved = md.edits.some(({ item, before }) => item.offset !== before.offset
       || (Number(item.standoff) || 0) !== (Number(before.standoff) || 0));

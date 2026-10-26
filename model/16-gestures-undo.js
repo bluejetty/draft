@@ -885,12 +885,18 @@
     // page answering a gesture nobody made. The pick chain's own precedence
     // (wall and line BEFORE stair) is untouched -- it decides what the first
     // click selects, and nothing can be dragged here that it did not choose.
-    const stairGrab = filterAllows('stair') ? stairAt(at) : null;
+    // OR BY ITS CORNER, a selected flight's corner within a node's reach,
+    // which may stand a hair outside it.
+    const stairByCorner = filterAllows('stair')
+      ? selection.filter(entry => entry.type === 'stair').map(entry => entry.item).find(st => stairCornerAt(st, at)) : null;
+    const stairGrab = filterAllows('stair') ? (stairByCorner || stairAt(at)) : null;
     if (stairGrab && selection.some(entry => entry.item === stairGrab)) {
       const well = stairWellOf(stairGrab);
+      const corner = stairCornerAt(stairGrab, at);
       moveDrag = {
         kind: 'stair', stair: stairGrab, before: { ...stairGrab },
-        grab: at, start: { ...stairGrab.start }, end: { ...stairGrab.end },
+        grab: corner ? { x: corner.x, z: corner.z } : at, corner,
+        start: { ...stairGrab.start }, end: { ...stairGrab.end },
         well: well.hole, wellBefore: well.hole ? { ...well.hole } : null,
         wellPoints: well.hole ? well.hole.points.map(pt => ({ x: pt.x, z: pt.z })) : null,
         shared: well.shared,
@@ -1186,9 +1192,24 @@
           if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
           md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
           md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
+          // HELD BY A CORNER, that corner lands exactly on a node, a face
+          // corner or a line it is brought to -- a point before the faces.
+          md.lit = null;
+          if (md.corner && snapLive() && board !== 'toy') {
+            const held = { x: md.corner.x + dx, z: md.corner.z + dz };
+            md.magnet ||= magnetExcluding(stairCorners({ ...md.stair, start: md.start, end: md.end }));
+            const hit = pointCatch(held, md.magnet);
+            if (hit) {
+              dx += hit.land.x - held.x;
+              dz += hit.land.z - held.z;
+              md.lit = hit;
+              md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
+              md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
+            }
+          }
           // AND ON TO A WALL'S INSIDE FACE when its side comes within reach
           // (Movie, 18 Oct), the well going the same way.
-          const snap = stairFaceSnap(md.stair);
+          const snap = md.lit ? null : stairFaceSnap(md.stair);
           if (snap) {
             dx += snap.frame.n.x * snap.shift;
             dz += snap.frame.n.z * snap.shift;

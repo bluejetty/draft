@@ -41,6 +41,15 @@ const MUTANTS = [
     find: "    const inside = node == null && edge == null && whole.some(rf => pointInRing(rf.points, at));\n",
     with: "    const inside = false;\n",
     test: "a drag inside the roof moves the whole roof" },
+  // THE EDGE STOP AT 3" (Movie, 26 Oct, the one snap rule).
+  { file: 'model/09-draw-move-stretch.js', name: "the edge stop catches from 8 px again",
+    find: "        const catchFt = snapLive() && board !== 'toy' ? ROOF_EDGE_STOP_IN / 12 * snapStrength() : 0;\n",
+    with: "        const catchFt = 8 / view.scale;\n",
+    test: "the edge stop catches from 2 1/2\" short, not from 4\"" },
+  { file: 'model/09-draw-move-stretch.js', name: "the edge stop catches nothing short of the corner",
+    find: "  const ROOF_EDGE_STOP_IN = 3;\n",
+    with: "  const ROOF_EDGE_STOP_IN = 0;\n",
+    test: "the edge stop catches from 2 1/2\" short, not from 4\"" },
 ];
 
 const run = name => {

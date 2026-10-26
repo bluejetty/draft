@@ -14,7 +14,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-html-stair-lock.spec.js';
 const MUTANTS = [
   { file: "model/16-gestures-undo.js", name: "no snap on a drag",
-    find: "          const snap = stairFaceSnap(md.stair);\n",
+    find: "          const snap = md.lit ? null : stairFaceSnap(md.stair);\n",
     with: "          const snap = null;\n",
     test: "dragged near the foundation wall, the flight's side snaps to its inside face and locks to it" },
   { file: "model/06-selection-pick.js", name: "the snap lands on the wall line, not its face",

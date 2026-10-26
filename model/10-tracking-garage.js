@@ -908,6 +908,16 @@
   // "node snape orange glow"). And a cross line snapped to from a node that
   // sends no ray of its own, lit while it holds the point.
   const paintSnapNode = () => {
+    // A FIXTURE THAT CAUGHT ITS NEIGHBOUR: the orange ring on the joint.
+    // A SELECT drag holds it in moveDrag, a MOVE drag in moveState.
+    const fixtureHeld = moveDrag?.kind === 'fixture' ? moveDrag
+      : (() => { try { return moveState?.drag?.kind === 'fixture' ? moveState.drag.md : null; } catch { return null; } })();
+    if (fixtureHeld) {
+      canvas.removeAttribute('data-snap-node');
+      if (fixtureHeld.lit) paintDonut(fixtureHeld.lit.pt, 'orange');
+      markMagnet(fixtureHeld.lit || null);
+      return;
+    }
     // A NODE BEING DRAGGED shows what has it, from the drag's own answer.
     if ((moveDrag?.kind === 'corner' || moveDrag?.kind === 'wall') && moveDrag.active) {
       canvas.removeAttribute('data-snap-node');
@@ -935,6 +945,26 @@
       else paintDonut(held, 'grab');
       grabMark(held);
       markMagnet(tm.pointLock?.lit || null);
+      return;
+    }
+    // A FLIGHT HELD BY ITS CORNER (stairCornerAt): what it has landed on,
+    // or the corner cyan in the hand.
+    if (moveDrag?.kind === 'stair' && moveDrag.corner) {
+      canvas.removeAttribute('data-snap-node');
+      const held = { x: moveDrag.corner.x + moveDrag.stair.start.x - moveDrag.start.x, y: 0,
+        z: moveDrag.corner.z + moveDrag.stair.start.z - moveDrag.start.z };
+      if (moveDrag.lit) paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
+      else paintDonut(held, 'grab');
+      grabMark(held);
+      markMagnet(moveDrag.lit || null);
+      return;
+    }
+    const stairHover = !tm && !moveDrag && cursorWorld && activeTool === RESTING_TOOL
+      ? selection.filter(e => e.type === 'stair').map(e => stairCornerAt(e.item, cursorWorld)).find(Boolean) : null;
+    if (stairHover) {
+      canvas.removeAttribute('data-snap-node');
+      paintDonut({ x: stairHover.x, y: 0, z: stairHover.z }, 'grab');
+      grabMark(stairHover);
       return;
     }
     const suiteHover = !cursorWorld || (tm && (!tm.hologram || tm.from)) ? null

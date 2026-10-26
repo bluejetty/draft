@@ -1809,12 +1809,15 @@
         // on the other side" -- "it was hard to get right on the corner point
         // there was a little extra roof on either one side or the other").
         // Where an edge either side would shrink to nothing -- the slid line
-        // through its far corner -- the slide stops, and catches it from a
-        // few pixels short; the tidy on the release then drops the corner.
+        // through its far corner -- the slide stops, and catches it from 3"
+        // short (the one snap rule, Movie 26 Oct: the roof's edge stop kept
+        // at 3", inches on the plan, scaled by SNAP STRENGTH, nothing with
+        // SNAP off or CTRL held); the tidy on the release then drops the
+        // corner. Past the corner it stops whatever the snap: that is no catch.
         const stops = [roof.points[(i - 1 + n) % n], roof.points[(i + 2) % n]]
           .map(p => (p.x - a.x) * nn.x + (p.z - a.z) * nn.z)
           .filter(cd => Math.abs(cd) > 1e-6 && Math.sign(cd) === Math.sign(dist || cd));
-        const catchFt = 8 / view.scale;
+        const catchFt = snapLive() && board !== 'toy' ? ROOF_EDGE_STOP_IN / 12 * snapStrength() : 0;
         stops.sort((p, q) => Math.abs(p) - Math.abs(q));
         const stop = stops[0];
         if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;
@@ -1953,6 +1956,7 @@
   // one carries them all, a click on one picks just it; two picked and
   // BREAK ROOF splits the roof between them.
   const ROOF_NODE_CATCH_PX = 14;
+  const ROOF_EDGE_STOP_IN = 3;
   // ── BREAK ROOF: TWO ROOFS FROM ONE, ALONG THE LINE BETWEEN TWO NODES ──
   //
   // Each piece keeps its own run of the outline, its edges' kinds and
