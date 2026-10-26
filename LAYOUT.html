@@ -1445,6 +1445,9 @@ const scaleFamilyFor = view => (isSiteView(view) ? 'site' : 'architect');
 // drawing, and would then be wrong -- too roomy -- for all the rest.
 // It is still the right hook for an ELEVATION, where dimensions are not drawn
 // yet and so cannot be measured, which is why it keeps its name and its zero.
+// The site's dimension rows, in paper past the lot line: 3/8" to the first,
+// 3/8" more to the second, and a quarter inch for the figures on it.
+const SITE_ROWS_ROOM_IN = 3 / 8 + 3 / 8 + 1 / 4;
 const VIEW_ALLOWANCE_FT = Object.freeze({
   dimensions: 0,   // strings standing off the object
   markers: 0,      // elevation / level markers hanging off the sides
@@ -1471,7 +1474,7 @@ function windowsFor(views, pifs, region) {
   const n = views.length;
   const pifAt = i => (Array.isArray(pifs) ? pifs[i] : pifs);
   const avail = region.h - n * COMPOSE_LABEL_IN - (n - 1) * COMPOSE_GAP_IN;
-  const full = views.map((view, i) => Math.max(view.hFt * pifAt(i), 0.75));
+  const full = views.map((view, i) => Math.max(view.hFt * pifAt(i) + (view.padIn || 0), 0.75));
   const short = Math.max(0, full.reduce((a, b) => a + b, 0) - avail);
   const give = views.map((view, i) => (view.cropFt || 0) * pifAt(i));
   const giveAll = give.reduce((a, b) => a + b, 0);
@@ -1480,7 +1483,7 @@ function windowsFor(views, pifs, region) {
   return views.map((view, i) => {
     const cut = short > 0 && giveAll > 0 ? Math.min(give[i], short * give[i] / giveAll) : 0;
     const hIn = full[i] - cut + extra;
-    const wIn = Math.max(view.wFt * pifAt(i), 0.75);
+    const wIn = Math.max(view.wFt * pifAt(i) + (view.padIn || 0), 0.75);
     const xIn = region.x + region.w / 2;
     const natTop = top + extra / 2;
     const yIn = natTop + full[i] / 2;
@@ -2004,11 +2007,17 @@ class Component extends PageLogic {
   // The footprint a view claims on paper, in feet. The scale chooser, the
   // frame and the painter all ask this one function, so they cannot disagree
   // about how big the view is.
+  //
+  // `padIn` IS PAPER the view needs past its feet, the same at every scale:
+  // the site's two dimension rows stand 3/8" and 3/4" of paper off the lot
+  // (layout-plan.js), with their figures past that, on every side the frame
+  // is centred on -- so the frame grows by that much paper all round.
   _viewFootprintFt(view) {
     const pad = 2 * this._viewAllowanceFt();
     if (view.kind === 'plan') {
       const b = this._planBounds(view.levelId);
-      return b ? { wFt: (b.maxX - b.minX) + pad, hFt: (b.maxZ - b.minZ) + pad } : null;
+      const padIn = isSiteView(view) ? 2 * SITE_ROWS_ROOM_IN : 0;
+      return b ? { wFt: (b.maxX - b.minX) + pad, hFt: (b.maxZ - b.minZ) + pad, padIn } : null;
     }
     const ex = this._cutExtents(view);
     if (!ex) return null;
@@ -2034,8 +2043,9 @@ class Component extends PageLogic {
     const foot = this._viewFootprintFt(viewport);
     const wFt = foot ? foot.wFt : null;
     const hFt = foot ? foot.hFt : null;
-    const wIn = wFt !== null ? Math.max(wFt * viewport.pif, 0.75) : 2;
-    const hIn = hFt !== null ? Math.max(hFt * viewport.pif, 0.75) : 2;
+    const padIn = foot?.padIn || 0;
+    const wIn = wFt !== null ? Math.max(wFt * viewport.pif + padIn, 0.75) : 2;
+    const hIn = hFt !== null ? Math.max(hFt * viewport.pif + padIn, 0.75) : 2;
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
   }
 
@@ -2152,13 +2162,13 @@ class Component extends PageLogic {
     const family = SCALE_FAMILIES[scaleFamilyFor(views[0])] || SCALE_FAMILIES.architect;
     const fits = pif => {
       if (axis === 'row') {
-        const sumW = views.reduce((sum, view) => sum + view.wFt * pif, 0)
+        const sumW = views.reduce((sum, view) => sum + view.wFt * pif + (view.padIn || 0), 0)
           + COMPOSE_GAP_IN * (views.length - 1);
-        const maxH = Math.max(...views.map(view => view.hFt)) * pif + COMPOSE_LABEL_IN;
+        const maxH = Math.max(...views.map(view => view.hFt * pif + (view.padIn || 0))) + COMPOSE_LABEL_IN;
         return sumW <= region.w && maxH <= region.h;
       }
-      const maxW = Math.max(...views.map(view => view.wFt)) * pif;
-      const sumH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
+      const maxW = Math.max(...views.map(view => view.wFt * pif + (view.padIn || 0)));
+      const sumH = views.reduce((sum, view) => sum + view.hFt * pif + (view.padIn || 0) + COMPOSE_LABEL_IN, 0)
         + COMPOSE_GAP_IN * (views.length - 1);
       return maxW <= region.w && sumH <= region.h;
     };
@@ -2176,7 +2186,7 @@ class Component extends PageLogic {
       .sort((x, y) => y.id - x.id);          // top storey first, the way a set reads
     const sized = view => {
       const foot = this._viewFootprintFt(view);
-      return foot ? { ...view, wFt: foot.wFt, hFt: foot.hFt } : null;
+      return foot ? { ...view, ...foot } : null;
     };
     // A VIEW is placed only if something would put ink in it: planSheet is
     // null for a level with no walls in that view.
@@ -2369,12 +2379,13 @@ class Component extends PageLogic {
         commit(views[0], xIn, yIn);
         return;
       }
-      const stackH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
+      const tall = view => view.hFt * pif + (view.padIn || 0);
+      const stackH = views.reduce((sum, view) => sum + tall(view) + COMPOSE_LABEL_IN, 0)
         + COMPOSE_GAP_IN * (views.length - 1);
       let y = region.y + Math.max(0, (region.h - stackH) / 2);
       views.forEach(view => {
-        commit(view, region.x + region.w / 2, y + (view.hFt * pif) / 2);
-        y += view.hFt * pif + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
+        commit(view, region.x + region.w / 2, y + tall(view) / 2);
+        y += tall(view) + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
       });
     });
     this.setState({
@@ -3092,6 +3103,9 @@ class Component extends PageLogic {
           // `|| null` KEEPS THE OLD PROMISE: a viewport saved before views
           // existed carries no view and still draws the whole level.
           view: viewport.view || null,
+          // THIS VIEWPORT'S SCALE, for what is laid out in paper inches --
+          // the site's dimension rows, 3/8" apart on every sheet.
+          pif: viewport.pif,
         });
         ctx.restore();
       }
@@ -3704,8 +3718,8 @@ class Component extends PageLogic {
       ? levelId : { kind: 'plan', levelId });
     if (!foot) return SCALES[start].pif;
     const region = this._composeRegionIn();
-    const fits = pif => foot.wFt * pif <= region.w
-      && foot.hFt * pif + COMPOSE_LABEL_IN <= region.h;
+    const fits = pif => foot.wFt * pif + (foot.padIn || 0) <= region.w
+      && foot.hFt * pif + (foot.padIn || 0) + COMPOSE_LABEL_IN <= region.h;
     for (let i = start; i >= 0; i -= 1) {
       if (fits(SCALES[i].pif)) return SCALES[i].pif;
     }
@@ -3722,7 +3736,7 @@ class Component extends PageLogic {
     const working = view?.kind === 'plan' && view.levelId < 0 ? SHELF_PIF : SCALES[this.state.activeScale].pif;
     const foot = this._viewFootprintFt(view);
     if (!foot) return working;
-    return Math.min(working, this._autoScaleFor([{ ...view, wFt: foot.wFt, hFt: foot.hFt }], this._composeRegionIn()));
+    return Math.min(working, this._autoScaleFor([{ ...view, ...foot }], this._composeRegionIn()));
   }
 
   _placeViewport(ptIn) {

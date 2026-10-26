@@ -1171,7 +1171,7 @@
       if (lot) {
         (lot.points || []).forEach(point => framed.push(point));
         if (LP && typeof LP.siteDimStrings === 'function') {
-          LP.siteDimStrings(drawing).forEach(row => {
+          LP.siteDimStrings(drawing, dimScalePif(SITE_LEVEL_ID)).forEach(row => {
             framed.push(row.start);
             framed.push(row.end);
           });
