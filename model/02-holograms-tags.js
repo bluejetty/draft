@@ -247,7 +247,8 @@
     try { setHologramChip(); } catch { /* not wired yet */ }
     if (!H()) return;
     const drew = H().paint(ctx, toS, drawing, activeLevelId(),
-      { view: activeViewId(), show: hologramShow, paperColor: skin['surface-page'] });
+      { view: activeViewId(), show: hologramShow, paperColor: skin['surface-page'],
+        pictures: true, pictureKey: String(modelEpoch) });
     // A SUITE IN HAND LIGHTS THE SHELL WALL IT IS LINING UP WITH, and the
     // doors and windows it will cut there (Movie, 18 Oct: "light up the walls
     // when they are close enough for auto snap allignment and then show where
