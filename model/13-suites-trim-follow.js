@@ -2908,8 +2908,13 @@
       && H().suiteNear(drawing, { ...m.underlay, mode: 'suite' }, activeLevelId(), reachFt('suite')).length) {
       sayOnStrip('This hologram is blue, so it does not snap. Set it to SUITE on the HOLOGRAM card: it snaps, its lined-up walls glow, and its windows cut the shell wall.');
     }
-    paint();
+    // ONE PAINT A FRAME (Movie, 26 Oct, his 22-suite file: the drag fell
+    // behind the hand). A mouse sends more moves than the screen shows; each
+    // move above has already put the suite where it goes, and the next frame
+    // paints wherever the last one left it.
+    if (!traceMovePaint) traceMovePaint = requestAnimationFrame(() => { traceMovePaint = 0; paint(); });
   }, true);
+  let traceMovePaint = 0;
   // The click the browser sends after the drag is the drag's own, not a
   // press for whatever tool is up -- swallowed once.
   let swallowTraceClick = false;

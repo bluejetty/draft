@@ -296,7 +296,34 @@
     return { a, dir, lo: Math.min(a, a + dir * sf.len), hi: Math.max(a, a + dir * sf.len) };
   };
   const hostWalls = saved => (Array.isArray(saved?.walls) ? saved.walls : []);
+  // WORKED OUT ONCE PER CHANGE, not on every paint (Movie, 26 Oct, his
+  // 22-suite file: a suite drag ran at seven frames a second, and this was
+  // asked four times a frame). The answer is kept against what it reads --
+  // the shell's walls and openings, and where each suite stands -- so any
+  // edit to those asks afresh.
+  const sourceIds = new WeakMap();
+  let sourceSeq = 0;
+  const sourceId = src => {
+    if (!src || typeof src !== 'object') return 0;
+    if (!sourceIds.has(src)) sourceIds.set(src, ++sourceSeq);
+    return sourceIds.get(src);
+  };
+  const holoKey = holo => {
+    const { source, ...rest } = holo || {};
+    return `${sourceId(source)}:${JSON.stringify(rest)}`;
+  };
+  const sharedMemo = new WeakMap();
   const shared = saved => {
+    if (!saved || typeof saved !== 'object') return sharedFresh(saved);
+    const key = `${JSON.stringify(hostWalls(saved))}|${JSON.stringify(saved.fenestrations || [])}|${
+      shown(saved).filter(isSuite).map(holoKey).join(';')}`;
+    const kept = sharedMemo.get(saved);
+    if (kept && kept.key === key) return kept.out;
+    const out = sharedFresh(saved);
+    sharedMemo.set(saved, { key, out });
+    return out;
+  };
+  const sharedFresh = saved => {
     const out = { openings: [], hidden: new Map(), clashes: [] };
     const suites = shown(saved).filter(isSuite);
     if (!suites.length || !window.DraftGeometry2D || !window.DraftWallTypes) return out;
@@ -528,8 +555,9 @@
   };
   // The openings the shell's walls carry from the suites placed on them --
   // what every painter of the shell adds to its own.
-  const hostOpenings = saved => shared(saved).openings;
-  const clashes = saved => shared(saved).clashes;
+  // Copies, so a caller's change to one is never kept for the next.
+  const hostOpenings = saved => shared(saved).openings.map(o => ({ ...o }));
+  const clashes = saved => shared(saved).clashes.map(c => ({ ...c }));
 
   // What a demo pick or a dashed outline needs about each thing: its outline,
   // and a line to measure a click to.
@@ -611,6 +639,42 @@
     });
     return pair;
   };
+  // ── EACH SUITE A PICTURE OF ITS OWN ─────────────────────────────────────
+  //
+  // Movie, 26 Oct, his 22-suite file: dragging one suite redrew all twenty-two
+  // on every move of the mouse -- seven frames a second. Each suite is drawn
+  // once onto a canvas the size of its own box and laid on after; it is drawn
+  // afresh only when what it shows changes (its file, its demo, the shell
+  // walls taken from it, its layers, the zoom or its turn). A pan or a move
+  // only slides the picture, to the nearest whole pixel. A suite wholly off
+  // the screen is not drawn at all (on MODEL's plan; a DXF keeps every line).
+  //
+  // THE BOX IS ITS WALLS AND FIXTURES with room around them for what stands
+  // outside a wall -- a door swing, a window's size -- and never less than
+  // PICTURE_PAD_PX. A suite drawn bigger than PICTURE_MAX_PX (zoomed right in
+  // on it) is drawn straight on, as before, rather than kept. MODEL's plan
+  // asks for pictures (`env.pictures`); a sheet, a print or a DXF does not,
+  // and is drawn line by line as it always was.
+  const PICTURE_PAD_FT = 8;
+  const PICTURE_PAD_PX = 48;
+  const PICTURE_MAX_PX = 8e6;
+  const pictureStore = new WeakMap();
+  const picturesFor = target => {
+    if (!pictureStore.has(target)) pictureStore.set(target, new Map());
+    return pictureStore.get(target);
+  };
+  const suiteBox = (existing, levelId, toDev) => {
+    const pts = [];
+    (existing.walls || []).filter(wall => wall && Number(wall.levelId) === Number(levelId))
+      .forEach(wall => { if (wall.start && wall.end) pts.push(wall.start, wall.end); });
+    if (!pts.length) return null;
+    const devs = pts.map(toDev);
+    const o = toDev({ x: 0, z: 0 }), e = toDev({ x: 1, z: 0 });
+    const pxPerFt = Math.hypot(e.x - o.x, e.y - o.y);
+    const pad = Math.max(PICTURE_PAD_PX, PICTURE_PAD_FT * pxPerFt);
+    return { x0: Math.min(...devs.map(p => p.x)) - pad, y0: Math.min(...devs.map(p => p.y)) - pad,
+      x1: Math.max(...devs.map(p => p.x)) + pad, y1: Math.max(...devs.map(p => p.y)) + pad };
+  };
   const shown = saved => (Array.isArray(saved?.holograms) ? saved.holograms : []).filter(holo => !holo.hidden);
   // ── A HOLOGRAM'S OWN HOLOGRAMS COME WITH IT (Movie, 18 Oct: "i put a
   // HOLOGRAM of SUITE S into the PHASE 1, and then i saved it and i loaded the
@@ -676,17 +740,57 @@
     ink.clearRect(0, 0, w, h);
     ink.setTransform(ctx.getTransform());
     let drew = false;
+    const pictures = picturesFor(ctx.canvas);
+    const used = new Set();
+    const T = ctx.getTransform();
+    const dev = p => ({ x: T.a * p.x + T.c * p.y + T.e, y: T.b * p.x + T.d * p.y + T.f });
     list.forEach(holo => {
       try {
         const place = pt => toS(F.hologramPoint(holo, pt));
-        const existing = suiteExisting(holo, parts(holo).existing, info);
+        const own = parts(holo).existing;
+        const existing = suiteExisting(holo, own, info);
+        const gone = info.hidden.get(holo.id);
         const layersOff = layersOffFor(holo, env.saved);
-        drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, existing, levelId,
-          { view, hologram: true, paperColor: night ? '#ffffff' : (env.paperColor || '#ffffff'), layersOff })) || drew;
+        const paperColor = night ? '#ffffff' : (env.paperColor || '#ffffff');
+        const draw = target => withoutWords(target, layersOff, () => LP.drawPlan(target, place, existing, levelId,
+          { view, hologram: true, paperColor, layersOff }));
+        // OFF THE SCREEN, NOT DRAWN; ON IT, DRAWN ONCE AND LAID ON AFTER.
+        const box = suiteBox(existing, levelId, pt => dev(place(pt)));
+        if (env.pictures && box && (box.x1 < 0 || box.y1 < 0 || box.x0 > w || box.y0 > h)) return;
+        if (!env.pictures || !box || (box.x1 - box.x0) * (box.y1 - box.y0) > PICTURE_MAX_PX) {
+          drew = draw(ink) || drew;
+          return;
+        }
+        const anchor = dev(place({ x: 0, z: 0 }));
+        const ux = dev(place({ x: 1, z: 0 })), uz = dev(place({ x: 0, z: 1 }));
+        // WHERE IT STANDS IS NOT IN THE KEY: a move slides the picture.
+        const key = [holoKey({ ...holo, x: 0, z: 0 }), gone ? [...gone].sort().join(',') : '',
+          levelId, view, paperColor, [...(layersOff || [])].join(','), env.pictureKey || '',
+          [ux.x - anchor.x, ux.y - anchor.y, uz.x - anchor.x, uz.y - anchor.y].map(v => v.toFixed(6)).join(',')].join('|');
+        used.add(holo.id);
+        let pic = pictures.get(holo.id);
+        if (!pic || pic.key !== key) {
+          const x0 = Math.floor(box.x0), y0 = Math.floor(box.y0);
+          const c = pic?.canvas || document.createElement('canvas');
+          c.width = Math.max(1, Math.ceil(box.x1) - x0);
+          c.height = Math.max(1, Math.ceil(box.y1) - y0);
+          const pc = c.getContext('2d');
+          pc.setTransform(T.a, T.b, T.c, T.d, T.e - x0, T.f - y0);
+          const any = draw(pc);
+          pic = { key, canvas: c, any, x0, y0, anchor };
+          pictures.set(holo.id, pic);
+        }
+        if (!pic.any) return;
+        ink.save();
+        ink.setTransform(1, 0, 0, 1, 0, 0);
+        ink.drawImage(pic.canvas, pic.x0 + Math.round(anchor.x - pic.anchor.x), pic.y0 + Math.round(anchor.y - pic.anchor.y));
+        ink.restore();
+        drew = true;
       } catch (error) {
         console.warn(`suite ${holo.name || holo.id} could not be drawn`, error);
       }
     });
+    [...pictures.keys()].forEach(id => { if (!used.has(id)) pictures.delete(id); });
     if (drew) {
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
