@@ -2769,11 +2769,17 @@
   // THE CORNER A PRESS WOULD TAKE, cyan under SELECT before any press: a
   // repaint only when the corner under the hand changes.
   let suiteHoverKey = '';
-  canvas.addEventListener('pointermove', () => {
-    if (traceMoving || activeTool !== RESTING_TOOL || !cursorWorld) return;
-    const g = holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, cursorWorld)).find(Boolean);
+  canvas.addEventListener('pointermove', event => {
+    // Armed from the card's MOVE with nothing pressed yet: that suite's
+    // corners only. Otherwise under SELECT: any suite's. Read from the
+    // event itself -- this may run before the page's own cursor has moved.
+    const armed = traceMoving?.hologram && !traceMoving.from;
+    if (traceMoving ? !armed : activeTool !== RESTING_TOOL) return;
+    const at = tracePoint(event);
+    const g = armed ? suiteGrabAt(traceMoving.underlay, at)
+      : holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, at)).find(Boolean);
     const key = g ? `${g.x},${g.z}` : '';
-    if (key !== suiteHoverKey) { suiteHoverKey = key; paint(); }
+    if (key !== suiteHoverKey) { suiteHoverKey = key; requestAnimationFrame(() => paint()); }
   });
   window.addEventListener('pointerdown', event => {
     if (traceMoving || event.target !== canvas || event.button !== 0) return;

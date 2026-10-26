@@ -58,11 +58,14 @@ test('a suite FILE still blue gets them too; a plain hologram gets none', async 
   expect(await nodes(page, holo({}, drawing({ walls: BOX })))).toEqual([]);
 });
 
-test('super nodes drawn in the suite\'s own file replace all four corners', async ({ page }) => {
+// SUPERNODE IS GONE (Movie, 26 Oct): one an old suite file kept is ignored,
+// and the suite has its four corners like any other.
+test('a super node left in the suite\'s own file is ignored: the four corners stand', async ({ page }) => {
   await open(page);
   const own = [{ id: 'sn1', levelId: 3, view: 'plan', point: P(5, 0) }];
   const got = await nodes(page, holo({ mode: 'suite' }, drawing({ walls: BOX, superNodes: own })));
-  expect(got).toEqual([[105, 50]]);
+  expect(got).toHaveLength(4);
+  expect(got).not.toContainEqual([105, 50]);
 });
 
 test('turned with the hologram, the corners turn with it', async ({ page }) => {

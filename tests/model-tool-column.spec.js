@@ -42,8 +42,8 @@ const ROSTER = [
   // MOVE and STRETCH (Movie, 20 Oct: "MOVE "M" and also STRETCH" -- "HHHHHH").
   ['draw', 'move', 'MOVE', 'M'],
   ['draw', 'stretch', 'STRETCH', 'H'],
-  // SUPERNODE (Movie, 20 Oct) in the old NODE / ARC slot, on its N.
-  ['draw', 'node', 'SUPERNODE', 'N'],
+  // SUPERNODE (Movie, 20 Oct) stood here on N, and is gone (26 Oct: "maybe
+  // we can get rid of that, it didn't work that good").
   ['draw', 'line', 'LINE', 'L'],
   ['draw', 'shape', 'SHAPE', 'A'],
   ['draw', 'dimension', 'DIMENSION', 'D'],
@@ -109,7 +109,7 @@ const keys = page => page.locator('[data-tool-key]').evaluateAll(els => els.map(
   armed: el.getAttribute('aria-pressed') === 'true',
 })));
 
-test('twenty-two keys, in the old page\'s order and grouping', async ({ page }) => {
+test('twenty-one keys, in the old page\'s order and grouping', async ({ page }) => {
   await openColumn(page);
   const got = await keys(page);
 
@@ -125,7 +125,7 @@ test('twenty-two keys, in the old page\'s order and grouping', async ({ page }) 
     .toHaveText('BUILD');
 });
 
-test('sixteen keys carry a letter and seven are deliberately bare',
+test('fifteen keys carry a letter and seven are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -135,7 +135,7 @@ test('sixteen keys carry a letter and seven are deliberately bare',
     // Stated as a count as well as a table, because the table above would also
     // be satisfied by a build that prints nothing on ANY face if the expected
     // letters were ever loosened to ''.
-    expect(got.filter(k => k.key !== '')).toHaveLength(16);
+    expect(got.filter(k => k.key !== '')).toHaveLength(15);
     expect(got.filter(k => k.key === '').map(k => k.id))
       .toEqual(['annotation', 'roomtag', 'dormer', 'column', 'beam', 'stair', 'fixture']);
   });
