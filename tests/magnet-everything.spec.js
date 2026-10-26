@@ -183,17 +183,20 @@ test('a roof node dragged lands on another roof\'s corner, and never on itself',
     await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
   };
   // FIRST THE NUDGE, while no corner of B stands on A's: B's bottom-left
-  // node 5" (0.42 ft) in hand shows no magnet. The node is not its own, so
-  // its old place, inside the six-inch reach, does not take it, and it is
-  // clear of its neighbours' cross lines (9.6 px off each).
+  // node 1.2" each way in hand (1.7", the old place inside a node's 2" reach
+  // at the 4 px floor) shows no magnet. The node is not its own, so its old
+  // place does not take it. TRACK off, so the cross lines through its
+  // neighbours, an inch and a half off, do not either.
+  await page.locator('[data-mode-track]').click();
+  await expect(page.locator('[data-mode-track]')).toHaveAttribute('aria-pressed', 'false');
   await armOnB();
-  await dragFrom(page, at, [13, 8], [13.3, 8.3]);
+  await dragFrom(page, at, [13, 8], [13.1, 8.1]);
   expect(await magnet(page)).toBeNull();
   await page.mouse.up();
   await page.waitForTimeout(100);
   await expect(page.locator('#strip-message')).toContainText('Node moved');
   let rb = (await saved(page)).roofs.find(r => r.id === 'rb');
-  expect([r3(rb.points[3].x), r3(rb.points[3].z)]).toEqual([13.3, 8.3]);
+  expect([r3(rb.points[3].x), r3(rb.points[3].z)]).toEqual([13.1, 8.1]);
   // THEN THE LANDING: its top-left node to 1.4" off roof A's top-right
   // corner (inside a node's 2"), and on it. (The save's Escape put MOVE
   // down: arm it again.)

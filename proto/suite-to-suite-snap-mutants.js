@@ -26,7 +26,7 @@ const MUTANTS = [
   { file: 'hologram.js', name: 'a much wider reach',
     find: "      if (Math.abs(d) > reachFt) return;\n      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };",
     with: "      if (Math.abs(d) > reachFt * 3) return;\n      const u = { x: (L.b.x - L.a.x) / L.len, z: (L.b.z - L.a.z) / L.len };",
-    test: 'a foot short' },
+    test: 'six inches short' },
   { file: 'model/13-suites-trim-follow.js', name: 'the line also pins the suite along it (no jog)',
     find: "        m.underlay.x += held === 'x' ? 0 : lock.dx;",
     with: "        m.underlay.x = (holograms().find(o => o === lock.other) || m.underlay).x;\n        m.underlay.x += held === 'x' ? 0 : lock.dx;",

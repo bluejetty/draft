@@ -121,14 +121,14 @@ test('lines that do not quite meet stay solid: nothing is drawn joined', async (
   await expect(page.locator('#plan')).toHaveAttribute('data-joined-lines', '1');
 });
 
-test('a foot short, nothing catches', async ({ page }) => {
+test('six inches short, nothing catches', async ({ page }) => {
   const { at } = await open(page, plan());
   const gap = (await lines(page, 'h2'))[0].z - (await lines(page, 'h1'))[1].z;
   await grab(page, at, [10, 7.5]);
-  await to(page, at, [10, 7.5 + gap - 1]);
+  await to(page, at, [10, 7.5 + gap - 0.5]);
   expect(await lineLock(page)).toBeNull();
   await drop(page);
-  expect((await saved(page)).holograms[0].z).toBeCloseTo(gap - 1, 1);
+  expect((await saved(page)).holograms[0].z).toBeCloseTo(gap - 0.5, 1);
 });
 
 test('the corners no longer pull: corner to corner across, with the lines not facing, nothing catches', async ({ page }) => {
