@@ -2395,7 +2395,11 @@ if (!window.DraftDrawingFormat) {
       // the titles out from the viewports as it always has.
       sheets: (Array.isArray(raw?.sheets) ? raw.sheets : []).slice(0, 99)
         .map(sheet => ({ title: typeof sheet?.title === 'string'
-          ? sheet.title.trim().toUpperCase().slice(0, 40) : '' })),
+          ? sheet.title.trim().toUpperCase().slice(0, 40) : '',
+          // THIS SHEET ONLY (Movie, 26 Oct): a titleblock frame of its own,
+          // by frame id; absent, the sheet wears the set's.
+          ...(typeof sheet?.titleblock === 'string' && /^[A-Z0-9_-]{1,24}$/i.test(sheet.titleblock)
+            ? { titleblock: sheet.titleblock } : {}) })),
       nextViewportId: Math.max(
         Number.isInteger(Number(raw?.nextViewportId)) ? Number(raw.nextViewportId) : 1,
         ...viewports.map(viewport => viewport.id + 1),

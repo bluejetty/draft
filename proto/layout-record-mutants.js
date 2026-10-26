@@ -34,8 +34,8 @@ const MUTANTS = [
   { file: 'LAYOUT.html',
     name: 'THE CUT IDS ARE NOT PASSED: every section viewport falls off every '
       + 'saved sheet set, quietly, and the sheets just have less on them',
-    find: 'const layout = saved?.layout ? format.layout(saved.layout, levelIds, cutIds) : null;',
-    with: 'const layout = saved?.layout ? format.layout(saved.layout, levelIds) : null;' },
+    find: 'const layout = saved?.layout ? format.layout(saved.layout, viewLevelIds, cutIds) : null;',
+    with: 'const layout = saved?.layout ? format.layout(saved.layout, viewLevelIds) : null;' },
 
   { file: 'LAYOUT.html',
     name: 'THE PAPER IS PATCHED UNCONDITIONALLY, so every drawing saved before '

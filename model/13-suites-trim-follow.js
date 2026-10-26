@@ -2293,6 +2293,11 @@
       sayOnStrip(`${file.name} is not a drawing this page can read.`);
       return null;
     }
+    // A .draft SAVED WITH ITS UNDERLAY PICTURES PACKED IN (Movie, 25 Oct)
+    // brings its drawing, not them: a hologram is kept whole inside this
+    // drawing, and megabytes of someone else's tracing photos would ride in
+    // every save.
+    if (parsed && typeof parsed === 'object') delete parsed.underlayFiles;
     const check = F.checkEnvelope(parsed);
     if (!check.ok) {
       sayOnStrip(check.reason === 'version'
@@ -2597,6 +2602,34 @@
     const squaredAt = squareTo(from, at);
     return onTheFoot_if() ? onTheFoot(from, squaredAt, 0) : squaredAt;
   };
+  // A PRESS ON A SUITE'S END LINE PICKS THE SUITE UP (Movie, 25 Oct: "so a
+  // user can see them easily and grab onto the line directly easily"), with
+  // SELECT up -- a drawing tool keeps its press. The listener just below
+  // then starts the drag from this same press; a press that moves nothing
+  // puts it straight back down.
+  const SUITE_LINE_GRAB_PX = 7;
+  const suiteLineAt = event => {
+    if (!H()?.suiteEndLines || !drawing) return null;
+    const r = canvas.getBoundingClientRect();
+    const p = { x: event.clientX - r.left, y: event.clientY - r.top };
+    let best = null;
+    holograms().filter(holo => !holo.hidden).forEach(holo => H().suiteEndLines(holo, activeLevelId()).forEach(L => {
+      const a = toS(L.ea), b = toS(L.eb);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      const d = Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+      if (d <= SUITE_LINE_GRAB_PX && (!best || d < best.d)) best = { d, holo };
+    }));
+    return best?.holo || null;
+  };
+  window.addEventListener('pointerdown', event => {
+    if (traceMoving || event.target !== canvas || event.button !== 0) return;
+    if (activeTool !== RESTING_TOOL) return;
+    const holo = suiteLineAt(event);
+    if (!holo) return;
+    traceMoving = { underlay: holo, from: null, before: null, hologram: true, grabbed: true };
+    sayOnStrip(traceMoveWord(traceMoving));
+  }, true);
   window.addEventListener('pointerdown', event => {
     if (!traceMoving || event.target !== canvas || event.button !== 0) return;
     event.stopImmediatePropagation();
@@ -2644,8 +2677,32 @@
     // lining them up it snaps to make it easy for them"): within 6" of a
     // shell wall's faces lining up with its own, it slides the rest -- when
     // no super node has it.
+    // ITS END LINES MEET THE NEXT SUITE'S (Movie, 25 Oct, the rings
+    // replaced by a line on each end: "should line up to become one line").
+    // Across the lines only: along them the suite stays free to jog in or
+    // out, which the shell wall's snap just below settles -- "lock into the
+    // ext wall to ext wall (to show the windows and doors)".
+    m.lineLock = null;
+    if (m.hologram && !m.superLock && H()?.suiteLineSnap) {
+      const lock = H().suiteLineSnap(m.underlay, holograms().filter(o => o !== m.underlay && !o.hidden),
+        activeLevelId(), SUITE_LINE_PULL_FT);
+      if (lock) {
+        const held = squaredAxis(m.from, at);
+        m.underlay.x += held === 'x' ? 0 : lock.dx;
+        m.underlay.z += held === 'z' ? 0 : lock.dz;
+        m.lineLock = lock;
+      }
+    }
     if (m.hologram && m.underlay.mode === 'suite' && !m.superLock && H()?.suiteSnap) {
       const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), 0.5);
+      // A LINE THAT HAS IT KEEPS IT: the shell's slide is taken along the
+      // line only, never back across what the line just lined up.
+      if (m.lineLock) {
+        const n = m.lineLock.mine.n;
+        const across = slide.x * n.x + slide.z * n.z;
+        slide.x -= n.x * across;
+        slide.z -= n.z * across;
+      }
       // AND NOT OFF THE SQUARE: with the T-SQUARE down the slide may only
       // take the suite further along the axis the hand is moving on. A slide
       // on the held axis would be the snap moving what the square forbade.
@@ -2690,6 +2747,7 @@
     const moved = m.before && (Math.abs(m.underlay.x - m.before.x) > TRACE_MOVE_MIN_FT
       || Math.abs(m.underlay.z - m.before.z) > TRACE_MOVE_MIN_FT);
     if (moved) { endTraceMove(true); return; }
+    if (m.grabbed) { endTraceMove(false); return; }
     m.from = null;
     m.before = null;
     sayOnStrip(traceMoveWord(m));

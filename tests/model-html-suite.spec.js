@@ -164,7 +164,17 @@ test('a suite draws in the normal colours, not the hologram blue', async ({ page
     const corners = (window.DraftHologram.suiteSuperNodes(holo, 3) || []).map(n => ({
       x: (r.width / 2 + (n.point.x - cx) * scale) * k, y: (r.height / 2 + (n.point.z - cz) * scale) * k }));
     const reach = 14 * k;
-    const onRing = (x, y) => corners.some(q => Math.hypot(q.x - x, q.y - y) <= reach);
+    // AND NOT ITS END LINES (Movie, 25 Oct): the rings gave way to a line on
+    // each end of the suite, 2 ft past its corners, in the same colour.
+    const toPx = p => ({ x: (r.width / 2 + (p.x - cx) * scale) * k, y: (r.height / 2 + (p.z - cz) * scale) * k });
+    const ends = (window.DraftHologram.suiteEndLines?.(holo, 3) || []).map(L => [toPx(L.ea), toPx(L.eb)]);
+    const nearSeg = (x, y, [a, b]) => {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy)) <= 10 * k;
+    };
+    const onRing = (x, y) => corners.some(q => Math.hypot(q.x - x, q.y - y) <= reach)
+      || ends.some(seg => nearSeg(x, y, seg));
     let n = 0;
     // THE HOLOGRAM'S BLUE, not the turquoise of a super node ring: blue well
     // above green.

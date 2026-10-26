@@ -1235,6 +1235,42 @@
         columnsOnBeam(item, (drawing.beams || []).filter(b => !chosen.has(b))).map(c => c.point)),
     ])].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
   };
+  // THE POINT A MOVE TAKES HOLD OF (Movie, 25 Oct: "i'd like to pick the
+  // point where i scroll over, the 'node or intersection' is given a
+  // CIRCLE, if there is a CIRCLE and i click the circle it click on the
+  // exact intersection or node and allow me to place that node EXACTLY onto
+  // another intersection or node in the same way" -- after "i'd like to
+  // snap the inside corner of the WC and move it to the inside corner where
+  // the 2x6 wall meets the 2x4 wall ... i get it off a little each time").
+  // A press used to take hold wherever it fell, a few inches off the corner
+  // he aimed at, and the move carried that miss to the corner it landed on;
+  // and the WC's inside FACE corners were never among the points a move
+  // seeks with. Now: every point the selection carries, and the face corners
+  // of its walls -- inside and outside -- within 14 px of the hand; the press
+  // takes that exact point, and the hand's catch then lands it exactly on the
+  // node or face corner it is dropped on.
+  const MOVE_GRAB_PX = 14;
+  const moveGrabPoints = () => {
+    const entries = selectionEntries();
+    const pts = carriedPoints(entries).map(v => ({ x: v.x, z: v.z, node: true }));
+    const G = window.DraftGeometry2D;
+    const ws = entries.filter(e => e.type === 'wall').map(e => e.item);
+    if (G?.wallFaceCorners && ws.length) {
+      G.wallFaceCorners(ws, openingThicknessFt()).forEach(c => pts.push({ x: c.x, z: c.z, node: false }));
+    }
+    return pts;
+  };
+  const moveGrabAt = at => {
+    if (!at || !selection.length) return null;
+    const r = MOVE_GRAB_PX / view.scale;
+    let best = null;
+    moveGrabPoints().forEach(p => {
+      const d = Math.hypot(p.x - at.x, p.z - at.z);
+      // A NODE BEATS A FACE CORNER AT THE SAME DISTANCE, as the magnet has it.
+      if (d <= r && (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) < 1e-9 && p.node && !best.p.node))) best = { d, p };
+    });
+    return best ? best.p : null;
+  };
   const selectionMoveSet = () => {
     const entries = selectionEntries();
     const chosen = new Set(entries.map(entry => entry.item));
@@ -1621,7 +1657,9 @@
         canvas.setPointerCapture(event.pointerId);
         return;
       }
-      moveState.drag = { kind: 'selection', at, set: selectionMoveSet(), moved: false };
+      const grab = moveGrabAt(at);
+      moveState.drag = { kind: 'selection', at: grab ? { x: grab.x, z: grab.z } : at, grab: grab || null, press: at,
+        set: selectionMoveSet(), moved: false };
       canvas.setPointerCapture(event.pointerId);
       return;
     }
@@ -1846,8 +1884,15 @@
       const steps = [moveStep, ...settled.steps];
       undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : moveStep);
       // A TYPED LENGTH MAY FINISH IT -- see moveTyped.
+      // THE WAY A TYPED LENGTH GOES is the hand's own travel, press to
+      // release: with a corner taken exactly (moveGrabAt) the drag's start
+      // stood a little off the press, and that small jump would tilt a
+      // straight drag into a slant.
+      const way = d.grab && d.press && d.cursor
+        ? { x: d.cursor.x - d.press.x, z: d.cursor.z - d.press.z } : null;
       moveTyped = Math.hypot(d.dx || 0, d.dz || 0) > 1e-6
-        ? { set: d.set, dx: d.dx, dz: d.dz, moveStep, step: undoStack[undoStack.length - 1] } : null;
+        ? { set: d.set, dx: d.dx, dz: d.dz, ...(way && Math.hypot(way.x, way.z) > 1e-6 ? { way } : {}),
+          moveStep, step: undoStack[undoStack.length - 1] } : null;
       markDirty();
       setSelection([...selection]);
       sayOnStrip(settled.said

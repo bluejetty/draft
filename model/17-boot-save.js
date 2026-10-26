@@ -667,6 +667,55 @@
     return contents;
   };
 
+  // ── THE UNDERLAY PICTURES RIDE IN THE .draft (Movie, 25 Oct) ─────────
+  //
+  // "can it save the jpg within the file so when the user reopens the jpg is
+  // already loaded", and, asked, "Always pack them in". A picture under the
+  // plan is kept in this browser's own store, by the underlay's id; the
+  // drawing only names it. So the file on disk carries each one too, as a
+  // data URL under `underlayFiles` -- the DOWNLOAD only: the shared store
+  // already holds the pictures, and the save a drafter makes every few
+  // minutes stays the size it was. OPEN puts them back in the store and
+  // reads the drawing without them (unpackUnderlayFiles).
+  const asDataUrl = blob => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+  const withUnderlayFiles = async contents => {
+    const list = (drawing?.underlays || []).filter(u => u && u.id != null);
+    if (!list.length || !window.SharedFileStore?.loadNamedFile) return contents;
+    const packed = {};
+    for (const u of list) {
+      try {
+        const file = await window.SharedFileStore.loadNamedFile(u.id, 'underlays');
+        if (file) packed[u.id] = { name: file.name || String(u.id), dataUrl: await asDataUrl(file) };
+      } catch (error) {
+        console.warn(`MODEL: underlay ${u.id} could not be packed:`, error);
+      }
+    }
+    if (!Object.keys(packed).length) return contents;
+    return JSON.stringify({ ...JSON.parse(contents), underlayFiles: packed });
+  };
+  const unpackUnderlayFiles = async file => {
+    let parsed;
+    try { parsed = JSON.parse(await file.text()); } catch { return file; }
+    const packed = parsed && typeof parsed === 'object' ? parsed.underlayFiles : null;
+    if (!packed || typeof packed !== 'object') return file;
+    for (const [id, entry] of Object.entries(packed)) {
+      if (!entry || typeof entry.dataUrl !== 'string' || !entry.dataUrl.startsWith('data:')) continue;
+      try {
+        const blob = await (await fetch(entry.dataUrl)).blob();
+        await window.SharedFileStore.saveNamedFile(new File([blob], id, { type: blob.type }), 'underlays');
+      } catch (error) {
+        console.warn(`MODEL: underlay ${id} could not be unpacked:`, error);
+      }
+    }
+    delete parsed.underlayFiles;
+    return new File([JSON.stringify(parsed)], file.name, { type: 'application/json' });
+  };
+
   // Returns whether the write landed, because SAVE FIRST in the unsaved guard
   // has to know: a guard that offered to save, failed, and threw the drawing
   // away anyway would be worse than no guard at all.
@@ -685,7 +734,7 @@
       // give them a copy of a drawing the shared store does not have, named
       // as though it were saved.
       const contents = await writeDrawing();
-      if (download) await downloadDrawing(contents, download, handle);
+      if (download) await downloadDrawing(await withUnderlayFiles(contents), download, handle);
       // The note described a difference this save has just resolved.
       if (elsewhereNote) elsewhereNote.hidden = true;
       saveButton.disabled = false;
@@ -1198,7 +1247,7 @@
       event.target.value = '';
       // A SAVED FILE OPENS ONTO LEVELS / LAYERS (Movie, 10 Oct), so the
       // previews of what was just opened are the first thing in view.
-      if (file && (await adoptAndShow(file))) setRail('right', true);
+      if (file && (await adoptAndShow(await unpackUnderlayFiles(file)))) setRail('right', true);
     });
   }
 

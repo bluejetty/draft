@@ -351,9 +351,10 @@
     const m = moveTyped;
     if (m.opening) return slideByTyped(m, feet);
     if (m.drag) return dragByTyped(m, feet);
-    const len = Math.hypot(m.dx, m.dz);
+    const wx = m.way ? m.way.x : m.dx, wz = m.way ? m.way.z : m.dz;
+    const len = Math.hypot(wx, wz);
     if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
-    const dx = m.dx / len * feet, dz = m.dz / len * feet;
+    const dx = wx / len * feet, dz = wz / len * feet;
     // WHAT THE RELEASE WORKED OUT COMES BACK FIRST -- a floor stepped deeper
     // for the drag's span, a stair's framing laid where the drag left it --
     // last first, the way UNDO takes a batch. The move's own step stays: it

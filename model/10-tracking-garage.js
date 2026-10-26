@@ -787,6 +787,9 @@
     orange: { ink: '#ff9a1f', glow: 'rgba(255, 150, 30, 0.95)' },
     yellow: { ink: '#ffe600', glow: 'rgba(255, 230, 0, 0.95)' },
     neon: { ink: TRACK_LIT, glow: TRACK_GLOW },
+    // THE POINT A MOVE WILL TAKE HOLD OF, its own colour, so the selection's
+    // circle never reads as a target's.
+    grab: { ink: '#22e3ff', glow: 'rgba(34, 227, 255, 0.95)' },
   };
   const tierOf = lit => (lit?.seg ? 'neon' : lit?.node ? 'orange' : 'yellow');
   const paintDonut = (pt, tier = 'orange') => {
@@ -917,6 +920,13 @@
       markMagnet(moveDrag.lit);
       return;
     }
+    // A FLOORING CORNER IN HAND shows the corner it will land on.
+    if (moveDrag?.kind === 'roomcorner' && moveDrag.lit) {
+      canvas.removeAttribute('data-snap-node');
+      paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
+      markMagnet(moveDrag.lit);
+      return;
+    }
     // THE MOVE TOOL'S DRAG shows what has it, the same way -- with the nodes
     // too, and the square line-up's guide.
     const mv = moveState?.drag;
@@ -930,6 +940,16 @@
     }
     // AND BEFORE THE PRESS, what the hand is over glows (Movie, 19 Oct:
     // "stuff should glow when i mouse over so i know its magnetic snapable").
+    // THE SELECTION'S OWN CORNER UNDER THE HAND, before the press: the
+    // circle the press will take hold of exactly (moveGrabAt).
+    const grabHover = moveState?.on && !moveState.drag && !moveState.roof && cursorWorld ? moveGrabAt(cursorWorld) : null;
+    if (grabHover) {
+      canvas.removeAttribute('data-snap-node');
+      paintDonut({ x: grabHover.x, y: 0, z: grabHover.z }, 'grab');
+      canvas.setAttribute('data-move-grab', JSON.stringify([Number(grabHover.x.toFixed(4)), Number(grabHover.z.toFixed(4))]));
+      return;
+    }
+    canvas.removeAttribute('data-move-grab');
     const hover = moveHover();
     if (hover) {
       canvas.removeAttribute('data-snap-node');

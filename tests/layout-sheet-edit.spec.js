@@ -286,3 +286,34 @@ for (const [name, mimeType, bytes, ratio] of [
     expect(Math.abs(size[0] / size[1] - ratio), `the block alone, ${size}`).toBeLessThan(0.08);
   });
 }
+
+// A SHELF ON A SHEET (Movie, 26 Oct: "i'd like to be able to add a viewport
+// from a 'SHELF' drawing so i can show the suites"). A shelf that holds walls
+// is offered under SHELVES -- an empty one is not -- and comes in as a plan
+// of that shelf, titled by the shelf's name, kept through a reload.
+test('+ ADD VIEWPORT offers a SHELF with a drawing on it, and puts it on the sheet', async ({ page }) => {
+  const d = boneDrawing();
+  d.boneyardShelves = [{ id: 1, name: 'SHELF 1' }, { id: 2, name: 'SUITE A' }];
+  const w = (id, sx, sz, ex, ez) => ({ id, start: point(sx, sz), end: point(ex, ez), levelId: -2, view: 'plan',
+    wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' });
+  d.walls.push(w(101, 0, 0, 24, 0), w(102, 24, 0, 24, 30), w(103, 24, 30, 0, 30), w(104, 0, 30, 0, 0));
+  await openLayout(page, d);
+  await waitForCompose(page);
+  const dealt = await savedLayout(page);
+  expect(dealt.viewports.some(v => v.levelId < 0), 'the auto deal leaves the shelves alone').toBe(false);
+  await page.locator('[data-layout-add-sheet]').click();
+  await page.locator('[data-layout-add-viewport]').click();
+  await expect(page.locator('.lay-add-head')).toContainText(['SHELVES']);
+  await expect(page.locator('[data-add-pick="plan:-1"]'), 'an empty shelf is not offered').toHaveCount(0);
+  await page.locator('[data-add-pick="plan:-2"]').click();
+  await expect(page.locator('[data-add-pick="plan:-2"]')).toHaveText('SUITE A PLAN');
+  const seq = await saveSeq(page);
+  await page.mouse.click(...await deskPoint(page, 7, 5));
+  const after = await savedAfter(page, seq);
+  const made = after.viewports.find(v => !dealt.viewports.some(o => o.id === v.id));
+  expect(made).toMatchObject({ kind: 'plan', levelId: -2 });
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+  expect((await savedLayout(page)).viewports.some(v => v.id === made.id && v.levelId === -2),
+    'the shelf viewport survives a reload').toBe(true);
+});
