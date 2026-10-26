@@ -2,8 +2,9 @@
 // MUTATION GATE for a BONEYARD shelf on a sheet (tests/layout-sheet-edit.spec.js).
 //
 // Movie, 26 Oct: "i'd like to be able to add a viewport from a 'SHELF'
-// drawing so i can show the suites". Three seams: the SHELVES group in the
-// add list, only shelves that hold walls, and the shelf's viewport read back.
+// drawing so i can show the suites". Four seams: the SHELVES group in the
+// add list, only shelves that hold walls, the frame on the suite, and the
+// shelf's viewport read back.
 //
 // Run: node proto/layout-shelf-viewport-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -13,6 +14,11 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/layout-sheet-edit.spec.js';
 
 const MUTANTS = [
+  { file: 'LAYOUT.html',
+    name: 'a shelf is framed on everything lying on it',
+    find: "      if (levelId < 0) {\n        const pts = ",
+    with: "      if (false) {\n        const pts = ",
+    test: '+ ADD VIEWPORT offers a SHELF with a drawing on it, and puts it on the sheet' },
   { file: 'LAYOUT.html',
     name: 'no SHELVES in the add list',
     find: "    return [['PLANS', plans], ['SHELVES', shelves], ",

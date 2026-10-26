@@ -154,16 +154,22 @@ if (!window.DraftPlanComposition) {
     const hasLayerViews = Boolean(env.hasLayerViews);
     const viewId = env.viewId === undefined ? null : env.viewId;
     const shows = layerShows(env);
+    // A HOLOGRAM'S LAYERS SWITCHED OFF (Movie, 26 Oct: "bring in the suites
+    // and turn off most or all of the text and dimension layers"), by layer
+    // id. Unlike the view's own list above, an untagged record is asked by
+    // the layer it is drawn on (its painter's default), so a suite's AUTO
+    // DIMS -- which carry no layer key -- go off with A-DIMS.
+    const off = id => Boolean(env.layersOff && id && env.layersOff.has(id));
     const pick = (items, options) => forLevel(items, levelId, viewId, hasLayerViews, options);
 
     // Roofs and outlines are whole-level, not per-view: a roof belongs to the
     // level it covers and shows on every drawing of it.
-    const floors = pick(env.floors).filter(floor => shows(floor.layer));
-    const shapes = pick(env.shapes).filter(shape => shows(shape.layer));
-    const roofs = pick(env.roofs, { views: false });
+    const floors = pick(env.floors).filter(floor => shows(floor.layer) && !off(floor.layer || 'A-FL'));
+    const shapes = pick(env.shapes).filter(shape => shows(shape.layer) && !off(shape.layer || 'SHAPE'));
+    const roofs = pick(env.roofs, { views: false }).filter(roof => !off(roof.layer || 'A-ROOF'));
     const walls = pick(env.walls);
-    const lines = pick(env.lines).filter(line => shows(line.layer));
-    const dimensions = pick(env.dimensions).filter(dimension => shows(dimension.layer));
+    const lines = pick(env.lines).filter(line => shows(line.layer) && !off(line.layer || 'draft'));
+    const dimensions = pick(env.dimensions).filter(dimension => shows(dimension.layer) && !off(dimension.layer || 'A-DIMS'));
     // A STAIR NOTE BELONGS TO THE STAIR WORKSPACE, which is a separate
     // surface with its own painter -- and the exclusion sits ON TOP of the
     // view match rather than inside it, because a level with NO layer views
@@ -171,7 +177,7 @@ if (!window.DraftPlanComposition) {
     // apply it; this module did not, so stair notes were landing on plan
     // viewports on the sheet.
     const notes = pick(env.notes)
-      .filter(note => note.view !== 'stair' && shows(note.layer));
+      .filter(note => note.view !== 'stair' && shows(note.layer) && !off(note.layer || 'A-ANNO-NOTE'));
 
     // A STAGE WITH NO ENV IS SKIPPED, NOT GUESSED. These painters read their
     // colours, their formatters and their host lookups straight off the env --
@@ -187,7 +193,7 @@ if (!window.DraftPlanComposition) {
     // with its flooring on reaches paper; the painter drops the bare shape
     // on a print. The tags' own pass (the names) stays last.
     const roomShapes = env.roomTagEnv && render.drawRoomShape2D
-      ? pick(env.roomTags, { views: false }).filter(tag => (tag.points || []).length >= 3 && shows('A-FL-FLOORING'))
+      ? pick(env.roomTags, { views: false }).filter(tag => (tag.points || []).length >= 3 && shows('A-FL-FLOORING') && !off('A-FL-FLOORING'))
       : [];
     roomShapes.forEach(tag => { onLayer(ctx, 'A-FL-FLOORING'); render.drawRoomShape2D(ctx, toS, tag, {}, env.roomTagEnv); });
 
@@ -196,7 +202,7 @@ if (!window.DraftPlanComposition) {
     // fixtures below still read the real walls.
     // THE WC TILE, under the walls so their fill stops it at the face. It
     // rides the fixture env: a sheet that draws no fixtures draws no tile.
-    const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer));
+    const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer) && !off(fixture.layer || 'A-FIXT'));
     if (env.fixtureEnv && render.drawWetFloors2D && levelFixtures.length) {
       const ink = env.fixtureEnv.FIXTURE_COLOR;
       onLayer(ctx, 'A-FL-FLOORING');
@@ -213,8 +219,11 @@ if (!window.DraftPlanComposition) {
     const joins = env.wallJoins ? env.wallJoins(pieces) : null;
     // The fill pass is the wall's hatch -- its own layer, so an engineer can
     // switch the pattern off and keep the wall.
-    pieces.forEach(wall => { onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
-    pieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });
+    // A WALL SWITCHED OFF goes with its hatch; the openings and fixtures it
+    // hosts still ask their own layers.
+    const drawnPieces = pieces.filter(wall => !off(wallLayer(wall)));
+    drawnPieces.forEach(wall => { if (off('A-WALL-PATT')) return; onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
+    drawnPieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });
 
     // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct):
     // worked out by the caller (door-bucks.js through layout-plan), painted
@@ -224,7 +233,7 @@ if (!window.DraftPlanComposition) {
       render.drawDoorBucks2D(ctx, toS, env.doorBucks, env.buckEnv || {});
     }
 
-    drawOpenings(ctx, toS, env, walls, shows);
+    drawOpenings(ctx, toS, env, walls, shows, off);
 
     // FIXTURES RIDE THEIR HOST WALL, so the painter is handed the wall as its
     // own argument rather than looking it up. `_redrawOverlay` draws them
@@ -240,7 +249,8 @@ if (!window.DraftPlanComposition) {
       const wallById = new Map(walls.map(wall => [wall.id, wall]));
       const drawn = list(env.fixtures)
         .filter(fixture => fixture.levelId === levelId
-          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer));
+          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer)
+          && !off(fixture.layer || 'A-FIXT'));
       drawn.forEach(fixture => {
         onLayer(ctx, fixture.layer || 'A-FIXT');
         render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
@@ -265,7 +275,7 @@ if (!window.DraftPlanComposition) {
     // which is the old page's own trick.
     if (env.electricEnv && window.DraftElectricSymbols) {
       const symbols = window.DraftElectricSymbols;
-      const devices = pick(env.electricDevices).filter(device => shows(device.layer));
+      const devices = pick(env.electricDevices).filter(device => shows(device.layer) && !off(device.layer || 'E-POWER'));
       if (devices.length && env.electricDeviceAt) {
         const a = toS({ x: 0, y: 0, z: 0 });
         const b = toS({ x: env.electricEnv.deviceFt || 0.5, y: 0, z: 0 });
@@ -290,13 +300,13 @@ if (!window.DraftPlanComposition) {
     // THE CALLER MAY HAVE PICKED THEM ALREADY (`stairsShown`, layout-plan):
     // a plan shows the stairs landing on it and the ones under it too
     // (Movie, 16 Oct), which a level filter here could not know about.
-    if (env.stairEnv) {
+    if (env.stairEnv && !off('A-STR')) {
       onLayer(ctx, 'A-STR');
       render.drawStairs2D(ctx, toS,
         { ...env.stairEnv, stairs: Array.isArray(env.stairsShown) ? env.stairsShown : pick(env.stairs, { strict: true }) });
     }
     if (env.cutMarkEnv) { onLayer(ctx, 'A-SECT-MARK'); render.drawCutMarks2D(ctx, toS, env.cutMarkEnv); }
-    if (env.outlineEnv) { onLayer(ctx, 'OUTLINE'); render.drawOutlines2D(ctx, toS, env.outlineEnv); }
+    if (env.outlineEnv && !off('OUTLINE')) { onLayer(ctx, 'OUTLINE'); render.drawOutlines2D(ctx, toS, env.outlineEnv); }
 
     strokeLines(ctx, toS, lines, env);
 
@@ -330,16 +340,16 @@ if (!window.DraftPlanComposition) {
     if (env.structureEnv) {
       // THE TAG OPPOSITE THE BEAM'S STRING, one per line (render-2d
       // beamTagSides), read off the dimensions this same pass draws.
-      const beamsHere = pick(env.beams);
+      const beamsHere = pick(env.beams).filter(beam => !off(beam.layer || 'S-BEAM'));
       const tags = typeof render.beamTagSides === 'function' ? render.beamTagSides(beamsHere, dimensions) : new Map();
       beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env.structureEnv); });
       // THE BEAM IN THE FLOOR SYSTEM OVER THIS PLAN (Movie, 16 Oct): dash-dot
       // and lighter, tagged ABOVE. Worked out by the caller (layout-plan
       // beamsAbove); this only paints them.
-      const beamsOver = pick(env.beamsAbove);
+      const beamsOver = pick(env.beamsAbove).filter(beam => !off(beam.layer || 'S-BEAM'));
       const overTags = typeof render.beamTagSides === 'function' ? render.beamTagSides(beamsOver, dimensions) : new Map();
       beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id) }, env.structureEnv); });
-      pick(env.columns).forEach(column => {
+      pick(env.columns).filter(column => !off(column.layer || 'S-COL-FOOTING')).forEach(column => {
         onLayer(ctx, column.layer || 'S-COL-FOOTING');
         render.drawColumn2D(ctx, toS, column, {
           footing: env.columnFooting ? env.columnFooting(column) : null,
@@ -367,7 +377,7 @@ if (!window.DraftPlanComposition) {
     // which also keeps them to the walls plan on a sheet that names a view.
     if (env.roomTagEnv) {
       pick(env.roomTags, { views: false })
-        .filter(tag => shows(tag.layer || 'ROOM-IDS-AREA'))
+        .filter(tag => shows(tag.layer || 'ROOM-IDS-AREA') && !off(tag.layer || 'ROOM-IDS-AREA'))
         .forEach(tag => { onLayer(ctx, tag.layer || 'ROOM-IDS-AREA'); render.drawRoomTag2D(ctx, toS, tag, {}, env.roomTagEnv); });
     }
   };
@@ -382,12 +392,13 @@ if (!window.DraftPlanComposition) {
   // shared between storeys can put another level's openings on this draw, and
   // the host-wall test is the one that gets that right -- which is also why
   // the label pass looks the outline up per LEVEL rather than once.
-  const drawOpenings = (ctx, toS, env, walls, shows) => {
+  const drawOpenings = (ctx, toS, env, walls, shows, off = () => false) => {
     const render = R();
     if (!env.openingGeometry) return;
     const hostIds = new Set(walls.map(wall => wall.id));
     const openings = list(env.fenestrations)
-      .filter(opening => hostIds.has(opening.wallId) && shows(opening.layer));
+      .filter(opening => hostIds.has(opening.wallId) && shows(opening.layer)
+        && !off(opening.layer || (opening.type === 'door' ? 'A-DOOR' : 'A-GLAZ')));
     if (!openings.length) return;
 
     const geometryOf = new Map();
@@ -425,7 +436,7 @@ if (!window.DraftPlanComposition) {
     // for the building and not the construction document, and layout-plan
     // withholds the outline there for the same reason it withholds dimensions
     // -- so this needs no mode of its own.
-    const showWin = shows('A-DIMS-WIN'), showDoor = shows('A-DIMS-DOOR');
+    const showWin = shows('A-DIMS-WIN') && !off('A-DIMS-WIN'), showDoor = shows('A-DIMS-DOOR') && !off('A-DIMS-DOOR');
     if (env.houseOutline && (showWin || showDoor)
       && window.DraftFenLabels && window.DraftFenLabels.openingTagLine
       && window.DraftRender2D && window.DraftRender2D.labelAlongLine2D) {

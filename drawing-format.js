@@ -1740,6 +1740,18 @@ if (!window.DraftDrawingFormat) {
   // PHASE 2 and the SUITE HOLOGRAMS didn't show"). This dropped them -- "the
   // existing house is the existing house" -- but a shell's suites ARE the
   // existing building. Kept, normalised the same way, four deep at most.
+  // THE HOLOGRAMS' LAYER SETS (Movie, 26 Oct): `off`, the main set's layers
+  // off; `files`, a file's own set by its name (THIS TYPE ONLY); `advanced`,
+  // the full layer list shown instead of the seven groups.
+  const hologramLayers = raw => {
+    const layerIds = list => [...new Set((Array.isArray(list) ? list : []).map(v => String(v ?? '').trim()).filter(Boolean))];
+    const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const files = {};
+    if (src.files && typeof src.files === 'object' && !Array.isArray(src.files)) {
+      Object.keys(src.files).forEach(name => { if (Array.isArray(src.files[name])) files[name] = layerIds(src.files[name]); });
+    }
+    return { off: layerIds(src.off), files, advanced: src.advanced === true };
+  };
   const holograms = (raw, depth = 0) => (Array.isArray(raw) ? raw : [])
     .map(holo => {
       const id = String(holo?.id || '').trim();
@@ -1788,6 +1800,12 @@ if (!window.DraftDrawingFormat) {
         // and its exterior walls' windows cut into the shell's where the two
         // walls' faces line up. Absent is the blue existing-house hologram.
         ...(holo?.mode === 'suite' ? { mode: 'suite' } : {}),
+        // ITS OWN LAYER SET (THIS ONE ONLY, Movie 26 Oct): the layer ids it
+        // draws without, kept even when empty -- its own set with every layer
+        // on is still its own. Absent, it wears its file's set or the main
+        // one (drawing.hologramLayers, hologram.js layerSetFor).
+        ...(holo?.layersOwn === true ? { layersOwn: true, layersOff: [...new Set((Array.isArray(holo?.layersOff) ? holo.layersOff : [])
+          .map(v => String(v ?? '').trim()).filter(Boolean))] } : {}),
         // THE HOLOGRAMS INSIDE IT SWITCHED OFF (Movie, 21 Oct: "allow the user
         // to turn on and off the other holograms within a file they bring it
         // as a hologram"), by their ids in its own file. Absent is all on.
@@ -2575,6 +2593,7 @@ if (!window.DraftDrawingFormat) {
     outlines,
     underlays,
     holograms,
+    hologramLayers,
     hologramPoint,
     hologramLocal,
     HOLOGRAM_DEMO_KINDS,

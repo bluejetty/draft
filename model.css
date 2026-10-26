@@ -1392,6 +1392,16 @@
   [data-trace-layers] button:hover { border-color: var(--accent); }
   .hologram-show button[aria-pressed="true"] { border-color: rgb(82,151,218); color: rgb(82,151,218); }
   .hologram-show button[aria-pressed="false"] { opacity: 0.55; text-decoration: line-through; }
+  /* THE HOLOGRAMS' LAYERS (Movie, 26 Oct): which set, OWN SET, the switches. */
+  .hologram-layers { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 0;
+    border-top:1px solid var(--edge-panel); border-bottom:1px solid var(--edge-panel); }
+  .hologram-layers select { padding:3px 6px; border-radius:3px; border:1px solid var(--edge-panel);
+    background: var(--surface-chip); color: var(--ink-primary); font-family: var(--font-ui);
+    font-size:10px; font-weight:600; letter-spacing:0.04em; }
+  .hologram-own-set { font-family: var(--font-ui); font-size:10px; font-weight:600; letter-spacing:0.04em;
+    color: var(--ink-quiet); display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+  .hologram-layer-buttons { display:flex; flex-wrap:wrap; gap:4px; flex-basis:100%; }
+  .hologram-layers button:disabled { opacity:0.35; cursor:default; }
   .trace-card { max-width:30em; width:100%; max-height:calc(100vh - 60px); overflow-y:auto; }
   .trace-card input[type=text] { width:100%; box-sizing:border-box; margin-top:4px; padding:4px 8px;
     border:1px solid var(--edge-panel); border-radius:3px; background: var(--surface-chip);

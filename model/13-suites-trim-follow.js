@@ -1994,6 +1994,133 @@
     const litRow = document.querySelector('.hologram-copy[data-lit]');
     if (litRow?.scrollIntoView) litRow.scrollIntoView({ block: 'nearest' });
   });
+  // ── THE HOLOGRAMS' LAYERS (Movie, 26 Oct) ───────────────────────────────
+  //
+  // One main set every hologram wears, as the titleblock is one for every
+  // sheet; a TYPE (a file, one colour) or ONE COPY may be let go of it with
+  // OWN SET and given its own -- "delink it from the main LAYER SET and set
+  // up a 'special set' for a particual 'SUITE/SHELF/TYPE COLOR' or also ...
+  // 1 specific suite". The five groups first; ADVANCED lists every layer.
+  // TEXT OFF is the press he asked for: "bring in the suites and turn off
+  // most or all of the text and dimension layers" (a suite never drew its
+  // dimension strings; hologram.js LAYER_GROUPS).
+  let hologramLayerTarget = 'main';
+  // TIDIED ONCE, then the same object: every press edits what the paint and
+  // the save read, not a copy made a moment before.
+  const tidiedLayerSets = new WeakSet();
+  const hologramLayerStore = () => {
+    const F = window.DraftDrawingFormat;
+    if (!drawing.hologramLayers || !tidiedLayerSets.has(drawing.hologramLayers)) {
+      drawing.hologramLayers = F.hologramLayers ? F.hologramLayers(drawing.hologramLayers) : { off: [], files: {}, advanced: false };
+      tidiedLayerSets.add(drawing.hologramLayers);
+    }
+    return drawing.hologramLayers;
+  };
+  // What the target edits: `{ off, own, set(off), setOwn(on) }`.
+  const hologramLayerEdit = (target, all) => {
+    const store = hologramLayerStore();
+    const [kind, key] = target.split(':');
+    if (kind === 'type') {
+      const own = Object.prototype.hasOwnProperty.call(store.files, key);
+      return { own, off: own ? store.files[key] : store.off,
+        set: off => { store.files[key] = off; },
+        setOwn: on => { if (on) store.files[key] = [...store.off]; else delete store.files[key]; } };
+    }
+    if (kind === 'copy') {
+      const holo = all.find(h => String(h.id) === key);
+      if (!holo) return null;
+      const own = holo.layersOwn === true;
+      return { own, off: own ? (holo.layersOff || []) : H().layerSetFor(holo, drawing).off,
+        set: off => { holo.layersOff = off; },
+        setOwn: on => {
+          if (on) { holo.layersOff = [...H().layerSetFor(holo, drawing).off]; holo.layersOwn = true; } else { delete holo.layersOwn; delete holo.layersOff; }
+        } };
+    }
+    return { own: true, main: true, off: store.off, set: off => { store.off = off; }, setOwn: () => {} };
+  };
+  const hologramLayersChanged = () => { markDirty(); paint(); renderHologramList(); };
+  const hologramLayersBlock = all => {
+    const block = document.createElement('div');
+    block.className = 'trace-row hologram-show hologram-layers';
+    block.dataset.hologramLayers = '';
+    const store = hologramLayerStore();
+    // THE TARGET: the main set, a type, or one copy.
+    const pickTarget = document.createElement('select');
+    pickTarget.dataset.hologramLayerTarget = '';
+    pickTarget.setAttribute('aria-label', 'Which holograms these layers are for');
+    const add = (value, label) => {
+      const o = document.createElement('option');
+      o.value = value; o.textContent = label;
+      pickTarget.appendChild(o);
+    };
+    add('main', 'LAYERS — ALL HOLOGRAMS');
+    const files = [...new Set(all.map(h => H().fileOf(h)))];
+    files.forEach(f => add(`type:${f}`, `TYPE ${f}${Object.prototype.hasOwnProperty.call(store.files, f) ? ' (own set)' : ''}`));
+    files.forEach(f => all.filter(h => H().fileOf(h) === f).forEach((h, i) =>
+      add(`copy:${h.id}`, `${f} #${i + 1}${h.layersOwn === true ? ' (own set)' : ''}`)));
+    if (![...pickTarget.options].some(o => o.value === hologramLayerTarget)) hologramLayerTarget = 'main';
+    pickTarget.value = hologramLayerTarget;
+    pickTarget.addEventListener('change', () => { hologramLayerTarget = pickTarget.value; renderHologramList(); });
+    block.appendChild(pickTarget);
+    const edit = hologramLayerEdit(hologramLayerTarget, all);
+    if (!edit) return block;
+    // OWN SET: let go of the main set (a type) or of its type's (one copy).
+    if (!edit.main) {
+      const own = document.createElement('label');
+      own.className = 'hologram-own-set';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = edit.own;
+      box.dataset.hologramLayerOwn = '';
+      box.addEventListener('change', () => { edit.setOwn(box.checked); hologramLayersChanged(); });
+      own.append(box, hologramLayerTarget.startsWith('type:') ? ' THIS TYPE ONLY' : ' THIS ONE ONLY');
+      block.appendChild(own);
+    }
+    const off = new Set(edit.off);
+    const toggle = (layers, on) => {
+      const next = new Set(off);
+      layers.forEach(id => (on ? next.delete(id) : next.add(id)));
+      edit.set([...next]);
+      hologramLayersChanged();
+    };
+    const buttons = document.createElement('div');
+    buttons.className = 'hologram-layer-buttons';
+    // ADVANCED: every word as one switch, then each drafting layer by name.
+    const groups = store.advanced
+      ? [{ id: H().WORDS, label: 'ALL WORDS', layers: [H().WORDS] },
+        ...window.DraftLayerStandards.DEFAULT_LAYER_STANDARDS.flatMap(g => g.layers)
+          .map(l => ({ id: l.id, label: l.name || l.id, layers: [l.id] }))]
+      : H().LAYER_GROUPS;
+    groups.forEach(group => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = group.label;
+      b.dataset.hologramLayer = group.id;
+      const on = group.layers.some(id => !off.has(id));
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.disabled = !edit.own;
+      b.addEventListener('click', () => toggle(group.layers, !on));
+      buttons.appendChild(b);
+    });
+    block.appendChild(buttons);
+    const tools = document.createElement('div');
+    tools.className = 'hologram-layer-buttons';
+    const tool = (label, data, fn, disabled = false) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label; b.dataset[data] = '';
+      b.disabled = disabled;
+      b.addEventListener('click', fn);
+      tools.appendChild(b);
+    };
+    tool('TEXT OFF', 'hologramLayersQuiet', () => toggle(H().TEXT_OFF, false), !edit.own);
+    tool('ALL ON', 'hologramLayersAll', () => { edit.set([]); hologramLayersChanged(); }, !edit.own);
+    tool(store.advanced ? 'FEWER LAYERS' : 'ADVANCED', 'hologramLayersAdvanced', () => {
+      store.advanced = !store.advanced;
+      hologramLayersChanged();
+    });
+    block.appendChild(tools);
+    return block;
+  };
   // WHICH FILES' INSIDE LISTS ARE OPEN, by file.
   const hologramInsideOpen = new Set();
   // AND THE COPY WHOSE BUTTONS A PRESS LAST USED, kept open while nothing is picked.
@@ -2024,6 +2151,7 @@
         row.appendChild(b);
       });
       list.appendChild(row);
+      list.appendChild(hologramLayersBlock(all));
     }
     // ONE CARD PER FILE, A NUMBERED ROW PER COPY (Movie, 20 Oct: "can we do
     // 1 per file (and 1 color per file) and then a list within that of each

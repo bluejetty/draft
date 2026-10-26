@@ -1245,6 +1245,8 @@ if (!window.DraftLayoutPlan) {
       // "draws" -- an untagged dimension from before this key existed, and a
       // profile that predates a layer being added, both keep drawing.
       layerStandard: layerTable ? (id => layerTable[id] || null) : null,
+      // A HOLOGRAM'S OWN LAYERS SWITCHED OFF (hologram.js layersOffFor).
+      layersOff: env.layersOff || null,
       // ── AND WHICH LAYERS THIS VIEW CARRIES AT ALL ─────────────────────
       //
       // The other half of the same gate, and the first caller `layersFor`
