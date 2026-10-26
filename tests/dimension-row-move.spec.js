@@ -125,7 +125,10 @@ test('AUTO DIMS run again keeps a moved row where it was left', async ({ page })
     'nothing left on the old line').toBe(false);
 });
 
-test('a selected dimension deletes', async ({ page }) => {
+// AN AUTO STRING TAKES ITS ROW (Movie, 26 Oct: "allow the user to be able to
+// DELETE a string ... when the line is deleted i'd like the other lines to
+// re-adjust"): the whole row on that side goes, and the level remembers it.
+test('a selected auto dimension deletes its row on that side', async ({ page }) => {
   await openBuilt(page);
   const before = await saved(page);
   const row = frontRow(before);
@@ -134,6 +137,7 @@ test('a selected dimension deletes', async ({ page }) => {
   await page.keyboard.press('Delete');
   await save(page);
   const after = await saved(page);
-  expect(after.dimensions.length).toBe(before.dimensions.length - 1);
+  expect(after.dimensions.length).toBeLessThanOrEqual(before.dimensions.length - row.length);
   expect(after.dimensions.some(d => d.id === row[0].id), 'the picked one went').toBe(false);
+  expect(Object.values(after.autoDimRowsOff || {}).flat(), 'and the level remembers the row').toHaveLength(1);
 });

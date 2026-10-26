@@ -60,6 +60,14 @@
   #dims-show { position:absolute; display:flex; gap:4px; pointer-events:auto; }
   #dims-show[hidden] { display:none; }
   #dims-show .sel-chip { flex:none; white-space:nowrap; padding:5px 7px; }
+  #dims-show .sel-chip[hidden] { display:none; }
+  /* AUTO DIMS ROWS: four rows a side, ticked on or off. */
+  #auto-rows { position:fixed; z-index:40; display:flex; flex-direction:column; gap:4px; padding:8px;
+    background:var(--surface-page, #fff); border:1px solid var(--line-soft, #c9c9c9);
+    font:600 10px/1.2 'Barlow Condensed', sans-serif; letter-spacing:0.04em; color:var(--ink-primary, #1d1f20); }
+  #auto-rows .auto-rows-side { display:flex; gap:10px; align-items:center; }
+  #auto-rows .auto-rows-side > span { width:46px; }
+  #auto-rows label { display:inline-flex; gap:3px; align-items:center; cursor:pointer; white-space:nowrap; }
   /* THE LENGTH BOX, LIVE: a line in hand (Movie, 12 Oct: "brighten up the
      LENGTH BOX ... make it orange ... around the outside, but leave the inner
      part darker"). The shared sheet draws the glow; the page names its colour,
