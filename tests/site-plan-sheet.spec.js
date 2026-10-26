@@ -64,11 +64,14 @@ test('the dealt SITE PLAN sheet carries a view of the site', async ({ page }) =>
     .toEqual(['plan:8']);
 });
 
-test('and RE-DEAL SHEETS keeps it, which is what he tried next', async ({ page }) => {
+// RE-DEAL SHEETS is gone over a dealt set (Movie, 26 Oct); the composer still
+// deals the set again when the paper changes, and that keeps it too.
+test('and dealing the set again keeps it, which is what he tried next', async ({ page }) => {
   await houseAndLot(page);
   await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
-  await page.getByRole('button', { name: /RE-DEAL/i }).click();
+  await expect(page.getByRole('button', { name: /DEAL/i })).toHaveCount(0);
+  await page.evaluate(() => page._composeDefaultSet());
   await page.waitForTimeout(800);
   expect(await siteViewports(page), 'a re-deal dropped the site view')
     .toEqual(['plan:8']);

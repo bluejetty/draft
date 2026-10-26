@@ -305,14 +305,15 @@ test('THIS SHEET ONLY gives one sheet its own frame; the rest keep the main one'
   layout = (await savedDrawing(page)).layout;
   expect(layout.titleblock).toBe('LROUND01');
   expect(layout.sheets[0].titleblock).toBe('LBAND01');
-  // Kept through a reload and a RE-DEAL.
+  // Kept through a reload and the composer dealing again (DEAL SHEETS is
+  // hidden over a dealt set now; a paper change still re-deals one).
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.locator('[data-layout-sheet="1"]').click();
   await expect(own).toBeChecked();
   await expect(frameMenu(page)).toHaveValue('LBAND01');
-  page.once('dialog', dialog => dialog.accept());
-  await withLayoutSave(page, () => page.locator('[data-layout-deal-sheets]').click());
+  await expect(page.locator('[data-layout-deal-sheets]')).toBeHidden();
+  await withLayoutSave(page, () => page.evaluate(() => page._composeDefaultSet()));
   layout = (await savedDrawing(page)).layout;
   expect(layout.sheets.find(sh => sh.title === (layout.sheets[0].title))?.titleblock).toBe('LBAND01');
   // Unticked, sheet 1 wears the main frame again.
