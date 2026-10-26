@@ -147,6 +147,7 @@
   // NEVER UNREADABLE: zoomed right out the figure stops at 7px rather than
   // shrinking to a smear.
   const DIM_TEXT_PAPER_IN = 1 / 8;
+  const SITE_MARK_CLEAR_IN = 3 / 8;
   const DIM_TEXT_EM_PER_CAP = 1.4;   // render-2d's NOTE_EM_PER_CAP
   const DIM_TEXT_MIN_PX = 7;
   const DIM_TEXT_DEFAULT_PIF = 1 / 4;
@@ -154,6 +155,7 @@
     ['1/16"', 1 / 16], ['3/32"', 3 / 32], ['1/8"', 1 / 8], ['3/16"', 3 / 16], ['1/4"', 1 / 4],
     ['3/8"', 3 / 8], ['1/2"', 1 / 2], ['3/4"', 3 / 4], ['1"', 1],
     ['1"=10\'', 1 / 10], ['1"=20\'', 1 / 20], ['1"=30\'', 1 / 30], ['1"=40\'', 1 / 40],
+    ['1"=50\'', 1 / 50], ['1"=60\'', 1 / 60], ['1"=100\'', 1 / 100],
   ];
   const dimScaleLabel = pif => {
     const listed = DIM_SCALE_CHOICES.find(([, p]) => Math.abs(p - pif) < 1e-9);
@@ -170,8 +172,14 @@
     const pif = Number(drawing?.dimScales?.[levelId]);
     return pif > 0 ? pif : null;
   };
+  // THE SITE READS 1" = 30' WHEN NOTHING SAYS OTHERWISE, the sheet set's own
+  // site scale: at 1/4" = 1' its rows would stand a foot and a half off the
+  // lot. It is also the scale the site's dimension ROWS are laid out at here
+  // (Movie, 26 Oct: "locked in the position and size that they will be
+  // displayed on paper"): DIM SCALE, else the site sheet's viewport.
   const dimScalePif = (levelId = activeLevelId()) =>
-    dimOwnPif(levelId) || dimLayoutPif(levelId) || DIM_TEXT_DEFAULT_PIF;
+    dimOwnPif(levelId) || dimLayoutPif(levelId)
+    || (Number(levelId) === SITE_LEVEL_ID ? (window.DraftLayoutPlan?.SITE_DIM_DEFAULT_PIF || 1 / 30) : DIM_TEXT_DEFAULT_PIF);
   const dimTextScale = () => {
     const capFt = DIM_TEXT_PAPER_IN / dimScalePif();
     const px = capFt * view.scale * DIM_TEXT_EM_PER_CAP;
@@ -796,8 +804,11 @@
       minX: Math.min(...points.map(pt => pt.x)), maxX: Math.max(...points.map(pt => pt.x)),
       minZ: Math.min(...points.map(pt => pt.z)), maxZ: Math.max(...points.map(pt => pt.z)),
     };
-    const reach = (typeof LP.siteDimReachFt === 'function' ? LP.siteDimReachFt() : 5)
-      + (CM.E_MARK_CLEAR_FT || 2);
+    // THE RING CLEARS THE OUTER ROW BY PAPER TOO -- 3/8", the rows' own step
+    // -- or at a small scale its 2 ft vanish under the row's figures.
+    const pif = dimScalePif(SITE_LEVEL_ID);
+    const reach = (typeof LP.siteDimReachFt === 'function' ? LP.siteDimReachFt(pif) : 5)
+      + Math.max(CM.E_MARK_CLEAR_FT || 2, SITE_MARK_CLEAR_IN / pif);
     return CM.seatMarksAround(autoElevationCuts(), box, reach);
   };
 
@@ -1699,6 +1710,8 @@
       // so the ink is the one thing the screen hands the painter.
       window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {
         siteLineInk: skin['draw-site-line'],
+        // THE ROWS AT THE SCALE THEY PRINT AT (DIM SCALE, else the sheet's).
+        pif: dimScalePif(SITE_LEVEL_ID),
         // AND THE TOP PLATES THE ROOF RESTS ON (Movie, 14 Oct: "please show
         // the outline of the top plates of walls that the roof rests on that
         // are n the roof plan - show those lines also in the site plane").

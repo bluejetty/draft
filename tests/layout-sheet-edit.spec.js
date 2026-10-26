@@ -108,7 +108,7 @@ const savedAfter = async (page, after) => {
   return savedLayout(page);
 };
 
-test('the open sheet\'s name is a text box on a press -- in the list, the thumbnail and the titleblock -- and one name changes all three', async ({ page }) => {
+test('the open sheet\'s name is a text box on a press -- on the thumbnail and the titleblock -- and one name changes both', async ({ page }) => {
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
   const name = n => page.locator(`[data-layout-sheet="${n}"] [data-sheet-name]`);
@@ -124,9 +124,8 @@ test('the open sheet\'s name is a text box on a press -- in the list, the thumbn
   await page.keyboard.press('Enter');
   let saved = await savedAfter(page, seq);
   expect(saved.sheets[1].title).toBe('FRONT AND BACK');
-  await expect(name(2)).toHaveText('FRONT AND BACK');
   await expect(page.locator('[data-sheet-thumb="2"] [data-sheet-name]')).toHaveText('2 FRONT AND BACK');
-  // The thumbnail's name does the same.
+  // A second press on it opens the box again.
   await page.locator('[data-sheet-thumb="2"] [data-sheet-name]').click();
   await expect(page.locator('#lay-rename')).toHaveValue('FRONT AND BACK');
   await page.keyboard.press('Escape');
@@ -149,14 +148,14 @@ test('the X takes a sheet off: an empty one straight away, one with drawings aft
   const dealt = await savedLayout(page);
   const count = dealt.sheets.length;
   // An empty sheet at the end.
-  await page.locator('[data-layout-add-sheet]').click();
-  await expect(page.locator('[data-sheet-list] [data-layout-sheet]')).toHaveCount(count + 1);
+  await page.locator('[data-rail-add-page]').click();
+  await expect(page.locator('[data-sheet-thumb]')).toHaveCount(count + 1);
   let asked = 0;
   page.on('dialog', d => { asked += 1; d.accept(); });
   let seq = await saveSeq(page);
   await page.locator(`[data-layout-sheet="${count + 1}"] [data-remove-sheet-at]`).click();
   await savedAfter(page, seq);
-  await expect(page.locator('[data-sheet-list] [data-layout-sheet]')).toHaveCount(count);
+  await expect(page.locator('[data-sheet-thumb]')).toHaveCount(count);
   expect(asked, 'an empty sheet goes without a question').toBe(0);
   // The first sheet with drawings, from its thumbnail: it asks.
   const full = Math.min(...dealt.viewports.map(v => v.sheet || 1));
@@ -193,7 +192,7 @@ test('+ ADD VIEWPORT asks what -- plans, elevations, sections -- then the next p
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
   const dealt = await savedLayout(page);
-  await page.locator('[data-layout-add-sheet]').click();
+  await page.locator('[data-rail-add-page]').click();
   const sheet = dealt.sheets.length + 1;
   await page.locator('[data-layout-add-viewport]').click();
   await expect(page.locator('[data-add-pick]')).toHaveText(['MAIN FL PLAN', 'FOUNDATION PLAN',
@@ -323,7 +322,7 @@ test('+ ADD VIEWPORT offers a SHELF with a drawing on it, and puts it on the she
   await waitForCompose(page);
   const dealt = await savedLayout(page);
   expect(dealt.viewports.some(v => v.levelId < 0), 'the auto deal leaves the shelves alone').toBe(false);
-  await page.locator('[data-layout-add-sheet]').click();
+  await page.locator('[data-rail-add-page]').click();
   await page.locator('[data-layout-add-viewport]').click();
   await expect(page.locator('.lay-add-head')).toContainText(['SHELVES']);
   await expect(page.locator('[data-add-pick="plan:-1"]'), 'an empty shelf is not offered').toHaveCount(0);

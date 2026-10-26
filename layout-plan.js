@@ -732,13 +732,19 @@ if (!window.DraftLayoutPlan) {
   // outside it, which is the order a reader wants: the setback you check
   // against the bylaw sits beside the line it is measured to.
   //
-  // IN FEET, NOT PIXELS. These are distances on the ground like the setbacks
-  // beside them, so the rows hold their spacing at every zoom and every sheet
-  // scale; a pixel offset would crowd the lot on a small viewport and drift
-  // off the paper on a large one.
-  const SITE_DIM_FIRST_FT = 3;
-  const SITE_DIM_GAP_FT = 2;
-  const SITE_DIM_OUTER_FT = SITE_DIM_FIRST_FT + SITE_DIM_GAP_FT;
+  // ON PAPER, NOT ON THE GROUND (Movie, 26 Oct: "on the site plan the
+  // dimensions are too close together due to the scale and size ... locked
+  // in the position and size that they will be displayed on paper"). Three
+  // and two feet were a sixteenth of an inch apart at 1" = 60'. Each row now
+  // stands 3/8" of PAPER out -- the first off the property line, the second
+  // off the first -- so the ground distance is the sheet's scale's business:
+  // 22'-6" at 1" = 60', 7'-6" at 1" = 20'. `pif` is the scale (paper inches
+  // per foot) the rows are laid out for: each LAYOUT viewport hands its own,
+  // so two viewports of the one site at two scales both read 3/8" apart, and
+  // MODEL hands the scale its DIM SCALE names. None given reads 1" = 30'.
+  const SITE_DIM_PAPER_IN = 3 / 8;
+  const SITE_DIM_DEFAULT_PIF = 1 / 30;
+  const siteDimFt = pif => SITE_DIM_PAPER_IN / (pif > 0 ? pif : SITE_DIM_DEFAULT_PIF);
 
   const boxOfPoints = points => (points.length ? {
     minX: Math.min(...points.map(pt => pt.x)), maxX: Math.max(...points.map(pt => pt.x)),
@@ -779,7 +785,8 @@ if (!window.DraftLayoutPlan) {
   // -- a stored copy would be a second record of the same two boxes, going
   // stale between drags. Exported so MODEL paints the same rows on screen and
   // seats its elevation marks clear of them.
-  function siteDimStrings(saved) {
+  function siteDimStrings(saved, pif) {
+    const firstFt = siteDimFt(pif), outerFt = 2 * siteDimFt(pif);
     const { lot, bodies } = sitePlanParts(saved);
     if (!lot) return [];
     const lotBox = boxOfPoints(lot.points);
@@ -801,10 +808,10 @@ if (!window.DraftLayoutPlan) {
       if (houseBox) {
         const hLo = axis === 'z' ? houseBox.minZ : houseBox.minX;
         const hHi = axis === 'z' ? houseBox.maxZ : houseBox.maxX;
-        rows.push(...siteChain([lo, hLo, hHi, hi], axis, at(SITE_DIM_FIRST_FT), 'inner'));
+        rows.push(...siteChain([lo, hLo, hHi, hi], axis, at(firstFt), 'inner'));
       }
       // OUTER: the lot, end to end.
-      rows.push(...siteChain([lo, hi], axis, at(SITE_DIM_OUTER_FT), 'outer'));
+      rows.push(...siteChain([lo, hi], axis, at(outerFt), 'outer'));
     };
     // Front to back is measured along the front's own axis and read from the
     // LEFT side; side to side is measured across it and read from the FRONT.
@@ -817,9 +824,9 @@ if (!window.DraftLayoutPlan) {
   // HOW FAR OUT EVERYTHING ELSE HAS TO STAND. Movie, same message: "the E1-E4
   // on the outside can we make it so it is on the OUTSIDE of the site lines".
   // The marks are seated by MODEL, which asks here rather than keeping its own
-  // copy of 3 and 2 -- one number, so a change to the rows moves the ring with
-  // them instead of leaving it among the figures.
-  const siteDimReachFt = () => SITE_DIM_OUTER_FT;
+  // copy of the spacing -- one number, so a change to the rows moves the ring
+  // with them instead of leaving it among the figures. At the same `pif`.
+  const siteDimReachFt = pif => 2 * siteDimFt(pif);
 
   // THE FOOTPRINT IS THE GROUND FLOOR'S OUTLINES, every building on it. The
   // lowest floor level that HAS outlines answers -- a bungalow's and a
@@ -941,7 +948,7 @@ if (!window.DraftLayoutPlan) {
     // against the lot lines nearest the lot, the lot's own size outside that.
     // Drawn last, like every other sheet's dimensions, over what they measure.
     const render = window.DraftRender2D;
-    const rows = siteDimStrings(saved);
+    const rows = siteDimStrings(saved, env.pif);
     if (rows.length && render && render.drawDimension2D) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE-DIMS';
       const fmt = window.DraftFormatters || {};
@@ -949,8 +956,8 @@ if (!window.DraftLayoutPlan) {
         label: ft => (fmt.formatArchitecturalInches
           ? fmt.formatArchitecturalInches(ft * 12) : `${Math.round(ft)}'`),
         colors: env.siteDimColors || DIMENSION_COLORS,
-        // ON THE LINE, because the line is already where he put it: the rows
-        // stand 3 ft and 5 ft off the lot in FEET, and the screen's default
+        // ON THE LINE, because the line is already where it belongs: the rows
+        // stand 3/8" and 3/4" of paper off the lot, and the screen's default
         // 19px stand-off would add a second offset in a different unit on top
         // of it -- the two rows would sit at a different spacing on every zoom.
         atLine: true,
@@ -1538,6 +1545,7 @@ if (!window.DraftLayoutPlan) {
     drawSitePlan,
     siteDimStrings,
     siteDimReachFt,
+    SITE_DIM_DEFAULT_PIF,
   });
 })();
 }

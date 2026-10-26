@@ -97,12 +97,12 @@ async function withLayoutSave(page, action) {
 }
 
 // Place a viewport of one level and hand back the record that was written.
-// The level is picked by `data-layout-level="<id>"`, the handle the page's own
-// specs use — its LABEL is derived from level-assembly.js's storey table ("1
-// MAIN FL"), so matching on the text would couple this spec to a naming rule
-// that has nothing to do with what it is testing.
+// The level is the page's own default for + ADD VIEWPORT with no pick, set
+// directly: the PLAN LEVEL list that chose it is gone (Movie, 26 Oct), and a
+// pick from the add menu takes the sheet set's ladder rather than the
+// active scale this spec is about.
 async function placedPif(page, levelId) {
-  await page.locator(`[data-layout-level="${levelId}"]`).click();
+  await page.evaluate(id => new Promise(done => page.setState({ activeLevelId: id }, done)), levelId);
   await page.locator('[data-layout-add-viewport]').click();
   await expect(page.locator('[data-layout-add-viewport]')).toContainText('CLICK THE SHEET');
   const box = await page.locator('[data-layout-canvas]').boundingBox();

@@ -68,20 +68,28 @@ test('the outer row is the lot itself, front to back and side to side', async ({
   expect(near(byAxis.x, 50), `side to side is ${byAxis.x}, not the lot's 50`).toBe(true);
 });
 
-test('they stand 3 ft and 5 ft outside the property line, in feet', async ({ page }) => {
-  const all = await rows(page);
-  // THE ROW'S OWN COORDINATE is the one it does not measure along: a z string
-  // stands at an x, and that x is what has to be 3 or 5 feet beyond the lot.
-  const standOff = row => (row.axis === 'z'
-    ? Math.abs(row.start.x) - LOT.x : Math.abs(row.start.z) - LOT.z);
-  const inner = all.filter(row => row.row === 'inner').map(standOff);
-  const outer = all.filter(row => row.row === 'outer').map(standOff);
-  expect(inner.every(gap => near(gap, 3)),
-    `the inner row stands at ${inner.map(v => v.toFixed(2)).join(', ')} ft`).toBe(true);
-  // 3 + 2: "then 2ft future for the outside dimensino line".
-  expect(outer.every(gap => near(gap, 5)),
-    `the outer row stands at ${outer.map(v => v.toFixed(2)).join(', ')} ft`).toBe(true);
-});
+// ON PAPER (Movie, 26 Oct: "the dimensions are too close together due to
+// the scale and size ... locked in the position and size that they will be
+// displayed on paper"). 3/8" of paper to the first row and 3/8" more to the
+// second, at whatever scale the sheet is: the ground distance follows it.
+const standOffs = (all, row) => all.filter(r => r.row === row).map(r => (r.axis === 'z'
+  ? Math.abs(r.start.x) - LOT.x : Math.abs(r.start.z) - LOT.z));
+for (const [label, pif, first] of [['1" = 60\'', 1 / 60, 22.5], ['1" = 20\'', 1 / 20, 7.5],
+  ['no scale given, the site\'s 1" = 30\'', undefined, 11.25]]) {
+  test(`at ${label} they stand 3/8" and 3/4" of paper off the property line`, async ({ page }) => {
+    await page.goto('/LAYOUT.html');
+    await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+    const all = await page.evaluate(({ d, pif }) => window.DraftLayoutPlan.siteDimStrings(d, pif),
+      { d: DRAWING, pif });
+    const inner = standOffs(all, 'inner'), outer = standOffs(all, 'outer');
+    expect(inner.every(gap => near(gap, first)),
+      `the inner row stands at ${inner.map(v => v.toFixed(2)).join(', ')} ft, not ${first}`).toBe(true);
+    expect(outer.every(gap => near(gap, 2 * first)),
+      `the outer row stands at ${outer.map(v => v.toFixed(2)).join(', ')} ft, not ${2 * first}`).toBe(true);
+    expect(await page.evaluate(pif => window.DraftLayoutPlan.siteDimReachFt(pif), pif),
+      'what the marks clear is the outer row').toBeCloseTo(2 * first, 6);
+  });
+}
 
 test('and a turned plan puts them on the turned front, not on a fixed side',
   async ({ page }) => {
@@ -141,10 +149,11 @@ test('E1-E4 stand outside the outer row on the site plan, and nowhere else',
     const site = await marksOn(8);
     expect(site.drawn.length, 'the site level drew no marks').toBe(4);
     // E1 looks from +z, so its line stands past the lot's far edge: 37.5 of
-    // lot, 5 of dimension rows, and the marks' own 2 ft clearance.
+    // lot, the rows' 3/4" of paper at the site's 1" = 30' (22.5 ft), and the
+    // marks' own clearance.
     const e1 = site.drawn.find(mark => mark.id === 'E1');
     expect(e1.a[1], 'E1 is not outside the lot and its dimension rows')
-      .toBeGreaterThan(LOT.z + 5);
+      .toBeGreaterThan(LOT.z + 22.5);
     site.drawn.forEach(mark => {
       const out = Math.max(Math.abs(mark.a[0]), Math.abs(mark.a[1]));
       expect(out, `${mark.id} is inside the property line`).toBeGreaterThan(Math.min(LOT.x, LOT.z));

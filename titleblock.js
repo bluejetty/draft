@@ -462,6 +462,12 @@ if (!window.DraftTitleblock) {
     if (typeof info.onPageTitle === 'function') {
       info.onPageTitle({ x: x + w * 0.5, y: arrowB, w: w * 0.5, h: titleB - arrowB });
     }
+    // AND THE PROJECT'S, the other half (Movie, 26 Oct: "when i click in the
+    // title block area where it says NEW HOME ... allow the user to click on
+    // it to change it").
+    if (typeof info.onProjectName === 'function') {
+      info.onProjectName({ x, y: arrowB, w: w * 0.5, h: titleB - arrowB });
+    }
     divider(titleB);
 
     // Rotated address + owner: label column against the rail, words beside.
@@ -635,6 +641,7 @@ if (!window.DraftTitleblock) {
     // Project cell
     label(cells[1], 'PROJECT');
     lines(cells[1], [info.projectName, info.owner, info.address], h * 0.14);
+    if (typeof info.onProjectName === 'function') info.onProjectName({ x: cells[1].x, y, w: cells[1].w, h });
 
     // Drafter cell
     label(cells[2], 'DRAWN BY');

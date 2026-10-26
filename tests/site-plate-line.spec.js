@@ -37,13 +37,28 @@ async function openSite(page, drawing) {
   await expect(page.locator('#readout')).toContainText(/scale|walls/, { timeout: 10000 });
   await page.waitForTimeout(500);
 }
+// THE SAME FRAME FOR BOTH CENSUSES. The fit takes in the ring of E marks,
+// and the marks come off the walls: without them the fit is tighter, the
+// lot draws bigger and lights more pixels on its own (the rows and the ring
+// stand out in paper since 26 Oct, so the difference is no longer small).
+// Both are looked at through one window, set in the same breath as the
+// count so no late fit can move it between the two.
+// Closed in on the building at ten pixels a foot, so the plate line is a
+// line and not a few pixels.
+const frameOf = page => page.evaluate(() => {
+  const pts = (drawing.roofs || []).flatMap(r => r.points || []);
+  const cx = (Math.min(...pts.map(p => p.x)) + Math.max(...pts.map(p => p.x))) / 2;
+  const cz = (Math.min(...pts.map(p => p.z)) + Math.max(...pts.map(p => p.z))) / 2;
+  return { cx, cz, scale: 10 };
+});
 
 // TWO CENSUSES OF ONE CANVAS, taken together so a repaint cannot move one of
 // them: how much ink is the skin's wall-edge grey, and how much of the sheet
 // is LIGHT at all. A tolerance is unavoidable -- a stroke antialiases against
 // what is under it -- and it is kept to 30, well inside the gap between this
 // grey and the page's own near-black ground.
-const census = page => page.evaluate(() => {
+const census = (page, frame = null) => page.evaluate(frame => {
+  if (frame) { Object.assign(view, frame); paint(); }
   const root = getComputedStyle(document.documentElement);
   const hex = (root.getPropertyValue('--draw-wall-edge').trim()
     || root.getPropertyValue('--draw-line').trim());
@@ -57,13 +72,14 @@ const census = page => page.evaluate(() => {
     if (d[i] > 120 && d[i + 1] > 120 && d[i + 2] > 120) light += 1;
   }
   return { hex, ink, light };
-});
+}, frame);
 
 test('the site plan draws the plate line, and the roof\'s own walls put it there',
   async ({ page }) => {
     await h.openModel(page, { webgl: false });
     await openSite(page, GARAGE);
-    const withWalls = await census(page);
+    const frame = await frameOf(page);
+    const withWalls = await census(page, frame);
     expect(withWalls.hex, 'the skin publishes a wall-edge ink').toMatch(/^#[0-9a-f]{6}$/i);
     // ATTRIBUTED RATHER THAN COUNTED. A number on its own cannot say WHICH
     // line it found -- the property line, the dimension rows and the roof are
@@ -72,7 +88,7 @@ test('the site plan draws the plate line, and the roof\'s own walls put it there
     // the roof are drawn off records this does not touch and stay as they
     // were.
     await openSite(page, { ...GARAGE, walls: [] });
-    const without = await census(page);
+    const without = await census(page, frame);
     expect(withWalls.ink, `${withWalls.ink} px of ${withWalls.hex} with the walls, `
       + `${without.ink} without`).toBeGreaterThan(without.ink + 300);
   });
@@ -85,9 +101,10 @@ test('and in ink that reads on a dark page, not the sheet\'s paper black',
     // cannot put a bright pixel on a black sheet however much of it is drawn.
     await h.openModel(page, { webgl: false });
     await openSite(page, GARAGE);
-    const withWalls = await census(page);
+    const frame = await frameOf(page);
+    const withWalls = await census(page, frame);
     await openSite(page, { ...GARAGE, walls: [] });
-    const without = await census(page);
+    const without = await census(page, frame);
     expect(withWalls.light, `${withWalls.light} light px with the walls, `
       + `${without.light} without`).toBeGreaterThan(without.light + 300);
   });

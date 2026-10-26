@@ -648,7 +648,7 @@ test('the named sheets survive a reload, an undo and a hand on the set', async (
 
   // + SHEET makes a twelfth that stays, and takes the set off the composer.
   const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
-  await page.locator('[data-layout-add-sheet]').click();
+  await page.locator('[data-rail-add-page]').click();
   await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
   const added = await savedLayout(page);
   expect(added.sheets).toHaveLength(12);
@@ -682,7 +682,7 @@ test('Ctrl+Z undoes on the sheet, and Ctrl+Shift+Z puts it back', async ({ page 
   const before = (await savedLayout(page)).sheets.length;
 
   const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
-  await page.locator('[data-layout-add-sheet]').click();
+  await page.locator('[data-rail-add-page]').click();
   await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
   await expect(page.locator('[data-layout-sheet]')).toHaveCount(before + 1);
 
@@ -718,7 +718,7 @@ test('Ctrl+Z typed in a text field is the field\'s, not the sheet\'s',
     await openLayout(page, twoStorey());
     await waitForCompose(page);
     const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
-    await page.locator('[data-layout-add-sheet]').click();
+    await page.locator('[data-rail-add-page]').click();
     await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
     const sheets = await page.locator('[data-layout-sheet]').count();
 
@@ -852,7 +852,10 @@ test('ELECTRIC PLAN is dealt last when devices are placed, and REMOVE SHEET take
     expect(sectionSheet).toBe(10);
     await page.locator('[data-layout-sheet="10"]').click();
     const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
-    await page.locator('[data-layout-remove-sheet]').click();
+    // From its X on the rail (the panel's REMOVE SHEET went with the SHEET
+    // list, Movie 26 Oct); a sheet with a drawing on it asks first.
+    page.once('dialog', d => d.accept());
+    await page.locator('[data-sheet-thumb="10"] [data-remove-sheet-at]').click();
     await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
     const after = await savedLayout(page);
     expect(after.sheets.map(sheet => sheet.title).slice(-3)).toEqual(['FOUNDATION', 'BASEMENT PLAN', 'ELECTRIC PLAN']);

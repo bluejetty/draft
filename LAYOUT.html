@@ -624,6 +624,10 @@
     border-radius:4px; background:none; color: var(--ink-secondary); }
   .lay-thumb:hover { border-color: var(--edge-panel); }
   .lay-thumb.on { border-color: var(--accent-mark); color: var(--ink-primary); }
+  /* A page picked up to move, and the place it will land. */
+  .lay-thumb.lay-thumb-lifted { opacity:0.45; }
+  .lay-thumb.lay-thumb-drop { outline:2px dashed var(--accent-mark); outline-offset:2px; }
+  [data-sheet-rail-grid][data-rail-dragging] .lay-thumb { cursor:grabbing; }
   .lay-thumb canvas { display:block; width:var(--thumb-w, 64px); height:var(--thumb-h, 42px); }
   .lay-add-page-plus { display:flex !important; align-items:center; justify-content:center;
     width:var(--thumb-w, 64px); height:var(--thumb-h, 42px); box-sizing:border-box;
@@ -636,12 +640,10 @@
      version"). The X wears the accent and its ink -- blue on day, red on
      ROUGH -- at the right of each sheet row and the corner of each thumb. */
   .lay-thumb { position:relative; }
-  [data-sheet-list] .lay-pick { position:relative; padding-right:26px; }
   .lay-sheet-x { position:absolute; display:inline-flex; align-items:center; justify-content:center;
     width:14px; height:14px; border-radius:2px; cursor:pointer;
     background-color: var(--accent); color: var(--accent-ink);
     font: 700 11px/1 'Barlow Condensed', system-ui, sans-serif; }
-  [data-sheet-list] .lay-sheet-x { right:6px; top:50%; transform:translateY(-50%); }
   .lay-thumb .lay-sheet-x { right:1px; top:1px; }
   .lay-sheet-x:hover { filter:brightness(1.15); }
   [data-sheet-name] { cursor:text; }
@@ -915,15 +917,10 @@
       </div>
     </div>
 
-    <div class="lay-section">
-      <div class="lay-section-title">Sheet</div>
-      <div data-sheet-list></div>
-      <button type="button" data-layout-add-sheet id="lay-add-sheet">+ Sheet</button>
-      <!-- REMOVE SHEET (Movie, 1 Oct: "BASEMENT PLAN and ELECTRIC PLAN
-           sometimes i don't include them"). Takes the sheet on the desk out of
-           the set, whatever is on it, and closes the gap; undo brings it back. -->
-      <button type="button" data-layout-remove-sheet id="lay-remove-sheet">− Remove Sheet</button>
-    </div>
+    <!-- NO SHEET LIST HERE (Movie, 26 Oct: "we shouldn't need the left area
+         menu SHEET, because we have the layout viewports on the right side
+         that does all the same stuff"). The rail's pages open, rename and
+         delete (X) a sheet, and its ADD PAGE adds one. -->
 
     <div class="lay-section">
       <div class="lay-section-title">Viewport Scale</div>
@@ -938,10 +935,9 @@
       <div data-hologram-list></div>
     </div>
 
-    <div class="lay-section" data-level-section hidden>
-      <div class="lay-section-title">Plan Level</div>
-      <div data-level-list></div>
-    </div>
+    <!-- NO PLAN LEVEL LIST (Movie, 26 Oct: "think it doesn't do anything and
+         we can probably remove it"). It only chose the floor + ADD VIEWPORT
+         places with no pick, and the add menu lists every floor's plan. -->
 
     <!-- ── TITLEBLOCK AND LOGO: TWO QUESTIONS, TWO ROWS ──────────────────
          Movie, 14 Oct: "we should put a button up beside TITLEBLOCK title to
@@ -1445,6 +1441,11 @@ const scaleFamilyFor = view => (isSiteView(view) ? 'site' : 'architect');
 // drawing, and would then be wrong -- too roomy -- for all the rest.
 // It is still the right hook for an ELEVATION, where dimensions are not drawn
 // yet and so cannot be measured, which is why it keeps its name and its zero.
+// The site's dimension rows, in paper past the lot line: 3/8" to the first,
+// 3/8" more to the second, and a quarter inch for the figures on it.
+const SITE_ROWS_ROOM_IN = 3 / 8 + 3 / 8 + 1 / 4;
+// How far a press on a rail page travels before it is a drag, not a click.
+const RAIL_DRAG_PX = 6;
 const VIEW_ALLOWANCE_FT = Object.freeze({
   dimensions: 0,   // strings standing off the object
   markers: 0,      // elevation / level markers hanging off the sides
@@ -1471,7 +1472,7 @@ function windowsFor(views, pifs, region) {
   const n = views.length;
   const pifAt = i => (Array.isArray(pifs) ? pifs[i] : pifs);
   const avail = region.h - n * COMPOSE_LABEL_IN - (n - 1) * COMPOSE_GAP_IN;
-  const full = views.map((view, i) => Math.max(view.hFt * pifAt(i), 0.75));
+  const full = views.map((view, i) => Math.max(view.hFt * pifAt(i) + (view.padIn || 0), 0.75));
   const short = Math.max(0, full.reduce((a, b) => a + b, 0) - avail);
   const give = views.map((view, i) => (view.cropFt || 0) * pifAt(i));
   const giveAll = give.reduce((a, b) => a + b, 0);
@@ -1480,7 +1481,7 @@ function windowsFor(views, pifs, region) {
   return views.map((view, i) => {
     const cut = short > 0 && giveAll > 0 ? Math.min(give[i], short * give[i] / giveAll) : 0;
     const hIn = full[i] - cut + extra;
-    const wIn = Math.max(view.wFt * pifAt(i), 0.75);
+    const wIn = Math.max(view.wFt * pifAt(i) + (view.padIn || 0), 0.75);
     const xIn = region.x + region.w / 2;
     const natTop = top + extra / 2;
     const yIn = natTop + full[i] / 2;
@@ -2004,11 +2005,17 @@ class Component extends PageLogic {
   // The footprint a view claims on paper, in feet. The scale chooser, the
   // frame and the painter all ask this one function, so they cannot disagree
   // about how big the view is.
+  //
+  // `padIn` IS PAPER the view needs past its feet, the same at every scale:
+  // the site's two dimension rows stand 3/8" and 3/4" of paper off the lot
+  // (layout-plan.js), with their figures past that, on every side the frame
+  // is centred on -- so the frame grows by that much paper all round.
   _viewFootprintFt(view) {
     const pad = 2 * this._viewAllowanceFt();
     if (view.kind === 'plan') {
       const b = this._planBounds(view.levelId);
-      return b ? { wFt: (b.maxX - b.minX) + pad, hFt: (b.maxZ - b.minZ) + pad } : null;
+      const padIn = isSiteView(view) ? 2 * SITE_ROWS_ROOM_IN : 0;
+      return b ? { wFt: (b.maxX - b.minX) + pad, hFt: (b.maxZ - b.minZ) + pad, padIn } : null;
     }
     const ex = this._cutExtents(view);
     if (!ex) return null;
@@ -2034,8 +2041,9 @@ class Component extends PageLogic {
     const foot = this._viewFootprintFt(viewport);
     const wFt = foot ? foot.wFt : null;
     const hFt = foot ? foot.hFt : null;
-    const wIn = wFt !== null ? Math.max(wFt * viewport.pif, 0.75) : 2;
-    const hIn = hFt !== null ? Math.max(hFt * viewport.pif, 0.75) : 2;
+    const padIn = foot?.padIn || 0;
+    const wIn = wFt !== null ? Math.max(wFt * viewport.pif + padIn, 0.75) : 2;
+    const hIn = hFt !== null ? Math.max(hFt * viewport.pif + padIn, 0.75) : 2;
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
   }
 
@@ -2152,13 +2160,13 @@ class Component extends PageLogic {
     const family = SCALE_FAMILIES[scaleFamilyFor(views[0])] || SCALE_FAMILIES.architect;
     const fits = pif => {
       if (axis === 'row') {
-        const sumW = views.reduce((sum, view) => sum + view.wFt * pif, 0)
+        const sumW = views.reduce((sum, view) => sum + view.wFt * pif + (view.padIn || 0), 0)
           + COMPOSE_GAP_IN * (views.length - 1);
-        const maxH = Math.max(...views.map(view => view.hFt)) * pif + COMPOSE_LABEL_IN;
+        const maxH = Math.max(...views.map(view => view.hFt * pif + (view.padIn || 0))) + COMPOSE_LABEL_IN;
         return sumW <= region.w && maxH <= region.h;
       }
-      const maxW = Math.max(...views.map(view => view.wFt)) * pif;
-      const sumH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
+      const maxW = Math.max(...views.map(view => view.wFt * pif + (view.padIn || 0)));
+      const sumH = views.reduce((sum, view) => sum + view.hFt * pif + (view.padIn || 0) + COMPOSE_LABEL_IN, 0)
         + COMPOSE_GAP_IN * (views.length - 1);
       return maxW <= region.w && sumH <= region.h;
     };
@@ -2176,7 +2184,7 @@ class Component extends PageLogic {
       .sort((x, y) => y.id - x.id);          // top storey first, the way a set reads
     const sized = view => {
       const foot = this._viewFootprintFt(view);
-      return foot ? { ...view, wFt: foot.wFt, hFt: foot.hFt } : null;
+      return foot ? { ...view, ...foot } : null;
     };
     // A VIEW is placed only if something would put ink in it: planSheet is
     // null for a level with no walls in that view.
@@ -2369,12 +2377,13 @@ class Component extends PageLogic {
         commit(views[0], xIn, yIn);
         return;
       }
-      const stackH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
+      const tall = view => view.hFt * pif + (view.padIn || 0);
+      const stackH = views.reduce((sum, view) => sum + tall(view) + COMPOSE_LABEL_IN, 0)
         + COMPOSE_GAP_IN * (views.length - 1);
       let y = region.y + Math.max(0, (region.h - stackH) / 2);
       views.forEach(view => {
-        commit(view, region.x + region.w / 2, y + (view.hFt * pif) / 2);
-        y += view.hFt * pif + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
+        commit(view, region.x + region.w / 2, y + tall(view) / 2);
+        y += tall(view) + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
       });
     });
     this.setState({
@@ -2523,6 +2532,10 @@ class Component extends PageLogic {
     if (!base || typeof base !== 'object') base = this._saved;
     if (!base) return;
     const merged = { ...base, layout: this._layoutKey() };
+    // A PROJECT NAME TYPED ON THE TITLEBLOCK goes into the drawing itself.
+    if (this._projectNameToWrite != null) {
+      merged.projectInfo = { ...(base.projectInfo || {}), name: this._projectNameToWrite };
+    }
     const file = new File([JSON.stringify(merged)], 'model-drawing.json', { type: 'application/json' });
     try {
       await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, { ifRev: at.rev });
@@ -2531,6 +2544,7 @@ class Component extends PageLogic {
       return this._writeLayoutToStore(triesLeft - 1);
     }
     this._saved = merged;
+    this._projectNameToWrite = null;
   }
 
   // ─── Personal settings and company standards packages ───────────────────────
@@ -2821,6 +2835,7 @@ class Component extends PageLogic {
     // inches -- the two places a press renames the sheet or opens the logo
     // picker, which a check can find no other way.
     document.body.dataset.layoutTitleHit = JSON.stringify(this._titleHitIn || null);
+    document.body.dataset.layoutProjectHit = JSON.stringify(this._projectHitIn || null);
     document.body.dataset.layoutLogoHit = JSON.stringify(this._logoHitIn || null);
     // ARRIVING ON THE SITE PLAN SHEET IS THE QUESTION, and this is the one
     // place that sees every arrival -- a rail press, a re-deal, a sheet
@@ -2933,10 +2948,11 @@ class Component extends PageLogic {
       // THE PAGE TITLE IS PRESSABLE ON THE DESK: the titleblock says where
       // it drew it, in paper inches, for _onMouseDown to rename from.
       const desk = !print;
-      if (desk) { this._titleHitIn = null; this._logoHitIn = null; }
+      if (desk) { this._titleHitIn = null; this._logoHitIn = null; this._projectHitIn = null; }
       const inches = r => ({ xIn: (r.x - panX) / zoom, yIn: (r.y - panY) / zoom, wIn: r.w / zoom, hIn: r.h / zoom });
       const info = { ...this._titleblockInfo(sheet),
         ...(desk ? { onPageTitle: r => { this._titleHitIn = inches(r); },
+          onProjectName: r => { this._projectHitIn = inches(r); },
           onLogoCell: r => { this._logoHitIn = inches(r); } } : {}) };
       window.DraftTitleblock.draw(ctx, tbBox, style, info, this._logos?.[style.markId] || null);
     } else {
@@ -3092,6 +3108,9 @@ class Component extends PageLogic {
           // `|| null` KEEPS THE OLD PROMISE: a viewport saved before views
           // existed carries no view and still draws the whole level.
           view: viewport.view || null,
+          // THIS VIEWPORT'S SCALE, for what is laid out in paper inches --
+          // the site's dimension rows, 3/8" apart on every sheet.
+          pif: viewport.pif,
         });
         ctx.restore();
       }
@@ -3442,6 +3461,16 @@ class Component extends PageLogic {
     }
     const hit = this._viewportAt(ptIn);
     const t = this._titleHitIn;
+    const pj = this._projectHitIn;
+    const inside = r => r && ptIn.xIn >= r.xIn && ptIn.xIn <= r.xIn + r.wIn && ptIn.yIn >= r.yIn && ptIn.yIn <= r.yIn + r.hIn;
+    if (!hit && inside(pj)) {
+      e.preventDefault();
+      const r = this._canvas.getBoundingClientRect();
+      const { zoom, panX, panY } = this.state;
+      this._openProjectRename({ left: r.left + pj.xIn * zoom + panX - 40,
+        top: r.top + (pj.yIn + pj.hIn / 2) * zoom + panY, width: 200, height: 0 });
+      return;
+    }
     if (hit) {
       this._draggingViewport = { id: hit.id, dxIn: hit.xIn - ptIn.xIn, dyIn: hit.yIn - ptIn.yIn };
       this.setState({ selectedViewportId: hit.id }, () => this._draw());
@@ -3704,8 +3733,8 @@ class Component extends PageLogic {
       ? levelId : { kind: 'plan', levelId });
     if (!foot) return SCALES[start].pif;
     const region = this._composeRegionIn();
-    const fits = pif => foot.wFt * pif <= region.w
-      && foot.hFt * pif + COMPOSE_LABEL_IN <= region.h;
+    const fits = pif => foot.wFt * pif + (foot.padIn || 0) <= region.w
+      && foot.hFt * pif + (foot.padIn || 0) + COMPOSE_LABEL_IN <= region.h;
     for (let i = start; i >= 0; i -= 1) {
       if (fits(SCALES[i].pif)) return SCALES[i].pif;
     }
@@ -3722,7 +3751,7 @@ class Component extends PageLogic {
     const working = view?.kind === 'plan' && view.levelId < 0 ? SHELF_PIF : SCALES[this.state.activeScale].pif;
     const foot = this._viewFootprintFt(view);
     if (!foot) return working;
-    return Math.min(working, this._autoScaleFor([{ ...view, wFt: foot.wFt, hFt: foot.hFt }], this._composeRegionIn()));
+    return Math.min(working, this._autoScaleFor([{ ...view, ...foot }], this._composeRegionIn()));
   }
 
   _placeViewport(ptIn) {
@@ -3935,7 +3964,6 @@ class Component extends PageLogic {
     document.querySelectorAll('[data-orient]').forEach(button =>
       button.classList.toggle('on', button.dataset.orient === orientation));
 
-    this._paintSheetList();
     // AND THE FOOT'S ARROWS ARE THE SAME LIST, so they grey at its ends. Here
     // rather than in `_draw`, because this is where the sheet list itself is
     // repainted -- one place that knows the stack changed, not two.
@@ -3960,16 +3988,6 @@ class Component extends PageLogic {
       })) : [],
       key => this._toggleViewportHologram(key));
 
-    const levels = this._levelsWithWalls?.() || [];
-    document.querySelector('[data-level-section]').hidden = !levels.length;
-    picks('[data-level-list]',
-      levels.map(level => ({
-        key: level.id,
-        label: level.name,
-        on: activeLevelId === level.id,
-        data: { 'data-layout-level': String(level.id) },
-      })),
-      id => this.setState({ activeLevelId: id }));
 
     // The company strips are an 11×17 feature: the letter sheet stands the
     // picker down and keeps the plain strip.
@@ -4076,7 +4094,6 @@ class Component extends PageLogic {
     redo.disabled = !this.state.historyFuture;
     title(undo, this.state.historyPast ? 'Undo the last sheet change' : 'Nothing to undo yet');
     title(redo, this.state.historyFuture ? 'Redo the sheet change just undone' : 'Nothing to redo');
-    document.querySelector('[data-layout-remove-sheet]').disabled = this._sheetCount() <= 1;
     // ON SCREEN EXACTLY WHILE THERE IS SOMETHING TO DELETE, as MODEL's is.
     document.querySelector('[data-delete-viewport]').hidden = this.state.selectedViewportId == null;
     document.querySelector('[data-copy-viewport]').hidden = this.state.selectedViewportId == null;
@@ -4104,28 +4121,7 @@ class Component extends PageLogic {
   // ─── The sheet rail ────────────────────────────────────────────────────
   // Rebuilt only when the sheets' names or number change; otherwise this
   // moves the outline and asks each thumbnail whether its sheet changed.
-  // THE SHEET LIST: the number, the name, and the X. A press on the name of
-  // the sheet already open renames it; anywhere else on the row opens it.
-  _paintSheetList() {
-    const host = document.querySelector('[data-sheet-list]');
-    if (!host) return;
-    host.textContent = '';
-    const count = this._sheetCount();
-    for (let n = 1; n <= count; n += 1) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = `lay-pick${this.state.activeSheet === n ? ' on' : ''}`;
-      button.setAttribute('data-layout-sheet', String(n));
-      const name = document.createElement('span');
-      name.dataset.sheetName = String(n);
-      name.textContent = this._sheetTitle(n);
-      button.append(`${n}  `, name);
-      if (count > 1) button.append(this._sheetX(n));
-      button.addEventListener('click', e => this._onSheetPress(e, n, name));
-      host.appendChild(button);
-    }
-  }
-
+  // A PAGE'S X, on its rail thumbnail.
   _sheetX(n) {
     const x = document.createElement('span');
     x.className = 'lay-sheet-x';
@@ -4180,6 +4176,47 @@ class Component extends PageLogic {
     document.body.appendChild(input);
     input.focus();
     input.select();
+  }
+
+  // THE PROJECT'S NAME, pressed on the titleblock (Movie, 26 Oct: "allow the
+  // user to click on it to change it, and also change it in the project
+  // information area too"). One name: the drawing's projectInfo.name, which
+  // the PROJECT page's NAME box and every sheet's titleblock both read.
+  _openProjectRename(rect) {
+    document.getElementById('lay-rename')?.remove();
+    const input = document.createElement('input');
+    input.id = 'lay-rename';
+    input.dataset.projectRename = '';
+    input.value = String(this._saved?.projectInfo?.name || '');
+    input.placeholder = 'NEW HOME';
+    input.maxLength = 200;
+    Object.assign(input.style, { left: `${rect.left}px`, top: `${rect.top + rect.height / 2 - 12}px`,
+      width: `${Math.max(160, rect.width)}px` });
+    let done = false;
+    const close = keep => {
+      if (done) return;
+      done = true;
+      const name = input.value.replace(/\s+/g, ' ').trim();
+      input.remove();
+      if (keep) this._renameProject(name);
+    };
+    input.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); close(true); }
+      if (e.key === 'Escape') { e.preventDefault(); close(false); }
+    });
+    input.addEventListener('blur', () => close(true));
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+  }
+
+  _renameProject(name) {
+    if (!this._saved || name === String(this._saved.projectInfo?.name || '')) return;
+    this._saved = { ...this._saved, projectInfo: { ...(this._saved.projectInfo || {}), name } };
+    this._projectNameToWrite = name;
+    this._persistLayout();
+    this._draw();
   }
 
   _renameSheet(n, title) {
@@ -4372,13 +4409,19 @@ class Component extends PageLogic {
         button.type = 'button';
         button.className = 'lay-thumb';
         button.dataset.sheetThumb = String(i + 1);
+        button.dataset.layoutSheet = String(i + 1);
         button.title = label;
         const name = document.createElement('span');
         name.dataset.sheetName = String(i + 1);
         name.textContent = label;
         button.append(document.createElement('canvas'), name);
         if (count > 1) button.append(this._sheetX(i + 1));
-        button.addEventListener('click', e => this._onSheetPress(e, i + 1, name));
+        button.addEventListener('click', e => {
+          // The click the browser sends after a drag is the drag's own.
+          if (this._railDragged) { this._railDragged = false; return; }
+          this._onSheetPress(e, i + 1, name);
+        });
+        button.addEventListener('pointerdown', e => this._railDragStart(e, i + 1));
         return button;
       }), this._addPageTile());
       grid.dataset.signature = signature;
@@ -4393,6 +4436,64 @@ class Component extends PageLogic {
     // ONE MORE PLACE IN THE GRID for the ADD PAGE tile.
     this._sizeRail(grid, count + 1);
     this._queueThumbs(grid);
+  }
+
+  // ── A PAGE DRAGGED TO A NEW PLACE IN THE SET ────────────────────────────
+  //
+  // Movie, 26 Oct: "in the layout area i can 're-arrange' the layouts by
+  // dragging their position (in the right menu with the small viewports
+  // showing the layouts)". A press on a page that travels more than a few
+  // pixels picks it up; the page under the hand when it is let go is where
+  // it goes, the others closing up round it -- sheet numbers, names and what
+  // is on each go with their pages. A press that does not travel is the
+  // click it always was.
+  _railDragStart(e, from) {
+    if (e.button !== 0 || e.target.closest('[data-remove-sheet-at]')) return;
+    const grid = document.querySelector('[data-sheet-rail-grid]');
+    const start = { x: e.clientX, y: e.clientY };
+    let lifted = false, over = from;
+    const pageAt = (x, y) => {
+      const el = document.elementFromPoint(x, y)?.closest?.('[data-sheet-thumb]');
+      return el && grid.contains(el) ? Number(el.dataset.sheetThumb) : null;
+    };
+    const mark = () => grid.querySelectorAll('[data-sheet-thumb]').forEach(b => {
+      const n = Number(b.dataset.sheetThumb);
+      b.classList.toggle('lay-thumb-lifted', lifted && n === from);
+      b.classList.toggle('lay-thumb-drop', lifted && n === over && n !== from);
+    });
+    const move = ev => {
+      if (!lifted && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < RAIL_DRAG_PX) return;
+      lifted = true;
+      over = pageAt(ev.clientX, ev.clientY) ?? over;
+      grid.dataset.railDragging = String(from);
+      mark();
+    };
+    const up = ev => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      delete grid.dataset.railDragging;
+      if (!lifted) return;
+      this._railDragged = true;
+      over = pageAt(ev.clientX, ev.clientY) ?? over;
+      lifted = false;
+      mark();
+      if (over !== from) this._moveSheet(from, over);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  // Sheet `from` to place `to`: the set re-numbered, the open sheet kept open.
+  _moveSheet(from, to) {
+    const count = this._sheetCount();
+    if (from === to || from < 1 || to < 1 || from > count || to > count) return;
+    const order = Array.from({ length: count }, (_, i) => i + 1);
+    order.splice(to - 1, 0, ...order.splice(from - 1, 1));
+    const numberOf = old => order.indexOf(old) + 1;
+    const sheets = order.map(old => this.state.sheets[old - 1] || { title: '' });
+    const viewports = this.state.viewports.map(viewport => ({ ...viewport, sheet: numberOf(viewport.sheet || 1) }));
+    this.setState({ sheets, viewports, activeSheet: numberOf(this.state.activeSheet), auto: false },
+      () => { this._persistLayout(); this._draw(); });
   }
 
   // + ADD PAGE AT THE END OF THE PAGES (Movie, 26 Oct: "can we put a 'ADD NEW
@@ -5036,8 +5137,6 @@ class Component extends PageLogic {
     on('[data-open-standards]', 'click', () => this._openProfileDialog('standards'));
     document.querySelectorAll('[data-orient]').forEach(button =>
       button.addEventListener('click', () => this._setOrientation(button.dataset.orient)));
-    on('[data-layout-add-sheet]', 'click', () => this._addSheet());
-    on('[data-layout-remove-sheet]', 'click', () => this._removeSheet(this.state.activeSheet));
     // ARMED AT ONCE, as it always was: the next press on the sheet places
     // the PLAN LEVEL list's floor. The list of views opens under it, and a
     // pick there changes what that press places.
