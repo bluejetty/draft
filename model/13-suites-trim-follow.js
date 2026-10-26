@@ -1118,7 +1118,11 @@
   const holdSnapOff = held => {
     if (snapHeldOff === held) return;
     snapHeldOff = held;
-    stripRefresh(); paint();
+    stripRefresh();
+    // REPAINTED ONLY WHEN A CATCH IS SHOWING, the one thing Ctrl changes on
+    // the sheet: a repaint on every Ctrl went out between the keys of a
+    // Ctrl+Z and drew the sheet as it stood before the undo.
+    if (['data-snap-magnet', 'data-snap-node', 'data-move-grab'].some(a => canvas.hasAttribute(a))) paint();
   };
   window.addEventListener('keydown', e => { if (e.key === 'Control') holdSnapOff(true); }, true);
   window.addEventListener('keyup', e => { if (e.key === 'Control') holdSnapOff(false); }, true);
