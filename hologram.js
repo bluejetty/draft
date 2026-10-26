@@ -314,7 +314,9 @@
   };
   const sharedMemo = new WeakMap();
   const shared = saved => {
-    if (!saved || typeof saved !== 'object') return sharedFresh(saved);
+    // NO SUITE, NOTHING TO KEEP: the plain house asks this on every paint,
+    // and building the key would be the whole cost.
+    if (!saved || typeof saved !== 'object' || !shown(saved).some(isSuite)) return sharedFresh(saved);
     const key = `${JSON.stringify(hostWalls(saved))}|${JSON.stringify(saved.fenestrations || [])}|${
       shown(saved).filter(isSuite).map(holoKey).join(';')}`;
     const kept = sharedMemo.get(saved);
