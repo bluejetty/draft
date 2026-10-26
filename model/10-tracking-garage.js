@@ -928,7 +928,7 @@
     // SELECT over any suite.
     const tm = (() => { try { return traceMoving; } catch { return null; } })();
     const grabMark = p => canvas.setAttribute('data-move-grab', JSON.stringify([Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]));
-    if (tm?.hologram && tm.from && tm.grab && tm.before) {
+    if (tm?.from && tm.grab && tm.before) {
       canvas.removeAttribute('data-snap-node');
       const held = { x: tm.grab.x + tm.underlay.x - tm.before.x, y: 0, z: tm.grab.z + tm.underlay.z - tm.before.z };
       if (tm.pointLock) paintDonut(tm.pointLock.lit.pt, tierOf(tm.pointLock.lit));

@@ -2821,7 +2821,11 @@
     event.stopImmediatePropagation();
     event.preventDefault();
     traceMoving.from = tracePoint(event);
-    traceMoving.grab = traceMoving.hologram ? suiteGrabAt(traceMoving.underlay, traceMoving.from) : null;
+    // A PICTURE IS HELD BY THE POINT PRESSED ON IT (Movie, 26 Oct: the
+    // REGISTRATION TARGET a node "so i can position the property site plan
+    // properly"): that point lands exactly on a node it is brought to.
+    traceMoving.grab = traceMoving.hologram ? suiteGrabAt(traceMoving.underlay, traceMoving.from)
+      : { x: traceMoving.from.x, z: traceMoving.from.z };
     if (traceMoving.grab) traceMoving.from = { ...traceMoving.from, x: traceMoving.grab.x, z: traceMoving.grab.z };
     traceMoving.magnet = null;
     // A WHOLE COPY, because UNDO's 'props' step restores the record to exactly
@@ -2856,7 +2860,7 @@
     // Across the lines only: along them the suite stays free to jog in or
     // out, which the shell wall's snap just below settles -- "lock into the
     // ext wall to ext wall (to show the windows and doors)".
-    m.pointLock = m.hologram ? suitePointLock(m) : null;
+    m.pointLock = suitePointLock(m);
     if (m.pointLock) {
       const held = squaredAxis(m.from, at);
       m.underlay.x += held === 'x' ? 0 : m.pointLock.dx;

@@ -927,9 +927,15 @@
     if (!drawing) return [];
     const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
     if (magnetSegCache.key === key) return magnetSegCache.list;
-    magnetSegCache = { key, list: [...wallFaceSegs(), ...bodySegs([...lines(), ...loopEdges()])] };
+    magnetSegCache = { key, list: [...wallFaceSegs(), ...bodySegs([...lines(), ...loopEdges(), ...siteRoofEdges()])] };
     return magnetSegCache.list;
   };
+  // ON THE SITE, THE ROOF'S EDGES are lines to land on too (siteSnapNodes).
+  const SITE_SNAP_LEVEL = 8;
+  const siteRoofEdges = () => (Number(activeLevelId()) === SITE_SNAP_LEVEL && drawing
+    ? (drawing.roofs || []).filter(r => Array.isArray(r?.points) && r.points.length >= 3)
+      .flatMap(r => r.points.map((p, i) => ({ start: p, end: r.points[(i + 1) % r.points.length] })))
+    : []);
   // WHERE RUNS CROSS WITH NO NODE THERE: yellow corners too, on this level.
   let crossingCache = { key: null, list: [] };
   const crossingNodes = () => {
@@ -1357,6 +1363,28 @@
     if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND THE REGISTRATION TARGET, on every level, and on the SITE the roof
+    // drawn over it (Movie, 26 Oct: "the roof plan doesn't seem to have NODE
+    // SNAPS working - i really would like the REGISTRATION TARGET to have a
+    // node snap so i can position the property site plan properly").
+    siteSnapNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
+    return out;
+  };
+  // THE GOLD TARGET is a node wherever it stands; the SITE shows the house
+  // by its roof, whose corners live on the ROOF level, so there they are
+  // the house's nodes. A shelf's target belongs to the shelf, and is one too.
+  const siteSnapNodes = () => {
+    if (!drawing) return [];
+    const out = [];
+    const target = siteDatumNow();
+    if (target && Number.isFinite(target.x) && Number.isFinite(target.z)) out.push({ x: target.x, y: 0, z: target.z });
+    if (Number(activeLevelId()) === SITE_SNAP_LEVEL) {
+      (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);
+      }));
+    }
     return out;
   };
   // THE FIXTURE CORNERS A FLOOR OR SHAPE CATCHES: the four of each piece's
