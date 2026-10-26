@@ -104,8 +104,8 @@ test('a moved suite slides its picture; lined up on the shell, it is drawn afres
 
 test('its layers changed, a suite is drawn afresh', async ({ page }) => {
   await open(page);
-  expect(await drawnBy(page, "Object.assign(holograms().find(x => x.id === 'h1'), { layersOwn: true, layersOff: ['A-GLAZ'] });"))
-    .toBe(1);
+  // The drawing's main set: the windows off for every suite.
+  expect(await drawnBy(page, "drawing.hologramLayers = { off: ['A-GLAZ'] };")).toBe(1);
 });
 
 test('a sheet or a print draws every suite line by line, every time', async ({ page }) => {
