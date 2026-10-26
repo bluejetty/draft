@@ -40,6 +40,7 @@ async function open(page, f, url = '/MODEL.html?right=1') {
 }
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
+  if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
 };
 async function saved(page) {
   await closeCard(page);

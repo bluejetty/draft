@@ -39,6 +39,7 @@ const chip = page => page.locator('[data-mode-hologram]');
 // The card covers SAVE and UNDO while it is up, as it does for images.
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
+  if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
 };
 const undo = async page => {
   await closeCard(page);
@@ -88,28 +89,24 @@ test('BRING IN keeps a copy of the other drawing, where its own file has it', as
 test('HIDE takes the blue off, SHOW puts it back', async ({ page }) => {
   await open(page);
   await bringIn(page);
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-show]').click();
-  await page.locator('[data-trace-later]').click();
+  await page.locator('[data-hologram-close]').click();
   expect(await bluePixels(page)).toBeLessThan(50);
   expect((await saved(page)).holograms[0].hidden).toBe(true);
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-show]').click();
-  await page.locator('[data-trace-later]').click();
+  await page.locator('[data-hologram-close]').click();
   expect(await bluePixels(page)).toBeGreaterThan(500);
 });
 
 test('MOVE drags it, the arrows and [ ] turn it, and UNDO undoes each', async ({ page }) => {
   await open(page);
   await bringIn(page);
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-right]').click();
   expect((await saved(page)).holograms[0].angleDeg).toBe(90);
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-move]').click();
   // Turned while it is in hand; the drag that follows puts it down.
   await page.keyboard.press(']');
@@ -181,8 +178,7 @@ test('COPY puts another of the same file in hand, and REFRESH takes every copy t
   expect([copy.z, copy.angleDeg]).toEqual([first.z, first.angleDeg]);
   expect(copy.source.walls).toHaveLength(3);
   // REFRESH on the first: both copies take the newer file, both stay put.
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-refresh]').first().click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'existing-house.draft', mimeType: 'application/json', buffer: HOUSE });
@@ -221,8 +217,7 @@ test('MIRROR turns it over across its own axis, F in hand does too, and the blue
   // the one it stands in. (The halves do not swap to the pixel -- the
   // stair's lettering keeps its own way round -- so the test is the SIDE.)
   expect(before.right - before.left).toBeGreaterThan(before.left * 0.1);
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-mirror]').click();
   await closeCard(page);
   let holo = (await saved(page)).holograms[0];
@@ -235,8 +230,7 @@ test('MIRROR turns it over across its own axis, F in hand does too, and the blue
   expect(Math.abs(after.hi - before.hi)).toBeLessThan(3);
   expect(after.left - after.right).toBeGreaterThan(after.right * 0.1);
   // F while it is in hand turns it back.
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-move]').click();
   await page.keyboard.press('KeyF');
   await page.keyboard.press('Escape');
@@ -261,8 +255,7 @@ test('DELETE takes it off, UNDO brings it back, and its own holograms come in wi
   // ITS OWN HOLOGRAMS COME WITH IT (Movie, 18 Oct: PHASE 1's suites "need to
   // also show as part of the PHASE 1 hologram").
   expect((await saved(page)).holograms[0].source.holograms?.map(h => h.id)).toEqual(['hologram-1']);
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-delete]').click();
   await expect(page.locator('[data-hologram-row]')).toHaveCount(0);
   expect((await saved(page)).holograms).toHaveLength(0);
@@ -317,8 +310,7 @@ const findWall = page => page.evaluate(() => {
 });
 // TRACE on opens the card; when it is already on, off and on again does.
 const openCard = async page => {
-  if (await chip(page).getAttribute('aria-pressed') === 'true') await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
 };
 
 test('DEMO marks a wall coming out -- dashed, gone from the existing plan -- and a click again keeps it', async ({ page }) => {

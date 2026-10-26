@@ -47,6 +47,7 @@ async function open(page) {
 const chip = page => page.locator('[data-mode-hologram]');
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
+  if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
 };
 const saved = async page => {
   await closeCard(page);

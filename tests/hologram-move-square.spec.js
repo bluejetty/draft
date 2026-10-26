@@ -48,6 +48,7 @@ const tsquare = page => page.locator('[data-mode-tsquare]');
 const foot = page => page.locator('[data-mode-scale]');
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
+  if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
 };
 const saved = async page => {
   await closeCard(page);
@@ -64,8 +65,7 @@ const bringIn = async page => {
 };
 // MOVE, then a drag of (dx, dy) screen pixels from the middle of the plan.
 const moveBy = async (page, dx, dy) => {
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-move]').click();
   const box = await page.locator('#plan').boundingBox();
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
