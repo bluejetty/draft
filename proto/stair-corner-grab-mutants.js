@@ -3,9 +3,10 @@
 // (tests/stair-corner-grab.spec.js).
 //
 // Movie, 26 Oct, the one snap rule: whole-thing drags are held by the
-// nearest own corner within a node's reach, cyan before the press. Four
-// seams: the corner taken, its catch, the cyan ring before the press, and
-// Ctrl switching the catch off.
+// nearest own corner within a node's reach, cyan before the press. Three
+// seams: the corner taken, its catch, and the cyan ring before the press.
+// (Ctrl held is the shared catch's own: reachFt reaches nothing, gated in
+// suite-corner-grab-mutants.js; a second check here would be equivalent.)
 //
 // Run: node proto/stair-corner-grab-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -30,11 +31,6 @@ const MUTANTS = [
     find: "      ? selection.filter(e => e.type === 'stair').map(e => stairCornerAt(e.item, cursorWorld)).find(Boolean) : null;\n",
     with: "      ? null : null;\n",
     test: 'rings cyan' },
-  { file: 'model/16-gestures-undo.js',
-    name: 'Ctrl held still catches',
-    find: "          if (md.corner && snapLive() && board !== 'toy') {\n",
-    with: "          if (md.corner && board !== 'toy') {\n",
-    test: 'Ctrl held' },
 ];
 
 const run = name => {
