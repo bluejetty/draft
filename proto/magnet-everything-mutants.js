@@ -22,7 +22,7 @@ const MUTANTS = [
     test: 'a floor\'s corner is a node, its edge a face, and a line across its edge crosses at a yellow corner' },
   { file: 'model/07-walls-magnet.js',
     name: 'a loop\'s edges are no faces',
-    find: '    magnetSegCache = { key, list: [...wallFaceSegs(), ...bodySegs([...lines(), ...loopEdges()])] };\n',
+    find: '    magnetSegCache = { key, list: [...wallFaceSegs(), ...bodySegs([...lines(), ...loopEdges(), ...siteRoofEdges()])] };\n',
     with: '    magnetSegCache = { key, list: [...wallFaceSegs()] };\n',
     test: 'a floor\'s corner is a node, its edge a face, and a line across its edge crosses at a yellow corner' },
   { file: 'model/07-walls-magnet.js',

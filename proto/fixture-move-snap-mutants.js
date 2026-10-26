@@ -22,7 +22,7 @@ const MUTANTS = [
     test: 'MOVE slides' },
   { file: 'model/11-floor-openings-fixtures.js',
     name: 'no side catches at all',
-    find: "    if (!snapOn || board === 'toy') return target;\n",
+    find: "    if (!snapLive() || board === 'toy') return target;\n",
     with: "    return target;\n",
     test: 'within an inch' },
   { file: 'model/11-floor-openings-fixtures.js',

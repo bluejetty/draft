@@ -69,7 +69,7 @@ const MUTANTS = [
     test: 'SHOW AREA off counts nothing' },
   { file: 'model/16-gestures-undo.js',
     name: 'a face corner takes no link',
-    find: "          const face = window.DraftGeometry2D.nearestVertex(wallFaceNodes(), raw, reach);\n",
+    find: "          const face = window.DraftGeometry2D.nearestVertex(wallFaceNodes(), raw, reachFt(CORNER_REACH));\n",
     with: "          const face = null;\n",
     test: 'a corner dropped on the inside corner of two walls' },
   { file: 'model/03-plan-paint.js',

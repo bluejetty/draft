@@ -15,7 +15,7 @@ const SPEC = 'tests/wall-face-seek.spec.js';
 const MUTANTS = [
   { file: 'model/16-gestures-undo.js',
     name: 'a dragged wall\'s faces seek nothing',
-    find: '          const seek = !toy && !ends && snapOn ? wallFaceSeek(md, dx, dz) : null;\n',
+    find: '          const seek = !toy && !ends && snapLive() ? wallFaceSeek(md, dx, dz) : null;\n',
     with: '          const seek = null;\n',
     test: 'a dragged wall slides across its run until its face lines up with another wall\'s, and both faces glow' },
   { file: 'model/07-walls-magnet.js',
