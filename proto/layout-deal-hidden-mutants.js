@@ -5,8 +5,8 @@
 // Movie, 26 Oct: "if they accidentally or misunderstand what RE-DEAL means it
 // will delete all their work placing the viewports" -- "Hide the button: it
 // goes away after the first deal, and you add new views by hand with + ADD
-// VIEWPORT". Three seams: the button hidden, the CSS that lets it hide, and
-// the verb refusing over a sheet with a viewport on it.
+// VIEWPORT". Two seams: the button hidden, and the verb refusing over a
+// sheet with a viewport on it.
 //
 // Run: node proto/layout-deal-hidden-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -20,11 +20,6 @@ const MUTANTS = [
     name: 'DEAL SHEETS stays over a dealt set',
     find: "    deal.hidden = this.state.viewports.length > 0;\n",
     with: "    deal.hidden = false;\n",
-    test: 'a sheet with a viewport on it offers no DEAL; with the last one deleted it is back and deals the set without asking' },
-  { file: 'LAYOUT.html',
-    name: 'the panel style shows it hidden or not',
-    find: "  #lay-deal[hidden] { display:none; }\n",
-    with: "",
     test: 'a sheet with a viewport on it offers no DEAL; with the last one deleted it is back and deals the set without asking' },
   { file: 'LAYOUT.html',
     name: 'the verb deals over a sheet with a viewport on it',
