@@ -908,6 +908,16 @@
   // "node snape orange glow"). And a cross line snapped to from a node that
   // sends no ray of its own, lit while it holds the point.
   const paintSnapNode = () => {
+    // A FIXTURE THAT CAUGHT ITS NEIGHBOUR: the orange ring on the joint.
+    // A SELECT drag holds it in moveDrag, a MOVE drag in moveState.
+    const fixtureHeld = moveDrag?.kind === 'fixture' ? moveDrag
+      : (() => { try { return moveState?.drag?.kind === 'fixture' ? moveState.drag.md : null; } catch { return null; } })();
+    if (fixtureHeld) {
+      canvas.removeAttribute('data-snap-node');
+      if (fixtureHeld.lit) paintDonut(fixtureHeld.lit.pt, 'orange');
+      markMagnet(fixtureHeld.lit || null);
+      return;
+    }
     // A NODE BEING DRAGGED shows what has it, from the drag's own answer.
     if ((moveDrag?.kind === 'corner' || moveDrag?.kind === 'wall') && moveDrag.active) {
       canvas.removeAttribute('data-snap-node');
