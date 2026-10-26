@@ -1365,6 +1365,12 @@
     if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND THE BG STOREYS' WALL ENDS (Movie, 21 Oct: "i would like the NODES
+    // to work in the BG"): nodes like the level's own, so they are asked
+    // before the cross lines, not after.
+    bgWalls().forEach(w => [w.start, w.end].forEach(v => {
+      if (v && !out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    }));
     // AND ON THE SITE, THE REGISTRATION TARGET and the roof drawn over it
     // (Movie, 26 Oct: "the roof plan doesn't seem to have NODE SNAPS working
     // - i really would like the REGISTRATION TARGET to have a node snap so i
