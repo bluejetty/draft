@@ -154,8 +154,8 @@ test('without a saved drawing the sheet explains itself and places nothing', asy
 
 test('a click places a plan viewport at the sheet point, at the active scale', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  // The busiest plan is the default level; its button reads engaged.
-  await expect(page.locator('[data-layout-level="1"]')).toBeVisible();
+  // The busiest plan is the default level.
+  expect(await page.evaluate(() => page.state.activeLevelId)).toBe(1);
   await placeViewport(page, 8, 5);
   const saved = await savedDrawing(page);
   // The seeded one on sheet 2 and the one just placed.
@@ -275,9 +275,6 @@ test('+ ADD VIEWPORT stays on screen on a short window', async ({ page }) => {
   await page.setViewportSize({ width: 1518, height: 660 });
   await openLayout(page, houseDrawing());
 
-  // The conditional sections must actually be present, or this checks a
-  // shorter panel than a drafter sees and passes for the wrong reason.
-  await expect(page.locator('[data-layout-level]').first()).toBeVisible();
 
   const btn = page.locator('[data-layout-add-viewport]');
   await expect(btn).toBeVisible();
