@@ -226,14 +226,10 @@ test('AUTO DIMS and HAND DIMS beside the north arrow show or hide each kind; the
   expect(await painted(page)).toEqual([31]);
 });
 
-// ON ANY LEVEL WITH WALLS (Movie, 26 Oct: "can we put the AUTODIM / HAND DIM
-// buttons in the SHELF"): AUTO DIMS lays the strings from there.
-test('no walls and no strings, no chips -- until the DIMENSION tool is up; walls bring them', async ({ page }) => {
-  await open(page, drawing([]));
+test('no strings on the level, no chips -- until the DIMENSION tool is up', async ({ page }) => {
+  await open(page, drawing(RUN));
   await expect(page.locator('#dims-show')).toBeHidden();
   await armDimension(page);
-  await expect(page.locator('#dims-show')).toBeVisible();
-  await open(page, drawing(RUN));
   await expect(page.locator('#dims-show')).toBeVisible();
 });
 

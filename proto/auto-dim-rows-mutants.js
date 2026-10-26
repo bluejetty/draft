@@ -38,7 +38,7 @@ const MUTANTS = [
     test: 'DELETE on one piece of a row takes the row off that side, and the rows outside step in' },
   { file: 'model/03-plan-paint.js',
     name: 'the chips wait for strings, as before',
-    find: "    const any = dimensions().length > 0 || activeTool === 'dimension' || walls().length > 0;\n",
+    find: "    const any = dimensions().length > 0 || activeTool === 'dimension'\n      || (activeLevelId() < 0 && walls().length > 0);\n",
     with: "    const any = dimensions().length > 0 || activeTool === 'dimension';\n",
     test: 'on a shelf the AUTO DIMS chip is there before any strings, and a press lays the four rows' },
   { file: 'model/03-plan-paint.js',

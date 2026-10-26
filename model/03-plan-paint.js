@@ -1578,10 +1578,12 @@
       dimsShowBox.append(rowsBtn);
       dock.append(dimsShowBox);
     }
-    // ON ANY LEVEL WITH WALLS, so a shelf with a suite and no strings yet
-    // still offers AUTO DIMS (Movie, 26 Oct: "can we put the AUTODIM / HAND
-    // DIM buttons in the SHELF").
-    const any = dimensions().length > 0 || activeTool === 'dimension' || walls().length > 0;
+    // AND ON A SHELF WITH WALLS, so a suite with no strings yet still offers
+    // AUTO DIMS (Movie, 26 Oct: "can we put the AUTODIM / HAND DIM buttons in
+    // the SHELF"). A floor keeps its rule: the chips stand over the sheet's
+    // top corner, where a floor is drawn, only once there are strings.
+    const any = dimensions().length > 0 || activeTool === 'dimension'
+      || (activeLevelId() < 0 && walls().length > 0);
     const rowsBtn = dimsShowBox.querySelector('[data-auto-rows]');
     if (rowsBtn) rowsBtn.hidden = !(levelHasAutoDims() || autoRowsOff(activeLevelId(), activeViewId() || 'plan').length);
     dimsShowBox.hidden = !any;
