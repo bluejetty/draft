@@ -106,6 +106,20 @@ test('an edge pulled past the corner stops on it: no roof the other side, no sli
   expect(ring(roof.points)).toEqual([[-8, -8], [68, -8], [68, 38], [-8, 38]]);
 });
 
+// THE STOP CATCHES FROM 3" (Movie, 26 Oct, the one snap rule: "keep the 3""),
+// whatever the zoom; 4" short is let go where it was.
+test('the edge stop catches from 2 1/2" short, not from 4"', async ({ page }) => {
+  const { at } = await open(page);
+  await armMove(page, at);
+  await drag(page, at, [30, 44], [30, 38 + 2.5 / 12]);
+  let roof = await saved(page);
+  expect(ring(roof.points), '2 1/2" short: on the corner').toEqual([[-8, -8], [68, -8], [68, 38], [-8, 38]]);
+  await page.keyboard.press('Control+z');
+  await drag(page, at, [30, 44], [30, 38 + 4 / 12]);
+  roof = await saved(page);
+  expect(ring(roof.points).length, '4" short: the jog stays, four inches deep').toBe(8);
+});
+
 test('a node dragged moves alone; a node clicked is picked and DELETE takes it out', async ({ page }) => {
   const { at } = await open(page);
   await armMove(page, at);
