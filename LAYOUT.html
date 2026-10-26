@@ -1520,6 +1520,8 @@ const E_MARK_CLEAR_FT = 2;
 
 
 const MODEL_STORAGE_BUCKET = 'model-drawing';
+// Room round a shelf's walls for the dimension strings that measure them.
+const SHELF_FRAME_PAD_FT = 6;
 // The SITE level, by the Model Space's own numbering (floors odd, half-levels
 // even; SITE and ROOF sit outside it). It is the level the AUTOSITE rectangle
 // is filed on, so the two pages put the lot in the same place.
@@ -1842,7 +1844,21 @@ class Component extends PageLogic {
       // house as placed, so an addition's sheet is not cropped to the
       // addition.
       let box = window.DraftLayoutPlan.planBounds(this._saved, levelId);
-      const extra = window.DraftHologram ? window.DraftHologram.framePoints(this._saved, levelId) : [];
+      // A SHELF IS FRAMED ON ITS SUITE (Movie, 26 Oct: "i placed something
+      // but doesn't look like the suite"). A shelf is a workbench: old
+      // dimension strings and pictures lie about it far from the suite, and
+      // framing them all put the suite in a corner of a 390 ft window at
+      // 1" = 30'. Its walls, and room around them for their own strings.
+      if (levelId < 0) {
+        const pts = (this._saved?.walls || []).filter(w => w?.levelId === levelId && w.start && w.end)
+          .flatMap(w => [w.start, w.end]);
+        if (pts.length) {
+          const pad = SHELF_FRAME_PAD_FT;
+          box = { minX: Math.min(...pts.map(p => p.x)) - pad, maxX: Math.max(...pts.map(p => p.x)) + pad,
+            minZ: Math.min(...pts.map(p => p.z)) - pad, maxZ: Math.max(...pts.map(p => p.z)) + pad };
+        }
+      }
+      const extra = levelId < 0 ? [] : window.DraftHologram ? window.DraftHologram.framePoints(this._saved, levelId) : [];
       if (extra.length) {
         box = extra.reduce((b, pt) => ({
           minX: Math.min(b.minX, pt.x), maxX: Math.max(b.maxX, pt.x),

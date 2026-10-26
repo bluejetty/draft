@@ -297,6 +297,10 @@ test('+ ADD VIEWPORT offers a SHELF with a drawing on it, and puts it on the she
   const w = (id, sx, sz, ex, ez) => ({ id, start: point(sx, sz), end: point(ex, ez), levelId: -2, view: 'plan',
     wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' });
   d.walls.push(w(101, 0, 0, 24, 0), w(102, 24, 0, 24, 30), w(103, 24, 30, 0, 30), w(104, 0, 30, 0, 0));
+  // AN OLD STRING LEFT ON THE SHELF 300 FT AWAY: the frame is the suite's,
+  // not the workbench's (Movie, 26 Oct: "doesn't look like the suite").
+  d.dimensions = [...(d.dimensions || []), { id: 900, levelId: -2, view: 'plan', auto: false, layer: 'A-DIMS-HAND',
+    start: point(300, 0), end: point(340, 0) }];
   await openLayout(page, d);
   await waitForCompose(page);
   const dealt = await savedLayout(page);
@@ -312,6 +316,7 @@ test('+ ADD VIEWPORT offers a SHELF with a drawing on it, and puts it on the she
   const after = await savedAfter(page, seq);
   const made = after.viewports.find(v => !dealt.viewports.some(o => o.id === v.id));
   expect(made).toMatchObject({ kind: 'plan', levelId: -2 });
+  expect(made.pif, 'a 24 x 30 suite comes in at a plan scale, not a site one').toBeGreaterThanOrEqual(3 / 16);
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   expect((await savedLayout(page)).viewports.some(v => v.id === made.id && v.levelId === -2),
