@@ -103,8 +103,12 @@ test('OPEN asks first, then reads the file in -- its sheets and its pictures', a
   other.underlayFiles = { u2: { name: 'other.png', dataUrl: PNG } };
   const chooser = page.waitForEvent('filechooser');
   await ask.locator('[data-new-discard]').click();
+  // OPEN reloads the page once the file is in the store: wait for that
+  // reload, not for the page that is about to go.
+  const reloaded = page.waitForEvent('load');
   await (await chooser).setFiles({ name: 'other.draft', mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(other)) });
+  await reloaded;
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await expect.poll(async () => (await stored(page))?.projectInfo?.name).toBe('HOUSE B');
   const d = await stored(page);

@@ -1829,6 +1829,13 @@
     try {
       thumbTarget = { levelId: Number(levelId), viewId: viewId || null };
       ctx = screen.getContext('2d');
+      // NO WORDS IN A SEAT (Movie, 26 Oct: "the MAIN FL layout looks like
+      // there is a bunch of text but its all jumbled, just show the main wall
+      // outlines" -- "no text"). Room names, sizes, tags and dimension
+      // figures shrink to a smear at 82px across, so the seat's own context
+      // writes none of them; the lines are what read.
+      ctx.fillText = () => {};
+      ctx.strokeText = () => {};
       // The seat canvas is 2x its CSS box, the same trick the main canvas
       // uses, so the miniature is crisp on a retina panel.
       dpr = 2; cssW = screen.width / dpr; cssH = screen.height / dpr;
@@ -1860,6 +1867,10 @@
       if (Number(levelId) < 0) paintSuperNodes();
       ctx.restore();
     } finally {
+      // The seat's own canvas writes again once the miniature is down.
+      const seatCtx = screen.getContext('2d');
+      delete seatCtx.fillText;
+      delete seatCtx.strokeText;
       ctx = savedCtx; cssW = savedW; cssH = savedH; dpr = savedDpr;
       view.cx = savedView.cx; view.cz = savedView.cz; view.scale = savedView.scale;
       thumbTarget = null;
@@ -1914,8 +1925,17 @@
     // THE SAME INKS AS THE FULL-SIZE VIEW. A thumbnail that kept paper while
     // the sheet beside it went dark would be the rail disagreeing with the
     // drawing it is a rail of.
-    window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
-      { coarseSilhouette: true, colors: window.DraftCutView.inksFromSkin(skin) });
+    // AND NO WORDS IN IT, as a plan's seat has none (paintPlanThumb): its
+    // level marks and tags are a smear at this size.
+    c.fillText = () => {};
+    c.strokeText = () => {};
+    try {
+      window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
+        { coarseSilhouette: true, colors: window.DraftCutView.inksFromSkin(skin) });
+    } finally {
+      delete c.fillText;
+      delete c.strokeText;
+    }
   };
 
   // ── PRINTSCREEN: three pages for a client ─────────────────────────────────

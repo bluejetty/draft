@@ -106,8 +106,8 @@ test('the saved shelf comes into another plan as a suite, standing on its floor'
   // INTO A PLAN WITH NOTHING ON ITS SHELVES.
   const plan = { ...drawing(), walls: drawing().walls.filter(w => w.levelId === 3), fenestrations: [], lines: [] };
   await open(page, plan);
-  await page.locator('[data-mode-trace]').click();
-  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-mode-hologram]').click();
+  await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles({ name: 'SHELF 1.draft', mimeType: 'application/json', buffer: Buffer.from(text) });
   await page.keyboard.press('Escape');
   const d = await saved(page);

@@ -44,9 +44,10 @@ async function open(page) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-const chip = page => page.locator('[data-mode-trace]');
+const chip = page => page.locator('[data-mode-hologram]');
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
+  if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
 };
 const saved = async page => {
   await closeCard(page);
@@ -57,7 +58,7 @@ const saved = async page => {
 
 async function bringIn(page) {
   await chip(page).click();
-  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'existing-house.draft', mimeType: 'application/json', buffer: HOUSE });
   await expect.poll(async () => (await saved(page)).holograms?.length || 0).toBe(1);
@@ -65,7 +66,7 @@ async function bringIn(page) {
 
 async function armMove(page) {
   await chip(page).click();
-  if (!await page.locator('#trace-ask').isVisible()) await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-move]').click();
 }
 

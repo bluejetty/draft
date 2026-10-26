@@ -51,8 +51,8 @@ async function open(page) {
   await expect(page.locator('#readout')).toContainText('front-left of foundation', { timeout: 10000 });
 }
 async function bringIn(page, file, name) {
-  await page.locator('[data-mode-trace]').click();
-  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-mode-hologram]').click();
+  await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) });
 }

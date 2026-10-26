@@ -43,11 +43,12 @@ async function open(page, drawing = BLANK) {
   await page.goto('/MODEL.html?level=3');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
-const chip = page => page.locator('[data-mode-trace]');
+const chip = page => page.locator('[data-mode-hologram]');
 const tsquare = page => page.locator('[data-mode-tsquare]');
 const foot = page => page.locator('[data-mode-scale]');
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
+  if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
 };
 const saved = async page => {
   await closeCard(page);
@@ -57,15 +58,14 @@ const saved = async page => {
 };
 const bringIn = async page => {
   await chip(page).click();
-  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'existing-house.draft', mimeType: 'application/json', buffer: HOUSE });
   await expect.poll(async () => (await saved(page)).holograms?.length || 0).toBe(1);
 };
 // MOVE, then a drag of (dx, dy) screen pixels from the middle of the plan.
 const moveBy = async (page, dx, dy) => {
-  await chip(page).click();
-  await chip(page).click();
+  if (!await page.locator('#hologram-ask').isVisible()) await chip(page).click();
   await page.locator('[data-hologram-move]').click();
   const box = await page.locator('#plan').boundingBox();
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;

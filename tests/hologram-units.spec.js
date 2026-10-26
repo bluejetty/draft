@@ -234,8 +234,8 @@ test('a paste on the plan shows in the list as the next copy', async ({ page }) 
 
 test('a new file brought in takes a colour no file here has, and keeps it', async ({ page }) => {
   await open(page, twoFiles());
-  await page.locator('[data-mode-trace]').click();
-  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-mode-hologram]').click();
+  await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'suite-c.draft', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(SUITE)) });
   await page.keyboard.press('Escape');
