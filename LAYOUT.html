@@ -1718,6 +1718,15 @@ class Component extends PageLogic {
     this._drawingChecked = true;
     this._drawingGen = (this._drawingGen || 0) + 1;
     this._levels = saved ? format.levels(saved.levels) : [];
+    // THE BONEYARD SHELVES THAT HOLD A DRAWING, as plan "levels" of their
+    // own (Movie, 26 Oct: "i'd like to be able to add a viewport from a
+    // 'SHELF' drawing so i can show the suites"). A shelf's walls carry
+    // the shelf's id negated as their level, which is all the plan painter
+    // filters on. Offered under + ADD VIEWPORT only; the auto deal never
+    // puts a shelf on a sheet.
+    this._shelfLevels = saved ? format.boneyardShelves(saved.boneyardShelves)
+      .filter(shelf => (Array.isArray(saved.walls) ? saved.walls : []).some(w => w?.levelId === -shelf.id))
+      .map(shelf => ({ id: -shelf.id, name: shelf.name, elev: 0, shelf: true })) : [];
     this._planBoundsByLevel = new Map();
     this._cutEnv = null;
     this._cutExtentsCache = new Map();
@@ -1725,7 +1734,8 @@ class Component extends PageLogic {
     const levelIds = new Set(this._levels.map(level => level.id));
     this._cuts = saved ? format.cuts(saved.cuts, levelIds) : [];
     const cutIds = new Set(this._cuts.map(cut => cut.id));
-    const layout = saved?.layout ? format.layout(saved.layout, levelIds, cutIds) : null;
+    const viewLevelIds = new Set([...levelIds, ...this._shelfLevels.map(level => level.id)]);
+    const layout = saved?.layout ? format.layout(saved.layout, viewLevelIds, cutIds) : null;
     const patch = {
       viewports: layout ? layout.viewports : [],
       sheets: layout ? layout.sheets : [],
@@ -3193,8 +3203,9 @@ class Component extends PageLogic {
   // A level that has no foundation view has only the one plan, so its own
   // name is the right title and nothing changes for it.
   _planTitle(viewport) {
-    const level = this._levels.find(l => l.id === viewport.levelId);
+    const level = [...this._levels, ...(this._shelfLevels || [])].find(l => l.id === viewport.levelId);
     if (!level) return 'PLAN';
+    if (level.shelf) return `${level.name} PLAN`;
     if (viewport.view === 'foundation') return 'FOUNDATION PLAN';
     if (viewport.view === 'floor') return `${level.name} FLOOR LAYOUT`;
     const splits = (window.DraftLayerViews?.layerViewsForLevelId(level.id) || [])
@@ -3581,7 +3592,9 @@ class Component extends PageLogic {
       ({ kind: 'elevation', elevId, label: `ELEVATION ${elevId}` }));
     const sections = (this._cuts || []).map(cut =>
       ({ kind: 'section', cutId: cut.id, label: `SECTION ${cut.name}` }));
-    return [['PLANS', plans], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections]]
+    const shelves = (this._shelfLevels || []).map(level =>
+      ({ kind: 'plan', levelId: level.id, label: `${level.name} PLAN` }));
+    return [['PLANS', plans], ['SHELVES', shelves], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections]]
       .filter(([, list]) => list.length);
   }
 
