@@ -2780,8 +2780,10 @@
     const armed = traceMoving?.hologram && !traceMoving.from;
     if (traceMoving ? !armed : activeTool !== RESTING_TOOL) return;
     const at = tracePoint(event);
+    // A SELECTED FLIGHT'S CORNER rings cyan the same way (stairCornerAt).
     const g = armed ? suiteGrabAt(traceMoving.underlay, at)
-      : holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, at)).find(Boolean);
+      : holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, at)).find(Boolean)
+        || selection.filter(e => e.type === 'stair').map(e => stairCornerAt(e.item, at)).find(Boolean);
     const key = g ? `${g.x},${g.z}` : '';
     if (key !== suiteHoverKey) { suiteHoverKey = key; requestAnimationFrame(() => paint()); }
   });

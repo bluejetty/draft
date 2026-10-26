@@ -947,6 +947,26 @@
       markMagnet(tm.pointLock?.lit || null);
       return;
     }
+    // A FLIGHT HELD BY ITS CORNER (stairCornerAt): what it has landed on,
+    // or the corner cyan in the hand.
+    if (moveDrag?.kind === 'stair' && moveDrag.corner) {
+      canvas.removeAttribute('data-snap-node');
+      const held = { x: moveDrag.corner.x + moveDrag.stair.start.x - moveDrag.start.x, y: 0,
+        z: moveDrag.corner.z + moveDrag.stair.start.z - moveDrag.start.z };
+      if (moveDrag.lit) paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
+      else paintDonut(held, 'grab');
+      grabMark(held);
+      markMagnet(moveDrag.lit || null);
+      return;
+    }
+    const stairHover = !tm && !moveDrag && cursorWorld && activeTool === RESTING_TOOL
+      ? selection.filter(e => e.type === 'stair').map(e => stairCornerAt(e.item, cursorWorld)).find(Boolean) : null;
+    if (stairHover) {
+      canvas.removeAttribute('data-snap-node');
+      paintDonut({ x: stairHover.x, y: 0, z: stairHover.z }, 'grab');
+      grabMark(stairHover);
+      return;
+    }
     const suiteHover = !cursorWorld || (tm && (!tm.hologram || tm.from)) ? null
       : tm ? suiteGrabAt(tm.underlay, cursorWorld)
         : activeTool === RESTING_TOOL ? holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, cursorWorld)).find(Boolean) : null;

@@ -917,6 +917,26 @@
     return { c: { x: (stair.start.x + stair.end.x) / 2, z: (stair.start.z + stair.end.z) / 2 },
       u, n: { x: -u.z, z: u.x }, len, half: (Number(stair.widthFt) || 3) / 2 };
   };
+  // A STRAIGHT FLIGHT'S FOUR CORNERS, start side then end side.
+  const stairCorners = stair => {
+    const f = stairFrame(stair);
+    if (!f) return [];
+    const side = (p, k) => ({ x: p.x + f.n.x * f.half * k, z: p.z + f.n.z * f.half * k });
+    return [side(stair.start, 1), side(stair.start, -1), side(stair.end, -1), side(stair.end, 1)];
+  };
+  // THE CORNER A PRESS TAKES (Movie, 26 Oct, the one snap rule: a whole
+  // thing dragged is held by the nearest of its own corners within a node's
+  // reach): `{ x, z }` or null.
+  const stairCornerAt = (stair, at) => {
+    if (!stair || !at || snapHeldOff) return null;
+    const r = reachFt(NODE_REACH);
+    let best = null;
+    stairCorners(stair).forEach(c => {
+      const d = Math.hypot(c.x - at.x, c.z - at.z);
+      if (d <= r && (!best || d < best.d)) best = { d, c };
+    });
+    return best ? best.c : null;
+  };
   // WHERE A WALL'S FACE STANDS ACROSS THE FLIGHT: its offset along the
   // stair's left normal, for the face toward the flight's middle -- or null
   // for a wall not alongside it (not parallel, beside less than 6" of it, or
