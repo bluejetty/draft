@@ -1658,7 +1658,7 @@
         return;
       }
       const grab = moveGrabAt(at);
-      moveState.drag = { kind: 'selection', at: grab ? { x: grab.x, z: grab.z } : at, grab: grab || null,
+      moveState.drag = { kind: 'selection', at: grab ? { x: grab.x, z: grab.z } : at, grab: grab || null, press: at,
         set: selectionMoveSet(), moved: false };
       canvas.setPointerCapture(event.pointerId);
       return;
@@ -1884,8 +1884,15 @@
       const steps = [moveStep, ...settled.steps];
       undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : moveStep);
       // A TYPED LENGTH MAY FINISH IT -- see moveTyped.
+      // THE WAY A TYPED LENGTH GOES is the hand's own travel, press to
+      // release: with a corner taken exactly (moveGrabAt) the drag's start
+      // stood a little off the press, and that small jump would tilt a
+      // straight drag into a slant.
+      const way = d.grab && d.press && d.cursor
+        ? { x: d.cursor.x - d.press.x, z: d.cursor.z - d.press.z } : null;
       moveTyped = Math.hypot(d.dx || 0, d.dz || 0) > 1e-6
-        ? { set: d.set, dx: d.dx, dz: d.dz, moveStep, step: undoStack[undoStack.length - 1] } : null;
+        ? { set: d.set, dx: d.dx, dz: d.dz, ...(way && Math.hypot(way.x, way.z) > 1e-6 ? { way } : {}),
+          moveStep, step: undoStack[undoStack.length - 1] } : null;
       markDirty();
       setSelection([...selection]);
       sayOnStrip(settled.said

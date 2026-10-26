@@ -20,6 +20,11 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/stair-reframe.spec.js tests/model-html-fenestration.spec.js tests/model-html-fixture-tool.spec.js tests/move-tsquare.spec.js tests/beam-move.spec.js';
 const MUTANTS = [
+  { file: 'model/14-promotion-tools.js',
+    name: 'a typed length after a corner-held drag goes the drag\'s slanted way',
+    find: "    const wx = m.way ? m.way.x : m.dx, wz = m.way ? m.way.z : m.dz;\n",
+    with: "    const wx = m.dx, wz = m.dz;\n",
+    test: 'after a MOVE drag, a typed distance puts the stair exactly there and frames it there' },
   { file: 'model/14-promotion-tools.js', name: 'a typed distance does not re-frame the stair for the exact place',
     find: "    const settled = settleSelectionMove(m.set);\n    const steps = [m.moveStep, ...settled.steps];\n",
     with: "    const settled = { steps: [], said: '' };\n    const steps = [m.moveStep, ...settled.steps];\n",
