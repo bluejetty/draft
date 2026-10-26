@@ -489,6 +489,8 @@
      The note below already says so, so the button does not repeat it. */
   #lay-deal:disabled { background:none; color: var(--ink-quiet);
     border-color: var(--edge-panel); cursor:default; }
+  /* Gone once anything is on the sheets (_paintPanel). */
+  #lay-deal[hidden] { display:none; }
   /* PRINT WEARS THE ACCENT, the only panel button besides ADD VIEWPORT that
      does. Movie went looking for it and could not find it: "how do i print
      this layout page? or multiple pages can't see a print button yet". The
@@ -4043,10 +4045,14 @@ class Component extends PageLogic {
 
     const deal = document.querySelector('[data-layout-deal-sheets]');
     deal.disabled = !this._saved;
-    // IT SAYS WHICH IT WOULD DO. Dealing over a dealt set is a re-deal, and
-    // naming that is the difference between a button a drafter trusts and one
-    // they press twice to find out.
-    deal.textContent = this.state.viewports.length ? 'Re-deal Sheets' : 'Deal Sheets';
+    // GONE ONCE ANYTHING IS ON THE SHEETS (Movie, 26 Oct: "if they change
+    // their setup and make it how they like it, if they accidentally or
+    // misunderstand what RE-DEAL means it will delete all their work placing
+    // the viewports" -- "Hide the button: it goes away after the first deal,
+    // and you add new views by hand with + ADD VIEWPORT"). The viewports
+    // already redraw from the MODEL's latest save; a new view goes on by hand.
+    deal.hidden = this.state.viewports.length > 0;
+    deal.textContent = 'Deal Sheets';
 
     const note = document.querySelector('#lay-viewport-note');
     note.hidden = !(this._drawingChecked && !this._saved);
@@ -5100,16 +5106,11 @@ class Component extends PageLogic {
     });
   }
 
-  // THE COMPOSER, ON DEMAND. It replaces every viewport on every sheet, so a
-  // drafter who has placed any by hand is asked first -- and is NOT asked when
-  // there is nothing of theirs to lose, because a confirm over an empty sheet
-  // is a dialog that only ever has one sensible answer.
+  // THE COMPOSER, ON DEMAND -- onto empty sheets only. The button is hidden
+  // as soon as a viewport stands anywhere (_paintPanel), and this refuses the
+  // same, so nothing a drafter placed is ever dealt over.
   _dealSheets() {
-    if (!this._saved) return;
-    const byHand = this.state.viewports.length > 0 && this.state.auto !== true;
-    if (byHand && !window.confirm(
-      'Deal the standard sheet set?\n\nThis replaces the viewports you have '
-      + 'placed by hand. Undo takes it back.')) return;
+    if (!this._saved || this.state.viewports.length > 0) return;
     this.setState({ addingViewport: false }, () => this._composeDefaultSet());
   }
 }

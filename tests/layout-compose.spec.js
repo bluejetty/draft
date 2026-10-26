@@ -562,38 +562,49 @@ function handArranged() {
   return d;
 }
 
-test('DEAL SHEETS deals the set over a sheet the flag was never set on', async ({ page }) => {
-  await openBare(page, handArranged());
-  expect((await savedLayout(page)).auto).toBe(false);
+// DEAL SHEETS IS GONE ONCE ANYTHING IS ON THE SHEETS (Movie, 26 Oct: "if
+// they accidentally or misunderstand what RE-DEAL means it will delete all
+// their work placing the viewports" -- "Hide the button: it goes away after
+// the first deal, and you add new views by hand with + ADD VIEWPORT"). The
+// viewports already redraw from the MODEL's latest save, so nothing needs
+// dealing again; take every viewport off and the button is back.
+test('a sheet with a viewport on it offers no DEAL; with the last one deleted it is back and deals the set without asking',
+  async ({ page }) => {
+    await openBare(page, handArranged());
+    expect((await savedLayout(page)).auto).toBe(false);
+    const btn = page.locator('[data-layout-deal-sheets]');
+    await expect(btn).toBeHidden();
 
-  const btn = page.locator('[data-layout-deal-sheets]');
-  await expect(btn).toBeVisible();
-  await expect(btn).toBeEnabled();
-  // It names what it would do, and with a hand on the sheet that is a re-deal.
-  await expect(btn).toContainText(/Re-deal/i);
+    // The verb itself refuses over a sheet with a viewport on it.
+    const seq0 = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+    await page.evaluate(() => page._dealSheets());
+    await page.waitForTimeout(300);
+    expect((await savedLayout(page)).viewports.map(v => v.id), 'nothing dealt over it').toEqual([1]);
+    expect(await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0))).toBe(seq0);
 
-  page.once('dialog', d => d.accept());
-  await btn.click();
-  await waitForCompose(page);
+    // The one viewport deleted: the sheets are empty and DEAL SHEETS is back.
+    await page.evaluate(() => new Promise(done => page.setState({ selectedViewportId: 1 }, done)));
+    await page.keyboard.press('Delete');
+    await expect(btn).toBeVisible();
+    await expect(btn).toBeEnabled();
+    await expect(btn).toHaveText(/^Deal Sheets$/i);
 
-  const layout = await savedLayout(page);
-  expect(layout.auto).toBe(true);
-  // The SAME set the flag deals -- elevations paired, then a plan per floor.
-  // Named by kind rather than counted, so a set that dealt the right NUMBER of
-  // the wrong things fails.
-  const bySheet = {};
-  layout.viewports.forEach(v => {
-    (bySheet[v.sheet || 1] = bySheet[v.sheet || 1] || []).push(v.kind);
+    // No dialog handler: an unhandled dialog would hang, so a pass means none.
+    await btn.click();
+    await waitForCompose(page);
+    const layout = await savedLayout(page);
+    expect(layout.auto).toBe(true);
+    // The SAME set the entry deal deals -- elevations paired, then a plan per
+    // floor. Named by kind rather than counted.
+    const bySheet = {};
+    layout.viewports.forEach(v => {
+      (bySheet[v.sheet || 1] = bySheet[v.sheet || 1] || []).push(v.kind);
+    });
+    expect(bySheet[2]).toEqual(['elevation', 'elevation']);
+    expect(bySheet[3]).toEqual(['elevation', 'elevation']);
+    expect(Object.keys(bySheet).length).toBeGreaterThan(2);
+    await expect(btn, 'and gone again').toBeHidden();
   });
-  expect(bySheet[1]).toBeUndefined();                    // SITE PLAN, no painter yet
-  expect(bySheet[2]).toEqual(['elevation', 'elevation']);
-  expect(bySheet[3]).toEqual(['elevation', 'elevation']);
-  expect(Object.keys(bySheet).length).toBeGreaterThan(2);
-  await expect(page.locator('[data-layout-sheet]')).not.toHaveCount(1);
-
-  // And it still offers the re-deal, because there is a set to replace.
-  await expect(btn).toContainText(/Re-deal/i);
-});
 
 test('with no drawing there is nothing to deal, and the button says so by being dead',
   async ({ page }) => {
@@ -605,36 +616,6 @@ test('with no drawing there is nothing to deal, and the button says so by being 
     await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
     // The note beside it already explains why; the button does not repeat it.
     await expect(page.locator('[data-layout-deal-sheets]')).toBeDisabled();
-  });
-
-// THE COMPOSER REPLACES THE HAND, so a drafter who placed viewports themselves
-// is asked first. Cancelling must leave their sheets untouched -- a confirm
-// that discards on either answer is worse than no confirm.
-test('a hand-placed sheet is confirmed before it is replaced, and Cancel keeps it',
-  async ({ page }) => {
-    // One viewport placed by hand, the flag off: the shape the entry deal
-    // leaves alone (layout-deal-on-entry.spec.js) and the verb must ask over.
-    await openBare(page, handArranged());
-    const mine = await savedLayout(page);
-    expect(mine.viewports).toHaveLength(1);
-    expect(mine.auto).not.toBe(true);
-    const seq1 = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
-
-    page.once('dialog', d => d.dismiss());
-    await page.locator('[data-layout-deal-sheets]').click();
-    await page.waitForTimeout(400);
-
-    const after = await savedLayout(page);
-    expect(after.viewports.map(v => v.id)).toEqual(mine.viewports.map(v => v.id));
-    expect(after.auto).not.toBe(true);
-
-    // Accepting deals it, so the confirm is a gate and not a refusal.
-    page.once('dialog', d => d.accept());
-    await page.locator('[data-layout-deal-sheets]').click();
-    await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq1);
-    const dealt = await savedLayout(page);
-    expect(dealt.viewports.length).toBeGreaterThan(1);
-    expect(dealt.auto).toBe(true);
   });
 
 // AND NO CONFIRM WHEN THERE IS NOTHING TO LOSE. A dialog over an empty sheet

@@ -103,8 +103,8 @@ test('a blank layout over a built house is dealt on entry, with no press and no 
     expect(kinds.filter(k => k === 'elevation')).toHaveLength(4);
     expect(kinds).toContain('plan');
     await expect(page.locator('[data-layout-sheet]')).not.toHaveCount(1);
-    // And the button now names the re-deal, because there is a set to replace.
-    await expect(page.locator('[data-layout-deal-sheets]')).toContainText(/Re-deal/i);
+    // And DEAL SHEETS is gone: nothing re-deals over a set (Movie, 26 Oct).
+    await expect(page.locator('[data-layout-deal-sheets]')).toBeHidden();
   });
 
 test('sheets already dealt or arranged by hand are left exactly as saved, and nothing is written',
@@ -119,7 +119,7 @@ test('sheets already dealt or arranged by hand are left exactly as saved, and no
     expect(layout.auto).toBe(false);
     expect(layout.viewports).toEqual(mine.layout.viewports);
     expect(layout.sheets).toEqual(mine.layout.sheets);
-    await expect(page.locator('[data-layout-deal-sheets]')).toContainText(/Re-deal/i);
+    await expect(page.locator('[data-layout-deal-sheets]')).toBeHidden();
   });
 
 test('a drawing with no walls deals nothing on entry', async ({ page }) => {
