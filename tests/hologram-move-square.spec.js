@@ -43,7 +43,7 @@ async function open(page, drawing = BLANK) {
   await page.goto('/MODEL.html?level=3');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
-const chip = page => page.locator('[data-mode-trace]');
+const chip = page => page.locator('[data-mode-hologram]');
 const tsquare = page => page.locator('[data-mode-tsquare]');
 const foot = page => page.locator('[data-mode-scale]');
 const closeCard = async page => {
@@ -57,7 +57,7 @@ const saved = async page => {
 };
 const bringIn = async page => {
   await chip(page).click();
-  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'existing-house.draft', mimeType: 'application/json', buffer: HOUSE });
   await expect.poll(async () => (await saved(page)).holograms?.length || 0).toBe(1);

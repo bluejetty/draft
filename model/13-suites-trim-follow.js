@@ -1725,8 +1725,8 @@
         if (geo?.dxf) list.appendChild(traceTextList(geo));
       }
     });
-    renderHologramList();
     traceAsk.hidden = false;
+    setHologramChip();
   };
 
   // ── HOLOGRAMS ON THE CARD (Movie, 8 Oct) ─────────────────────────────────
@@ -1977,25 +1977,18 @@
       ? `${hologramNoun(holo)} is mirrored \u2014 MIRROR again, or UNDO, turns it back.`
       : `${hologramNoun(holo)} is the right way round again.`);
   };
-  // THE LIST IS DRAWN INTO BOTH CARDS -- PHOTO's and the HOLOGRAM chip's
-  // own (Movie, 18 Oct: "an area on the MODEL AREA that shows which
-  // HOLOGRAMS are loaded ... up by the PHOTO IMAGE loading button").
-  // INTO THE ONE THAT IS UP, the other's emptied: two copies of every row
-  // would be two of every button.
+  // THE LIST IS DRAWN INTO THE HOLOGRAM CHIP'S OWN CARD, and only there
+  // now (Movie, 26 Oct: "can the IMAGE Loading area ONLY show images (not
+  // holograms)"); the PHOTO card is pictures only.
   function renderHologramList() {
-    const into = hologramAsk && !hologramAsk.hidden ? hologramAsk : traceAsk;
-    [traceAsk, hologramAsk].forEach(card => {
-      if (!card) return;
-      if (card === into) renderHologramListInto(card);
-      else card.querySelector('[data-hologram-list]').textContent = '';
-    });
+    if (hologramAsk && !hologramAsk.hidden) renderHologramListInto(hologramAsk);
     setHologramChip();
   }
   // THE LIST FOLLOWS THE PLAN: a hologram picked there lights its row (and
   // brings it into view), and a COPY / PASTE or DELETE there shows in the
   // list -- whenever a card with the list is up.
   selectionWatchers.push(() => {
-    const up = (hologramAsk && !hologramAsk.hidden) || (traceAsk && !traceAsk.hidden);
+    const up = hologramAsk && !hologramAsk.hidden;
     if (!up) return;
     renderHologramList();
     const litRow = document.querySelector('.hologram-copy[data-lit]');
@@ -2387,7 +2380,7 @@
     paint();
     return { holo, registeredAt };
   };
-  [traceAsk.querySelector('[data-hologram-upload]'), hologramAsk?.querySelector('[data-hologram-ask-upload]')].forEach(b => b?.addEventListener('click', () => {
+  [hologramAsk?.querySelector('[data-hologram-ask-upload]')].forEach(b => b?.addEventListener('click', () => {
     closeHologramCards();
     hologramRefreshing = null;
     hologramFile.click();

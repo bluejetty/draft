@@ -35,8 +35,8 @@ async function bringIn(page, level, file, name = 'two-bed.draft') {
   }, { bucket: BUCKET, f: shell() });
   await page.goto(`/MODEL.html?level=${level}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await page.locator('[data-mode-trace]').click();
-  await page.locator('[data-hologram-upload]').click();
+  await page.locator('[data-mode-hologram]').click();
+  await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) });
   await page.keyboard.press('Escape');
   await page.locator('#save').click();
