@@ -115,6 +115,11 @@ test('ADVANCED lists every layer by its own name, and FEWER LAYERS goes back to 
   await expect(page.locator('[data-hologram-layer="ROOM-IDS-AREA"]')).toBeVisible();
   await expect(page.locator('[data-hologram-layer="HOLO-TEXT"]')).toHaveText('ALL WORDS');
   expect(await page.locator('[data-hologram-layer]').count()).toBeGreaterThan(20);
+  // THE ROOM NAMES' OWN LAYER, alone: off, the names go; on again, they come back.
+  await page.locator('[data-hologram-layer="ROOM-IDS-AREA"]').click();
+  expect(await namesDrawn(page)).toBe(0);
+  await page.locator('[data-hologram-layer="ROOM-IDS-AREA"]').click();
+  expect(await namesDrawn(page)).toBe(3);
   await page.locator('[data-hologram-layer="HOLO-TEXT"]').click();
   await expect(page.locator('[data-hologram-layer="HOLO-TEXT"]')).toHaveAttribute('aria-pressed', 'false');
   expect(await namesDrawn(page)).toBe(0);

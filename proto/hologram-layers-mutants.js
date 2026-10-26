@@ -20,7 +20,7 @@ const MUTANTS = [
     name: 'TEXT off still writes the words',
     find: "    if (!off || !off.has(WORDS)) return draw();\n",
     with: "    return draw();\n",
-    test: 'one main set for every hologram; a type, or one copy, can take its own' },
+    test: 'ADVANCED lists every layer by its own name, and FEWER LAYERS goes back to the five' },
   { file: 'hologram.js',
     name: 'a copy\'s own set is ignored',
     find: "    if (holo?.layersOwn === true) return { off: cleanOff(holo.layersOff), from: 'copy' };\n",

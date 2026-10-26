@@ -1744,13 +1744,13 @@ if (!window.DraftDrawingFormat) {
   // off; `files`, a file's own set by its name (THIS TYPE ONLY); `advanced`,
   // the full layer list shown instead of the seven groups.
   const hologramLayers = raw => {
-    const ids = list => [...new Set((Array.isArray(list) ? list : []).map(v => String(v ?? '').trim()).filter(Boolean))];
+    const layerIds = list => [...new Set((Array.isArray(list) ? list : []).map(v => String(v ?? '').trim()).filter(Boolean))];
     const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     const files = {};
     if (src.files && typeof src.files === 'object' && !Array.isArray(src.files)) {
-      Object.keys(src.files).forEach(name => { if (Array.isArray(src.files[name])) files[name] = ids(src.files[name]); });
+      Object.keys(src.files).forEach(name => { if (Array.isArray(src.files[name])) files[name] = layerIds(src.files[name]); });
     }
-    return { off: ids(src.off), files, advanced: src.advanced === true };
+    return { off: layerIds(src.off), files, advanced: src.advanced === true };
   };
   const holograms = (raw, depth = 0) => (Array.isArray(raw) ? raw : [])
     .map(holo => {

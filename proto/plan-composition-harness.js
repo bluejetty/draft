@@ -445,17 +445,17 @@ const MUTATIONS = [
     pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, null, 'fill', env.wallEnv));
     const joins`)],
   ['the WC tile reads every level\'s fixtures',
-    s => s.replace('const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer));',
+    s => s.replace("const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer) && !off(fixture.layer || 'A-FIXT'));",
       'const levelFixtures = list(env.fixtures);')],
   ['the two wall passes collapse into one loop',
-    s => s.replace(`    pieces.forEach(wall => { onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
-    pieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });`,
-    `    pieces.forEach(wall => {
+    s => s.replace(`    drawnPieces.forEach(wall => { if (off('A-WALL-PATT')) return; onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
+    drawnPieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });`,
+    `    drawnPieces.forEach(wall => {
       render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv);
       render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv);
     });`)],
   ['roofs are filtered by view like everything else',
-    s => s.replace("const roofs = pick(env.roofs, { views: false });", 'const roofs = pick(env.roofs);')],
+    s => s.replace("const roofs = pick(env.roofs, { views: false })", 'const roofs = pick(env.roofs)')],
   ['the level filter is dropped -- every level draws at once',
     s => s.replace('return list(items).filter(item => item.levelId === levelId && (!views || keep(item)));',
       'return list(items).filter(item => (!views || keep(item)));')],
@@ -465,8 +465,8 @@ const MUTATIONS = [
     s => s.replace('    !hasLayerViews || (!strict && viewId === null)',
       '    (!strict && viewId === null)')],
   ['openings are filtered by their own level instead of their host wall',
-    s => s.replace('.filter(opening => hostIds.has(opening.wallId) && shows(opening.layer));',
-      '.filter(opening => opening.levelId === env.levelId && shows(opening.layer));')],
+    s => s.replace('.filter(opening => hostIds.has(opening.wallId) && shows(opening.layer)',
+      '.filter(opening => opening.levelId === env.levelId && shows(opening.layer)')],
   // RE-AIMED (17 Oct): the caller may hand the list over (`stairsShown`);
   // the fallback pick is the half these two bend.
   ['a line\'s weight is ignored on the sheet',
@@ -485,12 +485,13 @@ const MUTATIONS = [
     s => s.replace("|| (strict ? item.view === viewId : (item.view || 'plan') === viewId);",
       "|| (item.view || 'plan') === viewId;")],
   ['a stair note lands on the plan again',
-    s => s.replace(".filter(note => note.view !== 'stair' && shows(note.layer));",
+    s => s.replace(".filter(note => note.view !== 'stair' && shows(note.layer) && !off(note.layer || 'A-ANNO-NOTE'));",
       '.filter(note => shows(note.layer));')],
   ['a fixture is filtered by view instead of by its host wall',
     s => s.replace(`      const drawn = list(env.fixtures)
         .filter(fixture => fixture.levelId === levelId
-          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer));`,
+          && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer)
+          && !off(fixture.layer || 'A-FIXT'));`,
     '      const drawn = pick(env.fixtures).filter(fixture => shows(fixture.layer));')],
   ['a layer the view does not carry is drawn anyway',
     s => s.replace("      if (carried && layerId != null && layerId !== '' && !carried.has(layerId)) return false;", '')],
