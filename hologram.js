@@ -39,6 +39,58 @@
   // A FILE IS ITS NAME: the copies are named for the file they came from,
   // which is what REFRESH already reads as one block.
   const fileOf = holo => String(holo?.name || holo?.id || '');
+  // ── A HOLOGRAM'S LAYERS (Movie, 26 Oct) ────────────────────────────────
+  //
+  // "in the hologram area can we have a LAYERS area where the user can turn
+  // on and off different layers in the holograms ... the SAME like the TB,
+  // but you can also check a box to delink it from the main LAYER SET and set
+  // up a 'special set' for a particual 'SUITE/SHELF/TYPE COLOR' or also ...
+  // 1 specific suite" -- "basically i'd like to bring in the suites and turn
+  // off most or all of the text and dimension layers". Then, of the two
+  // lists offered: "try option A ... can we make option B a more advanced
+  // option they can turn on and off?"
+  //
+  // FIVE GROUPS (A), each a handful of the drafting layers; ADVANCED (B) is
+  // every layer by its own name. Both write one thing, the layers OFF, and
+  // the plan painter (plan-composition) skips what is on it. A hologram
+  // never drew its dimension strings or its notes (layout-plan: they are the
+  // OTHER drawing's annotation), so there is no switch for them: TEXT is the
+  // words a suite does carry -- room names, door and window marks, fixture
+  // marks, area labels -- and `HOLO-TEXT` takes every one of them at once.
+  const WORDS = 'HOLO-TEXT';
+  const LAYER_GROUPS = Object.freeze([
+    Object.freeze({ id: 'walls', label: 'WALLS', layers: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-WALL-PATT']) }),
+    Object.freeze({ id: 'openings', label: 'DOORS & WINDOWS', layers: Object.freeze(['A-DOOR', 'A-GLAZ']) }),
+    Object.freeze({ id: 'fixtures', label: 'FIXTURES / CABINETS', layers: Object.freeze(['A-FIXT', 'E-POWER']) }),
+    Object.freeze({ id: 'flooring', label: 'FLOORING / AREAS', layers: Object.freeze(['A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'SHAPE']) }),
+    Object.freeze({ id: 'text', label: 'TEXT & ROOM NAMES', layers: Object.freeze([WORDS, 'ROOM-IDS-AREA', 'A-DIMS-WIN', 'A-DIMS-DOOR']) }),
+  ]);
+  // THE ONE-PRESS SET: every word off, the drawing on.
+  const TEXT_OFF = LAYER_GROUPS.find(g => g.id === 'text').layers;
+  // NO WORDS AT ALL on a hologram drawn with HOLO-TEXT off: the painters
+  // write room names, fixture and door marks deep inside, so the context
+  // they write through simply writes nothing for the length of its pass.
+  const withoutWords = (ctx, off, draw) => {
+    if (!off || !off.has(WORDS)) return draw();
+    ctx.fillText = () => {};
+    ctx.strokeText = () => {};
+    try { return draw(); } finally { delete ctx.fillText; delete ctx.strokeText; }
+  };
+  const cleanOff = raw => [...new Set((Array.isArray(raw) ? raw : []).map(v => String(v ?? '').trim()).filter(Boolean))];
+  // WHICH SET A HOLOGRAM WEARS: its own (THIS ONE ONLY), else its file's
+  // (THIS TYPE ONLY), else the drawing's main set. `{ off, from }`, `from`
+  // being 'copy', 'type' or 'main'.
+  const layerSetFor = (holo, saved) => {
+    if (holo?.layersOwn === true) return { off: cleanOff(holo.layersOff), from: 'copy' };
+    const sets = saved?.hologramLayers || {};
+    const file = sets.files && Object.prototype.hasOwnProperty.call(sets.files, fileOf(holo)) ? sets.files[fileOf(holo)] : null;
+    if (file) return { off: cleanOff(file), from: 'type' };
+    return { off: cleanOff(sets.off), from: 'main' };
+  };
+  const layersOffFor = (holo, saved) => {
+    const { off } = layerSetFor(holo, saved);
+    return off.length ? new Set(off) : null;
+  };
   // Its colour: the one any of its copies was given when it came in, else
   // its place among the drawing's files, in the order they first appear.
   const colourIndex = (holo, saved) => {
@@ -630,8 +682,9 @@
       try {
         const place = pt => toS(F.hologramPoint(holo, pt));
         const existing = suiteExisting(holo, parts(holo).existing, info);
-        drew = LP.drawPlan(ink, place, existing, levelId,
-          { view, hologram: true, paperColor: night ? '#ffffff' : (env.paperColor || '#ffffff') }) || drew;
+        const layersOff = layersOffFor(holo, env.saved);
+        drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, existing, levelId,
+          { view, hologram: true, paperColor: night ? '#ffffff' : (env.paperColor || '#ffffff'), layersOff })) || drew;
       } catch (error) {
         console.warn(`suite ${holo.name || holo.id} could not be drawn`, error);
       }
@@ -671,7 +724,7 @@
     const info = shared(saved);
     // THE SUITES FIRST, straight onto the target in the drawing's own inks.
     const suiteDrew = list.some(isSuite) && show.existing
-      ? paintSuites(ctx, toS, list.filter(isSuite), info, levelId, view, env) : false;
+      ? paintSuites(ctx, toS, list.filter(isSuite), info, levelId, view, { ...env, saved }) : false;
     // ONE PASS PER COLOUR: each file's holograms drawn, tinted its colour
     // through the mask, laid on, and the scratch cleared for the next.
     const groups = new Map();
@@ -693,8 +746,9 @@
           const place = pt => toS(F.hologramPoint(holo, pt));
           const split = parts(holo);
           if (show.existing) {
-            drew = LP.drawPlan(ink, place, split.existing, levelId,
-              { view, hologram: true, paperColor: env.paperColor || '#ffffff' }) || drew;
+            const layersOff = layersOffFor(holo, saved);
+            drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, split.existing, levelId,
+              { view, hologram: true, paperColor: env.paperColor || '#ffffff', layersOff })) || drew;
           }
           if (show.demo) drew = paintDemo(ink, place, holo, split, levelId, view || 'plan') || drew;
         } catch (error) {
@@ -985,5 +1039,6 @@
     planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
     drawn, suiteSuperNodes, shelfSuperNodes, suiteEndLines, suiteLineSnap,
+    LAYER_GROUPS, TEXT_OFF, WORDS, layerSetFor, layersOffFor,
   });
 })();
