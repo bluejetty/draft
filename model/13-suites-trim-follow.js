@@ -2766,19 +2766,58 @@
     }));
     return best?.holo || null;
   };
+  // THE CORNER A PRESS WOULD TAKE, cyan under SELECT before any press: a
+  // repaint only when the corner under the hand changes.
+  let suiteHoverKey = '';
+  canvas.addEventListener('pointermove', () => {
+    if (traceMoving || activeTool !== RESTING_TOOL || !cursorWorld) return;
+    const g = holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, cursorWorld)).find(Boolean);
+    const key = g ? `${g.x},${g.z}` : '';
+    if (key !== suiteHoverKey) { suiteHoverKey = key; paint(); }
+  });
   window.addEventListener('pointerdown', event => {
     if (traceMoving || event.target !== canvas || event.button !== 0) return;
     if (activeTool !== RESTING_TOOL) return;
-    const holo = suiteLineAt(event);
+    const at = tracePoint(event);
+    const holo = suiteLineAt(event) || holograms().filter(h => !h.hidden).find(h => suiteGrabAt(h, at));
     if (!holo) return;
     traceMoving = { underlay: holo, from: null, before: null, hologram: true, grabbed: true };
     sayOnStrip(traceMoveWord(traceMoving));
   }, true);
+  // A SUITE IS HELD BY ITS CORNER (Movie, 26 Oct, the grab rule: "whole-
+  // thing drags grab the nearest own corner within reach"): a press within
+  // a node's reach of one of its four corners takes that corner exactly,
+  // cyan under the hand before the press; the corner then lands exactly on
+  // a house node or face corner it is brought to (suitePointLock), before
+  // the end lines and the shell are asked -- a point beats a line. A press
+  // away from the corners holds the suite loosely, as before.
+  const suiteGrabAt = (holo, at) => {
+    if (!holo || !at || !H()?.suiteSuperNodes) return null;
+    const r = reachFt(NODE_REACH);
+    let best = null;
+    H().suiteSuperNodes(holo, activeLevelId()).forEach(n => {
+      const d = Math.hypot(n.point.x - at.x, n.point.z - at.z);
+      if (d <= r && (!best || d < best.d)) best = { d, p: { x: n.point.x, z: n.point.z } };
+    });
+    return best ? best.p : null;
+  };
+  // THE CORNER IN HAND ON A HOUSE NODE OR FACE CORNER, `{ dx, dz, lit }`, or
+  // null. The house's points only: suite meets suite by the end lines.
+  const suitePointLock = m => {
+    if (!m.grab || !snapLive() || board === 'toy') return null;
+    const at = { x: m.grab.x + (m.underlay.x - m.before.x), z: m.grab.z + (m.underlay.z - m.before.z) };
+    m.magnet ||= { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: [] };
+    const hit = pointCatch(at, m.magnet);
+    return hit ? { dx: hit.land.x - at.x, dz: hit.land.z - at.z, lit: hit } : null;
+  };
   window.addEventListener('pointerdown', event => {
     if (!traceMoving || event.target !== canvas || event.button !== 0) return;
     event.stopImmediatePropagation();
     event.preventDefault();
     traceMoving.from = tracePoint(event);
+    traceMoving.grab = traceMoving.hologram ? suiteGrabAt(traceMoving.underlay, traceMoving.from) : null;
+    if (traceMoving.grab) traceMoving.from = { ...traceMoving.from, x: traceMoving.grab.x, z: traceMoving.grab.z };
+    traceMoving.magnet = null;
     // A WHOLE COPY, because UNDO's 'props' step restores the record to exactly
     // its copy and drops any key the copy lacks -- an { x, z } here undid a
     // MOVE by deleting the picture's id, level and kind with it.
@@ -2811,8 +2850,14 @@
     // Across the lines only: along them the suite stays free to jog in or
     // out, which the shell wall's snap just below settles -- "lock into the
     // ext wall to ext wall (to show the windows and doors)".
+    m.pointLock = m.hologram ? suitePointLock(m) : null;
+    if (m.pointLock) {
+      const held = squaredAxis(m.from, at);
+      m.underlay.x += held === 'x' ? 0 : m.pointLock.dx;
+      m.underlay.z += held === 'z' ? 0 : m.pointLock.dz;
+    }
     m.lineLock = null;
-    if (m.hologram && H()?.suiteLineSnap) {
+    if (m.hologram && !m.pointLock && H()?.suiteLineSnap) {
       const lock = H().suiteLineSnap(m.underlay, holograms().filter(o => o !== m.underlay && !o.hidden),
         activeLevelId(), reachFt('suite'));
       if (lock) {
@@ -2822,7 +2867,7 @@
         m.lineLock = lock;
       }
     }
-    if (m.hologram && m.underlay.mode === 'suite' && H()?.suiteSnap) {
+    if (m.hologram && m.underlay.mode === 'suite' && !m.pointLock && H()?.suiteSnap) {
       const slide = H().suiteSnap(drawing, m.underlay, activeLevelId(), reachFt('suite'));
       // A LINE THAT HAS IT KEEPS IT: the shell's slide is taken along the
       // line only, never back across what the line just lined up.
@@ -2879,6 +2924,8 @@
     if (m.grabbed) { endTraceMove(false); return; }
     m.from = null;
     m.before = null;
+    m.grab = null;
+    m.pointLock = null;
     sayOnStrip(traceMoveWord(m));
   }, true);
   window.addEventListener('click', event => {

@@ -922,6 +922,30 @@
       markMagnet(moveDrag.lit);
       return;
     }
+    // A SUITE HELD BY ITS CORNER (suiteGrabAt): the corner cyan in the
+    // hand, or what it has landed on; before the press, the corner a press
+    // would take -- with the suite in hand from its card's MOVE, or under
+    // SELECT over any suite.
+    const tm = (() => { try { return traceMoving; } catch { return null; } })();
+    const grabMark = p => canvas.setAttribute('data-move-grab', JSON.stringify([Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]));
+    if (tm?.hologram && tm.from && tm.grab && tm.before) {
+      canvas.removeAttribute('data-snap-node');
+      const held = { x: tm.grab.x + tm.underlay.x - tm.before.x, y: 0, z: tm.grab.z + tm.underlay.z - tm.before.z };
+      if (tm.pointLock) paintDonut(tm.pointLock.lit.pt, tierOf(tm.pointLock.lit));
+      else paintDonut(held, 'grab');
+      grabMark(held);
+      markMagnet(tm.pointLock?.lit || null);
+      return;
+    }
+    const suiteHover = !cursorWorld || (tm && (!tm.hologram || tm.from)) ? null
+      : tm ? suiteGrabAt(tm.underlay, cursorWorld)
+        : activeTool === RESTING_TOOL ? holograms().filter(h => !h.hidden).map(h => suiteGrabAt(h, cursorWorld)).find(Boolean) : null;
+    if (suiteHover) {
+      canvas.removeAttribute('data-snap-node');
+      paintDonut({ x: suiteHover.x, y: 0, z: suiteHover.z }, 'grab');
+      grabMark(suiteHover);
+      return;
+    }
     // A FLOORING CORNER IN HAND shows the corner it will land on.
     if (moveDrag?.kind === 'roomcorner' && moveDrag.lit) {
       canvas.removeAttribute('data-snap-node');
