@@ -625,6 +625,10 @@
   .lay-thumb:hover { border-color: var(--edge-panel); }
   .lay-thumb.on { border-color: var(--accent-mark); color: var(--ink-primary); }
   .lay-thumb canvas { display:block; width:var(--thumb-w, 64px); height:var(--thumb-h, 42px); }
+  .lay-add-page-plus { display:flex !important; align-items:center; justify-content:center;
+    width:var(--thumb-w, 64px); height:var(--thumb-h, 42px); box-sizing:border-box;
+    border:1px dashed var(--edge-panel); color: var(--ink-quiet); font-size:22px; font-weight:300; }
+  .lay-add-page:hover .lay-add-page-plus { border-color: var(--accent); color: var(--accent); }
   /* A SHEET'S NAME AND ITS X (Movie, 25 Oct, marked in GIMP: "click on the
      title ... a text box comes up and you can change the name it changes all
      3 names. also add a X so the user can delete a page that is emtpty or
@@ -662,6 +666,11 @@
   #lay-logo-grid img { width:100%; height:52px; object-fit:contain; background:#fff; }
   #lay-logo-grid .lay-logo-none { height:52px; width:100%; display:flex; align-items:center; justify-content:center;
     color: var(--ink-quiet); }
+  #lay-logo-grid [data-logo-rename] { cursor:text; border-bottom:1px dashed var(--edge-panel); }
+  #lay-logo-grid [data-logo-rename]:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  #lay-logo-grid .lay-logo-rename { width:100%; box-sizing:border-box; height:20px; padding:0 4px;
+    border:1px solid var(--accent); background: var(--surface-chip); color: var(--ink-primary);
+    font: 600 11px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; text-align:center; }
   .lay-logo-foot { display:flex; align-items:center; gap:10px; margin-top:12px; }
   .lay-logo-foot button { border:1px solid var(--accent); background-color: var(--accent); color: var(--accent-ink);
     font: 600 12px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; padding:7px 12px; cursor:pointer; }
@@ -1522,6 +1531,9 @@ const E_MARK_CLEAR_FT = 2;
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 // Room round a shelf's walls for the dimension strings that measure them.
 const SHELF_FRAME_PAD_FT = 6;
+// The scale a shelf comes onto a sheet at (Movie, 26 Oct: 1/8" first, then
+// "1/4"=1' is better size").
+const SHELF_PIF = 1 / 4;
 // The SITE level, by the Model Space's own numbering (floors odd, half-levels
 // even; SITE and ROOF sit outside it). It is the level the AUTOSITE rectangle
 // is filed on, so the two pages put the lot in the same place.
@@ -3705,7 +3717,9 @@ class Component extends PageLogic {
   // overridden by something bigger, and a view too long for it walks down
   // the sheet set's own ladder, engineer's scales included.
   _pickedPif(view) {
-    const working = SCALES[this.state.activeScale].pif;
+    // A SHELF STARTS AT 1/4" = 1' (Movie, 26 Oct), or smaller if a big one
+    // needs it.
+    const working = view?.kind === 'plan' && view.levelId < 0 ? SHELF_PIF : SCALES[this.state.activeScale].pif;
     const foot = this._viewFootprintFt(view);
     if (!foot) return working;
     return Math.min(working, this._autoScaleFor([{ ...view, wFt: foot.wFt, hFt: foot.hFt }], this._composeRegionIn()));
@@ -4227,13 +4241,73 @@ class Component extends PageLogic {
         none.textContent = mark.company || mark.label;
         button.append(none);
       }
-      button.append(mark.label);
+      // AN OFFICE LOGO'S NAME IS PRESSED TO RENAME IT (Movie, 26 Oct: "on the
+      // loaded up logos can we click on the 'Company 01' logo to change the
+      // name"); a shipped mark's name is its own. The press on the name does
+      // not pick the logo -- the picture does that.
+      const logoId = String(mark.id).startsWith(window.DraftTitleblock.LOGO_ID_PREFIX)
+        ? String(mark.id).slice(window.DraftTitleblock.LOGO_ID_PREFIX.length) : null;
+      const name = document.createElement('span');
+      name.className = 'lay-logo-name';
+      name.textContent = mark.label;
+      if (logoId) {
+        name.dataset.logoRename = logoId;
+        name.title = 'Click to rename this logo';
+        name.addEventListener('click', e => {
+          e.stopPropagation();
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'lay-logo-rename';
+          input.dataset.logoRenameInput = logoId;
+          input.value = mark.label;
+          input.maxLength = 40;
+          let done = false;
+          const finish = keep => {
+            if (done) return;
+            done = true;
+            if (keep) this._renameLogo(logoId, input.value);
+            this._paintLogoGrid();
+            // The card keeps the keys, so Escape still closes it.
+            document.querySelector('[data-logo-picker] [data-logo-close]')?.focus();
+          };
+          input.addEventListener('click', ev => ev.stopPropagation());
+          input.addEventListener('keydown', ev => {
+            ev.stopPropagation();
+            if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+            else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+          });
+          input.addEventListener('blur', () => finish(true));
+          name.replaceWith(input);
+          input.focus();
+          input.select();
+        });
+      }
+      button.append(name);
       button.addEventListener('click', () => {
         this._setTitleblockMark(mark.id);
         this._closeLogoPicker();
       });
       grid.append(button);
     });
+  }
+
+  // THE NAME AN OFFICE LOGO GOES BY, written to the company standard -- the
+  // record COMPANY STANDARDS renames too, so both lists say the same.
+  _renameLogo(id, label) {
+    const T = window.DraftTitleblock;
+    const manager = window.DraftProfileManager;
+    const text = String(label || '').trim().toUpperCase().slice(0, 40);
+    if (!T || !manager || !text) return;
+    const logos = this._companyLogos();
+    if (!logos.some(logo => logo.id === id)) return;
+    const next = T.normaliseCompanyLogos(logos.map(logo => (logo.id === id ? { ...logo, label: text } : logo)));
+    const active = manager.getActive('standards');
+    const content = active?.content || {};
+    manager.saveActive(manager.createPackage('standards', active?.name || manager.defaultName(),
+      { ...content, model: { ...(content.model || {}), companyLogos: next } }));
+    this._loadTitleblockLogos();
+    this._paintPanel();
+    this._draw();
   }
 
   // A FILE TO A LOGO: decoded, brought down to 512px, its margin trimmed off
@@ -4302,7 +4376,7 @@ class Component extends PageLogic {
         if (count > 1) button.append(this._sheetX(i + 1));
         button.addEventListener('click', e => this._onSheetPress(e, i + 1, name));
         return button;
-      }));
+      }), this._addPageTile());
       grid.dataset.signature = signature;
       this._thumbKeys = new Map();
     }
@@ -4312,8 +4386,29 @@ class Component extends PageLogic {
       if (on) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
     });
-    this._sizeRail(grid, count);
+    // ONE MORE PLACE IN THE GRID for the ADD PAGE tile.
+    this._sizeRail(grid, count + 1);
     this._queueThumbs(grid);
+  }
+
+  // + ADD PAGE AT THE END OF THE PAGES (Movie, 26 Oct: "can we put a 'ADD NEW
+  // PAGE' to the right side where the page views show so i can click on it
+  // and make a new sheet for new layouts"): the panel's + SHEET, a blank
+  // sheet on the end, taken straight to it.
+  _addPageTile() {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'lay-thumb lay-add-page';
+    tile.dataset.railAddPage = '';
+    tile.title = 'Add a new blank page at the end';
+    const plus = document.createElement('span');
+    plus.className = 'lay-add-page-plus';
+    plus.textContent = '+';
+    const name = document.createElement('span');
+    name.textContent = 'ADD PAGE';
+    tile.append(plus, name);
+    tile.addEventListener('click', () => this._addSheet());
+    return tile;
   }
 
   // SMALL ENOUGH THAT THE WHOLE SET FITS WITHOUT A SCROLL: two columns, as

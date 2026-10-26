@@ -256,6 +256,24 @@ test('a double press on the titleblock\'s logo opens the picker: pick one, or ad
   expect(size[0]).toBeLessThan(200);
   expect(size[0]).toBeGreaterThan(160);
   expect(Math.abs(size[0] / size[1] - 2)).toBeLessThan(0.06);
+  // ITS NAME IS PRESSED TO RENAME IT (Movie, 26 Oct: "can we click on the
+  // 'Company 01' logo to change the name"), and the press does not pick it.
+  // A shipped mark's name is not offered.
+  await expect(page.locator('[data-logo-rename]')).toHaveCount(1);
+  await page.locator('[data-logo-rename]').click();
+  await expect(page.locator('[data-logo-picker]')).toBeVisible();
+  const box = page.locator('[data-logo-rename-input]');
+  await box.fill('Acme Homes');
+  await box.press('Enter');
+  await expect(page.locator('[data-logo-rename]')).toHaveText('ACME HOMES');
+  expect(await page.evaluate(() => window.DraftProfileManager.getActive('standards').content.model.companyLogos.map(l => l.label)))
+    .toEqual(['ACME HOMES']);
+  await expect(page.locator('[data-layout-mark]')).toContainText('ACME HOMES');
+  // Escape leaves the name as it was.
+  await page.locator('[data-logo-rename]').click();
+  await page.locator('[data-logo-rename-input]').fill('NOPE');
+  await page.locator('[data-logo-rename-input]').press('Escape');
+  await expect(page.locator('[data-logo-rename]')).toHaveText('ACME HOMES');
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-logo-picker]')).toBeHidden();
 });
@@ -316,9 +334,31 @@ test('+ ADD VIEWPORT offers a SHELF with a drawing on it, and puts it on the she
   const after = await savedAfter(page, seq);
   const made = after.viewports.find(v => !dealt.viewports.some(o => o.id === v.id));
   expect(made).toMatchObject({ kind: 'plan', levelId: -2 });
-  expect(made.pif, 'a 24 x 30 suite comes in at a plan scale, not a site one').toBeGreaterThanOrEqual(3 / 16);
+  // AT 1/4" = 1' (Movie, 26 Oct) or the next rung down when the suite and
+  // its strings need it -- framed on the suite, never a site scale.
+  expect(made.pif, 'no larger than 1/4"').toBeLessThanOrEqual(1 / 4);
+  expect(made.pif, 'a plan scale, not a site one').toBeGreaterThanOrEqual(3 / 16);
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   expect((await savedLayout(page)).viewports.some(v => v.id === made.id && v.levelId === -2),
     'the shelf viewport survives a reload').toBe(true);
+});
+
+// + ADD PAGE AT THE END OF THE PAGES (Movie, 26 Oct: "can we put a 'ADD NEW
+// PAGE' to the right side where the page views show so i can click on it and
+// make a new sheet for new layouts").
+test('+ ADD PAGE at the end of the rail adds a blank page and goes to it', async ({ page }) => {
+  await openLayout(page, boneDrawing());
+  await waitForCompose(page);
+  const dealt = await savedLayout(page);
+  const tile = page.locator('[data-rail-add-page]');
+  await expect(tile).toBeVisible();
+  await expect(tile).toContainText('ADD PAGE');
+  const seq = await saveSeq(page);
+  await tile.click();
+  const after = await savedAfter(page, seq);
+  expect(after.sheets.length).toBe(dealt.sheets.length + 1);
+  await expect(page.locator(`[data-sheet-thumb="${dealt.sheets.length + 1}"]`)).toHaveClass(/\bon\b/);
+  // Still the last thing in the rail.
+  expect(await page.evaluate(() => document.querySelector('[data-sheet-rail-grid]').lastElementChild.hasAttribute('data-rail-add-page'))).toBe(true);
 });
