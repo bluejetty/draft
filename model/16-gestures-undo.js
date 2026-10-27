@@ -2046,6 +2046,64 @@
   canvas.addEventListener('pointerup', e => { if (elevNotePress) elevNoteLift(e); });
   canvas.addEventListener('pointercancel', endDrag);
 
+  // ── ZOOM BACK AND ON (Movie, 27 Oct, the ARCHICAD keys he ticked) ────
+  //
+  // Ctrl+[ goes back to the view before the last zoom or fit, Ctrl+] on
+  // again, ARCHICAD's Previous / Next Zoom. A wheel burst is one zoom: the
+  // view is noted when a burst begins, not on every notch.
+  const viewBack = [];
+  const viewAhead = [];
+  let viewNotedAt = 0;
+  const VIEW_BURST_MS = 600;
+  const viewNow = () => ({ cx: view.cx, cz: view.cz, scale: view.scale });
+  const noteView = (discrete = false) => {
+    const now = Date.now();
+    if (discrete || now - viewNotedAt > VIEW_BURST_MS) {
+      viewBack.push(viewNow());
+      if (viewBack.length > 50) viewBack.shift();
+      viewAhead.length = 0;
+    }
+    // A FIT IS ITS OWN STEP, and the wheel after it starts a new burst.
+    viewNotedAt = discrete ? 0 : now;
+  };
+  const stepView = (from, to) => {
+    if (!from.length) return;
+    to.push(viewNow());
+    Object.assign(view, from.pop());
+    viewNotedAt = 0;
+    paint();
+  };
+
+  // ARROWS NUDGE WHAT IS PICKED: an inch a press, a foot with Ctrl held --
+  // the MOVE drag's own machinery (selectionMoveSet), so walls drag their
+  // neighbours' corners, assemblies keep their shape and one UNDO takes each
+  // press back. Up is up the sheet.
+  const NUDGE_FT = 1 / 12;
+  const nudgeSelection = (dx, dz) => {
+    if (!selection.length) return false;
+    const set = selectionMoveSet();
+    if (!set.before.length) {
+      set.detached.forEach(x => { x.wall[x.key] = x.orig; });
+      sayOnStrip('The arrows move walls, lines, shapes, floors, stairs and assemblies; slide a door or window along its wall.');
+      return true;
+    }
+    if (set.slide) ({ dx, dz } = slideDelta(set.slide, dx, dz));
+    if (set.across) { const t = dx * set.across.x + dz * set.across.z; dx = set.across.x * t; dz = set.across.z * t; }
+    set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+    if (set.run) reclipRun(set.run);
+    set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
+    set.points.forEach(relinkVertex);
+    const moveStep = { kind: 'rotate', before: set.before, detached: set.detached, wells: set.wells };
+    const settled = settleSelectionMove(set);
+    const steps = [moveStep, ...settled.steps];
+    undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : moveStep);
+    markDirty();
+    setSelection([...selection]);
+    sayOnStrip(`Nudged ${feetLabel(Math.hypot(dx, dz))}.${settled.said} UNDO puts it back.`);
+    paint();
+    return true;
+  };
+
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -2075,6 +2133,7 @@
     // which is what a 1/16" nudge needs to be seen. 200 was the old stop, and
     // it stays the ceiling for 0-to-fit, so a tiny drawing still opens framed
     // rather than magnified.
+    noteView();
     view.scale = Math.max(0.25, Math.min(view.scale * factor, 800));
     const after = toWorld(sx, sy);
     view.cx += before.x - after.x;
@@ -2091,7 +2150,41 @@
     const typing = e.target instanceof HTMLElement
       && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
     if (typing) return;
-    if (e.key === '0') { fit(); paint(); }
+    if (e.key === '0') { noteView(true); fit(); paint(); }
+    // THE VIEW KEYS (Movie, 27 Oct, ARCHICAD's): Ctrl+' fits as 0 does,
+    // Ctrl+[ / Ctrl+] step back and on through the zooms, Shift+F2 / Ctrl+F2
+    // (and Page Up / Page Down) go up and down a level, F3 opens the 3D
+    // WIREFRAME as its chip does.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "'") {
+      e.preventDefault(); noteView(true); fit(); paint(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === '[' || e.key === ']')) {
+      e.preventDefault();
+      if (e.key === '[') stepView(viewBack, viewAhead); else stepView(viewAhead, viewBack);
+      return;
+    }
+    const levelKey = e.key === 'PageUp' || (e.key === 'F2' && e.shiftKey) ? LEVEL_UP
+      : e.key === 'PageDown' || (e.key === 'F2' && e.ctrlKey) ? LEVEL_DOWN : null;
+    if (levelKey !== null) {
+      if (!drawing || modalUp()) return;
+      e.preventDefault();
+      levelStep(levelKey);
+      return;
+    }
+    if (e.key === 'F3' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      const wire = document.querySelector('[data-page="boneyard"]');
+      if (wire) { e.preventDefault(); wire.click(); }
+      return;
+    }
+    // THE ARROWS NUDGE (above), in SELECT with something picked and no
+    // gesture in hand; an inch, or a foot with Ctrl.
+    const arrow = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (arrow && !e.altKey && !e.shiftKey && drawing && !modalUp() && !drawStart && !moveDrag
+      && activeTool === RESTING_TOOL && !activeCut()) {
+      const step = e.ctrlKey || e.metaKey ? 1 : NUDGE_FT;
+      if (nudgeSelection(arrow[0] * step, arrow[1] * step)) e.preventDefault();
+      return;
+    }
     // CTRL+A SELECTS ALL (selectAll, above). A plain A is the SHAPE key.
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a') {
       if (!drawing || modalUp() || activeCut()) return;
