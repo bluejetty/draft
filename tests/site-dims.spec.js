@@ -186,17 +186,23 @@ test('on the SITE level the chips stand ready: AUTO DIMS hides the rows, DIM SCA
   await expect(page.locator('[data-dim-scale]')).toBeVisible();
   // What MODEL hands the site painter, read off the painter itself.
   const handed = () => page.evaluate(() => {
-    const LP = window.DraftLayoutPlan;
-    let env = null;
+    const LP = window.DraftLayoutPlan, R = window.DraftRender2D;
+    let env = null, drawn = 0;
     window.DraftLayoutPlan = { ...LP, drawSitePlan: (...a) => { env = a[3]; return LP.drawSitePlan(...a); } };
+    window.DraftRender2D = { ...R, drawDimension2D: (...a) => { drawn += 1; return R.drawDimension2D(...a); } };
     paint();
     window.DraftLayoutPlan = LP;
-    return { rows: env && env.siteDims !== false, pif: env && env.pif };
+    window.DraftRender2D = R;
+    return { rows: env && env.siteDims !== false, pif: env && env.pif, drawn };
   });
-  expect(await handed()).toEqual({ rows: true, pif: 1 / 30 });
+  const on = await handed();
+  expect({ rows: on.rows, pif: on.pif }).toEqual({ rows: true, pif: 1 / 30 });
+  expect(on.drawn, 'the rows are drawn').toBeGreaterThan(0);
   await page.locator('[data-dims-show="auto"]').click();
-  expect((await handed()).rows, 'AUTO DIMS off: no rows').toBe(false);
+  const off = await handed();
+  expect(off.rows, 'AUTO DIMS off: no rows').toBe(false);
+  expect(off.drawn, 'and none drawn').toBe(0);
   await page.locator('[data-dims-show="auto"]').click();
   await page.locator('[data-dim-scale]').selectOption(String(1 / 60));
-  expect(await handed()).toEqual({ rows: true, pif: 1 / 60 });
+  expect((await handed()).pif).toBe(1 / 60);
 });
