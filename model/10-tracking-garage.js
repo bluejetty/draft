@@ -1037,12 +1037,18 @@
     if (!cursorWorld || !(drawsRun() || tracesLoop)) { markMagnet(null); return; }
     // A RUN HELD SQUARE asks the squared magnet, as drawPoint does; the
     // locked bearing and the protractor take no magnet at all.
-    const runs = drawsRun() && board !== 'toy' && drawStart;
-    const steered = runs && (lockedPoint(drawStart, cursorWorld) || protractorPoint(drawStart, cursorWorld));
-    const fixed = runs && !steered ? squaredAxis(drawStart, cursorWorld) : null;
+    // A LOOP'S LAST CORNER IS ITS RUN'S START (Movie, 27 Oct): the outline,
+    // floor and shape square from it too, so their ring is the squared one --
+    // without it the ring lit where the hand was and the press landed on the
+    // square.
+    const runFrom = drawStart
+      || (activeTool === 'outline' ? outlineTail() : loopCornersInHand()?.at(-1)) || null;
+    const runs = (drawsRun() || tracesLoop) && board !== 'toy' && runFrom;
+    const steered = runs && (lockedPoint(runFrom, cursorWorld) || protractorPoint(runFrom, cursorWorld));
+    const fixed = runs && !steered ? squaredAxis(runFrom, cursorWorld) : null;
     const magnet = (drawsRun() || tracesLoop) && !steered ? drawMagnet() : null;
     if (fixed) {
-      const lit = axisMagnet(squareTo(drawStart, cursorWorld), fixed, [], magnet);
+      const lit = axisMagnet(squareTo(runFrom, cursorWorld), fixed, [], magnet);
       paintMagnets(cursorWorld, magnet, lit);
       if (lit) paintDonut(lit.pt, tierOf(lit));
       markMagnet(lit);
@@ -1443,8 +1449,22 @@
     // it (the orange ray), so the loop can always be brought home. TOY keeps
     // its law: square, on the foot.
     if (board !== 'toy' && !locked) {
-      const hand = tsquareLive() ? outlineHand(from, at, 90)
-        : protractorOn ? outlineHand(from, at, protractorStep) : outlineAligned(at);
+      // SQUARE, AND SNAPPED ALONG THE SQUARE (Movie, 27 Oct: "the lines for
+      // the outline house aren't landing on the proper spot perpendicular to
+      // the point selected ... even with the T on"). The squared corner took
+      // no snap at all, so the neon ring lit on the line and the press landed
+      // where the hand was. Now it is drawPoint's rule: the square holds one
+      // coordinate and a node, corner or line it crosses sets the other --
+      // and a catch is exact, so the foot does not round it away.
+      if (tsquareLive()) {
+        const square = outlineHand(from, at, 90);
+        const fixed = Math.abs(at.x - from.x) >= Math.abs(at.z - from.z) ? 'z' : 'x';
+        const caught = axisSnap({ x: square.x, y: 0, z: square.z }, fixed, [], drawMagnet());
+        if (caught) return { x: caught.x, z: caught.z };
+        const pt = onTheFoot_if() ? onTheFoot(from, square) : square;
+        return { x: pt.x, z: pt.z };
+      }
+      const hand = protractorOn ? outlineHand(from, at, protractorStep) : outlineAligned(at);
       const pt = onTheFoot_if() ? onTheFoot(from, hand) : hand;
       return { x: pt.x, z: pt.z };
     }
