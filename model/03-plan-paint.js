@@ -155,7 +155,7 @@
     ['1/16"', 1 / 16], ['3/32"', 3 / 32], ['1/8"', 1 / 8], ['3/16"', 3 / 16], ['1/4"', 1 / 4],
     ['3/8"', 3 / 8], ['1/2"', 1 / 2], ['3/4"', 3 / 4], ['1"', 1],
     ['1"=10\'', 1 / 10], ['1"=20\'', 1 / 20], ['1"=30\'', 1 / 30], ['1"=40\'', 1 / 40],
-    ['1"=50\'', 1 / 50], ['1"=60\'', 1 / 60], ['1"=100\'', 1 / 100],
+    ['1"=50\'', 1 / 50], ['1"=60\'', 1 / 60], ['1"=80\'', 1 / 80], ['1"=100\'', 1 / 100], ['1"=200\'', 1 / 200],
   ];
   const dimScaleLabel = pif => {
     const listed = DIM_SCALE_CHOICES.find(([, p]) => Math.abs(p - pif) < 1e-9);
@@ -1555,9 +1555,22 @@
       pick.addEventListener('change', () => {
         if (!drawing) return;
         const id = activeLevelId();
+        const before = drawing.dimScales;
         const next = { ...(drawing.dimScales || {}) };
         if (pick.value) next[id] = Number(pick.value); else delete next[id];
         drawing.dimScales = next;
+        // AND THE AUTO ROWS STEP TO THE NEW PAPER (Movie, 26 Oct: "the lines
+        // don't move to new spacings for the altered scale"): every view of
+        // this level that has them is laid again, in one UNDO with the pick.
+        const views = [...new Set((drawing.dimensions || [])
+          .filter(dim => dim.auto === true && Number(dim.levelId) === Number(id)).map(dim => dim.view || 'plan'))];
+        const laid = views.map(view => placeAutoDims(id, view)).filter(r => r !== -1);
+        const placed = laid.flatMap(r => r.placed), removed = laid.flatMap(r => r.removed);
+        undoStack.push({ kind: 'node', undo: () => {
+          if (before) drawing.dimScales = before; else delete drawing.dimScales;
+          drawing.dimensions = (drawing.dimensions || []).filter(dim => !placed.includes(dim));
+          removed.forEach(dim => { if (!drawing.dimensions.includes(dim)) drawing.dimensions.push(dim); });
+        } });
         markDirty();
         paint();
       });

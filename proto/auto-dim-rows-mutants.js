@@ -56,6 +56,21 @@ const MUTANTS = [
     find: "      setAutoRowsOff(levelId, view, before);\n      drawing.dimensions = (drawing.dimensions || []).filter(dim => !placed.includes(dim));\n",
     with: "      drawing.dimensions = (drawing.dimensions || []).filter(dim => !placed.includes(dim));\n",
     test: 'ROWS puts it back, the rows step out again; UNDO takes the put-back away' },
+  { file: 'model/12-garage-storeys-stairs.js',
+    name: 'the rows stand in feet, whatever the scale',
+    find: "      stringSpacingFt: AD.STRING_SPACING_FT * paper,\n      rowsOff:",
+    with: "      stringSpacingFt: AD.STRING_SPACING_FT,\n      rowsOff:",
+    test: 'DIM SCALE lays the rows out again at the new paper; UNDO puts them back' },
+  { file: 'model/03-plan-paint.js',
+    name: 'a DIM SCALE pick leaves the rows where they were',
+    find: "        const laid = views.map(view => placeAutoDims(id, view)).filter(r => r !== -1);\n",
+    with: "        const laid = [];\n",
+    test: 'DIM SCALE lays the rows out again at the new paper; UNDO puts them back' },
+  { file: 'model/03-plan-paint.js',
+    name: 'UNDO of a pick keeps the new rows',
+    find: "          drawing.dimensions = (drawing.dimensions || []).filter(dim => !placed.includes(dim));\n          removed.forEach(dim => { if (!drawing.dimensions.includes(dim)) drawing.dimensions.push(dim); });\n        } });\n        markDirty();\n        paint();\n",
+    with: "        } });\n        markDirty();\n        paint();\n",
+    test: 'DIM SCALE lays the rows out again at the new paper; UNDO puts them back' },
 ];
 
 const run = name => {
