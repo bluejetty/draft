@@ -55,6 +55,9 @@ const ROSTER = [
   // ASSEMBLY (Movie, 18 Oct): "put it up in with the other main letters" --
   // Y, the binding the old page carried for `group`.
   ['draw', 'assembly', 'ASSEMBLY', 'Y'],
+  // MULTIPLE (Movie, 27 Oct): "put a button in the DRAFTING menu we can work
+  // on it later" -- a placeholder, no letter yet.
+  ['draw', 'multiple', 'MULTIPLE', ''],
   ['build', 'wall', 'WALL', 'W'],
   ['build', 'fenestration', 'FENESTRATION', 'E'],
   ['build', 'floor', 'FLOOR', 'F'],
@@ -109,7 +112,7 @@ const keys = page => page.locator('[data-tool-key]').evaluateAll(els => els.map(
   armed: el.getAttribute('aria-pressed') === 'true',
 })));
 
-test('twenty-one keys, in the old page\'s order and grouping', async ({ page }) => {
+test('twenty-two keys, in the old page\'s order and grouping', async ({ page }) => {
   await openColumn(page);
   const got = await keys(page);
 
@@ -125,7 +128,7 @@ test('twenty-one keys, in the old page\'s order and grouping', async ({ page }) 
     .toHaveText('BUILD');
 });
 
-test('fifteen keys carry a letter and seven are deliberately bare',
+test('fifteen keys carry a letter and eight are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -137,7 +140,7 @@ test('fifteen keys carry a letter and seven are deliberately bare',
     // letters were ever loosened to ''.
     expect(got.filter(k => k.key !== '')).toHaveLength(15);
     expect(got.filter(k => k.key === '').map(k => k.id))
-      .toEqual(['annotation', 'roomtag', 'dormer', 'column', 'beam', 'stair', 'fixture']);
+      .toEqual(['annotation', 'roomtag', 'multiple', 'dormer', 'column', 'beam', 'stair', 'fixture']);
   });
 
 test('a SETTINGS remap moves the letter on the key face', async ({ page }) => {

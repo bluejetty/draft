@@ -1016,6 +1016,15 @@
   // THE LETTERS ARE READ ONCE AT BUILD, from SETTINGS through the roster. A
   // remap made in another tab lands on the next load, which is how every other
   // profile-backed value on this page behaves.
+  // THE KEY'S FACE IS ITS LETTER AND A DRAWING (Movie, 27 Oct: "don't put
+  // text in the box except the letter, just an icon and command letter").
+  // The name stays on the key, hidden, for the tooltip's reader and the specs.
+  const toolIcon = id => {
+    const icon = document.createElement('span');
+    icon.dataset.toolIcon = '';
+    icon.innerHTML = window.DraftToolIcons?.svg(id) || '';
+    return icon;
+  };
   const buildToolColumn = () => {
     const roster = window.DraftToolRoster;
     const slot = document.getElementById('tool-slot');
@@ -1046,11 +1055,15 @@
         const label = document.createElement('span');
         label.dataset.toolName = '';
         label.textContent = tool.name;
-        btn.append(letter, label);
+        btn.append(letter, toolIcon(tool.id), label);
         // PRESSING THE ARMED KEY RETURNS TO SELECT rather than to nothing --
         // see the register's comment. Pressing SELECT while select is armed is
         // therefore a no-op, which is right: it is the resting state.
-        btn.addEventListener('click', () => pressToolKey(tool.id));
+        btn.addEventListener('click', () => {
+          // A PLACEHOLDER KEY says it is coming and arms nothing.
+          if (tool.placeholder) { sayOnStrip(`${tool.name} is coming soon — copies in a row or a grid.`); return; }
+          pressToolKey(tool.id);
+        });
         return btn;
       }));
       box.append(name, keys);
@@ -1102,7 +1115,11 @@
       // FENESTRATION does not fit on it at a readable size. The refusal that
       // used to go here -- "the TOY board does not offer this tool" -- went
       // with the ruling: there is no tool TOY does not offer.
-      btn.title = tool.name;
+      // "WALL — press W to draw a wall." (Movie, 27 Oct: "when the user
+      // scolls over the tool name should be first ... to explain the KEY,
+      // and what it does").
+      const key = roster.keyFor(tool.id, roster.bindings());
+      btn.title = window.DraftToolIcons ? window.DraftToolIcons.title(tool.name, key, tool.id) : tool.name;
     });
   }
 
@@ -1493,7 +1510,9 @@
       btn.type = 'button';
       btn.className = 'tool-key';
       btn.dataset.barKey = id;
-      btn.title = id === 'select' ? 'SELECT — then press a kind to pick only that kind' : tool.name;
+      const key = roster.keyFor(id, resolved);
+      const said = window.DraftToolIcons ? window.DraftToolIcons.title(tool.name, key, id) : tool.name;
+      btn.title = id === 'select' ? `${said} Then press a kind to pick only that kind.` : said;
       btn.setAttribute('aria-pressed', String(id === activeTool));
       const letter = document.createElement('span');
       letter.dataset.toolLetter = '';
@@ -1501,7 +1520,7 @@
       const label = document.createElement('span');
       label.dataset.toolName = '';
       label.textContent = tool.name;
-      btn.append(letter, label);
+      btn.append(letter, toolIcon(id), label);
       btn.addEventListener('click', () => pressToolKey(id, true));
       return btn;
     }));
