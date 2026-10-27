@@ -155,7 +155,7 @@
     ['1/16"', 1 / 16], ['3/32"', 3 / 32], ['1/8"', 1 / 8], ['3/16"', 3 / 16], ['1/4"', 1 / 4],
     ['3/8"', 3 / 8], ['1/2"', 1 / 2], ['3/4"', 3 / 4], ['1"', 1],
     ['1"=10\'', 1 / 10], ['1"=20\'', 1 / 20], ['1"=30\'', 1 / 30], ['1"=40\'', 1 / 40],
-    ['1"=50\'', 1 / 50], ['1"=60\'', 1 / 60], ['1"=100\'', 1 / 100],
+    ['1"=50\'', 1 / 50], ['1"=60\'', 1 / 60], ['1"=80\'', 1 / 80], ['1"=100\'', 1 / 100], ['1"=200\'', 1 / 200],
   ];
   const dimScaleLabel = pif => {
     const listed = DIM_SCALE_CHOICES.find(([, p]) => Math.abs(p - pif) < 1e-9);
@@ -1525,7 +1525,7 @@
           // (Movie, 26 Oct: on a SHELF, "if the user pressed it please make
           // them"), the DIMENSION panel's AUTO DIMS; after that the chip
           // shows and hides them, as it always has.
-          if (kind === 'auto' && !levelHasAutoDims()) {
+          if (kind === 'auto' && !levelHasAutoDims() && !siteRowsHere()) {
             dimsHidden = { ...dimsHidden, auto: false };
             try { localStorage.setItem('model.dimsHidden', JSON.stringify(dimsHidden)); } catch (e) {}
             pressAutoDims();
@@ -1555,9 +1555,22 @@
       pick.addEventListener('change', () => {
         if (!drawing) return;
         const id = activeLevelId();
+        const before = drawing.dimScales;
         const next = { ...(drawing.dimScales || {}) };
         if (pick.value) next[id] = Number(pick.value); else delete next[id];
         drawing.dimScales = next;
+        // AND THE AUTO ROWS STEP TO THE NEW PAPER (Movie, 26 Oct: "the lines
+        // don't move to new spacings for the altered scale"): every view of
+        // this level that has them is laid again, in one UNDO with the pick.
+        const views = [...new Set((drawing.dimensions || [])
+          .filter(dim => dim.auto === true && Number(dim.levelId) === Number(id)).map(dim => dim.view || 'plan'))];
+        const laid = views.map(view => placeAutoDims(id, view)).filter(r => r !== -1);
+        const placed = laid.flatMap(r => r.placed), removed = laid.flatMap(r => r.removed);
+        undoStack.push({ kind: 'node', undo: () => {
+          if (before) drawing.dimScales = before; else delete drawing.dimScales;
+          drawing.dimensions = (drawing.dimensions || []).filter(dim => !placed.includes(dim));
+          removed.forEach(dim => { if (!drawing.dimensions.includes(dim)) drawing.dimensions.push(dim); });
+        } });
         markDirty();
         paint();
       });
@@ -1583,7 +1596,7 @@
     // the SHELF"). A floor keeps its rule: the chips stand over the sheet's
     // top corner, where a floor is drawn, only once there are strings.
     const any = dimensions().length > 0 || activeTool === 'dimension'
-      || (activeLevelId() < 0 && walls().length > 0);
+      || (activeLevelId() < 0 && walls().length > 0) || siteRowsHere();
     const rowsBtn = dimsShowBox.querySelector('[data-auto-rows]');
     if (rowsBtn) rowsBtn.hidden = !(levelHasAutoDims() || autoRowsOff(activeLevelId(), activeViewId() || 'plan').length);
     dimsShowBox.hidden = !any;
@@ -1604,6 +1617,13 @@
     dimsShowBox.style.left = `${c.x - DOCK_CHIP / 2 - 10 - w}px`;
     dimsShowBox.style.top = `${midY - hgt / 2}px`;
   }
+  // THE SITE'S OWN ROWS COUNT AS ITS AUTO STRINGS (Movie, 26 Oct: "the
+  // dimension scale button doesn't show up on the site plan (or the autodim
+  // and hand dim buttons) could we have those here too"). They are drawn off
+  // the lot rather than stored, so the chips ask the lot: AUTO DIMS shows or
+  // hides them, DIM SCALE sets the paper they are laid out for.
+  const siteRowsHere = () => activeLevelId() === SITE_LEVEL_ID && !!drawing
+    && (window.DraftLayoutPlan?.siteDimStrings?.(drawing, dimScalePif(SITE_LEVEL_ID)) || []).length > 0;
   const levelHasAutoDims = () => {
     const levelId = activeLevelId(), view = activeViewId() || 'plan';
     return (drawing?.dimensions || []).some(dim => dim.auto === true
@@ -1781,8 +1801,10 @@
       // so the ink is the one thing the screen hands the painter.
       window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {
         siteLineInk: skin['draw-site-line'],
-        // THE ROWS AT THE SCALE THEY PRINT AT (DIM SCALE, else the sheet's).
+        // THE ROWS AT THE SCALE THEY PRINT AT (DIM SCALE, else the sheet's),
+        // and not at all while AUTO DIMS is off.
         pif: dimScalePif(SITE_LEVEL_ID),
+        siteDims: !dimsHidden.auto,
         // AND THE TOP PLATES THE ROOF RESTS ON (Movie, 14 Oct: "please show
         // the outline of the top plates of walls that the roof rests on that
         // are n the roof plan - show those lines also in the site plane").

@@ -1254,6 +1254,7 @@
     ['A-DIMS-FENS', 'OPENINGS'], ['A-DIMS-INT', 'INT WALLS'],
     ['A-DIMS-EXT', 'CORNERS'], ['A-DIMS-OVR', 'OVERALL']]);
   const AUTO_ROW_SIDES = Object.freeze(['N', 'E', 'S', 'W']);
+  const AUTO_DIM_BASE_PIF = 1 / 4;
   const autoRowsKey = (levelId, view) => `${Number(levelId)}|${view || 'plan'}`;
   const autoRowsOff = (levelId, view) => {
     const list = drawing?.autoDimRowsOff?.[autoRowsKey(levelId, view)];
@@ -1299,9 +1300,18 @@
     return { placed, removed };
   };
 
+  // THE ROWS STAND IN PAPER (Movie, 26 Oct: "the text changes size but the
+  // lines don't move to new spacings for the altered scale"). The first-row
+  // offset and the step between rows are the drafting standard's feet AT
+  // 1/4" = 1' -- 3/8" of paper each -- and are laid out at the level's DIM
+  // SCALE (dimScalePif: the pick, else the LAYOUT sheet, else 1/4"), so a
+  // roof plan at 1" = 80' strings its rows 3/8" apart on that sheet as a
+  // floor at 1/4" does on its own. At 1/4" nothing moves.
+  const autoDimPaperFactor = levelId => AUTO_DIM_BASE_PIF / dimScalePif(levelId);
   const placeAutoDims = (levelId, view) => {
     if (!drawing) return -1;
     const G = window.DraftGeometry2D;
+    const paper = autoDimPaperFactor(levelId);
     const AD = window.DraftAutoDims;
     // The ELECTRIC sheet dims the walls it is drawn over, which live on the
     // plan -- MODEL.dc.html's own first line of _placeAutoDims.
@@ -1342,9 +1352,9 @@
     const segments = AD.computeAutoDimStrings({
       walls, outlines: strung, roofs, openings,
       offsetOutline: (pts, dist) => G.offsetOutline(pts, dist),
-      firstOffset: autoDimFirstOffsetFt(),
+      firstOffset: autoDimFirstOffsetFt() * paper,
       jogMergeFt: AD.JOG_MERGE_FT,
-      stringSpacingFt: AD.STRING_SPACING_FT,
+      stringSpacingFt: AD.STRING_SPACING_FT * paper,
       rowsOff: autoRowsOff(levelId, view),
       // THE INTERIOR STRING'S TWO INPUTS, and it draws nothing without them.
       // A wall's FACES are what that string measures to, and a face is the
@@ -1387,8 +1397,8 @@
       // THE STACK ALREADY OUTSIDE, so an opening string sent out past the
       // wall (within 3 ft of it) lands one row beyond the perimeter rows.
       perimeter: segments || [],
-      firstOffsetFt: autoDimFirstOffsetFt(),
-      stringSpacingFt: AD.STRING_SPACING_FT,
+      firstOffsetFt: autoDimFirstOffsetFt() * paper,
+      stringSpacingFt: AD.STRING_SPACING_FT * paper,
     }) : [];
     // THE EARLY RETURN IS UNCHANGED FOR THE CASE IT WAS WRITTEN FOR. It fires
     // when computeAutoDimStrings finds nothing big enough to string, and that

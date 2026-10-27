@@ -120,3 +120,20 @@ test('a row taken off stays off through a save and a reload', async ({ page }) =
   await page.evaluate(() => { pressAutoDims(); });
   expect((await westRows(page)).map(r => r[1])).toEqual(['A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS']);
 });
+
+// THE ROWS STAND IN PAPER (Movie, 26 Oct: "the text changes size but the
+// lines don't move to new spacings for the altered scale"): 1.5 ft apart at
+// 1/4" = 1' is 3/8" of paper, so at 1" = 20' they stand 7.5 ft apart.
+test('DIM SCALE lays the rows out again at the new paper; UNDO puts them back', async ({ page }) => {
+  await onShelf(page);
+  await page.locator('[data-dims-show="auto"]').click();
+  const gaps = rows => rows.slice(1).map((r, i) => Math.round((r[0] - rows[i][0]) * 100) / 100);
+  const quarter = await westRows(page);
+  expect(gaps(quarter)).toEqual([1.5, 1.5, 1.5]);
+  await page.locator('[data-dim-scale]').selectOption(String(1 / 20));
+  const twenty = await westRows(page);
+  expect(twenty.map(r => r[1]), 'the same rows').toEqual(quarter.map(r => r[1]));
+  expect(gaps(twenty)).toEqual([7.5, 7.5, 7.5]);
+  await page.evaluate(() => { undoOnce(); paint(); });
+  expect(await westRows(page)).toEqual(quarter);
+});
