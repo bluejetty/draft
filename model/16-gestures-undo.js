@@ -2182,9 +2182,11 @@
       undoOnce();
       return;
     }
-    // REDO (Movie, 20 Oct): Ctrl+Y, or Ctrl+Shift+Z, steps forward through
-    // the versions -- the entries a jump back left ahead of the cursor.
-    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+    // REDO (Movie, 20 Oct): Ctrl+Shift+Z steps forward through the versions
+    // -- the entries a jump back left ahead of the cursor. CTRL+SHIFT+Z ONLY
+    // since 27 Oct ("Ctrl+Shift+Z for redo, like archicad - make ours the
+    // same please"); Ctrl+Y groups now, as Ctrl+G does.
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
       if (versions.cursor < versions.entries.length - 1) { e.preventDefault(); historyStep(1); }
     }
   });
@@ -2209,8 +2211,8 @@
   // (adoptFile, muted so it is not itself a version) and moves the cursor;
   // an edit made standing on an older entry drops the entries after it,
   // as Photoshop's history does. Ctrl+Z keeps the fine-grained undo while
-  // there is one and steps back here when there is none; Ctrl+Y or
-  // Ctrl+Shift+Z steps forward.
+  // there is one and steps back here when there is none; Ctrl+Shift+Z
+  // steps forward.
   const HISTORY_BACK = 100;
   const HISTORY_BYTES = 80 * 1024 * 1024;
   const HISTORY_COUNTED = [['walls', 'wall'], ['lines', 'line'], ['fenestrations', 'opening'],

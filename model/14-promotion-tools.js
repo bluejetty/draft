@@ -1176,6 +1176,14 @@
       ungroupByKey();
       return;
     }
+    // AND CTRL+Y / CTRL+SHIFT+Y THE SAME ("if CTL-Y and CTL-SHIFT-Y is
+    // available those can also do the same things") -- free once redo went
+    // to Ctrl+Shift+Z only, as ARCHICAD has it.
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      if (event.shiftKey) ungroupByKey(); else groupByKey();
+      return;
+    }
     const tool = roster.TOOLS.find(entry => entry.command
       && kb.eventMatchesBinding(event, map[entry.command]));
     if (!tool) return;

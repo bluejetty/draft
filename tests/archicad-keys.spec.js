@@ -102,6 +102,11 @@ test('CTRL+G makes what is picked one assembly; CTRL+SHIFT+G ungroups it', async
   expect(made).toEqual([['wall-1', 'wall-2']]);
   await page.keyboard.press('Control+Shift+g');
   expect(await page.evaluate(() => drawing.groups.length)).toBe(0);
+  // CTRL+Y and CTRL+SHIFT+Y do the same, now redo is Ctrl+Shift+Z only.
+  await page.keyboard.press('Control+y');
+  expect(await page.evaluate(() => drawing.groups.length), 'CTRL+Y groups').toBe(1);
+  await page.keyboard.press('Control+Shift+y');
+  expect(await page.evaluate(() => drawing.groups.length), 'CTRL+SHIFT+Y ungroups').toBe(0);
   // Nothing picked: the strip says so and nothing is made.
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+g');

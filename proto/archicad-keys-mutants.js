@@ -55,6 +55,11 @@ const MUTANTS = [
     find: "    if (map.ungroup && kb.eventMatchesBinding(event, map.ungroup)) {\n",
     with: "    if (false) {\n",
     test: 'CTRL+G makes what is picked one assembly; CTRL+SHIFT+G ungroups it' },
+  { file: 'model/14-promotion-tools.js',
+    name: 'CTRL+Y does not group',
+    find: "    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'y') {\n",
+    with: "    if (false) {\n",
+    test: 'CTRL+G makes what is picked one assembly; CTRL+SHIFT+G ungroups it' },
 ];
 
 const run = name => {
