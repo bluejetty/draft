@@ -55,15 +55,20 @@
     return true;
   };
   window.addEventListener('keydown', e => {
-    if (e.key !== 'Shift' || e.repeat || !refHover || refLock || !REF_TOOLS.has(activeTool) || board === 'toy') return;
+    // ALT, NOT SHIFT, since 27 Oct: Shift holds the run square, as ARCHICAD's
+    // does, and lining up on a node moved over to Alt.
+    if (e.key !== 'Alt' || e.repeat || !refHover || refLock || !REF_TOOLS.has(activeTool) || board === 'toy') return;
     const t = e.target;
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+    // The browser's own Alt (its menu bar) is not wanted on the sheet.
+    e.preventDefault();
     refLock = { x: refHover.x, z: refHover.z, released: false, at: null };
-    sayOnStrip('LINED UP on that node -- aim along the guide, and type a length to measure it from the node. Let go of SHIFT and move to go free.');
+    sayOnStrip('LINED UP on that node -- aim along the guide, and type a length to measure it from the node. Let go of ALT and move to go free.');
     paint();
   }, true);
   window.addEventListener('keyup', e => {
-    if (e.key !== 'Shift' || !refLock) return;
+    if (e.key !== 'Alt' || !refLock) return;
+    e.preventDefault();
     refLock.released = true;
     refLock.at = cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : { x: refLock.x, z: refLock.z };
   }, true);
@@ -1438,7 +1443,7 @@
     // it (the orange ray), so the loop can always be brought home. TOY keeps
     // its law: square, on the foot.
     if (board !== 'toy' && !locked) {
-      const hand = tsquareOn ? outlineHand(from, at, 90)
+      const hand = tsquareLive() ? outlineHand(from, at, 90)
         : protractorOn ? outlineHand(from, at, protractorStep) : outlineAligned(at);
       const pt = onTheFoot_if() ? onTheFoot(from, hand) : hand;
       return { x: pt.x, z: pt.z };
@@ -1521,7 +1526,7 @@
     const first = outlineCorners[0], last = outlineTail();
     // FREE, THE EDGE HOME IS WHATEVER IT IS: on DRAFTING with no instrument
     // lit the outline turns at any angle, so its last edge may too.
-    if (board !== 'toy' && !tsquareOn && !protractorOn && angleLockDeg() == null) return last;
+    if (board !== 'toy' && !tsquareLive() && !protractorOn && angleLockDeg() == null) return last;
     const prev = outlineCorners[outlineCorners.length - 2];
     const dx = first.x - last.x, dz = first.z - last.z;
     const r = Math.SQRT1_2;

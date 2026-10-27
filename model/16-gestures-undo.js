@@ -1276,7 +1276,7 @@
           // travel wins.
           // TWO ANCHORS ON A LINE: along it only, like a window (anchorSlide).
           if (md.slide) ({ dx, dz } = slideDelta(md.slide, dx, dz));
-          else if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+          else if (tsquareLive() && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
           // AND BY THE FOOT with the 1' light lit, the MOVE verb's rule
           // (Movie, 20 Oct: "make it work for when i moved grouped stuff too").
           const Q = window.DraftToyConstraints;
@@ -1344,8 +1344,8 @@
           // question for the board, not for this bug.
           const grabbed = md.before[0];
           const from = { x: grabbed.x, z: grabbed.z };
-          const wanted = tsquareOn ? squareTo(from, raw) : raw;
-          const fixed = tsquareOn ? squaredAxis(from, raw) : null;
+          const wanted = tsquareLive() ? squareTo(from, raw) : raw;
+          const fixed = tsquareLive() ? squaredAxis(from, raw) : null;
           // THE MAGNET ON A DRAG TOO, with SNAP lit off TOY: the corners and
           // faces of every wall the node does not belong to.
           const magnet = snapLive() && board !== 'toy' ? (md.magnet ||= dragMagnet(grabbed.vtx)) : null;
@@ -1411,14 +1411,16 @@
           // distance" exactly true, rather than true to within the float drift
           // of a hundred pointermove events.
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
-          // SHIFT HELD: the wall goes on its own, its corners let go.
-          if (board !== 'toy') setWallLoose(md, e.shiftKey);
+          // ALT HELD: the wall goes on its own, its corners let go. (SHIFT
+          // until 27 Oct; Shift holds the drag square now, as ARCHICAD's does,
+          // and Alt is the corner's own key -- Alt-drag detaches a corner.)
+          if (board !== 'toy') setWallLoose(md, e.altKey);
           // THE T-SQUARE HOLDS A MOVED WALL SQUARE (Movie, 18 Oct: "i like how
           // the walls move, but when the T is on they should stay moving 90
           // degrees it is free moving right now but the T is on"). The wall
           // slides across its own run only, so the walls meeting its ends
           // stretch along their own lines and stay at 90.
-          if (tsquareOn && board !== 'toy' && md.body?.start && md.body?.end) {
+          if (tsquareLive() && board !== 'toy' && md.body?.start && md.body?.end) {
             const ux = md.body.end.x - md.body.start.x, uz = md.body.end.z - md.body.start.z;
             const len = Math.hypot(ux, uz);
             if (len > 1e-6) {

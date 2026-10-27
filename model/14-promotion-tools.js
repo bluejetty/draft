@@ -1155,6 +1155,27 @@
     // compares every modifier exactly, so Ctrl+Z is not 'Z' and the undo
     // handler keeps it.
     const map = roster.bindings();
+    // T LATCHES THE T-SQUARE (Movie, 27 Oct), the chip's own press: down, the
+    // run is held square without holding anything, and SHIFT frees it while
+    // held. The binding was in SETTINGS all along and nothing read it.
+    if (map.tsquare && kb.eventMatchesBinding(event, map.tsquare)) {
+      event.preventDefault();
+      tsquareChip.click();
+      return;
+    }
+    // CTRL+G GROUPS, CTRL+SHIFT+G UNGROUPS (Movie, 27 Oct: "i use CTL-G to
+    // group and CTL SHIFT G to ungroup", ARCHICAD's keys). Both bindings were
+    // in SETTINGS already and nothing read them.
+    if (map.groupAlt && kb.eventMatchesBinding(event, map.groupAlt)) {
+      event.preventDefault();
+      groupByKey();
+      return;
+    }
+    if (map.ungroup && kb.eventMatchesBinding(event, map.ungroup)) {
+      event.preventDefault();
+      ungroupByKey();
+      return;
+    }
     const tool = roster.TOOLS.find(entry => entry.command
       && kb.eventMatchesBinding(event, map[entry.command]));
     if (!tool) return;
@@ -1560,6 +1581,22 @@
     syncAssembly();
     markDirty();
     paint();
+  };
+
+  // CTRL+G: what is picked becomes one FIXED assembly at once, the Y key's
+  // closer without the arming; CTRL+SHIFT+G: UNGROUP on what is picked.
+  const groupByKey = () => {
+    const n = selection.length;
+    if (!n) { sayOnStrip('Pick the items first, then CTRL+G makes them one assembly.'); return; }
+    createAssembly(true);
+    const group = selectedGroups()[0];
+    sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. CTRL+SHIFT+G ungroups it.`);
+  };
+  const ungroupByKey = () => {
+    const going = selectedGroups();
+    if (!going.length) { sayOnStrip('Pick an assembly first, then CTRL+SHIFT+G ungroups it.'); return; }
+    ungroupSelected();
+    sayOnStrip(`${going.map(group => group.name).join(', ')} ungrouped: the items are single again.`);
   };
 
   // ── THE ASSEMBLY KEY: Y, PICK, AND Y / ENTER / DOUBLE-CLICK ─────────────

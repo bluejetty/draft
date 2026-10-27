@@ -1265,7 +1265,7 @@
     const K = window.DraftFixtureKinds;
     if (md.free) {
       let dx = raw.x - md.grabWorld.x, dz = raw.z - md.grabWorld.z;
-      if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+      if (tsquareLive() && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
       // A PIECE LEAVES ITS RUN when it moves on its own; an island takes its
       // pieces. A new line object each time, so the undo's before keeps the old.
       const own = md.fixture.kind === 'island' || !md.riders.length ? null : `free:${md.fixture.id}`;
@@ -1284,7 +1284,7 @@
     if (fixture.kind === 'island') {
       // ANYWHERE: along the wall and off it, held square by the T-SQUARE as
       // the MOVE verb is -- the larger travel wins.
-      if (tsquareOn && board !== 'toy') { if (Math.abs(dAlong) >= Math.abs(dAcross)) dAcross = 0; else dAlong = 0; }
+      if (tsquareLive() && board !== 'toy') { if (Math.abs(dAlong) >= Math.abs(dAcross)) dAcross = 0; else dAlong = 0; }
       const offset = Math.min(Math.max(md.was.offset + dAlong, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
       const side = fixture.side === -1 ? -1 : 1;
       const standoff = Math.max(0, md.was.standoff + side * dAcross);

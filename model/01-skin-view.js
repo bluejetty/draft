@@ -127,6 +127,14 @@
   let noteEnd = 'line';
   let elevPointerTip = null;  // { u, e } -- POINTER's first tap, waiting for the text
   let tsquareOn = false;    // T-SQUARE down: the run in hand is held square
+  // SHIFT HOLDS IT SQUARE, as ARCHICAD's Shift does (Movie, 27 Oct: "it has
+  // the SHIFT for the 90 degree lines (like our T SQUARE) ... get it working
+  // fairly similar to ARCHICAD, but also change it so its a little better").
+  // The better part is the latch: T or the chip locks the T-square down, and
+  // SHIFT then frees the run while it is held. So the T-square is live when
+  // exactly one of the two is on.
+  let shiftSquare = false;
+  const tsquareLive = () => tsquareOn !== shiftSquare;
   // THE FOOT LIGHT. A PAGE SETTING, NOT DRAWING DATA -- a drawing carrying
   // "the foot light was on" would arrive in someone else's session and start
   // rounding his walls, so it rides in SKIN_KEY with the theme. (The board
