@@ -55,15 +55,20 @@
     return true;
   };
   window.addEventListener('keydown', e => {
-    if (e.key !== 'Shift' || e.repeat || !refHover || refLock || !REF_TOOLS.has(activeTool) || board === 'toy') return;
+    // ALT, NOT SHIFT, since 27 Oct: Shift holds the run square, as ARCHICAD's
+    // does, and lining up on a node moved over to Alt.
+    if (e.key !== 'Alt' || e.repeat || !refHover || refLock || !REF_TOOLS.has(activeTool) || board === 'toy') return;
     const t = e.target;
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+    // The browser's own Alt (its menu bar) is not wanted on the sheet.
+    e.preventDefault();
     refLock = { x: refHover.x, z: refHover.z, released: false, at: null };
-    sayOnStrip('LINED UP on that node -- aim along the guide, and type a length to measure it from the node. Let go of SHIFT and move to go free.');
+    sayOnStrip('LINED UP on that node -- aim along the guide, and type a length to measure it from the node. Let go of ALT and move to go free.');
     paint();
   }, true);
   window.addEventListener('keyup', e => {
-    if (e.key !== 'Shift' || !refLock) return;
+    if (e.key !== 'Alt' || !refLock) return;
+    e.preventDefault();
     refLock.released = true;
     refLock.at = cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : { x: refLock.x, z: refLock.z };
   }, true);
@@ -1032,12 +1037,18 @@
     if (!cursorWorld || !(drawsRun() || tracesLoop)) { markMagnet(null); return; }
     // A RUN HELD SQUARE asks the squared magnet, as drawPoint does; the
     // locked bearing and the protractor take no magnet at all.
-    const runs = drawsRun() && board !== 'toy' && drawStart;
-    const steered = runs && (lockedPoint(drawStart, cursorWorld) || protractorPoint(drawStart, cursorWorld));
-    const fixed = runs && !steered ? squaredAxis(drawStart, cursorWorld) : null;
+    // A LOOP'S LAST CORNER IS ITS RUN'S START (Movie, 27 Oct): the outline,
+    // floor and shape square from it too, so their ring is the squared one --
+    // without it the ring lit where the hand was and the press landed on the
+    // square.
+    const runFrom = drawStart
+      || (activeTool === 'outline' ? outlineTail() : loopCornersInHand()?.at(-1)) || null;
+    const runs = (drawsRun() || tracesLoop) && board !== 'toy' && runFrom;
+    const steered = runs && (lockedPoint(runFrom, cursorWorld) || protractorPoint(runFrom, cursorWorld));
+    const fixed = runs && !steered ? squaredAxis(runFrom, cursorWorld) : null;
     const magnet = (drawsRun() || tracesLoop) && !steered ? drawMagnet() : null;
     if (fixed) {
-      const lit = axisMagnet(squareTo(drawStart, cursorWorld), fixed, [], magnet);
+      const lit = axisMagnet(squareTo(runFrom, cursorWorld), fixed, [], magnet);
       paintMagnets(cursorWorld, magnet, lit);
       if (lit) paintDonut(lit.pt, tierOf(lit));
       markMagnet(lit);
@@ -1438,8 +1449,22 @@
     // it (the orange ray), so the loop can always be brought home. TOY keeps
     // its law: square, on the foot.
     if (board !== 'toy' && !locked) {
-      const hand = tsquareOn ? outlineHand(from, at, 90)
-        : protractorOn ? outlineHand(from, at, protractorStep) : outlineAligned(at);
+      // SQUARE, AND SNAPPED ALONG THE SQUARE (Movie, 27 Oct: "the lines for
+      // the outline house aren't landing on the proper spot perpendicular to
+      // the point selected ... even with the T on"). The squared corner took
+      // no snap at all, so the neon ring lit on the line and the press landed
+      // where the hand was. Now it is drawPoint's rule: the square holds one
+      // coordinate and a node, corner or line it crosses sets the other --
+      // and a catch is exact, so the foot does not round it away.
+      if (tsquareLive()) {
+        const square = outlineHand(from, at, 90);
+        const fixed = Math.abs(at.x - from.x) >= Math.abs(at.z - from.z) ? 'z' : 'x';
+        const caught = axisSnap({ x: square.x, y: 0, z: square.z }, fixed, [], drawMagnet());
+        if (caught) return { x: caught.x, z: caught.z };
+        const pt = onTheFoot_if() ? onTheFoot(from, square) : square;
+        return { x: pt.x, z: pt.z };
+      }
+      const hand = protractorOn ? outlineHand(from, at, protractorStep) : outlineAligned(at);
       const pt = onTheFoot_if() ? onTheFoot(from, hand) : hand;
       return { x: pt.x, z: pt.z };
     }
@@ -1521,7 +1546,7 @@
     const first = outlineCorners[0], last = outlineTail();
     // FREE, THE EDGE HOME IS WHATEVER IT IS: on DRAFTING with no instrument
     // lit the outline turns at any angle, so its last edge may too.
-    if (board !== 'toy' && !tsquareOn && !protractorOn && angleLockDeg() == null) return last;
+    if (board !== 'toy' && !tsquareLive() && !protractorOn && angleLockDeg() == null) return last;
     const prev = outlineCorners[outlineCorners.length - 2];
     const dx = first.x - last.x, dz = first.z - last.z;
     const r = Math.SQRT1_2;

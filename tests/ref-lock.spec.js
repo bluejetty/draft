@@ -1,4 +1,5 @@
-// A HOVERED NODE, AND SHIFT TO LINE UP ON IT (Movie, 23 Oct).
+// A HOVERED NODE, AND ALT TO LINE UP ON IT (Movie, 23 Oct; SHIFT until 27
+// Oct, when Shift became ARCHICAD's hold-square and this moved to Alt).
 //
 // "on ARCHICAD, i can SCROLL OVER a node/ or corner and i can use that 'node'
 // or corner (the one o most recently scrolled over become the point if i
@@ -55,19 +56,19 @@ async function tsquare(page, on) {
 }
 const newWall = d => d.walls.find(w => !['a', 'b'].includes(w.id));
 
-test('hovered, then SHIFT: the next point of a wall lies straight across from the node', async ({ page }) => {
+test('hovered, then ALT: the next point of a wall lies straight across from the node', async ({ page }) => {
   const { at } = await open(page);
   await tsquare(page, false);
   await h.armFromRail(page, 'wall');
   await press(page, at, 3, 4);
   await move(page, at, 12, 10);                 // over the node
   await move(page, at, 7, 8);                   // away from it
-  await page.keyboard.down('Shift');
+  await page.keyboard.down('Alt');
   await move(page, at, 6, 10.6);                // aiming across from it, a bit off
   expect(await lockAt(page), 'lined up on the node').toEqual([12, 10]);
   await page.mouse.click(...at(6, 10.6));
   await page.waitForTimeout(80);
-  await page.keyboard.up('Shift');
+  await page.keyboard.up('Alt');
   await page.keyboard.press('Escape');
   const w = newWall(await saved(page));
   expect(r3(w.end.z), 'straight across from the node').toBe(10);
@@ -80,9 +81,9 @@ test('a length typed while lined up is measured from the node', async ({ page })
   await h.armFromRail(page, 'wall');
   await press(page, at, 3, 4);
   await move(page, at, 12, 10);
-  await page.keyboard.down('Shift');
+  await page.keyboard.down('Alt');
   await move(page, at, 7, 10.4);
-  await page.keyboard.up('Shift');
+  await page.keyboard.up('Alt');
   await page.keyboard.type('3');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(100);
@@ -92,15 +93,15 @@ test('a length typed while lined up is measured from the node', async ({ page })
   expect([r3(w.end.x), r3(w.end.z)], 'three feet from the node, toward the hand').toEqual([9, 10]);
 });
 
-test('let go of SHIFT and move: the cursor is free and the node forgotten', async ({ page }) => {
+test('let go of ALT and move: the cursor is free and the node forgotten', async ({ page }) => {
   const { at } = await open(page);
   await h.armFromRail(page, 'wall');
   await press(page, at, 3, 4);
   await move(page, at, 12, 10);
-  await page.keyboard.down('Shift');
+  await page.keyboard.down('Alt');
   await move(page, at, 7, 10.4);
   expect(await lockAt(page)).toEqual([12, 10]);
-  await page.keyboard.up('Shift');
+  await page.keyboard.up('Alt');
   await move(page, at, 6, 7);
   expect(await lockAt(page), 'free again').toBeNull();
 });
@@ -111,9 +112,9 @@ test('a floor\'s corner lines up on a hovered node too', async ({ page }) => {
   await h.armFromRail(page, 'floor');
   // THE FIRST CORNER, lined up: it has no corner before it to run from.
   await move(page, at, 12, 0);
-  await page.keyboard.down('Shift');
+  await page.keyboard.down('Alt');
   await press(page, at, 12.3, 6);
-  await page.keyboard.up('Shift');
+  await page.keyboard.up('Alt');
   await move(page, at, 7, 7);
   await press(page, at, 6, 6);
   await press(page, at, 6, 9);

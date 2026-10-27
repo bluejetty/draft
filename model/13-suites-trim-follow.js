@@ -152,7 +152,7 @@
     markDirty();
   };
   const squared = (a, b) => {
-    if (!tsquareOn) return b;
+    if (!tsquareLive()) return b;
     return Math.abs(b.u - a.u) >= Math.abs(b.e - a.e) ? { u: b.u, e: a.e } : { u: a.u, e: b.e };
   };
   // The mark under a point on screen, nearest first, within 8 px.
@@ -752,7 +752,7 @@
   // Acceptance #4 is what keeps this honest in the other direction: in
   // DRAFTING with the T-square down, nothing squares and the same gesture
   // commits the same off-axis wall it commits today. TOY must not leak.
-  const squaring = () => tsquareOn || board === 'toy';
+  const squaring = () => tsquareLive() || board === 'toy';
 
   const squareTo = (from, at) => {
     if (!squaring() || !from) return at;
@@ -916,7 +916,7 @@
     angOut.textContent = run ? angleLabel(run.from, run.to) : '';
     protractorOut.textContent = run ? angleLabel(run.from, run.to) : '—';
     rulerChip.classList.toggle('lit', rulerOn);
-    tsquareChip.classList.toggle('lit', tsquareOn);
+    tsquareChip.classList.toggle('lit', tsquareLive());
     // THE BOARD IS NOT ASKED (Movie, 15 Oct). The chip was dark on TOY because
     // the instrument was refused there; it is offered now, and a chip that
     // took the press and stayed dark would be the worst of both.
@@ -1127,6 +1127,24 @@
   window.addEventListener('keydown', e => { if (e.key === 'Control') holdSnapOff(true); }, true);
   window.addEventListener('keyup', e => { if (e.key === 'Control') holdSnapOff(false); }, true);
   window.addEventListener('blur', () => holdSnapOff(false));
+  // ── SHIFT HELD = SQUARE (Movie, 27 Oct) ──────────────────────────────
+  //
+  // ARCHICAD's Shift: drawing, MOVE, COPY, a corner or a wall dragged, all
+  // held at 90 degrees while it is down, and free again when it comes up,
+  // mid-drag included. With the T-square latched (T, or the chip) Shift
+  // frees instead. Read off the pointer too, as CTRL is, so a key let go
+  // while the page had no focus cannot leave the run held.
+  const holdSquare = held => {
+    if (shiftSquare === held) return;
+    shiftSquare = held;
+    stripRefresh();
+    if (cursorWorld) paint();
+  };
+  window.addEventListener('keydown', e => { if (e.key === 'Shift') holdSquare(true); }, true);
+  window.addEventListener('keyup', e => { if (e.key === 'Shift') holdSquare(false); }, true);
+  window.addEventListener('blur', () => holdSquare(false));
+  ['pointerdown', 'pointermove'].forEach(type =>
+    window.addEventListener(type, e => holdSquare(!!e.shiftKey), true));
   ['pointerdown', 'pointermove'].forEach(type =>
     window.addEventListener(type, e => holdSnapOff(!!e.ctrlKey), true));
   trackChip?.addEventListener('click', () => {

@@ -1,4 +1,5 @@
-// SHIFT LETS A DRAGGED WALL GO OF ITS CORNERS (Movie, 18 Oct).
+// ALT LETS A DRAGGED WALL GO OF ITS CORNERS (Movie, 18 Oct; SHIFT until 27
+// Oct, when Shift became ARCHICAD's hold-square and this moved to Alt).
 //
 // "i'd like to be able to have an option to DISCONNECT the nodes at corners,
 // maybe by pressing SHIFT while attempting to move the line, then the nodes
@@ -39,23 +40,23 @@ async function saved(page) {
 }
 const pt = p => [Math.round(p.x * 100) / 100 + 0, Math.round(p.z * 100) / 100 + 0];
 const wallOf = (d, id) => d.walls.find(w => w.id === id);
-// Select wall-1, then drag its body 1' down with SHIFT held for `shiftFor`
+// Select wall-1, then drag its body 1' down with ALT held for `altFor`
 // of the way (1 = the whole drag, 0.5 = let go half way).
-async function dragWall(page, at, shiftFor) {
+async function dragWall(page, at, altFor) {
   await page.mouse.click(...at(10, 0));
   await page.waitForTimeout(100);
   await page.mouse.move(...at(10, 0));
   await page.mouse.down();
-  await page.keyboard.down('Shift');
+  await page.keyboard.down('Alt');
   await page.mouse.move(...at(10, 0.5), { steps: 5 });
-  if (shiftFor < 1) await page.keyboard.up('Shift');
+  if (altFor < 1) await page.keyboard.up('Alt');
   await page.mouse.move(...at(10, 1), { steps: 5 });
   await page.mouse.up();
-  if (shiftFor >= 1) await page.keyboard.up('Shift');
+  if (altFor >= 1) await page.keyboard.up('Alt');
   await page.waitForTimeout(100);
 }
 
-test('SHIFT held: the wall moves on its own; the walls it met stay where they were; UNDO joins it again', async ({ page }) => {
+test('ALT held: the wall moves on its own; the walls it met stay where they were; UNDO joins it again', async ({ page }) => {
   const { at } = await open(page);
   await dragWall(page, at, 1);
   let d = await saved(page);
@@ -72,7 +73,7 @@ test('SHIFT held: the wall moves on its own; the walls it met stay where they we
   expect(pt(wallOf(d, 'wall-2').start), 'the corner is shared again').toEqual([20, 1]);
 });
 
-test('SHIFT let go part way: the corners bounce back and stretch with it', async ({ page }) => {
+test('ALT let go part way: the corners bounce back and stretch with it', async ({ page }) => {
   const { at } = await open(page);
   await dragWall(page, at, 0.5);
   const d = await saved(page);

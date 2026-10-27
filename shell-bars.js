@@ -413,7 +413,7 @@ if (!window.DraftShellBars) {
       title="PROTRACTOR STEP — 45° or 30°; press to change it">45°</button>
 
     <button type="button" id="strip-tsquare" class="chip" data-mode-tsquare
-      title="T-SQUARE — holds the wall being drawn square to the sheet">
+      title="T-SQUARE (T) — holds what is drawn or moved square to the sheet. Or hold SHIFT for square while it is held; with the T-square down, SHIFT frees it.">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M1 3 H15"></path>
         <path d="M8 3 V15"></path>

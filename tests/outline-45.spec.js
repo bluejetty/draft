@@ -134,7 +134,10 @@ test('a first edge shorter than the close-the-loop reach is kept, not pulled hom
   await open(page, 'drafting');
   const { at, scale } = await h.planFrame(page);
   await h.selectTool(page, 'outline');
-  const step = 6 / scale;              // six pixels: inside the 8 px reach
+  // THREE PIXELS: inside the reach since 26 Oct's one snap rule (2", with a
+  // 4 px floor), where six had been inside the old 8 px one -- at six the
+  // step no longer reached the first corner and the case went untested.
+  const step = 3 / scale;
   for (const pt of [[0, 0], [step, 0], [step, 6], [0, 6]]) {
     await page.mouse.move(...at(...pt));
     await page.waitForTimeout(60);

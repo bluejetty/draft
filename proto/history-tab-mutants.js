@@ -37,15 +37,15 @@ const MUTANTS = [
     with: "",
     test: 'drawing on an older version drops the versions after it' },
   { file: 'model/16-gestures-undo.js',
-    name: 'Ctrl+Y steps nowhere',
+    name: 'Ctrl+Shift+Z steps nowhere',
     find: "      if (versions.cursor < versions.entries.length - 1) { e.preventDefault(); historyStep(1); }\n",
     with: "",
-    test: 'Ctrl+Z with no fine-grained undo left steps back a version; Ctrl+Y steps forward' },
+    test: 'Ctrl+Z with no fine-grained undo left steps back a version; Ctrl+Shift+Z steps forward' },
   { file: 'model/16-gestures-undo.js',
     name: 'Ctrl+Z with nothing to undo does nothing',
     find: "        if (versions.cursor > 0) { e.preventDefault(); historyStep(-1); }\n",
     with: "",
-    test: 'Ctrl+Z with no fine-grained undo left steps back a version; Ctrl+Y steps forward' },
+    test: 'Ctrl+Z with no fine-grained undo left steps back a version; Ctrl+Shift+Z steps forward' },
 ];
 
 const run = name => {

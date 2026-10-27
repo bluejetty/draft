@@ -1441,7 +1441,7 @@
   const stretchDestination = at => {
     const base = stretchState.base;
     let to = drawSnap(at).pt || at;
-    if (base && tsquareOn && board !== 'toy') {
+    if (base && tsquareLive() && board !== 'toy') {
       to = Math.abs(to.x - base.x) >= Math.abs(to.z - base.z) ? { x: to.x, z: base.z } : { x: base.x, z: to.z };
     }
     return { x: to.x, z: to.z };
@@ -1742,7 +1742,7 @@
       // measured along that axis (moveSeek), and a free move reads them in
       // both.
       let axis = null;
-      if (tsquareOn && board !== 'toy' && !d.set.across) {
+      if (tsquareLive() && board !== 'toy' && !d.set.across) {
         if (Math.abs(at.x - d.at.x) >= Math.abs(at.z - d.at.z)) { dz = 0; axis = 'x'; } else { dx = 0; axis = 'z'; }
       }
       // BY THE FOOT WITH THE 1' LIGHT LIT (Movie, 20 Oct: "when i MOVE a group

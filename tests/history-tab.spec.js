@@ -114,13 +114,13 @@ test('drawing on an older version drops the versions after it', async ({ page })
   expect(d.walls.map(w => Math.round(w.start.z)).sort((p, q) => p - q)).toEqual([2, 10]);
 });
 
-test('Ctrl+Z with no fine-grained undo left steps back a version; Ctrl+Y steps forward', async ({ page }) => {
+test('Ctrl+Z with no fine-grained undo left steps back a version; Ctrl+Shift+Z steps forward', async ({ page }) => {
   const { at } = await open(page);
   await wall(page, at, [2, 2], [8, 2]);
   await openTab(page);
   await rows(page).nth(1).click();   // OPENED: the jump also empties the undo stack
   await expect(page.locator('#strip-message')).toContainText(/is on the sheet/i);
-  await page.keyboard.press('Control+y');
+  await page.keyboard.press('Control+Shift+z');
   await expect(page.locator('#strip-message')).toContainText(/CURRENT version back/i);
   expect((await saved(page)).walls).toHaveLength(1);
   await page.keyboard.press('Control+z');

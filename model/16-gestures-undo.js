@@ -1276,7 +1276,7 @@
           // travel wins.
           // TWO ANCHORS ON A LINE: along it only, like a window (anchorSlide).
           if (md.slide) ({ dx, dz } = slideDelta(md.slide, dx, dz));
-          else if (tsquareOn && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+          else if (tsquareLive() && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
           // AND BY THE FOOT with the 1' light lit, the MOVE verb's rule
           // (Movie, 20 Oct: "make it work for when i moved grouped stuff too").
           const Q = window.DraftToyConstraints;
@@ -1344,8 +1344,8 @@
           // question for the board, not for this bug.
           const grabbed = md.before[0];
           const from = { x: grabbed.x, z: grabbed.z };
-          const wanted = tsquareOn ? squareTo(from, raw) : raw;
-          const fixed = tsquareOn ? squaredAxis(from, raw) : null;
+          const wanted = tsquareLive() ? squareTo(from, raw) : raw;
+          const fixed = tsquareLive() ? squaredAxis(from, raw) : null;
           // THE MAGNET ON A DRAG TOO, with SNAP lit off TOY: the corners and
           // faces of every wall the node does not belong to.
           const magnet = snapLive() && board !== 'toy' ? (md.magnet ||= dragMagnet(grabbed.vtx)) : null;
@@ -1411,14 +1411,16 @@
           // distance" exactly true, rather than true to within the float drift
           // of a hundred pointermove events.
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
-          // SHIFT HELD: the wall goes on its own, its corners let go.
-          if (board !== 'toy') setWallLoose(md, e.shiftKey);
+          // ALT HELD: the wall goes on its own, its corners let go. (SHIFT
+          // until 27 Oct; Shift holds the drag square now, as ARCHICAD's does,
+          // and Alt is the corner's own key -- Alt-drag detaches a corner.)
+          if (board !== 'toy') setWallLoose(md, e.altKey);
           // THE T-SQUARE HOLDS A MOVED WALL SQUARE (Movie, 18 Oct: "i like how
           // the walls move, but when the T is on they should stay moving 90
           // degrees it is free moving right now but the T is on"). The wall
           // slides across its own run only, so the walls meeting its ends
           // stretch along their own lines and stay at 90.
-          if (tsquareOn && board !== 'toy' && md.body?.start && md.body?.end) {
+          if (tsquareLive() && board !== 'toy' && md.body?.start && md.body?.end) {
             const ux = md.body.end.x - md.body.start.x, uz = md.body.end.z - md.body.start.z;
             const len = Math.hypot(ux, uz);
             if (len > 1e-6) {
@@ -2180,9 +2182,11 @@
       undoOnce();
       return;
     }
-    // REDO (Movie, 20 Oct): Ctrl+Y, or Ctrl+Shift+Z, steps forward through
-    // the versions -- the entries a jump back left ahead of the cursor.
-    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+    // REDO (Movie, 20 Oct): Ctrl+Shift+Z steps forward through the versions
+    // -- the entries a jump back left ahead of the cursor. CTRL+SHIFT+Z ONLY
+    // since 27 Oct ("Ctrl+Shift+Z for redo, like archicad - make ours the
+    // same please"); Ctrl+Y groups now, as Ctrl+G does.
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
       if (versions.cursor < versions.entries.length - 1) { e.preventDefault(); historyStep(1); }
     }
   });
@@ -2207,8 +2211,8 @@
   // (adoptFile, muted so it is not itself a version) and moves the cursor;
   // an edit made standing on an older entry drops the entries after it,
   // as Photoshop's history does. Ctrl+Z keeps the fine-grained undo while
-  // there is one and steps back here when there is none; Ctrl+Y or
-  // Ctrl+Shift+Z steps forward.
+  // there is one and steps back here when there is none; Ctrl+Shift+Z
+  // steps forward.
   const HISTORY_BACK = 100;
   const HISTORY_BYTES = 80 * 1024 * 1024;
   const HISTORY_COUNTED = [['walls', 'wall'], ['lines', 'line'], ['fenestrations', 'opening'],
