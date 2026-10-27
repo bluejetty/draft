@@ -53,11 +53,20 @@ test('UNDO takes back the last wall, and the house is still there after a reload
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.toyReady === '1');
   await sloppyBox(page);
-  await page.locator('#undo').click();
-  await expect(page.locator('#plan')).toHaveAttribute('data-walls', '3');
+  // Kept as drawn, before anything else touches the store.
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.toyReady === '1');
-  await expect(page.locator('#plan')).toHaveAttribute('data-walls', '3');
+  await expect(page.locator('#plan')).toHaveAttribute('data-walls', '4');
+  // One more wall, then UNDO takes it back, and the reload agrees.
+  await pressAt(page, -8, 4);
+  await pressAt(page, -8, 8);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#plan')).toHaveAttribute('data-walls', '5');
+  await page.locator('#undo').click();
+  await expect(page.locator('#plan')).toHaveAttribute('data-walls', '4');
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.toyReady === '1');
+  await expect(page.locator('#plan')).toHaveAttribute('data-walls', '4');
 });
 
 test('SAVE writes a .draft that MODEL opens, with the walls where the game drew them', async ({ page }) => {
