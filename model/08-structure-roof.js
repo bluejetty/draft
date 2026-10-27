@@ -1123,6 +1123,28 @@
   // second thing and reports success.
   const deleteSelection = () => {
     if (!drawing || !selection.length) return 0;
+    const pressMark = undoStack.length;
+    // AN AUTO STRING TAKES ITS ROW OFF THAT SIDE (Movie, 26 Oct: "when the
+    // line is deleted i'd like the other lines to re-adjust") -- see
+    // changeAutoRows. Every row a picked piece belongs to goes in one press,
+    // and the level is laid again without them.
+    const rowPicks = selection.filter(entry => entry.type === 'dimension' && isAutoRow(entry.item));
+    if (rowPicks.length) {
+      const byLevel = new Map();
+      rowPicks.forEach(({ item }) => {
+        const side = autoDimSide(item);
+        if (!side) return;
+        const key = autoRowsKey(item.levelId, item.view);
+        if (!byLevel.has(key)) byLevel.set(key, { levelId: Number(item.levelId), view: item.view || 'plan', rows: new Set() });
+        byLevel.get(key).rows.add(`${side}:${item.layer}`);
+      });
+      byLevel.forEach(({ levelId, view, rows }) => changeAutoRows(levelId, view, off => [...off, ...rows]));
+      if (undoStack.length - pressMark > 1) undoStack.push({ kind: 'batch', steps: undoStack.splice(pressMark) });
+      const n = [...byLevel.values()].reduce((sum, l) => sum + l.rows.size, 0);
+      setSelection(selection.filter(entry => !rowPicks.includes(entry)));
+      sayOnStrip(`${n === 1 ? 'That row is' : `${n} rows are`} off \u2014 the rows outside moved in. ROWS by AUTO DIMS puts ${n === 1 ? 'it' : 'them'} back, or UNDO.`);
+      if (!selection.length) return n;
+    }
     // A FIXED ASSEMBLY'S FIXTURES STAY WHEN ITS WALLS GO (Movie, 23 Oct:
     // "the shower seems to be deleted if i delete this back wall, can we do
     // the same thing we did with the toilet so the wall can be deleted"). A
@@ -1139,9 +1161,9 @@
     const staying = selection.filter(stays);
     const doomed = selection.filter(entry => !stays(entry));
     let gone = 0;
-    const mark = undoStack.length;
+    const mark = pressMark;
     doomed.forEach(entry => { if (deleteEntry(entry)) gone += 1; });
-    if (!gone) return 0;
+    if (!gone) return rowPicks.length ? 1 : 0;
     if (staying.length) {
       sayOnStrip(`${staying.length === 1 ? 'The fixture stays' : `${staying.length} fixtures stay`} where ${staying.length === 1 ? 'it' : 'they'} stood \u2014 pick one on its own to delete it. UNDO puts the walls back.`);
     }

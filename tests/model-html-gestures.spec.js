@@ -886,6 +886,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // AUTO DIMS / HAND DIMS beside the north arrow (Movie, 18 Oct):
             // each kind of string shown or hidden on the sheet.
             'AUTO DIMS', 'HAND DIMS',
+            // AND ROWS (Movie, 26 Oct): the auto rows a side, ticked on or off
+            // -- strings that measure what is drawn, so no absence row moves.
+            'ROWS',
             // §6'S THREE ANSWERS (Movie, 15 Oct), raised by DRAGGING A WALL
             // OFF ITS FOOTPRINT: "can we ask them if they would like a
             // cantilever or overhang supported by a beam ... or ... move the

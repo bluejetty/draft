@@ -148,8 +148,16 @@ if (!window.DraftAutoDims) {
     // of the plan (Movie, 11 Oct: "only need 1 mark for beams (if the beams
     // are lined up) and put it on the EXT of the plan").
     beams,
+    // THE ROWS THE DRAFTER TOOK OFF (Movie, 26 Oct: "allow the user to be
+    // able to DELETE a string ... when the line is deleted i'd like the other
+    // lines to re-adjust. and then put it back if they change their mind").
+    // `SIDE:LAYER` keys -- 'W:A-DIMS-INT' is the west side's interior row --
+    // left out of the side's stack before it is laid, so the rows outside it
+    // step in and close the gap.
+    rowsOff,
   }) {
     const exteriorBeamLines = beamLinesOf(beams);
+    const offRows = new Set(Array.isArray(rowsOff) ? rowsOff : []);
     const toCorner = point => ({ x: point.x, z: point.z, srcId: point.srcId || null });
     const boxOf = pts => ({
       minX: Math.min(...pts.map(pt => pt.x)), maxX: Math.max(...pts.map(pt => pt.x)),
@@ -560,7 +568,9 @@ if (!window.DraftAutoDims) {
           strings.push({ coords: [lo, hi], layer: DIM_LAYERS.OVERALL });
         }
         const own = side === 'N' ? minZ : side === 'S' ? maxZ : side === 'W' ? minX : maxX;
-        entries.push({ group, side, lo, hi, strings, own, edge: own, base: 0 });
+        const kept = strings.filter(string => !offRows.has(`${side}:${string.layer}`));
+        if (!kept.length) return;
+        entries.push({ group, side, lo, hi, strings: kept, own, edge: own, base: 0 });
       });
     });
     // Push each stack's base edge past every footprint sitting in its path.

@@ -1239,6 +1239,66 @@
     return step;
   };
 
+  // ── THE ROWS TAKEN OFF A SIDE ───────────────────────────────────────────
+  //
+  // Movie, 26 Oct: "allow the user to be able to DELETE a string or add a
+  // string back from AUTODIMENSION ... when the line is deleted i'd like the
+  // other lines to re-adjust. and then put it back if they change their
+  // mind". A DELETE on an auto string takes its whole ROW off that side --
+  // OPENINGS, INT WALLS, CORNERS or OVERALL -- and the level remembers it,
+  // so AUTO DIMS run again (or a wall moved) lays the side without it and
+  // the rows outside step in. The ROWS list by the AUTO DIMS chip puts one
+  // back. Kept at the top of the drawing per level and view, `dimScales`'
+  // way: `autoDimRowsOff['3|plan'] = ['W:A-DIMS-INT', ...]`.
+  const AUTO_ROW_LAYERS = Object.freeze([
+    ['A-DIMS-FENS', 'OPENINGS'], ['A-DIMS-INT', 'INT WALLS'],
+    ['A-DIMS-EXT', 'CORNERS'], ['A-DIMS-OVR', 'OVERALL']]);
+  const AUTO_ROW_SIDES = Object.freeze(['N', 'E', 'S', 'W']);
+  const autoRowsKey = (levelId, view) => `${Number(levelId)}|${view || 'plan'}`;
+  const autoRowsOff = (levelId, view) => {
+    const list = drawing?.autoDimRowsOff?.[autoRowsKey(levelId, view)];
+    return Array.isArray(list) ? list.slice() : [];
+  };
+  const setAutoRowsOff = (levelId, view, list) => {
+    const next = { ...(drawing.autoDimRowsOff || {}) };
+    const key = autoRowsKey(levelId, view);
+    const clean = [...new Set(list)].sort();
+    if (clean.length) next[key] = clean; else delete next[key];
+    if (Object.keys(next).length) drawing.autoDimRowsOff = next; else delete drawing.autoDimRowsOff;
+  };
+  // WHICH SIDE AN AUTO STRING STANDS ON: a string across the plan's width is
+  // north or south of the walls' middle, one up it east or west. Read off
+  // the walls, so it holds after a reload, which keeps no side on the record.
+  const autoDimSide = dim => {
+    const wallView = dim.view === 'e-power' ? 'plan' : (dim.view || 'plan');
+    const pts = (drawing.walls || []).filter(wall => Number(wall.levelId) === Number(dim.levelId)
+      && (wall.view || 'plan') === wallView).flatMap(wall => [wall.start, wall.end]);
+    if (!pts.length) return null;
+    const cx = (Math.min(...pts.map(p => p.x)) + Math.max(...pts.map(p => p.x))) / 2;
+    const cz = (Math.min(...pts.map(p => p.z)) + Math.max(...pts.map(p => p.z))) / 2;
+    if (Math.abs(dim.start.z - dim.end.z) < 1e-6) return dim.start.z < cz ? 'N' : 'S';
+    if (Math.abs(dim.start.x - dim.end.x) < 1e-6) return dim.start.x < cx ? 'W' : 'E';
+    return null;
+  };
+  const isAutoRow = dim => dim?.auto === true && AUTO_ROW_LAYERS.some(([layer]) => layer === dim.layer);
+  // Take rows off, or put them back, and lay the level again: ONE UNDO puts
+  // the list and the strings back as they were.
+  const changeAutoRows = (levelId, view, change) => {
+    const before = autoRowsOff(levelId, view);
+    const after = change(before.slice());
+    setAutoRowsOff(levelId, view, after);
+    const result = placeAutoDims(levelId, view);
+    const placed = result === -1 ? [] : result.placed;
+    const removed = result === -1 ? [] : result.removed;
+    undoStack.push({ kind: 'node', undo: () => {
+      setAutoRowsOff(levelId, view, before);
+      drawing.dimensions = (drawing.dimensions || []).filter(dim => !placed.includes(dim));
+      removed.forEach(dim => { if (!drawing.dimensions.includes(dim)) drawing.dimensions.push(dim); });
+    } });
+    markDirty();
+    return { placed, removed };
+  };
+
   const placeAutoDims = (levelId, view) => {
     if (!drawing) return -1;
     const G = window.DraftGeometry2D;
@@ -1285,6 +1345,7 @@
       firstOffset: autoDimFirstOffsetFt(),
       jogMergeFt: AD.JOG_MERGE_FT,
       stringSpacingFt: AD.STRING_SPACING_FT,
+      rowsOff: autoRowsOff(levelId, view),
       // THE INTERIOR STRING'S TWO INPUTS, and it draws nothing without them.
       // A wall's FACES are what that string measures to, and a face is the
       // stored line offset by a thickness this module has never known -- the
