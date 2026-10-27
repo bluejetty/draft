@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// MUTATION GATE for the hovered node SHIFT lines up on (tests/ref-lock.spec.js).
+// MUTATION GATE for the hovered node ALT lines up on (SHIFT until 27 Oct) (tests/ref-lock.spec.js).
 //
 // Movie, 23 Oct: "i can SCROLL OVER a node/ or corner ... if i press SHIFT and
 // hold the T SQUARE will line up with that previously scrolled over node and
@@ -15,11 +15,11 @@ const MUTANTS = [
   { file: 'model/10-tracking-garage.js', name: 'SHIFT lines up on nothing',
     find: "    if (!refLock || !at || !REF_TOOLS.has(activeTool)) return null;\n    const p = refAim(refLock, at);",
     with: "    return null;\n    const p = refAim(refLock, at);",
-    test: 'hovered, then SHIFT' },
+    test: 'hovered, then ALT' },
   { file: 'model/16-gestures-undo.js', name: 'the hovered node is never taken',
     find: "        if (node) refHover = { x: node.x, z: node.z };\n",
     with: "",
-    test: 'hovered, then SHIFT' },
+    test: 'hovered, then ALT' },
   { file: 'model/14-promotion-tools.js', name: 'a typed length is measured from the run, not the node',
     find: "    const fromRef = refTyped(feet);\n",
     with: "    const fromRef = null;\n",
@@ -27,7 +27,7 @@ const MUTANTS = [
   { file: 'model/16-gestures-undo.js', name: 'let go and moved, the cursor stays lined up',
     find: "      if (refLock?.released && cursorWorld && Math.hypot(at.x - refLock.at.x, at.z - refLock.at.z) * view.scale > 6) dropRefLock();\n",
     with: "",
-    test: 'let go of SHIFT and move' },
+    test: 'let go of ALT and move' },
   { file: 'model/11-floor-openings-fixtures.js', name: 'a floor corner does not line up',
     find: "  const loopPoint = (at, corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : []) => {\n    const ref = refPoint(at);\n    if (ref) return { x: ref.x, z: ref.z };\n",
     with: "  const loopPoint = (at, corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : []) => {\n",
