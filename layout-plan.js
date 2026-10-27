@@ -948,7 +948,8 @@ if (!window.DraftLayoutPlan) {
     // against the lot lines nearest the lot, the lot's own size outside that.
     // Drawn last, like every other sheet's dimensions, over what they measure.
     const render = window.DraftRender2D;
-    const rows = siteDimStrings(saved, env.pif);
+    // `siteDims: false` is a page hiding them (MODEL's AUTO DIMS chip).
+    const rows = env.siteDims === false ? [] : siteDimStrings(saved, env.pif);
     if (rows.length && render && render.drawDimension2D) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE-DIMS';
       const fmt = window.DraftFormatters || {};

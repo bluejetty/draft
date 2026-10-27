@@ -167,3 +167,36 @@ test('E1-E4 stand outside the outer row on the site plan, and nowhere else',
     const main = await marksOn(3);
     expect(main.drawn, 'a floor plan\'s marks moved').toEqual(main.record);
   });
+
+// THE CHIPS ON THE SITE TOO (Movie, 26 Oct: "the dimension scale button
+// doesn't show up on the site plan (or the autodim and hand dim buttons)
+// could we have those here too"). The rows are drawn off the lot, not
+// stored, so AUTO DIMS hides and shows them and DIM SCALE re-spaces them.
+test('on the SITE level the chips stand ready: AUTO DIMS hides the rows, DIM SCALE lays them out', async ({ page }) => {
+  await page.goto('/MODEL.dc.html');
+  await page.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 10000 });
+  await page.evaluate(async d => {
+    localStorage.clear();
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), 'model-drawing');
+  }, DRAWING);
+  await page.goto('/MODEL.html?mode=night&level=8');
+  await page.waitForFunction(() => typeof drawing !== 'undefined' && drawing && activeLevelId() === 8, null, { timeout: 10000 });
+  await expect(page.locator('[data-dims-show="auto"]')).toBeVisible();
+  await expect(page.locator('[data-dim-scale]')).toBeVisible();
+  // What MODEL hands the site painter, read off the painter itself.
+  const handed = () => page.evaluate(() => {
+    const LP = window.DraftLayoutPlan;
+    let env = null;
+    window.DraftLayoutPlan = { ...LP, drawSitePlan: (...a) => { env = a[3]; return LP.drawSitePlan(...a); } };
+    paint();
+    window.DraftLayoutPlan = LP;
+    return { rows: env && env.siteDims !== false, pif: env && env.pif };
+  });
+  expect(await handed()).toEqual({ rows: true, pif: 1 / 30 });
+  await page.locator('[data-dims-show="auto"]').click();
+  expect((await handed()).rows, 'AUTO DIMS off: no rows').toBe(false);
+  await page.locator('[data-dims-show="auto"]').click();
+  await page.locator('[data-dim-scale]').selectOption(String(1 / 60));
+  expect(await handed()).toEqual({ rows: true, pif: 1 / 60 });
+});
