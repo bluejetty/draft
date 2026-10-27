@@ -111,7 +111,17 @@
     // SNAP AND TRACK ON DRAFTING: TOY's points are the foot's. A NODE is
     // exact and skips the foot below; a CROSS LINE only sets the bearing, so
     // with the 1' light on the run still lands on the whole foot along it.
-    const snap = !fixed && board !== 'toy' ? drawSnap(wanted) : {};
+    // AND TOY TAKES THE POINT IT LIGHTS (Movie, 27 Oct: "i'm trying to snap
+    // onto the end of the line, but it is snapping me couple inches over from
+    // it"). The orange ring lit on the line's end in TOY too, and the press
+    // landed where the hand was, or the foot rounded the run past it. A node
+    // or the bullseye beats the foot on either board; TOY still takes no face
+    // and no cross line. Held square, the run slides along its square to the
+    // lit point, as axisSnap does on DRAFTING.
+    const caught = !fixed || board === 'toy' ? drawSnap(at) : {};
+    const lit = caught.node || caught.bullseye ? caught.pt : null;
+    if (fixed && lit) return fixed === 'z' ? { x: lit.x, y: 0, z: wanted.z } : { x: wanted.x, y: 0, z: lit.z };
+    const snap = !fixed && (board !== 'toy' || lit) ? caught : {};
     if (snap.pt && !snap.node && !snap.face && onTheFoot_if()) return onTheFoot(drawStart, snap.pt);
     const snapped = fixed ? axisSnap(wanted, fixed, [], board !== 'toy' ? drawMagnet() : null)
       : (snap.pt || cornerSnap(wanted, []));
