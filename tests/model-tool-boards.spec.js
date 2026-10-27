@@ -131,8 +131,10 @@ test('a key on TOY says its own name, not a refusal', async ({ page }) => {
   await open(page, base({ board: 'toy' }));
   // The refusal used to read "the TOY board does not offer ROOF". A title
   // that still said so would be the page arguing with its own keys.
-  await expect(key(page, 'roof')).toHaveAttribute('title', 'ROOF');
-  await expect(key(page, 'wall')).toHaveAttribute('title', 'WALL');
+  // Since 27 Oct the title is the name and the key's sentence ("WALL — press
+  // W to draw a wall.") -- still the tool's own words, still no refusal.
+  await expect(key(page, 'roof')).toHaveAttribute('title', 'ROOF — press O to draw a roof.');
+  await expect(key(page, 'wall')).toHaveAttribute('title', 'WALL — press W to draw a wall.');
 });
 
 test('the register ARMS a drafting tool on TOY', async ({ page }) => {
