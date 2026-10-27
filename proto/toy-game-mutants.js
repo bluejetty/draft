@@ -49,7 +49,7 @@ const MUTANTS = [
     with: "    version: 1, planTurn: 0, board: null,\n",
     test: 'SAVE writes a .draft that MODEL opens, with the walls where the game drew them' },
   { file: 'game/toy-game.js',
-    name: 'OPEN takes every storey\\'s walls onto MAIN FL',
+    name: "OPEN takes every storey's walls onto MAIN FL",
     find: "    const mine = all.filter(wall => Number(wall.levelId) === MAIN_FL\n      && ",
     with: "    const mine = all.filter(wall => ",
     test: 'OPEN reads a saved house back in' },
