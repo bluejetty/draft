@@ -1193,7 +1193,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       expect(await page.locator('input[type=file]').count()).toBe(3);
     });
 
-  test('T-SQUARE — pressing `t` does nothing the page or the file can show',
+  // T LATCHES THE T-SQUARE since 27 Oct (Movie: "get it working fairly
+  // similar to ARCHICAD ... a little better"). Until then `t` was bound in
+  // SETTINGS and read by nothing, and this test held it to doing nothing.
+  // Now it is the chip's own press: down, then up again -- and still nothing
+  // the drawing or the file can show.
+  test('T-SQUARE — `t` latches it down and lifts it again, and touches nothing in the drawing or the file',
     async ({ page }) => {
       await seeded(page);
       // LET THE RAIL SETTLE FIRST. The readout carries `rail N ms`, which the
@@ -1201,24 +1206,25 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // paint ONE PER FRAME to keep the task short, that pass spans several
       // frames after load. Snapshotting mid-pass and comparing afterwards
       // compares two different moments of an instrument, not the effect of a
-      // keypress: it read `rail 0.00 ms` before and `rail 35.20 ms` after,
-      // and blamed the T-square. Wait for it to stop moving, then measure.
+      // keypress.
       await expect
         .poll(async () => (/rail ([\d.]+) ms/.exec(await readout(page).textContent()) || [])[1],
           { timeout: 5000 })
         .not.toBe('0.00');
       await page.waitForTimeout(200);
-      const before = await readout(page).textContent();
+      // The paint time is an instrument too: a latched T-square repaints.
+      const steady = text => text.replace(/paint [\d.]+ ms/, 'paint ms');
+      const before = steady(await readout(page).textContent());
       const beforeFile = JSON.stringify(await h.savedDrawing(page));
+      const chip = page.locator('#strip-tsquare');
 
       await page.keyboard.press('t');
-      await page.keyboard.press('T');
+      await expect(chip, 't latches the T-square down').toHaveClass(/\blit\b/);
+      await page.keyboard.press('t');
+      await expect(chip, 't again lifts it').not.toHaveClass(/\blit\b/);
 
-      // NO PERSISTED CONSEQUENCE IS EXPECTED for a T-square, so the visible
-      // state is the assertion — per the rule, absence is only credible if
-      // something was actually attempted.
-      expect(await readout(page).textContent(),
-        'a T-square that had stowed or dropped would change what the page says')
+      expect(steady(await readout(page).textContent()),
+        'a T-square that had stowed or dropped anything would change what the page says')
         .toBe(before);
       expect(JSON.stringify(await h.savedDrawing(page)),
         'and it must not have touched the file either').toBe(beforeFile);
