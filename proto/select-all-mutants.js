@@ -38,8 +38,8 @@ const MUTANTS = [
     test: 'a plain A is still SHAPE' },
   { file: 'model/16-gestures-undo.js',
     name: 'CTRL+A typed in a box selects all',
-    find: "    if (typing) return;\n    if (e.key === '0') { fit(); paint(); }\n    // CTRL+A SELECTS ALL",
-    with: "    if (typing && e.key !== 'a') return;\n    if (e.key === '0') { fit(); paint(); }\n    // CTRL+A SELECTS ALL",
+    find: "    if (typing) return;\n    if (e.key === '0') { noteView(true); fit(); paint(); }\n",
+    with: "    if (typing && e.key !== 'a') return;\n    if (e.key === '0') { noteView(true); fit(); paint(); }\n",
     test: 'CTRL+A typed in a box is the box' },
 ];
 
