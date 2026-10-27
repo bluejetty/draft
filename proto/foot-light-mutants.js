@@ -61,8 +61,8 @@ const MUTANTS = [
 
   { file: 'model/13-suites-trim-follow.js',
     name: 'THE LIGHT SQUARES TOO: DRAFTING quietly loses the off-axis wall',
-    find: "  const squaring = () => tsquareOn || board === 'toy';",
-    with: "  const squaring = () => tsquareOn || board === 'toy' || footOn;",
+    find: "  const squaring = () => tsquareLive() || board === 'toy';",
+    with: "  const squaring = () => tsquareLive() || board === 'toy' || footOn;",
     test: 'the light rounds distance and squares nothing' },
 
   { file: 'model/16-gestures-undo.js',

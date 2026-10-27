@@ -42,7 +42,7 @@ const MUTANTS = [
     test: 'on DRAFTING with no instrument lit the outline turns at any angle, unrounded, and closes on the first corner' },
   { file: 'model/10-tracking-garage.js',
     name: 'a free outline still has to come home square',
-    find: "    if (board !== 'toy' && !tsquareOn && !protractorOn && angleLockDeg() == null) return last;\n",
+    find: "    if (board !== 'toy' && !tsquareLive() && !protractorOn && angleLockDeg() == null) return last;\n",
     with: '',
     test: 'on DRAFTING with no instrument lit the outline turns at any angle, unrounded, and closes on the first corner' },
   { file: 'model/10-tracking-garage.js',
