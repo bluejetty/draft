@@ -85,4 +85,13 @@ test('TOY: a run held square ends on the lit line end, not on the whole foot pas
   await hover(page, 10.1, -1.5);
   await expect(page.locator('#plan')).not.toHaveAttribute('data-snap-node', /./);
   near(await page.evaluate(() => { const p = drawPoint(cursorWorld); return [p.x, p.z]; }), [10, -1.6], 1e-3);
+  // A run an inch off the end's line stays square and ends level with it.
+  await page.keyboard.press('Escape');
+  await tapWorld(page, 10.1, -3.6);
+  near(await startOf(page), [10.1, -3.6], 1e-3);
+  await hover(page, 10.05, -0.05);
+  await expect(page.locator('#plan')).toHaveAttribute('data-snap-node', '[10,0]');
+  const end = await page.evaluate(() => { const p = drawPoint(cursorWorld); return [p.x, p.z]; });
+  near(end, [10.1, 0], 1e-3);
+  expect(end[1]).toBe(0);
 });
