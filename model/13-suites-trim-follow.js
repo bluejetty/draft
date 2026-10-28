@@ -2325,7 +2325,18 @@
       edit.dataset.hologramEditShelf = first.id;
       edit.title = 'Put a copy of its drawing on a new BONEYARD shelf to change; SAVE AS SUITE, then REFRESH';
       edit.addEventListener('click', () => { closeHologramCards(); editOnShelf(first); });
-      head.append(swatch, name, count, edit, refresh);
+      // ALIGN, THE FILE'S OWN (Movie, 28 Oct: "will need to be in each
+      // hologram card actually"): every copy of this file slid so its site
+      // plan's green registration mark sits on the drawing's -- whatever the
+      // REGISTRATION box's type list says. Only a file with a site plan.
+      const align = document.createElement('button');
+      align.type = 'button';
+      align.textContent = 'ALIGN';
+      align.dataset.hologramAlign = key;
+      align.title = 'Line this file\'s site plan green registration mark up on the drawing\'s';
+      align.hidden = !window.DraftLotSizes?.siteOutlineOf(first.source?.outlines);
+      align.addEventListener('click', () => { alignHolograms(holo => H().fileOf(holo) === key); renderHologramList(); });
+      head.append(swatch, name, count, align, edit, refresh);
       fileCard.appendChild(head);
       // ITS OWN HOLOGRAMS, ON AND OFF (Movie, 21 Oct: "a little button to
       // show a list of the HOLOGRAMS within a HOLOGRAM and a checkbox beside

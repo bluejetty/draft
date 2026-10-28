@@ -163,3 +163,97 @@ test('the own box off takes this file\'s lot line off the site plan, the sheet\'
   expect(await drew(file())).toBe(true);
   expect(await drew(d)).toBe(false);
 });
+
+// "when a user brings in another plan (which also has a site plan and a
+// green target) have a button that says ALIGN SITE PLAN GREEN REGISTRATION
+// MARKS" -- "and then align those all on that green target if they pick
+// that" (Movie, 28 Oct).
+test('ALIGN SITE PLAN GREEN REGISTRATION MARKS slides each hologram so its green mark sits on this file\'s; one UNDO', async ({ page }) => {
+  const d = withPhase1();
+  d.outlines = file().outlines;
+  d.holograms.push({ ...d.holograms[0], id: 'hologram-2', name: 'PHASE 0', x: -7, z: 11 });
+  await openWith(page, d);
+  const align = box(page).locator('[data-reg-align]');
+  await expect(align).toBeVisible();
+  await expect(align).toHaveText('ALIGN SITE PLAN GREEN REGISTRATION MARKS');
+  const greens = () => page.evaluate(() => {
+    const dr = globalThis.eval('drawing');
+    const LS = window.DraftLotSizes;
+    return window.DraftHologram.siteLots(dr).map(l => (l.key === 'own'
+      ? LS.siteDatumOf(LS.siteOutlineOf(dr.outlines), 0) : LS.siteDatumOf({ points: l.points }, 0)));
+  });
+  const before = await greens();
+  expect(before[1]).not.toEqual(before[0]);
+  const ownWalls = await page.evaluate(() => JSON.stringify(globalThis.eval('drawing').walls));
+  await align.click();
+  const after = await greens();
+  after.slice(1).forEach(g => { expect(g.x).toBeCloseTo(after[0].x, 6); expect(g.z).toBeCloseTo(after[0].z, 6); });
+  expect(after[0]).toEqual(before[0]);
+  expect(await page.evaluate(() => JSON.stringify(globalThis.eval('drawing').walls)), 'nothing of this file moved').toBe(ownWalls);
+  await page.keyboard.press('Control+z');
+  expect(await greens()).toEqual(before);
+});
+
+test('with no lot of its own, ALIGN lines the holograms up on the checked site plan', async ({ page }) => {
+  const d = withPhase1();
+  d.holograms.push({ ...d.holograms[0], id: 'hologram-2', name: 'PHASE 0', x: -7, z: 11 });
+  d.siteLots = { 'hologram-1': false, 'hologram-2': true };
+  await openWith(page, d);
+  const p2 = await page.evaluate(() => ({ ...globalThis.eval('drawing').holograms[1] }));
+  await box(page).locator('[data-reg-align]').click();
+  const hs = await page.evaluate(() => globalThis.eval('drawing').holograms.map(h => [h.x, h.z]));
+  expect(hs[1], 'the checked one is the mark, and stays').toEqual([p2.x, p2.z]);
+  expect(hs[0]).toEqual([p2.x, p2.z]);
+});
+
+// "the suites i don't want aligned that way, so this button should only be
+// for some" -- "will need to be in each hologram card actually" -- "add the
+// list of hologram TYPES (1 per suite and 1 per phase) and then allow the
+// user to checkbox which he wants aligned in addition to be able to do it on
+// the card area for the holograms" (Movie, 28 Oct).
+const withSuite = () => {
+  const d = withPhase1();
+  d.outlines = file().outlines;
+  const suiteSrc = { ...d.holograms[0].source, suiteKind: 'residential' };
+  d.holograms.push({ id: 'suite-1', name: 'SUITE A', mode: 'suite', x: 3, z: 4, angleDeg: 0, pivotX: 0, pivotZ: 0, source: suiteSrc });
+  return d;
+};
+const xz = page => page.evaluate(() => globalThis.eval('drawing').holograms.map(h => [h.id, h.x, h.z]));
+test('the TYPES list: a phase box on, a suite box off; ALIGN leaves the suite where it is until its box is on', async ({ page }) => {
+  await openWith(page, withSuite());
+  await expect(box(page).locator('[data-reg-align-type="PHASE 1"]')).toBeChecked();
+  await expect(box(page).locator('[data-reg-align-type="SUITE A"]')).not.toBeChecked();
+  const before = await xz(page);
+  await box(page).locator('[data-reg-align]').click();
+  const once = await xz(page);
+  expect(once[0]).not.toEqual(before[0]);
+  expect(once[1], 'the suite stays').toEqual(before[1]);
+  await box(page).locator('[data-reg-align-type="SUITE A"]').check();
+  await box(page).locator('[data-reg-align]').click();
+  expect((await xz(page))[1], 'checked, it aligns').not.toEqual(before[1]);
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).alignTypes).toEqual({ 'SUITE A': true });
+});
+
+test('a hologram card\'s ALIGN lines up that file alone, box or no box', async ({ page }) => {
+  await openWith(page, withSuite());
+  const before = await xz(page);
+  await page.locator('[data-mode-hologram]').click();
+  await page.locator('[data-hologram-align="SUITE A"]').click();
+  const after = await xz(page);
+  expect(after[1]).not.toEqual(before[1]);
+  expect(after[0], 'PHASE 1 untouched').toEqual(before[0]);
+});
+
+test('the box sits ON TOP of the open right panel and its tabs, not beside them', async ({ page }) => {
+  await openWith(page, withSuite());
+  await page.goto(`/MODEL.html?level=${SITE}&right=1&pane=levels`);
+  await expect(box(page)).toBeVisible({ timeout: 10000 });
+  const r = await box(page).boundingBox();
+  const vw = page.viewportSize().width;
+  expect(vw - (r.x + r.width), 'in the corner').toBeLessThan(20);
+  const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('#registration') !== null,
+    [r.x + r.width - 6, r.y + 6]);
+  expect(top, 'nothing over it').toBe(true);
+});

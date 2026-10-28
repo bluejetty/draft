@@ -131,9 +131,12 @@
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
   /* REGISTRATION (Movie, 28 Oct), seated just over the pan hint in the
-     same corner, in the panel's own surface so it reads as furniture. */
+     same corner, in the panel's own surface so it reads as furniture. ON
+     TOP of the side tabs and the open panel ("that box should cover over
+     the side tabs if those are exposed, this one will only be needed on
+     site plan but will be important to see"). */
   #registration { position:fixed; right:12px; bottom:calc(var(--readout-bottom) + 20px);
-    z-index:5; display:flex; flex-direction:column; gap:4px; padding:6px 8px;
+    z-index:7; display:flex; flex-direction:column; gap:4px; padding:6px 8px;
     border:1px solid var(--edge-panel); border-radius:4px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.04em; color: var(--ink-primary); }
@@ -149,6 +152,9 @@
   #registration .reg-sites input { width:auto; margin:0; accent-color: var(--accent-mark, var(--accent)); }
   #registration .reg-sites button { font: inherit; font-size:10px; padding:0 5px; }
   #registration label[hidden] { display:none; }
+  #registration [data-reg-align] { font: inherit; font-size:10px; letter-spacing:0.04em;
+    white-space:normal; max-width:16em; padding:3px 6px; }
+  #registration [data-reg-align][hidden] { display:none; }
   :root {
     /* THE RAIL BAND, left behind when the bar metrics went to
        shell-bars.css: only the sidebars read these two, and the bars

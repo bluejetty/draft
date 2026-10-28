@@ -1009,6 +1009,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // already placed and NOT NOW takes it back out -- both doors to
             // the AUTO BEAM row the table already carries.
             'PLACE BEAMS AND COLUMNS', 'NOT NOW',
+            // AND REGISTRATION's ALIGN (Movie, 28 Oct): slides holograms so
+            // their green site marks sit on one. It moves holograms, which
+            // the MOVE row already carries, so no absence row moves.
+            'reg-align',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a
