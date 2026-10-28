@@ -92,6 +92,18 @@ const MUTANTS = [
     find: "  #registration { position:fixed; right:12px; bottom:calc(var(--readout-bottom) + 20px);\n    z-index:7;",
     with: "  #registration { position:fixed; right:12px; bottom:calc(var(--readout-bottom) + 20px);\n    z-index:4;",
     test: 'the box sits ON TOP' },
+  // "can the corners of the site plan (and the lower right corner with the
+  // green target) all have snap nodes on the hologram site plan" (28 Oct).
+  { file: 'model/02-holograms-tags.js',
+    name: 'a hologram\'s lot line is not its wall on SITE',
+    find: "      .filter(w => w?.start && w?.end), ...hologramLotHere(holo)] : []);",
+    with: "      .filter(w => w?.start && w?.end)] : []);",
+    test: 'on SITE a hologram is picked by its lot line' },
+  { file: 'model/09-draw-move-stretch.js',
+    name: 'a hologram is not taken by its corners',
+    find: "    entries.filter(e => e.type === 'hologram').forEach(({ item }) => hologramCorners(item)\n      .forEach(v => pts.push({ x: v.x, z: v.z, node: true })));\n",
+    with: "",
+    test: 'on SITE a hologram is picked by its lot line' },
 ];
 
 const run = name => {

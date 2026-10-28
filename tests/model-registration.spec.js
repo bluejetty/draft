@@ -257,3 +257,47 @@ test('the box sits ON TOP of the open right panel and its tabs, not beside them'
     [r.x + r.width - 6, r.y + 6]);
   expect(top, 'nothing over it').toBe(true);
 });
+
+// "as a secondary method to align the site plans, can the corners of the
+// site plan (and the lower right corner with the green target) all have snap
+// nodes on the hologram site plan" (Movie, 28 Oct).
+test('on SITE a hologram is picked by its lot line, taken by its green corner, and dropped exactly on this file\'s', async ({ page }) => {
+  const d = withPhase1();
+  d.outlines = file().outlines;
+  Object.assign(d.holograms[0], { x: 40, z: -25 });
+  // Its box ticked, so its lot line shows to be taken hold of.
+  d.siteLots = { 'hologram-1': true };
+  await openWith(page, d);
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at, scale } = await h.planFrame(page);
+  const g = await page.evaluate(() => {
+    const dr = globalThis.eval('drawing');
+    const LS = window.DraftLotSizes;
+    const [own, holo] = window.DraftHologram.siteLots(dr);
+    return { own: LS.siteDatumOf(LS.siteOutlineOf(dr.outlines), 0), holo: LS.siteDatumOf({ points: holo.points }, 0),
+      edge: holo.points.slice(1, 3) };
+  });
+  // A click on the hologram's lot line picks the hologram.
+  const mid = { x: (g.edge[0].x + g.edge[1].x) / 2, z: (g.edge[0].z + g.edge[1].z) / 2 };
+  await page.mouse.click(...at(mid.x, mid.z));
+  expect(await page.evaluate(() => selection.map(s => s.type))).toEqual(['hologram']);
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press('m');
+  const off = 2 / scale;
+  await page.mouse.move(...at(g.holo.x + off, g.holo.z - off), { steps: 3 });
+  await page.waitForTimeout(100);
+  const grab = JSON.parse(await page.locator('#plan').getAttribute('data-move-grab') || 'null');
+  expect(grab, 'the circle is on its green corner').toEqual([Number(g.holo.x.toFixed(4)), Number(g.holo.z.toFixed(4))]);
+  await page.mouse.down();
+  await page.mouse.move(...at(g.own.x + off, g.own.z + off), { steps: 10 });
+  await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const now = await page.evaluate(() => {
+    const dr = globalThis.eval('drawing');
+    return window.DraftLotSizes.siteDatumOf({ points: window.DraftHologram.siteLots(dr)[1].points }, 0);
+  });
+  expect(now.x, 'on the green mark, across').toBeCloseTo(g.own.x, 6);
+  expect(now.z, 'and down').toBeCloseTo(g.own.z, 6);
+});

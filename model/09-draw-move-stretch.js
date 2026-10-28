@@ -1253,6 +1253,9 @@
   const moveGrabPoints = () => {
     const entries = selectionEntries();
     const pts = carriedPoints(entries).map(v => ({ x: v.x, z: v.z, node: true }));
+    // A HOLOGRAM IS TAKEN BY ITS CORNERS -- on SITE, its lot's (Movie, 28 Oct).
+    entries.filter(e => e.type === 'hologram').forEach(({ item }) => hologramCorners(item)
+      .forEach(v => pts.push({ x: v.x, z: v.z, node: true })));
     const G = window.DraftGeometry2D;
     const ws = entries.filter(e => e.type === 'wall').map(e => e.item);
     if (G?.wallFaceCorners && ws.length) {

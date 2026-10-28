@@ -66,9 +66,29 @@
   // all 4 of these suites with a rectagular select and then copy / flip
   // them". Its walls on this level, where they stand on the plan: a click on
   // one picks the whole hologram, and the box catches it by them.
+  // ON THE SITE PLAN ITS LOT LINE IS ITS WALL (Movie, 28 Oct: "as a
+  // secondary method to align the site plans, can the corners of the site
+  // plan (and the lower right corner with the green target) all have snap
+  // nodes on the hologram site plan"): picked by it, its corners nodes, so a
+  // MOVE takes the hologram by a lot corner and lands it on this file's.
+  // Only while its lot line shows (REGISTRATION's box).
+  const hologramLotHere = holo => {
+    if (!H() || holo?.hidden || activeLevelId() !== SITE_LEVEL_ID || !H().lotShown(String(holo.id), drawing)) return [];
+    const lot = window.DraftLotSizes?.siteOutlineOf(holo.source?.outlines);
+    if (!lot) return [];
+    const pts = H().placed(holo, lot.points);
+    return pts.map((a, i) => ({ start: a, end: pts[(i + 1) % pts.length], lotLine: true }));
+  };
   const hologramWallsHere = holo => (H() && !holo?.hidden
-    ? H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === activeLevelId()))
-      .filter(w => w?.start && w?.end) : []);
+    ? [...H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === activeLevelId()))
+      .filter(w => w?.start && w?.end), ...hologramLotHere(holo)] : []);
+  // AND ITS GREEN TARGET, a node of its own where the lot is out of square.
+  const hologramGreenHere = holo => {
+    const edges = hologramLotHere(holo);
+    if (!edges.length) return [];
+    const at = window.DraftLotSizes.siteDatumOf({ points: edges.map(e => e.start) }, drawing?.planTurn || 0);
+    return at ? [at] : [];
+  };
   const hologramPickAt = worldPt => {
     const G = window.DraftGeometry2D;
     if (!G) return null;
@@ -84,7 +104,7 @@
   // every corner of its walls here, for the middle a turn or a flip goes about.
   const hologramPivotPlaced = holo => ({ x: (Number(holo.pivotX) || 0) + (Number(holo.x) || 0),
     z: (Number(holo.pivotZ) || 0) + (Number(holo.z) || 0) });
-  const hologramCorners = holo => hologramWallsHere(holo).flatMap(w => [w.start, w.end]);
+  const hologramCorners = holo => [...hologramWallsHere(holo).flatMap(w => [w.start, w.end]), ...hologramGreenHere(holo)];
 
   // ── SUPER NODES (Movie, 20 Oct), and their going (26 Oct) ─────────────
   //
