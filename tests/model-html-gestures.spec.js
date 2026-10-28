@@ -1104,7 +1104,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // (and pitch)"): sizes for the roof the ROOF tool makes.
             'gable-eave', 'gable-pitch',
             // AND THE STAIR'S WIDTH (25 Oct): a size for the stair it places.
-            'stair-width'].sort(),
+            'stair-width',
+            // REGISTRATION's two figures on SITE (Movie, 28 Oct): the gap
+            // from the lot's green target to the house's gold one. They slide
+            // the lot the OUTLINE row already authors, so no absence moves.
+            'reg-setback', 'reg-sideyard'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
