@@ -37,6 +37,7 @@
 <script src="./cut-view-env.js"></script>
 <script src="./tour.js"></script>
 <script src="./boneyard-edit.js"></script>
+<script src="./boneyard-beams.js"></script>
 <script src="./boneyard-loops.js"></script>
 <script src="./layer-views.js"></script>
 <script src="./stair-geometry.js"></script>
@@ -217,13 +218,22 @@
     document.getElementById('dt-verbs').insertAdjacentHTML('beforeend',
       '<button type="button" id="undo" title="Undo the last change (Ctrl+Z)" disabled>UNDO</button>'
       + '<button type="button" id="break" aria-pressed="false"'
-      + ' title="Put a corner on an edge at a foot mark (B)">BREAK</button>');
+      + ' title="Put a corner on an edge at a foot mark (B)">BREAK</button>'
+      // THE BEAMS (Movie, 28 Oct: "add a beam line (in the foundation) on
+      // wireframe and remove a beamline on the main floor").
+      + '<button type="button" id="beam-add" aria-pressed="false"'
+      + ' title="Draw a beam line on this level: two clicks (E)">BEAM</button>'
+      + '<button type="button" id="column-add" aria-pressed="false"'
+      + ' title="Put a column on a beam line: click the line (C)">COLUMN</button>'
+      + '<button type="button" id="beam-delete" disabled'
+      + ' title="Delete the picked beam line or column (Delete)">DELETE</button>');
   </script>
 
   <script>
     (async () => {
       const BL = window.DraftBoneyardLoops;
       const BE = window.DraftBoneyardEdit;
+      const BB = window.DraftBoneyardBeams;
       const FORMAT = window.DraftDrawingFormat;
       const FMT = window.DraftFormatters;
       const S = window.SharedFileStore;
@@ -236,6 +246,9 @@
       const statusEl = document.getElementById('status');
       const breakBtn = document.getElementById('break');
       const undoBtn = document.getElementById('undo');
+      const beamBtn = document.getElementById('beam-add');
+      const columnBtn = document.getElementById('column-add');
+      const deleteBtn = document.getElementById('beam-delete');
       const say = text => { statusEl.textContent = text; };
       const DRIVE_THRU = './MODEL.html?from=boneyard';
       const toDriveThru = document.getElementById('to-drivethru');
@@ -295,6 +308,31 @@
       let saves = 0;
       // A push being dragged on the right: where it started and how far.
       let drag = null;
+      // THE BEAMS (boneyard-beams.js): the tool armed ('beam' | 'column' |
+      // null), the beam line or column picked, the first end of a line being
+      // drawn and where the second follows the pointer, and a drag under way.
+      let beamTool = null;
+      let beamPick = null;
+      let beamStart = null;
+      let beamHover = null;
+      let beamDrag = null;
+      // FOUNDATION first, then the floors bottom-up: a level's beams carry
+      // the floor above it, and a line moved carries the lines over it.
+      const levelOrder = () => [1, ...((stack && stack.floors) || []).slice()
+        .sort((a, b) => a.floorTop - b.floorTop).map(f => Number(f.id))];
+      // Where a level's beams stand in the 3D: under the floor they carry,
+      // their posts from the level's own floor (the footing, for FOUNDATION).
+      const beamHeights = levelId => {
+        const floors = ((stack && stack.floors) || []).slice().sort((a, b) => a.floorTop - b.floorTop);
+        if (Number(levelId) === 1) {
+          return { top: floors[0] ? floors[0].floorTop : 0,
+            foot: stack && stack.foundation ? stack.foundation.wallBottom : -8 };
+        }
+        const i = floors.findIndex(f => Number(f.id) === Number(levelId));
+        if (i < 0) return null;
+        const up = floors[i + 1];
+        return { top: up ? up.floorTop : floors[i].wallTop, foot: floors[i].floorTop };
+      };
 
       const load = async () => {
         if (!S) return null;
@@ -590,6 +628,32 @@
           x: post.point.x, z: post.point.z, foot: Number(post.foot.toFixed(4)),
           top: Number(post.top.toFixed(4)), carries: post.carries }))));
         c3.setAttribute('data-openings', openingsAttr(laid.levels));
+        // THE BEAMS AND THEIR POSTS, each level's under the floor it carries.
+        const beams3d = [];
+        if (laid.at) {
+          const d3 = preview ? preview.drawing : raw;
+          laid.levels.filter(l => l.kind !== 'roof').forEach(level => {
+            const hgt = beamHeights(BB.levelIdOf(level));
+            if (!hgt || !d3) return;
+            const { beams, columns } = BB.shown(d3, level);
+            ctx.strokeStyle = level.color;
+            ctx.lineWidth = 2.4;
+            ctx.setLineDash([10, 3, 2, 3]);
+            beams.forEach(b => {
+              const a = laid.at(b.start, hgt.top), e = laid.at(b.end, hgt.top);
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+            });
+            ctx.setLineDash([]);
+            ctx.lineWidth = 1.4;
+            columns.forEach(c => {
+              const a = laid.at(c.point, hgt.foot), e = laid.at(c.point, hgt.top);
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+            });
+            beams3d.push({ name: level.name, beams: beams.length, columns: columns.length,
+              top: Number(hgt.top.toFixed(4)) });
+          });
+        }
+        c3.setAttribute('data-beams', JSON.stringify(beams3d));
         c3.setAttribute('data-thin', thinAttr(laid.levels.map(l =>
           ({ name: l.name, lines: l.thinPolys, to: same }))));
         document.getElementById('angle').textContent = `${angle}°`;
@@ -769,6 +833,7 @@
         c2.setAttribute('data-thin', thinAttr(thinDrawn));
         strokeCut(ctx, cut, level.color, 3);
         c2.setAttribute('data-openings', openingsAttr([{ name: level.name, cut }]));
+        paintBeams2d(ctx, level);
         // ── THE STAIRS ON THIS LEVEL ──────────────────────────────────────
         //
         // Movie, 16 Oct: "can you add the stairs to the wireframe so i can
@@ -911,6 +976,10 @@
       const pick = level => {
         picked = level;
         selected = null;
+        beamPick = null;
+        beamStart = null;
+        beamHover = null;
+        syncBeamButtons();
         paintLegend();
         paintHoloLegend();
         paint3d();
@@ -1095,6 +1164,7 @@
 
       const setBreaking = on => {
         breaking = on;
+        if (on && beamTool) setBeamTool(null);
         breakBtn.setAttribute('aria-pressed', String(on));
         c2.setAttribute('data-mode', on ? 'break' : 'edit');
         if (on) say('BREAK: tap an edge where the corner goes — it lands on the nearest foot.');
@@ -1113,6 +1183,260 @@
         say('Undone.');
       });
       undoBtn.addEventListener('click', undoLast);
+
+      // ── THE BEAMS ────────────────────────────────────────────────────
+      //
+      // Movie, 28 Oct: "add a beam line (in the foundation) on wireframe and
+      // remove a beamline on the main floor, but the 2 beamlines on the main
+      // floor should be alligned with 2 of the foundation beamlines in the
+      // center". A level's own lines and posts are drawn over its bone, the
+      // level below's faint under them to line up on; BEAM draws a line (two
+      // clicks, square, snapped to a wall or to a line below), COLUMN puts a
+      // post on a line, a press picks a line or a post and a drag moves it,
+      // and DELETE takes it. The arithmetic is boneyard-beams.js's.
+      const reachFt = px => px / frame.s;
+      const beamLevel = () => (picked && picked.kind !== 'roof' ? picked : null);
+      const rnd = v => Math.round(v * 1e4) / 1e4;
+      const syncBeamButtons = () => {
+        deleteBtn.disabled = !beamPick;
+        c2.setAttribute('data-beam-pick', beamPick ? JSON.stringify(beamPick) : '');
+      };
+      const setBeamTool = tool => {
+        beamTool = tool;
+        beamStart = null;
+        beamHover = null;
+        if (tool) { setBreaking(false); beamPick = null; syncBeamButtons(); }
+        beamBtn.setAttribute('aria-pressed', String(tool === 'beam'));
+        columnBtn.setAttribute('aria-pressed', String(tool === 'column'));
+        c2.setAttribute('data-beam-tool', tool || '');
+        if (tool === 'beam') say('BEAM: click where the line starts — on a wall, or over a line of the level below.');
+        if (tool === 'column') say('COLUMN: click a beam line where the column goes.');
+        paint2d();
+      };
+      beamBtn.addEventListener('click', () => setBeamTool(beamTool === 'beam' ? null : 'beam'));
+      columnBtn.addEventListener('click', () => setBeamTool(beamTool === 'column' ? null : 'column'));
+
+      // A point onto the nearest edge of the level's bone, within 12 px, or
+      // to the nearest inch: a beam line runs wall to wall.
+      const snapToBone = (level, at) => {
+        const reach = reachFt(12);
+        let best = null;
+        level.loops.forEach(loop => loop.points.forEach((a, i) => {
+          const b = loop.points[(i + 1) % loop.points.length];
+          const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz;
+          if (L2 < 1e-9) return;
+          const t = Math.max(0, Math.min(1, ((at.x - a.x) * dx + (at.z - a.z) * dz) / L2));
+          const p = { x: a.x + t * dx, z: a.z + t * dz };
+          const dist = Math.hypot(p.x - at.x, p.z - at.z);
+          if (dist <= reach && (!best || dist < best.dist)) best = { p, dist };
+        }));
+        return best ? best.p : { x: Math.round(at.x * 12) / 12, z: Math.round(at.z * 12) / 12 };
+      };
+      const drawnLine = (level, at) => BB.squareEnd(raw, { level, a: beamStart, b: snapToBone(level, at),
+        snapFt: reachFt(12), levelOrder: levelOrder() });
+
+      const paintBeams2d = (ctx, level) => {
+        const d = preview ? preview.drawing : raw;
+        if (!d || level.kind === 'roof') {
+          c2.setAttribute('data-beams', '[]');
+          c2.setAttribute('data-columns', '[]');
+          return;
+        }
+        const order = levelOrder();
+        const at = order.indexOf(BB.levelIdOf(level));
+        const beamInk = skin['draw-beam'] || '#b8834e';
+        const colInk = skin['draw-column'] || '#dddddd';
+        const mark = skin['accent-mark'] || '#ffb000';
+        const line = (a, b) => {
+          const p = toScreen(a), q = toScreen(b);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+        };
+        // THE LEVEL BELOW'S LINES, faint: what a line here is lined up over.
+        const belowBeams = at > 0
+          ? BB.shown(d, { kind: order[at - 1] === 1 ? 'foundation' : 'floor', levelId: order[at - 1] }).beams : [];
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = beamInk;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 5]);
+        belowBeams.forEach(b => line(b.start, b.end));
+        ctx.restore();
+        const { beams, columns } = BB.shown(d, level);
+        const pickedBeam = beamPick && beamPick.type === 'beam'
+          ? beams.find(b => Number(b.id) === Number(beamPick.id)) : null;
+        const row = pickedBeam ? BB.rowOf(d, pickedBeam) : [];
+        ctx.save();
+        ctx.lineWidth = 3;
+        ctx.setLineDash([14, 4, 3, 4]);
+        beams.forEach(b => { ctx.strokeStyle = row.includes(b) ? mark : beamInk; line(b.start, b.end); });
+        ctx.restore();
+        columns.forEach(c => {
+          const p = toScreen(c.point);
+          const on = beamPick && beamPick.type === 'column' && Number(beamPick.id) === Number(c.id);
+          ctx.fillStyle = on ? mark : colInk;
+          ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+          ctx.strokeStyle = on ? mark : beamInk;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(p.x - 4, p.y - 4, 8, 8);
+        });
+        if (beamStart && beamHover) {
+          ctx.save();
+          ctx.strokeStyle = mark;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([8, 4]);
+          line(beamHover.a, beamHover.b);
+          ctx.restore();
+          const len = Math.hypot(beamHover.b.x - beamHover.a.x, beamHover.b.z - beamHover.a.z);
+          const q = toScreen(beamHover.b);
+          ctx.fillStyle = mark;
+          ctx.font = '12px "DM Mono", monospace';
+          ctx.fillText(ft(len), q.x + 8, q.y - 8);
+        }
+        c2.setAttribute('data-beams', JSON.stringify(beams.map(b => ({ id: b.id,
+          a: [rnd(b.start.x), rnd(b.start.z)], b: [rnd(b.end.x), rnd(b.end.z)], auto: b.auto === true }))));
+        c2.setAttribute('data-columns', JSON.stringify(columns.map(c => ({ id: c.id,
+          at: [rnd(c.point.x), rnd(c.point.z)] }))));
+        c2.setAttribute('data-beams-below', String(belowBeams.length));
+      };
+
+      const beamWords = {
+        TOO_SHORT: 'a beam line is at least a foot long',
+        NO_BEAM: 'that beam line is not in the drawing any more',
+        NO_COLUMN: 'that column is not in the drawing any more',
+        ON_ANGLE: 'that beam is on an angle — it can be deleted, not dragged',
+        NO_BEAM_HERE: 'a column goes on a beam line — click the line',
+        NO_MOVE: 'nothing to move',
+      };
+      const beamWhy = reason => beamWords[reason] || `cannot: ${reason}`;
+      const moveWords = (report, land) => {
+        const parts = [`beam line moved ${ft(report.deltaFt)}`];
+        if (land && land.snapped != null) parts.push('lined up over the line below');
+        if (report.carried) parts.push(`${report.carried} line${report.carried === 1 ? '' : 's'} above followed`);
+        if (report.posts) parts.push(`${report.posts} column${report.posts === 1 ? '' : 's'} with it`);
+        return parts.join(' · ');
+      };
+      const commitBeam = queued(async (result, words) => {
+        if (readOnly()) { say(leaseWords()); paintAll(); return; }
+        await commit(result);
+        syncBeamButtons();
+        paint2d();
+        if (words) say(words);
+      });
+      const addBeamLine = (level, sq) => {
+        const result = BB.addBeam(raw, { level, a: sq.a, b: sq.b });
+        if (!result.ok) { say(beamWhy(result.reason)); paint2d(); return; }
+        beamPick = { type: 'beam', id: result.report.beamId };
+        const posts = result.report.posts;
+        commitBeam(result, `${level.name}: beam line ${ft(result.report.lengthFt)}`
+          + (sq.snapped != null ? ', over the line below' : '')
+          + (posts ? ` · ${posts} column${posts === 1 ? '' : 's'} under it` : '')
+          + ' — click where the next one starts, or BEAM again to stop.');
+      };
+      const deletePicked = () => {
+        if (!beamPick) return;
+        if (readOnly()) { say(leaseWords()); return; }
+        const result = beamPick.type === 'beam'
+          ? BB.deleteBeam(raw, { beamId: beamPick.id })
+          : BB.deleteColumn(raw, { columnId: beamPick.id });
+        if (!result.ok) { say(beamWhy(result.reason)); return; }
+        const words = beamPick.type === 'beam'
+          ? `beam line deleted${result.report.posts ? `, with its ${result.report.posts} column${result.report.posts === 1 ? '' : 's'}` : ''}`
+          : 'column deleted';
+        beamPick = null;
+        commitBeam(result, words);
+      };
+      deleteBtn.addEventListener('click', deletePicked);
+
+      // A press: the tools first, then a post, then a line. Returns true
+      // when the press was the beams' and the bone is not to see it.
+      const beamPointerDown = (e, x, y) => {
+        const level = beamLevel();
+        if (!level || !frame || breaking) return false;
+        const at = toWorld(x, y);
+        if (beamTool === 'beam') {
+          if (readOnly()) { say(leaseWords()); return true; }
+          if (!beamStart) {
+            beamStart = snapToBone(level, at);
+            beamHover = { a: beamStart, b: beamStart };
+            say('BEAM: click where the line ends.');
+            paint2d();
+            return true;
+          }
+          const sq = drawnLine(level, at);
+          beamStart = null;
+          beamHover = null;
+          addBeamLine(level, sq);
+          return true;
+        }
+        if (beamTool === 'column') {
+          if (readOnly()) { say(leaseWords()); return true; }
+          const result = BB.addColumn(raw, { level, at, reach: reachFt(10) });
+          if (!result.ok) { say(beamWhy(result.reason)); return true; }
+          beamPick = { type: 'column', id: result.report.columnId };
+          commitBeam(result, `${level.name}: column added — click another line, or COLUMN again to stop.`);
+          return true;
+        }
+        // A PRESS ON THE BONE IS THE BONE'S: a line ends on a wall, so near
+        // its end the wall is what was meant, and the line is picked along
+        // its length.
+        if (edgeUnder(x, y)) return false;
+        const col = BB.columnNear(raw, level, at, reachFt(8));
+        const beam = col ? null : BB.beamNear(raw, level, at, reachFt(6));
+        if (!col && !beam) {
+          if (beamPick) { beamPick = null; syncBeamButtons(); paint2d(); }
+          return false;
+        }
+        selected = null;
+        beamPick = col ? { type: 'column', id: col.id } : { type: 'beam', id: beam.id };
+        syncBeamButtons();
+        beamDrag = { x, y, pick: beamPick, line: beam ? BB.rowLine(BB.rowOf(raw, beam)) : null,
+          moved: false, result: null, words: '' };
+        c2.setPointerCapture(e.pointerId);
+        paint2d();
+        say(col ? `${level.name}: column picked — drag it along its line, or DELETE.`
+          : `${level.name}: beam line picked — drag it across, or DELETE. A line on a floor above standing over it goes with it.`);
+        return true;
+      };
+      const beamPointerMove = e => {
+        const box = c2.getBoundingClientRect();
+        const px = e.clientX - box.left, py = e.clientY - box.top;
+        if (beamTool === 'beam' && beamStart) {
+          const level = beamLevel();
+          if (level) { beamHover = drawnLine(level, toWorld(px, py)); paint2d(); }
+          return true;
+        }
+        if (!beamDrag) return false;
+        if (!beamDrag.moved && Math.hypot(px - beamDrag.x, py - beamDrag.y) < 3) return true;
+        beamDrag.moved = true;
+        let result = null;
+        if (beamDrag.pick.type === 'beam') {
+          const line = beamDrag.line;
+          if (!line) { say(beamWhy('ON_ANGLE')); return true; }
+          const rawDeltaFt = (line.axis === 'x' ? py - beamDrag.y : px - beamDrag.x) / frame.s;
+          const land = BB.landing(raw, { beamId: beamDrag.pick.id, rawDeltaFt,
+            snapFt: reachFt(10), levelOrder: levelOrder() });
+          result = land.deltaFt ? BB.moveBeam(raw, { beamId: beamDrag.pick.id,
+            deltaFt: land.deltaFt, levelOrder: levelOrder() }) : null;
+          beamDrag.words = result && result.ok ? moveWords(result.report, land) : '';
+        } else {
+          result = BB.moveColumn(raw, { columnId: beamDrag.pick.id, to: toWorld(px, py) });
+          beamDrag.words = result && result.ok ? 'column moved along its line' : '';
+        }
+        beamDrag.result = result && result.ok ? result : null;
+        preview = beamDrag.result
+          ? { drawing: beamDrag.result.drawing, levels: BL.boneLevels(beamDrag.result.drawing, stack) } : null;
+        say(beamDrag.words);
+        paintAll();
+        return true;
+      };
+      const beamPointerUp = () => {
+        if (!beamDrag) return false;
+        const was = beamDrag;
+        beamDrag = null;
+        preview = null;
+        if (was.result) commitBeam(was.result, was.words); else paintAll();
+        return true;
+      };
 
       // A press on an edge picks it, and a drag pushes it -- in whole feet,
       // square to itself, shown as it goes and done when the finger lifts.
@@ -1147,6 +1471,7 @@
       c2.addEventListener('pointerdown', e => {
         const box = c2.getBoundingClientRect();
         const x = e.clientX - box.left, y = e.clientY - box.top;
+        if (beamPointerDown(e, x, y)) return;
         const dot = !breaking ? dotUnder(x, y) : null;
         if (dot) {
           selected = null;
@@ -1171,6 +1496,7 @@
         say(`${picked.name}: ${len} edge picked — drag it, or use the arrow keys, a foot at a time.`);
       });
       c2.addEventListener('pointermove', e => {
+        if (beamPointerMove(e)) return;
         if (dotDrag) {
           const box = c2.getBoundingClientRect();
           const dx = e.clientX - box.left - dotDrag.x, dy = e.clientY - box.top - dotDrag.y;
@@ -1198,6 +1524,7 @@
         paintAll();
       });
       c2.addEventListener('pointerup', async () => {
+        if (beamPointerUp()) return;
         if (dotDrag) {
           const dot = dotDrag;
           dotDrag = null;
@@ -1218,8 +1545,19 @@
 
       window.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoLast(); return; }
-        if (e.key === 'Escape') { setBreaking(false); selected = null; paint2d(); return; }
+        if (e.key === 'Escape') {
+          setBreaking(false);
+          if (beamTool) setBeamTool(null);
+          beamPick = null;
+          syncBeamButtons();
+          selected = null;
+          paint2d();
+          return;
+        }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && beamPick) { e.preventDefault(); deletePicked(); return; }
         if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) { setBreaking(!breaking); return; }
+        if (e.key.toLowerCase() === 'e' && !e.ctrlKey && !e.metaKey) { setBeamTool(beamTool === 'beam' ? null : 'beam'); return; }
+        if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) { setBeamTool(beamTool === 'column' ? null : 'column'); return; }
         const loop = selected && picked && picked.loops[selected.loopIndex];
         const edge = loop && BE.edgeOf(loop.points, selected.edgeIndex);
         // WITH AN EDGE PICKED the arrows push it a foot; without, left and
