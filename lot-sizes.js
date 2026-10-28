@@ -548,6 +548,7 @@ if (!window.DraftLotSizes) {
     bestLotTierFor,
     houseBoxOf,
     siteDatumOf,
+    lotAxes,
     placeLotFor,
     houseFaceOf,
     siteOutlineOf,

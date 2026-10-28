@@ -2057,6 +2057,7 @@
     // button beside an arrow that is not there.
     if (northDock) northDock.hidden = true;
     if (typeof syncBoneGoes === 'function') syncBoneGoes();
+    paintRegistration();
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);

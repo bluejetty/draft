@@ -1252,6 +1252,8 @@
   // answers it. A `const` arrow down there would be in its temporal dead
   // zone from up here, which is a crash rather than a missing repaint.
   let paintLotPick = () => {};
+  // The REGISTRATION box's numbers, on every paint (10-tracking-garage.js).
+  let paintRegistration = () => {};
 
   const goToLevel = id => {
     // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the

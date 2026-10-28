@@ -837,7 +837,10 @@ if (!window.DraftLayoutPlan) {
   function sitePlanParts(saved) {
     const outlines = (Array.isArray(saved?.outlines) ? saved.outlines : [])
       .filter(item => item && Array.isArray(item.points) && item.points.length > 2);
-    const lot = outlines.find(item => item.site === true) || null;
+    // THIS FILE'S LOT, unless its box in REGISTRATION is off (hologram.js
+    // siteLots, Movie 28 Oct: "no double lines").
+    const lot = saved?.siteLots?.own === false ? null
+      : outlines.find(item => item.site === true) || null;
     const bodies = outlines.filter(item => item.site !== true
       && num(item.levelId) !== null && num(item.levelId) > 1
       && num(item.levelId) !== SITE_LEVEL_ID && num(item.levelId) !== 7);
