@@ -500,12 +500,92 @@
     });
     return gone;
   };
+  // ── EXTEND A ROOF EDGE (Movie, 28 Oct) ──────────────────────────────────
+  //
+  // "could i make the EXTEND command work (i also tried to select the top of
+  // wall outline but i can't select it" -- "extend the roof to the edge of
+  // the wall" -- "the edge of the roof that i select" -- "than i could line up
+  // the rest of the roof off of that". EXTEND pressed on a roof's edge slides
+  // that whole edge straight out, square to itself, to the nearest edge ahead
+  // that runs the same way across it: a wall's face (the wall tops the ROOF
+  // plan draws, a hologram's walls), a line, or another roof's edge -- the
+  // selected walls and lines only, when there are any. It is MOVE's edge
+  // slide (slideEdge), so the overhang goes with it. One UNDO.
+  const ROOF_EXTEND_PARALLEL = 0.02;
+  const roofExtendTargets = roof => {
+    const G = window.DraftGeometry2D;
+    const thick = openingThicknessFt();
+    const picked = selection.filter(e => e.type === 'wall' || e.type === 'line').map(e => e.item);
+    const seg = s => ({ a: { x: s.start.x, z: s.start.z }, b: { x: s.end.x, z: s.end.z } });
+    if (picked.length) {
+      const pickedWalls = picked.filter(w => walls().includes(w));
+      return [...G.wallFaceLines(pickedWalls, thick), ...picked.filter(l => !pickedWalls.includes(l)).map(seg)];
+    }
+    let standing = walls();
+    if (!standing.length && activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls && drawing) {
+      standing = G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],
+        floors: drawing.floors || [], levels: drawing.levels || [] });
+    }
+    const holo = holograms().flatMap(hologramWallsHere);
+    const others = roofs().filter(r => r !== roof).flatMap(r => r.points.map((p, i) =>
+      ({ a: p, b: r.points[(i + 1) % r.points.length] })));
+    return [...G.wallFaceLines([...standing, ...holo], thick), ...lines().map(seg), ...others];
+  };
+  // How far edge i of the roof slides along slideEdge's normal to land on the
+  // nearest target ahead, or null.
+  const roofExtendDist = (roof, i) => {
+    const pts = roof.points, n = pts.length, a = pts[i], b = pts[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    if (len < 1e-6) return null;
+    const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len }, nn = { x: -u.z, z: u.x };
+    const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    const out = pointInRing(pts, { x: mid.x + nn.x * 0.01, z: mid.z + nn.z * 0.01 }) ? -1 : 1;
+    let best = null;
+    roofExtendTargets(roof).forEach(t => {
+      const tx = t.b.x - t.a.x, tz = t.b.z - t.a.z, tl = Math.hypot(tx, tz);
+      if (tl < 1e-6 || Math.abs(u.x * tz - u.z * tx) / tl > ROOF_EXTEND_PARALLEL) return;
+      const d = (t.a.x - a.x) * nn.x + (t.a.z - a.z) * nn.z;
+      if (d * out <= 1e-4) return;
+      const s0 = (t.a.x - a.x) * u.x + (t.a.z - a.z) * u.z, s1 = (t.b.x - a.x) * u.x + (t.b.z - a.z) * u.z;
+      if (Math.min(len, Math.max(s0, s1)) - Math.max(0, Math.min(s0, s1)) <= 1e-4) return;
+      if (best == null || Math.abs(d) < Math.abs(best)) best = d;
+    });
+    return best;
+  };
+  const roofExtendAt = at => {
+    if (!filterAllows('roof')) return null;
+    for (const roof of roofs()) {
+      const i = roofEdgeNear(roof, at);
+      if (i != null) return { roof, i };
+    }
+    return null;
+  };
+  const roofExtendPress = hit => {
+    const { roof, i } = hit;
+    const dist = roofExtendDist(roof, i);
+    if (dist == null) {
+      sayOnStrip('EXTEND — nothing runs across ahead of that roof edge. Select the wall it should reach, then press the edge.');
+      return;
+    }
+    const before = roofBefore(roof);
+    normaliseForMove(roof);
+    roof.points = slideEdge(roof.points, i, dist);
+    if (roof.footprint) roof.footprint = slideEdge(roof.footprint, i, dist);
+    tidyRoof(roof, [i, (i + 1) % roof.points.length]);
+    undoStack.push({ kind: 'props', edits: [{ item: roof, before }] });
+    markDirty();
+    sayOnStrip(`ROOF EDGE EXTENDED ${window.DraftFormatters.formatArchitecturalInches(Math.abs(dist) * 12)} to the edge ahead. Press another edge, or UNDO puts it back.`);
+    paint();
+  };
   const trimPress = (at, e, tool) => {
     const mode = (tool === 'extend') !== !!(e && e.shiftKey) ? 'extend' : 'trim';
+    // A ROOF EDGE UNDER THE PRESS, EXTENDING: the roof's own slide.
+    const roofHit = mode === 'extend' && !trimSegAt(at) ? roofExtendAt(at) : null;
+    if (roofHit) { roofExtendPress(roofHit); return; }
     const plan = trimPlan(at, mode);
     if (!plan) {
       sayOnStrip(mode === 'trim' ? 'TRIM — press on the piece of a wall or line to take away.'
-        : 'EXTEND — press near the end of a wall or line.');
+        : 'EXTEND — press near the end of a wall or line, or on a roof edge.');
       return;
     }
     if (plan.why) {

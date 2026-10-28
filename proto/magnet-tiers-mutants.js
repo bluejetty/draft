@@ -26,7 +26,7 @@ const MUTANTS = [
     test: 'a node reaches 2", a crossing that acts like one 1 1/2"' },
   { file: 'model/07-walls-magnet.js',
     name: 'a crossing is no corner',
-    find: "    crossingCache = { key, list: G.lineCrossings(runsHere()) };\n",
+    find: "    crossingCache = { key, list: G.lineCrossings([...runsHere(), ...tops]) };\n",
     with: '    crossingCache = { key, list: [] };\n',
     test: 'a node reaches 2", a crossing that acts like one 1 1/2"' },
   { file: 'model/10-tracking-garage.js',

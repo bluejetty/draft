@@ -859,7 +859,14 @@
     if (!G?.wallFaceLines || !drawing) return [];
     const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
     if (faceLineCache.key === key) return faceLineCache.list;
-    faceLineCache = { key, list: G.wallFaceLines(walls(), openingThicknessFt()) };
+    // AND ON THE ROOF PLAN, THE WALL TOPS IT DRAWS (Movie, 28 Oct: "looks
+    // like the top ceiling wall doesn't snap"): the faces of the walls the
+    // roofs rest on, as wallFaceNodes already gives their corners.
+    const own = walls();
+    const segs = own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls
+      ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],
+        floors: drawing.floors || [], levels: drawing.levels || [] }) : []);
+    faceLineCache = { key, list: G.wallFaceLines(segs, openingThicknessFt()) };
     return faceLineCache.list;
   };
   // ── THE ONE SNAP RULE (Movie, 25-26 Oct) ─────────────────────────────
@@ -945,7 +952,10 @@
     if (!G?.lineCrossings || !drawing) return [];
     const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
     if (crossingCache.key === key) return crossingCache.list;
-    crossingCache = { key, list: G.lineCrossings(runsHere()) };
+    // ON THE ROOF PLAN the wall tops' faces cross the lines drawn over them
+    // too (Movie, 28 Oct: "nodes at intersections").
+    const tops = walls().length ? [] : wallFaceSegs().map(f => ({ start: f.a, end: f.b }));
+    crossingCache = { key, list: G.lineCrossings([...runsHere(), ...tops]) };
     return crossingCache.list;
   };
   // EVERY YELLOW CORNER: the faces' corners and the crossings.
