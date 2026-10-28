@@ -1576,6 +1576,7 @@
       ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT` : ''),
   });
 
+  const LOWER_ROOF_ALPHA = 0.5;
   const paintRoofs = () => {
     const R = window.DraftRender2D;
     const G = window.DraftGeometry2D;
@@ -1587,11 +1588,23 @@
       ? G.roofBearing({ roofs: roofs(), walls: drawing.walls || [],
         outlines: drawing.outlines || [], levels: drawing.levels || [] })
       : []).map(b => [b.roof, b]));
+    let lowered = 0;
     roofs().forEach(roof => {
       if ((roof.points || []).length < 3) return;
       const b = bearing.get(roof);
+      // A LOWER ROOF, LIGHTER ON THE ROOF PLAN (Movie, 27 Oct: "i think we
+      // already set it up for the lower roofs to show on the ROOF PLAN but
+      // maybe shaded lighter?"): one dropped onto a storey below, or drawn on
+      // one, is under the eye there, not level with the main roof.
+      const lower = roof.drawnOn != null && activeLevelId() === ROOF_LEVEL_ID;
+      if (lower) { ctx.save(); ctx.globalAlpha *= LOWER_ROOF_ALPHA; lowered += 1; }
       R.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {}, paintEnv());
+      if (lower) ctx.restore();
     });
+    // THE SHEET ONLY: the rail paints each level's thumbnail through here.
+    if (ctx.canvas === canvas) {
+      canvas.dataset.lowerRoofs = String(lowered);
+    }
     const thicknessFt = openingThicknessFt();
     // EVERY wall top a roof rests on -- entry and garage too -- once each,
     // not roof by roof (geometry-2d roofPlanWalls).
