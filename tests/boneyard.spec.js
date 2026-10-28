@@ -103,6 +103,32 @@ test('the foundation\'s garage loop is the floor\'s, solid, and not doubled unde
     expect(out.own, 'his own foundation outline stands alone').toEqual([{ garage: true, id: 'fg' }]);
   });
 
+// THE LOT IS NO ROOF (Movie's PHASE2, 28 Oct: "still shows on the wireframe
+// of the extra roof"). A file saved before MODEL learned to drop them carries
+// roofs built off the SITE lot; the wireframe never stands them up.
+test('a roof built from the SITE lot is not on the wireframe; a storey roof is',
+  async ({ page }) => {
+    await boneyardOfTwoStorey(page);
+    const ids = await page.evaluate(() => {
+      const BL = window.DraftBoneyardLoops;
+      const sq = (x, z, s) => [{ x, z }, { x: x + s, z }, { x: x + s, z: z + s }, { x, z: z + s }];
+      const stack = { floors: [{ id: 3, name: 'MAIN FL', floorTop: 0, wallTop: 8 }],
+        foundation: { wallBottom: -8 } };
+      const d = {
+        outlines: [{ id: 'h', levelId: 3, points: sq(0, 0, 30) },
+          { id: 'lot', levelId: 8, site: true, points: sq(-100, -100, 300) }],
+        walls: [], fenestrations: [],
+        roofs: [
+          { id: 'lot-roof', levelId: 8, sourceLevelId: 3, sourceShapeId: 'lot', overhang: 2, edges: ['eave', 'eave', 'eave', 'eave'], points: sq(-100, -100, 300) },
+          { id: 'main-roof', levelId: 3, sourceLevelId: 3, sourceShapeId: 'h', overhang: 2, edges: ['eave', 'eave', 'eave', 'eave'], points: sq(-2, -2, 34) },
+        ],
+      };
+      const roof = BL.boneLevels(d, stack).find(l => l.kind === 'roof');
+      return roof ? roof.loops.map(l => l.id) : [];
+    });
+    expect(ids).toEqual(['main-roof']);
+  });
+
 // Movie, 16 Oct: "in the 3D Iso rotation control up near middle of screen
 // put in up and down arrows over the rotation and 15 degree iterations in
 // those directions too".

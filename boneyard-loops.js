@@ -245,8 +245,13 @@ if (!window.DraftBoneyardLoops) {
     // One ROOF level still -- one button, one colour -- with each loop
     // carrying the height and the floor it stands on.
     if (ownRoof && inset && inset.length >= 3) thinOf(ownRoof, top.floor.wallTop);
+    // A ROOF BUILT FROM THE LOT is no roof (Movie's PHASE2, 28 Oct): MODEL
+    // drops it on open, but a file not saved since still carries it.
+    const lots = new Set(((drawing && drawing.outlines) || [])
+      .filter(o => o && o.site === true).map(o => String(o.id)));
     ((drawing && drawing.roofs) || []).forEach(roof => {
       if (roof.sourceLevelId == null || roof.garage || (roof.points || []).length < 3) return;
+      if (lots.has(String(roof.sourceShapeId || ''))) return;
       const on = floors.find(f => Number(f.floor.id) === Number(roof.sourceLevelId));
       const pts = on && footprint(roof);
       if (!pts || pts.length < 3) return;
