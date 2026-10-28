@@ -67,6 +67,11 @@
     // ENTER or DOUBLE CLICK or press Y again to close the assembly as one new
     // unit". Y is the binding the old page already carried for `group`.
     { id: 'assembly',     name: 'ASSEMBLY',     group: 'draw',  kind: 'contextual', command: 'group' },
+    // MULTIPLE (Movie, 27 Oct: "i notice we don't have a MULTIPLE button yet.
+    // put a button in the DRAFTING menu we can work on it later") --
+    // ARCHICAD's Multiply. A PLACEHOLDER: the key is there and says it is
+    // coming; it arms nothing.
+    { id: 'multiple',     name: 'MULTIPLE',     group: 'draw',  kind: 'contextual', command: null, placeholder: true },
     { id: 'wall',         name: 'WALL',         group: 'build', kind: 'contextual', command: 'wall' },
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },

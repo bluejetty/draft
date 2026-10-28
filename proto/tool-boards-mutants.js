@@ -48,7 +48,7 @@ const MUTANTS = [
     test: 'no key is down on TOY' },
   { file: 'model/14-promotion-tools.js',
     name: 'a key still says the board refuses it',
-    find: '      btn.title = tool.name;',
+    find: '      btn.title = window.DraftToolIcons ? window.DraftToolIcons.title(tool.name, key, tool.id) : tool.name;',
     with: "      btn.title = board === 'toy'\n"
       + "        ? `${tool.name} — the TOY board does not offer this tool` : tool.name;",
     test: 'a key on TOY says its own name' },

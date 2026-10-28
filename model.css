@@ -858,10 +858,14 @@
      would sit differently from its neighbours and read as a different kind of
      key, which is a thing about the tool that is not true. */
   [data-tool-letter]:empty::after { content:'\200b'; }
-  [data-tool-name] { position:absolute; left:0; right:0; bottom:2px;
-    font-size:6.5px; font-weight:600; letter-spacing:0.02em;
-    text-transform:uppercase; line-height:1.1; text-align:center;
-    padding:0 1px; overflow:hidden; }
+  /* THE FACE IS THE LETTER AND A DRAWING (Movie, 27 Oct: "don't put text in
+     the box except the letter, just an icon and command letter"). The name
+     stays in the key for a reader, out of sight; the tooltip says it whole. */
+  [data-tool-name] { position:absolute; width:1px; height:1px; overflow:hidden;
+    clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
+  [data-tool-icon] { position:absolute; left:50%; top:55%; transform:translate(-50%, -50%);
+    width:22px; height:22px; line-height:0; pointer-events:none; }
+  [data-tool-icon] svg { display:block; }
   /* SELECTION and OBJECT TYPE. Chips wrap rather than scroll: ALL LEVELS and
      FENESTRATION are long words in a 120px panel, and a row that scrolls
      sideways hides the chip a drafter is looking for. */

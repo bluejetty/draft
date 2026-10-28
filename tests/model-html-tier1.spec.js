@@ -510,6 +510,9 @@ test.describe('MODEL.html tier 1', () => {
       // hand-written buttons that can drift apart. This assertion caught it
       // the same hour it was added, exactly as intended.
       './tool-roster.js',
+      // AND THE KEYS' FACES (Movie, 27 Oct): a small drawing and the tooltip
+      // sentence per tool, data only, no dependency of its own.
+      './tool-icons.js',
       // THE THREE TOY MODULES, and this assertion caught them too -- though
       // not the same hour, because the shard holding it was being cancelled at
       // its 40-minute cap rather than reporting. They arrived with §3, the
