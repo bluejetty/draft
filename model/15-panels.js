@@ -2150,6 +2150,8 @@
     const caps = stair ? ['PLAN', 'SECTION'] : ['TOP', 'FRONT', 'LEFT', 'RIGHT'];
     objWin.querySelectorAll('figcaption').forEach((cap, i) => { if (caps[i]) cap.textContent = caps[i]; });
     if (stair) {
+      const stairViews = objWin.querySelector('.objprop-views');
+      if (stairViews) stairViews.hidden = false;
       const SG = window.DraftStairGeometry, F = window.DraftFormatters;
       const layout = SG.stairCurrentLayout(stair, stairLevels());
       title.textContent = `STAIR \u2014 ${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)} \u00b7 ${Math.round((Number(stair.widthFt) || 3) * 12)}" WIDE`;
@@ -2157,9 +2159,42 @@
       drawObjStairViews(stair);
       return;
     }
-    title.textContent = items.length ? `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}` : 'PICK A FIXTURE, CABINET OR STAIR';
-    props.replaceChildren(...(items.length ? [fixturePropsNode(items)] : []));
-    drawObjViews(items);
+    const viewsBox = objWin.querySelector('.objprop-views');
+    if (viewsBox) viewsBox.hidden = !items.length;
+    if (items.length) {
+      title.textContent = `${fixturePanelTitle(items)}${items.length > 1 ? ` \u00d7${items.length}` : ''}`;
+      props.replaceChildren(fixturePropsNode(items));
+      drawObjViews(items);
+      return;
+    }
+    // EVERYTHING ELSE WITH PROPERTIES (Movie, 28 Oct: "can we show the
+    // properties for AREA ROOM TAGs, and anything else that has PROPERTIES
+    // in the OBJ / PROPERTIES box ... if there is no VIEWS like for the ROOM
+    // TAG, just show the properties part and don't show the empty
+    // viewports"): the same panel the left PROPERTIES box builds, built a
+    // second time here so both work, and no view boxes.
+    const kinds = [...new Set(selection.map(entry => entry.type))];
+    const picked = selection.map(entry => entry.item);
+    const panel = kinds.length === 1 ? (SELECTION_PANELS[kinds[0]]?.(picked)
+      || (kinds[0] === 'dimension' ? dimensionInfo(picked) : null)) : null;
+    objWin.dataset.objpropKind = panel ? kinds[0] : 'none';
+    title.textContent = panel ? `${panel.title}${picked.length > 1 ? ` \u00d7${picked.length}` : ''}`
+      : kinds.length > 1 ? `${selection.length} THINGS OF ${kinds.length} KINDS` : 'PICK ANYTHING TO SEE ITS PROPERTIES';
+    props.replaceChildren(...(panel ? [panel.node] : []));
+  };
+  // A DIMENSION'S FIGURES: what it measures, in the drawing's units.
+  const dimensionInfo = dims => {
+    const F = window.DraftFormatters;
+    const box = document.createElement('div');
+    dims.forEach(dim => {
+      const row = document.createElement('div');
+      row.dataset.propRow = 'measures';
+      const ft = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+      row.textContent = `MEASURES ${drawing?.units === 'metric' ? F.formatMetres(ft) : F.formatArchitecturalInches(ft * 12)}`
+        + (dim.text ? ` \u00b7 "${dim.text}"` : '') + (dim.auto ? ' \u00b7 AUTO' : ' \u00b7 HAND');
+      box.append(row);
+    });
+    return { title: dims.length > 1 ? 'DIMENSIONS' : 'DIMENSION', node: box };
   };
   const setObjOpen = on => {
     if (!objTab || !objWin) return;

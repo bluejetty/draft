@@ -58,7 +58,7 @@ test('the tab hangs under the top bar; a click on a sink base opens the window o
   for (const pick of ['bowls', 'uppers']) await expect(win.locator(`[data-prop-select="${pick}"]`)).toBeVisible();
 });
 
-test('UPPERS OFF in the window saves on the piece; the tab shuts it; nothing picked says to pick a fixture', async ({ page }) => {
+test('UPPERS OFF in the window saves on the piece; the tab shuts it; nothing picked says to pick anything', async ({ page }) => {
   const { at, z } = await open(page);
   await page.mouse.click(...at(7, z));
   const win = page.locator('#objprop');
@@ -69,7 +69,7 @@ test('UPPERS OFF in the window saves on the piece; the tab shuts it; nothing pic
   await expect(win.locator('[data-prop-select="uppers"]'), 'the window shows what it saved').toHaveValue('off');
   // Empty sheet in front of the run, clear of both panes.
   await page.mouse.click(...at(7, 3.2));
-  await expect(win.locator('[data-objprop-title]')).toHaveText('PICK A FIXTURE, CABINET OR STAIR');
+  await expect(win.locator('[data-objprop-title]')).toHaveText('PICK ANYTHING TO SEE ITS PROPERTIES');
   await page.locator('#objprop-tab').click();
   await expect(win).toBeHidden();
 });
@@ -92,4 +92,34 @@ test('the faces: a run tiled in 24" bays, the sides mirrored, a kind with no tra
     };
   });
   expect(got).toEqual({ runWide: 96, runBays: 4, mirrored: true, deep: 24, plain: [false, 60, 80] });
+});
+
+// "can we show the properties for AREA ROOM TAGs, and anything else that has
+// PROPERTIES in the OBJ / PROPERTIES box up top right, if there is no VIEWS
+// like for the ROOM TAG, just show the properties part and don't show the
+// empty viewports" (Movie, 28 Oct).
+test('a wall, a room tag and a dimension show their properties in the window, with no empty view boxes', async ({ page }) => {
+  const { at, z } = await open(page);
+  await page.evaluate(() => {
+    drawing.roomTags = [{ id: 'rt', levelId: 3, view: 'plan', name: 'KITCHEN', at: { x: 8, y: 0, z: -6 } }];
+    drawing.dimensions = [{ id: 'dm', levelId: 3, view: 'plan', start: { x: 0, y: 0, z: 5 }, end: { x: 12, y: 0, z: 5 } }];
+  });
+  await page.mouse.click(...at(7, z));
+  const win = page.locator('#objprop');
+  await expect(win).toBeVisible();
+  await expect(win.locator('.objprop-views'), 'a fixture keeps its views').toBeVisible();
+  await page.evaluate(() => setSelection([{ type: 'wall', item: drawing.walls[0] }]));
+  await expect(win.locator('[data-objprop-title]')).toHaveText('WALL');
+  await expect(win.locator('.objprop-views'), 'no empty boxes').toBeHidden();
+  expect(await win.locator('[data-objprop-props] *').count(), 'its properties').toBeGreaterThan(2);
+  await page.evaluate(() => setSelection([{ type: 'roomtag', item: drawing.roomTags[0] }]));
+  await expect(win.locator('[data-objprop-title]')).toHaveText('ROOM TAG');
+  await expect(win.locator('.objprop-views')).toBeHidden();
+  expect(await win.locator('[data-objprop-props] *').count()).toBeGreaterThan(0);
+  await page.evaluate(() => setSelection([{ type: 'dimension', item: drawing.dimensions[0] }]));
+  await expect(win.locator('[data-objprop-title]')).toHaveText('DIMENSION');
+  await expect(win.locator('[data-prop-row="measures"]')).toContainText("12'-0\"");
+  await page.evaluate(() => setSelection([]));
+  await expect(win.locator('[data-objprop-title]')).toHaveText('PICK ANYTHING TO SEE ITS PROPERTIES');
+  await expect(win.locator('.objprop-views')).toBeHidden();
 });
