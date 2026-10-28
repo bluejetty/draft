@@ -17,7 +17,7 @@ const SPEC = 'tests/model-registration.spec.js';
 const MUTANTS = [
   { file: 'model/10-tracking-garage.js',
     name: 'the box shows on every level',
-    find: "    const onSite = activeLevelId() === SITE_LEVEL_ID && !boneyardActive;\n",
+    find: "    const onSite = activeLevelId() === SITE_LEVEL_ID && !boneyardActive && !(drawing && activeCut());\n",
     with: "    const onSite = !boneyardActive;\n",
     test: 'not on a floor plan' },
   { file: 'model/10-tracking-garage.js',

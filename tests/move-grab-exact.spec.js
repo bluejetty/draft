@@ -134,3 +134,49 @@ test('a flooring corner dropped by the inside corner of a 2x6 and a 2x4 lands on
   expect(p.x).toBeCloseTo(target.x, 6);
   expect(p.z).toBeCloseTo(target.z, 6);
 });
+
+// A WALL RUN INTO THE SIDE OF ANOTHER -- a T (Movie, 28 Oct: "the inside
+// corner node where i want to attach the kitchen isn't node snapping or
+// showing the circle" -- a 2x6 run into the middle of an ICF wall, "i'm
+// pointing a blue line at the corner that i want to attach the inside corner
+// of the kitchen wall").
+test('a 2x6 run into the side of an ICF wall makes its inside corner a node: the kitchen\'s inside corner lands on it exactly', async ({ page }) => {
+  const d = drawing();
+  d.walls = [W('icf', [0, -10], [0, 20], 'icf'), W('t6', [-12, 0], [0, 0], 'stud_2x6'),
+    W('wa', [20, 20], [26, 20], 'stud_2x4'), W('wb', [20, 20], [20, 26], 'stud_2x4')];
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: d });
+  await page.goto('/MODEL.html?left=1&lpane=drafting');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const { at, scale } = await h.planFrame(page);
+  // The T's inside corner on the south side: the ICF's west face, the 2x6's
+  // south face.
+  const target = { x: -11.25 / 24, z: 5.5 / 24 };
+  const nodes = await page.evaluate(() => wallFaceNodes());
+  expect(nodes.some(n => Math.hypot(n.x - target.x, n.z - target.z) < 1e-6), 'the T makes its inside corner').toBe(true);
+  const wc = await insideCorner(page, ['wa', 'wb'], [1, 1, 20, 20]);
+  await page.evaluate(() => setSelection(drawing.walls.filter(w => w.id === 'wa' || w.id === 'wb')
+    .map(item => ({ type: 'wall', item }))));
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press('m');
+  const off = 2 / scale;
+  await page.mouse.move(...at(wc.x + off, wc.z + off), { steps: 3 });
+  await page.waitForTimeout(100);
+  await page.mouse.down();
+  await page.mouse.move(...at(target.x - off, target.z + off), { steps: 10 });
+  await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const landed = await page.evaluate(t => {
+    const ws = drawing.walls.filter(w => w.id === 'wa' || w.id === 'wb');
+    return window.DraftGeometry2D.wallFaceCorners(ws, openingThicknessFt())
+      .sort((a, b) => Math.hypot(a.x - t.x, a.z - t.z) - Math.hypot(b.x - t.x, b.z - t.z))[0];
+  }, target);
+  expect(landed.x, 'on the T\'s corner, across').toBeCloseTo(target.x, 6);
+  expect(landed.z, 'and down').toBeCloseTo(target.z, 6);
+});

@@ -2527,11 +2527,12 @@
   };
   paintRegistration = () => {
     if (!regBox) return;
-    const onSite = activeLevelId() === SITE_LEVEL_ID && !boneyardActive;
+    const onSite = activeLevelId() === SITE_LEVEL_ID && !boneyardActive && !(drawing && activeCut());
     const lots = onSite && window.DraftHologram ? window.DraftHologram.siteLots(drawing) : [];
     const gap = onSite ? regGap() : null;
-    regBox.hidden = !onSite || (!gap && !lots.length && !(drawing?.holograms || []).length);
-    if (regBox.hidden) return;
+    const hide = !onSite || (!gap && !lots.length && !(drawing?.holograms || []).length);
+    if (regBox.hidden !== hide) regBox.hidden = hide;
+    if (hide) return;
     paintRegSites(lots.length > 1 || lots.some(l => l.key !== 'own') ? lots : []);
     const types = paintRegTypes();
     if (regAlign) regAlign.hidden = !alignTarget() || !types.some(t => t.lot && t.on);

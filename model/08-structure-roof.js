@@ -139,7 +139,49 @@
   // ends are POOLED like every other line's, so a line drawn onto a line's
   // corner shares it, and layer `draft` is what the reader gives any line
   // whose layer it does not know.
+  // A STRING IS ONE ASSEMBLY (Movie, 28 Oct: "when i initially draw a
+  // 'string' of lines, id like those string to be grouped initially, user
+  // would need to BUST it" -- "when you draw a string of 3 lines they should
+  // be assembled right after you draw them. you would need to bust them, and
+  // then you could re ASSEMBLY Y them" -- lines and walls both). Every piece
+  // of a chain is kept here; when the chain ends -- ENTER, a double-click,
+  // ESC, another tool, or a fresh first point -- two or more become one
+  // assembly, as ASSEMBLY (Y) + ENTER makes one. ASSEMBLY BUST splits it.
+  let drawnChain = [];
+  sealDrawnChain = () => {
+    const chain = drawnChain;
+    if (chain.length && drawStart && drawStart === chain[chain.length - 1].item.end) return;
+    drawnChain = [];
+    const live = chain.filter(entry => (entry.type === 'line' ? drawing?.lines : drawing?.walls)?.includes(entry.item));
+    if (live.length < 2 || live.some(entry => groupOf(entry))) return;
+    const n = Number(drawing.nextGroupId) > 0 ? Number(drawing.nextGroupId) : groups().length + 1;
+    const allLines = live.every(entry => entry.type === 'line');
+    const firstWall = live.find(entry => entry.type === 'wall')?.item;
+    drawing.groups = drawing.groups || [];
+    const group = {
+      id: `group-${n}`,
+      name: `${allLines ? 'LINES' : 'WALLS'} ${n}`,
+      fixed: true,
+      stretchBehavior: 'rigid',
+      members: live.map(entry => ({ type: entry.type, id: entry.item.id })),
+      wallSettings: firstWall ? { wallType: firstWall.wallType, baseHeight: firstWall.baseHeight,
+        topHeight: firstWall.topHeight, refLine: firstWall.refLine } : null,
+    };
+    drawing.groups.push(group);
+    drawing.nextGroupId = n + 1;
+    if (selection.some(entry => live.some(l => l.item === entry.item))) setSelection(itemsOfGroup(group));
+    sayOnStrip(`${group.name}: the string is one assembly -- ASSEMBLY BUST splits it.`);
+    markDirty();
+  };
   const commitDrawn = (from, to) => {
+    const made = commitDrawnPiece(from, to);
+    if (drawnChain.length && from !== drawnChain[drawnChain.length - 1].item.end) {
+      const was = drawStart; drawStart = null; sealDrawnChain(); drawStart = was;
+    }
+    drawnChain.push(made);
+    return made;
+  };
+  const commitDrawnPiece = (from, to) => {
     if (activeTool !== 'line') {
       const justified = toyJustifyAlongHardLine(from, to);
       return { type: 'wall', item: commitWall(from, to,

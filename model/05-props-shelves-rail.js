@@ -1257,6 +1257,9 @@
   // ALIGN onto the green registration mark (10-tracking-garage.js); a hologram
   // card's ALIGN calls it too.
   let alignHolograms = () => 0;
+  // A STRING DRAWN IN ONE GO SEALED INTO AN ASSEMBLY once it ends
+  // (08-structure-roof.js); paint asks on every frame.
+  let sealDrawnChain = () => {};
 
   const goToLevel = id => {
     // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the

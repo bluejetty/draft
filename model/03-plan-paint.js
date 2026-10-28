@@ -2047,6 +2047,9 @@
   const paint = () => {
     paintFrame += 1;
     if (syncDragLength) syncDragLength();
+    // REGISTRATION's box, outside the timed paint body: it is DOM, not ink.
+    paintRegistration();
+    sealDrawnChain();
     const t0 = performance.now();
     // Hand dimensions onto the corners they were put on, before anything draws.
     if (typeof followDimLinks === 'function') followDimLinks();
@@ -2057,7 +2060,6 @@
     // button beside an arrow that is not there.
     if (northDock) northDock.hidden = true;
     if (typeof syncBoneGoes === 'function') syncBoneGoes();
-    paintRegistration();
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
