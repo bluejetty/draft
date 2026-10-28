@@ -1104,15 +1104,33 @@
   // out again from the walls, so a point taken off one would be back on the
   // next re-lay. Nearest tip within the grab, and it wins over the line it
   // stands on (hitAt asks here first).
+  // An auto row's point another piece of the same row also stands on.
+  const autoPointInner = (d, point) => {
+    const at = d[point];
+    return shownDimensions().some(o => o !== d && o.auto && o.layer === d.layer
+      && Math.abs(dimNormal(o).x * (o.start.x - at.x) + dimNormal(o).z * (o.start.z - at.z)) < 0.01
+      && [o.start, o.end].some(q => Math.abs(q.x - at.x) < 0.01 && Math.abs(q.z - at.z) < 0.01));
+  };
   const dimPointAt = worldPt => {
     const s = toS(worldPt);
     let best = null, bestD = SELECT_GRAB_PX;
+    // A press nearer the middle of any auto piece than to a tick takes that
+    // piece, not the tick of its neighbour.
+    const autoMids = shownDimensions().filter(d => d.auto).map(d => dimDrawnLine(d)).filter(Boolean)
+      .map(l => Math.hypot(s.x - (l[0].x + l[1].x) / 2, s.y - (l[0].y + l[1].y) / 2));
+    const nearestMid = autoMids.length ? Math.min(...autoMids) : Infinity;
     shownDimensions().forEach(d => {
-      if (d.auto) return;
+      // AN AUTO ROW'S POINTS TOO (Movie, 28 Oct: "i couldn't select the point
+      // where the 2 dims meet") -- its inner ones: taken off, the row is laid
+      // again without them and remembers (autoDimPointsOff).
+      if (d.auto && !isAutoRow(d)) return;
       const line = dimDrawnLine(d);
       if (!line) return;
       [['start', line[0]], ['end', line[1]]].forEach(([point, q]) => {
         const dist = Math.hypot(s.x - q.x, s.y - q.y);
+        // TIGHTER ON AN AUTO ROW: right on the tick, so a press on a short
+        // piece's middle still takes the piece (and its row).
+        if (d.auto && (dist > SELECT_GRAB_PX / 2 || nearestMid <= dist || !autoPointInner(d, point))) return;
         if (dist < bestD) { bestD = dist; best = { type: 'dimension', item: d, point }; }
       });
     });

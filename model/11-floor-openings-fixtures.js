@@ -1442,7 +1442,10 @@
     if (washroomPreset) return dropWashroom(at);
     if (kitchenPreset) return dropKitchen(at);
     const kind = fixtureKind();
-    if (kind.preset === true || kind.id === 'tub') {
+    // THE TUB CLICKS ON LIKE THE SHOWER (Movie, 28 Oct: "I CAN'T INSERT a
+    // TUB ... shower i can insert but can't do a tub"): its back to the wall
+    // pressed, and into the corner when pressed by one.
+    if (kind.preset === true) {
       sayOnStrip(`${kind.label} is not on this page yet — it takes a gesture of its own.`);
       return null;
     }
@@ -1476,6 +1479,10 @@
     // cabinet RUN (below) never goes through this clamp and so may reach the
     // corner; and changing it is a product decision, which is Movie's.
     if (kind.id === 'cornerbase') return cornerPress(kind, placement);
+    if (kind.id === 'tub') {
+      const tub = tubPress(kind, placement);
+      if (tub) return tub;
+    }
     const G = window.DraftGeometry2D;
     // PRESSED BY A CORNER, IT GOES INTO IT, its half inch off the crossing
     // wall (Movie, 23 Oct: "the corner at the extra 1/2" point will be the
@@ -1535,6 +1542,27 @@
   // tight in it -- no header bearing held off this end, it is a cabinet in
   // the corner. Its `corner` says which of its ends stands there.
   const CORNER_REACH_FT = 4;
+  // A TUB PRESSED BY A CORNER fills that end of the alcove the way a WC
+  // preset's tub does: the crossing wall nearest the press, within
+  // CORNER_REACH_FT, is its faucet-end wall, and it stands its half inch off
+  // it (fixture-geometry's tubGeometry). Nothing near: the plain click.
+  const tubPress = (kind, placement) => {
+    const FG = window.DraftFixtureGeometry;
+    const { wall, frame, along } = placement;
+    let best = null;
+    walls().forEach(other => {
+      if (other === wall || !other.start || !other.end) return;
+      if (String(other.levelId) !== String(wall.levelId) || (other.view || 'plan') !== (wall.view || 'plan')) return;
+      const hit = FG.wallCross(wall, frame, other);
+      if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
+      const d = Math.abs(hit.along - along);
+      if (d <= CORNER_REACH_FT && (!best || d < best.d)) best = { other, d, dir: hit.along <= along ? 1 : -1 };
+    });
+    if (!best) return null;
+    const record = { offset: 0, width: kind.widthFt, side: placement.side, endWallId: best.other.id, dir: best.dir };
+    if (!FG.tubGeometry(walls(), { ...record, kind: 'tub', depth: kind.depthFt }, wall, frame)) return null;
+    return addFixture(kind, wall, record);
+  };
   const cornerPress = (kind, placement) => {
     const FG = window.DraftFixtureGeometry;
     const { wall, frame, along } = placement;

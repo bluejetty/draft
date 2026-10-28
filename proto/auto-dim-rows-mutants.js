@@ -18,8 +18,8 @@ const SPEC = 'tests/auto-dim-rows.spec.js';
 const MUTANTS = [
   { file: 'auto-dims.js',
     name: 'a row taken off is laid anyway',
-    find: "        const kept = strings.filter(string => !offRows.has(`${side}:${string.layer}`));\n",
-    with: "        const kept = strings;\n",
+    find: "        const kept = strings.filter(string => !offRows.has(`${side}:${string.layer}`))\n",
+    with: "        const kept = strings\n",
     test: 'DELETE on one piece of a row takes the row off that side, and the rows outside step in' },
   { file: 'model/12-garage-storeys-stairs.js',
     name: 'AUTO DIMS is not told which rows are off',
@@ -33,7 +33,7 @@ const MUTANTS = [
     test: 'DELETE on one piece of a row takes the row off that side, and the rows outside step in' },
   { file: 'model/08-structure-roof.js',
     name: 'DELETE takes the one piece, as before',
-    find: "    const rowPicks = selection.filter(entry => entry.type === 'dimension' && isAutoRow(entry.item));\n",
+    find: "    const rowPicks = selection.filter(entry => entry.type === 'dimension' && !entry.point && isAutoRow(entry.item));\n",
     with: "    const rowPicks = [];\n",
     test: 'DELETE on one piece of a row takes the row off that side, and the rows outside step in' },
   { file: 'model/03-plan-paint.js',
@@ -71,6 +71,23 @@ const MUTANTS = [
     find: "          drawing.dimensions = (drawing.dimensions || []).filter(dim => !placed.includes(dim));\n          removed.forEach(dim => { if (!drawing.dimensions.includes(dim)) drawing.dimensions.push(dim); });\n        } });\n        markDirty();\n        paint();\n",
     with: "        } });\n        markDirty();\n        paint();\n",
     test: 'DIM SCALE lays the rows out again at the new paper; UNDO puts them back' },
+  // A POINT OFF AN AUTO ROW (Movie, 28 Oct: "there is an extra point ... i
+  // couldn't select the point where the 2 dims meet").
+  { file: 'auto-dims.js',
+    name: 'a point taken off is laid anyway',
+    find: "          .map(string => withoutPoints(side, string));\n",
+    with: ";\n",
+    test: 'a point where two pieces of an auto row meet' },
+  { file: 'model/08-structure-roof.js',
+    name: 'DELETE on an auto point takes the row, as before',
+    find: "      return entry.item.auto ? deleteAutoDimPoint(entry.item, entry.point) : deleteDimPoint(entry.item, entry.point);\n",
+    with: "      return deleteDimPoint(entry.item, entry.point);\n",
+    test: 'a point where two pieces of an auto row meet' },
+  { file: 'model/12-garage-storeys-stairs.js',
+    name: 'AUTO DIMS is not told which points are off',
+    find: "      pointsOff: autoPointsOff(levelId, view),\n",
+    with: "",
+    test: 'a point where two pieces of an auto row meet' },
 ];
 
 const run = name => {

@@ -155,9 +155,22 @@ if (!window.DraftAutoDims) {
     // left out of the side's stack before it is laid, so the rows outside it
     // step in and close the gap.
     rowsOff,
+    // AND SINGLE POINTS TAKEN OFF A ROW (Movie, 28 Oct: "on this fenestration
+    // autodim there is an extra point for some reason, i tried to select and
+    // delete it"): { side, layer, at } -- `at` the point's place along the
+    // string. Its two pieces become one; the ends of a string stay.
+    pointsOff,
   }) {
     const exteriorBeamLines = beamLinesOf(beams);
     const offRows = new Set(Array.isArray(rowsOff) ? rowsOff : []);
+    const offPoints = Array.isArray(pointsOff) ? pointsOff : [];
+    const withoutPoints = (side, string) => {
+      const gone = offPoints.filter(p => p && p.side === side && p.layer === string.layer);
+      if (!gone.length) return string;
+      const coords = string.coords.filter((c, i) => i === 0 || i === string.coords.length - 1
+        || !gone.some(p => Math.abs(Number(p.at) - c) < 0.01));
+      return { ...string, coords };
+    };
     const toCorner = point => ({ x: point.x, z: point.z, srcId: point.srcId || null });
     const boxOf = pts => ({
       minX: Math.min(...pts.map(pt => pt.x)), maxX: Math.max(...pts.map(pt => pt.x)),
@@ -568,7 +581,8 @@ if (!window.DraftAutoDims) {
           strings.push({ coords: [lo, hi], layer: DIM_LAYERS.OVERALL });
         }
         const own = side === 'N' ? minZ : side === 'S' ? maxZ : side === 'W' ? minX : maxX;
-        const kept = strings.filter(string => !offRows.has(`${side}:${string.layer}`));
+        const kept = strings.filter(string => !offRows.has(`${side}:${string.layer}`))
+          .map(string => withoutPoints(side, string));
         if (!kept.length) return;
         entries.push({ group, side, lo, hi, strings: kept, own, edge: own, base: 0 });
       });

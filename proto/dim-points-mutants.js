@@ -21,7 +21,7 @@ const MUTANTS = [
     test: 'DELETE on the point where two pieces meet joins them into one longer measurement' },
   { file: 'model/08-structure-roof.js',
     name: 'DELETE on a point takes the whole line',
-    find: "    if (entry.type === 'dimension' && entry.point) return deleteDimPoint(entry.item, entry.point);\n",
+    find: "    if (entry.type === 'dimension' && entry.point) {\n      return entry.item.auto ? deleteAutoDimPoint(entry.item, entry.point) : deleteDimPoint(entry.item, entry.point);\n    }\n",
     with: "",
     test: 'DELETE on the point where two pieces meet joins them into one longer measurement' },
   { file: 'model/08-structure-roof.js',
@@ -36,8 +36,8 @@ const MUTANTS = [
     test: 'DELETE on an end point takes the run to the next point; the string ends there now' },
   { file: 'model/06-selection-pick.js',
     name: 'a point on an AUTO dimension is picked too',
-    find: "      if (d.auto) return;\n      const line = dimDrawnLine(d);\n      if (!line) return;\n      [['start', line[0]], ['end', line[1]]]",
-    with: "      const line = dimDrawnLine(d);\n      if (!line) return;\n      [['start', line[0]], ['end', line[1]]]",
+    find: "        if (d.auto && (dist > SELECT_GRAB_PX / 2 || nearestMid <= dist || !autoPointInner(d, point))) return;\n",
+    with: "",
     test: 'a point on an AUTO dimension is not offered; the hand piece sharing the corner goes instead' },
 ];
 

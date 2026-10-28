@@ -171,6 +171,7 @@
     };
     adoptNotes();
     trimSlivers({ walls: true });
+    dropLotRoofs();
     // THE HALF INCH OFF A CROSSING WALL, on every drawing opened (Movie, 23
     // Oct: "update all the stuff"): a piece or run that ran into a wall
     // stands its half inch off it (settleFixtureGaps).
@@ -555,6 +556,16 @@
   //   a wall shorter than 1/16" goes, with the doors and windows on it.
   // On open, and on every save. Walls only on open: a wall being dragged
   // through zero length is not a sliver yet.
+  // A ROOF BUILT FROM THE LOT goes on open: boneOf once took the SITE lot for
+  // a storey, and a file saved then carries lot-sized roofs on SITE.
+  function dropLotRoofs() {
+    const lots = new Set((drawing.outlines || [])
+      .filter(o => o.site === true).map(o => String(o.id)));
+    const before = (drawing.roofs || []).length;
+    drawing.roofs = (drawing.roofs || [])
+      .filter(r => !lots.has(String(r.sourceShapeId || '')));
+    return before - drawing.roofs.length;
+  }
   const SLIVER_FT = 1 / 192;
   function trimSlivers({ walls: doWalls = false } = {}) {
     const G = window.DraftGeometry2D;
