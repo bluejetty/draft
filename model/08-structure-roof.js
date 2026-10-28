@@ -170,7 +170,6 @@
     drawing.groups.push(group);
     drawing.nextGroupId = n + 1;
     if (selection.some(entry => live.some(l => l.item === entry.item))) setSelection(itemsOfGroup(group));
-    sayOnStrip(`${group.name}: the string is one assembly -- ASSEMBLY BUST splits it.`);
     markDirty();
   };
   const commitDrawn = (from, to) => {
