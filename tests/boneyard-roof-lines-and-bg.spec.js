@@ -78,14 +78,21 @@ const boxOf = pairs => ({
 // HOW MUCH OF THE CANVAS IS THE ROOF'S COLOUR. Faded or full, a stroke keeps
 // its RGB on a transparent canvas and gives up only its alpha, so one count
 // answers "is any of the roof in this window" however lightly it was drawn.
-const roofInk = (page, which) => page.locator(which).evaluate((c, want) => {
+// WITHIN A FEW SHADES OF THE ROOF'S ORANGE, not that exact colour: a hairline
+// laid where the frame happens to put it between pixels blends with whatever
+// is under it, and CI read 0 here with the roof's lines listed (18 Oct, and
+// again on 28 Oct after the 3D pane narrowed by 2%). A roof that is not drawn
+// is still 0.
+const INK_SLACK = 24;
+const roofInk = (page, which) => page.locator(which).evaluate((c, [want, slack]) => {
   const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
   let n = 0;
   for (let i = 0; i < px.length; i += 4) {
-    if (px[i + 3] > 8 && px[i] === want[0] && px[i + 1] === want[1] && px[i + 2] === want[2]) n += 1;
+    if (px[i + 3] > 8 && Math.abs(px[i] - want[0]) <= slack && Math.abs(px[i + 1] - want[1]) <= slack
+      && Math.abs(px[i + 2] - want[2]) <= slack) n += 1;
   }
   return n;
-}, ROOF_INK);
+}, [ROOF_INK, INK_SLACK]);
 
 // The strongest alpha within a pixel or two of a point: a hairline can land
 // between two pixels and split itself across both, so a single read says
