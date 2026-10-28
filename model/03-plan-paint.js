@@ -1747,6 +1747,32 @@
     });
   };
 
+  // THE MINI REGISTRATION POINTS: a kitchen's or a bath's inside corner, the
+  // point it is placed by (11-floor-openings-fixtures.js registrationOn).
+  // The datum's target, small and in the same gold -- on screen only, the
+  // way the node circles are: it is for placing, not for the builder.
+  const paintMiniTargets = () => {
+    const shown = [];
+    groups().forEach(group => {
+      const pt = registrationPoint(group);
+      if (!pt) return;
+      const o = toS({ x: pt.x, y: 0, z: pt.z });
+      ctx.save();
+      ctx.strokeStyle = skin['draw-origin'] || '#966b0b';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(o.x - 7, o.y); ctx.lineTo(o.x + 7, o.y);
+      ctx.moveTo(o.x, o.y - 7); ctx.lineTo(o.x, o.y + 7);
+      ctx.stroke();
+      ctx.restore();
+      shown.push({ group: group.id, x: Math.round(pt.x * 1e4) / 1e4, z: Math.round(pt.z * 1e4) / 1e4 });
+    });
+    document.body.dataset.miniTargets = JSON.stringify(shown);
+  };
+
   const paintOrigin = () => {
     const R = window.DraftRender2D;
     if (!R) {
@@ -2248,6 +2274,7 @@
         // page (MODEL.dc.html:6956, immediately before the committed lines):
         // it is the one point the drafter must always be able to find.
         paintOrigin();
+        paintMiniTargets();
         paintNorth();
         paintNorthIcon();
         paintTrackingRays();

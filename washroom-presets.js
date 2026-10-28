@@ -363,13 +363,49 @@ if (!window.DraftWashroomPresets) {
   // off where the room actually is, so a mirrored or turned room is right
   // without a rule per case. `ext` is the exterior wall the room stands
   // against, or null.
+  // THE ROOM'S OWN WALLS ON THEIR INSIDE FACES (Movie, 28 Oct: "for
+  // bathrooms this model will be used too - interior corner placement").
+  // A 2x4 standing on the room's rectangle -- left, right, far, its own tub
+  // end -- is drawn on the face the room sees, its studs outward; every
+  // wall end on one of those lines comes in to the face with it, so a
+  // partition tees onto the face and the corners are the inside corners.
+  // Walls inside the room (a chase, a stub, a plumbing wall) stay on their
+  // centrelines.
+  function facedWalls(lay, own) {
+    const { W, L } = lay.preset;
+    const near = (a, b) => Math.abs(a - b) < 1e-6;
+    const onU = u => (near(u, -HALF_4) ? 0 : near(u, W + HALF_4) ? W : u);
+    const onV = v => (near(v, L + HALF_4) ? L : own && near(v, -HALF_4) ? 0 : v);
+    const rim = w => w.wallType === 'stud_2x4' && (
+      (near(w.a[0], w.b[0]) && (near(w.a[0], -HALF_4) || near(w.a[0], W + HALF_4)))
+      || (near(w.a[1], w.b[1]) && (near(w.a[1], L + HALF_4) || (own && near(w.a[1], -HALF_4)))));
+    return lay.walls.map(w => ({ ...w, face: rim(w),
+      a: [onU(w.a[0]), onV(w.a[1])], b: [onU(w.b[0]), onV(w.b[1])] }));
+  }
+
+  // THE MINI REGISTRATION POINT (Movie, 28 Oct: "sure tub corner"): the
+  // inside corner at the tub end on the toilet and vanity side.
+  function registrationCorner(lay) {
+    const { W } = lay.preset;
+    const by = lay.fixtures.find(f => (f.kind === 'vanity' || f.kind === 'toilet') && Array.isArray(f.at));
+    return by && by.at[0] < W / 2 ? [0, 0] : [W, 0];
+  }
+
   function place(id, { at, angleDeg = 0, flip = false, ext = null } = {}) {
     const lay = localLayout(id, { tubInsetFt: ext ? ext.insetFt : null });
     if (!lay || !at) return null;
     const P = toWorld(lay.preset, { at, angleDeg, flip });
-    const walls = lay.walls.map(w => ({ key: w.key, start: P(w.a), end: P(w.b), wallType: w.wallType }));
-    const hostOf = key => (key === 'ext' ? ext && ext.wall : walls.find(w => w.key === key));
     const centre = P([lay.preset.W / 2, lay.preset.L / 2]);
+    // A faced wall's studs go away from the room: 'left' stands them on the
+    // wall's left normal, so a room on that side wants 'right'.
+    const walls = facedWalls(lay, !ext).map(w => {
+      const wall = { key: w.key, start: P(w.a), end: P(w.b), wallType: w.wallType };
+      if (!w.face) return wall;
+      const d = unit(wall.start, wall.end);
+      const roomLeft = dot({ x: -d.z, z: d.x }, sub(centre, wall.start)) > 0;
+      return { ...wall, refLine: roomLeft ? 'right' : 'left' };
+    });
+    const hostOf = key => (key === 'ext' ? ext && ext.wall : walls.find(w => w.key === key));
     const along = (wall, pt) => dot(sub(pt, wall.start), unit(wall.start, wall.end));
     // +1 when the point is on the wall's left normal (-dz, dx) -- the face
     // fixture-geometry.js calls side 1.
@@ -422,6 +458,7 @@ if (!window.DraftWashroomPresets) {
     });
     return {
       id, name: lay.preset.name, walls, fixtures, doors, door: doors[0], centre,
+      registration: P(registrationCorner(lay)),
       inside: lay.inside.map(P),
       spaces: lay.spaces.map(sp => ({ name: sp.name, poly: sp.poly.map(P) })),
       ext: ext ? ext.wall : null,

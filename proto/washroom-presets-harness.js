@@ -104,7 +104,7 @@ const inches = ft => Math.round(ft * 12 * 10) / 10;
 // exactly as the page will.
 const realise = (room, extWall = null) => {
   const walls = room.walls.map(w => ({ id: w.key, start: { ...w.start, y: 0 }, end: { ...w.end, y: 0 },
-    levelId: 3, view: 'plan', wallType: w.wallType, refLine: 'center' }));
+    levelId: 3, view: 'plan', wallType: w.wallType, refLine: w.refLine || 'center' }));
   if (extWall) walls.push(extWall);
   const idOf = key => (key === 'ext' ? extWall.id : key);
   const fixtures = room.fixtures.map(f => ({ kind: f.kind, wallId: idOf(f.host), levelId: 3, offset: f.offset,
@@ -378,6 +378,44 @@ for (const id of ['BF1', 'BF2', 'BF3', 'BF4']) {
     toilet && tg ? `${toilet.wallId} ${footprintIn(tg, b2.inside)}` : 'none', 'ext true');
   const t2 = R2.geo(R2.fixtures.find(f => f.kind === 'tub'));
   check('and its tub still fills the alcove to the house wall', t2 ? inches(t2.tubLen) : 'none', 72);
+}
+
+// ── ON THEIR INSIDE FACES, AND THE MINI REGISTRATION POINT ─────────────────
+// Movie, 28 Oct: "for bathrooms this model will be used too - interior
+// corner placement", and the point: "sure tub corner". The room's own 2x4s
+// are drawn on the face the room sees, studs outward; the point is the
+// inside corner at the tub end on the toilet/vanity side, however the room
+// is turned or mirrored.
+for (const angleDeg of [0, 90, 180, 270]) {
+  for (const flip of [false, true]) {
+    const tag = `A at ${angleDeg}${flip ? ' mirrored' : ''}`;
+    const room = WP.place('A', { at: { x: 7, z: -4 }, angleDeg, flip });
+    const R = realise(room);
+    const rim = ['left', 'right', 'far', 'tub'];
+    // Each rim wall's studs lie wholly outside the room: its two faces are
+    // the drawn line and a line 3 1/2" further from the room's centre.
+    const outward = rim.every(key => {
+      const w = R.walls.find(x => x.id === key);
+      const f = FG.wallFrame(w);
+      const mid = { x: (w.start.x + w.end.x) / 2, z: (w.start.z + w.end.z) / 2 };
+      const toC = (room.centre.x - mid.x) * f.nx + (room.centre.z - mid.z) * f.nz;
+      const near = Math.abs(f.startOff) < 1e-9 ? f.startOff : f.endOff;
+      const far = near === f.startOff ? f.endOff : f.startOff;
+      return Math.abs(near) < 1e-9 && Math.sign(far) === -Math.sign(toC) && Math.abs(Math.abs(far) - 3.5 / 12) < 1e-9;
+    });
+    check(`${tag}: left, right, far and tub walls drawn on their inside faces, studs outward`, outward, true);
+    const corners = room.inside.map(p => `${r2(p.x)},${r2(p.z)}`);
+    check(`${tag}: the tub corner is one of the inside corners`,
+      corners.includes(`${r2(room.registration.x)},${r2(room.registration.z)}`), true);
+    const vanity = R.geo(R.fixtures.find(f => f.kind === 'vanity'));
+    const tub = R.geo(R.fixtures.find(f => f.kind === 'tub'));
+    const d = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+    // The tub end's two corners are the two nearest the tub; of those, the
+    // one nearer the vanity.
+    const tubEnd = room.inside.slice().sort((a, b) => d(a, tub.center) - d(b, tub.center)).slice(0, 2);
+    const want = tubEnd.sort((a, b) => d(a, vanity.center) - d(b, vanity.center))[0];
+    check(`${tag}: on the vanity's side, at the tub end`, d(want, room.registration) < 1e-6, true);
+  }
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

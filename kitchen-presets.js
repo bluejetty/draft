@@ -262,20 +262,29 @@ if (!window.DraftKitchenPresets) {
   // The side wall carries the first leg and the top wall the second, each
   // as long as its leg needs -- swapped when F swaps the legs, or a mirrored
   // U1 would put its 9'-8" leg on the 8'-7" wall and be refused.
+  //
+  // DRAWN ON THEIR INSIDE FACES (Movie, 28 Oct: "change the 3.5" wall so the
+  // line is on the interior (behind the cabinets etc) and the intersection at
+  // the corner of the kitchen would be the 'mini' registration point so a
+  // user can position the placement in the larger model precisely"). Each
+  // wall's line is the face the cabinets stand against, both lines start at
+  // `at` -- the inside corner, the kitchen's registration point -- and the
+  // studs stand outward of them: the top wall's to its left, the side
+  // wall's to its right, read along start -> end.
   const STUD_4 = 3.5 * IN;
   function ownWalls(id, at, angleDeg = 0, flip = false) {
     const p = PRESETS[id];
     if (!p || !at) return null;
-    const h = STUD_4 / 2;
     const t = (angleDeg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);
     const P = (x, z) => ({ x: at.x + c * x - s * z, y: 0, z: at.z + s * x + c * z });
-    const corner = P(h, -h);
+    const corner = P(0, 0);
     return {
       walls: [
-        { key: 'top', start: corner, end: P(-needFt(p, flip ? 'first' : 'second'), -h), wallType: 'stud_2x4', refLine: 'center' },
-        { key: 'side', start: corner, end: P(h, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'center' },
+        { key: 'top', start: corner, end: P(-needFt(p, flip ? 'first' : 'second'), 0), wallType: 'stud_2x4', refLine: 'left' },
+        { key: 'side', start: corner, end: P(0, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'right' },
       ],
       inside: P(-1, 1),
+      registration: { x: corner.x, z: corner.z },
     };
   }
 
