@@ -841,7 +841,12 @@
   // (newDimensionId) rather than the string every other copy takes.
   // A STAIR COPIES (Movie, 25 Oct: "Should Ctrl+C / Ctrl+V copy stairs too? yes"),
   // its well and open side cut and framed again where the copy lands.
-  const NOT_COPIED = new Set(['roof', 'roomtag', 'note']);
+  // A ROOF COPIES TOO (Movie, 27 Oct: "COPY or CUT would be even better the
+  // peice they would like to take down 1 storey and then go down one story
+  // and paste it on that story, and the properties change if he does it").
+  // Where it lands is pasteHeld's: on the ROOF plan it is the top roof, on a
+  // storey it is that storey's lower roof (SITS ON the storey under it).
+  const NOT_COPIED = new Set(['roomtag', 'note']);
 
   // DELETE A POINT, NOT THE LINE (Movie, 20 Oct): "rather than the dimension
   // line disappearing only that 'point' will no longer be measured and the
@@ -1038,6 +1043,18 @@
         delete copy.levelId;
         delete copy.demo;
         while (holograms().some(h => h.id === copy.id)) copy.id = newDrawingItemId('hologram');
+      }
+      // A ROOF LANDS IN THE SAME PLACE, ON THE ROOF LEVEL, sitting on the
+      // storey the paste was made on the plan above (setRoofSitsOn): pasted
+      // on 2ND FL it is a lower roof over MAIN FL, drawn on both plans;
+      // pasted on the ROOF plan it is a roof on the top storey again.
+      if (type === 'roof') {
+        copy.levelId = ROOF_LEVEL_ID;
+        const storeys = roofStoreys();
+        const k = storeys.findIndex(l => l.id === Number(owner));
+        delete copy.drawnOn;
+        if (k > 0) setRoofSitsOn(copy, storeys[k - 1].id, storeys);
+        else if (storeys.length) copy.sourceLevelId = storeys[storeys.length - 1].id;
       }
       if (type === 'wall') wallIds.set(String(raw.id), copy.id);
       if (free) {

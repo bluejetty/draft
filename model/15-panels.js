@@ -1733,6 +1733,33 @@
   // in its assembly -- unless THIS ROOF is chosen; an edge is always this
   // roof's own.
   let roofScopeOne = false;
+  // THE STOREYS A ROOF CAN SIT ON: the floors with walls on them, lowest
+  // first -- not the foundation, the roof or the site.
+  const roofStoreys = () => {
+    const built = new Set((drawing?.walls || []).map(w => Number(w.levelId)));
+    return (drawing?.levels || [])
+      .filter(l => ![1, ROOF_LEVEL_ID, SITE_LEVEL_ID].includes(Number(l.id)) && built.has(Number(l.id)))
+      .map(l => ({ id: Number(l.id), name: l.name, elev: Number(l.elev) || 0 }))
+      .sort((a, b) => a.elev - b.elev || a.id - b.id);
+  };
+  // Dropped onto storey `id`: it bears on that storey's walls and is drawn on
+  // the storey above, as a lower roof drawn by hand is. Back on TOP FLOOR it
+  // sits on the top storey, as the roof the build cut does.
+  const setRoofSitsOn = (roof, id, storeys) => {
+    if (id == null) {
+      if (roof.drawnOn == null) return null;
+      delete roof.drawnOn;
+      roof.sourceLevelId = storeys[storeys.length - 1].id;
+      return null;
+    }
+    const k = storeys.findIndex(l => l.id === id);
+    const above = storeys[k + 1];
+    if (k < 0 || !above) return 'That storey has nothing above it to drop the roof from.';
+    roof.sourceLevelId = id;
+    roof.drawnOn = above.id;
+    roof.follows = 'none';
+    return null;
+  };
   const roofPropsNode = picked => {
     const box = document.createElement('div');
     const again = () => { if (selection.every(e => e.type === 'roof')) showSelectionProps(); };
@@ -1752,6 +1779,29 @@
       again();
       return items[0].pitch;
     }));
+    // SITS ON (Movie, 27 Oct: "cut the roof how it is now and drop it down to
+    // match the one beside it" -- "we shouldn't drop it automatically but
+    // allow the user to drop it somehow, in the properties menu maybe").
+    // TOP FLOOR is the house roof on the full wall stack; a storey below it
+    // makes this roof the lower roof a drafter draws on the storey above
+    // (`drawnOn`), bearing on that storey's walls (cut-view roofBaseElev) and
+    // shown on that floor plan as well as the ROOF plan.
+    const storeys = roofStoreys();
+    if (storeys.length > 1) {
+      const top = storeys[storeys.length - 1];
+      const sitsOn = r => (r.drawnOn != null && r.sourceLevelId != null
+        && storeys.some(l => l.id === Number(r.sourceLevelId) && l !== top) ? String(r.sourceLevelId) : 'top');
+      const now = items.map(sitsOn);
+      box.append(propRow('SITS ON', [['top', 'TOP FLOOR'],
+        ...storeys.slice(0, -1).reverse().map(l => [String(l.id), l.name])],
+      now.every(v => v === now[0]) ? now[0] : null, id => {
+        const refusal = editRoofs(items, roof => setRoofSitsOn(roof, id === 'top' ? null : Number(id), storeys));
+        if (refusal) sayOnStrip(refusal);
+        else sayOnStrip(id === 'top' ? 'ROOF on the TOP FLOOR walls again.'
+          : `ROOF dropped to sit on ${storeys.find(l => l.id === Number(id)).name}'s walls -- it shows on the plan above it too.`);
+        again();
+      }));
+    }
     // EVERY EDGE AT ONCE, which is where a drafter starts -- 8' all round --
     // before picking out the edges that differ.
     const all = items.flatMap(roofOverhangs);
