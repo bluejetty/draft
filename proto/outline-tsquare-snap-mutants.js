@@ -30,6 +30,29 @@ const MUTANTS = [
     find: "        const square = outlineHand(from, at, 90);\n",
     with: "        const square = { x: at.x, z: at.z };\n",
     test: 'T-square lit, nothing in reach: the corner is square to the last and wherever the hand set it' },
+  // "my OUTLINE for the house isn't connecting to the line i drew" and "if
+  // something is scolled over and is CIRCLED --- THAT is what will be
+  // connected too" (Movie, 27 Oct).
+  { file: 'model/10-tracking-garage.js',
+    name: 'the first corner takes a node and nothing else, as before',
+    find: "      if (snap.pt) return { x: snap.pt.x, z: snap.pt.z };\n",
+    with: "",
+    test: 'the first corner pressed beside a line lands on the line' },
+  { file: 'model/10-tracking-garage.js',
+    name: 'the squared outline corner slides beside a circled node',
+    find: "        if (held) return { x: held.pt.x, z: held.pt.z };\n",
+    with: "",
+    test: 'T-square lit: a circled node off the square is where the corner goes, and the ring is on it' },
+  { file: 'model/10-tracking-garage.js',
+    name: 'the ring is drawn beside the circled node, on the square',
+    find: "(magnet && handPoint(cursorWorld, magnet)) || ",
+    with: "",
+    test: 'T-square lit: a circled node off the square is where the corner goes, and the ring is on it' },
+  { file: 'model/10-tracking-garage.js',
+    name: 'a squared wall run slides beside a circled node',
+    find: "    if (held) return held.pt;\n",
+    with: "",
+    test: 'T-square lit: a wall run ends on the circled node, not square beside it' },
 ];
 
 const run = name => {

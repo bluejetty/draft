@@ -128,6 +128,8 @@
     if (fixed && lit) return fixed === 'z' ? { x: lit.x, y: 0, z: wanted.z } : { x: wanted.x, y: 0, z: lit.z };
     const snap = !fixed && (board !== 'toy' || lit) ? caught : {};
     if (snap.pt && !snap.node && !snap.face && onTheFoot_if()) return onTheFoot(drawStart, snap.pt);
+    const held = fixed ? handPoint(at, drawMagnet()) : null;
+    if (held) return held.pt;
     const snapped = fixed ? axisSnap(wanted, fixed, [], board !== 'toy' ? drawMagnet() : null)
       : (snap.pt || cornerSnap(wanted, []));
     if (snapped) return snapped;
@@ -1048,7 +1050,7 @@
     const fixed = runs && !steered ? squaredAxis(runFrom, cursorWorld) : null;
     const magnet = (drawsRun() || tracesLoop) && !steered ? drawMagnet() : null;
     if (fixed) {
-      const lit = axisMagnet(squareTo(runFrom, cursorWorld), fixed, [], magnet);
+      const lit = (magnet && handPoint(cursorWorld, magnet)) || axisMagnet(squareTo(runFrom, cursorWorld), fixed, [], magnet);
       paintMagnets(cursorWorld, magnet, lit);
       if (lit) paintDonut(lit.pt, tierOf(lit));
       markMagnet(lit);
@@ -1432,7 +1434,14 @@
       if (snap.node || snap.bullseye) return { x: snap.pt.x, z: snap.pt.z };
       const house = garageRunHouse();
       const onHouse = house && snapOntoHouse(house, at);
-      return onHouse || { x: at.x, z: at.z };
+      if (onHouse) return onHouse;
+      // AND A LINE OR A CROSS LINE, as a wall's first point takes them (Movie,
+      // 27 Oct: "my OUTLINE for the house isn't connecting to the line i drew
+      // its off a bit"). The first corner took a node and nothing else, so a
+      // press beside the line landed 7/16" off it, and the T-square then
+      // carried that 7/16" round every corner after.
+      if (snap.pt) return { x: snap.pt.x, z: snap.pt.z };
+      return { x: at.x, z: at.z };
     }
     // The lock and the hand both turn in the outline's own step: a quarter
     // turn on TOY, an eighth on DRAFTING.
@@ -1457,6 +1466,9 @@
       // coordinate and a node, corner or line it crosses sets the other --
       // and a catch is exact, so the foot does not round it away.
       if (tsquareLive()) {
+        // A CIRCLED NODE OR CORNER WINS over the square (handPoint).
+        const held = handPoint(at, drawMagnet());
+        if (held) return { x: held.pt.x, z: held.pt.z };
         const square = outlineHand(from, at, 90);
         const fixed = Math.abs(at.x - from.x) >= Math.abs(at.z - from.z) ? 'z' : 'x';
         const caught = axisSnap({ x: square.x, y: 0, z: square.z }, fixed, [], drawMagnet());

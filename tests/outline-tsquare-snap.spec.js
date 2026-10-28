@@ -67,3 +67,58 @@ test('T-square lit, nothing in reach: the corner is square to the last and where
   expect(x, 'square to the first corner').toBe(3);
   expect(Math.abs(z - 4)).toBeLessThan(0.1);
 });
+
+// "my OUTLINE for the house isn't connecting to the line i drew its off a bit
+// still not snapping to the node" -- the first corner, pressed beside the
+// line, took no catch but a node, so it sat 7/16" off and the T-square
+// carried that round. And "can we make it so if something is scolled over and
+// is CIRCLED --- THAT is what will be connected too".
+test('the first corner pressed beside a line lands on the line', async ({ page }) => {
+  await open(page, true);
+  await page.keyboard.press('0');
+  await page.waitForTimeout(100);
+  const { at, scale } = await h.planFrame(page);
+  await h.selectTool(page, 'outline');
+  await page.locator('[data-mode-tsquare]').click();
+  await page.mouse.click(...at(5, 3 / scale));
+  expect(await lastCorner(page)).toEqual([5, 0]);
+});
+
+test('T-square lit: a circled node off the square is where the corner goes, and the ring is on it', async ({ page }) => {
+  await open(page, true);
+  await page.keyboard.press('0');
+  // Back a little, so the line's end is clear of the panels.
+  const fit = await h.planFrame(page);
+  await page.mouse.move(...fit.at(5, 0));
+  await page.mouse.wheel(0, 300);
+  await page.waitForTimeout(150);
+  const { at, scale } = await h.planFrame(page);
+  await h.selectTool(page, 'outline');
+  await page.locator('[data-mode-tsquare]').click();
+  // A corner 7/16" right of the line's end, then down to the end.
+  const off = 7 / 16 / 12;
+  // CTRL held, so nothing catches it and it stays 7/16" off.
+  await page.keyboard.down('Control');
+  await page.mouse.click(...at(20 + off, 4));
+  await page.keyboard.up('Control');
+  expect(await lastCorner(page)).toEqual([Math.round((20 + off) * 1e4) / 1e4, 4]);
+  await page.mouse.move(...at(20 + 2 / scale, 2 / scale));
+  await page.waitForTimeout(80);
+  const ring = JSON.parse(await page.locator('#plan').getAttribute('data-snap-magnet'));
+  expect(ring.at, 'the ring is on the node').toEqual([20, 0]);
+  await page.mouse.click(...at(20 + 2 / scale, 2 / scale));
+  expect(await lastCorner(page), 'and the corner is on it').toEqual([20, 0]);
+});
+
+test('T-square lit: a wall run ends on the circled node, not square beside it', async ({ page }) => {
+  await open(page, true);
+  const end = await page.evaluate(() => {
+    tsquareOn = true;
+    drawStart = { x: 20 + 7 / 16 / 12, y: 0, z: 4 };
+    activeTool = 'wall';
+    const p = drawPoint({ x: 20.01, y: 0, z: 0.01 });
+    drawStart = null;
+    return [Math.round(p.x * 1e4) / 1e4 + 0, Math.round(p.z * 1e4) / 1e4 + 0];
+  });
+  expect(end).toEqual([20, 0]);
+});

@@ -1643,6 +1643,20 @@
     return { pt: fixed === 'z' ? { x: best.at, y: 0, z: worldPt.z } : { x: worldPt.x, y: 0, z: best.at },
       seg: best.seg };
   };
+  // WHAT IS CIRCLED IS WHAT IS CONNECTED TO (Movie, 27 Oct: "can we make it
+  // so if something is scolled over and is CIRCLED --- THAT is what will be
+  // connected too"). A node or a corner in reach of the HAND beats the
+  // square: the point goes exactly on it and the ring is drawn on it. Before
+  // this the square slid along to the node's free coordinate only, and the
+  // ring -- a few pixels across -- sat over the node while the press landed
+  // beside it, 7/16" off in his outline. Null when nothing is in reach.
+  const handPoint = (hand, magnet = null) => {
+    if (!hand || board === 'toy') return null;
+    const node = cornerSnap(hand, []);
+    const point = node ? { v: node, node: true }
+      : (magnet && strongerPoint(hand, magnet.nodes || [], magnet.corners));
+    return point ? { pt: { x: point.v.x, y: 0, z: point.v.z }, corner: point.v, node: !!point.node } : null;
+  };
   const axisSnap = (worldPt, fixed, moving = [], magnet = null) =>
     axisMagnet(worldPt, fixed, moving, magnet)?.pt || null;
 
