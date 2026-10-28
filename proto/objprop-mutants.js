@@ -25,8 +25,8 @@ const MUTANTS = [
     test: 'the tab hangs' },
   { file: 'model/15-panels.js',
     name: 'the window has no properties',
-    find: "    props.replaceChildren(...(items.length ? [fixturePropsNode(items)] : []));\n",
-    with: "    props.replaceChildren();\n",
+    find: "      props.replaceChildren(fixturePropsNode(items));\n",
+    with: "      props.replaceChildren();\n",
     test: 'the tab hangs' },
   { file: 'model/15-panels.js',
     name: 'the TOP view draws nothing',
@@ -50,6 +50,23 @@ const MUTANTS = [
     find: "  const propsShowing = () => true;\n",
     with: "  const propsShowing = () => params.get('lprops') !== '0';\n",
     test: 'stays on under either tab' },
+  // "anything else that has PROPERTIES ... if there is no VIEWS ... just
+  // show the properties part and don't show the empty viewports" (28 Oct).
+  { file: 'model/15-panels.js',
+    name: 'a wall or a room tag shows nothing in the window',
+    find: "    props.replaceChildren(...(panel ? [panel.node] : []));\n",
+    with: "    props.replaceChildren();\n",
+    test: 'a wall, a room tag and a dimension' },
+  { file: 'model/15-panels.js',
+    name: 'the empty view boxes stay up',
+    find: "    if (viewsBox) viewsBox.hidden = !items.length;\n",
+    with: "",
+    test: 'a wall, a room tag and a dimension' },
+  { file: 'model/15-panels.js',
+    name: 'a dimension says nothing',
+    find: "      || (kinds[0] === 'dimension' ? dimensionInfo(picked) : null)) : null;\n",
+    with: "      || null) : null;\n",
+    test: 'a wall, a room tag and a dimension' },
 ];
 
 const run = name => {
