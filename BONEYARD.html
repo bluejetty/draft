@@ -87,8 +87,10 @@
      needed"). It is the pane that can afford it: the right one is where the
      editing happens and every foot of it is worked in, while the left is a
      picture of what the editing did. The model inside follows on its own --
-     the 3D fits itself to its box, so a narrower box IS a smaller model. */
-  .pane-3d { flex: 0 1 38%; }
+     the 3D fits itself to its box, so a narrower box IS a smaller model.
+     36%, not 38, since the rail took a LOCK box per level (27 Oct): the
+     edit side keeps its room and the picture gives up the width. */
+  .pane-3d { flex: 0 1 36%; }
   canvas#bones3d { cursor: grab; touch-action: none; }
   /* THE LEVELS STAND BETWEEN THE PANES, top-aligned so the first one is
      level with both heads, and no wider than the longest name needs. */
@@ -104,7 +106,11 @@
   /* A LEVEL AND ITS BG, side by side: the name takes the room and BG takes
      what it needs, so the stack keeps one left edge and one right one. */
   .level-row { display: flex; align-items: stretch; gap: 4px; }
-  .level-row > button:first-child { flex: 1; min-width: 0; }
+  .level-row > button[data-bone-level] { flex: 1; min-width: 0; }
+  .level-row .lock { flex: none; display: inline-flex; align-items: center; gap: 3px;
+    font-size: 10px; letter-spacing: .08em; color: var(--ink-quiet); cursor: pointer; }
+  .level-row .lock input { margin: 0; accent-color: var(--accent-mark); }
+  .level-row .lock:has(input:disabled) { opacity: .3; cursor: default; }
   .legend button.bg {
     flex: none; font-size: 10px; letter-spacing: .08em; padding: 2px 5px;
     color: var(--ink-quiet); justify-content: center;
@@ -194,9 +200,6 @@
     <section class="pane" aria-label="The chosen level">
       <div class="pane-head">
         <span class="title" id="level-title">LEVEL</span>
-        <button type="button" class="btn" id="break" aria-pressed="false"
-          title="Put a corner on an edge at a foot mark (B)">BREAK</button>
-        <button type="button" class="btn" id="undo" title="Undo the last change (Ctrl+Z)" disabled>UNDO</button>
       </div>
       <canvas id="bones2d"></canvas>
     </section>
@@ -205,7 +208,17 @@
   <button type="button" class="btn" id="to-drivethru" hidden
     title="Nothing here yet: pick a house at the drive-thru, built or drawn"
     >PICK A HOUSE AT THE DRIVE-THRU</button>
-  <script>window.DraftShellBars.bottomBar({ page: 'boneyard', bone: false });</script>
+  <script>window.DraftShellBars.bottomBar({ page: 'boneyard', bone: false, verbs: true });</script>
+  <!-- BREAK AND UNDO IN THE FOOT, left of the middle, where MODEL keeps its
+       verbs (Movie, 27 Oct: "move the BREAK and UNDO and other stuff that
+       might appear later down to a similar location as we have it for model
+       space"). The bar seats the box; the page owns the buttons. -->
+  <script>
+    document.getElementById('dt-verbs').insertAdjacentHTML('beforeend',
+      '<button type="button" id="undo" title="Undo the last change (Ctrl+Z)" disabled>UNDO</button>'
+      + '<button type="button" id="break" aria-pressed="false"'
+      + ' title="Put a corner on an edge at a foot mark (B)">BREAK</button>');
+  </script>
 
   <script>
     (async () => {
@@ -264,6 +277,10 @@
       // question about the next five minutes, not about the drawing.
       const bg = new Set();
       const keyOf = level => `${level.kind}:${level.levelId}`;
+      // THE LOCKS (Movie, 27 Oct): "lets go ALL CHECKED first when they get
+      // in there and can uncheck them". The keys UNCHECKED, so every level is
+      // locked on arrival and a level that appears later is locked too.
+      const unlocked = new Set();
       // THE HOLOGRAM FILES SHOWN, by file name. Off at every opening and never
       // saved -- "start off" -- and only ever looked at: nothing here picks,
       // drags or breaks a hologram wall.
@@ -867,7 +884,25 @@
             paintLegend();
             paint2d();
           });
-          row.append(b, back);
+          // LOCK: THIS LEVEL MOVES WITH THE ONE BEING EDITED, where their
+          // lines overlap. On the right, BG on the left (Movie, 27 Oct). The
+          // picked level is the one moving, so its own box is not a question.
+          const lock = document.createElement('label');
+          lock.className = 'lock';
+          lock.title = `Lock ${level.name}: its lines that overlap move with the level being edited`;
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.dataset.boneLock = level.name;
+          box.checked = !unlocked.has(keyOf(level));
+          box.disabled = isPicked;
+          box.addEventListener('change', () => {
+            if (box.checked) unlocked.delete(keyOf(level)); else unlocked.add(keyOf(level));
+          });
+          // THE BOX ALONE, its word in the title: a word on every row widened
+          // the rail and took the room the 3D window gave up.
+          box.setAttribute('aria-label', `Lock ${level.name}`);
+          lock.append(box);
+          row.append(back, b, lock);
           return row;
         }));
       };
@@ -928,6 +963,7 @@
       // ── EDITING ─────────────────────────────────────────────────────
       const editCtx = () => ({
         levels,
+        locked: new Set(levels.map(keyOf).filter(k => !unlocked.has(k))),
         ladder: window.DraftTour && window.DraftTour.floorPullLadder,
         roofSourceId: (levels.find(l => l.kind === 'roof') || {}).sourceLevelId,
         // THE WALL UNDER AN UPPER ROOF RUN OUT OVER THE MAIN ROOF (boneyard-
@@ -1052,7 +1088,8 @@
           loopIndex: hit.loopIndex, edgeIndex: hit.edge.index, atFt: along }, editCtx());
         if (!result.ok) { say(why(result.reason)); return; }
         await commit(result);
-        say(`Broken at ${ft(Math.round(along))} — tap either part and push it.`);
+        const also = result.also && result.also.length ? ` (and ${result.also.join(', ')}, locked)` : '';
+        say(`Broken at ${ft(Math.round(along))}${also} — tap either part and push it.`);
       });
 
       const setBreaking = on => {

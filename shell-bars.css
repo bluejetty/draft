@@ -835,6 +835,16 @@
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
   #delete:hover, #model-undo:hover, #model-rotate:hover, #model-flip:hover, #model-break:hover, #model-move:hover, #model-wall-off:hover, #model-rescale:hover, #rotate-bar button:hover, #flip-bar button:hover, #rescale-bar button:hover { color: var(--accent); border-color: var(--accent); }
+  /* A PAGE'S OWN VERBS IN THE BOX (BONEYARD's BREAK and UNDO) wear the same
+     face as MODEL's. */
+  #dt-verbs > button { font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
+  #dt-verbs > button:hover, #dt-verbs > button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  #dt-verbs > button:disabled { opacity:.45; cursor:default; color: var(--ink-primary); border-color: var(--edge-panel); }
+  #dt-verbs > button[hidden] { display:none; }
   #delete[hidden], #model-undo[hidden], #model-rotate[hidden], #model-flip[hidden], #model-break[hidden], #model-move[hidden], #model-wall-off[hidden], #model-rescale[hidden], #rotate-bar[hidden], #flip-bar[hidden], #rescale-bar[hidden] { display:none; }
   /* CROWDED, THE VERBS DRAW IN: seatFootVerbs() puts data-tight on the row
      when the verbs at full size do not fit between the pages and the trio,

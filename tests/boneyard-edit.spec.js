@@ -99,6 +99,9 @@ test('the arrows push the picked edge a foot at a time, and the house goes with 
 test('a floor pulled past its foundation walks the ladder: 2 ft free, then 4\'-6" on piles', async ({ page }) => {
   await boneyardOf(page, 'bungalow', 'bungalow');
   await page.locator('[data-bone-level="MAIN FL"]').click();
+  // FOUNDATION UNLOCKED: locked, as every level arrives, it would go out with
+  // MAIN FL and there would be nothing to hang over (boneyard-locks.spec.js).
+  await page.locator('[data-bone-lock="FOUNDATION"]').uncheck();
   // The house's left wall, x = -16.
   await tapWorld(page, -16, 0);
   await page.keyboard.press('ArrowLeft');

@@ -618,6 +618,14 @@ ${withBone ? BONE : ''}    <button id="trio-down" type="button" data-trio-down h
   const BOTQUIET = `  <div class="grow"></div>
   <div id="dt-bar" data-drivethru-bar>
 ${trio(false)}  </div>`;
+  // AND A PAGE OF ITS OWN VERBS gets the box MODEL's stand in, empty, for the
+  // page to fill (BONEYARD's BREAK and UNDO, Movie 27 Oct: "a similar
+  // location as we have it for model space"). Only the box: the ids inside
+  // are the page's.
+  const BOTQUIET_VERBS = `  <div class="grow"></div>
+  <div id="dt-bar" data-drivethru-bar>
+${trio(false)}    <div id="dt-verbs" data-foot-verbs></div>
+  </div>`;
   const BOTMIDDLE = `  <div class="grow"></div>
   <!-- THE MIDDLE PAIR (Movie, 15 Sep): "2 buttons, the DRIVE-THRU MENU, and
        the BONE". Exactly two, because the sign rises over this spot and
@@ -977,7 +985,10 @@ ${trio(true)}
     // smaller face -- and the row is measured again after each. The
     // attribute is this function's alone, and the observer that calls it
     // watches `hidden`, not this, so there is nothing to loop.
-    const room = trioBox.left - pageBox.right - 2 * FOOT_VERB_MARGIN;
+    // NO TRIO ON THE BAR (a bone-less page whose arrows are hidden): the
+    // middle of the sheet is the edge, where #dt-bar stands.
+    const trioLeft = trioBox.width ? trioBox.left : barBox.left;
+    const room = trioLeft - pageBox.right - 2 * FOOT_VERB_MARGIN;
     delete box.dataset.tight;
     let width = box.getBoundingClientRect().width;
     for (const stage of ['1', '2']) {
@@ -985,11 +996,11 @@ ${trio(true)}
       box.dataset.tight = stage;
       width = box.getBoundingClientRect().width;
     }
-    if (!width || !trioBox.width || !pageBox.width) return;
+    if (!width || !pageBox.width) return;
     const half = width / 2;
     const left = pageBox.right + FOOT_VERB_MARGIN + half;
-    const right = trioBox.left - FOOT_VERB_MARGIN - half;
-    const middle = (pageBox.right + trioBox.left) / 2;
+    const right = trioLeft - FOOT_VERB_MARGIN - half;
+    const middle = (pageBox.right + trioLeft) / 2;
     // AND WHEN EVEN THAT DOES NOT FIT, THE TRIO WINS: the row sits clear of
     // the BONE and runs over the pages' end instead. Centring it split the
     // overflow between the two, and half of it on the bone was the whole
@@ -1244,7 +1255,7 @@ ${trio(true)}
       const tools = (opts.tools || []).map(tool => BAR_TOOLS[tool] || '').join('');
       put(BOTHEAD + '\n'
         + '<div id="page-row" data-page-row>\n' + rowOf('page', opts.page) + '\n</div>\n'
-        + (opts.bone === false ? BOTQUIET + '\n' : BOTMIDDLE + '\n')
+        + (opts.bone === false ? (opts.verbs ? BOTQUIET_VERBS : BOTQUIET) + '\n' : BOTMIDDLE + '\n')
         + '  <div id="sheet-row" data-sheet-row>\n' + tools + rowOf('sheet', opts.page) + '\n  </div>\n'
         + BOTTAIL);
       // AFTER the markup, because the slot it fills arrives with it. `put`
