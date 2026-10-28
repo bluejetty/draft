@@ -80,7 +80,7 @@ const MUTANTS = [
   { file: 'BONEYARD.html',
     name: 'the 3D gives up nothing: the two windows split the page even, and '
       + 'the rail is squeezed in out of the gap between them',
-    find: '  .pane-3d { flex: 0 1 38%; }',
+    find: '  .pane-3d { flex: 0 1 36%; }',
     with: '  .pane-3d { flex: 1; }',
     test: 'the 3D side is the one that gave up the room' },
 
