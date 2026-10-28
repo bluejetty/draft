@@ -227,22 +227,20 @@ test('a press away from every wall drops the piece free there and says so', asyn
   await expect(page.locator('#strip-message')).toContainText(/placed free/i);
 });
 
-// THE GESTURE THIS PORT DOES NOT CARRY, asserted so its absence is a stated
-// fact rather than something a drafter discovers. The tub takes two WALLS
-// (back, then faucet end), its own gesture on the old page, and refuses BY
-// NAME -- the difference between "not built yet" and "silently broken". The
-// old page's kitchen L PRESET is no longer offered here at all (Movie, 17
-// Oct: KITCHEN L1 is the kitchen).
-for (const [kindId, label] of [['tub', 'TUB']]) {
-  test(`${label} says it is not here yet rather than placing the wrong thing`,
-    async ({ page }) => {
-      await houseOnLivePage(page);
-      const wall = await longestPlanWall(page);
-      await armKind(page, kindId);
-      await pressWorld(page, alongWall(wall, 0.5, 0.6));
-
-      expect(await fixturesOf(page)).toHaveLength(0);
-      await expect(page.locator('#strip-message'))
-        .toContainText(/not on this page yet/i);
-    });
-}
+// THE TUB CLICKS ON NOW (Movie, 28 Oct: "I CAN'T INSERT a TUB ... shower
+// i can insert but can't do a tub"). It said "not on this page yet" for want
+// of the old page's two-wall gesture; it goes on like the SHOWER, its back to
+// the wall pressed (and into the corner by one -- tub-click.spec.js). The old
+// page's kitchen L PRESET is no longer offered here at all (Movie, 17 Oct:
+// KITCHEN L1 is the kitchen).
+test('TUB goes on the wall pressed, rather than saying it is not here yet', async ({ page }) => {
+  await houseOnLivePage(page);
+  const wall = await longestPlanWall(page);
+  await armKind(page, 'tub');
+  await pressWorld(page, alongWall(wall, 0.5, 0.6));
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  const placed = await fixturesOf(page);
+  expect(placed.map(f => f.kind)).toEqual(['tub']);
+  await expect(page.locator('#strip-message')).not.toContainText(/not on this page yet/i);
+});

@@ -932,7 +932,9 @@
   };
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
-    if (entry.type === 'dimension' && entry.point) return deleteDimPoint(entry.item, entry.point);
+    if (entry.type === 'dimension' && entry.point) {
+      return entry.item.auto ? deleteAutoDimPoint(entry.item, entry.point) : deleteDimPoint(entry.item, entry.point);
+    }
     if (entry.type === 'wall') return !!deleteWall(entry.item);
     // A STAIR TAKES ITS STAIRWELL WITH IT. AUTO STAIR cuts a surface opening
     // in the floor above and tags it with the stair's id; deleting the stair
@@ -1186,7 +1188,7 @@
     // line is deleted i'd like the other lines to re-adjust") -- see
     // changeAutoRows. Every row a picked piece belongs to goes in one press,
     // and the level is laid again without them.
-    const rowPicks = selection.filter(entry => entry.type === 'dimension' && isAutoRow(entry.item));
+    const rowPicks = selection.filter(entry => entry.type === 'dimension' && !entry.point && isAutoRow(entry.item));
     if (rowPicks.length) {
       const byLevel = new Map();
       rowPicks.forEach(({ item }) => {

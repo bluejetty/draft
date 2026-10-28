@@ -137,3 +137,44 @@ test('DIM SCALE lays the rows out again at the new paper; UNDO puts them back', 
   await page.evaluate(() => { undoOnce(); paint(); });
   expect(await westRows(page)).toEqual(quarter);
 });
+
+// "on this fenestration autodim there is an extra point for some reason, i
+// tried to select and delete it but i couldn't select the point where the 2
+// dims meet" (Movie, 28 Oct).
+test('a point where two pieces of an auto row meet can be picked; DELETE takes just that point and AUTO DIMS keeps it off; UNDO puts it back', async ({ page }) => {
+  const twoWindows = { ...SHELF, fenestrations: [...SHELF.fenestrations,
+    { id: 'f2', wallId: 'w', levelId: -1, view: 'plan', type: 'window', offset: 5, width: 3, sillHeight: 3, headHeight: 6.67 }] };
+  await onShelf(page, twoWindows);
+  await page.locator('[data-dims-show="auto"]').click();
+  const fens = () => page.evaluate(() => dimensions()
+    .filter(d => d.auto && d.layer === 'A-DIMS-FENS' && autoDimSide(d) === 'W')
+    .map(d => [Math.min(d.start.z, d.end.z), Math.max(d.start.z, d.end.z)].map(v => Math.round(v * 100) / 100))
+    .sort((a, b) => a[0] - b[0]));
+  const before = await fens();
+  expect(before.length, 'two windows: three pieces').toBe(3);
+  // The joint between the first two pieces, picked where it is drawn.
+  const joint = before[0][1];
+  const picked = await page.evaluate(z => {
+    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-FENS' && autoDimSide(x) === 'W'
+      && Math.abs(Math.max(x.start.z, x.end.z) - z) < 0.01);
+    const line = dimDrawnLine(d);
+    const tip = Math.abs(d.end.z - z) < 0.01 ? line[1] : line[0];
+    const hit = dimPointAt(toWorld(tip.x, tip.y));
+    return hit && { type: hit.type, point: hit.point, auto: hit.item.auto };
+  }, joint);
+  expect(picked, 'the joint is pickable on an auto row').toEqual({ type: 'dimension', point: expect.any(String), auto: true });
+  await page.evaluate(z => {
+    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-FENS' && autoDimSide(x) === 'W'
+      && Math.abs(Math.max(x.start.z, x.end.z) - z) < 0.01);
+    setSelection([{ type: 'dimension', item: d, point: d.end.z > d.start.z ? 'end' : 'start' }]);
+  }, joint);
+  await page.keyboard.press('Delete');
+  const after = await fens();
+  expect(after, 'the two pieces are one; the row stays').toEqual([[before[0][0], before[1][1]], before[2]]);
+  await page.evaluate(() => { pressAutoDims(); });
+  expect(await fens(), 'AUTO DIMS keeps the point off').toEqual(after);
+  // UNDO the AUTO DIMS press, then the DELETE: the point is back.
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  expect(await fens(), 'UNDO puts it back').toEqual(before);
+});

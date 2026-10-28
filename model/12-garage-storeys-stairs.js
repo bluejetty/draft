@@ -1281,6 +1281,39 @@
     if (Math.abs(dim.start.x - dim.end.x) < 1e-6) return dim.start.x < cx ? 'W' : 'E';
     return null;
   };
+  // SINGLE POINTS OFF A ROW, kept beside the rows: `autoDimPointsOff['3|plan']
+  // = [{ side: 'E', layer: 'A-DIMS-FENS', at: 12.5 }]`.
+  const autoPointsOff = (levelId, view) => {
+    const list = drawing?.autoDimPointsOff?.[autoRowsKey(levelId, view)];
+    return Array.isArray(list) ? list.map(p => ({ ...p })) : [];
+  };
+  const setAutoPointsOff = (levelId, view, list) => {
+    const next = { ...(drawing.autoDimPointsOff || {}) };
+    const key = autoRowsKey(levelId, view);
+    if (list.length) next[key] = list; else delete next[key];
+    if (Object.keys(next).length) drawing.autoDimPointsOff = next; else delete drawing.autoDimPointsOff;
+  };
+  // A POINT OF AN AUTO ROW TAKEN OFF: the level laid again without it, its
+  // two pieces now one. ONE UNDO puts it back.
+  const deleteAutoDimPoint = (dim, point) => {
+    const side = autoDimSide(dim);
+    const at = dim[point];
+    if (!side || !at) return false;
+    const along = side === 'N' || side === 'S' ? at.x : at.z;
+    const levelId = Number(dim.levelId), view = dim.view || 'plan';
+    const before = autoPointsOff(levelId, view);
+    setAutoPointsOff(levelId, view, [...before, { side, layer: dim.layer, at: along }]);
+    const result = placeAutoDims(levelId, view);
+    const placed = result === -1 ? [] : result.placed;
+    const removed = result === -1 ? [] : result.removed;
+    undoStack.push({ kind: 'node', undo: () => {
+      setAutoPointsOff(levelId, view, before);
+      drawing.dimensions = (drawing.dimensions || []).filter(d => !placed.includes(d));
+      removed.forEach(d => { if (!drawing.dimensions.includes(d)) drawing.dimensions.push(d); });
+    } });
+    markDirty();
+    return true;
+  };
   const isAutoRow = dim => dim?.auto === true && AUTO_ROW_LAYERS.some(([layer]) => layer === dim.layer);
   // Take rows off, or put them back, and lay the level again: ONE UNDO puts
   // the list and the strings back as they were.
@@ -1356,6 +1389,7 @@
       jogMergeFt: AD.JOG_MERGE_FT,
       stringSpacingFt: AD.STRING_SPACING_FT * paper,
       rowsOff: autoRowsOff(levelId, view),
+      pointsOff: autoPointsOff(levelId, view),
       // THE INTERIOR STRING'S TWO INPUTS, and it draws nothing without them.
       // A wall's FACES are what that string measures to, and a face is the
       // stored line offset by a thickness this module has never known -- the
