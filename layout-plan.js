@@ -306,6 +306,7 @@ if (!window.DraftLayoutPlan) {
   // literal in this file.
   const ROOF_PLATE_INK = '#1d1f20';
 
+  const LOWER_ROOF_PRINT = '#9a9a9a';
   function drawRoofPlan(ctx, toS, saved, levelId, env = {}) {
     const geo = window.DraftGeometry2D;
     const render = window.DraftRender2D;
@@ -330,9 +331,14 @@ if (!window.DraftLayoutPlan) {
     const bearing = new Map((geo.roofBearing ? geo.roofBearing({
       roofs, walls: of('walls'), outlines: of('outlines'), levels: of('levels'),
     }) : []).map(b => [b.roof, b]));
+    // A LOWER ROOF PRINTS GREY (Movie, 28 Oct: "make the printed
+    // construction layout a dimmer or greyer line"): the screen marks it red,
+    // paper only has to say it is not the main roof.
+    const lowerEnv = { ...roofEnv, colors: { roof: LOWER_ROOF_PRINT, roofGuide: LOWER_ROOF_PRINT } };
     roofs.forEach(roof => {
       const b = bearing.get(roof);
-      render.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {}, roofEnv);
+      render.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {},
+        roof.drawnOn != null ? lowerEnv : roofEnv);
     });
     const thicknessFt = wall => {
       const type = WALL_TYPES.find(t => t.id === wall.wallType)

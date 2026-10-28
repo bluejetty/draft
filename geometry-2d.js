@@ -3796,7 +3796,12 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     };
     const own = roof => roof && !roof.garage && roof.sourceLevelId != null
       && !ROOF_PLAN_SKIP_LEVELS.has(Number(roof.sourceLevelId));
-    const ownLevels = new Set(roofs.filter(own).map(r => Number(r.sourceLevelId)));
+    // A ROOF DROPPED BELOW (`drawnOn`, SITS ON) stands UNDER the main roof,
+    // not over it, so it never stops one (Movie, 28 Oct: "the ridge lines on
+    // the main roof disappeared on that roof plan view" -- the bone's own
+    // roof, with no storey of its own, was cut away inside MAIN FL's outline,
+    // ridges and all, the moment a piece was dropped onto MAIN FL).
+    const ownLevels = new Set(roofs.filter(r => own(r) && r.drawnOn == null).map(r => Number(r.sourceLevelId)));
     const houseLevel = (levels || []).map(l => Number(l && l.id))
       .find(id => Number.isFinite(id) && !ROOF_PLAN_SKIP_LEVELS.has(id)
         && !ownLevels.has(id) && houseWalls(id).length);
