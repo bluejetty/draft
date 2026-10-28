@@ -3001,6 +3001,32 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // ONLY WALLS OF ONE POOL MELD: the pool key is (level, view, body) on the
   // pooled corner, so a garage wall crossing a house wall stays as it was,
   // the same rule wallJoins keeps by identity.
+  // ENDS IN THE SAME PLACE ARE ONE CORNER, FOR THE DRAWING (Movie, 28 Oct:
+  // "the ext / inside suite wall (hallway wall) where the door jogs in the
+  // wall doesn't connect properly on the inside and outside corners doesn't
+  // meld" -- "even if they aren't connected but in the same location, they
+  // should meld"). wallJoins keys on the corner OBJECT, so two walls whose
+  // ends merely coincide drew as two boxes. These are copies of the walls
+  // with every end within a hair of another (same body) handed ONE point,
+  // so the corner mitres; the records are not touched.
+  const SAME_END_FT = 0.005;
+  function sharedEnds(walls) {
+    const seen = [];
+    const canon = (pt, body) => {
+      const hit = seen.find(v => v.body === body
+        && Math.abs(v.pt.x - pt.x) < SAME_END_FT && Math.abs(v.pt.z - pt.z) < SAME_END_FT);
+      if (hit) return hit.pt;
+      seen.push({ pt, body });
+      return pt;
+    };
+    return (walls || []).map(w => {
+      if (!w || !w.start || !w.end) return w;
+      const body = w.body || 'house';
+      const start = canon(w.start, body), end = canon(w.end, body);
+      return start === w.start && end === w.end ? w : { ...w, start, end, meldOf: w.meldOf || w };
+    });
+  }
+
   function meldPieces(walls) {
     const EPS = 1e-6, NEAR = 1e-3;
     // The pooled corner's key where there is one; the wall's own fields where
@@ -4020,6 +4046,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     profileEnvelope,
     wallJoins,
     meldPieces,
+    sharedEnds,
     outlineSegment,
     outlineSegmentCount,
     lineControlPoint,

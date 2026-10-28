@@ -399,7 +399,7 @@
     // painter is handed the walls cut at those points so the T and the X join
     // like corners do (geometry-2d's meldPieces). Drawing only -- `shown`
     // stays the real walls for the openings below and for everything else.
-    const pieces = G.meldPieces ? G.meldPieces(shown) : shown;
+    const pieces = G.meldPieces ? G.meldPieces(G.sharedEnds ? G.sharedEnds(shown) : shown) : shown;
     const joins = G.wallJoins(pieces);
     pieces.forEach(wall => {
       if (!wall.start || !wall.end) return;
