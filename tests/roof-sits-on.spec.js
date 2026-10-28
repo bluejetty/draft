@@ -97,3 +97,31 @@ test('a one-storey house offers no SITS ON: there is nothing to drop to', async 
   await expect(page.locator('[data-roof-edge-label]')).toBeVisible();
   await expect(sits(page)).toHaveCount(0);
 });
+
+// "COPY or CUT would be even better the peice they would like to take down 1
+// storey and then go down one story and paste it on that story, and the
+// properties change if he does it".
+test('CUT a roof on the ROOF plan and paste it on 2ND FL: it lands in place, SITS ON MAIN FL; pasted back on the ROOF plan it is a top roof', async ({ page }) => {
+  const { at } = await open(page);
+  await page.mouse.click(...at(15, 10));
+  await page.keyboard.press('Control+x');
+  expect(await page.evaluate(() => drawing.roofs.length), 'cut takes it off the roof').toBe(0);
+  await page.evaluate(() => goToLevel(5));
+  await page.keyboard.press('Control+v');
+  const pasted = await page.evaluate(() => drawing.roofs.map(r => ({ levelId: r.levelId, drawnOn: r.drawnOn ?? null,
+    src: r.sourceLevelId, x0: Math.min(...r.points.map(p => p.x)), x1: Math.max(...r.points.map(p => p.x)) })));
+  expect(pasted).toEqual([{ levelId: 7, drawnOn: 5, src: 3, x0: -2, x1: 32 }]);
+  expect(await page.evaluate(() => roofs().length), 'and it shows on 2ND FL').toBe(1);
+  await expect(sits(page).locator('[data-prop-value="3"]')).toHaveAttribute('aria-pressed', 'true');
+  // COPY it back up onto the ROOF plan: a roof on the top storey.
+  await page.keyboard.press('Control+c');
+  await page.evaluate(() => goToLevel(7));
+  await page.keyboard.press('Control+v');
+  const both = await page.evaluate(() => drawing.roofs.map(r => [r.drawnOn ?? null, r.sourceLevelId]));
+  expect(both).toEqual([[5, 3], [null, 5]]);
+  // One UNDO takes a paste back; the CUT's own UNDO puts the roof back.
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  expect(await page.evaluate(() => drawing.roofs.map(r => [r.id, r.drawnOn ?? null]))).toEqual([['roof-1', null]]);
+});

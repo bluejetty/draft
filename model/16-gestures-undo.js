@@ -2196,12 +2196,23 @@
     // COPY ... can we do CTL-C for copy and CTL-P for past"): the foot's COPY
     // and PASTE, the same verbs. V, not P -- Ctrl+P is the browser's print.
     // A plain C is still CUT; eventMatchesBinding keeps the two apart.
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && ['c', 'v'].includes(e.key.toLowerCase())) {
+    // AND CTRL+X CUTS (Movie, 27 Oct: "COPY or CUT would be even better"):
+    // the copy taken, then the DELETE, so one UNDO puts it back where it was.
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && ['c', 'v', 'x'].includes(e.key.toLowerCase())) {
       if (!drawing || modalUp() || activeCut()) return;
+      const k = e.key.toLowerCase();
       // NOTHING PICKED, the browser's own copy stands (text on the page).
-      if (e.key.toLowerCase() === 'c' && !selection.length) return;
+      if (k !== 'v' && !selection.length) return;
       e.preventDefault();
-      if (e.key.toLowerCase() === 'c') { copySelection(); paint(); } else pasteHeld();
+      if (k === 'c') { copySelection(); paint(); }
+      else if (k === 'x') {
+        const n = copySelection();
+        if (n) {
+          deleteSelection();
+          sayOnStrip(`CUT ${n === 1 ? 'it' : `${n} items`} -- go to the level it belongs on and Ctrl+V to paste it there.`);
+        }
+        paint();
+      } else pasteHeld();
       return;
     }
     // ESCAPE IS THE OLD PAGE'S ESCAPE, measured rather than invented.
