@@ -17,6 +17,16 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
+  { file: 'model/10-tracking-garage.js',
+    name: 'the SITE lot is taken for a storey bone',
+    find: "    .find(o => Number(o.levelId) === Number(levelId) && o.site !== true) || null;",
+    with: "    .find(o => Number(o.levelId) === Number(levelId)) || null;",
+    test: 'never the lot' },
+  { file: 'model/17-boot-save.js',
+    name: 'a file saved with lot roofs keeps them on open',
+    find: "    trimSlivers({ walls: true });\n    dropLotRoofs();\n",
+    with: "    trimSlivers({ walls: true });\n",
+    test: 'opens without them' },
   { file: 'model/16-gestures-undo.js',
     name: 'the roofs are never rebuilt, so a moved bone leaves them stale',
     find: "        if (board === 'toy') { boneFollows(md.before, md.body?.levelId); rebuildRoofs(); }",
@@ -74,7 +84,7 @@ const run = grep => {
 // `git checkout -- <file>`, so a file left out of this guard has any
 // uncommitted work in it silently destroyed the first time a mutant touches
 // it. §3b added toy-constraints.js to the targets; it belongs here too.
-const dirty = execSync('git status --porcelain MODEL.html geometry-2d.js',
+const dirty = execSync('git status --porcelain MODEL.html geometry-2d.js model/10-tracking-garage.js model/16-gestures-undo.js model/17-boot-save.js',
   { cwd: ROOT }).toString().trim();
 if (dirty) {
   console.error('REFUSING TO RUN: uncommitted changes; this restores from HEAD.\n' + dirty);

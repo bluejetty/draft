@@ -491,8 +491,12 @@
       .sort((a, b) => (Number(a.elev) || 0) - (Number(b.elev) || 0))[0] || null;
   };
 
+  // THE LOT IS NOT A STOREY. The SITE level's outline is the lot (`site:
+  // true`); taken as a bone it roofed the whole lot less the storey above it
+  // -- Movie's PHASE2 (28 Oct), six lot-sized hips on SITE after a BONEYARD
+  // drag.
   const boneOf = levelId => (drawing.outlines || [])
-    .find(o => Number(o.levelId) === Number(levelId)) || null;
+    .find(o => Number(o.levelId) === Number(levelId) && o.site !== true) || null;
 
   // The edge that dies into the storey above is a GABLE -- ruled 14 Sep, "the
   // roof should terminate where it meets the upper storey wall like a garage

@@ -1618,6 +1618,50 @@ test('§5 — a floor pulled back under its storey loses the roof it had',
       'covered again, so the roof goes').toBe(0);
   });
 
+// THE LOT IS NOT A STOREY (Movie's PHASE2, 28 Oct: "roof is weird"). The
+// SITE level's outline is the lot, `site: true`; boneOf took it for a bone, so
+// a BONEYARD drag roofed the whole lot less the storey above -- lot-sized hips
+// on the site plan and on every elevation.
+const LOT = (id, levelId, pts) => ({ ...OUT(id, levelId, null, pts), site: true });
+const withLot = extra => base({
+  board: 'toy',
+  levels: [{ id: 8, name: 'SITE', elev: 0 }, { id: 3, name: 'MAIN FL', elev: 0 },
+    { id: 4, name: '2ND FL', elev: 9 }],
+  activeLevelIdx: 1,
+  outlines: [
+    LOT('lot-1', 8, [[-60, -60], [60, -60], [60, 60], [-60, 60]]),
+    OUT('main-1', 3, null, [[-10, -10], [10, -10], [10, 10], [-10, 10]]),
+    OUT('up-1', 4, null, [[-10, -10], [10, -10], [10, 0], [-10, 0]]),
+  ],
+  ...extra,
+});
+
+test('§5 — a BONEYARD drag roofs the storeys, never the lot', async ({ page }) => {
+  await open(page, withLot());
+  await nudge(page, [0, 10], [0, 9]);
+  const roofs = await roofsOf(page);
+  expect(roofs.filter(r => r.levelId === 3).length, 'the main floor took its roof').toBe(1);
+  expect(roofs.filter(r => r.levelId === 8 || r.from === 'lot-1'),
+    'and nothing was built from the lot').toEqual([]);
+});
+
+test('§5 — a file saved with lot roofs opens without them; a hand roof stays',
+  async ({ page }) => {
+    const ring = pts => pts.map(([x, z]) => ({ x, y: 0, z }));
+    await open(page, withLot({
+      roofs: [
+        { id: 'roof-lot', levelId: 8, sourceLevelId: 4, sourceShapeId: 'lot-1',
+          overhang: 2, pitch: 4, garage: false, edges: ['eave', 'eave', 'eave', 'eave'],
+          points: ring([[-60, 0], [60, 0], [60, 60], [-60, 60]]) },
+        { id: 'roof-hand', levelId: 8, sourceLevelId: null, sourceShapeId: null,
+          overhang: 2, pitch: 4, garage: false, edges: ['eave', 'eave', 'eave', 'eave'],
+          points: ring([[30, 30], [40, 30], [40, 40], [30, 40]]) },
+      ],
+    }));
+    const ids = await page.evaluate(() => drawing.roofs.map(r => r.id));
+    expect(ids, 'the lot roof is gone and the hand-drawn one is kept').toEqual(['roof-hand']);
+  });
+
 test('§5 — dragging one floor does not reshape the storey above it',
   async ({ page }) => {
     // THE FAULT MY OWN FIRST FIX INTRODUCED, and the gate caught that nothing
