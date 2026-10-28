@@ -53,6 +53,22 @@ if (!window.DraftBoneyardEdit) {
   const DIM_BAND_FT = 6;
   // A garage pile stands on the grade beam's centreline, a few inches in.
   const PILE_BAND_FT = 1;
+  // ── THE LOCKS (Movie, 27 Oct) ────────────────────────────────────────
+  //
+  // "add a checkbox area so the user who is controlling one outline on one
+  // floor can select the other floor with lines that overlap to move locked
+  // with how they move the layer they are on" -- "lets go ALL CHECKED first
+  // when they get in there and can uncheck them". `ctx.locked` is the set of
+  // `kind:levelId` keys whose boxes are checked; absent, every edit keeps the
+  // rules it had before the boxes (everything above follows, nothing below).
+  // A checked floor goes with the push where its edge lies on the same line
+  // -- within a wall's thickness, under the 1' step a cantilever takes -- and
+  // an unchecked one stays where it is and stops the follow there.
+  const LOCK_TOL_FT = 0.75;
+  const lockKey = lvl => `${lvl.kind}:${lvl.levelId}`;
+  const follows = (ctx, lvl) => !ctx || !ctx.locked || ctx.locked.has(lockKey(lvl));
+  const roofFollows = ctx => !ctx || !ctx.locked
+    || [...ctx.locked].some(k => String(k).startsWith('roof:'));
 
   const near = (a, b, t = TOL) => Math.abs(a - b) <= t;
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -623,7 +639,23 @@ if (!window.DraftBoneyardEdit) {
 
     // A FLOOR'S OWN PULL walks the ladder against what is under it. The
     // garage stands on its own concrete, so it has no ladder.
-    if (level.kind === 'floor' && !loop.garage && p > 0 && ladder) {
+    // A FLOOR BELOW THAT IS LOCKED AND FLUSH goes out with it (below), so
+    // nothing hangs over it and there is no ladder to walk.
+    const flushBelow = (q, c) => {
+      if (!ctx.locked || q < 0 || !follows(ctx, stack[q])) return [];
+      const hits = [];
+      stack[q].loops.forEach(lp => {
+        if (lp.garage !== (loop.garage === true)) return;
+        edgesOf(lp.points).forEach(o => {
+          if (!o.square || o.axis !== edge.axis || o.n !== edge.n || Math.abs(o.c - c) > LOCK_TOL_FT) return;
+          if (Math.min(o.hi, edge.hi) - Math.max(o.lo, edge.lo) <= TOL) return;
+          hits.push({ loop: lp, edge: o });
+        });
+      });
+      return hits;
+    };
+    const carriedUnder = p > 0 && flushBelow(p - 1, edge.c).length > 0;
+    if (level.kind === 'floor' && !loop.garage && p > 0 && ladder && !carriedUnder) {
       const under = belowEdge(stack[p - 1], edge);
       if (under) {
         const wantH = under.h + out;
@@ -653,7 +685,7 @@ if (!window.DraftBoneyardEdit) {
       else {
         pushLevelRecords(d, lvl.levelId, garage, L, newId);
         if (garage) pushLevelRecords(d, 1, true, L, newId);
-        report.roofs += pushRoofs(d, roofsFor(d, lvl.levelId, ctx.roofSourceId), lp.points, L);
+        if (roofFollows(ctx)) report.roofs += pushRoofs(d, roofsFor(d, lvl.levelId, ctx.roofSourceId), lp.points, L);
       }
       // One line per level and distance, however many of its edges moved.
       if (!report.moves.some(m => m.levelId === lvl.levelId && m.kind === lvl.kind && near(m.outFt, amount))) {
@@ -666,11 +698,23 @@ if (!window.DraftBoneyardEdit) {
 
     moveLoop(level, loop, edge, edge.lo, edge.hi, out);
 
+    // ── AND THE LOCKED FLOORS UNDER IT, ON THE SAME LINE ───────────────
+    // Down the stack while each one has an edge on the line the one above
+    // it stood on; the first that has none, or is unchecked, ends it.
+    for (let q = p - 1, c = edge.c; q >= 0; q--) {
+      const hits = flushBelow(q, c);
+      if (!hits.length) break;
+      hits.forEach(h => moveLoop(stack[q], h.loop, h.edge,
+        Math.max(edge.lo, h.edge.lo), Math.min(edge.hi, h.edge.hi), out));
+      c = hits[0].edge.c;
+    }
+
     // ── AND EVERYTHING ABOVE ───────────────────────────────────────────
     let prev = { axis: edge.axis, n: edge.n, c: edge.c, lo: edge.lo, hi: edge.hi, out };
     for (let q = p + 1; q < stack.length; q++) {
       const lvl = stack[q];
       if (lvl.kind !== 'floor') continue;
+      if (!follows(ctx, lvl)) break;
       const hit = inlineEdge(lvl, prev);
       if (!hit) break;
       // HOOKED, NOT MERELY FACING THE SAME WAY. An edge further out than the
@@ -962,18 +1006,10 @@ if (!window.DraftBoneyardEdit) {
   // pushed alone. A floor's bone gets the corner in its outline; the
   // foundation's bone is its concrete, so the wall and the footing under it
   // are cut there instead.
-  const breakEdge = (drawing, req, ctx) => {
-    if (req.kind === 'roof') return breakRoofEdge(drawing, req, ctx);
-    const stack = floorsOf(ctx.levels);
-    const level = stack.find(l => l.kind === req.kind && Number(l.levelId) === Number(req.levelId));
-    const loop = level && level.loops[req.loopIndex];
-    const edge = loop && edgeOf(loop.points, req.edgeIndex);
-    if (!edge) return { ok: false, reason: 'NO_EDGE' };
-    if (!edge.square) return { ok: false, reason: 'NOT_SQUARE' };
-    const u = Math.round(Number(req.atFt));
-    if (!(u >= edge.lo + 1 - TOL && u <= edge.hi - 1 + TOL)) return { ok: false, reason: 'AT_END' };
+  // The break itself, on a drawing already copied: a floor's outline gets
+  // the corner, the foundation's wall and footing lines are cut there.
+  const breakFloorIn = (d, level, loop, edge, edgeIndex, u) => {
     const at = pointAt(edge.axis, edge.c, u);
-    const d = clone(drawing);
     if (level.kind === 'foundation') {
       const newId = idMaker(d);
       const split = (list, keep, prefix) => {
@@ -995,25 +1031,16 @@ if (!window.DraftBoneyardEdit) {
       d.walls = split(d.walls || [], w => Number(w.levelId) === 1 && w.view === 'foundation'
         && !isGarageWall(w), 'wall');
       d.lines = split(d.lines || [], l => Number(l.levelId) === 1 && !isGarageLine(l), 'line');
-      return { ok: true, drawing: d, at };
+      return { ok: true, at };
     }
     const outline = (d.outlines || []).find(o => o.id === loop.id);
     if (!outline) return { ok: false, reason: 'NO_LOOP' };
-    outline.points.splice(req.edgeIndex + 1, 0, { x: at.x, y: 0, z: at.z });
-    return { ok: true, drawing: d, at };
+    outline.points.splice(edgeIndex + 1, 0, { x: at.x, y: 0, z: at.z });
+    return { ok: true, at };
   };
-
   // A ROOF'S BREAK goes in its eave, one overhang out from the bone's edge,
   // carrying that edge's eave and overhang on both halves.
-  const breakRoofEdge = (drawing, req, ctx) => {
-    const roofLevel = levelOf(ctx.levels, 'roof', req.levelId);
-    const loop = roofLevel && roofLevel.loops[req.loopIndex];
-    const edge = loop && edgeOf(loop.points, req.edgeIndex);
-    if (!edge) return { ok: false, reason: 'NO_EDGE' };
-    if (!edge.square) return { ok: false, reason: 'NOT_SQUARE' };
-    const u = Math.round(Number(req.atFt));
-    if (!(u >= edge.lo + 1 - TOL && u <= edge.hi - 1 + TOL)) return { ok: false, reason: 'AT_END' };
-    const d = clone(drawing);
+  const breakRoofIn = (d, loop, edge, u) => {
     const roof = (d.roofs || []).find(r => r.id === loop.id);
     if (!roof) return { ok: false, reason: 'NO_ROOF' };
     const ohOf = i => Number((roof.edgeOverhang || [])[i] ?? roof.overhang ?? 0) || 0;
@@ -1026,7 +1053,43 @@ if (!window.DraftBoneyardEdit) {
     if (Array.isArray(roof.edgeOverhang)) {
       roof.edgeOverhang.splice(eave.index + 1, 0, roof.edgeOverhang[eave.index]);
     }
-    return { ok: true, drawing: d, at: pointAt(edge.axis, edge.c, u) };
+    return { ok: true, at: pointAt(edge.axis, edge.c, u) };
+  };
+
+  const breakEdge = (drawing, req, ctx) => {
+    const all = req.kind === 'roof' ? [] : floorsOf(ctx.levels);
+    const level = req.kind === 'roof' ? levelOf(ctx.levels, 'roof', req.levelId)
+      : all.find(l => l.kind === req.kind && Number(l.levelId) === Number(req.levelId));
+    const loop = level && level.loops[req.loopIndex];
+    const edge = loop && edgeOf(loop.points, req.edgeIndex);
+    if (!edge) return { ok: false, reason: 'NO_EDGE' };
+    if (!edge.square) return { ok: false, reason: 'NOT_SQUARE' };
+    const u = Math.round(Number(req.atFt));
+    if (!(u >= edge.lo + 1 - TOL && u <= edge.hi - 1 + TOL)) return { ok: false, reason: 'AT_END' };
+    const d = clone(drawing);
+    const done = req.kind === 'roof' ? breakRoofIn(d, loop, edge, u)
+      : breakFloorIn(d, level, loop, edge, req.edgeIndex, u);
+    if (!done.ok) return done;
+    // AND THE LOCKED LEVELS WITH AN EDGE ON THE SAME LINE take the corner
+    // too, so the next push finds the same part to move on each of them.
+    const also = [];
+    if (ctx && ctx.locked) {
+      (ctx.levels || []).forEach(other => {
+        if (other === level || !follows(ctx, other)) return;
+        if (other.kind !== 'roof' && other.kind !== 'floor' && other.kind !== 'foundation') return;
+        if (other.kind === 'floor' && isLanding(other)) return;
+        other.loops.forEach(lp => {
+          if (lp.garage) return;
+          const o = edgesOf(lp.points).find(e => e.square && e.axis === edge.axis && e.n === edge.n
+            && Math.abs(e.c - edge.c) <= LOCK_TOL_FT && u >= e.lo + 1 - TOL && u <= e.hi - 1 + TOL);
+          if (!o) return;
+          const r = other.kind === 'roof' ? breakRoofIn(d, lp, o, u)
+            : breakFloorIn(d, other, lp, o, o.index, u);
+          if (r.ok && !also.includes(other.name)) also.push(other.name);
+        });
+      });
+    }
+    return { ok: true, drawing: d, at: done.at, also };
   };
 
   // ── AN OPENING SLIDES ALONG ITS WALL ─────────────────────────────────
