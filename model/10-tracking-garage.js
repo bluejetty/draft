@@ -2339,6 +2339,237 @@
       + 'drag its corners to suit your lot.');
   };
 
+  // ── REGISTRATION: SETBACK AND SIDEYARD, TYPED (Movie, 28 Oct) ──────────
+  //
+  // The gap between the two targets, read on the turned plan's axes: the
+  // green one stands on the lot's front-left corner, the gold one on the
+  // house's, so SETBACK is how far the gold sits back from the front line
+  // and SIDEYARD how far in from the left one. A number typed slides the
+  // LOT by the difference and nothing else, with one UNDO.
+  const regBox = document.querySelector('[data-registration]');
+  const regSetback = regBox?.querySelector('[data-reg-setback]');
+  const regSideyard = regBox?.querySelector('[data-reg-sideyard]');
+  const regGap = () => {
+    const lot = LS.siteOutlineOf(drawing?.outlines);
+    const gold = lot && siteDatumNow();
+    const green = gold && LS.siteDatumOf(lot, drawing?.planTurn || 0);
+    if (!green) return null;
+    const { front, left } = LS.lotAxes(drawing?.planTurn || 0);
+    const along = (p, d) => p.x * d.x + p.z * d.z;
+    return { lot, front, left,
+      setback: along(green, front) - along(gold, front),
+      sideyard: along(green, left) - along(gold, left) };
+  };
+  const regText = feet => (lotMetric()
+    ? window.DraftFormatters.formatMetres(feet)
+    : window.DraftFormatters.formatArchitecturalInches(Math.round(feet * 192) / 16));
+  const regRead = value => {
+    if (lotMetric()) {
+      const m = parseFloat(String(value).replace(/m$/i, ''));
+      return Number.isFinite(m) ? m / 0.3048 : NaN;
+    }
+    const read = window.DraftFormatters.parseArchitecturalLength(value);
+    return read.ok ? read.inches / 12 : NaN;
+  };
+  const regSites = regBox?.querySelector('[data-reg-sites]');
+  let regSitesKey = '';
+  // THE LOTS AS ROWS, rebuilt only when what they say changes, so a box
+  // being clicked is not torn out from under the pointer by the next paint.
+  const paintRegSites = lots => {
+    const key = JSON.stringify(lots.map(l => [l.key, l.name, l.shown]));
+    if (!regSites || key === regSitesKey) return;
+    regSitesKey = key;
+    regSites.replaceChildren(...lots.map(l => {
+      const row = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = l.shown;
+      box.dataset.regSite = l.key;
+      box.addEventListener('change', () => {
+        drawing.siteLots = { ...(drawing.siteLots || {}), [l.key]: box.checked };
+        markDirty();
+        paint();
+      });
+      const name = document.createElement('span');
+      name.textContent = l.name;
+      row.append(box, name);
+      if (l.key !== 'own') {
+        const use = document.createElement('button');
+        use.type = 'button';
+        use.dataset.regUse = l.key;
+        use.textContent = 'USE';
+        use.title = `Copy ${l.name}'s lot into this file, exactly where it lies`;
+        use.addEventListener('click', e => { e.preventDefault(); useHologramLot(l); });
+        row.append(use);
+      }
+      return row;
+    }));
+  };
+  // A HOLOGRAM'S LOT, COPIED IN (Movie, 28 Oct: "i will need to add a 2nd
+  // exact site plan for the PHASE 2 as PHASE 1"). Laid where it lies here,
+  // so the two green targets are one; this file's lot is replaced if it has
+  // one, and the hologram's line is switched off -- one line, not two.
+  const useHologramLot = l => {
+    drawing.outlines = drawing.outlines || [];
+    const was = LS.siteOutlineOf(drawing.outlines);
+    const lotsBefore = drawing.siteLots;
+    const sizeBefore = drawing.lot;
+    const record = { id: newDrawingItemId('outline'), masterId: null, levelId: SITE_LEVEL_ID,
+      garage: false, site: true, detached: false, foundation: null,
+      points: l.points.map(pt => ({ x: pt.x, y: 0, z: pt.z })), overriddenSrcIds: [] };
+    if (was) drawing.outlines.splice(drawing.outlines.indexOf(was), 1, record);
+    else drawing.outlines.push(record);
+    if (l.size) drawing.lot = { ...l.size };
+    drawing.siteLots = { ...(drawing.siteLots || {}), own: true, [l.key]: false };
+    undoStack.push({ kind: 'node', undo: () => {
+      const at = drawing.outlines.indexOf(record);
+      if (at >= 0) { if (was) drawing.outlines.splice(at, 1, was); else drawing.outlines.splice(at, 1); }
+      drawing.siteLots = lotsBefore;
+      drawing.lot = sizeBefore;
+      setSelection([]);
+    } });
+    markDirty();
+    sayOnStrip(`${l.name}'s lot copied into this file \u2014 its line is off, this file's shows.`);
+    paint();
+  };
+  // ALIGN SITE PLAN GREEN REGISTRATION MARKS (Movie, 28 Oct: "when a user
+  // brings in another plan (which also has a site plan and a green target)
+  // have a button that says ALIGN SITE PLAN GREEN REGISTRATION MARKS" -- "and
+  // then align those all on that green target if they pick that"). The mark
+  // is this file's own lot, or, with none, the hologram site plan whose box
+  // is checked. Only holograms move; nothing of this file does. One UNDO.
+  //
+  // NOT EVERY HOLOGRAM ("the suites i don't want aligned that way, so this
+  // button should only be for some" -- "add the list of hologram TYPES (1 per
+  // suite and 1 per phase) and then allow the user to checkbox which he
+  // wants aligned in addition to be able to do it on the card"). A TYPE is a
+  // file; `drawing.alignTypes` holds its box, and an untouched box is on for
+  // a phase and off for a suite.
+  const regAlign = regBox?.querySelector('[data-reg-align]');
+  const regTypes = regBox?.querySelector('[data-reg-types]');
+  const holoLotOf = holo => {
+    const lot = LS.siteOutlineOf(holo?.source?.outlines);
+    return lot ? window.DraftHologram.placed(holo, lot.points) : null;
+  };
+  const greenAt = points => LS.siteDatumOf({ points }, drawing?.planTurn || 0);
+  const alignTarget = () => {
+    const own = LS.siteOutlineOf(drawing?.outlines);
+    if (own) return { name: 'THIS FILE', id: null, at: greenAt(own.points) };
+    const lots = window.DraftHologram ? window.DraftHologram.siteLots(drawing) : [];
+    const pick = lots.find(l => l.shown) || lots[0];
+    return pick ? { name: pick.name, id: pick.key, at: greenAt(pick.points) } : null;
+  };
+  const typeAligns = file => {
+    const v = drawing?.alignTypes?.[file];
+    if (typeof v === 'boolean') return v;
+    const first = (drawing?.holograms || []).find(h => window.DraftHologram.fileOf(h) === file);
+    return !window.DraftHologram.isSuite(first);
+  };
+  alignHolograms = which => {
+    const target = alignTarget();
+    if (!target?.at) { sayOnStrip('No green registration mark to align to -- draw or USE a site plan first.'); return 0; }
+    const moved = [];
+    (drawing.holograms || []).filter(which).forEach(holo => {
+      if (String(holo.id) === target.id) return;
+      const pts = holoLotOf(holo);
+      const from = pts && greenAt(pts);
+      if (!from) return;
+      const dx = target.at.x - from.x, dz = target.at.z - from.z;
+      if (Math.hypot(dx, dz) < 1e-9) return;
+      moved.push({ holo, x: holo.x, z: holo.z });
+      holo.x = (Number(holo.x) || 0) + dx;
+      holo.z = (Number(holo.z) || 0) + dz;
+    });
+    if (!moved.length) { sayOnStrip('Those green registration marks already line up.'); return 0; }
+    undoStack.push({ kind: 'node', undo: () => {
+      moved.forEach(m => { m.holo.x = m.x; m.holo.z = m.z; });
+    } });
+    bumpModelEpoch();
+    markDirty();
+    sayOnStrip(`${moved.length === 1 ? 'One hologram' : `${moved.length} holograms`} moved onto ${target.name}'s green registration mark.`);
+    paint();
+    return moved.length;
+  };
+  regAlign?.addEventListener('click', () => {
+    alignHolograms(holo => typeAligns(window.DraftHologram.fileOf(holo)));
+  });
+  let regTypesKey = '';
+  const paintRegTypes = () => {
+    const H = window.DraftHologram;
+    const files = [...new Set((drawing?.holograms || []).map(h => H.fileOf(h)))];
+    const rows = files.map(file => {
+      const copies = drawing.holograms.filter(h => H.fileOf(h) === file);
+      return { file, suite: H.isSuite(copies[0]), lot: copies.some(holoLotOf), on: typeAligns(file) };
+    });
+    const key = JSON.stringify(rows);
+    if (!regTypes || key === regTypesKey) return rows;
+    regTypesKey = key;
+    regTypes.replaceChildren(...(rows.length ? [Object.assign(document.createElement('b'), { textContent: 'HOLOGRAM TYPES \u00b7 ALIGN' })] : []),
+      ...rows.map(r => {
+        const row = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = r.on;
+        box.dataset.regAlignType = r.file;
+        box.disabled = !r.lot;
+        row.title = r.lot ? `Align ${r.file} when ALIGN is pressed` : `${r.file} has no site plan to align by`;
+        box.addEventListener('change', () => {
+          drawing.alignTypes = { ...(drawing.alignTypes || {}), [r.file]: box.checked };
+          markDirty();
+          paintRegistration();
+        });
+        const name = document.createElement('span');
+        name.textContent = `${r.file}${r.suite ? ' (SUITE)' : ''}`;
+        row.append(box, name);
+        return row;
+      }));
+    return rows;
+  };
+  paintRegistration = () => {
+    if (!regBox) return;
+    const onSite = activeLevelId() === SITE_LEVEL_ID && !boneyardActive && !(drawing && activeCut());
+    const lots = onSite && window.DraftHologram ? window.DraftHologram.siteLots(drawing) : [];
+    const gap = onSite ? regGap() : null;
+    const hide = !onSite || (!gap && !lots.length && !(drawing?.holograms || []).length);
+    if (regBox.hidden !== hide) regBox.hidden = hide;
+    if (hide) return;
+    paintRegSites(lots.length > 1 || lots.some(l => l.key !== 'own') ? lots : []);
+    const types = paintRegTypes();
+    if (regAlign) regAlign.hidden = !alignTarget() || !types.some(t => t.lot && t.on);
+    [[regSetback, gap?.setback], [regSideyard, gap?.sideyard]].forEach(([input, feet]) => {
+      input.closest('label').hidden = !gap;
+      if (gap && document.activeElement !== input) input.value = regText(feet);
+    });
+  };
+  const regTyped = (input, key) => {
+    const gap = regGap();
+    const want = regRead(input.value);
+    if (!gap || !Number.isFinite(want)) { paintRegistration(); paint(); return; }
+    const by = want - gap[key];
+    if (Math.abs(by) < 1e-6) return;
+    // THE LOT MOVES TOWARD WHERE THE NUMBER GROWS: a deeper setback carries
+    // the front line forward, a wider sideyard carries the left line out.
+    const dir = key === 'setback' ? gap.front : gap.left;
+    const before = gap.lot.points.map(pt => ({ ...pt }));
+    gap.lot.points.forEach(pt => { pt.x += dir.x * by; pt.z += dir.z * by; });
+    const lot = gap.lot;
+    undoStack.push({ kind: 'node', undo: () => {
+      lot.points.forEach((pt, i) => Object.assign(pt, before[i]));
+    } });
+    markDirty();
+    sayOnStrip(`${key === 'setback' ? 'SETBACK' : 'SIDEYARD'} ${regText(want)} — the lot moved, the house stayed.`);
+    paint();
+  };
+  [[regSetback, 'setback'], [regSideyard, 'sideyard']].forEach(([input, key]) => {
+    if (!input) return;
+    input.addEventListener('change', () => regTyped(input, key));
+    input.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { input.value = ''; input.blur(); paintRegistration(); }
+    });
+  });
+
   if (lotCard) {
     lotCard.querySelector('[data-lot-pick-draw]').addEventListener('click', () => {
       lotTouched = true;

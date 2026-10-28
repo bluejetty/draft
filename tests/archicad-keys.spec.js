@@ -55,15 +55,17 @@ test('SHIFT held squares the run and lights the T-square; let go, the run is fre
   await expect(chip(page)).not.toHaveClass(/\blit\b/);
 });
 
-test('T latches the T-square down; SHIFT then frees the run while held; T again lifts it', async ({ page }) => {
+// SHIFT ONLY TURNS IT ON (Movie, 28 Oct: "if T is fully engaged it doesn't
+// toggle off, but if its off it toggles on").
+test('T latches the T-square down; SHIFT held leaves it square; T again lifts it', async ({ page }) => {
   await open(page);
   await h.armFromRail(page, 'line');
   await page.keyboard.press('t');
   await expect(chip(page)).toHaveClass(/\blit\b/);
   expect(await landing(page, 9, 5.3)).toEqual([9, 4]);
   await page.keyboard.down('Shift');
-  expect(await landing(page, 9, 5.3), 'SHIFT frees a latched T-square').toEqual([9, 5.3]);
-  await expect(chip(page)).not.toHaveClass(/\blit\b/);
+  expect(await landing(page, 9, 5.3), 'SHIFT does not free a latched T-square').toEqual([9, 4]);
+  await expect(chip(page)).toHaveClass(/\blit\b/);
   await page.keyboard.up('Shift');
   expect(await landing(page, 9, 5.3)).toEqual([9, 4]);
   await page.keyboard.press('t');

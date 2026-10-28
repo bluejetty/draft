@@ -73,13 +73,13 @@ const mainOf = d => d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
 const fdnX0 = d => Math.min(...d.walls.filter(w => Number(w.levelId) === 1 && w.view === 'foundation')
   .flatMap(w => [w.start.x, w.end.x]));
 
-test('each level row is BG, the level, then its LOCK box -- every box checked, the picked level\'s not a question', async ({ page }) => {
+test('each level row is its LOCK box, the level, then BG -- every box checked, the picked level\'s not a question', async ({ page }) => {
   await bungalow(page);
   await page.locator('[data-bone-level="MAIN FL"]').click();
   const rows = await page.locator('.level-row').evaluateAll(rs => rs.map(r => [...r.children].map(c =>
     c.dataset.boneBg ? 'BG' : c.dataset.boneLevel ? 'LEVEL' : c.querySelector('[data-bone-lock]') ? 'LOCK' : '?')));
   expect(rows.length).toBeGreaterThan(1);
-  rows.forEach(r => expect(r).toEqual(['BG', 'LEVEL', 'LOCK']));
+  rows.forEach(r => expect(r).toEqual(['LOCK', 'LEVEL', 'BG']));
   const boxes = page.locator('[data-bone-lock]');
   for (let i = 0; i < await boxes.count(); i += 1) await expect(boxes.nth(i)).toBeChecked();
   await expect(page.locator('[data-bone-lock="MAIN FL"]')).toBeDisabled();

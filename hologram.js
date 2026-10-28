@@ -810,6 +810,38 @@
   // Paint every shown hologram of `saved` at `levelId`. `toS` is the caller's
   // feet-to-screen; env: { view, show: { existing, demo }, paperColor }.
   // Returns whether anything was drawn.
+  // ── WHICH SITE PLAN SHOWS (Movie, 28 Oct: "i will need to add a 2nd exact
+  // site plan for the PHASE 2 as PHASE 1, but will only want to show the
+  // PHASE 2 site (no double lines)" -- "in the registration box show the
+  // different site plans on which holograms / file and they can checkbox the
+  // one they want to use"). `saved.siteLots` holds the boxes, keyed 'own' or
+  // by the hologram's id; a box never touched shows a hologram's lot only
+  // while this file has none of its own.
+  const ownLotOf = saved => (Array.isArray(saved?.outlines) ? saved.outlines : [])
+    .find(o => o && o.site === true && Array.isArray(o.points) && o.points.length > 2) || null;
+  const lotShown = (key, saved) => {
+    const v = saved?.siteLots?.[String(key)];
+    if (typeof v === 'boolean') return v;
+    return key === 'own' ? true : !ownLotOf(saved);
+  };
+  // Every lot in reach: this file's, then each hologram's, laid where it
+  // stands in this drawing.
+  const siteLots = saved => {
+    const out = [];
+    if (ownLotOf(saved)) out.push({ key: 'own', name: 'THIS FILE', shown: lotShown('own', saved) });
+    shown(saved).filter(holo => !isSuite(holo)).forEach(holo => {
+      const lot = ownLotOf(holo.source);
+      if (!lot) return;
+      out.push({ key: String(holo.id), name: holo.name || 'HOLOGRAM', shown: lotShown(String(holo.id), saved),
+        points: placed(holo, lot.points), size: holo.source?.lot || null });
+    });
+    return out;
+  };
+  // A hologram's existing drawing less its lot line, where its box is off.
+  const lotLess = (holo, saved, existing, levelId) => (Number(levelId) === 8
+    && !lotShown(String(holo.id).split('/')[0], saved)
+    ? { ...existing, outlines: (existing.outlines || []).filter(o => !o?.site) } : existing);
+
   const paint = (ctx, toS, saved, levelId, env = {}) => {
     const list = drawn(saved);
     const LP = window.DraftLayoutPlan;
@@ -851,7 +883,7 @@
           const split = parts(holo);
           if (show.existing) {
             const layersOff = layersOffFor(holo, saved);
-            drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, split.existing, levelId,
+            drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, lotLess(holo, saved, split.existing, levelId), levelId,
               { view, hologram: true, paperColor: env.paperColor || '#ffffff', layersOff })) || drew;
           }
           if (show.demo) drew = paintDemo(ink, place, holo, split, levelId, view || 'plan') || drew;
@@ -1142,7 +1174,7 @@
     BLUE, PALE, ALPHA, VIEWS, COLOURS, colourOf, colourIndex, nextColour, fileOf,
     planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
-    drawn, suiteSuperNodes, shelfSuperNodes, suiteEndLines, suiteLineSnap,
+    drawn, siteLots, lotShown, suiteSuperNodes, shelfSuperNodes, suiteEndLines, suiteLineSnap,
     LAYER_GROUPS, TEXT_OFF, WORDS, layerSetFor, layersOffFor,
   });
 })();

@@ -130,11 +130,12 @@
   // SHIFT HOLDS IT SQUARE, as ARCHICAD's Shift does (Movie, 27 Oct: "it has
   // the SHIFT for the 90 degree lines (like our T SQUARE) ... get it working
   // fairly similar to ARCHICAD, but also change it so its a little better").
-  // The better part is the latch: T or the chip locks the T-square down, and
-  // SHIFT then frees the run while it is held. So the T-square is live when
-  // exactly one of the two is on.
+  // The better part is the latch: T or the chip locks the T-square down.
+  // SHIFT ONLY EVER TURNS IT ON (Movie, 28 Oct: "if T is fully engaged it
+  // doesn't toggle off, but if its off it toggles on"), so the T-square is
+  // live when either of the two is.
   let shiftSquare = false;
-  const tsquareLive = () => tsquareOn !== shiftSquare;
+  const tsquareLive = () => tsquareOn || shiftSquare;
   // THE FOOT LIGHT. A PAGE SETTING, NOT DRAWING DATA -- a drawing carrying
   // "the foot light was on" would arrive in someone else's session and start
   // rounding his walls, so it rides in SKIN_KEY with the theme. (The board
@@ -1576,7 +1577,6 @@
       ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT` : ''),
   });
 
-  const LOWER_ROOF_ALPHA = 0.5;
   const paintRoofs = () => {
     const R = window.DraftRender2D;
     const G = window.DraftGeometry2D;
@@ -1592,14 +1592,16 @@
     roofs().forEach(roof => {
       if ((roof.points || []).length < 3) return;
       const b = bearing.get(roof);
-      // A LOWER ROOF, LIGHTER ON THE ROOF PLAN (Movie, 27 Oct: "i think we
-      // already set it up for the lower roofs to show on the ROOF PLAN but
-      // maybe shaded lighter?"): one dropped onto a storey below, or drawn on
-      // one, is under the eye there, not level with the main roof.
+      // A LOWER ROOF, IN RED ON THE ROOF PLAN (Movie, 27 Oct: "maybe shaded
+      // lighter?" -- then 28 Oct: "instead of making the lower roof dimmer,
+      // lets make it a redish color instead, will be more obvious to the
+      // user"): one dropped onto a storey below, or drawn on one, is under
+      // the eye there, not level with the main roof.
       const lower = roof.drawnOn != null && activeLevelId() === ROOF_LEVEL_ID;
-      if (lower) { ctx.save(); ctx.globalAlpha *= LOWER_ROOF_ALPHA; lowered += 1; }
-      R.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {}, paintEnv());
-      if (lower) ctx.restore();
+      if (lower) lowered += 1;
+      const env = paintEnv();
+      R.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {},
+        lower ? { ...env, colors: { ...env.colors, roof: skin['draw-roof-lower'] } } : env);
     });
     // THE SHEET ONLY: the rail paints each level's thumbnail through here.
     if (ctx.canvas === canvas) {

@@ -1009,6 +1009,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // already placed and NOT NOW takes it back out -- both doors to
             // the AUTO BEAM row the table already carries.
             'PLACE BEAMS AND COLUMNS', 'NOT NOW',
+            // AND REGISTRATION's ALIGN (Movie, 28 Oct): slides holograms so
+            // their green site marks sit on one. It moves holograms, which
+            // the MOVE row already carries, so no absence row moves.
+            'reg-align',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a
@@ -1104,7 +1108,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // (and pitch)"): sizes for the roof the ROOF tool makes.
             'gable-eave', 'gable-pitch',
             // AND THE STAIR'S WIDTH (25 Oct): a size for the stair it places.
-            'stair-width'].sort(),
+            'stair-width',
+            // REGISTRATION's two figures on SITE (Movie, 28 Oct): the gap
+            // from the lot's green target to the house's gold one. They slide
+            // the lot the OUTLINE row already authors, so no absence moves.
+            'reg-setback', 'reg-sideyard'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as

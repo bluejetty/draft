@@ -166,6 +166,10 @@ if (!window.DraftPalette) {
                         // QUIETER than the footprint they belong to. That
                         // ordering is the check: guide contrast below roof
                         // contrast, on both skins.
+    'draw-roof-lower',  // a LOWER roof on the ROOF plan -- one dropped onto, or
+                        // drawn on, a storey below (Movie, 28 Oct: "instead
+                        // of making the lower roof dimmer, lets make it a
+                        // redish color instead, will be more obvious").
     // TRACE -- an outline's identity while it is being drawn or parked, and
     // the selection that picks one up. A CATEGORICAL family, not a scale:
     // these colours exist to be told apart FROM EACH OTHER, the way a legend
@@ -334,6 +338,7 @@ if (!window.DraftPalette) {
       // reading day always had.
       'draw-roof':       '#c4915a',
       'draw-roof-guide': '#a3703f',   // 3.90 -- clears 3.0, sits under the roof's 5.95
+      'draw-roof-lower': '#e0645a',   // red against the night ground, clear of the roof's brown
       // TRACE. Ratios are against surface-page; the floor for line work is 3.0.
       // Every value here is MODEL.html's own literal EXCEPT the two marked
       // LIFTED, which were measured below the floor on this mode.
@@ -441,6 +446,7 @@ if (!window.DraftPalette) {
       'draw-column':     '#1d1f20',   // 14.79 -- ink-primary, as the old page
       'draw-roof':       '#7a4a21',   // 6.64 on the page
       'draw-roof-guide': '#a3703f',   // 3.79 -- under the roof's 6.64, same as night's ordering.
+      'draw-roof-lower': '#b8382e',   // red on the day page
                                       // Both values are what render-2d.js hardcoded before this
                                       // role existed, so DAY IS UNCHANGED.
       // TRACE, against day's ground. Only the garage boneyard moves here.

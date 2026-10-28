@@ -1253,6 +1253,9 @@
   const moveGrabPoints = () => {
     const entries = selectionEntries();
     const pts = carriedPoints(entries).map(v => ({ x: v.x, z: v.z, node: true }));
+    // A HOLOGRAM IS TAKEN BY ITS CORNERS -- on SITE, its lot's (Movie, 28 Oct).
+    entries.filter(e => e.type === 'hologram').forEach(({ item }) => hologramCorners(item)
+      .forEach(v => pts.push({ x: v.x, z: v.z, node: true })));
     const G = window.DraftGeometry2D;
     const ws = entries.filter(e => e.type === 'wall').map(e => e.item);
     if (G?.wallFaceCorners && ws.length) {
@@ -1765,12 +1768,20 @@
       paint();
       return;
     }
+    // THE T-SQUARE HOLDS A ROOF'S MOVE SQUARE (Movie, 28 Oct: "the T isn't
+    // engaging for when i move the roof"): a whole roof, its picked nodes or
+    // one corner go straight across or straight along, whichever the hand is
+    // nearer, as a wall's drag does -- and a catch only slides it along.
+    const squareMove = tsquareLive() && (d.kind === 'roof' || d.kind === 'nodes' || d.kind === 'node');
+    const across = Math.abs(dx) >= Math.abs(dz);
+    if (squareMove) { if (across) dz = 0; else dx = 0; }
     // A WHOLE ROOF SEEKS by its corners, the way a selection does.
     if (d.kind === 'roof' && snapLive() && board !== 'toy') {
       const carried = d.targets.flatMap(r => [...r.points, ...(r.footprint || [])]);
       const seek = pointsSeek(d.befores.flatMap(b => b.points), dx, dz, (d.magnet ||= magnetExcluding(carried)));
       d.lit = seek?.lit || null;
       if (seek) { dx = seek.dx; dz = seek.dz; }
+      if (squareMove) { if (across) dz = 0; else dx = 0; }
     }
     d.targets.forEach((roof, k) => {
       const b = d.befores[k];
@@ -1792,10 +1803,20 @@
         // never itself: its own place is kept out of the magnet.
         const own = b.points[d.node];
         const magnet = snapLive() && board !== 'toy' ? (d.magnet ||= magnetExcluding([own])) : null;
-        const hit = magnet ? dragMagnetAt(at, own, magnet) : null;
-        d.lit = hit || null;
-        const snap = hit?.pt || trackSnap(at, [own])?.pt || null;
-        const to = snap ? { x: snap.x, z: snap.z } : at;
+        let to;
+        if (squareMove) {
+          // Square to where it started; what it catches sets the free
+          // coordinate only, and the ring is drawn where it lands.
+          const aim = { x: own.x + dx, y: 0, z: own.z + dz };
+          const hit = magnet ? axisMagnet(aim, across ? 'z' : 'x', [own], magnet) : null;
+          d.lit = hit || null;
+          to = hit ? { x: hit.pt.x, z: hit.pt.z } : { x: aim.x, z: aim.z };
+        } else {
+          const hit = magnet ? dragMagnetAt(at, own, magnet) : null;
+          d.lit = hit || null;
+          const snap = hit?.pt || trackSnap(at, [own])?.pt || null;
+          to = snap ? { x: snap.x, z: snap.z } : at;
+        }
         const sx = to.x - b.points[d.node].x, sz = to.z - b.points[d.node].z;
         roof.points[d.node] = { ...roof.points[d.node], x: to.x, z: to.z };
         if (roof.footprint) roof.footprint[d.node] = { ...roof.footprint[d.node], x: roof.footprint[d.node].x + sx, z: roof.footprint[d.node].z + sz };

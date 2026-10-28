@@ -3001,6 +3001,32 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // ONLY WALLS OF ONE POOL MELD: the pool key is (level, view, body) on the
   // pooled corner, so a garage wall crossing a house wall stays as it was,
   // the same rule wallJoins keeps by identity.
+  // ENDS IN THE SAME PLACE ARE ONE CORNER, FOR THE DRAWING (Movie, 28 Oct:
+  // "the ext / inside suite wall (hallway wall) where the door jogs in the
+  // wall doesn't connect properly on the inside and outside corners doesn't
+  // meld" -- "even if they aren't connected but in the same location, they
+  // should meld"). wallJoins keys on the corner OBJECT, so two walls whose
+  // ends merely coincide drew as two boxes. These are copies of the walls
+  // with every end within a hair of another (same body) handed ONE point,
+  // so the corner mitres; the records are not touched.
+  const SAME_END_FT = 0.005;
+  function sharedEnds(walls) {
+    const seen = [];
+    const canon = (pt, body) => {
+      const hit = seen.find(v => v.body === body
+        && Math.abs(v.pt.x - pt.x) < SAME_END_FT && Math.abs(v.pt.z - pt.z) < SAME_END_FT);
+      if (hit) return hit.pt;
+      seen.push({ pt, body });
+      return pt;
+    };
+    return (walls || []).map(w => {
+      if (!w || !w.start || !w.end) return w;
+      const body = w.body || 'house';
+      const start = canon(w.start, body), end = canon(w.end, body);
+      return start === w.start && end === w.end ? w : { ...w, start, end, meldOf: w.meldOf || w };
+    });
+  }
+
   function meldPieces(walls) {
     const EPS = 1e-6, NEAR = 1e-3;
     // The pooled corner's key where there is one; the wall's own fields where
@@ -3614,10 +3640,42 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
       return { w, u, n, t, offs: [startOff, endOff] };
     }).filter(Boolean);
     const near = (p, q) => Math.abs(p.x - q.x) < 1e-3 && Math.abs(p.z - q.z) < 1e-3;
+    // v stands within g's length and within its body (its faces, give or
+    // take a hair), and f runs across it rather than along it.
+    const teeInto = (f, v, g) => {
+      if (Math.abs(f.u.x * g.u.z - f.u.z * g.u.x) < 1e-6) return false;
+      const len = Math.hypot(g.w.end.x - g.w.start.x, g.w.end.z - g.w.start.z);
+      const rx = v.x - g.w.start.x, rz = v.z - g.w.start.z;
+      const along = rx * g.u.x + rz * g.u.z;
+      if (along < -1e-3 || along > len + 1e-3) return false;
+      const across = rx * g.n.x + rz * g.n.z;
+      return across >= Math.min(...g.offs) - 1e-3 && across <= Math.max(...g.offs) + 1e-3;
+    };
+    // Where f's two faces meet the face of g on f's own side.
+    const teeCorners = (f, v, g) => {
+      const other = near(f.w.start, v) ? f.w.end : f.w.start;
+      const side = (other.x - v.x) * g.n.x + (other.z - v.z) * g.n.z;
+      const og = side >= 0 ? Math.max(...g.offs) : Math.min(...g.offs);
+      const gx = g.w.start.x + g.n.x * og, gz = g.w.start.z + g.n.z * og;
+      const cross = f.u.x * g.u.z - f.u.z * g.u.x;
+      return f.offs.map(of => {
+        const fx = v.x + f.n.x * of, fz = v.z + f.n.z * of;
+        // fx + u_f*s on g's face line: (f0 - g0) x u_g + s (u_f x u_g) = 0
+        const s = -((fx - gx) * g.u.z - (fz - gz) * g.u.x) / cross;
+        return { x: fx + f.u.x * s, z: fz + f.u.z * s };
+      });
+    };
     frames.forEach(f => {
       [f.w.start, f.w.end].forEach(v => {
         const others = frames.filter(g => g !== f && (near(g.w.start, v) || near(g.w.end, v)));
         if (!others.length) {
+          // A WALL RUN INTO ANOTHER'S SIDE -- a T (Movie, 28 Oct: "the inside
+          // corner node where i want to attach the kitchen isn't node snapping
+          // or showing the circle", a 2x6 run into the middle of an ICF wall).
+          // Its end stands on or in the other wall's body, not on an end, so
+          // no corner was made where its two faces meet that wall's near face.
+          const tees = frames.filter(g => g !== f && teeInto(f, v, g));
+          if (tees.length) { tees.forEach(g => teeCorners(f, v, g).forEach(add)); return; }
           f.offs.forEach(o => add({ x: v.x + f.n.x * o, z: v.z + f.n.z * o }));
           return;
         }
@@ -3796,7 +3854,12 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     };
     const own = roof => roof && !roof.garage && roof.sourceLevelId != null
       && !ROOF_PLAN_SKIP_LEVELS.has(Number(roof.sourceLevelId));
-    const ownLevels = new Set(roofs.filter(own).map(r => Number(r.sourceLevelId)));
+    // A ROOF DROPPED BELOW (`drawnOn`, SITS ON) stands UNDER the main roof,
+    // not over it, so it never stops one (Movie, 28 Oct: "the ridge lines on
+    // the main roof disappeared on that roof plan view" -- the bone's own
+    // roof, with no storey of its own, was cut away inside MAIN FL's outline,
+    // ridges and all, the moment a piece was dropped onto MAIN FL).
+    const ownLevels = new Set(roofs.filter(r => own(r) && r.drawnOn == null).map(r => Number(r.sourceLevelId)));
     const houseLevel = (levels || []).map(l => Number(l && l.id))
       .find(id => Number.isFinite(id) && !ROOF_PLAN_SKIP_LEVELS.has(id)
         && !ownLevels.has(id) && houseWalls(id).length);
@@ -3983,6 +4046,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     profileEnvelope,
     wallJoins,
     meldPieces,
+    sharedEnds,
     outlineSegment,
     outlineSegmentCount,
     lineControlPoint,

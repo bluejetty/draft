@@ -2047,6 +2047,9 @@
   const paint = () => {
     paintFrame += 1;
     if (syncDragLength) syncDragLength();
+    // REGISTRATION's box, outside the timed paint body: it is DOM, not ink.
+    paintRegistration();
+    sealDrawnChain();
     const t0 = performance.now();
     // Hand dimensions onto the corners they were put on, before anything draws.
     if (typeof followDimLinks === 'function') followDimLinks();

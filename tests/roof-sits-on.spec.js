@@ -56,7 +56,7 @@ const bears = page => page.evaluate(() => {
   return Math.round(CV.roofBaseElev(r, stack, env) * 100) / 100;
 });
 
-test('SITS ON drops a roof to the storey below: it bears on MAIN FL\'s walls, shows on 2ND FL, and is lighter on the ROOF plan', async ({ page }) => {
+test('SITS ON drops a roof to the storey below: it bears on MAIN FL\'s walls, shows on 2ND FL, and is marked on the ROOF plan', async ({ page }) => {
   const { at } = await open(page);
   await page.mouse.click(...at(15, 10));
   await expect(sits(page).locator('[data-prop-value="top"]')).toHaveAttribute('aria-pressed', 'true');
@@ -124,4 +124,72 @@ test('CUT a roof on the ROOF plan and paste it on 2ND FL: it lands in place, SIT
   await page.keyboard.press('Control+z');
   await page.keyboard.press('Control+z');
   expect(await page.evaluate(() => drawing.roofs.map(r => [r.id, r.drawnOn ?? null]))).toEqual([['roof-1', null]]);
+});
+
+// "instead of making the lower roof dimmer, lets make it a redish color
+// instead, will be more obvious to the user. make the printed construction
+// layout a dimmer or greyer line" (Movie, 28 Oct).
+const inkOf = (page, hex) => page.evaluate(want => {
+  const c = document.getElementById('plan');
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const r = parseInt(want.slice(1, 3), 16), g = parseInt(want.slice(3, 5), 16), b = parseInt(want.slice(5, 7), 16);
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (Math.abs(d[i] - r) < 12 && Math.abs(d[i + 1] - g) < 12 && Math.abs(d[i + 2] - b) < 12) n += 1;
+  }
+  return n;
+}, hex);
+test('a lower roof is RED on the ROOF plan, and GREY on the printed roof plan', async ({ page }) => {
+  const { at } = await open(page);
+  const red = await page.evaluate(() => skin['draw-roof-lower']);
+  expect(red).toMatch(/^#[0-9a-f]{6}$/i);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  expect(await inkOf(page, red), 'the main roof is not red').toBeLessThan(20);
+  await page.mouse.click(...at(15, 10));
+  await sits(page).locator('[data-prop-value="3"]').click();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  expect(await inkOf(page, red), 'the lower roof is').toBeGreaterThan(200);
+  // On paper: LAYOUT's roof plan, through the same painter LAYOUT uses.
+  const printed = await page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 400; c.height = 300;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 400, 300);
+    window.DraftLayoutPlan.drawPlan(ctx, p => ({ x: 50 + p.x * 8, y: 50 + p.z * 8 }), drawing, 7, {});
+    const d = ctx.getImageData(0, 0, 400, 300).data;
+    let grey = 0, brown = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const [r, g, b] = [d[i], d[i + 1], d[i + 2]];
+      if (r < 200 && Math.abs(r - g) < 8 && Math.abs(g - b) < 8 && r > 110) grey += 1;
+      if (r - b > 50 && r < 200) brown += 1;
+    }
+    return { grey, brown };
+  });
+  expect(printed.grey, 'the lower roof prints grey').toBeGreaterThan(200);
+  expect(printed.brown, 'not in the main roof\'s brown').toBeLessThan(40);
+});
+
+// "the ridge lines on the main roof disappeared on that roof plan view i
+// noticed, the roof still is on the elevations" (Movie, 28 Oct). The bone's
+// own roof has no storey named; a piece dropped onto MAIN FL is below it,
+// and must not cut it away inside MAIN FL's outline.
+test('a roof dropped onto MAIN FL leaves the bone\'s main roof whole on the ROOF plan, ridges and all', async ({ page }) => {
+  await open(page);
+  const excluded = await page.evaluate(() => {
+    const G = window.DraftGeometry2D;
+    const P = a => a.map(([x, z]) => ({ x, y: 0, z }));
+    const outlines = [{ id: 'o3', levelId: 3, points: P([[0, 0], [30, 0], [30, 20], [0, 20]]) },
+      { id: 'o5', levelId: 5, points: P([[0, 0], [30, 0], [30, 20], [0, 20]]) }];
+    const main = { id: 'main', levelId: 7, pitch: 6, points: P([[-2, -2], [32, -2], [32, 22], [-2, 22]]) };
+    const piece = { id: 'piece', levelId: 7, pitch: 6, sourceLevelId: 3, drawnOn: 5,
+      points: P([[30, 5], [40, 5], [40, 15], [30, 15]]) };
+    const bear = roofs => G.roofBearing({ roofs, walls: drawing.walls, outlines, levels: drawing.levels })
+      .find(b => b.roof === main).exclude.length;
+    return { alone: bear([main]), withDropped: bear([main, piece]),
+      withUpper: bear([main, { ...piece, drawnOn: undefined, sourceLevelId: 5 }]) };
+  });
+  expect(excluded.alone).toBe(0);
+  expect(excluded.withDropped, 'a dropped piece cuts nothing out of the main roof').toBe(0);
+  expect(excluded.withUpper, 'a storey with its own roof ABOVE still stops it, as before').toBe(1);
 });

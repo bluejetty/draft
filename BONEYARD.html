@@ -885,7 +885,8 @@
             paint2d();
           });
           // LOCK: THIS LEVEL MOVES WITH THE ONE BEING EDITED, where their
-          // lines overlap. On the right, BG on the left (Movie, 27 Oct). The
+          // lines overlap. The box on the left, BG on the right (Movie, 28 Oct:
+          // "the BG should be on the right side, checkmarks on the left"). The
           // picked level is the one moving, so its own box is not a question.
           const lock = document.createElement('label');
           lock.className = 'lock';
@@ -902,7 +903,7 @@
           // the rail and took the room the 3D window gave up.
           box.setAttribute('aria-label', `Lock ${level.name}`);
           lock.append(box);
-          row.append(back, b, lock);
+          row.append(lock, b, back);
           return row;
         }));
       };

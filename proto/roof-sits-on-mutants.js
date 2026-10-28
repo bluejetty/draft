@@ -36,10 +36,10 @@ const MUTANTS = [
     with: "    if (storeys.length > 0) {\n      const top",
     test: 'a one-storey house offers no SITS ON' },
   { file: 'model/01-skin-view.js',
-    name: 'a lower roof is drawn full strength on the ROOF plan',
+    name: 'a lower roof is drawn in the main roof\'s brown on the ROOF plan',
     find: "      const lower = roof.drawnOn != null && activeLevelId() === ROOF_LEVEL_ID;\n",
     with: "      const lower = false;\n",
-    test: 'SITS ON drops a roof to the storey below' },
+    test: 'a lower roof is RED on the ROOF plan' },
   { file: 'model/08-structure-roof.js',
     name: 'a roof is not copied',
     find: "  const NOT_COPIED = new Set(['roomtag', 'note']);\n",
@@ -60,6 +60,31 @@ const MUTANTS = [
     find: "          deleteSelection();\n          sayOnStrip(`CUT",
     with: "          sayOnStrip(`CUT",
     test: 'CUT a roof on the ROOF plan and paste it on 2ND FL' },
+  // "instead of making the lower roof dimmer, lets make it a redish color
+  // instead ... make the printed construction layout a dimmer or greyer
+  // line" (Movie, 28 Oct).
+  { file: 'model/01-skin-view.js',
+    name: 'the lower roof is dimmed in brown again, not red',
+    find: "        lower ? { ...env, colors: { ...env.colors, roof: skin['draw-roof-lower'] } } : env);\n",
+    with: "        env);\n",
+    test: 'a lower roof is RED on the ROOF plan' },
+  { file: 'layout-plan.js',
+    name: 'the printed lower roof is brown like the main one',
+    find: "        roof.drawnOn != null ? lowerEnv : roofEnv);\n",
+    with: "        roofEnv);\n",
+    test: 'a lower roof is RED on the ROOF plan' },
+  { file: 'layout-plan.js',
+    name: 'the printed lower roof keeps brown guides',
+    find: "colors: { roof: LOWER_ROOF_PRINT, roofGuide: LOWER_ROOF_PRINT } };",
+    with: "colors: { roof: LOWER_ROOF_PRINT } };",
+    test: 'a lower roof is RED on the ROOF plan' },
+  // "the ridge lines on the main roof disappeared on that roof plan view"
+  // (Movie, 28 Oct).
+  { file: 'geometry-2d.js',
+    name: 'a dropped roof cuts the bone\'s main roof away inside MAIN FL',
+    find: "roofs.filter(r => own(r) && r.drawnOn == null).map(",
+    with: "roofs.filter(own).map(",
+    test: 'a roof dropped onto MAIN FL leaves' },
 ];
 
 const run = name => {
