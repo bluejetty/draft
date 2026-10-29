@@ -1542,6 +1542,15 @@
     roof.follows = 'none';
     return null;
   };
+  // A RAISED HEEL, per edge, in inches; a roof with none raised keeps no list.
+  const setRoofHeel = (roof, index, inches) => {
+    const n = roof.points.length;
+    const now = Array.isArray(roof.edgeHeelIn) && roof.edgeHeelIn.length === n
+      ? roof.edgeHeelIn.map(v => Number(v) || 0) : roof.points.map(() => 0);
+    const next = now.map((v, i) => (i === index ? inches : v));
+    if (next.some(v => v > 0)) roof.edgeHeelIn = next; else delete roof.edgeHeelIn;
+    return null;
+  };
   // ONE UNDO PER EDIT, however many roofs it touched, and nothing at all if
   // any one of them refuses -- a half-applied edit across an assembly would
   // leave the drafter guessing which roofs took it.
@@ -1852,6 +1861,35 @@
         box.append(propField('OVERHANG, THIS EDGE', roofOverhangs(lone)[index],
           ft => editRoofs([lone], roof => setRoofOverhangs(roof,
             roofOverhangs(roof).map((v, i) => (i === index ? ft : v)))), again));
+        // RAISE HEEL (Movie, 28 Oct: "when i click a roof edge on the roof
+        // plan i can increase the 'wall' below where the eave is"). Inches,
+        // this eave only; the roof re-solves round it (geometry-2d
+        // heelVirtual), so its ridge moves toward the raised side.
+        if (kind === 'eave') {
+          const heelNow = () => {
+            const list = Array.isArray(lone.edgeHeelIn) && lone.edgeHeelIn.length === lone.points.length
+              ? lone.edgeHeelIn : null;
+            return list ? Number(list[index]) || 0 : 0;
+          };
+          box.append(numberField('RAISE HEEL, IN', heelNow(), 0, 48, 0.25, v => {
+            if (v === null) {
+              sayOnStrip('A raised heel runs from 0" to 48".');
+              return heelNow();
+            }
+            if (Math.abs(v - heelNow()) < 1e-9) return v;
+            editRoofs([lone], roof => setRoofHeel(roof, index, v));
+            sayOnStrip(v > 0 ? `EAVE raised ${v}" -- the ridge moves toward it.` : 'EAVE back on the plate.');
+            again();
+            return heelNow();
+          }));
+          const heelLine = document.createElement('div');
+          heelLine.className = 'props-title';
+          heelLine.dataset.roofEdgeHeel = '';
+          heelLine.textContent = `HEEL, THIS EDGE ${window.DraftFormatters.formatArchitecturalInches(
+            window.DraftDrawingFormat.roofHeelIn(ROOF_FASCIA_IN, roofOverhangs(lone)[index], lone.pitch || 4)
+            + heelNow())}`;
+          box.append(heelLine);
+        }
         const end = document.createElement('button');
         end.type = 'button';
         end.className = 'sel-chip';
