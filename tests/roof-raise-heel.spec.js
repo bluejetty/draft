@@ -119,17 +119,20 @@ test('a gable has no heel to raise', async ({ page }) => {
 // ── THE ELEVATIONS, OFFLINE, ON THE BUNGALOW ─────────────────────────────
 //
 // Its back eave (edge 0, the E3 side) raised 12": E3 shows the fascia a foot
-// up and a heel band under it with the plate's line across; the sides keep
+// up and the wall running on up to it -- Movie, 29 Oct: "it should look like
+// the lower wall extends up until it hits the soffit / fascia", so no band
+// and no line at the plate; the sides keep
 // their own fascia (a raised strip cut back along them once read as a seam
 // and took it off); the front does not change.
 const ENV = require('../proto/harness-env.js');
 const BUNGALOW = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'proto', 'perf-bungalow.draft'), 'utf8'));
 // Level ink in an elevation, by height AND pen: `17.25/1.25` is the wall's
 // own outline at the plate, `17.25/2.25` a fascia board's heavy foot. The
-// faint level rules (alpha ink) are left out.
+// faint level rules (alpha ink) and the faces' own paper-coloured seam
+// strokes are left out.
 const levelRuns = (strokes, minLen) => {
   const at = {};
-  strokes.filter(st => !/rgba\(29,31,32,0\.25\)/.test(st.ink)).forEach(st => {
+  strokes.filter(st => !/rgba\(29,31,32,0\.25\)/.test(st.ink) && st.ink !== '#fff').forEach(st => {
     for (let i = 1; i < st.pts.length; i++) {
       const a = st.pts[i - 1], b = st.pts[i];
       if (b.move || Math.abs(a.e - b.e) > 0.005) continue;
@@ -139,16 +142,17 @@ const levelRuns = (strokes, minLen) => {
   });
   return Object.fromEntries(Object.entries(at).filter(([, v]) => v > minLen));
 };
-const elevations = heel => {
+const elevations = (heel, edges) => {
   const s = JSON.parse(JSON.stringify(BUNGALOW));
   if (heel) s.roofs[0].edgeHeelIn = [heel, 0, 0, 0];
+  if (edges) s.roofs[0].edges = edges;
   const win = ENV.loadDraftModules();
   const env = ENV.buildEnv(win, s);
   return Object.fromEntries(ENV.standardElevationCuts(env)
     .map(cut => [cut.id, levelRuns(ENV.paintElevation(win, env, cut).strokes, 3)]));
 };
 
-test('the elevations: the raised fascia, the heel band and its plate line, the other eaves as they were', () => {
+test('the elevations: the raised fascia, the wall up to it, the other eaves as they were', () => {
   const plain = elevations(0);
   const raised = elevations(12);
   // The bungalow's plate (the soffit) and eave top (the fascia's top).
@@ -160,12 +164,39 @@ test('the elevations: the raised fascia, the heel band and its plate line, the o
   expect(raised.E3[at(TOP + 1, 1)], 'raised a foot').toBeGreaterThan(25);
   expect(raised.E3[at(PLATE + 1, 2.25)], 'its board\'s foot with it').toBeGreaterThan(25);
   expect(raised.E3[at(TOP, 1)] || 0, 'and none left at the old height').toBeLessThan(5);
-  // THE HEEL BAND: the wall's outline climbs to the raised soffit, and the
-  // plate's own line runs across under it.
+  // THE WALL GOES ON UP: its outline climbs to the raised soffit, and no line
+  // crosses it at the plate.
   expect(raised.E3[at(PLATE + 1, 1.25)], 'the wall up to the raised soffit').toBeGreaterThan(25);
-  expect(raised.E3[at(PLATE, 1)], 'the plate line across the band').toBeGreaterThan(25);
+  expect(raised.E3[at(PLATE, 1)] || 0, 'no line across it at the plate').toBeLessThan(5);
+  expect(raised.E3[at(PLATE, 1.25)] || 0, 'nor the wall\'s old top').toBeLessThan(5);
   for (const side of ['E2', 'E4']) {
     expect(raised[side][at(TOP, 1)], `${side} keeps its fascia`).toBeGreaterThan(40);
   }
   expect(raised.E1, 'the front is as it was').toEqual(plain.E1);
+});
+
+// A RAISED EAVE BETWEEN TWO GABLES (his PHASE 2 lower roof, 29 Oct): the
+// wall's corners climb with it to the soffit -- the end lines capped at the
+// plate left the wall's top corner open under the raised fascia.
+test('under a raised eave between gables the wall\'s corners climb to the soffit', () => {
+  const PLATE = 17.25;
+  const ends = heel => {
+    const s = JSON.parse(JSON.stringify(BUNGALOW));
+    s.roofs[0].edges = ['eave', 'gable', 'eave', 'gable'];
+    if (heel) s.roofs[0].edgeHeelIn = [heel, 0, 0, 0];
+    const win = ENV.loadDraftModules();
+    const env = ENV.buildEnv(win, s);
+    const cut = ENV.standardElevationCuts(env).find(c => c.id === 'E3');
+    const tops = [];
+    ENV.paintElevation(win, env, cut).strokes.filter(st => st.w === 1.25 && st.ink === '#1d1f20').forEach(st => {
+      for (let i = 1; i < st.pts.length; i++) {
+        const a = st.pts[i - 1], b = st.pts[i];
+        if (!b.move && Math.abs(a.u - b.u) < 0.005 && Math.abs(a.e - b.e) > 2) tops.push(Math.max(a.e, b.e));
+      }
+    });
+    return tops;
+  };
+  expect(Math.max(...ends(0)), 'plain: the corners stop at the plate').toBeCloseTo(PLATE, 2);
+  const raised = ends(12);
+  expect(raised.filter(e => Math.abs(e - (PLATE + 1)) < 0.01), 'both corners up to the raised soffit').toHaveLength(2);
 });
