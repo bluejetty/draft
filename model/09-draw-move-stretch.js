@@ -744,6 +744,11 @@
     roof.points = [...roof.points.slice(0, i + 1), { x: at.p.x, y, z: at.p.z }, ...roof.points.slice(i + 1)];
     roof.edges = [...kinds.slice(0, i + 1), kinds[i], ...kinds.slice(i + 1)];
     roof.edgeOverhang = [...overs.slice(0, i + 1), overs[i], ...overs.slice(i + 1)];
+    // A RAISED HEEL goes on along both halves of the edge it was on.
+    if (Array.isArray(roof.edgeHeelIn) && roof.edgeHeelIn.length === n) {
+      const heel = roof.edgeHeelIn;
+      roof.edgeHeelIn = [...heel.slice(0, i + 1), heel[i], ...heel.slice(i + 1)];
+    }
     if (foot && foot.length === n) {
       const a = foot[i], b = foot[(i + 1) % n];
       const ex = b.x - a.x, ez = b.z - a.z, l2 = ex * ex + ez * ez;
@@ -969,6 +974,7 @@
       roof.points.splice(i, 1);
       roof.edges.splice(i, 1);
       roof.edgeOverhang.splice(i, 1);
+      if (Array.isArray(roof.edgeHeelIn)) roof.edgeHeelIn = roof.edgeHeelIn.filter((_, k) => k !== i);
       if (roof.footprint) roof.footprint.splice(i, 1);
     };
     for (let guard = 0; guard < 200 && roof.points.length > 3; guard += 1) {
@@ -1000,6 +1006,7 @@
   };
   const roofBefore = roof => ({ ...roof, points: roof.points.map(p => ({ ...p })),
     edges: roof.edges.slice(), edgeOverhang: roofOverhangs(roof).slice(),
+    ...(Array.isArray(roof.edgeHeelIn) ? { edgeHeelIn: roof.edgeHeelIn.slice() } : {}),
     ...(roof.footprint ? { footprint: roof.footprint.map(p => ({ ...p })) } : {}),
     ...(roof.crossGables ? { crossGables: roof.crossGables.map(g => ({ ...g, at: { ...g.at } })) } : {}) });
   const normaliseForMove = roof => {
@@ -1060,6 +1067,7 @@
       roof.points.splice(i, 1);
       roof.edges.splice(i, 1);
       roof.edgeOverhang.splice(i, 1);
+      if (Array.isArray(roof.edgeHeelIn)) roof.edgeHeelIn = roof.edgeHeelIn.filter((_, k) => k !== i);
       if (roof.footprint) roof.footprint.splice(i, 1);
     });
     undoStack.push({ kind: 'props', edits: [{ item: roof, before }] });

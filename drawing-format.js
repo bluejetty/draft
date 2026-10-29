@@ -1017,6 +1017,13 @@ if (!window.DraftDrawingFormat) {
           ? { edgeOverhang: roof.edgeOverhang.map(value =>
             Math.min(ROOF_OVERHANG_MAX_FT, Math.max(0, number(value, number(roof?.overhang, 2))))) }
           : {}),
+        // A RAISED HEEL PER EDGE, inches (Movie, 28 Oct). Kept only when it
+        // matches the ring and lifts something; 0 to 48", a bad entry is 0.
+        ...((() => {
+          const heel = Array.isArray(roof?.edgeHeelIn) && roof.edgeHeelIn.length === points.length
+            ? roof.edgeHeelIn.map(value => Math.min(48, Math.max(0, number(value, 0)))) : null;
+          return heel && heel.some(v => v > 0) ? { edgeHeelIn: heel } : {};
+        })()),
         // THE WALL LINE THE EAVES HANG FROM, one point per roof point, kept
         // once a drafter types an edge's overhang (Movie, 18 Oct). Every
         // overhang is worked out from this, never from the eave: bringing the

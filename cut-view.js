@@ -1339,6 +1339,28 @@ if (!window.DraftCutView) {
   // ridge still came up an inch and a half INSIDE the window. Two callers on
   // two pages were each assembling that sum themselves, which is two chances
   // to leave a term out and no way to see that one of them had.
+  // ── A RAISED HEEL'S LIFT, PER EDGE, IN FEET (Movie, 28 Oct) ────────────
+  // `edgeHeelIn` holds inches per edge on eaves; a gable or a sloped edge
+  // lifts nothing. `heelLiftsFt` is every lift the roof's eaves stand at,
+  // 0 always among them.
+  function heelLiftAt(roof, i) {
+    const n = (roof?.points || []).length;
+    const heel = Array.isArray(roof?.edgeHeelIn) && roof.edgeHeelIn.length === n ? roof.edgeHeelIn : null;
+    if (!heel || !n) return 0;
+    const k = ((i % n) + n) % n;
+    const kind = roof.edges?.[k];
+    const h = Number(heel[k]);
+    return kind === 'gable' || kind === 'sloped' || !(h > 0) ? 0 : h / 12;
+  }
+  function heelLiftsFt(roof) {
+    const n = (roof?.points || []).length;
+    const out = [0];
+    for (let i = 0; i < n; i += 1) {
+      const lift = heelLiftAt(roof, i);
+      if (lift > 0 && !out.some(v => Math.abs(v - lift) < 1e-9)) out.push(lift);
+    }
+    return out;
+  }
   function roofEaveElev(roof, stack, env) {
     return roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
   }
@@ -3547,8 +3569,14 @@ if (!window.DraftCutView) {
     // fascia. Written twice, the day one of them widened its tolerance the
     // other would go on banding a different set of edges and the stub would
     // come back wearing a new number.
-    const isEaveEdge = (ea, eb, eaveTop) =>
-      Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
+    //
+    // A RAISED HEEL (Movie, 28 Oct) stands its eave `lift` feet over the
+    // roof's own, so an eave is an edge level at the eave top PLUS one of the
+    // lifts its roof carries -- 0 for every eave not raised. `eaveLiftOf`
+    // answers which; `isEaveEdge` only whether.
+    const eaveLiftOf = (ea, eb, eaveTop, lifts = [0]) => lifts.find(lift =>
+      Math.abs(ea - eaveTop - lift) < 0.01 && Math.abs(eb - eaveTop - lift) < 0.01);
+    const isEaveEdge = (ea, eb, eaveTop, lifts) => eaveLiftOf(ea, eb, eaveTop, lifts) != null;
     header(`${cut.name} — GENERATED ELEVATION`);
 
     const datum = env.elevationDatum();
@@ -4696,10 +4724,50 @@ if (!window.DraftCutView) {
     // `reach` already is. A wall off the end by more than that is somewhere
     // else. The perpendicular test (`cross`) is unchanged: a wall across the
     // rake still keeps its plate.
+    // ── UNDER A RAISED HEEL THE WALL GOES ON UP TO THE SOFFIT ─────────────
+    //
+    // Movie, 28 Oct: an eave raised h stands its soffit h over the plate, and
+    // the gap between is the heel band. A wall running along such an eave,
+    // inside it by no more than its overhang and a foot, climbs to the
+    // soffit -- the lift where the eave is level, and where it comes down on
+    // a plain neighbour's plane toward a corner, that lower height (the roof
+    // read at the eave line straight out from the wall).
+    const heelTopAt = (pt, plateTop, wallDir, wall) => {
+      let top = plateTop;
+      if (!facesByRoof || !wallDir) return top;
+      facesByRoof.forEach((roofFaces, roof) => {
+        const pts = roof.points || [];
+        if (!Array.isArray(roof.edgeHeelIn)) return;
+        const base = roofBaseElev(roof, stack, env);
+        if (Math.abs(base - plateTop) > 0.6) return;
+        pts.forEach((a, i) => {
+          const lift = heelLiftAt(roof, i);
+          if (!(lift > 0)) return;
+          const b = pts[(i + 1) % pts.length];
+          const gx = b.x - a.x, gz = b.z - a.z;
+          const gLen = Math.hypot(gx, gz) || 1;
+          if (Math.abs(wallDir.x * gz - wallDir.z * gx) / gLen > 0.2) return;
+          const along = ((pt.x - a.x) * gx + (pt.z - a.z) * gz) / gLen;
+          const off = Math.abs((pt.x - a.x) * gz - (pt.z - a.z) * gx) / gLen;
+          const over = Array.isArray(roof.edgeOverhang) ? Number(roof.edgeOverhang[i]) : NaN;
+          const reach = (Number.isFinite(over) ? over : Number(roof.overhang) || 0) + 1;
+          if (along < 0 || along > gLen || off > reach) return;
+          const eavePt = { x: a.x + gx / gLen * along, z: a.z + gz / gLen * along };
+          const inward = { x: pt.x - eavePt.x, z: pt.z - eavePt.z };
+          const il = Math.hypot(inward.x, inward.z) || 1;
+          const rise = sectionRoofHeightAt(
+            { x: eavePt.x + inward.x / il * 0.02, z: eavePt.z + inward.z / il * 0.02 }, roof, roofFaces);
+          if (rise == null) return;
+          top = Math.max(top, base + Math.min(lift, rise));
+        });
+      });
+      return top;
+    };
     const gableTopAt = (pt, plateTop, wallDir, wall) => {
       let top = plateTop;
       if (!facesByRoof) return top;
       if (carriesStoreyAbove(pt, plateTop, wall, wallDir)) return top;
+      top = heelTopAt(pt, plateTop, wallDir, wall);
       facesByRoof.forEach((roofFaces, roof) => {
         const base = roofBaseElev(roof, stack, env);
         if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
@@ -4921,7 +4989,11 @@ if (!window.DraftCutView) {
         const at = worldAt(u);
         const raw = gableTopAt(at, level.wallTop, wallDir, wall);
         const top = Math.max(floor, roofClippedTop(at, face.depth, raw));
-        return { top, clipped: top < raw - 1e-6 };
+        // In the HEEL BAND: lifted over the plate by a raised eave alone.
+        const heel = top > level.wallTop + 1e-3
+          && heelTopAt(at, level.wallTop, wallDir, wall) > level.wallTop + 1e-3
+          && Math.abs(raw - heelTopAt(at, level.wallTop, wallDir, wall)) < 1e-6;
+        return { top, clipped: top < raw - 1e-6, heel };
       };
       const tops = [];
       let prev = null;
@@ -4941,7 +5013,7 @@ if (!window.DraftCutView) {
           tops.push({ u: a, top: sampleTop(a).top });
           tops.push({ u: b, top: sampleTop(b).top });
         }
-        tops.push({ u, top: here.top });
+        tops.push({ u, top: here.top, heel: here.heel });
         prev = { u, clipped: here.clipped };
       }
       return { face, loU, hiU, floor, worldAt, wallDir, tops };
@@ -6094,6 +6166,32 @@ if (!window.DraftCutView) {
           }
         }
       });
+      // ── THE HEEL BAND (Movie, 28 Oct: "Separate heel band") ───────────
+      // Where a raised heel lifts the eave, the wall's face runs on up to the
+      // soffit; that strip is a band of its own -- plain, no siding course
+      // through it, and a line where the plate stands, the frieze board's foot.
+      const heelRuns = [];
+      let heelRun = null;
+      tops.forEach(s => {
+        if (s.heel) (heelRun = heelRun || []).push(s);
+        else if (heelRun) { heelRuns.push(heelRun); heelRun = null; }
+      });
+      if (heelRun) heelRuns.push(heelRun);
+      heelRuns.filter(run => run.length > 1).forEach(run => {
+        const plate = level.wallTop;
+        ctx.fillStyle = C.face;
+        ctx.beginPath();
+        ctx.moveTo(X(run[0].u), Y(plate));
+        run.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+        ctx.lineTo(X(run[run.length - 1].u), Y(plate));
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(run[0].u), Y(plate));
+        ctx.lineTo(X(run[run.length - 1].u), Y(plate));
+        ctx.stroke();
+      });
     };
 
     // ── A ROOF IS A SURFACE, AND IT JOINS THE PAINTER'S SORT ─────────────
@@ -6153,6 +6251,7 @@ if (!window.DraftCutView) {
         const base = roofBaseElev(roof, stack, env);
         const eaveTop = roofEaveElev(roof, stack, env);
         const pitch = roof.pitch || 4;
+        const lifts = heelLiftsFt(roof);
         roofFaces.forEach(face => {
           const poly = face.points || [];
           if (poly.length < 3) return;
@@ -6238,14 +6337,15 @@ if (!window.DraftCutView) {
             const a = poly[i], b = poly[(i + 1) % poly.length];
             const ea = eaveTop + geo().roofFaceRise(face, a, pitch);
             const eb = eaveTop + geo().roofFaceRise(face, b, pitch);
-            if (!isEaveEdge(ea, eb, eaveTop)) continue;
+            const lift = eaveLiftOf(ea, eb, eaveTop, lifts);
+            if (lift == null) continue;
             const xa = X(a.x * axis.x + a.z * axis.z);
             const xb = X(b.x * axis.x + b.z * axis.z);
             if (Math.abs(xb - xa) < 1) continue;   // this eave runs away from us
-            if (!eave) eave = [{ x: xa, y: Y(eaveTop) }, { x: xb, y: Y(eaveTop) }];
+            if (!eave) eave = [{ x: xa, y: Y(eaveTop + lift) }, { x: xb, y: Y(eaveTop + lift) }];
             parts.push([
-              { x: xa, y: Y(eaveTop) }, { x: xb, y: Y(eaveTop) },
-              { x: xb, y: Y(base) }, { x: xa, y: Y(base) },
+              { x: xa, y: Y(eaveTop + lift) }, { x: xb, y: Y(eaveTop + lift) },
+              { x: xb, y: Y(base + lift) }, { x: xa, y: Y(base + lift) },
             ]);
           }
           // AND NO FALLBACK WHERE NO EAVE IS FOUND. One was written -- the two
@@ -7214,6 +7314,7 @@ if (!window.DraftCutView) {
         const eaveTop = roofEaveElev(roof, stack, env);
         const pitch = roof.pitch || 4;
         const rpts = roof.points || [];
+        const lifts = heelLiftsFt(roof);
         // ── A GABLE END HAS A FRONT AND A BACK, AND ONLY ONE OF THEM ──────
         //
         // Movie, 21 Sep, on the garage roof in E1 FRONT: *"you shouldn't see
@@ -7401,7 +7502,9 @@ if (!window.DraftCutView) {
               const q = atT(t1);
               run.u1 = q.u; run.e1 = q.e; run.t1 = t1;
             });
-            const eave = isEaveEdge(ea, eb, eaveTop);
+            const eave = isEaveEdge(ea, eb, eaveTop, lifts);
+            // A RAISED EAVE's board hangs off its own top, the lift higher.
+            const boardTop = eave ? eaveTop + eaveLiftOf(ea, eb, eaveTop, lifts) : eaveTop;
             // AND A RAKE SLOPES, which is what makes it a rake and not the
             // ridge the rake runs up to. `onGable` asks only whether both
             // ends of an edge lie on a gable PLAN edge, and the flat top of
@@ -7455,7 +7558,7 @@ if (!window.DraftCutView) {
                 spans.filter(sp => sp.u1 - sp.u0 > 0.2).forEach(sp => {
                   ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                   ctx.beginPath();
-                  ctx.moveTo(X(sp.u0), Y(eaveTop)); ctx.lineTo(X(sp.u1), Y(eaveTop));
+                  ctx.moveTo(X(sp.u0), Y(boardTop)); ctx.lineTo(X(sp.u1), Y(boardTop));
                   ctx.stroke();
                 });
                 // ── THE BOARD'S FOOT IS ASKED ON ITS OWN ───────────────
@@ -7467,7 +7570,7 @@ if (!window.DraftCutView) {
                 // drawn the whole length of that run -- straight across the
                 // main roof's ridge, which stands nearer and between the two.
                 // So the foot gets its own visibility, at its own height.
-                const footE = eaveTop - ROOF_FASCIA_IN / 12;
+                const footE = boardTop - ROOF_FASCIA_IN / 12;
                 const tLo = Math.min(r.t0, r.t1), tHi = Math.max(r.t0, r.t1);
                 // Half-foot stations, then bisected to the real boundary the
                 // way the run's own ends are: a ridge poking 1 1/2" past the
@@ -7688,7 +7791,11 @@ if (!window.DraftCutView) {
           const l1 = Math.hypot(d1.x, d1.z), l2 = Math.hypot(d2.x, d2.z);
           if (l1 < 0.05 || l2 < 0.05 || Math.abs(cross) < 0.02 * l1 * l2) return;
           const u = pt.x * axis.x + pt.z * axis.z;
-          if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, eaveTop, u)) return;
+          // A corner stands at the lower of the two eaves meeting there: a
+          // raised eave beside a plain one comes down to it on the plain
+          // one's plane before the corner.
+          const cornerTop = eaveTop + Math.min(heelLiftAt(roof, i - 1), heelLiftAt(roof, i));
+          if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, cornerTop, u)) return;
           // ── AND NOT WHERE THE EAVE SIMPLY CARRIES ON ────────────────
           //
           // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE, twice: "the
@@ -7754,11 +7861,11 @@ if (!window.DraftCutView) {
             stepPast(d1, l1, prev, pt),
             stepPast({ x: -d2.x, z: -d2.z }, l2, pt, next),
           ];
-          if (past.some(p => carriedOn(roof, p, eaveTop))) return;
+          if (past.some(p => carriedOn(roof, p, cornerTop))) return;
           ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
           ctx.beginPath();
-          ctx.moveTo(X(u), Y(eaveTop));
-          ctx.lineTo(X(u), Y(eaveTop - ROOF_FASCIA_IN / 12));
+          ctx.moveTo(X(u), Y(cornerTop));
+          ctx.lineTo(X(u), Y(cornerTop - ROOF_FASCIA_IN / 12));
           ctx.stroke();
         });
       });

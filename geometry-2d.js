@@ -1096,6 +1096,75 @@ if (!window.DraftGeometry2D) {
     return { roof: virtual, cuts };
   };
 
+  // ── A RAISED HEEL: ONE EAVE LIFTED, ITS PLANE KEPT AT THE PITCH ──────
+  //
+  // Movie, 28 Oct: "an option to 'Raise' roof heel when i click a roof edge
+  // on the roof plan" -- just that edge, "it will cause the ridge of that roof
+  // to need to change location in most cases". A plane at the roof's pitch
+  // lifted h is the very plane an eave line pushed OUT by h x 12 / pitch would
+  // raise, from the same height. So the roof is solved off a ring with each
+  // raised edge's line pushed out that far -- the ridge comes TOWARD it (the
+  // lifted plane has less to climb) and rises by half the lift on a plain
+  // hip, and the hips beside it skew, by the wavefront's own rule -- and the strip
+  // between the pushed line and the real one is cut away (the `cuts` a hood
+  // and a SLOPED edge take). The real eave is left standing h higher, on the
+  // pushed plane; every other eave stays where it was.
+  //
+  // `edgeHeelIn` is per edge, inches, on eaves only; a gable or a sloped
+  // edge has no eave to lift.
+  const heelVirtual = roof => {
+    const pts = roof.points || [];
+    const n = pts.length;
+    const heel = Array.isArray(roof.edgeHeelIn) && roof.edgeHeelIn.length === n ? roof.edgeHeelIn : null;
+    if (n < 3 || !heel) return null;
+    const pitch = Number(roof.pitch) || 4;
+    const kinds = Array.isArray(roof.edges) ? roof.edges : [];
+    const push = pts.map((_, i) => {
+      const h = Number(heel[i]);
+      return kinds[i] === 'gable' || kinds[i] === 'sloped' || !(h > 0) ? 0 : h / pitch;
+    });
+    if (!push.some(d => d > 0)) return null;
+    const area2 = pts.reduce((sum, p, i) => { const q = pts[(i + 1) % n]; return sum + p.x * q.z - q.x * p.z; }, 0);
+    const s = area2 >= 0 ? 1 : -1;
+    // Each edge's line: its start, pushed out, and its direction.
+    const lines = pts.map((a, i) => {
+      const b = pts[(i + 1) % n];
+      const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+      const out = { x: s * u.z, z: -s * u.x };
+      return { p: { x: a.x + out.x * push[i], z: a.z + out.z * push[i] }, u };
+    });
+    const meet = (l1, l2, fallback) => {
+      const cross = l1.u.x * l2.u.z - l1.u.z * l2.u.x;
+      if (Math.abs(cross) < 1e-9) return fallback;
+      const t = ((l2.p.x - l1.p.x) * l2.u.z - (l2.p.z - l1.p.z) * l2.u.x) / cross;
+      return { x: l1.p.x + l1.u.x * t, z: l1.p.z + l1.u.z * t };
+    };
+    const virt = pts.map((a, i) => {
+      const prev = (i - 1 + n) % n;
+      if (!push[i] && !push[prev]) return { x: a.x, z: a.z };
+      return meet(lines[prev], lines[i], lines[i].p);
+    });
+    const cuts = [];
+    push.forEach((d, i) => {
+      if (!d) return;
+      const j = (i + 1) % n;
+      cuts.push({ points: [pts[i], virt[i], virt[j], pts[j]].map(p => ({ x: p.x, z: p.z })) });
+    });
+    // THE WALL LINE STAYS THE REAL ONE: a cross gable stands on it.
+    const wall = roofWallLine(roof);
+    const { edgeHeelIn, ...rest } = roof;
+    void edgeHeelIn;
+    // `heelCuts`, NOT `cuts`: a hood's cut leaves seams where the sheet runs
+    // on past it, but the strip's sides lie along the plain eaves beside it,
+    // and those are where the sheet STOPS -- read as seams they lost their
+    // fascia in the elevations.
+    const virtual = { ...rest, points: virt.map((p, i) => ({ x: p.x, y: pts[i].y || 0, z: p.z })),
+      heelCuts: cuts };
+    if (wall) virtual.footprint = wall.ring.map(p => ({ x: p.x, y: 0, z: p.z })); else delete virtual.footprint;
+    return { roof: virtual, cuts };
+  };
+
   // ── A SLIVER OR A SPIKE IN THE EAVE RING IS NOT ROOF (Movie, 18 Oct,
   // North Point's E1 and E3: "it might make the roof do weird stuff or the
   // roof already did weird stuff") ──────────────────────────────────────
@@ -1140,7 +1209,7 @@ if (!window.DraftGeometry2D) {
     const { footprint, ...rest } = roof;
     void footprint;
     return { ...rest, points: keep.map(i => pts[i]), edges: pick(roof.edges),
-      edgeOverhang: pick(roof.edgeOverhang) };
+      edgeOverhang: pick(roof.edgeOverhang), edgeHeelIn: pick(roof.edgeHeelIn) };
   };
 
   const roofSkeleton = (roof) => {
@@ -1148,6 +1217,9 @@ if (!window.DraftGeometry2D) {
     if (initialCount < 3) return [];
     const cleaned = cleanRoofRing(roof);
     if (cleaned) return roofSkeleton(cleaned);
+    // A RAISED HEEL: the pushed-out roof's lines, the strip outside cut away.
+    const raised = heelVirtual(roof);
+    if (raised) return roofSkeleton(raised.roof).flatMap(seg => cutRoofSegment(seg, { cuts: raised.cuts }));
     // A SLOPED EDGE: the full roof's lines, the corner's triangle cut from them.
     const sloped = slopedVirtual(roof);
     if (sloped) {
@@ -1476,6 +1548,9 @@ const roofFaces = (roof, arcs) => {
   // A SLIVER OR A SPIKE IN THE RING: the ring without it (cleanRoofRing).
   const cleaned = cleanRoofRing(roof);
   if (cleaned) return roofFaces(cleaned, roofSkeleton(cleaned));
+  // A RAISED HEEL: the pushed-out roof's planes, cut back to the real eave.
+  const raised = heelVirtual(roof);
+  if (raised) return roofFaces(raised.roof, roofSkeleton(raised.roof));
   // A SLOPED EDGE: the full roof's planes, cut along it (slopedVirtual).
   const sloped = slopedVirtual(roof);
   if (sloped) return roofFaces(sloped.roof, roofSkeleton(sloped.roof));
@@ -1668,12 +1743,15 @@ const seamsOf = (points, holes) => points.map((p, i) => {
   }));
 });
 const cutRoofFaces = (faces, roof) => {
-  const holes = cutLoopsOf(roof);
+  const seamHoles = cutLoopsOf(roof);
+  // A RAISED HEEL's strip (heelVirtual) is cut away like any hole, but its
+  // edges are the roof's own outline and never a seam.
+  const holes = [...seamHoles, ...cutLoopsOf({ cuts: roof?.heelCuts })];
   if (!holes.length) return faces;
   return faces.flatMap(face => holes
     .reduce((polys, hole) => polys.flatMap(poly => minusConvex(poly, hole)), [face.points])
     .map(points => splitAtCorners(points, holes))
-    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, holes) })));
+    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, seamHoles) })));
 };
 // A piece's edge along a hole's line can run past the hole's corner -- part
 // of it the cut, part a seam. Putting the corner in as a vertex makes each
