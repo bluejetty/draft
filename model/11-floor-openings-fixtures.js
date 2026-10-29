@@ -953,6 +953,35 @@
     return WP.place(washroomPreset, { ...pose, ...(snap ? { at: snap.at, ext: snap.ext } : {}) });
   };
 
+  // THE MINI REGISTRATION POINT a kitchen or a bath carries (Movie, 28 Oct:
+  // "the intersection at the corner of the kitchen would be the 'mini'
+  // registration point so a user can position the placement in the larger
+  // model precisely"). Kept as a distance along one of its own walls, so it
+  // rides every move, turn and stretch of that wall without a second copy
+  // of the point to fall out of step.
+  const registrationOn = (ownWalls, pt) => {
+    if (!pt) return null;
+    for (const wall of ownWalls || []) {
+      const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z, len = Math.hypot(dx, dz);
+      if (len < 1e-9) continue;
+      const along = ((pt.x - wall.start.x) * dx + (pt.z - wall.start.z) * dz) / len;
+      const off = Math.abs((pt.x - wall.start.x) * dz - (pt.z - wall.start.z) * dx) / len;
+      if (off < 1e-6 && along > -1e-6 && along < len + 1e-6) {
+        return { registration: { wallId: wall.id, along: Math.max(0, Math.min(len, along)) } };
+      }
+    }
+    return null;
+  };
+  const registrationPoint = group => {
+    const reg = group && group.registration;
+    const wall = reg && walls().find(w => String(w.id) === String(reg.wallId));
+    if (!wall || !wall.start || !wall.end) return null;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z, len = Math.hypot(dx, dz);
+    if (len < 1e-9) return null;
+    const t = Math.max(0, Math.min(len, Number(reg.along) || 0)) / len;
+    return { x: wall.start.x + dx * t, z: wall.start.z + dz * t };
+  };
+
   const dropWashroom = at => {
     const room = washroomPlacement(at);
     if (!room) return null;
@@ -960,7 +989,7 @@
     const mark = undoStack.length;
     const byKey = {};
     const made = room.walls.map(w => {
-      const wall = commitWall(w.start, w.end, { bone: false, refLine: 'center', wallType: w.wallType });
+      const wall = commitWall(w.start, w.end, { bone: false, refLine: w.refLine || 'center', wallType: w.wallType });
       byKey[w.key] = wall;
       return wall;
     });
@@ -1019,6 +1048,7 @@
       name: room.name,
       fixed: false,
       stretchBehavior: 'item-geometry',
+      ...(registrationOn(made, room.registration) || {}),
       members: made.map(wall => ({ type: 'wall', id: wall.id })),
       wallSettings: {
         wallType: made[0].wallType, baseHeight: made[0].baseHeight,
@@ -1102,7 +1132,7 @@
     own.walls.forEach(w => { w.levelId = levelId; w.view = wallHomeView(viewId); w.id = `kitchen-${w.key}`; });
     const theirs = KP.findCorner(own.walls, own.inside, FG);
     const kitchen = theirs && KP.place(kitchenPreset, theirs, { flip: kitchenFlip, depthOf });
-    return kitchen && !kitchen.refused ? { ...kitchen, own: own.walls } : null;
+    return kitchen && !kitchen.refused ? { ...kitchen, own: own.walls, registration: own.registration } : null;
   };
 
   const dropKitchen = at => {
@@ -1115,7 +1145,7 @@
     // mitres, and the pieces re-hosted from the stand-ins to the real walls.
     const mark = undoStack.length;
     const builtWalls = (kitchen.own || []).map(w => ({
-      stand: w, wall: commitWall(w.start, w.end, { bone: false, refLine: 'center', wallType: w.wallType }),
+      stand: w, wall: commitWall(w.start, w.end, { bone: false, refLine: w.refLine || 'center', wallType: w.wallType }),
     }));
     undoStack.length = mark;
     const hostOf = wall => (builtWalls.find(b => b.stand === wall) || { wall }).wall;
@@ -1153,6 +1183,7 @@
       fixed: ownWalls.length > 0,
       stretchBehavior: ownWalls.length ? 'rigid' : 'item-geometry',
       preset: { kind: 'kitchen', id: kitchen.id, flip: kitchenFlip, angleDeg: kitchenTurn },
+      ...(registrationOn(ownWalls, kitchen.registration) || {}),
       members: ownWalls.map(wall => ({ type: 'wall', id: wall.id }))
         .concat(made.map(item => ({ type: 'fixture', id: item.id }))),
     };

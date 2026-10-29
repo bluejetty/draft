@@ -20,11 +20,11 @@ const ROOT = path.join(__dirname, '..');
 
 const MUTATIONS = [
   ['the kitchen\'s own walls do not share a corner', 'kitchen-presets.js',
-    c => c.replace("        { key: 'side', start: corner, end: P(h, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'center' },",
-      "        { key: 'side', start: P(h, -h), end: P(h, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'center' },")],
+    c => c.replace("        { key: 'side', start: corner, end: P(0, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'right' },",
+      "        { key: 'side', start: P(0, 0), end: P(0, needFt(p, flip ? 'second' : 'first')), wallType: 'stud_2x4', refLine: 'right' },")],
   ['F does not swap the kitchen\'s own walls\' lengths', 'kitchen-presets.js',
-    c => c.replace("end: P(-needFt(p, flip ? 'first' : 'second'), -h)", "end: P(-needFt(p, 'second'), -h)")
-      .replace("end: P(h, needFt(p, flip ? 'second' : 'first'))", "end: P(h, needFt(p, 'first'))")],
+    c => c.replace("end: P(-needFt(p, flip ? 'first' : 'second'), 0)", "end: P(-needFt(p, 'second'), 0)")
+      .replace("end: P(0, needFt(p, flip ? 'second' : 'first'))", "end: P(0, needFt(p, 'first'))")],
   ['[ ] does not turn the kitchen\'s own walls', 'kitchen-presets.js',
     c => c.replace('    const t = (angleDeg * Math.PI) / 180, c = Math.cos(t), s = Math.sin(t);',
       '    const t = 0, c = Math.cos(t), s = Math.sin(t);')],
@@ -208,7 +208,13 @@ const geoOf = (f, walls = WALLS) => FG.fixtureGeometry(walls, { kind: f.kind, wa
   check('it brings two walls', own.walls.length, 2);
   check('that share their corner, so it mitres', own.walls[0].start === own.walls[1].start, true);
   const corner = KP.findCorner(own.walls, own.inside, FG);
-  check('their inside corner is the press', corner && `${r2(corner.legs[0].wall.start.x - 1.75 / 12)},${r2(corner.legs[0].wall.start.z + 1.75 / 12)}`, '3,-2');
+  // DRAWN ON THEIR INSIDE FACES (Movie, 28 Oct): the lines meet AT the
+  // press, which is the kitchen's mini registration point.
+  check('their lines meet at the press, the inside corner', `${r2(own.walls[0].start.x)},${r2(own.walls[0].start.z)}`, '3,-2');
+  check('which is the registration point', `${r2(own.registration.x)},${r2(own.registration.z)}`, '3,-2');
+  check('the studs stand outward of the lines',
+    own.walls.map(w => w.refLine).join(' '), 'left right');
+  check('the corner the kitchen reads off them is the press too', corner && Boolean(corner.legs), true);
   const kit = KP.place('L1', corner, { depthOf });
   check('and the kitchen fits them, 8\'-6" each way', Boolean(kit && !kit.refused), true);
   check('unturned, the sink leg runs down the right wall, as the suite', kit.firstLeg.wall.key, 'side');
@@ -217,7 +223,7 @@ const geoOf = (f, walls = WALLS) => FG.fixtureGeometry(walls, { kind: f.kind, wa
   // A quarter turn clockwise on the plan (x right, z down the screen): the
   // wall that ran west now runs north.
   check('[ ] turns them about the press: the top wall now runs north',
-    `${r2(d.end.x - d.start.x)},${r2(d.end.z - d.start.z)}`, `0,${r2(-(8.5 + 1.75 / 12))}`);
+    `${r2(d.end.x - d.start.x)},${r2(d.end.z - d.start.z)}`, `0,${r2(-8.5)}`);
 }
 
 // ── THE SUITES' KITCHENS ─────────────────────────────────────────────────

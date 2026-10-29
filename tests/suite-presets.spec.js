@@ -162,9 +162,10 @@ test('F mirrors KITCHEN L2 in open floor and it still drops: its own walls swap 
   const after = await h.savedDrawing(page);
   const added = after.walls.filter(w => !before.drawing.walls.some(o => o.id === w.id));
   const lengths = added.map(w => Math.round(Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) * 12)).sort((a, b) => a - b);
-  // 105" + the corner's half 2x4, and 174" + the same: the long leg is on
-  // the wall that runs west now, the short one down the side.
-  expect(lengths).toEqual([107, 176]);
+  // 105" and 174", each line its leg exactly: the lines are the inside
+  // faces and run from the inside corner (Movie, 28 Oct). The short leg is
+  // on the wall that runs west now, the long one down the side.
+  expect(lengths).toEqual([105, 174]);
   const west = added.find(w => Math.abs(w.end.z - w.start.z) < 0.01);
-  expect(Math.round(Math.abs(west.end.x - west.start.x) * 12)).toBe(107);
+  expect(Math.round(Math.abs(west.end.x - west.start.x) * 12)).toBe(105);
 });
