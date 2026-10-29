@@ -44,7 +44,7 @@ const MUTANTS = [
     name: 'the file forgets the raised heel',
     find: '          return heel && heel.some(v => v > 0) ? { edgeHeelIn: heel } : {};',
     with: '          return {};',
-    test: 'RAISE HEEL on the clicked eave' },
+    test: 'the elevations' },
   { file: 'model/15-panels.js',
     name: 'a gable offers a heel to raise',
     find: "        if (kind === 'eave') {\n          const heelNow = () => {",
