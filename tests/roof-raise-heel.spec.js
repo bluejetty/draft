@@ -90,6 +90,15 @@ test('RAISE HEEL on the clicked eave lifts it; the ridge comes toward it; the fi
   expect(rise.across).toBeCloseTo(0, 2);
   expect(rise.ridge, 'and the ridge 6" higher').toBeCloseTo(5.5, 2);
 
+  // OPENED AGAIN, the edge still says 12.
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  const again = (await h.planFrame(page)).at;
+  await click(page, again, 20, 15);
+  await click(page, again, 20, 0.2);
+  await expect(heelBox(page)).toHaveValue('12');
   // Back to 0 takes the list off the roof altogether.
   await heelBox(page).fill('0');
   await heelBox(page).press('Tab');
@@ -115,13 +124,16 @@ test('a gable has no heel to raise', async ({ page }) => {
 // and took it off); the front does not change.
 const ENV = require('../proto/harness-env.js');
 const BUNGALOW = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'proto', 'perf-bungalow.draft'), 'utf8'));
+// Level ink in an elevation, by height AND pen: `17.25/1.25` is the wall's
+// own outline at the plate, `17.25/2.25` a fascia board's heavy foot. The
+// faint level rules (alpha ink) are left out.
 const levelRuns = (strokes, minLen) => {
   const at = {};
-  strokes.forEach(st => {
+  strokes.filter(st => !/rgba\(29,31,32,0\.25\)/.test(st.ink)).forEach(st => {
     for (let i = 1; i < st.pts.length; i++) {
       const a = st.pts[i - 1], b = st.pts[i];
       if (b.move || Math.abs(a.e - b.e) > 0.005) continue;
-      const k = a.e.toFixed(2);
+      const k = `${a.e.toFixed(2)}/${st.w}`;
       at[k] = (at[k] || 0) + Math.abs(a.u - b.u);
     }
   });
@@ -139,18 +151,21 @@ const elevations = heel => {
 test('the elevations: the raised fascia, the heel band and its plate line, the other eaves as they were', () => {
   const plain = elevations(0);
   const raised = elevations(12);
-  // The bungalow's eave top (fascia top) and plate, read off the plain E1.
+  // The bungalow's plate (the soffit) and eave top (the fascia's top).
   const PLATE = 17.25, TOP = 17.7;
-  expect(plain.E3[TOP.toFixed(2)], 'the back fascia, plain').toBeGreaterThan(35);
-  expect(raised.E3[(TOP + 1).toFixed(2)], 'raised a foot').toBeGreaterThan(25);
-  expect(raised.E3[(PLATE + 1).toFixed(2)], 'its board\'s foot with it').toBeGreaterThan(25);
-  expect(raised.E3[TOP.toFixed(2)] || 0, 'and none left at the old height').toBeLessThan(5);
-  // THE HEEL BAND: the wall goes on up to the raised soffit, and the plate's
-  // own line runs across under it -- at the plate, beside the level rule
-  // (38'), more than 25' of band line.
-  expect(raised.E3[PLATE.toFixed(2)], 'the plate line under the band').toBeGreaterThan(38 + 25);
+  const at = (e, w) => `${e.toFixed(2)}/${w}`;
+  // The fascia: a light top line, a heavy foot a board under it.
+  expect(plain.E3[at(TOP, 1)], 'the back fascia, plain').toBeGreaterThan(35);
+  expect(plain.E3[at(PLATE, 2.25)], 'and its foot').toBeGreaterThan(35);
+  expect(raised.E3[at(TOP + 1, 1)], 'raised a foot').toBeGreaterThan(25);
+  expect(raised.E3[at(PLATE + 1, 2.25)], 'its board\'s foot with it').toBeGreaterThan(25);
+  expect(raised.E3[at(TOP, 1)] || 0, 'and none left at the old height').toBeLessThan(5);
+  // THE HEEL BAND: the wall's outline climbs to the raised soffit, and the
+  // plate's own line runs across under it.
+  expect(raised.E3[at(PLATE + 1, 1.25)], 'the wall up to the raised soffit').toBeGreaterThan(25);
+  expect(raised.E3[at(PLATE, 1)], 'the plate line across the band').toBeGreaterThan(25);
   for (const side of ['E2', 'E4']) {
-    expect(raised[side][TOP.toFixed(2)], `${side} keeps its fascia`).toBeGreaterThan(40);
+    expect(raised[side][at(TOP, 1)], `${side} keeps its fascia`).toBeGreaterThan(40);
   }
   expect(raised.E1, 'the front is as it was').toEqual(plain.E1);
 });
