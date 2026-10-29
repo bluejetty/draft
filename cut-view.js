@@ -4726,8 +4726,12 @@ if (!window.DraftCutView) {
     // rake still keeps its plate.
     // ── UNDER A RAISED HEEL THE WALL GOES ON UP TO THE SOFFIT ─────────────
     //
-    // Movie, 28 Oct: an eave raised h stands its soffit h over the plate, and
-    // the gap between is the heel band. A wall running along such an eave,
+    // Movie, 28 Oct: an eave raised h stands its soffit h over the plate.
+    // Movie, 29 Oct, on his PHASE 2 E2, with the picture redrawn: "it should
+    // look like the lower wall extends up until it hits the soffit / fascia"
+    // -- one wall, its own finish, no band and no line at the plate (a band
+    // painted over it once took the wall's corner line with it). A wall
+    // running along such an eave,
     // inside it by no more than its overhang and a foot, climbs to the
     // soffit -- the lift where the eave is level, and where it comes down on
     // a plain neighbour's plane toward a corner, that lower height (the roof
@@ -4989,11 +4993,7 @@ if (!window.DraftCutView) {
         const at = worldAt(u);
         const raw = gableTopAt(at, level.wallTop, wallDir, wall);
         const top = Math.max(floor, roofClippedTop(at, face.depth, raw));
-        // In the HEEL BAND: lifted over the plate by a raised eave alone.
-        const heel = top > level.wallTop + 1e-3
-          && heelTopAt(at, level.wallTop, wallDir, wall) > level.wallTop + 1e-3
-          && Math.abs(raw - heelTopAt(at, level.wallTop, wallDir, wall)) < 1e-6;
-        return { top, clipped: top < raw - 1e-6, heel };
+        return { top, clipped: top < raw - 1e-6 };
       };
       const tops = [];
       let prev = null;
@@ -5013,7 +5013,7 @@ if (!window.DraftCutView) {
           tops.push({ u: a, top: sampleTop(a).top });
           tops.push({ u: b, top: sampleTop(b).top });
         }
-        tops.push({ u, top: here.top, heel: here.heel });
+        tops.push({ u, top: here.top });
         prev = { u, clipped: here.clipped };
       }
       return { face, loU, hiU, floor, worldAt, wallDir, tops };
@@ -5687,8 +5687,13 @@ if (!window.DraftCutView) {
       // soffit, not a seam. So the corner rises only as far as the wall
       // sharing it also rises -- the plate where the neighbour is an eave
       // wall, the roof where it is a gable wall too.
+      // AND UNDER A RAISED HEEL the corner climbs with the wall to the soffit
+      // (Movie, 29 Oct): there is no soffit triangle there, only the wall.
       const cornerTopAt = (u, own) => {
-        let top = Math.min(own, level.wallTop);
+        const lifted = worldAt && geom.wallDir
+          ? heelTopAt(worldAt(Math.min(hiU, Math.max(loU, u))), level.wallTop, geom.wallDir, wall)
+          : level.wallTop;
+        let top = Math.min(own, Math.max(level.wallTop, lifted));
         faceGeoms.forEach(g => {
           if (g === geom || Math.abs(g.face.depth - face.depth) < 0.05) return;
           const end = Math.abs(g.loU - u) < 0.05 ? g.tops[0]
@@ -6165,32 +6170,6 @@ if (!window.DraftCutView) {
             }
           }
         }
-      });
-      // ── THE HEEL BAND (Movie, 28 Oct: "Separate heel band") ───────────
-      // Where a raised heel lifts the eave, the wall's face runs on up to the
-      // soffit; that strip is a band of its own -- plain, no siding course
-      // through it, and a line where the plate stands, the frieze board's foot.
-      const heelRuns = [];
-      let heelRun = null;
-      tops.forEach(s => {
-        if (s.heel) (heelRun = heelRun || []).push(s);
-        else if (heelRun) { heelRuns.push(heelRun); heelRun = null; }
-      });
-      if (heelRun) heelRuns.push(heelRun);
-      heelRuns.filter(run => run.length > 1).forEach(run => {
-        const plate = level.wallTop;
-        ctx.fillStyle = C.face;
-        ctx.beginPath();
-        ctx.moveTo(X(run[0].u), Y(plate));
-        run.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
-        ctx.lineTo(X(run[run.length - 1].u), Y(plate));
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = INK; ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(X(run[0].u), Y(plate));
-        ctx.lineTo(X(run[run.length - 1].u), Y(plate));
-        ctx.stroke();
       });
     };
 
