@@ -314,7 +314,72 @@ if (!window.DraftBoneyardBeams) {
     return { a: start, b: end, snapped: best ? best.c : null };
   };
 
+  // ── THE DIMENSIONS ─────────────────────────────────────────────────────
+  //
+  // Movie, 28 Oct: "we should also show the dimensions between the beams at
+  // each end", and "(maybe columns too but only when zoomed in closer".
+  //
+  // AT EACH END: for each way the lines run, a string square across them
+  // just inside each end of the run -- the walls the probe crosses (the
+  // level's bone) and every line it crosses, in order. A T's wing and its
+  // body are different ends, so each gets the lines it actually has.
+  const crossings = (loops, axis, at) => {
+    const out = [];
+    (loops || []).forEach(loop => loop.points.forEach((a, i) => {
+      const b = loop.points[(i + 1) % loop.points.length];
+      const ua = axis === 'x' ? a.x : a.z, ub = axis === 'x' ? b.x : b.z;
+      if ((ua - at) * (ub - at) > 0 || Math.abs(ua - ub) < TOL) return;
+      const t = (at - ua) / (ub - ua);
+      out.push(axis === 'x' ? a.z + (b.z - a.z) * t : a.x + (b.x - a.x) * t);
+    }));
+    return out;
+  };
+  const uniq = list => list.sort((a, b) => a - b)
+    .filter((v, i, all) => i === 0 || Math.abs(v - all[i - 1]) > TOL);
+  const endStrings = (drawing, level, loops) => {
+    const rows = [];
+    beamsOf(drawing, levelIdOf(level)).forEach(b => {
+      if (rows.some(r => r.includes(b))) return;
+      rows.push(rowOf(drawing, b));
+    });
+    const lines = rows.map(rowLine).filter(Boolean);
+    const out = [];
+    ['x', 'z'].forEach(axis => {
+      const mine = lines.filter(l => l.axis === axis);
+      if (!mine.length) return;
+      const lo = Math.min(...mine.map(l => l.lo)), hi = Math.max(...mine.map(l => l.hi));
+      [{ end: 'start', at: lo + 0.5 }, { end: 'end', at: hi - 0.5 }].forEach(({ end, at }) => {
+        const beamsAt = mine.filter(l => l.lo <= at + TOL && l.hi >= at - TOL).map(l => l.c);
+        if (!beamsAt.length) return;
+        const walls = crossings(loops, axis, at);
+        const stops = uniq([...beamsAt,
+          // The nearest wall each side of the lines it has.
+          ...[Math.max(...walls.filter(w => w < Math.min(...beamsAt) - TOL)),
+            Math.min(...walls.filter(w => w > Math.max(...beamsAt) + TOL))].filter(Number.isFinite)]);
+        if (stops.length < 2) return;
+        out.push({ axis, end, at, stops, gaps: stops.slice(1).map((v, i) => v - stops[i]) });
+      });
+    });
+    return out;
+  };
+
+  // ALONG EACH LINE: its ends and its posts, in order.
+  const postStrings = (drawing, level) => {
+    const rows = [];
+    beamsOf(drawing, levelIdOf(level)).forEach(b => {
+      if (rows.some(r => r.includes(b))) return;
+      rows.push(rowOf(drawing, b));
+    });
+    return rows.map(row => {
+      const line = rowLine(row);
+      if (!line) return null;
+      const stops = uniq([line.lo, line.hi, ...postsOn(drawing, row).map(c => along(line, c.point))]);
+      return { line, stops, gaps: stops.slice(1).map((v, i) => v - stops[i]) };
+    }).filter(r => r && r.stops.length > 2);
+  };
+
   window.DraftBoneyardBeams = Object.freeze({
+    endStrings, postStrings,
     MAX_SPAN_FT, ON_LINE_FT,
     levelIdOf, viewFor, shown, lineOf, rowOf, rowLine, postsOn, postsBetween, stackedOver,
     columnNear, beamNear, landing, squareEnd,

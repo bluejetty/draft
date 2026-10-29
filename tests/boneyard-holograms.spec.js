@@ -105,6 +105,27 @@ test('ON draws the file in the 3D and on its own level flat; OFF takes it away; 
   expect(await fileText(page), 'only looked at: the file is as it was').toBe(before);
 });
 
+// BG (Movie, 28 Oct: "allow the 'suites' holograms' to be in the BG
+// background"): a hologram can be sent behind, faded under the bones as a
+// level's BG is, and brought back in front.
+test('BG beside a hologram sends it behind, faded; pressed again it comes back in front', async ({ page }) => {
+  await open(page);
+  const bgBtn = page.locator('[data-bone-holo-bg="SUITE A"]');
+  await expect(bgBtn).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('[data-bone-level="MAIN FL"]').click();
+  await bgBtn.click();
+  await expect(bgBtn).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-bone-holo="SUITE A"]'), 'BG turns it on').toHaveAttribute('aria-pressed', 'true');
+  expect(await shown(page, '#bones2d'), 'drawn, behind').toEqual([{ name: 'SUITE A', walls: 8, bg: true }]);
+  expect(await shown(page, '#bones3d')).toEqual([{ name: 'SUITE A', walls: 8, bg: true }]);
+  await bgBtn.click();
+  expect(await shown(page, '#bones2d'), 'in front again').toEqual([{ name: 'SUITE A', walls: 8 }]);
+  await bgBtn.click();
+  await page.locator('[data-bone-holo="SUITE A"]').click();
+  await expect(bgBtn, 'OFF takes its BG with it').toHaveAttribute('aria-pressed', 'false');
+  expect(await shown(page, '#bones2d')).toEqual([]);
+});
+
 test('they start OFF again on the next opening', async ({ page }) => {
   await open(page);
   await page.locator('[data-bone-holo="SUITE A"]').click();

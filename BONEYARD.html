@@ -101,6 +101,8 @@
   .holo-legend .holo-head { font-size: 10px; letter-spacing: .1em; color: var(--ink-quiet); }
   .holo-legend button[aria-pressed="false"] { opacity: .55; }
   .holo-legend button .count { margin-left: auto; color: var(--ink-quiet); }
+  .holo-legend .holo-row > button[data-bone-holo] { flex: 1; min-width: 0; }
+  .holo-legend .holo-row > button.bg[aria-pressed="false"] { opacity: 1; }
   .levels-rail .legend { flex-direction: column; align-items: stretch;
     gap: 4px; flex-wrap: nowrap; }
   .levels-rail .legend button { justify-content: flex-start; white-space: nowrap; }
@@ -298,6 +300,10 @@
       // saved -- "start off" -- and only ever looked at: nothing here picks,
       // drags or breaks a hologram wall.
       const holoOn = new Set();
+      // AND THE ONES SENT BEHIND (Movie, 28 Oct: "allow the 'suites'
+      // holograms' to be in the BG background"): drawn faded under the
+      // bones, as a level's BG is, rather than over them. Never saved.
+      const holoBg = new Set();
       let laid = { levels: [], scale: 0 };
       // The edge the drafter picked: which loop of the picked level, which edge.
       let selected = null;
@@ -574,11 +580,29 @@
             b.append(n);
           }
           b.addEventListener('click', () => {
-            if (holoOn.has(file.name)) holoOn.delete(file.name); else holoOn.add(file.name);
+            if (holoOn.has(file.name)) { holoOn.delete(file.name); holoBg.delete(file.name); } else holoOn.add(file.name);
             paintHoloLegend();
             paintAll();
           });
-          return b;
+          // BG BESIDE IT, as on a level's row: pressed, the hologram is shown
+          // and sent behind; pressed again, it comes back in front.
+          const back = document.createElement('button');
+          back.type = 'button';
+          back.className = 'bg';
+          back.dataset.boneHoloBg = file.name;
+          back.textContent = 'BG';
+          back.title = `Show ${file.name} faded behind the level`;
+          back.setAttribute('aria-pressed', String(holoBg.has(file.name)));
+          back.addEventListener('click', () => {
+            if (holoBg.has(file.name)) holoBg.delete(file.name);
+            else { holoBg.add(file.name); holoOn.add(file.name); }
+            paintHoloLegend();
+            paintAll();
+          });
+          const row = document.createElement('div');
+          row.className = 'level-row holo-row';
+          row.append(b, back);
+          return row;
         }));
       };
 
@@ -605,14 +629,16 @@
         const holo3d = [];
         if (laid.at) {
           holosShown().forEach(file => {
+            ctx.globalAlpha = holoBg.has(file.name) ? 0.35 : 1;
             const walls = holoWalls(file).filter(w => laid.levels.some(l => l.kind !== 'roof'
               && Number(l.levelId) === Number(w.levelId)));
             strokeHoloWalls(ctx, walls, file.color, (pt, w) => {
               const l = laid.levels.find(lv => lv.kind !== 'roof' && Number(lv.levelId) === Number(w.levelId));
               return laid.at(pt, l.elev);
             });
-            holo3d.push({ name: file.name, walls: walls.length });
+            holo3d.push({ name: file.name, walls: walls.length, ...(holoBg.has(file.name) ? { bg: true } : {}) });
           });
+          ctx.globalAlpha = 1;
         }
         c3.setAttribute('data-holograms', JSON.stringify(holo3d));
         const sticks = laid.at ? postsOf(preview ? preview.drawing : raw) : [];
@@ -737,6 +763,12 @@
       // another is picked and an edit does not slide the plan under the
       // finger. It is fixed for the length of a drag.
       let frame = null;
+      // ZOOMED BY HAND (Movie, 28 Oct: "i'd like to be able to zoome into the
+      // 2d wireframe window like in model space"): the wheel zooms about the
+      // cursor and a drag on empty floor pans, as MODEL does; once zoomed the
+      // frame is the drafter's and is never refitted under him. 0 fits again.
+      let zoomed = false;
+      let pan = null;
       // THE EAVE IS PART OF THE EXTENT, whether or not the ROOF is the level
       // showing: the frame is the whole building's, and a frame that changed
       // shape when a roof was picked would slide the plan under the finger --
@@ -779,7 +811,7 @@
         c2.setAttribute('data-thin', '[]');
         const thinDrawn = [];
         // Refitted only when something has gone off the window.
-        if (!frame || (!drag && !fits(w, h))) frame = frameFor(w, h);
+        if (!frame || (!zoomed && !drag && !fits(w, h))) frame = frameFor(w, h);
         if (!level || !frame) return;
         const below = under(level);
         // THE BONES THE DRAFTER PUT BEHIND THIS ONE, faded, for lining one
@@ -809,6 +841,18 @@
         });
         ctx.restore();
         c2.setAttribute('data-faded', JSON.stringify(faded.map(l => l.name)));
+        // THE HOLOGRAMS SENT BEHIND, faded under the bones with the levels.
+        const holo2d = [];
+        if (level.kind !== 'roof') {
+          ctx.save();
+          ctx.globalAlpha = 0.35;
+          holosShown().filter(file => holoBg.has(file.name)).forEach(file => {
+            const walls = holoWalls(file).filter(w => Number(w.levelId) === Number(level.levelId));
+            strokeHoloWalls(ctx, walls, file.color, pt => toScreen(pt));
+            holo2d.push({ name: file.name, walls: walls.length, bg: true });
+          });
+          ctx.restore();
+        }
         if (below) {
           strokePolys(ctx, below.loops.map(l => l.points.map(toScreen)),
             skin['ink-quiet'] || '#888', 1, [5, 4]);
@@ -847,9 +891,8 @@
         }
         c2.setAttribute('data-stairs', String(stairsHere.length));
         // THE HOLOGRAMS SWITCHED ON, this level's walls of them only.
-        const holo2d = [];
         if (level.kind !== 'roof') {
-          holosShown().forEach(file => {
+          holosShown().filter(file => !holoBg.has(file.name)).forEach(file => {
             const walls = holoWalls(file).filter(w => Number(w.levelId) === Number(level.levelId));
             strokeHoloWalls(ctx, walls, file.color, pt => toScreen(pt));
             holo2d.push({ name: file.name, walls: walls.length });
@@ -1292,11 +1335,71 @@
           ctx.font = '12px "DM Mono", monospace';
           ctx.fillText(ft(len), q.x + 8, q.y - 8);
         }
+        paintBeamDims(ctx, level, d);
         c2.setAttribute('data-beams', JSON.stringify(beams.map(b => ({ id: b.id,
           a: [rnd(b.start.x), rnd(b.start.z)], b: [rnd(b.end.x), rnd(b.end.z)], auto: b.auto === true }))));
         c2.setAttribute('data-columns', JSON.stringify(columns.map(c => ({ id: c.id,
           at: [rnd(c.point.x), rnd(c.point.z)] }))));
         c2.setAttribute('data-beams-below', String(belowBeams.length));
+      };
+
+      // THE DIMENSIONS (Movie, 28 Oct: "we should also show the dimensions
+      // between the beams at each end", "(maybe columns too but only when
+      // zoomed in closer"): a string across the lines outside each end of
+      // the level, and -- closer than POST_DIMS_PX a foot -- the spacing of
+      // the posts along each line. boneyard-beams.js says where; this draws.
+      const POST_DIMS_PX = 10;
+      const paintBeamDims = (ctx, level, d) => {
+        const ink = skin['ink-quiet'] || '#8b8f92';
+        const pts = level.loops.flatMap(l => l.points);
+        const ends = pts.length ? BB.endStrings(d, level, level.loops) : [];
+        const box = {
+          x0: Math.min(...pts.map(p => p.x)), x1: Math.max(...pts.map(p => p.x)),
+          z0: Math.min(...pts.map(p => p.z)), z1: Math.max(...pts.map(p => p.z)),
+        };
+        const out = 26 / frame.s;
+        ctx.save();
+        ctx.strokeStyle = ink;
+        ctx.fillStyle = ink;
+        ctx.lineWidth = 1;
+        ctx.font = '11px "DM Mono", monospace';
+        // A run of stops along `axis` at a fixed cross position, ticked, each
+        // gap labelled where it has room.
+        const string = (axis, cross, stops, gaps, room) => {
+          const P = v => toScreen(axis === 'z' ? { x: cross, z: v } : { x: v, z: cross });
+          const a = P(stops[0]), b = P(stops[stops.length - 1]);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          stops.forEach(v => {
+            const p = P(v);
+            ctx.beginPath(); ctx.moveTo(p.x - 4, p.y + 4); ctx.lineTo(p.x + 4, p.y - 4); ctx.stroke();
+          });
+          gaps.forEach((g, i) => {
+            const p = P((stops[i] + stops[i + 1]) / 2);
+            const text = ft(g);
+            if (Math.abs(g) * frame.s < ctx.measureText(text).width * room) return;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            if (axis === 'z') ctx.rotate(-Math.PI / 2);
+            ctx.fillText(text, -ctx.measureText(text).width / 2, -4);
+            ctx.restore();
+          });
+        };
+        ends.forEach(e => {
+          // Lines along x are measured down z, outside the left or right end;
+          // lines along z across x, outside the top or bottom.
+          const cross = e.axis === 'x'
+            ? (e.end === 'start' ? box.x0 - out : box.x1 + out)
+            : (e.end === 'start' ? box.z0 - out : box.z1 + out);
+          string(e.axis === 'x' ? 'z' : 'x', cross, e.stops, e.gaps, 1.1);
+        });
+        const close = frame.s >= POST_DIMS_PX;
+        const posts = close ? BB.postStrings(d, level) : [];
+        posts.forEach(r => string(r.line.axis, r.line.c - 12 / frame.s, r.stops, r.gaps, 1.2));
+        ctx.restore();
+        const r2 = v => Math.round(v * 1e4) / 1e4;
+        c2.setAttribute('data-beam-dims', JSON.stringify(ends.map(e => ({ axis: e.axis, end: e.end,
+          gaps: e.gaps.map(r2) }))));
+        c2.setAttribute('data-post-dims', JSON.stringify(posts.map(r => r.gaps.map(r2))));
       };
 
       const beamWords = {
@@ -1468,9 +1571,27 @@
         paint2d();
         say(slideWords(result.report));
       });
+      const startPan = (e, x, y) => {
+        if (!frame) return;
+        pan = { x, y, ox: frame.ox, oy: frame.oy };
+        c2.setPointerCapture(e.pointerId);
+      };
+      c2.addEventListener('wheel', e => {
+        if (!frame) return;
+        e.preventDefault();
+        const box = c2.getBoundingClientRect();
+        const x = e.clientX - box.left, y = e.clientY - box.top;
+        const k = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        frame = { s: frame.s * k, ox: x - (x - frame.ox) * k, oy: y - (y - frame.oy) * k };
+        zoomed = true;
+        paint2d();
+      }, { passive: false });
+      // The right and middle buttons always pan, whatever is under them.
+      c2.addEventListener('contextmenu', e => e.preventDefault());
       c2.addEventListener('pointerdown', e => {
         const box = c2.getBoundingClientRect();
         const x = e.clientX - box.left, y = e.clientY - box.top;
+        if (e.button === 1 || e.button === 2) { startPan(e, x, y); return; }
         if (beamPointerDown(e, x, y)) return;
         const dot = !breaking ? dotUnder(x, y) : null;
         if (dot) {
@@ -1485,6 +1606,8 @@
           return;
         }
         const hit = edgeUnder(x, y);
+        // EMPTY FLOOR: the pick goes, and a drag from here pans.
+        if (!hit && !breaking) { selected = null; paint2d(); startPan(e, x, y); return; }
         if (!hit) { selected = null; paint2d(); return; }
         if (breaking) { doBreak(hit, toWorld(x, y)); return; }
         selected = { loopIndex: hit.loopIndex, edgeIndex: hit.edge.index };
@@ -1496,6 +1619,15 @@
         say(`${picked.name}: ${len} edge picked — drag it, or use the arrow keys, a foot at a time.`);
       });
       c2.addEventListener('pointermove', e => {
+        if (pan) {
+          const box = c2.getBoundingClientRect();
+          const dx = e.clientX - box.left - pan.x, dy = e.clientY - box.top - pan.y;
+          if (!dx && !dy) return;
+          frame = { s: frame.s, ox: pan.ox + dx, oy: pan.oy + dy };
+          zoomed = true;
+          paint2d();
+          return;
+        }
         if (beamPointerMove(e)) return;
         if (dotDrag) {
           const box = c2.getBoundingClientRect();
@@ -1524,6 +1656,7 @@
         paintAll();
       });
       c2.addEventListener('pointerup', async () => {
+        if (pan) { pan = null; return; }
         if (beamPointerUp()) return;
         if (dotDrag) {
           const dot = dotDrag;
@@ -1545,6 +1678,13 @@
 
       window.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoLast(); return; }
+        // 0 FITS, as it does in MODEL.
+        if (e.key === '0' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          frame = null;
+          zoomed = false;
+          paint2d();
+          return;
+        }
         if (e.key === 'Escape') {
           setBreaking(false);
           if (beamTool) setBeamTool(null);
@@ -1629,12 +1769,12 @@
         }
       }
       else if (!lease) say(leaseWords());
-      else say('Tap a loop, or a level above, to see it flat on the right. Tap an edge there to push it; BREAK puts a corner on a foot mark.');
+      else say('Tap a loop, or a level above, to see it flat on the right. Tap an edge there to push it; BREAK puts a corner on a foot mark. Wheel zooms, drag pans, 0 fits.');
       paintLegend();
       paintHoloLegend();
       paintAll();
       document.body.dataset.boneyardReady = '1';
-      window.addEventListener('resize', () => { frame = null; paintAll(); });
+      window.addEventListener('resize', () => { frame = null; zoomed = false; paintAll(); });
       window.DraftShellBars.wireSkin({
         theme: window.__byTheme.theme,
         mode: window.__byTheme.mode,

@@ -218,3 +218,39 @@ test('the 3D shows each level\'s lines under the floor they carry', async ({ pag
   expect(main.beams, 'MAIN FL\'s line').toBeGreaterThan(0);
   expect(fdn.top, 'the foundation\'s under MAIN FL').toBeLessThan(main.top);
 });
+
+// THE DIMENSIONS (Movie, 28 Oct: "we should also show the dimensions between
+// the beams at each end", "(maybe columns too but only when zoomed in closer").
+test('a string across the lines at each end, wall to line to line to wall; post spacing once zoomed in',
+  async ({ page }) => {
+    await boneyardOfTwoStorey(page);
+    await level(page, 'FOUNDATION');
+    const b = await box(page);
+    let n = await savesNow(page);
+    const z1 = Math.round(b.z0 + 8), z2 = Math.round(b.z0 + 20);
+    await drawLine(page, b, z1);
+    await saved(page, ++n);
+    await tapWorld(page, b.x0, z2);
+    await tapWorld(page, b.x1, z2);
+    await saved(page, ++n);
+    await page.keyboard.press('Escape');
+    const dims = JSON.parse(await page.locator('#bones2d').getAttribute('data-beam-dims'));
+    const along = dims.filter(d => d.axis === 'x');
+    expect(along.map(d => d.end).sort(), 'one string at each end').toEqual(['end', 'start']);
+    along.forEach(d => {
+      expect(d.gaps.map(g => Math.round(g * 12)), `${d.end}: wall, line, line, wall`)
+        .toEqual([Math.round((z1 - b.z0) * 12), (z2 - z1) * 12, Math.round((b.z1 - z2) * 12)]);
+    });
+    expect(JSON.parse(await page.locator('#bones2d').getAttribute('data-post-dims')),
+      'no post spacing at the fitted size').toEqual([]);
+    const c = await page.locator('#bones2d').boundingBox();
+    await page.mouse.move(...await at(page, { x: (b.x0 + b.x1) / 2, z: z1 }));
+    for (let i = 0; i < 8; i++) await page.mouse.wheel(0, -120);
+    const posts = JSON.parse(await page.locator('#bones2d').getAttribute('data-post-dims'));
+    expect(posts.length, 'zoomed in, each line\'s posts are dimensioned').toBeGreaterThan(0);
+    const len = b.x1 - b.x0;
+    const mine = posts.find(g => Math.abs(g.reduce((s, v) => s + v, 0) - len) < 1e-3);
+    expect(mine, 'a line wall to wall').toBeTruthy();
+    expect(Math.max(...mine), 'no span past 12 ft').toBeLessThanOrEqual(12 + 1e-6);
+    expect(c).toBeTruthy();
+  });
