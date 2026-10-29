@@ -179,3 +179,35 @@ test('an elevation viewport shows the existing house, and its switches are its o
   expect((await ink(page)).blue).toBeLessThan(on.blue * 0.3);
   expect((await savedDrawing(page)).layout.viewports[0].hologram).toEqual({ existing: false, demo: false });
 });
+
+// ZOOMED OUT, THE EXISTING HOUSE STAYS. Movie, 29 Oct, PHASE 1 beside PHASE 2:
+// "zoomed it you can see it , zoomed out you cant". The hologram's pass was
+// pinned to the sheet's frame but kept MODEL's screen gutters for a clip, and
+// on a viewport a few dozen pixels tall that clip had no height left.
+test('an elevation viewport zoomed out small still shows the existing house', async ({ page }) => {
+  const saved = drawing();
+  saved.levels = STACK;
+  saved.walls = onMain(saved.walls);
+  saved.holograms[0].source = { ...saved.holograms[0].source, levels: STACK,
+    walls: onMain(saved.holograms[0].source.walls) };
+  saved.layout = { paperKey: '11x17', orientation: 'landscape', auto: false, nextViewportId: 2,
+    viewports: [{ id: 1, kind: 'elevation', elevId: 'E1', pif: 0.0625, xIn: 8.5, yIn: 5.5, sheet: 1 }] };
+  await openLayout(page, saved);
+  const box = await page.locator('[data-layout-canvas]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  // Out until the viewport is shorter than MODEL's gutters top and bottom.
+  const tall = () => page.evaluate(() => {
+    const app = globalThis.eval('page');
+    const c = document.querySelector('[data-layout-canvas]');
+    const k = c.width / c.getBoundingClientRect().width;
+    return app._viewportRectIn(app._sheetViewports(app.state.activeSheet)[0]).hIn * app.state.zoom * k;
+  });
+  for (let i = 0; i < 12 && await tall() > 48; i++) {
+    await page.mouse.wheel(0, 200);
+    await page.waitForTimeout(100);
+  }
+  expect(await tall(), 'zoomed out small').toBeLessThan(48);
+  const small = await ink(page);
+  expect(small.black, 'the new work still drawn').toBeGreaterThan(20);
+  expect(small.blue, 'and the existing house beside it').toBeGreaterThan(20);
+});
