@@ -14,7 +14,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/hologram-front.spec.js';
 const MUTANTS = [
   { file: 'cut-view.js', name: 'the elevation never calls the overlay',
-    find: "    runOverlay(opts, { x0, y0, pxPerFt, uMin, yTop });\n",
+    find: "    runOverlay(opts, { x0, y0, pxPerFt, uMin, yTop, external: Boolean(fit) });\n",
     with: "",
     test: 'painted over the house' },
   { file: 'hologram.js', name: 'the overlay paints the ones behind',

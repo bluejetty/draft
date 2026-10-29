@@ -2223,7 +2223,7 @@ if (!window.DraftCutView) {
     const X = u => x0 + (u - uMin) * pxPerFt;
     const Y = e => y0 + (yTop - e) * pxPerFt;
     // A SECTION HAS NO OVERLAY: every hologram goes under it, as it always has.
-    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop, section: true })) return;
+    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop, section: true, external: Boolean(fit) })) return;
 
     const INK = C.line;
     header(`${cut.name} — GENERATED SECTION · ${env.ftIn(uMax - uMin)} CUT`);
@@ -3516,9 +3516,14 @@ if (!window.DraftCutView) {
     // from the pin (x0, y0, pxPerFt below), so the margins fit nothing; but
     // the level readings are drawn in the left margin, and a zoomed
     // elevation (MODEL, Movie 23 Oct) is still an elevation with readings.
-    // An external fit still takes none: the paper decides there.
-    const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
-      marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
+    // An external fit still takes none: the paper decides there -- and
+    // nor does a pass pinned to one (a hologram on a LAYOUT sheet). MODEL's
+    // gutters on a viewport 44 px tall left a clip of no height, and the
+    // existing house went missing zoomed out (Movie, 29 Oct: "zoomed it you
+    // can see it, zoomed out you cant").
+    const ext = Boolean(pin && pin.external);
+    const marginL = fit || ext ? 0 : mg.left, marginR = fit || ext ? 0 : mg.right,
+      marginT = fit || ext ? 0 : mg.top, marginB = fit || ext ? 0 : mg.bottom;
     // THE CUSHION IS AIR AT THE SIDES AND SKY AT THE TOP, AND NOTHING BELOW:
     // the footing goes on resting on its inch of dirt against the foot bar
     // (the 26 Sep ruling at yFit), with the pile shafts running under it.
@@ -3533,7 +3538,7 @@ if (!window.DraftCutView) {
       : marginT + ((h - marginT - marginB) - (yTop + sky - yFit) * pxPerFt) / 2 + sky * pxPerFt;
     const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
-    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop })) return true;
+    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop, external: Boolean(fit) })) return true;
 
     const INK = C.line;
     // WHAT MAKES A FACE EDGE AN EAVE: both ends sitting on the fascia top.
@@ -3575,6 +3580,8 @@ if (!window.DraftCutView) {
     // to the room inside the margins -- a viewport -- and the readings stay
     // where they are. The fit never needs this (it was fitted inside them)
     // and an external fit has no margins to keep.
+    // A pass pinned to an external fit clips to the viewport's own edges
+    // (its margins are none), so a hologram stays inside its box on the sheet.
     const pinClip = Boolean(pin) && !fit;
     if (pinClip) {
       ctx.save();
@@ -7825,7 +7832,7 @@ if (!window.DraftCutView) {
       if (pinClip) ctx.restore();
       return true;
     }
-    runOverlay(opts, { x0, y0, pxPerFt, uMin, yTop });
+    runOverlay(opts, { x0, y0, pxPerFt, uMin, yTop, external: Boolean(fit) });
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(marginL - 18, Y(fdn.grade));

@@ -35,7 +35,7 @@ const MUTANTS = [
     test: 'wheel zooms' },
   { file: 'cut-view.js',
     name: 'a pinned elevation drops its margins, and the readings with them',
-    find: "    const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,\n      marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;\n",
+    find: "    const marginL = fit || ext ? 0 : mg.left, marginR = fit || ext ? 0 : mg.right,\n      marginT = fit || ext ? 0 : mg.top, marginB = fit || ext ? 0 : mg.bottom;\n",
     with: "    const marginL = fit || pin ? 0 : mg.left, marginR = fit || pin ? 0 : mg.right,\n      marginT = fit || pin ? 0 : mg.top, marginB = fit || pin ? 0 : mg.bottom;\n",
     test: 'wheel zooms' },
   { file: 'model/16-gestures-undo.js',
