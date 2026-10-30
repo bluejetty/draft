@@ -58,6 +58,8 @@
 <script src="./shell-bars.js"></script>
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
+<script src="./bone-wallet.js"></script>
+<script src="./backup-email.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
 <!-- THE ROOF'S OWN WORDS. cut-view-env.js reads DraftRoofTypes to keep a
@@ -5041,7 +5043,12 @@ class Component extends PageLogic {
       window.__draftPrintCapture({ frame, doc, sheets, done });
       return;
     }
-    frame.contentWindow.addEventListener('afterprint', () => setTimeout(done, 0), { once: true });
+    // AND THEN THE BACKUP FILE QUESTION: the print window may have saved a
+    // PDF, which this page cannot see, so SEND asks for it with a picker.
+    frame.contentWindow.addEventListener('afterprint', () => setTimeout(() => {
+      done();
+      window.DraftBackupEmail?.offerPicked({ what: 'PDF' });
+    }, 0), { once: true });
     frame.contentWindow.focus();
     frame.contentWindow.print();
   }
@@ -5477,7 +5484,11 @@ page.componentDidMount();
       if (!/\.(draft|json|model|plan)$/i.test(name)) name += `.${extension()}`;
       close();
       const text = await storedText();
-      if (text) download(text, name);
+      if (text) {
+        download(text, name);
+        // SAVE BACKUP FILE TO EMAIL -- offered only after a local save.
+        window.DraftBackupEmail?.offer({ name, blob: new Blob([text], { type: 'application/json' }) });
+      }
       else page.setState({ persistenceStatus: 'UNSAVED', persistenceError: 'No drawing to save' });
     };
     saveAsScrim.querySelector('[data-lay-saveas-go]').addEventListener('click', go);
