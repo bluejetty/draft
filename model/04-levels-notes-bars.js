@@ -1246,6 +1246,8 @@
   // and a drip lands on the hour. Faster would redraw nothing; slower would
   // leave a bone in the wallet that the press says is not there.
   window.setInterval(refreshWallet, 60000);
+  // A BACKUP FILE EMAIL spends bones from outside this page's presses.
+  window.addEventListener('draft-bones-changed', refreshWallet);
 
   const signShut = () => sign.hasAttribute('data-shut');
   const outlinePresses = [...document.querySelectorAll('[data-drivethru-outline]')];
