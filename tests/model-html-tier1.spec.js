@@ -289,7 +289,8 @@ test.describe('MODEL.html tier 1', () => {
       // A LINE'S WEIGHTS, COLOURS AND DASHES (Movie, 19 Oct), one table
       // the painter, the panel, the format and the DXF all read.
       './line-styles.js',
-      './shared-file-store.js', './wall-types.js',
+      // backup-email.js: SAVE BACKUP FILE TO EMAIL after SAVE AS (Movie, 30 Oct).
+      './shared-file-store.js', './backup-email.js', './wall-types.js',
       // NO PATTERN MODULES HERE, AND THE REASON IS WORTH KEEPING. They were
       // added with the EXT. FINISH pane on 27 Sep under the claim that they
       // "delete a silence" -- that cut-view's paintFaceFinish and paintRoof
