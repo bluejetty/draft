@@ -853,6 +853,10 @@
   #dt-verbs[data-tight] > button { padding:6px 7px; letter-spacing:0.02em; }
   #dt-verbs[data-tight="2"] { gap:3px; }
   #dt-verbs[data-tight="2"] > button { padding:5px 6px; font-size:11px; }
+  /* A THIRD STAGE (6 Nov): ORDER joined the row, and seven verbs at the
+     second stage overran the 1280 foot's gap by a verb's width. */
+  #dt-verbs[data-tight="3"] { gap:2px; }
+  #dt-verbs[data-tight="3"] > button { padding:5px 4px; font-size:10px; letter-spacing:0; }
   #model-break[aria-pressed="true"], #model-move[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
   /* ROTATE'S OWN ROW, standing over the verbs while it is up. */
   #rotate-bar, #flip-bar, #rescale-bar, #order-bar { display:inline-flex; gap:6px; align-items:center; }

@@ -43,7 +43,7 @@ const MUTANTS = [
     with: "    const steps = [flipped, ...reframed.flatMap(r => r.steps)];\n",
     test: 'top for bottom, and one UNDO puts the lot back' },
   { file: 'shell-bars.js', name: 'crowded, the verbs keep their full size and land on the BONE',
-    find: "    for (const stage of ['1', '2']) {\n      if (width <= room) break;\n      box.dataset.tight = stage;\n      width = box.getBoundingClientRect().width;\n    }\n",
+    find: "    for (const stage of ['1', '2', '3']) {\n      if (width <= room) break;\n      box.dataset.tight = stage;\n      width = box.getBoundingClientRect().width;\n    }\n",
     with: "",
     test: 'crowded, the verbs draw in and leave the BONE clear' },
 ];
