@@ -226,6 +226,8 @@ test('with a save dialog, it opens beside the last .draft saved and writes the t
   await page.locator('#file-save-as').click();
   await page.locator('[data-save-as-go]').click();
   await expect.poll(() => page.evaluate(() => window.__picks.length)).toBe(1);
+  // SAVE AS now offers SAVE BACKUP FILE TO EMAIL; this check says NO THANKS.
+  await page.locator('[data-bk-skip]').click();
   await openPad(page);
   await page.locator('[data-notes-save-txt]').click();
   await expect.poll(() => page.evaluate(() => window.__picks.length)).toBe(2);

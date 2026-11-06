@@ -19,7 +19,10 @@ if (!window.DraftBoneWallet) {
   // The spend registry — the growth point: elevation re-deals (#253) and
   // LAYOUT printing (#168, 3 bones) register here later. Phase 1 wires
   // ONLY the BUILD HOUSE press.
-  const COSTS = Object.freeze({ buildHouse: 1 });
+  // A BACKUP FILE BY EMAIL is 3 (Movie, 30 Oct: "charge them 3 bones per
+  // email backup ... to slow them down a bit") -- backup-email.js, spent
+  // only once the mail has gone.
+  const COSTS = Object.freeze({ buildHouse: 1, emailBackup: 3 });
   const STORAGE_KEY = 'draft-bone-wallet';
 
   // A stored wallet the code can trust: numbers coerced, a missing or

@@ -13,8 +13,8 @@ const SPEC = 'tests/underlay-pack.spec.js';
 const MUTANTS = [
   { file: 'model/17-boot-save.js',
     name: 'the download carries no pictures',
-    find: "      if (download) await downloadDrawing(await withUnderlayFiles(contents), download, handle);",
-    with: "      if (download) await downloadDrawing(contents, download, handle);",
+    find: "        const packed = await withUnderlayFiles(contents);",
+    with: "        const packed = contents;",
     test: 'packs the picture' },
   { file: 'model/17-boot-save.js',
     name: 'OPEN leaves the pictures in the file',
