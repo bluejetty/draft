@@ -114,7 +114,7 @@ const MUTANTS = [
     name: 'the chips read the first shape only, not every selected one',
     find: "    const same = read => (shapes.every(s => read(s) === read(shapes[0])) ? read(shapes[0]) : undefined);\n",
     with: "    const same = read => read(shapes[0]);\n",
-    test: PANEL },
+    test: TWO },
   { file: 'model/15-panels.js',
     name: 'a chip writes the first selected shape only',
     find: "    const edits = list.map(shape => ({ item: shape, before: { ...shape } }));\n    list.forEach(shape => {\n      Object.entries(patch)",
