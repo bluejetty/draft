@@ -1569,6 +1569,9 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:11px;
     font-weight:600; letter-spacing:0.04em; white-space:nowrap; }
   #lot-pick .lot-commands button:hover { border-color: var(--accent); color: var(--accent); }
+  /* THE LONGEST COMMAND READS ON TWO LINES rather than widening the column
+     the four shorter ones sit in. */
+  #lot-pick [data-lot-pick-import] { white-space:normal; line-height:1.25; }
   /* THE VERB IS THE ONE THAT DRAWS, so it wears the accent the other three
      do not -- the same rule [data-promote-go] follows on every other card. */
   #lot-pick [data-lot-pick-draw] { border-color: var(--accent); color: var(--accent); }
