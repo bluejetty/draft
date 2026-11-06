@@ -808,6 +808,9 @@
     // different tile and never saw the size asked.
     if (entryId !== chosenEntryId) chosenSizeId = null;
     chosenEntryId = entryId;
+    // A HOUSE ORDERED ON A STANDALONE SITE PLAN MAKES IT A HOUSE FILE AGAIN:
+    // the levels it hid come back, because the house is about to need them.
+    if (drawing?.standalone) { delete drawing.standalone; markDirty(); }
     // THE PAGE DOES NOT TURN UNDER THE PRESS. Movie, 24 Sep: "after they make
     // their choice on this page, don't change the page. just light up their
     // choice and make the bone glow and pulse the glow so they will click it".
@@ -846,9 +849,25 @@
           button.textContent = entry.label;
           button.title = family.title;
           button.classList.toggle('chosen', entry.id === chosenEntryId);
-          button.onclick = () => { openFamilyId = null; pressEntry(entry.id); };
+          // A STANDALONE TILE IS THE WHOLE ORDER (Movie, 6 Nov: DRAW
+          // STANDALONE SITE PLAN). Nothing to choose and no bone to press
+          // after it: the press itself drops the board and goes there.
+          button.onclick = entry.standalone
+            ? () => startStandalone(entry.standalone)
+            : () => { openFamilyId = null; pressEntry(entry.id); };
           return button;
         }));
+        // THE SPOT KEPT UNDER IT ("leave a spot below i will want to ad
+        // somthing else there probably"): an empty half, so the tile above
+        // stays half a card the way the SUITE pair are, and the next press
+        // has its place on the board already.
+        for (let i = 0; i < (family.spare || 0); i += 1) {
+          const spare = document.createElement('span');
+          spare.className = 'dt-stack-spare';
+          spare.dataset.buildSpare = family.id;
+          spare.setAttribute('aria-hidden', 'true');
+          stack.append(spare);
+        }
         return stack;
       }
       const button = document.createElement('button');
@@ -1383,6 +1402,30 @@
     // should be tabbed into. The sheet does not, so there it stays live.
     boneFoot.disabled = show && (BOARD_ART[theme] || {}).coversBone === true;
   };
+  // DRAW STANDALONE SITE PLAN (Movie, 6 Nov). The board goes down, nothing
+  // is built, the drawing is marked standalone and the drafter is stood on
+  // SITE -- where arriving with no lot asks the lot question, which is the
+  // right first question for a site plan. The mark is the file's
+  // (`standalone`, drawing-format.js STANDALONE_KINDS): the LEVELS panel,
+  // the view rail and LAYOUT read it and offer SITE PLAN alone -- "that plan
+  // will be only for the SITE PLAN layer - no other layers offered".
+  //
+  // THE ORDER ON THE BOARD IS CLEARED, not kept: a house half-chosen before
+  // this press is not part of a site plan, and a bone left pulsing for it
+  // would be asking to build the thing he just said he was not building.
+  const startStandalone = kind => {
+    if (!drawing) return;
+    const want = window.DraftDrawingFormat?.standalone?.(kind) || null;
+    if (!want) return;
+    openFamilyId = null;
+    chosenEntryId = null;
+    chosenSizeId = null;
+    if (drawing.standalone !== want) { drawing.standalone = want; markDirty(); }
+    setSign(false);
+    syncBuildBar();
+    goToLevel(SITE_LEVEL_ID);
+  };
+
   // THE BUTTON LIGHTS BEFORE THE SIGN RISES (Movie, 15 Sep): the house
   // button glows, then the board comes up. One constant, because he said
   // he would want to change the length.

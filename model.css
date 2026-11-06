@@ -680,6 +680,11 @@
     width:clamp(48px, calc(var(--dt-w) * 0.14), 134px); }
   #build-entries .dt-stack button, #build-families .dt-stack button { flex:1 1 0; white-space:normal;
     line-height:1.15; padding:3px 4px; }
+  /* THE SPOT KEPT UNDER A STANDALONE TILE (Movie, 6 Nov: "leave a spot
+     below i will want to ad somthing else there probably"): the other half
+     of the card, empty, so the tile above is half a card like the SUITE
+     pair and the next press already has its place. */
+  #build-families .dt-stack-spare { flex:1 1 0; }
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
      one light, and a night-skin chip on it would read as a hole. */

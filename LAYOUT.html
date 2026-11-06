@@ -1745,6 +1745,13 @@ class Component extends PageLogic {
     this._drawingChecked = true;
     this._drawingGen = (this._drawingGen || 0) + 1;
     this._levels = saved ? format.levels(saved.levels) : [];
+    // A STANDALONE FILE (Movie, 6 Nov: DRAW STANDALONE SITE PLAN -- "that
+    // plan will be only for the SITE PLAN layer - no other layers offered").
+    // The deal and + ADD VIEWPORT offer the SITE PLAN and nothing else; the
+    // levels themselves stay listed, because the cut env and the painters
+    // are built against the whole stack and a site plan does not change
+    // what the file holds, only what is offered.
+    this._standalone = saved && format.standalone ? format.standalone(saved.standalone) : null;
     // THE BONEYARD SHELVES THAT HOLD A DRAWING, as plan "levels" of their
     // own (Movie, 26 Oct: "i'd like to be able to add a viewport from a
     // 'SHELF' drawing so i can show the suites"). A shelf's walls carry
@@ -2228,7 +2235,12 @@ class Component extends PageLogic {
     // does not carry a 2ND FL PLAN with nothing on it -- that one is not
     // waiting on a painter, it is not part of this house.
     const sheetPlan = [];
-    const deal = (title, views = []) => sheetPlan.push({ title, views: views.filter(Boolean) });
+    // A STANDALONE SITE PLAN IS ONE SHEET (Movie, 6 Nov): the SITE PLAN is
+    // dealt and every other name in the set is left in the deck.
+    const deal = (title, views = []) => {
+      if (this._standalone === 'site' && title !== 'SITE PLAN') return;
+      sheetPlan.push({ title, views: views.filter(Boolean) });
+    };
     const plansOf = ids => floorLevels.filter(level => ids(level.id))
       .map(level => planSheet(level.id, 'plan')).filter(Boolean);
     // THE SITE PLAN, WITH THE SITE ON IT (Movie, 14 Oct: "i tried to do the
@@ -3715,16 +3727,19 @@ class Component extends PageLogic {
       const picked = { kind: 'plan', levelId, ...(view ? { view } : {}) };
       return { ...picked, label: this._planTitle(picked) };
     };
-    const plans = levels.flatMap(level => {
+    // A STANDALONE SITE PLAN OFFERS THE SITE PLAN ALONE: no storey, no
+    // floor layout, no elevation, no section (Movie, 6 Nov).
+    const siteOnly = this._standalone === 'site';
+    const plans = levels.filter(level => !siteOnly || level.id === SITE_LEVEL_ID).flatMap(level => {
       const views = viewsOf(level);
       if (views.includes('foundation')) return [plan(level.id, 'foundation'), plan(level.id, 'plan')];
       return [plan(level.id, views.includes('plan') ? 'plan' : null)];
     });
-    const floors = levels.filter(level => viewsOf(level).includes('floor'))
+    const floors = siteOnly ? [] : levels.filter(level => viewsOf(level).includes('floor'))
       .map(level => plan(level.id, 'floor'));
-    const elevations = ['E1', 'E2', 'E3', 'E4'].map(elevId =>
+    const elevations = siteOnly ? [] : ['E1', 'E2', 'E3', 'E4'].map(elevId =>
       ({ kind: 'elevation', elevId, label: `ELEVATION ${elevId}` }));
-    const sections = (this._cuts || []).map(cut =>
+    const sections = siteOnly ? [] : (this._cuts || []).map(cut =>
       ({ kind: 'section', cutId: cut.id, label: `SECTION ${cut.name}` }));
     const shelves = (this._shelfLevels || []).map(level =>
       ({ kind: 'plan', levelId: level.id, label: `${level.name} PLAN` }));

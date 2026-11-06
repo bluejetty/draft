@@ -81,6 +81,31 @@ if (!window.DraftBuildMenu) {
         Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall', needsSize: true }),
       ]),
     }),
+    // A SITE PLAN AND NOTHING ELSE (Movie, 6 Nov: "when the AUTOHOUSE options
+    // is brought up at the begining - above it can we have an option - DRAW
+    // STANDALONE SITE PLAN ... put it like the RESIDENTIAL SUITES and
+    // COMMERCIAL SUITE - half size but put the STANDALONE SITE PLAN in a box
+    // on the right side of DETACHED GARAGE. leave a spot below i will want to
+    // ad somthing else there probably" -- "and then that plan will be only
+    // for the SITE PLAN layer - no other layers offered").
+    //
+    // NOT A HOUSE, AND NOT AN ORDER. No `type`, no bone: the press itself
+    // drops the board, builds nothing and lands the drafter on SITE, with
+    // `standalone: 'site'` written on the drawing so the LEVELS panel, the
+    // view rail and LAYOUT offer the site plan and nothing else. `standalone`
+    // is what reaches the file (drawing-format.js STANDALONE_KINDS).
+    // `stack: true` is the SUITE's shape, half a card; `spare: 1` is the
+    // empty half under it, kept for the next thing he puts there.
+    Object.freeze({
+      id: 'sitePlan',
+      label: 'SITE PLAN',
+      title: 'STANDALONE SITE PLAN — a lot and what stands on it, with no house built and no other level offered',
+      stack: true,
+      spare: 1,
+      entries: Object.freeze([
+        Object.freeze({ id: 'site-standalone', label: 'DRAW STANDALONE SITE PLAN', standalone: 'site' }),
+      ]),
+    }),
     Object.freeze({
       id: 'bungalow',
       label: 'BUNGALOW',
