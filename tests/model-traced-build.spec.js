@@ -508,6 +508,27 @@ test('a garage drawn as three legs off the house closes itself along the house w
   expect(d.roofs.length, 'one roof over house and garage').toBe(1);
 });
 
+// ONE ROOF STAYS ONE ROOF (jb, 6 Nov: "roof plan looks perfect but
+// elevations messed up"). A garage wrapped round the house's front corner
+// gave the house-and-garage loop an end the wing rule took for a house body
+// that narrows: the one roof was torn into two gabled roofs, each raked two
+// feet into the other, and every elevation drew the one through the other.
+// Movie, 6 Oct: "if both walls are same height exactly they should be ONE
+// roof" -- so one loop, raised whole, and no gable edge on it.
+test('a garage wrapped round the house corner is roofed as one hip roof, not two gabled wings', async ({ page }) => {
+  await open(page, matchedTops());
+  await drawType(page, 'bungalow', 'bungalow-garage');
+  await trace(page, [[0, 0], [0, -23], [-24, -23], [-24, 0]]);
+  await expect(page.locator('#strip-message')).toContainText('Now draw the garage');
+  // Off the front wall at x = -7, out, across past the house's right corner,
+  // back up its right wall's line and in to the corner.
+  await run(page, [[-7, 0], [-7, 10], [21, 10], [21, -8], [0, -8]]);
+  const d = await build(page);
+  expect(d.roofs.length, 'one roof over house and garage').toBe(1);
+  expect(d.roofs[0].edges.every(e => e === 'eave'), 'all eaves, no gable torn into it').toBe(true);
+  expect(d.roofs[0].points.length, 'the eight corners of the L').toBe(8);
+});
+
 // CONNECT AT CORNER (Movie, 6 Oct): a garage wall that carries a house wall
 // on past its corner is moved over 1 ft, square, with a stub at the corner,
 // so the garage's foundation bears full on the house wall. On DRAFTING it

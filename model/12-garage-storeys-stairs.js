@@ -4729,6 +4729,17 @@
     // own loop and there is nothing to cut.
     const houseRoofNotch = (plan.entry && overGarageBody && plan.overGarageRoof)
       ? (roomHood ? roomHood.roof : plan.overGarageRoof) : null;
+    // DOES THE HOUSE'S OWN BODY NARROW ON AN END? Read on the house loop
+    // alone, cleaned the way raiseRoofOver cleans it, so a wing the GARAGE
+    // makes on the house-and-garage loop is not mistaken for one of the
+    // house's.
+    const houseBodyHasWing = loop => {
+      const G = window.DraftGeometry2D;
+      if (!G || !G.roofEndAttachment || !Array.isArray(loop) || loop.length < 4) return false;
+      const cleaned = G.loopWithoutSpikes(loop);
+      const ring = G.loopWithoutJogs ? G.loopWithoutJogs(cleaned.points).points : cleaned.points;
+      return !!G.roofEndAttachment(ring);
+    };
     if (levelPresent(ROOF_LEVEL_ID)) {
       // THE ROOF'S OWN LOOP, which is NOT always the house's body. A
       // bungalow with a garage is roofed over the perimeter of both -- the
@@ -4748,6 +4759,20 @@
           stepped: true, cuts: twoRoofs.house.cuts, collect })
         : raiseRoofOver(plan.houseRoof || plan.house, {
           buildType: roofType, notch: houseRoofNotch, collect,
+          // ONE ROOF STAYS ONE ROOF (Movie, 6 Oct: "if both walls are same
+          // height exactly they should be ONE roof"). When the design hands
+          // the house and its garage one loop to roof, and the house's OWN
+          // body has no wing on its end and no taller wall to die into, that
+          // loop is raised whole: a garage standing on the house's end is
+          // not a wing to be taken off as a roof of its own (raiseRoofOver's
+          // end-attachment rule, 16 Oct, is for a house whose own body
+          // narrows, and that house keeps the rule). Read as wings, jb's
+          // 6 Nov bungalow came out as two gabled roofs each raked two feet
+          // into the other -- the garage taken for the main block and the
+          // house for the stub -- and every elevation drew the one through
+          // the other.
+          wings: !(plan.garage && plan.houseRoof && plan.houseRoof !== plan.house
+            && !houseRoofNotch && !houseBodyHasWing(plan.house)),
           onGableWall: run => gableWallRuns.push(run) }));
       const houseRoofMade = madeRoofs[madeRoofs.length - 1];
       // ── THE GABLE WALL ITSELF ─────────────────────────────────────────
