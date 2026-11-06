@@ -161,9 +161,11 @@ test('MODEL reads the strength: at 150% every reach is half again as long', asyn
 // zoomed right in, where two inches was 30 px of screen and a hand an inch
 // off a node was caught by it. The one rule keeps its three parts: 2" on
 // the plan, never under 4 px (zoomed out, a hand on the node still has it),
-// and now never over 10 px, so close up only a hand nearly on the node
-// catches. Measured through reachFt, in pixels at each zoom.
-test('zoomed in close a node reaches 10 px, not two inches; zoomed out 4 px; between, the inches', async ({ page }) => {
+// and now never over 16 px, so close up only a hand nearly on the node
+// catches. Sixteen keeps the two inches whole at every working zoom: the
+// 17 Oct press 1.7" off a node at up to 90 px a foot (snap-track.spec.js)
+// still lands on it. Measured through reachFt, in pixels at each zoom.
+test('zoomed in close a node reaches 16 px, not two inches; zoomed out 4 px; between, the inches', async ({ page }) => {
   await h.openModel(page, { webgl: false });
   await page.goto('/MODEL.html');
   await page.waitForFunction(() => typeof reachFt === 'function');
@@ -174,12 +176,13 @@ test('zoomed in close a node reaches 10 px, not two inches; zoomed out 4 px; bet
     view.scale = was;
     return px;
   }, scale);
-  // 300 px a foot: two inches would be 50 px. Capped at ten.
-  expect(await pxAt(300)).toBeCloseTo(10, 6);
+  // 300 px a foot: two inches would be 50 px. Capped at sixteen.
+  expect(await pxAt(300)).toBeCloseTo(16, 6);
   // 12 px a foot: two inches is 2 px, under the floor. Four.
   expect(await pxAt(12)).toBeCloseTo(4, 6);
-  // 36 px a foot: two inches is 6 px, inside both. The inches.
+  // 36 and 90 px a foot: two inches is 6 and 15 px, inside both. The inches.
   expect(await pxAt(36)).toBeCloseTo(6, 6);
+  expect(await pxAt(90)).toBeCloseTo(15, 6);
 });
 
 test('the Settings page saves the drafter name and phone', async ({ page }) => {
