@@ -2636,6 +2636,7 @@
     }
     syncRotateVerbs();
     syncFlipVerbs();
+    syncOrderVerbs();
     syncRescaleVerbs();
     syncBreakVerb();
     syncMoveVerb();

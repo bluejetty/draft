@@ -750,6 +750,18 @@ ${trio(true)}
     <button type="button" data-flip-axis="z" title="Top for bottom">&#x21C5; U/D</button>
     <button type="button" data-flip-done title="Put FLIP down">DONE</button>
   </span>
+  <!-- ORDER (Movie, 6 Nov): "we should have a feature to bring a item, or
+       group 'to the top' so it is seen over other items or lines". One verb,
+       its row over the others while it is up, as FLIP's is: TO FRONT paints
+       what is selected last of its kind, TO BACK first, and a click where
+       things stack takes the one painted last. -->
+  <button id="model-order" type="button" data-order hidden
+    title="Paint what is selected over or under the other things of its kind">ORDER</button>
+  <span id="order-bar" data-order-bar hidden>
+    <button type="button" data-order-front title="Painted over the other things of its kind, and picked first where they stack">TO FRONT</button>
+    <button type="button" data-order-back title="Painted under the other things of its kind">TO BACK</button>
+    <button type="button" data-order-done title="Put ORDER down">DONE</button>
+  </span>
   <!-- RESCALE (Movie, 23 Oct): "click on the bg photo and resize it with a
        resize button in bottom left menu area" -- "RESCALE might be a better
        term" -- "with proportions locked and also without". A photo picked on
@@ -982,16 +994,17 @@ ${trio(true)}
     // which took the press meant for it. Measured at the full size first;
     // when that does not fit between the pages and the trio, the tight
     // styling (shell-bars.css) goes on in two stages -- less air, then a
-    // smaller face -- and the row is measured again after each. The
-    // attribute is this function's alone, and the observer that calls it
-    // watches `hidden`, not this, so there is nothing to loop.
+    // smaller face, then (6 Nov, when ORDER made seven) a smaller face
+    // still -- and the row is measured again after each. The attribute is
+    // this function's alone, and the observer that calls it watches
+    // `hidden`, not this, so there is nothing to loop.
     // NO TRIO ON THE BAR (a bone-less page whose arrows are hidden): the
     // middle of the sheet is the edge, where #dt-bar stands.
     const trioLeft = trioBox.width ? trioBox.left : barBox.left;
     const room = trioLeft - pageBox.right - 2 * FOOT_VERB_MARGIN;
     delete box.dataset.tight;
     let width = box.getBoundingClientRect().width;
-    for (const stage of ['1', '2']) {
+    for (const stage of ['1', '2', '3']) {
       if (width <= room) break;
       box.dataset.tight = stage;
       width = box.getBoundingClientRect().width;

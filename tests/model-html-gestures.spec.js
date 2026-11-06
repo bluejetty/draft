@@ -807,6 +807,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // RESCALE (Movie, 23 Oct): a picked photo's handles size what is
             // already on the sheet; it makes nothing, as FLIP makes nothing.
             'model-rescale',
+            // ORDER (Movie, 6 Nov: "bring a item, or group 'to the top'"):
+            // what is already drawn is painted over or under the rest of its
+            // kind; it makes nothing, as FLIP makes nothing.
+            'model-order',
             // BREAK (Movie, 18 Oct) cuts a roof in two along a flush gable, or
             // breaks an assembly into its pieces. It divides what is drawn and
             // starts nothing new, so no absence row moves.
@@ -853,6 +857,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // RESCALE's own row (Movie, 23 Oct): its hint is words, its one
             // press DONE.
             'DONE',
+            // ORDER's own row (Movie, 6 Nov): to the front, to the back, DONE.
+            'TO FRONT', 'TO BACK', 'DONE',
             // THE STAIR'S POPUP (Movie, 25 Oct: "give them a popup choice"):
             // the shape, the hand it turns, which way from this floor, and
             // DONE. The choices set what the STAIR tool's two presses make;
