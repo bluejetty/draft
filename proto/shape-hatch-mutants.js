@@ -121,7 +121,7 @@ const MUTANTS = [
     with: "    list = list.slice(0, 1);\n    const edits = list.map(shape => ({ item: shape, before: { ...shape } }));\n    list.forEach(shape => {\n      Object.entries(patch)",
     test: TWO },
   { file: 'model/15-panels.js',
-    name: 'the last pick is not the next shape\\'s',
+    name: 'the last pick is not the next shape\'s',
     find: "  const shapeStyleDefaults = () => ({\n    ...(shapeDefaults.hatch ? { hatch: shapeDefaults.hatch } : {}),\n",
     with: "  const shapeStyleDefaults = () => ({\n",
     test: TWO },
