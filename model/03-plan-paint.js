@@ -1589,16 +1589,57 @@
         openAutoRows(rowsBtn);
       });
       dimsShowBox.append(rowsBtn);
+      // HOUSE FOOTPRINT (Movie, 6 Nov: "i decided not to AUTOBUILD a house,
+      // i just want to draw a site plan, but this GREY BOX appears and i
+      // can't seem to delete it ... the AUTOHOUSE should be optional, NOT
+      // required"). The site plan's shaded building, switched off and on
+      // without touching the building: the switch is the file's
+      // (`siteFootprint`, read by layout-plan.js sitePlanParts), so the
+      // LAYOUT sheet's SITE PLAN agrees with the screen. Beside the dims
+      // chips because that is where this level's show-and-hide lives; only
+      // on SITE, and only while there is a building to show or one hidden.
+      const footBtn = document.createElement('button');
+      footBtn.type = 'button';
+      footBtn.className = 'sel-chip';
+      footBtn.dataset.siteFootprint = '';
+      footBtn.textContent = 'HOUSE FOOTPRINT';
+      footBtn.title = 'HOUSE FOOTPRINT -- show or hide the building on the site plan (DELETE on it takes the footprint off for good)';
+      footBtn.addEventListener('click', () => {
+        if (!drawing) return;
+        const before = drawing.siteFootprint;
+        if (before === false) delete drawing.siteFootprint; else drawing.siteFootprint = false;
+        undoStack.push({ kind: 'node', undo: () => {
+          if (before === false) drawing.siteFootprint = false; else delete drawing.siteFootprint;
+          setSelection([]);
+        } });
+        // A FOOTPRINT OUT OF SIGHT IS OUT OF HAND TOO.
+        if (drawing.siteFootprint === false) {
+          setSelection(selection.filter(en => !(en.type === 'outline' && Number(en.item.levelId) !== SITE_LEVEL_ID)
+            && !(en.type === 'roof' && Number(en.item.levelId) === ROOF_LEVEL_ID)));
+        }
+        markDirty();
+        sayOnStrip(drawing.siteFootprint === false
+          ? 'HOUSE FOOTPRINT is off the site plan \u2014 the house itself is untouched. Press it again to show it.'
+          : 'HOUSE FOOTPRINT is back on the site plan.');
+        paint();
+      });
+      dimsShowBox.append(footBtn);
       dock.append(dimsShowBox);
     }
     // AND ON A SHELF WITH WALLS, so a suite with no strings yet still offers
     // AUTO DIMS (Movie, 26 Oct: "can we put the AUTODIM / HAND DIM buttons in
     // the SHELF"). A floor keeps its rule: the chips stand over the sheet's
     // top corner, where a floor is drawn, only once there are strings.
+    const foot = siteFootprintHere();
     const any = dimensions().length > 0 || activeTool === 'dimension'
-      || (activeLevelId() < 0 && walls().length > 0) || siteRowsHere();
+      || (activeLevelId() < 0 && walls().length > 0) || siteRowsHere() || foot;
     const rowsBtn = dimsShowBox.querySelector('[data-auto-rows]');
     if (rowsBtn) rowsBtn.hidden = !(levelHasAutoDims() || autoRowsOff(activeLevelId(), activeViewId() || 'plan').length);
+    const footBtn = dimsShowBox.querySelector('[data-site-footprint]');
+    if (footBtn) {
+      footBtn.hidden = !foot;
+      footBtn.setAttribute('aria-pressed', String(!!foot && drawing?.siteFootprint !== false));
+    }
     dimsShowBox.hidden = !any;
     if (!any) return;
     dimsShowBox.querySelectorAll('[data-dims-show]').forEach(btn => {
@@ -1622,6 +1663,14 @@
   // and hand dim buttons) could we have those here too"). They are drawn off
   // the lot rather than stored, so the chips ask the lot: AUTO DIMS shows or
   // hides them, DIM SCALE sets the paper they are laid out for.
+  // A BUILDING ON THE SITE TO SHOW OR HIDE: what sitePlanParts would paint
+  // with the switch on -- asked of the file with the switch lifted, so the
+  // chip stays up while the footprint is hidden, or there is no way back.
+  const siteFootprintHere = () => {
+    if (activeLevelId() !== SITE_LEVEL_ID || !drawing || boneyardActive || !window.DraftLayoutPlan) return false;
+    const parts = window.DraftLayoutPlan.sitePlanParts({ ...drawing, siteFootprint: true });
+    return parts.bodies.length > 0 || parts.roofs.length > 0;
+  };
   const siteRowsHere = () => activeLevelId() === SITE_LEVEL_ID && !!drawing
     && (window.DraftLayoutPlan?.siteDimStrings?.(drawing, dimScalePif(SITE_LEVEL_ID)) || []).length > 0;
   const levelHasAutoDims = () => {

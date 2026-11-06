@@ -847,6 +847,17 @@ if (!window.DraftLayoutPlan) {
     // siteLots, Movie 28 Oct: "no double lines").
     const lot = saved?.siteLots?.own === false ? null
       : outlines.find(item => item.site === true) || null;
+    // THE FOOTPRINT IS OPTIONAL (Movie, 6 Nov: "i decided not to AUTOBUILD
+    // a house, i just want to draw a site plan, but this GREY BOX appears
+    // and i can't seem to delete it ... the AUTOHOUSE should be optional").
+    // The file's own switch -- MODEL's HOUSE FOOTPRINT chip on the SITE
+    // level writes it -- takes the building off the site plan without
+    // touching the building: no bodies, no roofs, so nothing is shaded, the
+    // house's own dimension rows go with it, and the sheet's fit frames the
+    // lot alone. Read HERE rather than in the painter so that every reader of
+    // these parts -- the rows, the sheet's bounds, the screen's pick -- agrees
+    // that there is nothing on the lot.
+    if (saved?.siteFootprint === false) return { lot, bodies: [], roofs: [] };
     const bodies = outlines.filter(item => item.site !== true
       && num(item.levelId) !== null && num(item.levelId) > 1
       && num(item.levelId) !== SITE_LEVEL_ID && num(item.levelId) !== 7);
