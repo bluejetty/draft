@@ -992,6 +992,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             //
             // So the list grows by four and the table does not change.
             'DRAW AUTOSITE', 'NOT NOW', 'DRAW IT MYSELF', 'UPLOAD A SITE PLAN',
+            // AND THE SITE PLAN DRAWN IN ANOTHER .DRAFT (jb, 6 Nov: "i will
+            // draw the site plan on a seperate draft file that i will bring
+            // in and place"). It presses the HOLOGRAM chip's BRING IN, whose
+            // row the table already carries, so no absence row moves.
+            'IMPORT SITE PLAN FROM .DRAFT',
             // AND A FIFTH, FOR THE DRAFTER WHO WOULD RATHER NOT READ THE CARD
             // (Movie, 16 Oct: "put a big button on the bottom that says OK and
             // make it red ... if they click that just put in the best fit based
