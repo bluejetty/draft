@@ -1268,12 +1268,27 @@
     if (Object.keys(next).length) drawing.autoDimRowsOff = next; else delete drawing.autoDimRowsOff;
   };
   // WHICH SIDE AN AUTO STRING STANDS ON: a string across the plan's width is
-  // north or south of the walls' middle, one up it east or west. Read off
-  // the walls, so it holds after a reload, which keeps no side on the record.
+  // north or south of the building's middle, one up it east or west. Read
+  // off the geometry, so it holds after a reload, which keeps no side on the
+  // record. THE SAME GEOMETRY THE STRINGS WERE LAID FROM (placeAutoDims): the
+  // walls on the string's own view, the level's outlines, and the roofs on
+  // the ROOF level. This read the walls alone, and walls live on the walls
+  // plan -- so on a FLOOR LAYOUT, strung from the outline, every string had
+  // no side, DELETE took nothing off and said "0 rows are off" (jb, 6 Nov:
+  // "the dimensions aren't deleting"). The walls plan's walls are the last
+  // resort, because the layout is drawn over them.
+  const autoDimFootprint = (levelId, view) => {
+    const wallView = view === 'e-power' ? 'plan' : (view || 'plan');
+    const wallsOn = v => (drawing.walls || []).filter(wall => Number(wall.levelId) === Number(levelId)
+      && (wall.view || 'plan') === v).flatMap(wall => [wall.start, wall.end]);
+    const rings = list => (list || []).filter(item => Number(item.levelId) === Number(levelId)
+      && (item.points || []).length >= 3).flatMap(item => item.points);
+    const pts = [...wallsOn(wallView), ...rings(drawing.outlines),
+      ...(Number(levelId) === ROOF_LEVEL_ID ? rings(drawing.roofs) : [])];
+    return pts.length ? pts : wallsOn('plan');
+  };
   const autoDimSide = dim => {
-    const wallView = dim.view === 'e-power' ? 'plan' : (dim.view || 'plan');
-    const pts = (drawing.walls || []).filter(wall => Number(wall.levelId) === Number(dim.levelId)
-      && (wall.view || 'plan') === wallView).flatMap(wall => [wall.start, wall.end]);
+    const pts = autoDimFootprint(dim.levelId, dim.view).filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.z));
     if (!pts.length) return null;
     const cx = (Math.min(...pts.map(p => p.x)) + Math.max(...pts.map(p => p.x))) / 2;
     const cz = (Math.min(...pts.map(p => p.z)) + Math.max(...pts.map(p => p.z))) / 2;

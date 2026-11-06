@@ -178,3 +178,84 @@ test('a point where two pieces of an auto row meet can be picked; DELETE takes j
   await page.keyboard.press('Control+z');
   expect(await fens(), 'UNDO puts it back').toEqual(before);
 });
+
+// A FLOOR LAYOUT'S STRINGS COME OFF TOO (jb, 6 Nov: "the dimensions aren't
+// deleting"). The layout has no walls of its own -- they live on the walls
+// plan, and the layout's strings are laid from the level's OUTLINE -- so a
+// side read off the layout's walls alone found none. DELETE then took nothing
+// off, cleared the pick, and the strip said "0 rows are off".
+const HOUSE = {
+  version: 1, board: 'drafting',
+  levels: [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0 },
+    { id: 3, name: 'MAIN FL', elev: 0 }, { id: 1, name: 'FOUNDATION', elev: -8 }],
+  walls: [W('n', [0, 0], [30, 0], { levelId: 3 }), W('e', [30, 0], [30, 20], { levelId: 3 }),
+    W('s', [30, 20], [0, 20], { levelId: 3 }), W('w', [0, 20], [0, 0], { levelId: 3 })],
+  outlines: [{ id: 'house', levelId: 3, garage: false, points: [V(0, 0), V(30, 0), V(30, 20), V(0, 20)] }],
+  roofs: [{ id: 'roof', levelId: 7, pitch: 6, roofing: 'asphalt', overhang: 2, edges: ['eave', 'eave', 'eave', 'eave'],
+    points: [V(-2, -2), V(32, -2), V(32, 22), V(-2, 22)] }],
+  fenestrations: [], dimensions: [], lines: [], floors: [], shapes: [], surfaceOpenings: [], stairs: [],
+  notes: [], roomTags: [], columns: [], beams: [], boneyardOutlines: [], groups: [], levelLocks: [], underlays: [],
+};
+async function onSheet(page, url) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: HOUSE });
+  await page.goto(url);
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.waitForTimeout(200);
+}
+// The auto strings on the sheet by side, each side's layers.
+const sides = page => page.evaluate(() => {
+  const out = {};
+  dimensions().filter(d => d.auto).forEach(d => {
+    const side = autoDimSide(d) || '?';
+    (out[side] = out[side] || new Set()).add(d.layer);
+  });
+  return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, [...v].sort()]));
+});
+async function deleteWestOverall(page) {
+  const picked = await page.evaluate(() => {
+    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-OVR' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
+    if (!d) return false;
+    setSelection([{ type: 'dimension', item: d }]);
+    return true;
+  });
+  expect(picked, 'a west OVERALL string to delete').toBe(true);
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(100);
+}
+
+test('on a FLOOR LAYOUT, strung from the outline, DELETE on a string takes its row off', async ({ page }) => {
+  await onSheet(page, '/MODEL.html?level=3&view=floor');
+  expect(await page.evaluate(() => activeViewId())).toBe('floor');
+  await page.evaluate(() => { pressAutoDims(); });
+  const before = await sides(page);
+  expect(before['?'], 'every string knows its side').toBeUndefined();
+  expect(before.W).toContain('A-DIMS-OVR');
+  await deleteWestOverall(page);
+  const after = await sides(page);
+  expect(after.W || [], 'the west OVERALL row is gone').not.toContain('A-DIMS-OVR');
+  expect(after.E, 'and the east side keeps its rows').toEqual(before.E);
+  expect(await page.evaluate(() => selection.length), 'nothing left picked').toBe(0);
+  expect(await page.evaluate(() => drawing.autoDimRowsOff)).toEqual({ '3|floor': ['W:A-DIMS-OVR'] });
+  expect(await page.evaluate(() => stripNotice), 'the strip says one row is off').toMatch(/^That row is off/);
+  // AUTO DIMS again keeps it off; UNDO twice (that press, then the DELETE)
+  // puts it back.
+  await page.evaluate(() => { pressAutoDims(); });
+  expect((await sides(page)).W || []).not.toContain('A-DIMS-OVR');
+  await page.evaluate(() => { undoOnce(); undoOnce(); paint(); });
+  expect(await sides(page), 'the DELETE undoes').toEqual(before);
+});
+
+test('on the ROOF PLAN, strung from the roof, DELETE on a string takes its row off', async ({ page }) => {
+  await onSheet(page, '/MODEL.html?level=7');
+  await page.evaluate(() => { pressAutoDims(); });
+  const before = await sides(page);
+  expect(before['?'], 'every string knows its side').toBeUndefined();
+  expect(before.W).toContain('A-DIMS-OVR');
+  await deleteWestOverall(page);
+  expect((await sides(page)).W || [], 'the west OVERALL row is gone').not.toContain('A-DIMS-OVR');
+  expect(await page.evaluate(() => drawing.autoDimRowsOff)).toEqual({ '7|plan': ['W:A-DIMS-OVR'] });
+});

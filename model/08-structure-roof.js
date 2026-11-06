@@ -1231,12 +1231,15 @@
     // line is deleted i'd like the other lines to re-adjust") -- see
     // changeAutoRows. Every row a picked piece belongs to goes in one press,
     // and the level is laid again without them.
-    const rowPicks = selection.filter(entry => entry.type === 'dimension' && !entry.point && isAutoRow(entry.item));
+    // A STRING WITH NO SIDE TO TAKE OFF -- nothing on its level to stand
+    // beside -- is deleted as a hand dim is, rather than dropped from the
+    // pick with nothing done.
+    const rowPicks = selection.filter(entry => entry.type === 'dimension' && !entry.point
+      && isAutoRow(entry.item) && !!autoDimSide(entry.item));
     if (rowPicks.length) {
       const byLevel = new Map();
       rowPicks.forEach(({ item }) => {
         const side = autoDimSide(item);
-        if (!side) return;
         const key = autoRowsKey(item.levelId, item.view);
         if (!byLevel.has(key)) byLevel.set(key, { levelId: Number(item.levelId), view: item.view || 'plan', rows: new Set() });
         byLevel.get(key).rows.add(`${side}:${item.layer}`);
