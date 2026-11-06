@@ -915,6 +915,13 @@ if (!window.DraftDrawingFormat) {
       };
     }), env.drops).filter(Boolean))(Array.isArray(rawFloors) ? rawFloors : []));
 
+  // The fourteen hatches render-2d.js draws and the four linetypes line-styles.js
+  // names, spelled here because this module loads before both and a reader
+  // that reached across would throw on the Real Estate page, which has no
+  // painter.
+  const SHAPE_HATCH_IDS = Object.freeze(['black', 'grey', 'lightgrey', 'white', 'transparent', 'dots',
+    'siding_h', 'siding_v_bb', 'shake', 'ledgestone', 'ashlar', 'roundstone', 'fieldstone', 'brick']);
+  const SHAPE_STYLE_IDS = Object.freeze(['solid', 'dashed', 'dotdash', 'dotted']);
   const shapes = (rawShapes, levelIds, env = {}) => collectRefusals(
     Array.isArray(rawShapes) ? rawShapes : [],
     (Array.isArray(rawShapes) ? rawShapes : [])
@@ -934,6 +941,17 @@ if (!window.DraftDrawingFormat) {
         // shape and use that shape for the area)"). Its area is the suite's
         // line on the Real Estate plan. Absent unless ticked.
         ...(shape?.suite === true ? { suite: true } : {}),
+        // ITS HATCH AND ITS OUTLINE'S LINETYPE (jb, 6 Nov), kept when they
+        // name one the painter knows and dropped otherwise: a shape that
+        // carries neither draws as every shape did before today.
+        // ITS LABEL AND WHETHER ITS AREA IS WRITTEN (jb, 6 Nov: "it will
+        // double as area measurement / room label / flooring which can be
+        // turned on and off"). Absent means what it meant before: no name,
+        // and the area written only on a flooring area.
+        ...(String(shape?.label ?? '').trim() ? { label: String(shape.label).trim().slice(0, 60) } : {}),
+        ...(typeof shape?.showArea === 'boolean' ? { showArea: shape.showArea } : {}),
+        ...(SHAPE_HATCH_IDS.includes(String(shape?.hatch ?? '')) ? { hatch: String(shape.hatch) } : {}),
+        ...(SHAPE_STYLE_IDS.includes(String(shape?.style ?? '')) ? { style: String(shape.style) } : {}),
         layer: shapeFlooring ? 'A-FL-FLOORING' : 'SHAPE',
       };
     }), env.drops).filter(Boolean);

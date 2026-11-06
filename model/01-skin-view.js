@@ -1538,7 +1538,10 @@
       roof: skin['draw-roof'],
       roofGuide: skin['draw-roof-guide'],
     },
-    flooringTypes: window.DraftDrawingFormat.FLOORING_TYPES,
+    // THE FINISHES WITH THEIR LABELS: the painter reads entry.id and
+    // entry.label, as MODEL.dc.html hands them. FLOORING_TYPES is the bare
+    // id list, and handed that the painter found no type and wrote no name.
+    flooringTypes: window.DraftDrawingFormat.FLOORING_FINISHES,
     // This page never prints. When it does, this stops being a constant.
     isPrinting: false,
     offsetOutline: window.DraftGeometry2D.offsetOutline,

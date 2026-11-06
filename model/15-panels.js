@@ -1080,37 +1080,170 @@
     return box;
   };
 
-  // A SHAPE'S AREA, and whether it is the SECONDARY SUITE (Movie, 1 Oct).
-  // A ticked shape's area is the SUITE line under its floor on the Real
-  // Estate plan's FLOOR AREAS.
-  const shapePropsNode = shape => {
+  // ── A SHAPE'S PROPERTIES ──────────────────────────────────────────────
+  //
+  // Its area, whether it is the SECONDARY SUITE (Movie, 1 Oct), and since 6
+  // Nov (jb) what it is FOR: "it will double as area measurement / room label
+  // / flooring which can be turned on and off too", with "the shading of what
+  // is inside the box", "different types of hatches" and "LINETYPE for the
+  // exterior line". So: a LABEL (room / site), a SHOW AREA switch, the
+  // flooring finishes the room tag already offers, the hatches render-2d.js
+  // draws, and the four linetypes of line-styles.js. A change writes every
+  // selected shape in one undo, and the hatch and linetype picked last are
+  // the next shape's, remembered with the lights like a LINE's weight.
+  const SHAPE_DEFAULT_KEY = 'shapeStyle';
+  let shapeDefaults = (() => {
+    const raw = stored[SHAPE_DEFAULT_KEY] || {};
+    const R = window.DraftRender2D, LS = window.DraftLineStyles;
+    return {
+      hatch: R?.shapeHatchOf?.(raw.hatch) ? String(raw.hatch) : null,
+      style: LS?.styleOf?.(raw.style) ? String(raw.style) : null,
+    };
+  })();
+  // What a new shape is born with: nothing unless a chip was picked.
+  const shapeStyleDefaults = () => ({
+    ...(shapeDefaults.hatch ? { hatch: shapeDefaults.hatch } : {}),
+    ...(shapeDefaults.style ? { style: shapeDefaults.style } : {}),
+  });
+  const keepShapeDefaults = () => {
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [SHAPE_DEFAULT_KEY]: shapeDefaults }));
+    } catch { /* a browser refusing storage still keeps it for this tab */ }
+  };
+  // A patch's null DELETES the key, so an undo puts the record back to one
+  // that never had it -- the 'props' step restores by keys, not values.
+  const writeShapeProps = (list, patch) => {
+    const edits = list.map(shape => ({ item: shape, before: { ...shape } }));
+    list.forEach(shape => {
+      Object.entries(patch).forEach(([key, value]) => {
+        if (value == null) delete shape[key]; else shape[key] = value;
+      });
+      // THE LAYER FOLLOWS THE FLOORING, as the file reader decides it.
+      shape.layer = shape.flooring ? 'A-FL-FLOORING' : 'SHAPE';
+    });
+    undoStack.push({ kind: 'props', edits });
+    if ('hatch' in patch || 'style' in patch) {
+      shapeDefaults = { ...shapeDefaults,
+        ...('hatch' in patch ? { hatch: patch.hatch ?? null } : {}),
+        ...('style' in patch ? { style: patch.style ?? null } : {}) };
+      keepShapeDefaults();
+    }
+    markDirty();
+    showSelectionProps();
+    paint();
+  };
+  const shapeAreaSqFt = shape => Math.abs(shape.points.reduce((sum, p, i) => {
+    const q = shape.points[(i + 1) % shape.points.length];
+    return sum + (p.x * q.z - q.x * p.z) / 2;
+  }, 0));
+  // Whether the area is written on the sheet: SHOW AREA ticked, or a
+  // flooring area that was never told otherwise (the label it has carried
+  // since the flooring work, kept so no drawing changes under this).
+  const shapeAreaShown = shape => shape.showArea === true || (!!shape.flooring && shape.showArea !== false);
+  const shapePropsNode = shapes => {
+    const R = window.DraftRender2D, LS = window.DraftLineStyles;
+    const FMT = window.DraftDrawingFormat;
+    const one = shapes.length === 1 ? shapes[0] : null;
+    const same = read => (shapes.every(s => read(s) === read(shapes[0])) ? read(shapes[0]) : undefined);
+    const title = text => {
+      const t = document.createElement('div');
+      t.className = 'props-title';
+      t.textContent = text;
+      return t;
+    };
+    const chip = (data, text, pressed, onClick) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sel-chip';
+      Object.entries(data).forEach(([k, v]) => { b.dataset[k] = v; });
+      b.textContent = text;
+      b.setAttribute('aria-pressed', String(pressed === true));
+      b.classList.toggle('lit', pressed === true);
+      b.addEventListener('click', onClick);
+      return b;
+    };
     const box = document.createElement('div');
     const area = document.createElement('div');
     area.className = 'props-title';
     area.dataset.propSpan = '';
-    const sqft = Math.abs(shape.points.reduce((sum, p, i) => {
-      const q = shape.points[(i + 1) % shape.points.length];
-      return sum + (p.x * q.z - q.x * p.z) / 2;
-    }, 0));
-    area.textContent = `AREA ${Math.round(sqft).toLocaleString('en-US')} SQ FT`;
+    const sqft = shapes.reduce((sum, shape) => sum + shapeAreaSqFt(shape), 0);
+    area.textContent = `${one ? '' : 'TOTAL '}AREA ${Math.round(sqft).toLocaleString('en-US')} SQ FT`;
     box.append(area);
-    const chips = document.createElement('div');
-    chips.className = 'chip-row';
-    const suite = document.createElement('button');
-    suite.type = 'button';
-    suite.className = 'sel-chip';
-    suite.dataset.shapeSuite = '';
-    suite.textContent = 'SECONDARY SUITE';
-    suite.setAttribute('aria-pressed', String(shape.suite === true));
-    suite.addEventListener('click', () => {
-      undoStack.push(brushUndoStep([shape]));
-      if (shape.suite === true) delete shape.suite; else shape.suite = true;
-      markDirty();
-      showSelectionProps();
-      paint();
-    });
-    chips.append(suite);
-    box.append(chips);
+    // THE LABEL: a room's name, or a site area's. One shape at a time, since
+    // two shapes with one name is two rooms called the same thing.
+    if (one) {
+      box.append(title('ROOM / SITE LABEL'));
+      const label = document.createElement('input');
+      label.type = 'text';
+      label.className = 'prop-field';
+      label.dataset.shapeLabel = '';
+      label.placeholder = 'KITCHEN, LOT 12 …';
+      label.maxLength = 60;
+      label.value = one.label || '';
+      const commit = () => {
+        const text = label.value.trim().toUpperCase();
+        if (text === (one.label || '')) return;
+        writeShapeProps([one], { label: text || null });
+      };
+      label.addEventListener('change', commit);
+      label.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); label.blur(); } });
+      box.append(label);
+    }
+    const switches = document.createElement('div');
+    switches.className = 'chip-row';
+    const areaOn = same(shapeAreaShown);
+    switches.append(chip({ shapeArea: '' }, 'SHOW AREA', areaOn === true, () => {
+      writeShapeProps(shapes, { showArea: areaOn === true ? false : true });
+    }));
+    if (one) {
+      // A ticked shape's area is the SUITE line under its floor on the Real
+      // Estate plan's FLOOR AREAS.
+      switches.append(chip({ shapeSuite: '' }, 'SECONDARY SUITE', one.suite === true, () => {
+        writeShapeProps([one], { suite: one.suite === true ? null : true });
+      }));
+    }
+    box.append(switches);
+    // FLOORING: the finishes a room tag offers, with NONE first.
+    if (FMT?.FLOORING_FINISHES) {
+      box.append(title('FLOORING'));
+      const floorRow = document.createElement('div');
+      floorRow.className = 'chip-row';
+      const flooringNow = same(s => s.flooring?.type || null);
+      [{ id: null, label: 'NO FLOORING' }, ...FMT.FLOORING_FINISHES].forEach(finish => {
+        floorRow.append(chip({ shapeFlooring: finish.id || 'none' }, finish.label, flooringNow === finish.id, () => {
+          writeShapeProps(shapes, { flooring: finish.id ? { type: finish.id, thicknessIn: 3 / 8 } : null });
+        }));
+      });
+      box.append(floorRow);
+    }
+    // HATCH: what fills the box. NONE is the wash every shape had before.
+    if (R?.SHAPE_HATCHES) {
+      box.append(title('HATCH'));
+      const hatchRow = document.createElement('div');
+      hatchRow.className = 'chip-row';
+      const hatchNow = same(s => (R.shapeHatchOf(s.hatch) ? s.hatch : null));
+      [{ id: null, label: 'NONE' }, ...R.SHAPE_HATCHES].forEach(h => {
+        hatchRow.append(chip({ shapeHatch: h.id || 'none' }, h.label, hatchNow === h.id, () => {
+          writeShapeProps(shapes, { hatch: h.id });
+        }));
+      });
+      box.append(hatchRow);
+    }
+    // LINETYPE: the outline's dash, from the four a LINE can wear. A shape
+    // with none is DASHED, which is what it has always drawn as.
+    if (LS?.STYLES) {
+      box.append(title('LINETYPE'));
+      const styleRow = document.createElement('div');
+      styleRow.className = 'chip-row';
+      const styleNow = same(s => (LS.styleOf(s.style) ? s.style : 'dashed'));
+      LS.STYLES.forEach(st => {
+        styleRow.append(chip({ shapeStyle: st.id }, st.name, styleNow === st.id, () => {
+          writeShapeProps(shapes, { style: st.id });
+        }));
+      });
+      box.append(styleRow);
+    }
     return box;
   };
 
@@ -2045,8 +2178,7 @@
   const SELECTION_PANELS = {
     roomtag: items => (items.length === 1
       ? { title: 'ROOM TAG', node: roomTagPropsNode(items[0]) } : null),
-    shape: items => (items.length === 1
-      ? { title: 'SHAPE', node: shapePropsNode(items[0]) } : null),
+    shape: items => ({ title: 'SHAPE', node: shapePropsNode(items) }),
     wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
     fenestration: items => ({ title: 'OPENING', node: openingPropsNode(items) }),
     // A FIXTURE'S SIZE, and an island's aisle (Movie, 20 Oct).
