@@ -683,11 +683,6 @@
     width:clamp(48px, calc(var(--dt-w) * 0.14), 134px); }
   #build-entries .dt-stack button, #build-families .dt-stack button { flex:1 1 0; white-space:normal;
     line-height:1.15; padding:3px 4px; }
-  /* THE SPOT KEPT UNDER A STANDALONE TILE (Movie, 6 Nov: "leave a spot
-     below i will want to ad somthing else there probably"): the other half
-     of the card, empty, so the tile above is half a card like the SUITE
-     pair and the next press already has its place. */
-  #build-families .dt-stack-spare { flex:1 1 0; }
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
      one light, and a night-skin chip on it would read as a hole. */
@@ -696,6 +691,10 @@
     cursor:pointer; color:#1f3f6b; padding:5px 10px; border-radius:2px;
     border:1px solid #1f3f6b; background:#f1e9d2; }
   #build-bar button:hover { background:#fff8e6; }
+  /* A LOCKED TILE (CLASSIC DRAFTING, 6 Nov: no autohouse on this sheet):
+     greyed and dead to the hand, the reason on its title and on the sign. */
+  #build-bar button:disabled { opacity:0.35; cursor:not-allowed; }
+  #build-bar button:disabled:hover { background:#f1e9d2; }
   /* A CARD IS THE WHOLE BUTTON. Movie drew one per house type, lettering and
      all, so the tile wearing one carries no text of its own -- the label
      stays in the DOM for the reader and the check, clipped out of sight,

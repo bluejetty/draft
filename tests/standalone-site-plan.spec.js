@@ -80,13 +80,16 @@ const levelRows = page => page.locator('#levels-panel [data-level-row]')
   .evaluateAll(rows => rows.map(row => row.dataset.levelRow));
 const panelHasText = (page, re) => page.locator('#levels-panel').locator(`text=${re}`).count();
 
-test('the tile stands left of DETACHED GARAGE, half a card high, with its empty half under it', async ({ page }) => {
+test('the tile stands left of DETACHED GARAGE, half a card high, with CLASSIC DRAFTING under it', async ({ page }) => {
   await openModel(page);
   await h.openDriveThru(page);
   const tile = page.locator('#build-families [data-build-entry="site-standalone"]');
   await expect(tile).toHaveText('DRAW STANDALONE SITE PLAN');
   const stack = page.locator('#build-families [data-build-stack="sitePlan"]');
-  await expect(stack.locator('.dt-stack-spare'), 'the spot kept under it').toHaveCount(1);
+  // THE HALF UNDER IT, named an hour after he kept it empty: "just a blank
+  // drafting for just free drafting (no autohouse)" -- "shorter lets go
+  // CLASSIC".
+  await expect(stack.locator('[data-build-entry]')).toHaveText(['DRAW STANDALONE SITE PLAN', 'CLASSIC DRAFTING']);
 
   const tileBox = await tile.boundingBox();
   const garage = await page.locator('[data-build-family="detachedGarage"]').boundingBox();
@@ -101,9 +104,48 @@ test('the tile stands left of DETACHED GARAGE, half a card high, with its empty 
   // taller than its empty half), and no more than ~55% of the card beside it.
   expect(Math.abs(tileBox.height - suite.height), 'the SUITE tile\'s height').toBeLessThan(8);
   expect(tileBox.height, 'half the card').toBeLessThan(garage.height * 0.56);
-  // AND THE EMPTY HALF IS BELOW IT, not beside it: the tile sits in the
+  // AND CLASSIC DRAFTING IS BELOW IT, not beside it: the tile sits in the
   // card's top half.
   expect(tileBox.y, 'the tile is the top half').toBeLessThan(garage.y + garage.height / 2);
+  const classic = await page.locator('[data-build-entry="classic-drafting"]').boundingBox();
+  expect(classic.y, 'CLASSIC DRAFTING under it').toBeGreaterThan(tileBox.y + tileBox.height - 1);
+});
+
+test('CLASSIC DRAFTING drops the board, builds nothing, keeps every level, lands on MAIN FL, and locks the autohouse out', async ({ page }) => {
+  // FROM A STANDALONE SITE FILE, so the press has a mark to replace: every
+  // level is what he asked for ("'classic' autocad drafting plus archicad
+  // features"), and the site plan's mark would hide them.
+  await openModel(page, standaloneWithLot(), `?level=${SITE}`);
+  await dismissLotCard(page);
+  await h.openDriveThru(page);
+  await page.locator('[data-build-entry="classic-drafting"]').click();
+  await expect(page.locator('#drivethru'), 'the board goes down').toHaveAttribute('data-shut', '');
+  expect(await h.modelLevelId(page), 'standing on MAIN FL').toBe('3');
+  expect(await page.evaluate(() => drawing.standalone), 'the file says classic').toBe('classic');
+  expect(await page.evaluate(() => drawing.walls.length + drawing.roofs.length), 'no house was built').toBe(0);
+  await expect(page.locator('#bone')).not.toHaveAttribute('data-ready', '');
+  await h.openModelRail(page);
+  expect((await levelRows(page)).length, 'every level is offered').toBeGreaterThan(1);
+  expect(await panelHasText(page, /Elevations/), 'elevations too').toBeGreaterThan(0);
+  const d = await saved(page);
+  expect(d.standalone, 'the mark is the file\'s').toBe('classic');
+  expect(d.buildType ?? null, 'nothing was ordered').toBeNull();
+
+  // NO AUTOHOUSE LATER ("for this we shouldn't allow them to make an
+  // autohouse later, because i think it will confuse things"): the board
+  // comes back up with every house tile dead, the sign saying why, and
+  // the one press that would order a house refused.
+  await h.openDriveThru(page);
+  for (const family of ['detachedGarage', 'bungalow', 'bilevel']) {
+    await expect(page.locator(`[data-build-family="${family}"]`), `${family} is locked`).toBeDisabled();
+  }
+  await expect(page.locator('[data-build-entry="suite-residential"]')).toBeDisabled();
+  await expect(page.locator('[data-build-entry="site-standalone"]')).toBeDisabled();
+  await expect(page.locator('[data-build-entry="classic-drafting"]'), 'its own tile stays live').toBeEnabled();
+  await expect(page.locator('[data-drivethru-line]')).toContainText('NO AUTOHOUSE');
+  await page.evaluate(() => document.querySelector('[data-build-family="bungalow"]').click());
+  await expect(page.locator('#build-entries'), 'the submenu does not open').toBeHidden();
+  expect(await page.evaluate(() => drawing.buildType ?? null), 'no type was stamped').toBeNull();
 });
 
 test('the press drops the board, builds nothing, lands on SITE and marks the file standalone', async ({ page }) => {

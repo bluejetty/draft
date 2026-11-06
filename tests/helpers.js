@@ -648,10 +648,10 @@ const undesignedTile = page => page.evaluate(() => {
       // different prompt entirely -- they ask HOW BIG before the bone means
       // anything, so they are not "a tile with no design".
       // A SUITE is not a house either: it is started on the boneyard, not
-      // built (Movie, 20 Oct). Nor is a STANDALONE SITE PLAN (6 Nov): its
-      // press drops the board and goes to SITE, and the bone is not part of
-      // it.
-      if (!entry.needsSize && !entry.suite && !entry.standalone && !designed.has(entry.id)) {
+      // built (Movie, 20 Oct). Nor is a STANDALONE SITE PLAN or CLASSIC
+      // DRAFTING (6 Nov): their press drops the board and goes to a level,
+      // and the bone is not part of it.
+      if (!entry.needsSize && !entry.suite && !entry.standalone && !entry.free && !designed.has(entry.id)) {
         return { family: family.id, entry: entry.id, label: entry.label };
       }
     }

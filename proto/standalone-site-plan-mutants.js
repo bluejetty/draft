@@ -7,11 +7,12 @@
 // then that plan will be only for the SITE PLAN layer - no other layers
 // offered".
 //
-// Eight defects that still render: a tile that orders instead of going, a
+// Eleven defects that still render: a tile that orders instead of going, a
 // press that goes but does not say so in the file, a panel and a rail that
 // go on offering every level, a house order that leaves the mark on, a
-// LAYOUT that deals the whole set or offers it under + ADD VIEWPORT, and a
-// tile with no spot kept under it.
+// LAYOUT that deals the whole set or offers it under + ADD VIEWPORT, a
+// CLASSIC DRAFTING that orders a house, one that writes no mark, one that
+// leaves the house tiles live, and a panel that hides levels on it.
 //
 // Run: node proto/standalone-site-plan-mutants.js
 //      (refuses a dirty tree on the mutated files; restores from HEAD)
@@ -28,10 +29,25 @@ const MUTANTS = [
     with: "label: 'DRAW STANDALONE SITE PLAN' }),",
     test: 'the press drops the board' },
   { file: 'build-menu.js',
-    name: 'the spot under the tile is kept',
-    find: "      spare: 1,\n",
-    with: "",
-    test: 'the tile stands beside' },
+    name: 'CLASSIC DRAFTING is a free press, not a house order',
+    find: "label: 'CLASSIC DRAFTING', free: true,",
+    with: "label: 'CLASSIC DRAFTING',",
+    test: 'CLASSIC DRAFTING drops the board' },
+  { file: 'model/04-levels-notes-bars.js',
+    name: 'CLASSIC DRAFTING writes its mark on the file',
+    find: "    if (drawing.standalone !== 'classic') { drawing.standalone = 'classic'; markDirty(); }",
+    with: "    if (drawing.standalone) { delete drawing.standalone; markDirty(); }",
+    test: 'CLASSIC DRAFTING drops the board' },
+  { file: 'model/04-levels-notes-bars.js',
+    name: 'the house tiles are locked on a classic sheet',
+    find: "    if (!classicLocked() || entry?.free) return;",
+    with: "    return;",
+    test: 'CLASSIC DRAFTING drops the board' },
+  { file: 'model/05-props-shelves-rail.js',
+    name: 'a classic sheet offers every level: the panel reads the site mark alone',
+    find: "    if (standalone === 'site') return;",
+    with: "    if (standalone) return;",
+    test: 'CLASSIC DRAFTING drops the board' },
   { file: 'model/04-levels-notes-bars.js',
     name: 'the press writes the mark on the file',
     find: "    if (drawing.standalone !== want) { drawing.standalone = want; markDirty(); }",
