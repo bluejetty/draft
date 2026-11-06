@@ -155,6 +155,10 @@
     // on showing 3'-0" on a drawing that now says 915 everywhere else.
     if (selectionPanelUp) showSelectionProps();
     else showToolProps(activeTool);
+    // AND THE LENGTH BOX, the strip and the cursor tag, which otherwise keep
+    // the last reading in the old unit until the hand moves.
+    stripRefresh();
+    syncDrawLength();
     paint();
   }));
 
