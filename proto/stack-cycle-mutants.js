@@ -16,42 +16,40 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/stack-cycle.spec.js';
-const CYCLE = 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again';
-const ORDER = 'ORDER: TO FRONT paints the held thing last of its kind and a click takes it first; TO BACK the reverse; UNDO puts the order back';
 
 const MUTANTS = [
   { file: 'model/06-selection-pick.js', name: 'one line per kind, as before',
     find: "      if (takeAll('line', segsAt(lines(), worldPt))) return out;\n",
     with: "      if (takeAll('line', segsAt(lines(), worldPt).slice(0, 1))) return out;\n",
-    test: CYCLE },
+    test: 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again' },
   { file: 'model/06-selection-pick.js', name: 'the earlier record is on top',
     find: "    return near.sort((a, b) => (Math.abs(a.d - b.d) < 1e-6 ? b.i - a.i : a.d - b.d)).map(n => n.item);\n",
     with: "    return near.sort((a, b) => (Math.abs(a.d - b.d) < 1e-6 ? a.i - b.i : a.d - b.d)).map(n => n.item);\n",
-    test: CYCLE },
+    test: 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again' },
   { file: 'model/06-selection-pick.js', name: 'four pixels is the same spot again',
     find: "  const PICK_AGAIN_PX = 10;\n",
     with: "  const PICK_AGAIN_PX = 4;\n",
-    test: CYCLE },
+    test: 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again' },
   { file: 'model/06-selection-pick.js', name: 'the cycle forgets where it was',
     find: "    const lastAt = again && lastPick.item ? hits.findIndex(h => h.item === lastPick.item) : -1;\n",
     with: "    const lastAt = -1;\n",
-    test: CYCLE },
+    test: 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again' },
   { file: 'model/16-gestures-undo.js', name: 'a click again cannot step onto a held piece',
     find: "          && (under.again || !selection.some(entry => entry.item === under.hit.item))) {\n",
     with: "          && !selection.some(entry => entry.item === under.hit.item)) {\n",
-    test: CYCLE },
+    test: 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again' },
   { file: 'model/09-draw-move-stretch.js', name: 'TO FRONT sends to the back',
     find: "      const after = toFront ? [...staying, ...moving] : [...moving, ...staying];\n",
     with: "      const after = toFront ? [...moving, ...staying] : [...staying, ...moving];\n",
-    test: ORDER },
+    test: 'ORDER: TO FRONT paints the held thing last of its kind and a click takes it first; TO BACK the reverse; UNDO puts the order back' },
   { file: 'model/16-gestures-undo.js', name: 'UNDO forgets the order',
     find: "      step.lists.forEach(({ list, before }) => list.splice(0, list.length, ...before));\n",
     with: "",
-    test: ORDER },
+    test: 'ORDER: TO FRONT paints the held thing last of its kind and a click takes it first; TO BACK the reverse; UNDO puts the order back' },
   { file: 'model/15-panels.js', name: 'OBJ / PROP names an outline as nothing',
     find: "        : kinds.length === 1 ? `${hitSays(selection[0])}${picked.length > 1 ? ` \\u00d7${picked.length}` : ''} \\u2014 NOTHING TO SET`\n",
     with: "",
-    test: CYCLE },
+    test: 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again' },
 ];
 
 const run = name => {

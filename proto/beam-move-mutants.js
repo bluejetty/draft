@@ -14,8 +14,8 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/beam-move.spec.js';
 const MUTANTS = [
   { file: 'model/06-selection-pick.js', name: 'a click cannot reach a beam',
-    find: "      const beam = segAt(beams(), worldPt);\n",
-    with: "      const beam = null;\n",
+    find: "      if (takeAll('beam', segsAt(beams(), worldPt))) return out;\n",
+    with: "",
     test: 'a click on one piece picks the row; MOVE slides it across itself only, its posts ride, its far end finds the wall' },
   { file: 'model/06-selection-pick.js', name: 'a click takes one piece, not the row',
     find: "    if (entry.type === 'beam') return beamRun(entry.item).map(item => ({ type: 'beam', item }));\n",
