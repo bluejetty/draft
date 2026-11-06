@@ -1870,7 +1870,12 @@
         // again on the same spot steps off a corner handle.
         const under = pickUnder(e.clientX - rect.left, e.clientY - rect.top);
         const handle = md.kind === 'corner' || md.kind === 'roomcorner';
-        if ((under.again || !handle) && under.hit && !selection.some(entry => entry.item === under.hit.item)) {
+        // A CLICK AGAIN ALWAYS STEPS, even onto a piece the hand already
+        // holds (the next line of the same assembly): the selection is the
+        // same, the strip says which piece the cycle is on, and the one
+        // after it is reachable.
+        if ((under.again || !handle) && under.hit
+          && (under.again || !selection.some(entry => entry.item === under.hit.item))) {
           wallPicked = under.hit.type === 'wall' ? under.hit.item : null;
           setSelection(withGroup(under.hit));
           sayPickUnder(under);
@@ -2618,6 +2623,10 @@
       step.removed.slice().reverse().forEach(({ list, index, item }) => {
         list.splice(Math.min(index, list.length), 0, item);
       });
+    } else if (step.kind === 'reorder') {
+      // TO FRONT / TO BACK: each list back in the order it had, in place,
+      // so every reference to the list stays good.
+      step.lists.forEach(({ list, before }) => list.splice(0, list.length, ...before));
     } else if (step.kind === 'remove-item') {
       // The mirror of 'add-item', and the same trick: the list is captured
       // in the step, so one branch puts a line, floor, outline, column or

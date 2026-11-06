@@ -750,6 +750,18 @@ ${trio(true)}
     <button type="button" data-flip-axis="z" title="Top for bottom">&#x21C5; U/D</button>
     <button type="button" data-flip-done title="Put FLIP down">DONE</button>
   </span>
+  <!-- ORDER (Movie, 6 Nov): "we should have a feature to bring a item, or
+       group 'to the top' so it is seen over other items or lines". One verb,
+       its row over the others while it is up, as FLIP's is: TO FRONT paints
+       what is selected last of its kind, TO BACK first, and a click where
+       things stack takes the one painted last. -->
+  <button id="model-order" type="button" data-order hidden
+    title="Paint what is selected over or under the other things of its kind">ORDER</button>
+  <span id="order-bar" data-order-bar hidden>
+    <button type="button" data-order-front title="Painted over the other things of its kind, and picked first where they stack">TO FRONT</button>
+    <button type="button" data-order-back title="Painted under the other things of its kind">TO BACK</button>
+    <button type="button" data-order-done title="Put ORDER down">DONE</button>
+  </span>
   <!-- RESCALE (Movie, 23 Oct): "click on the bg photo and resize it with a
        resize button in bottom left menu area" -- "RESCALE might be a better
        term" -- "with proportions locked and also without". A photo picked on
