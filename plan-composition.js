@@ -165,7 +165,14 @@ if (!window.DraftPlanComposition) {
     // Roofs and outlines are whole-level, not per-view: a roof belongs to the
     // level it covers and shows on every drawing of it.
     const floors = pick(env.floors).filter(floor => shows(floor.layer) && !off(floor.layer || 'A-FL'));
-    const shapes = pick(env.shapes).filter(shape => shows(shape.layer) && !off(shape.layer || 'SHAPE'));
+    // A SHAPE ON THE NO-DRAFT LAYER NEVER REACHES A SHEET (jb, 6 Nov: "we
+    // should have a properties to SHOW or NOT SHOW ... DRAFT or NO DRAFT ...
+    // maybe can use the existing layers"). It is the line tool's own
+    // never-printing layer, asked here by name rather than through the
+    // standards table, because a sheet composes with isPrinting false and
+    // the table's print tick does not bind.
+    const shapes = pick(env.shapes).filter(shape => shape.layer !== 'no-draft'
+      && shows(shape.layer) && !off(shape.layer || 'SHAPE'));
     const roofs = pick(env.roofs, { views: false }).filter(roof => !off(roof.layer || 'A-ROOF'));
     const walls = pick(env.walls);
     const lines = pick(env.lines).filter(line => shows(line.layer) && !off(line.layer || 'draft'));
