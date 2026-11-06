@@ -952,7 +952,11 @@ if (!window.DraftDrawingFormat) {
         ...(typeof shape?.showArea === 'boolean' ? { showArea: shape.showArea } : {}),
         ...(SHAPE_HATCH_IDS.includes(String(shape?.hatch ?? '')) ? { hatch: String(shape.hatch) } : {}),
         ...(SHAPE_STYLE_IDS.includes(String(shape?.style ?? '')) ? { style: String(shape.style) } : {}),
-        layer: shapeFlooring ? 'A-FL-FLOORING' : 'SHAPE',
+        // NO DRAFT (jb, 6 Nov: "DRAFT or NO DRAFT ... maybe can use the
+        // existing layers"): a shape put on the line tool's never-printing
+        // layer stays there; every other shape sits on the layer its
+        // flooring decides, as before.
+        layer: shape?.layer === 'no-draft' ? 'no-draft' : (shapeFlooring ? 'A-FL-FLOORING' : 'SHAPE'),
       };
     }), env.drops).filter(Boolean);
 

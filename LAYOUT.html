@@ -2243,7 +2243,8 @@ class Component extends PageLogic {
     // plan traced by hand, with no lot card answered and no house, is a
     // site plan -- _planBounds frames it, drawSitePlan paints it.
     const siteParts = window.DraftLayoutPlan.sitePlanParts(this._saved);
-    const siteMarks = ['lines', 'notes', 'dimensions'].some(key =>
+    // AND ITS SHAPES, a tree among them (jb, 6 Nov), which print now.
+    const siteMarks = ['lines', 'notes', 'dimensions', 'shapes'].some(key =>
       (Array.isArray(this._saved[key]) ? this._saved[key] : []).some(item => item?.levelId === SITE_LEVEL_ID));
     deal('SITE PLAN', [siteParts.lot || siteParts.bodies.length || siteMarks
       ? sized({ kind: 'plan', levelId: SITE_LEVEL_ID, view: null }) : null]);

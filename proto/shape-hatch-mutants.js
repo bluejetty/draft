@@ -99,7 +99,7 @@ const MUTANTS = [
     test: 'the SHAPE panel offers fourteen hatches' },
   { file: 'model/15-panels.js',
     name: 'the layer stays SHAPE under a flooring',
-    find: "      shape.layer = shape.flooring ? 'A-FL-FLOORING' : 'SHAPE';\n",
+    find: "      shape.layer = shape.layer === 'no-draft' ? 'no-draft' : (shape.flooring ? 'A-FL-FLOORING' : 'SHAPE');\n",
     with: "",
     test: 'the SHAPE panel offers fourteen hatches' },
   { file: 'model/15-panels.js',

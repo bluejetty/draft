@@ -1119,8 +1119,10 @@
       Object.entries(patch).forEach(([key, value]) => {
         if (value == null) delete shape[key]; else shape[key] = value;
       });
-      // THE LAYER FOLLOWS THE FLOORING, as the file reader decides it.
-      shape.layer = shape.flooring ? 'A-FL-FLOORING' : 'SHAPE';
+      // THE LAYER FOLLOWS THE FLOORING, as the file reader decides it --
+      // unless the shape is NO DRAFT, which is the line tool's never-printing
+      // layer and wins (jb, 6 Nov). A patch of `layer: null` is DRAFT again.
+      shape.layer = shape.layer === 'no-draft' ? 'no-draft' : (shape.flooring ? 'A-FL-FLOORING' : 'SHAPE');
     });
     undoStack.push({ kind: 'props', edits });
     if ('hatch' in patch || 'style' in patch) {
@@ -1195,6 +1197,18 @@
     const areaOn = same(shapeAreaShown);
     switches.append(chip({ shapeArea: '' }, 'SHOW AREA', areaOn === true, () => {
       writeShapeProps(shapes, { showArea: areaOn === true ? false : true });
+    }));
+    // DRAFT / NO DRAFT (jb, 6 Nov: "we should have a properties to SHOW or
+    // NOT SHOW ... DRAFT or NO DRAFT ... maybe can use the existing layers").
+    // It IS the existing layer: NO DRAFT puts the shape on the line tool's
+    // NO-DRAFT layer, drawn here and never on a sheet; DRAFT hands it back to
+    // the layer its flooring decides, which prints.
+    const drafted = same(s => s.layer !== 'no-draft');
+    switches.append(chip({ shapeDraft: 'draft' }, 'DRAFT', drafted === true, () => {
+      if (drafted !== true) writeShapeProps(shapes, { layer: null });
+    }));
+    switches.append(chip({ shapeDraft: 'no-draft' }, 'NO DRAFT', drafted === false, () => {
+      if (drafted !== false) writeShapeProps(shapes, { layer: 'no-draft' });
     }));
     if (one) {
       // A ticked shape's area is the SUITE line under its floor on the Real
