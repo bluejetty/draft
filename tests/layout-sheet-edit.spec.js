@@ -195,8 +195,14 @@ test('+ ADD VIEWPORT asks what -- plans, elevations, sections -- then the next p
   await page.locator('[data-rail-add-page]').click();
   const sheet = dealt.sheets.length + 1;
   await page.locator('[data-layout-add-viewport]').click();
-  await expect(page.locator('[data-add-pick]')).toHaveText(['MAIN FL PLAN', 'FOUNDATION PLAN',
+  // EVERY LEVEL'S PLAN, DRAWN ON OR NOT (Movie, 6 Nov: "put all the possible
+  // viewports as available even if nothing is drawn"): the SITE and the ROOF
+  // carry no walls by nature and were never offered; FOUNDATION offers both
+  // of its drawings under the names the sheets print.
+  await expect(page.locator('[data-add-pick]')).toHaveText(['SITE PLAN', 'ROOF PLAN', 'MAIN FL PLAN',
+    'FOUNDATION PLAN', 'BASEMENT PLAN', 'MAIN FL FLOOR LAYOUT',
     'ELEVATION E1', 'ELEVATION E2', 'ELEVATION E3', 'ELEVATION E4', 'SECTION S1']);
+  await expect(page.locator('.lay-add-head')).toHaveText(['PLANS', 'FLOOR LAYOUTS', 'ELEVATIONS', 'SECTIONS']);
   // Armed at once, as it always was; the pick only changes what comes in.
   await expect(page.locator('[data-layout-add-viewport]')).toHaveText(/CLICK THE SHEET/i);
   await page.locator('[data-add-pick="elevation:E2"]').click();

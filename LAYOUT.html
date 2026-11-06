@@ -2239,8 +2239,13 @@ class Component extends PageLogic {
     // carried no viewport because nothing could paint one. layout-plan.js
     // draws the lot, the footprint and the eave line now, so the sheet gets
     // a view as soon as either the lot or a building exists.
+    // OR THE DRAFTER'S OWN LINES ON THE SITE LEVEL (Movie, 6 Nov): a site
+    // plan traced by hand, with no lot card answered and no house, is a
+    // site plan -- _planBounds frames it, drawSitePlan paints it.
     const siteParts = window.DraftLayoutPlan.sitePlanParts(this._saved);
-    deal('SITE PLAN', [siteParts.lot || siteParts.bodies.length
+    const siteMarks = ['lines', 'notes', 'dimensions'].some(key =>
+      (Array.isArray(this._saved[key]) ? this._saved[key] : []).some(item => item?.levelId === SITE_LEVEL_ID));
+    deal('SITE PLAN', [siteParts.lot || siteParts.bodies.length || siteMarks
       ? sized({ kind: 'plan', levelId: SITE_LEVEL_ID, view: null }) : null]);
     for (let i = 0; i < Math.max(1, elevViews.length); i += 2) {
       deal('ELEVATIONS', elevViews.slice(i, i + 2));
@@ -3682,24 +3687,55 @@ class Component extends PageLogic {
   // rung is placed at the smallest rung rather than not placed at all -- the
   // sheet is the drafter's to arrange, and a viewport they can see and move
   // beats a press that silently did nothing.
-  // THE VIEWS ADD VIEWPORT OFFERS: each floor with walls, the four
-  // elevations, the drawn sections -- named the way their captions are.
+  // THE VIEWS ADD VIEWPORT OFFERS: every level's plan, the floor layouts,
+  // the four elevations, the drawn sections -- named the way their captions
+  // are (_planTitle), and OFFERED WHETHER OR NOT ANYTHING IS DRAWN THERE YET.
+  //
+  // Movie, 6 Nov: "it only offers me ELEVATIONS for the viewpoint. i have
+  // some lines draws on the SITE PLAN i need to show" -- and then "put all
+  // the possible viewports as available even if nothing is drawn please".
+  // The list used to be the levels WITH WALLS, so a drawing of a site plan
+  // and nothing else offered no plan at all: SITE and ROOF carry no walls
+  // by their nature, and a storey carries none until the house is built. A
+  // viewport placed over an empty level is a 2" frame that fills in as the
+  // drawing does (_naturalRectIn), which is the sheet he asked for.
+  //
+  // Top down, the way the set deals and the rail reads: the levels the
+  // drafter added (9 and up), then SITE, ROOF, the storeys, FOUNDATION. A
+  // level with two drawings on it is offered twice under the names the
+  // sheets print: FOUNDATION PLAN and BASEMENT PLAN for level 1. A shelf is
+  // still offered only with a drawing on it: a shelf is a drawing the
+  // drafter brought in, not a sheet of the set.
   _addChoices() {
-    const plans = (this._levelsWithWalls?.() || []).map(level =>
-      ({ kind: 'plan', levelId: level.id, label: `${level.name} PLAN` }));
+    const VIEWS = window.DraftLayerViews;
+    const viewsOf = level => (VIEWS?.layerViewsForLevelId ? VIEWS.layerViewsForLevelId(level.id) : [])
+      .map(view => view.id);
+    const levels = (this._levels || []).slice().sort((x, y) => y.id - x.id);
+    const plan = (levelId, view) => {
+      const picked = { kind: 'plan', levelId, ...(view ? { view } : {}) };
+      return { ...picked, label: this._planTitle(picked) };
+    };
+    const plans = levels.flatMap(level => {
+      const views = viewsOf(level);
+      if (views.includes('foundation')) return [plan(level.id, 'foundation'), plan(level.id, 'plan')];
+      return [plan(level.id, views.includes('plan') ? 'plan' : null)];
+    });
+    const floors = levels.filter(level => viewsOf(level).includes('floor'))
+      .map(level => plan(level.id, 'floor'));
     const elevations = ['E1', 'E2', 'E3', 'E4'].map(elevId =>
       ({ kind: 'elevation', elevId, label: `ELEVATION ${elevId}` }));
     const sections = (this._cuts || []).map(cut =>
       ({ kind: 'section', cutId: cut.id, label: `SECTION ${cut.name}` }));
     const shelves = (this._shelfLevels || []).map(level =>
       ({ kind: 'plan', levelId: level.id, label: `${level.name} PLAN` }));
-    return [['PLANS', plans], ['SHELVES', shelves], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections]]
+    return [['PLANS', this._saved ? plans : []], ['FLOOR LAYOUTS', this._saved ? floors : []],
+      ['SHELVES', shelves], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections]]
       .filter(([, list]) => list.length);
   }
 
   _sameView(a, b) {
     if (!a || typeof a !== 'object' || !b || a.kind !== b.kind) return false;
-    return a.kind === 'plan' ? a.levelId === b.levelId
+    return a.kind === 'plan' ? a.levelId === b.levelId && (a.view || null) === (b.view || null)
       : a.kind === 'elevation' ? a.elevId === b.elevId : a.cutId === b.cutId;
   }
 
@@ -3719,7 +3755,9 @@ class Component extends PageLogic {
         button.type = 'button';
         button.textContent = label;
         button.title = `${label} -- then click the sheet where it goes`;
-        button.dataset.addPick = view.kind === 'plan' ? `plan:${view.levelId}`
+        // `plan:3`, or `plan:1:foundation` where the level holds more than
+        // one drawing and the pick names which.
+        button.dataset.addPick = view.kind === 'plan' ? `plan:${view.levelId}${view.view ? `:${view.view}` : ''}`
           : view.kind === 'elevation' ? `elevation:${view.elevId}` : `section:${view.cutId}`;
         button.className = this._sameView(this.state.addingViewport, view) ? 'on' : '';
         button.addEventListener('click', () =>

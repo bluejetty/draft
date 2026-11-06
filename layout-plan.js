@@ -861,6 +861,62 @@ if (!window.DraftLayoutPlan) {
     };
   }
 
+  // ── THE DRAFTER'S OWN MARKS ON A LEVEL THAT HAS NO WALLS ──────────────
+  //
+  // Movie, 6 Nov: "i have some lines draws on the SITE PLAN i need to show".
+  // The SITE sheet painted the lot, the footprint and the setback rows and
+  // nothing he drew himself -- drawPlan hands the SITE level to drawSitePlan
+  // and the ROOF level (or any level with no walls yet) to drawRoofPlan,
+  // and neither asks the composer for the level's lines, notes or hand
+  // dimensions. MODEL paints them on every level, so a line he could see on
+  // the screen was not on the sheet, and the sheet is what he prints.
+  //
+  // THE SAME COMPOSER, THE SAME FILTER, a smaller env: the three collections
+  // the composer draws without a building under them. A SITE or ROOF level
+  // has no layer views, so every record on the level draws -- the whole-level
+  // rule plan-composition.js carries for them. A shell (a thumbnail), a
+  // listing, a hologram and the site footprint on another sheet carry no
+  // annotation anywhere else and carry none here.
+  //
+  // `dimensions: false` is for the roof path, whose own painter already
+  // draws the level's strings; drawing them twice would double the ink.
+  function drawLevelMarks(ctx, toS, saved, levelId, env = {}, { dimensions = true } = {}) {
+    const composition = window.DraftPlanComposition;
+    const geo = window.DraftGeometry2D;
+    if (!composition || !geo) return false;
+    if (env.shell === true || env.listing === true || env.hologram === true
+      || env.siteFootprint === true) return false;
+    const of = key => (Array.isArray(saved?.[key]) ? saved[key] : [])
+      .filter(item => item?.levelId === levelId);
+    const lines = of('lines');
+    const notes = of('notes').filter(note => note.view !== 'stair');
+    const dims = dimensions ? of('dimensions') : [];
+    if (!lines.length && !notes.length && !dims.length) return false;
+    const fmt = window.DraftFormatters || {};
+    composition.drawPlan(ctx, toS, {
+      levelId,
+      viewId: null,
+      hasLayerViews: false,
+      isPrinting: false,
+      walls: [], floors: [], roofs: [], shapes: [], fixtures: [], stairs: [],
+      beams: [], columns: [], roomTags: [], fenestrations: [],
+      lines,
+      notes,
+      dimensions: dims,
+      lineControlPoint: geo.lineControlPoint,
+      inkScale: env.inkScale,
+      dimensionEnv: {
+        label: ft => (fmt.formatArchitecturalInches
+          ? fmt.formatArchitecturalInches(ft * 12) : `${Math.round(ft)}'`),
+        colors: DIMENSION_COLORS,
+        atLine: true,
+        inkScale: env.inkScale,
+      },
+      noteEnv: { color: '#1d1f20', fillColor: env.paperColor || '#ffffff' },
+    });
+    return true;
+  }
+
   const siteLoop = (ctx, toS, points) => {
     ctx.beginPath();
     points.forEach((pt, i) => {
@@ -873,7 +929,12 @@ if (!window.DraftLayoutPlan) {
   function drawSitePlan(ctx, toS, saved, env = {}) {
     const geo = window.DraftGeometry2D;
     const { lot, bodies, roofs } = sitePlanParts(saved);
-    if (!lot && !bodies.length && !roofs.length) return false;
+    // NOTHING BUT HIS OWN LINES IS STILL A SITE PLAN (Movie, 6 Nov): a lot
+    // traced by hand, a drive, a tree -- the marks go on below, and the
+    // sheet says it drew something.
+    if (!lot && !bodies.length && !roofs.length) {
+      return drawLevelMarks(ctx, toS, saved, SITE_LEVEL_ID, env);
+    }
     // ── THE FOOTPRINT IS THE ROOF PLAN (Movie, 14 Oct) ──────────────────
     //
     // "for the FOOTPRINT on the site plan the ROOF PLAN with the WALL
@@ -975,6 +1036,8 @@ if (!window.DraftLayoutPlan) {
       };
       rows.forEach(row => render.drawDimension2D(ctx, toS, row, {}, dimensionEnv));
     }
+    // AND WHAT THE DRAFTER DREW ON THE SITE LEVEL, over all of it.
+    drawLevelMarks(ctx, toS, saved, SITE_LEVEL_ID, env);
     return true;
   }
 
@@ -1004,7 +1067,14 @@ if (!window.DraftLayoutPlan) {
     // A FLOOR LAYOUT HAS FLOORS, NOT WALLS of its own: the deck, its holes,
     // the beams and posts under it and its dimensions.
     const floorLayout = view === 'floor' && hasFloorLayout(saved, levelId);
-    if (!walls.length && !floorLayout) return drawRoofPlan(ctx, toS, saved, levelId, env);
+    if (!walls.length && !floorLayout) {
+      // A ROOF LEVEL, OR A STOREY WITH NO WALLS YET: its roofs, then the
+      // lines and notes drawn on it (Movie, 6 Nov). drawRoofPlan carries the
+      // level's dimensions itself, but only when it finds a roof to draw.
+      const drewRoof = drawRoofPlan(ctx, toS, saved, levelId, env);
+      const drewMarks = drawLevelMarks(ctx, toS, saved, levelId, env, { dimensions: !drewRoof });
+      return drewRoof || drewMarks;
+    }
 
     // THE STOREY UNDER THIS ONE, FIRST OF ALL, so every other line on the
     // sheet — this floor's and the half-floor's alike — lands over it.
@@ -1553,6 +1623,7 @@ if (!window.DraftLayoutPlan) {
     drawPlan,
     sitePlanParts,
     drawSitePlan,
+    drawLevelMarks,
     siteDimStrings,
     siteDimReachFt,
     SITE_DIM_DEFAULT_PIF,
