@@ -822,51 +822,201 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // ── WHAT FILLS A SHAPE (jb, 6 Nov) ────────────────────────────────────
+  //
+  // "we need to be able to control the shading of what is inside the box and
+  // we should also allow different types of hatches ... for now put in hatch
+  // types black, grey, light grey, white, transparent. we will add EARTH
+  // hatch later. do a newspaper type dot shading hatch with about 25%
+  // shading." A shape with no `hatch` keeps the wash it has always had, so
+  // every shape drawn before today reads as it did.
+  //
+  // THE FILLS ARE INK, NOT SKIN. Black is black on the night page too: like a
+  // concrete wall's fill, a hatch is a legend the drafter chose, and a legend
+  // that changed with the lights would say one thing on screen and another
+  // on paper. WHITE is opaque for the same reason -- it is the fill that
+  // blanks what is under it, which is what a drafter reaches for it for.
+  // Exported as a FUNCTION, like every other name on the module's surface:
+  // the harness measures each export by emptying its body, and a table has
+  // no body to empty.
+  function shapeHatches() {
+    return SHAPE_HATCHES;
+  }
+  const SHAPE_HATCHES = Object.freeze([
+    Object.freeze({ id: 'black',       label: 'BLACK',       fill: '#000000' }),
+    Object.freeze({ id: 'grey',        label: 'GREY',        fill: '#808080' }),
+    Object.freeze({ id: 'lightgrey',   label: 'LIGHT GREY',  fill: '#c8c8c8' }),
+    Object.freeze({ id: 'white',       label: 'WHITE',       fill: '#ffffff' }),
+    Object.freeze({ id: 'transparent', label: 'TRANSPARENT', fill: null }),
+    Object.freeze({ id: 'dots',        label: 'DOTS 25%',    fill: null, dots: true }),
+    // AND THE EXTERIOR FINISHES (jb, 6 Nov: "we have the exterior elevations
+    // hatching those can go into the 'area' hatches too"): the eight of
+    // wall-types.js that put a mark on the sheet, drawn by finish-patterns.js
+    // exactly as an elevation draws them. Stucco is left out because stucco
+    // draws nothing, and a chip that changes nothing is a broken chip.
+    Object.freeze({ id: 'siding_h',    label: 'H. SIDING',   fill: null, finish: 'siding_h' }),
+    Object.freeze({ id: 'siding_v_bb', label: 'V. SIDING',   fill: null, finish: 'siding_v_bb' }),
+    Object.freeze({ id: 'shake',       label: 'CEDAR SHAKE', fill: null, finish: 'shake' }),
+    Object.freeze({ id: 'ledgestone',  label: 'LEDGESTONE',  fill: null, finish: 'ledgestone' }),
+    Object.freeze({ id: 'ashlar',      label: 'ASHLAR',      fill: null, finish: 'ashlar' }),
+    Object.freeze({ id: 'roundstone',  label: 'ROUNDSTONE',  fill: null, finish: 'roundstone' }),
+    Object.freeze({ id: 'fieldstone',  label: 'FIELDSTONE',  fill: null, finish: 'fieldstone' }),
+    Object.freeze({ id: 'brick',       label: 'BRICK',       fill: null, finish: 'brick' }),
+  ]);
+  function shapeHatchOf(id) {
+    return SHAPE_HATCHES.find(h => h.id === String(id ?? '')) || null;
+  }
+
+  // AN EXTERIOR FINISH LAID FLAT IN THE PLAN: the shape's bounding box is
+  // the "wall face", clipped to the shape, at the plan's own scale, in black
+  // ink. Both modules are read at draw time, so a page that loads neither
+  // (the Real Estate plan) draws the wash and nothing throws.
+  const finishScreen = (ctx, toS, screenPoints, finishId) => {
+    const FP = window.DraftFinishPatterns, WT = window.DraftWallTypes;
+    const finish = FP && WT && WT.finishById ? WT.finishById(finishId) : null;
+    if (!finish || finish.id !== finishId) return;
+    const o = toS({ x: 0, y: 0, z: 0 }), u = toS({ x: 1, y: 0, z: 0 });
+    const pxPerFt = Math.hypot(u.x - o.x, u.y - o.y);
+    if (!(pxPerFt > 0)) return;
+    const xs = screenPoints.map(p => p.x), ys = screenPoints.map(p => p.y);
+    const box = { x0: Math.min(...xs), x1: Math.max(...xs), yTop: Math.min(...ys), yBottom: Math.max(...ys), pxPerFt };
+    ctx.save();
+    ctx.clip();
+    FP.drawFinish(ctx, box, finish, { line: DOT_INK });
+    ctx.restore();
+  };
+
+  // THE NEWSPAPER SCREEN: black dots on a staggered grid, 6 px apart on the
+  // SCREEN whatever the zoom, so the tone reads as a tone at every scale
+  // rather than closing to a wash when zoomed out or opening to polka dots
+  // when zoomed in. The radius is what makes a quarter of the area ink:
+  // pi r^2 = 0.25 * 6^2, r = 1.69 (tests/shape-hatch.spec.js reads the mean
+  // tone off the glass to hold it there). The grid hangs off the shape's
+  // first corner so a pan carries the dots with the shape instead of
+  // sliding the shape under a screen fixed to the glass.
+  const DOT_PITCH_PX = 6;
+  const DOT_RADIUS_PX = Math.sqrt(0.25 * DOT_PITCH_PX * DOT_PITCH_PX / Math.PI);
+  const DOT_INK = '#000000';
+  const dotScreen = (ctx, screenPoints) => {
+    const xs = screenPoints.map(p => p.x), ys = screenPoints.map(p => p.y);
+    // Clipped to the glass as well as the shape: a shape zoomed far in is
+    // acres of off-screen dots nobody sees.
+    const glassW = ctx.canvas ? ctx.canvas.width : Infinity;
+    const glassH = ctx.canvas ? ctx.canvas.height : Infinity;
+    const x0 = Math.max(Math.min(...xs), -DOT_PITCH_PX), x1 = Math.min(Math.max(...xs), glassW + DOT_PITCH_PX);
+    const y0 = Math.max(Math.min(...ys), -DOT_PITCH_PX), y1 = Math.min(Math.max(...ys), glassH + DOT_PITCH_PX);
+    if (x1 <= x0 || y1 <= y0) return;
+    const ax = screenPoints[0].x, ay = screenPoints[0].y;
+    const startRow = Math.floor((y0 - ay) / DOT_PITCH_PX);
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = DOT_INK;
+    ctx.beginPath();
+    for (let row = startRow; ay + row * DOT_PITCH_PX <= y1; row += 1) {
+      const y = ay + row * DOT_PITCH_PX;
+      const shift = (row % 2) ? DOT_PITCH_PX / 2 : 0;
+      const startCol = Math.floor((x0 - ax - shift) / DOT_PITCH_PX);
+      for (let col = startCol; ax + shift + col * DOT_PITCH_PX <= x1; col += 1) {
+        const x = ax + shift + col * DOT_PITCH_PX;
+        ctx.moveTo(x + DOT_RADIUS_PX, y);
+        ctx.arc(x, y, DOT_RADIUS_PX, 0, Math.PI * 2);
+      }
+    }
+    ctx.fill();
+    ctx.restore();
+  };
+
+  // THE OUTLINE'S LINETYPE (jb, 6 Nov: "LINETYPE for the exterior line. offer
+  // all the linetypes we have already"): the four of line-styles.js. A shape
+  // with no `style` -- every one from before today -- keeps the 7,4 dash it
+  // has always worn, and DASHED means that same dash, so picking the chip
+  // that is already lit changes nothing on the sheet.
+  const SHAPE_DASH = Object.freeze([7, 4]);
+  function shapeDashOf(style) {
+    const id = String(style ?? 'dashed');
+    if (id === 'dashed') return SHAPE_DASH;
+    const LS = window.DraftLineStyles;
+    const found = LS && LS.styleOf(id);
+    return found ? found.dash : SHAPE_DASH;
+  }
+
   function drawShape2D(ctx, toS, shape, options = {}, env) {
     const points = shape?.points || [];
     if (points.length < 2) return;
     const { preview = false } = options;
     const screenPoints = points.map(toS);
+    const hatch = preview ? null : shapeHatchOf(shape.hatch);
+    // THE PATH IS TRACED TWICE when a hatch is drawn: a hatch begins paths
+    // of its own, and save/restore does not bring the shape's back, so the
+    // outline stroked after a dot screen would ring every dot and leave the
+    // shape itself unstroked. The second trace is what the stroke below
+    // strokes.
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
+      screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+      if (points.length >= 3) ctx.closePath();
+    };
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
-    screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+    trace();
     if (points.length >= 3) {
-      ctx.closePath();
       // Derived from the skin's own shape colour, like the roof's wash. These
       // three were rgba(63,143,122,...) -- #3f8f7a, which is draw-shape's
       // NIGHT value -- while the committed stroke below already read
       // env.shapeColor. So on the day page a shape was previewed in the night
       // green and changed colour the moment it was committed: 4.27 becoming
       // 5.56 against the same ground, visible as a shift rather than a fault.
-      ctx.fillStyle = atAlpha(env.shapeColor, preview ? 0.06 : 0.09);
-      ctx.fill();
+      if (!hatch) {
+        ctx.fillStyle = atAlpha(env.shapeColor, preview ? 0.06 : 0.09);
+        ctx.fill();
+      } else if (hatch.fill) {
+        ctx.fillStyle = hatch.fill;
+        ctx.fill();
+      }
+      if (hatch && hatch.dots) { dotScreen(ctx, screenPoints); trace(); }
+      if (hatch && hatch.finish) { finishScreen(ctx, toS, screenPoints, hatch.finish); trace(); }
     }
     ctx.strokeStyle = preview ? atAlpha(env.shapeColor, 0.72) : env.shapeColor;
     ctx.lineWidth = 1.5;
-    ctx.setLineDash([7, 4]);
+    ctx.setLineDash(preview ? SHAPE_DASH : shapeDashOf(shape.style));
     ctx.stroke();
     ctx.setLineDash([]);
     if (!preview && !env.isPrinting) {
       ctx.fillStyle = env.shapeColor;
       screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
     }
-    // A flooring area labels itself with its finish and measured area.
-    if (!preview && shape.flooring && points.length >= 3) {
-      const type = env.flooringTypes.find(entry => entry.id === shape.flooring.type);
-      const label = [type?.label, env.areaLabel(env.outlineAreaSqFt(points))]
+    // WHAT THE SHAPE SAYS ABOUT ITSELF, centred: its room / site label on
+    // one line, and under it the flooring finish and the measured area (jb,
+    // 6 Nov). The area is written when SHOW AREA is on -- and, as it has
+    // been since the flooring work, on a flooring area that was never told
+    // otherwise. Each line gets its own backing so it reads over any hatch,
+    // black included.
+    if (!preview && points.length >= 3) {
+      const type = shape.flooring && (env.flooringTypes || []).find(entry => entry.id === shape.flooring.type);
+      const areaOn = shape.showArea === true || (!!shape.flooring && shape.showArea !== false);
+      const name = String(shape.label || '').trim();
+      const detail = [type?.label, areaOn && env.areaLabel ? env.areaLabel(env.outlineAreaSqFt(points)) : null]
         .filter(Boolean).join(' · ');
-      if (label) {
+      const lines = [
+        ...(name ? [{ text: name, font: "700 12px 'Barlow Condensed', system-ui, sans-serif", high: 16 }] : []),
+        ...(detail ? [{ text: detail, font: "600 11px 'Barlow Condensed', system-ui, sans-serif", high: 15 }] : []),
+      ];
+      if (lines.length) {
         const cx = screenPoints.reduce((sum, pt) => sum + pt.x, 0) / screenPoints.length;
         const cy = screenPoints.reduce((sum, pt) => sum + pt.y, 0) / screenPoints.length;
-        ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
-        const textWidth = ctx.measureText(label).width;
-        ctx.fillStyle = 'rgba(255,255,255,0.92)';
-        ctx.fillRect(cx - textWidth / 2 - 3, cy - 8, textWidth + 6, 15);
-        ctx.fillStyle = env.shapeColor;
+        const total = lines.reduce((sum, line) => sum + line.high, 0);
+        let y = cy - total / 2;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(label, cx, cy);
+        lines.forEach(line => {
+          ctx.font = line.font;
+          const textWidth = ctx.measureText(line.text).width;
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.fillRect(cx - textWidth / 2 - 3, y, textWidth + 6, line.high);
+          ctx.fillStyle = env.shapeColor;
+          ctx.fillText(line.text, cx, y + line.high / 2);
+          y += line.high;
+        });
       }
     }
     ctx.restore();
@@ -3738,6 +3888,9 @@ if (!window.DraftRender2D) {
     drawRoof2D,
     drawWallTops2D,
     drawShape2D,
+    shapeHatches,
+    shapeHatchOf,
+    shapeDashOf,
     drawFixture2D,
     drawWetFloors2D,
     wetRoomLoops,

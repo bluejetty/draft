@@ -122,6 +122,8 @@
       sourceLevelId: null,
       flooring: null,
       layer: 'SHAPE',
+      // THE HATCH AND LINETYPE PICKED LAST, as a LINE takes its weight.
+      ...(typeof shapeStyleDefaults === 'function' ? shapeStyleDefaults() : {}),
     });
     shapeCorners = [];
     markLoopClosed(loop[0]);

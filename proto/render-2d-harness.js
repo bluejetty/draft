@@ -1352,6 +1352,97 @@ suite('drawShape2D', 'a preview never labels itself', R => {
   expect('no label', count(ctx, 'fillText'), 0);
 });
 
+// ── THE SHAPE'S HATCH AND LINETYPE (jb, 6 Nov) ──
+//
+// toS here is 1 px per ft, so TRI is a 10 px triangle: too small for a
+// brick course to land in and plenty for a 6 px dot screen. The finish
+// modules are not loaded into this window on purpose -- a page without
+// them (the Real Estate plan) must draw the wash and throw nothing.
+suite('shapeHatches', 'the five fills jb named, the dot screen, and the eight finishes that mark the sheet', R => {
+  const H = R.shapeHatches();
+  const ids = H.map(h => h.id);
+  expect('black, grey, light grey, white, transparent, dots lead the list',
+    ids.slice(0, 6).join(','), 'black,grey,lightgrey,white,transparent,dots');
+  expect('then the eight exterior finishes, stucco left out because it draws nothing',
+    ids.slice(6).join(','), 'siding_h,siding_v_bb,shake,ledgestone,ashlar,roundstone,fieldstone,brick');
+  expect('BLACK is black ink, not a skin role', H[0].fill, '#000000');
+  expect('WHITE is opaque paper', H.find(h => h.id === 'white').fill, '#ffffff');
+  expect('TRANSPARENT fills nothing', H.find(h => h.id === 'transparent').fill, null);
+  expect('every row has a chip label', H.every(h => typeof h.label === 'string' && h.label), true);
+});
+
+suite('shapeHatchOf', 'names a hatch or nothing', R => {
+  expect('a known id', R.shapeHatchOf('dots').dots, true);
+  expect('a finish id carries its finish', R.shapeHatchOf('brick').finish, 'brick');
+  expect('an unknown id is nothing, not a default', R.shapeHatchOf('earth'), null);
+  expect('absent is nothing', R.shapeHatchOf(undefined), null);
+});
+
+suite('shapeDashOf', 'absent and DASHED are the 7,4 the shape has always worn', R => {
+  expect('absent', R.shapeDashOf(undefined).join(','), '7,4');
+  expect('dashed', R.shapeDashOf('dashed').join(','), '7,4');
+  expect('a style this window cannot name falls back to the same dash, not to solid',
+    R.shapeDashOf('dotted').join(','), '7,4');
+});
+
+suite('drawShape2D', 'BLACK fills the box in black and skips the wash', R => {
+  const ctx = recordingCtx();
+  R.drawShape2D(ctx, toS, { points: TRI, hatch: 'black' }, {}, shapeEnv({ shapeColor: SENTINEL_SHAPE }));
+  const fills = sets(ctx, 'fillStyle').map(String);
+  expect('filled once', count(ctx, 'fill'), 1);
+  expect('in black', fills.includes('#000000'), true);
+  expect('and not washed', fills.includes('rgba(0,136,255,0.09)'), false);
+  expect('the outline still strokes in the skin colour', sets(ctx, 'strokeStyle').includes(SENTINEL_SHAPE), true);
+});
+
+suite('drawShape2D', 'TRANSPARENT fills nothing at all', R => {
+  const ctx = recordingCtx();
+  R.drawShape2D(ctx, toS, { points: TRI, hatch: 'transparent' }, {}, shapeEnv());
+  expect('no fill', count(ctx, 'fill'), 0);
+  expect('but the outline', count(ctx, 'stroke'), 1);
+});
+
+suite('drawShape2D', 'DOTS clip a screen of black circles to the shape and stroke the SHAPE, not the dots', R => {
+  const ctx = recordingCtx();
+  R.drawShape2D(ctx, toS, { points: TRI, hatch: 'dots' }, {}, shapeEnv({ shapeColor: SENTINEL_SHAPE }));
+  expect('clipped to the shape', count(ctx, 'clip'), 1);
+  expect('dots were drawn', count(ctx, 'arc') > 0, true);
+  expect('in black', sets(ctx, 'fillStyle').map(String).includes('#000000'), true);
+  // The dot pass begins its own path; the stroke after it must stroke a
+  // path traced AFTER the last arc, or every dot wears a green ring.
+  const tape = ctx.tape;
+  const lastArc = tape.map(e => e.op).lastIndexOf('arc');
+  const strokeAt = tape.map(e => e.op).lastIndexOf('stroke');
+  const retraced = tape.slice(lastArc, strokeAt).some(e => e.op === 'closePath');
+  expect('the shape is traced again before the outline is stroked', retraced, true);
+});
+
+suite('drawShape2D', 'a finish hatch with no finish module draws the shape and throws nothing', R => {
+  const ctx = recordingCtx();
+  R.drawShape2D(ctx, toS, { points: TRI, hatch: 'brick' }, {}, shapeEnv());
+  expect('no wash either -- brick is not a tint', count(ctx, 'fill'), 0);
+  expect('the outline', count(ctx, 'stroke'), 1);
+});
+
+suite('drawShape2D', 'a preview ignores the hatch', R => {
+  const ctx = recordingCtx();
+  R.drawShape2D(ctx, toS, { points: TRI, hatch: 'black' }, { preview: true }, shapeEnv({ shapeColor: SENTINEL_SHAPE }));
+  expect('washed, not blacked', sets(ctx, 'fillStyle').map(String).includes('rgba(0,136,255,0.06)'), true);
+});
+
+suite('drawShape2D', 'the label and the area: SHOW AREA, and a flooring area that was never told otherwise', R => {
+  const say = shape => {
+    const ctx = recordingCtx();
+    R.drawShape2D(ctx, toS, shape, {}, shapeEnv());
+    return calls(ctx, 'fillText').map(a => a[0]);
+  };
+  expect('a bare shape says nothing', say({ points: TRI }).join('|'), '');
+  expect('SHOW AREA on writes the area', say({ points: TRI, showArea: true }).join('|'), '240 sq ft');
+  expect('a label writes above the area', say({ points: TRI, label: 'LOT 12', showArea: true }).join('|'), 'LOT 12|240 sq ft');
+  expect('a flooring area still says finish and area', say({ points: TRI, flooring: { type: 'oak' } }).join('|'), 'Oak · 240 sq ft');
+  expect('SHOW AREA off silences the figure, the finish stays', say({ points: TRI, flooring: { type: 'oak' }, showArea: false }).join('|'), 'Oak');
+});
+
 // ── drawBoneyardMark2D ──
 const markEnv = () => ({
   geometryFor: () => ({ center: { x: 10, z: 0 }, ux: 1, uz: 0 }),
@@ -4108,6 +4199,16 @@ function coverage() {
     ['drawRoof2D guides ignore the skin', dropRoofGuideEnvColour],
     ['drawRoof2D wash left on the old brown while the outline moves', unDeriveRoofWash],
     ['drawShape2D preview back on the hardcoded night green', unDeriveShapePreview],
+    ['drawShape2D the outline strokes the dots instead of the shape', src => {
+      const out = src.replace("      if (hatch && hatch.dots) { dotScreen(ctx, screenPoints); trace(); }\n", "      if (hatch && hatch.dots) { dotScreen(ctx, screenPoints); }\n");
+      if (out === src) throw new Error('the dot pass moved');
+      return out;
+    }],
+    ['drawShape2D SHOW AREA off still writes a flooring area\'s figure', src => {
+      const out = src.replace("      const areaOn = shape.showArea === true || (!!shape.flooring && shape.showArea !== false);\n", "      const areaOn = shape.showArea === true || !!shape.flooring;\n");
+      if (out === src) throw new Error('the areaOn rule moved');
+      return out;
+    }],
     ['drawFixture2D kind dispatch (constant painter)', constantFixture],
     ['drawWallSeg2D env colours', dropWallEnvColours],
     ['drawWallSeg2D colour fallbacks', dropWallColourFallback],
