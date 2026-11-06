@@ -6,10 +6,10 @@
 // really would like the REGISTRATION TARGET to have a node snap so i can
 // position the property site plan properly". The seams: the target a node,
 // the roof's corners on the SITE, its edges on the SITE, those corners kept
-// off the floor plans and the house's corner with them -- and, since 6 Nov
-// ("i thought the gold node target had SNAP with orange pulse earlier but
-// not snapping now?"), the target PAINTED is the one that catches, so a SITE
-// or a floor plan with no house behind the target still catches on it.
+// off the floor plans and the target with them -- and, since 6 Nov ("i
+// thought the gold node target had SNAP with orange pulse earlier but not
+// snapping now?"), the target PAINTED is the one that catches, so a SITE
+// with no house behind the target still catches on it.
 //
 // Run: node proto/site-target-snap-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -35,26 +35,16 @@ const MUTANTS = [
     with: "...loopEdges()])] };",
     test: 'on the SITE the roof\'s edges are lines to land on' },
   { file: 'model/07-walls-magnet.js',
-    name: 'the roof\'s corners catch on every level',
-    find: "    if (!onSite) return out;\n",
-    with: "",
-    test: 'a roof on the ROOF level is no node on the MAIN FL' },
-  { file: 'model/07-walls-magnet.js',
-    name: 'the house\'s corner is a node on a floor plan too',
-    find: "    const target = onSite || !siteDatumNow() ? gridDatum() : null;\n",
-    with: "    const target = gridDatum();\n",
-    test: 'on a floor plan the target is no node of its own' },
+    name: 'the target and the roof catch on every level',
+    find: "    if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];\n",
+    with: "    if (!drawing) return [];\n",
+    test: 'no node' },
   // Movie, 6 Nov: the target painted on a SITE with no house caught nothing.
   { file: 'model/07-walls-magnet.js',
     name: 'the node is the house\'s corner, not the target painted',
-    find: "    const target = onSite || !siteDatumNow() ? gridDatum() : null;\n",
-    with: "    const target = onSite || !siteDatumNow() ? siteDatumNow() : null;\n",
+    find: "    const target = gridDatum();\n",
+    with: "    const target = siteDatumNow();\n",
     test: 'with no house' },
-  { file: 'model/07-walls-magnet.js',
-    name: 'a target that is no wall\'s corner is no node on a floor plan',
-    find: "    const target = onSite || !siteDatumNow() ? gridDatum() : null;\n",
-    with: "    const target = onSite ? gridDatum() : null;\n",
-    test: 'on a floor plan with no house the painted target is a node' },
 ];
 
 const run = name => {

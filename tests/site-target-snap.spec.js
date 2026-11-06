@@ -154,13 +154,13 @@ test('on a SITE with no house MOVE lands a line\'s end on the target', async ({ 
   expect(line.start.z).toBeCloseTo(8, 6);
 });
 
-// ON A FLOOR PLAN THE SAME: a target that is no wall's corner has no corner
-// catching there already, so it is a node of its own. (With a house it
-// stays what it was, above: the house's corner, no node.)
-test('on a floor plan with no house the painted target is a node', async ({ page }) => {
+// ON A FLOOR PLAN, NOT: the outline is seeded on the bullseye there, and a
+// target that caught like a node would pull a first edge shorter than its
+// reach straight back home (tests/outline-45.spec.js). The bullseye's own
+// 2.5 ft pull on an empty level is the floor plan's catch.
+test('on a floor plan with no house the painted target is no node', async ({ page }) => {
   await open(page, 3, { walls: false });
-  const { t, got, node } = await where(page);
+  const { t, node } = await where(page);
   expect(t).toEqual([12, 8]);
-  expect(close(got, t), JSON.stringify({ t, got })).toBe(true);
-  expect(node).toBe(true);
+  expect(node).toBe(false);
 });

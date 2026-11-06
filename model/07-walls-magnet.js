@@ -1402,17 +1402,16 @@
   // painter draws gridDatum(): the house's corner when there are walls to
   // work it out from, else the file's own drawingOrigin. The node here was
   // read from siteDatumNow() alone, so a SITE drawn before the house -- or
-  // with no house at all -- showed a target that caught nothing. And a
-  // target that is no wall's corner has no corner catching there already,
-  // so on a floor plan it is a node of its own too; the house's corner on a
-  // floor plan stays what it was, no node (tests/site-target-snap.spec.js).
+  // with no house at all -- showed a target that caught nothing. On a floor
+  // plan the target stays no node of its own: with a house its corner
+  // catches already (above), and without one the outline is seeded on the
+  // bullseye and a first edge shorter than a node's reach would be pulled
+  // straight back home (tests/outline-45.spec.js, model-traced-build).
   const siteSnapNodes = () => {
-    if (!drawing) return [];
+    if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];
     const out = [];
-    const onSite = Number(activeLevelId()) === SITE_SNAP_LEVEL;
-    const target = onSite || !siteDatumNow() ? gridDatum() : null;
+    const target = gridDatum();
     if (target && Number.isFinite(target.x) && Number.isFinite(target.z)) out.push({ x: target.x, y: 0, z: target.z });
-    if (!onSite) return out;
     (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {
       if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);
     }));
