@@ -64,30 +64,15 @@ if (!window.DraftBuildMenu) {
   // `foundation` belongs to the DETACHED entries alone and pre-answers the
   // prompt that _commitDetachedGarageOutline raises after the loop closes.
   const BUILD_MENU = Object.freeze([
-    Object.freeze({
-      id: 'detachedGarage',
-      label: 'DETACHED GARAGE',
-      title: 'DETACHED GARAGE — pick its foundation, then draw its own loop',
-      // No `type`: a detached garage says nothing about what house it stands
-      // beside, and may stand beside none.
-      // `needsSize` is the detached garage's second question (Movie, 15 Sep:
-      // "allow them to enter the size give them choices 16x24 24x26 25x25
-      // (or 4th option allow them to enter ___FT X ___FT)"). A house's size
-      // comes with its premade design; a garage is a box, so its size IS the
-      // design and nothing can be built without it.
-      entries: Object.freeze([
-        Object.freeze({ id: 'detached-thickened', label: 'THICKENED EDGE', foundation: 'thickened', needsSize: true }),
-        Object.freeze({ id: 'detached-gradebeam', label: 'GRADE BEAM', foundation: 'gradebeam', needsSize: true }),
-        Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall', needsSize: true }),
-      ]),
-    }),
     // A SITE PLAN AND NOTHING ELSE (Movie, 6 Nov: "when the AUTOHOUSE options
     // is brought up at the begining - above it can we have an option - DRAW
     // STANDALONE SITE PLAN ... put it like the RESIDENTIAL SUITES and
     // COMMERCIAL SUITE - half size but put the STANDALONE SITE PLAN in a box
     // on the right side of DETACHED GARAGE. leave a spot below i will want to
     // ad somthing else there probably" -- "and then that plan will be only
-    // for the SITE PLAN layer - no other layers offered").
+    // for the SITE PLAN layer - no other layers offered" -- and, shown it
+    // on the right: "oops i meant to the left of detached garage"). So it is
+    // FIRST ON THE SHELF, ahead of DETACHED GARAGE.
     //
     // NOT A HOUSE, AND NOT AN ORDER. No `type`, no bone: the press itself
     // drops the board, builds nothing and lands the drafter on SITE, with
@@ -104,6 +89,23 @@ if (!window.DraftBuildMenu) {
       spare: 1,
       entries: Object.freeze([
         Object.freeze({ id: 'site-standalone', label: 'DRAW STANDALONE SITE PLAN', standalone: 'site' }),
+      ]),
+    }),
+    Object.freeze({
+      id: 'detachedGarage',
+      label: 'DETACHED GARAGE',
+      title: 'DETACHED GARAGE — pick its foundation, then draw its own loop',
+      // No `type`: a detached garage says nothing about what house it stands
+      // beside, and may stand beside none.
+      // `needsSize` is the detached garage's second question (Movie, 15 Sep:
+      // "allow them to enter the size give them choices 16x24 24x26 25x25
+      // (or 4th option allow them to enter ___FT X ___FT)"). A house's size
+      // comes with its premade design; a garage is a box, so its size IS the
+      // design and nothing can be built without it.
+      entries: Object.freeze([
+        Object.freeze({ id: 'detached-thickened', label: 'THICKENED EDGE', foundation: 'thickened', needsSize: true }),
+        Object.freeze({ id: 'detached-gradebeam', label: 'GRADE BEAM', foundation: 'gradebeam', needsSize: true }),
+        Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall', needsSize: true }),
       ]),
     }),
     Object.freeze({

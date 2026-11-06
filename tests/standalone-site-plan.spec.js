@@ -11,7 +11,7 @@
 //
 // THREE THINGS, and each is checked where it would quietly go wrong:
 //
-//   1. THE TILE ON THE BOARD: half a card, beside DETACHED GARAGE, with the
+//   1. THE TILE ON THE BOARD: half a card, left of DETACHED GARAGE, with the
 //      empty half under it. Measured against the family cards rather than in
 //      pixels, because the board scales with the window and a tile that was
 //      merely "about half" would read as full-size on a wider screen.
@@ -80,7 +80,7 @@ const levelRows = page => page.locator('#levels-panel [data-level-row]')
   .evaluateAll(rows => rows.map(row => row.dataset.levelRow));
 const panelHasText = (page, re) => page.locator('#levels-panel').locator(`text=${re}`).count();
 
-test('the tile stands beside DETACHED GARAGE, half a card high, with its empty half under it', async ({ page }) => {
+test('the tile stands left of DETACHED GARAGE, half a card high, with its empty half under it', async ({ page }) => {
   await openModel(page);
   await h.openDriveThru(page);
   const tile = page.locator('#build-families [data-build-entry="site-standalone"]');
@@ -90,12 +90,12 @@ test('the tile stands beside DETACHED GARAGE, half a card high, with its empty h
 
   const tileBox = await tile.boundingBox();
   const garage = await page.locator('[data-build-family="detachedGarage"]').boundingBox();
-  const bungalow = await page.locator('[data-build-family="bungalow"]').boundingBox();
   const suite = await page.locator('[data-build-entry="suite-residential"]').boundingBox();
-  // ON THE RIGHT SIDE OF DETACHED GARAGE, which in a row means between it
-  // and BUNGALOW -- his words, and the board's order is the module's.
-  expect(tileBox.x, 'right of DETACHED GARAGE').toBeGreaterThan(garage.x + garage.width - 1);
-  expect(tileBox.x + tileBox.width, 'and before BUNGALOW').toBeLessThan(bungalow.x + 1);
+  // TO THE LEFT OF DETACHED GARAGE, first on the shelf ("oops i meant to the
+  // left of detached garage"), and the board's order is the module's.
+  expect(tileBox.x + tileBox.width, 'left of DETACHED GARAGE').toBeLessThan(garage.x + 1);
+  await expect(page.locator('#build-families > *').first(), 'first on the shelf')
+    .toHaveAttribute('data-build-stack', 'sitePlan');
   // HALF SIZE, LIKE THE SUITE PAIR: within a line's worth of the
   // RESIDENTIAL SUITE tile's height (its two-line label makes it a few px
   // taller than its empty half), and no more than ~55% of the card beside it.

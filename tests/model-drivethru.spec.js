@@ -560,7 +560,7 @@ test('the dog talks the drafter through it, and says what was ordered',
     await expect(page.locator('[data-drivethru-line]')).toContainText('BUNGALOW');
 
     // THE OPEN SUBMENU'S FIRST TILE -- not the row's, which since 6 Nov
-    // holds the standalone site plan's own tile ahead of BUNGALOW.
+    // holds the standalone site plan's own tile first.
     const entry = page.locator('#build-entries [data-build-entry]').first();
     const ordered = (await entry.textContent()).trim();
     await entry.click();
