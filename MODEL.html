@@ -732,6 +732,15 @@
         <button type="button" data-lot-pick-skip>NOT NOW</button>
         <button type="button" data-lot-pick-hand>DRAW IT MYSELF</button>
         <button type="button" data-lot-pick-upload>UPLOAD A SITE PLAN</button>
+        <!-- AND A FIFTH, THE SITE PLAN DRAWN IN ANOTHER .DRAFT (jb, 6 Nov):
+             "i think in alot of situations i will draw the site plan on a
+             seperate draft file that i will bring in and place, can we make
+             that an option for the site plan setup". Not new machinery
+             either: it is the HOLOGRAM chip's BRING IN, whose file picker
+             already reads a .draft, and whose lot line already shows here
+             while this file has no lot of its own. It comes in IN HAND, so
+             the press that brings it in is the press that places it. -->
+        <button type="button" data-lot-pick-import>IMPORT SITE PLAN FROM .DRAFT</button>
       </div>
     </div>
     <div class="lot-note" data-lot-note></div>
@@ -1041,6 +1050,7 @@
 <script src="./geometry-2d.js"></script>
 <script src="./line-styles.js"></script>
 <script src="./shared-file-store.js"></script>
+<script src="./backup-email.js"></script>
 <script src="./wall-types.js"></script>
 <script src="./formatters.js"></script>
 <script src="./cut-view.js"></script>

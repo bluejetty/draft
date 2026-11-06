@@ -15,8 +15,8 @@ const SPEC = 'tests/pick-under.spec.js';
 const MUTANTS = [
   { file: 'model/06-selection-pick.js',
     name: 'a click again takes the top one again',
-    find: "    if (now >= 0 && hits.length > 1) {\n",
-    with: "    if (false) {\n",
+    find: "    if (now >= 0 && hits.length > 1) at = (now + 1) % hits.length;\n",
+    with: "",
     test: 'step down' },
   { file: 'model/16-gestures-undo.js',
     name: 'a press on what is in hand, let go, does nothing',

@@ -731,6 +731,7 @@
   // Returns whether the write landed, because SAVE FIRST in the unsaved guard
   // has to know: a guard that offered to save, failed, and threw the drawing
   // away anyway would be worse than no guard at all.
+  let lastLocalSave = null;
   const save = async ({ download = null, handle = null } = {}) => {
     if (!drawing) return false;
     // A READ-ONLY PAGE DOES NOT ASK. The store would refuse it anyway — that gate
@@ -746,7 +747,13 @@
       // give them a copy of a drawing the shared store does not have, named
       // as though it were saved.
       const contents = await writeDrawing();
-      if (download) await downloadDrawing(await withUnderlayFiles(contents), download, handle);
+      if (download) {
+        const packed = await withUnderlayFiles(contents);
+        await downloadDrawing(packed, download, handle);
+        // THE COPY JUST WRITTEN TO THIS COMPUTER, for SAVE BACKUP FILE TO
+        // EMAIL (backup-email.js) -- offered only after a local save.
+        lastLocalSave = { name: (handle && handle.name) || download, contents: packed };
+      }
       // The note described a difference this save has just resolved.
       if (elsewhereNote) elsewhereNote.hidden = true;
       saveButton.disabled = false;
@@ -1296,7 +1303,11 @@
       // Closing it for them would read as "something went wrong".
       if (handle === 'cancelled') return;
       closeSaveAs();
-      await save({ download: typed, handle });
+      lastLocalSave = null;
+      if ((await save({ download: typed, handle })) && lastLocalSave && window.DraftBackupEmail) {
+        window.DraftBackupEmail.offer({ name: lastLocalSave.name,
+          blob: new Blob([lastLocalSave.contents], { type: 'application/json' }) });
+      }
     });
     saveAsBox.querySelector('[data-save-as-cancel]').addEventListener('click', closeSaveAs);
     saveAsName.addEventListener('keydown', event => {

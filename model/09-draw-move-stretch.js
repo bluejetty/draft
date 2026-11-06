@@ -347,11 +347,86 @@
     sayOnStrip(`Flipped ${axis === 'x' ? 'left for right' : 'top for bottom'} about its middle.${stairFramingSaid(reframed)} UNDO flips it back.`);
   };
   const setFlipOpen = open => { flipState.open = !!open; paint(); };
+  // ── ORDER: TO FRONT / TO BACK (Movie, 6 Nov) ─────────────────────────
+  //
+  // "we should have a feature to bring a item, or group 'to the top' so it
+  // is seen over other items or lines etc". Every painter walks its list in
+  // order, so the record at the end of its list is the one on top of the
+  // picture -- and segsAt picks the later record first where two are at the
+  // same distance, so the one on top is the one a click takes. TO FRONT
+  // moves what is held to the end of its list, TO BACK to the start; a
+  // whole assembly goes together, in the order it had.
+  //
+  // WITHIN ITS OWN KIND. Floors paint under shapes, shapes under lines,
+  // lines under walls, walls under fixtures: that is the drawing's
+  // convention (paint(), 03-plan-paint.js) and a line cannot be sent under
+  // a floor by this. The strip says so when a selection mixes kinds.
+  //
+  // ONE VERB IN THE FOOT, its row over the others while it is up, as FLIP's
+  // is: two more verbs at the full padding would not fit the 1280 foot that
+  // model-html-flip measures (crowded, the verbs draw in).
+  const ORDER_LISTS = { ...SELECTION_LISTS, wall: 'walls' };
+  var orderState = { open: false };
+  const orderButton = document.getElementById('model-order');
+  const orderBar = document.getElementById('order-bar');
+  const reorderSelection = toFront => {
+    if (!selection.length) return;
+    const byList = new Map();
+    selection.forEach(entry => {
+      const key = ORDER_LISTS[entry.type];
+      const list = key ? drawing?.[key] : null;
+      if (!Array.isArray(list) || !list.includes(entry.item)) return;
+      if (!byList.has(list)) byList.set(list, []);
+      byList.get(list).push(entry.item);
+    });
+    if (!byList.size) { sayOnStrip('Nothing in the selection has a draw order to change.'); return; }
+    const lists = [];
+    byList.forEach((items, list) => {
+      const before = list.slice();
+      const moving = before.filter(item => items.includes(item));
+      const staying = before.filter(item => !items.includes(item));
+      const after = toFront ? [...staying, ...moving] : [...moving, ...staying];
+      if (after.every((item, i) => item === before[i])) return;
+      list.splice(0, list.length, ...after);
+      lists.push({ list, before });
+    });
+    const n = selection.length;
+    const what = n === 1 ? hitSays(selection[0]) : `${n} things`;
+    if (!lists.length) {
+      sayOnStrip(`${what} is already at the ${toFront ? 'front' : 'back'} of its kind.`);
+      return;
+    }
+    undoStack.push({ kind: 'reorder', lists });
+    markDirty();
+    paint();
+    const kinds = new Set(selection.map(entry => entry.type));
+    sayOnStrip(`${what} ${toFront ? 'to the front' : 'to the back'}: painted ${toFront ? 'over' : 'under'} the other `
+      + `${kinds.size === 1 ? `${[...kinds][0]}s` : 'things of its kinds'}${toFront ? ', and picked first where they stack' : ''}. UNDO puts it back.`);
+  };
+  const setOrderOpen = open => { orderState.open = !!open; paint(); };
+  function syncOrderVerbs() {
+    if (!orderButton || !orderBar) return;
+    const able = selection.length && !activeCut() && !modalUp()
+      && selection.some(entry => Array.isArray(drawing?.[ORDER_LISTS[entry.type]]));
+    if (!able) orderState.open = false;
+    orderButton.hidden = !able || orderState.open || !!flipState?.open || !!rotateState?.open || !!rescaleState?.open;
+    orderBar.hidden = !orderState.open;
+    // OVER THE OTHER VERBS while it is up, as FLIP's row is.
+    if (orderState.open) {
+      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; }); // ORDER's row
+    }
+  }
+  if (orderButton) orderButton.addEventListener('click', () => setOrderOpen(true));
+  if (orderBar) {
+    orderBar.querySelector('[data-order-front]')?.addEventListener('click', () => reorderSelection(true));
+    orderBar.querySelector('[data-order-back]')?.addEventListener('click', () => reorderSelection(false));
+    orderBar.querySelector('[data-order-done]')?.addEventListener('click', () => setOrderOpen(false));
+  }
   function syncFlipVerbs() {
     if (!flipState || !flipButton || !flipBar) return;
     const able = selection.length && !activeCut() && !modalUp();
     if (!able) flipState.open = false;
-    flipButton.hidden = !able || flipState.open || !!rotateState?.open;
+    flipButton.hidden = !able || flipState.open || !!rotateState?.open || !!orderState?.open;
     flipBar.hidden = !flipState.open;
     // OVER THE OTHER VERBS while it is up, as ROTATE's row is.
     if (flipState.open) {
@@ -394,7 +469,7 @@
     if (!rescaleState || !rescaleButton || !rescaleBar) return;
     const able = !!selectedPhoto() && !activeCut() && !modalUp();
     if (!able) { rescaleState.open = false; rescaleState.drag = null; }
-    rescaleButton.hidden = !able || rescaleState.open || !!rotateState?.open || !!flipState?.open;
+    rescaleButton.hidden = !able || rescaleState.open || !!rotateState?.open || !!flipState?.open || !!orderState?.open;
     rescaleBar.hidden = !rescaleState.open;
     if (rescaleState.open) {
       [deleteButton, undoButton, copyButton, pasteButton, rotateButton, flipButton, moveButton].forEach(b => { if (b) b.hidden = true; });
@@ -506,7 +581,7 @@
     if (!rotateState || !rotateButton || !rotateBar) return;
     const able = (selection.length || photoInHand()) && !activeCut() && !modalUp();
     if (!able) rotateState.open = false;
-    rotateButton.hidden = !able || rotateState.open || !!flipState?.open;
+    rotateButton.hidden = !able || rotateState.open || !!flipState?.open || !!orderState?.open;
     rotateBar.hidden = !rotateState.open;
     // OVER THE OTHER VERBS while it is up.
     if (rotateState.open) {
@@ -565,7 +640,7 @@
     const one = breakHeld();
     const able = !activeCut() && !modalUp() && (!!one || selectedGroups().length > 0);
     if (!able || (breakState.held && one?.item !== breakState.held.item)) breakState.held = null;
-    breakButton.hidden = !able || !!rotateState?.open || !!flipState?.open;
+    breakButton.hidden = !able || !!rotateState?.open || !!flipState?.open || !!orderState?.open;
     breakButton.setAttribute('aria-pressed', String(!!breakState.held));
     // AN ITEM IS BROKEN, AN ASSEMBLY IS BUST (Movie, 18 Oct: "ASSEMBLY BREAK
     // is different from ROOF EDGE BREAK" -- "lets go ASSEMBLY GROUP /
@@ -634,7 +709,7 @@
     if (!wallOffButton) return;
     const wall = wallPicked && selection.some(e => e.item === wallPicked) && walls().includes(wallPicked) ? wallPicked : null;
     const able = !activeCut() && !modalUp() && !!wall && !!wallOffHost(wall);
-    wallOffButton.hidden = !able || !!rotateState?.open || !!flipState?.open;
+    wallOffButton.hidden = !able || !!rotateState?.open || !!flipState?.open || !!orderState?.open;
   }
   const wallOff = () => {
     const wall = wallPicked;
@@ -928,7 +1003,7 @@
       moveState.on = false; moveState.roof = null; moveState.node = null;
     }
     if (moveState.node && roof !== moveState.node.roof) moveState.node = null;
-    moveButton.hidden = !able || !!rotateState?.open || !!flipState?.open || !!rescaleState?.open;
+    moveButton.hidden = !able || !!rotateState?.open || !!flipState?.open || !!rescaleState?.open || !!orderState?.open;
     moveButton.setAttribute('aria-pressed', String(!!moveState.on));
     document.querySelectorAll('[data-tool-key="move"]').forEach(btn =>
       btn.setAttribute('aria-pressed', String(!!moveState.on)));
@@ -1556,7 +1631,7 @@
     return activeTool === 'stretch' && !!stretchState?.base && !!cursorWorld;
   }
   const stretchByTyped = () => {
-    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    const parsed = readLength(lengthBox.value);
     if (!parsed.ok) { sayOnStrip(parsed.error); return; }
     const base = stretchState.base;
     const to = stretchDestination(cursorWorld);

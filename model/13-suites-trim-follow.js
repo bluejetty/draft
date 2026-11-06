@@ -809,7 +809,13 @@
   const angleBox = document.getElementById('frozen-angle');
 
   const F = window.DraftFormatters;
-  const feetLabel = ft => F.formatArchitecturalInches(ft * 12);
+  // IN THE DRAWING'S UNIT (Movie, 6 Nov: "i switched to METRIC but the length
+  // box is still IMPERIAL"): every reading the box, the strip and the cursor
+  // tag print, and every length typed into the box, goes through this pair,
+  // so METRIC turns all of them at once. formatters.js says what a bare
+  // number means on each side of the switch.
+  const feetLabel = ft => F.formatLength(ft, drawing?.units);
+  const readLength = value => F.parseLength(value, drawing?.units);
   // Compass bearing off the +X axis, the reading a protractor gives: 0-180
   // either way rather than 0-360, because a wall drawn left has the same
   // angle as the same wall drawn right and a drafter reading 183° would

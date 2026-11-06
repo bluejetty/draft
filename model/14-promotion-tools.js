@@ -214,7 +214,7 @@
     paint();
   };
   const typedOutlineFeet = () => {
-    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    const parsed = readLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return undefined; }
     const feet = parsed.inches / 12;
     return feet > 0 ? feet : undefined;
@@ -345,7 +345,7 @@
   // the typed distance along the line the drag took. The drag's own undo
   // entry restores those starting points, so one UNDO still takes it back.
   const moveByTyped = () => {
-    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    const parsed = readLength(lengthBox.value);
     if (!parsed.ok) { sayOnStrip(parsed.error); return; }
     const feet = parsed.inches / 12;
     const m = moveTyped;
@@ -588,13 +588,13 @@
     if (stretchTypable()) { stretchByTyped(); return; }
     if (moveTypedReady()) { moveByTyped(); return; }
     if (dimTypedReady()) {
-      const parsed = F.parseArchitecturalLength(lengthBox.value);
+      const parsed = readLength(lengthBox.value);
       if (!parsed.ok) { sayOnStrip(parsed.error); return; }
       driveDimension(parsed.inches / 12);
       return;
     }
     if (shedRun()) {
-      const parsed = F.parseArchitecturalLength(lengthBox.value);
+      const parsed = readLength(lengthBox.value);
       if (!parsed.ok) { sayOnStrip(parsed.error); return; }
       if (!(parsed.inches > 0)) { sayOnStrip('Type a length over zero.'); return; }
       shedByTyped(parsed.inches / 12);
@@ -636,7 +636,7 @@
       return;
     }
     if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
-    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    const parsed = readLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
     if (!(feet > 0) || !drawStart || !cursorWorld) return;

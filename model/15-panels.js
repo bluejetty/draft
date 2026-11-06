@@ -2216,8 +2216,14 @@
     const panel = kinds.length === 1 ? (SELECTION_PANELS[kinds[0]]?.(picked)
       || (kinds[0] === 'dimension' ? dimensionInfo(picked) : null)) : null;
     objWin.dataset.objpropKind = panel ? kinds[0] : 'none';
+    // A KIND WITH NO PROPERTIES IS STILL NAMED (Movie, 6 Nov: "when it
+    // cycles through selections you should be able to see the OBJ / PROP
+    // area change"): a click-again that lands on an outline shows OUTLINE
+    // here, not the same words as an empty hand.
     title.textContent = panel ? `${panel.title}${picked.length > 1 ? ` \u00d7${picked.length}` : ''}`
-      : kinds.length > 1 ? `${selection.length} THINGS OF ${kinds.length} KINDS` : 'PICK ANYTHING TO SEE ITS PROPERTIES';
+      : kinds.length > 1 ? `${selection.length} THINGS OF ${kinds.length} KINDS`
+        : kinds.length === 1 ? `${hitSays(selection[0])}${picked.length > 1 ? ` \u00d7${picked.length}` : ''} \u2014 NOTHING TO SET`
+          : 'PICK ANYTHING TO SEE ITS PROPERTIES';
     props.replaceChildren(...(panel ? [panel.node] : []));
   };
   // A DIMENSION'S FIGURES: what it measures, in the drawing's units.

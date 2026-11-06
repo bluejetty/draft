@@ -807,6 +807,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // RESCALE (Movie, 23 Oct): a picked photo's handles size what is
             // already on the sheet; it makes nothing, as FLIP makes nothing.
             'model-rescale',
+            // ORDER (Movie, 6 Nov: "bring a item, or group 'to the top'"):
+            // what is already drawn is painted over or under the rest of its
+            // kind; it makes nothing, as FLIP makes nothing.
+            'model-order',
             // BREAK (Movie, 18 Oct) cuts a roof in two along a flush gable, or
             // breaks an assembly into its pieces. It divides what is drawn and
             // starts nothing new, so no absence row moves.
@@ -853,6 +857,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // RESCALE's own row (Movie, 23 Oct): its hint is words, its one
             // press DONE.
             'DONE',
+            // ORDER's own row (Movie, 6 Nov): to the front, to the back, DONE.
+            'TO FRONT', 'TO BACK', 'DONE',
             // THE STAIR'S POPUP (Movie, 25 Oct: "give them a popup choice"):
             // the shape, the hand it turns, which way from this floor, and
             // DONE. The choices set what the STAIR tool's two presses make;
@@ -997,6 +1003,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             //
             // So the list grows by four and the table does not change.
             'DRAW AUTOSITE', 'NOT NOW', 'DRAW IT MYSELF', 'UPLOAD A SITE PLAN',
+            // AND THE SITE PLAN DRAWN IN ANOTHER .DRAFT (jb, 6 Nov: "i will
+            // draw the site plan on a seperate draft file that i will bring
+            // in and place"). It presses the HOLOGRAM chip's BRING IN, whose
+            // row the table already carries, so no absence row moves.
+            'IMPORT SITE PLAN FROM .DRAFT',
             // AND A FIFTH, FOR THE DRAFTER WHO WOULD RATHER NOT READ THE CARD
             // (Movie, 16 Oct: "put a big button on the bottom that says OK and
             // make it red ... if they click that just put in the best fit based

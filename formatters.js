@@ -185,12 +185,53 @@ if (!window.DraftFormatters) {
     return parseArchitecturalLength(value);
   }
 
+  // ── A LENGTH IN THE DRAWING'S OWN UNIT ────────────────────────────────
+  //
+  // Movie, 6 Nov: "i switched to METRIC but the length box is still
+  // IMPERIAL". The LENGTH box, the strip's readout and the tag that rides
+  // the cursor all printed through formatArchitecturalInches whatever the
+  // switch said, so a metric drawing read 160'-1 7/8" at the one place the
+  // drafter looks while drawing. These two are the pair the box uses:
+  // the same `units` test as dimensionEnv's label, with imperial as the
+  // fall-through for the same reason (an absent or odd `units` still has to
+  // print something).
+  function formatLength(feet, units) {
+    return units === 'metric' ? formatMetres(feet) : formatArchitecturalInches(feet * 12);
+  }
+
+  // WHAT A TYPED LENGTH MEANS ON A METRIC DRAWING: a bare number is METRES,
+  // because metres is what the box shows -- the door and window boxes show
+  // millimetres and so read a bare number as millimetres (11-floor-openings-
+  // fixtures.js), and the rule both keep is "a bare number is the unit the
+  // box is showing". `mm`, `cm` and `m` say otherwise in so many words.
+  // Anything else -- 12-6, 12'6", 42" -- still goes to the imperial reader,
+  // so a drafter who thinks in feet is never refused on a metric sheet.
+  //
+  // NOT snapped to the sixteenth: 3.600 m is 141.732", and the imperial
+  // snap would hand back 141.75" -- 3.6005 m, half a millimetre the drafter
+  // did not type. The millimetre is the metric grid (formatMetres).
+  const METRES_PER_UNIT = { mm: 0.001, cm: 0.01, m: 1 };
+  function parseLength(value, units) {
+    if (units !== 'metric') return parseArchitecturalLength(value);
+    const raw = String(value ?? '').trim();
+    const match = raw.match(/^([+-]?\d+(?:\.\d+)?)\s*(mm|cm|m)?$/i);
+    if (match) {
+      const metres = Number(match[1]) * METRES_PER_UNIT[(match[2] || 'm').toLowerCase()];
+      return { ok: true, inches: metres / 0.0254 };
+    }
+    const imperial = parseArchitecturalLength(value);
+    if (imperial.ok) return imperial;
+    return { ok: false, error: 'Use 3.6 for metres, 3600 mm for millimetres, or 12-6 for feet and inches.' };
+  }
+
   window.DraftFormatters = {
     formatArchitecturalInches,
     formatInchesOnly,
     formatMetres,
+    formatLength,
     parseArchitecturalLength,
     parseAssemblyInches,
+    parseLength,
   };
 })();
 }

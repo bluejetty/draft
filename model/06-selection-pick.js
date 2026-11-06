@@ -151,17 +151,26 @@
     && onBeamLine(beam, c.point)
     && !keepBeams.some(other => other !== beam && Number(other.levelId) === Number(beam.levelId)
       && (other.view || 'plan') === (beam.view || 'plan') && onBeamLine(other, c.point)));
-  const segAt = (list, worldPt) => {
+  // EVERY SEGMENT UNDER THE GRAB, nearest first (Movie, 6 Nov: "when 2
+  // things are on top of each other when i select it the 2nd time i'd like
+  // to scroll the selection to pick the 2nd item or third etc"). One per
+  // kind was all the chain used to keep, so two lines drawn on top of each
+  // other were "1 OF 1" and the one underneath could not be reached by any
+  // click. Of two at the same distance, the LATER record first: it is
+  // painted last, so it is the one on top of the picture -- and TO FRONT
+  // moves a record to the end of its list for exactly this reason.
+  const segsAt = (list, worldPt) => {
     const G = window.DraftGeometry2D;
     const thresh = SELECT_GRAB_PX / view.scale;
-    let best = null, bestD = thresh;
-    list.forEach(item => {
+    const near = [];
+    list.forEach((item, i) => {
       if (!item.start || !item.end) return;
       const { d } = G.pointToSegment(worldPt, item);
-      if (d < bestD) { bestD = d; best = item; }
+      if (d < thresh) near.push({ item, d, i });
     });
-    return best;
+    return near.sort((a, b) => (Math.abs(a.d - b.d) < 1e-6 ? b.i - a.i : a.d - b.d)).map(n => n.item);
   };
+  const segAt = (list, worldPt) => segsAt(list, worldPt)[0] || null;
 
   const lineAt = worldPt => segAt(lines(), worldPt);
 
@@ -179,8 +188,9 @@
     return inside;
   };
 
-  const floorAt = worldPt => floors()
-    .find(floor => pointInRing(floor.points || [], worldPt)) || null;
+  // EVERY FLOOR THE POINT IS IN, the one painted last (on top) first.
+  const floorsAt = worldPt => floors().filter(floor => pointInRing(floor.points || [], worldPt)).reverse();
+  const floorAt = worldPt => floorsAt(worldPt)[0] || null;
   // A PHOTO'S FOOTPRINT, in feet: centred at x, z, widthFt by heightFt (a
   // turned one has its sides swapped already, by turnPhoto). Not a DXF,
   // whose lines are the drawing's own kind of thing.
@@ -198,18 +208,20 @@
   };
 
   // An outline is selected WHOLE, from any of its edges or any of its corners.
-  const outlineAt = worldPt => {
+  // AND EVERY OUTLINE WITH AN EDGE UNDER THE GRAB, last painted first.
+  const outlinesAt = worldPt => {
     const G = window.DraftGeometry2D;
     const thresh = SELECT_GRAB_PX / view.scale;
-    return outlines().find(outline => {
+    return outlines().filter(outline => {
       const pts = outline.points || [];
       return pts.some((a, i) => {
         const b = pts[(i + 1) % pts.length];
         if (!a || !b || pts.length < 2) return false;
         return G.pointToSegment(worldPt, { start: a, end: b }).d < thresh;
       });
-    }) || null;
+    }).reverse();
   };
+  const outlineAt = worldPt => outlinesAt(worldPt)[0] || null;
   // ── THE HOUSE FOOTPRINT, PICKED ON SITE (Movie, 6 Nov) ───────────────────
   //
   // "i decided not to AUTOBUILD a house, i just want to draw a site plan,
@@ -1078,8 +1090,9 @@
   const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID
     ? (drawing?.siteFootprint === false ? []
       : (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID)) : roofs());
-  const roofAt = worldPt => pickRoofs().slice().reverse()
-    .find(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)) || null;
+  const roofsAt = worldPt => pickRoofs().slice().reverse()
+    .filter(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt));
+  const roofAt = worldPt => roofsAt(worldPt)[0] || null;
 
   // Returns { type, item } or null, in the old page's precedence.
   // ── DIMENSIONS: WHERE THEY ARE DRAWN, AND THEIR ROWS ───────────────────
@@ -1173,6 +1186,9 @@
   const hitsAt = (worldPt, first = false) => {
     const out = [];
     const take = hit => { if (hit && !out.some(h => h.item === hit.item)) out.push(hit); return first && out.length > 0; };
+    // ALL OF A KIND AT THE SPOT, top first: the stop-at-first rule still
+    // holds, for a hover that only wants the top one.
+    const takeAll = (type, items) => items.some(item => take({ type, item }));
     // A ROOM TAG IS ON TOP OF WHAT IT NAMES: it is painted last, over the
     // floor and often over a fixture, so the pick agrees with the picture.
     // Movie, 1 Oct: "i wasn't able to select the ROOM TAG".
@@ -1210,12 +1226,10 @@
       if ((dimension) && take({ type: 'dimension', item: dimension })) return out;
     }
     if (filterAllows('wall')) {
-      const wall = segAt(walls(), worldPt);
-      if ((wall) && take({ type: 'wall', item: wall })) return out;
+      if (takeAll('wall', segsAt(walls(), worldPt))) return out;
     }
     if (filterAllows('line')) {
-      const line = lineAt(worldPt);
-      if ((line) && take({ type: 'line', item: line })) return out;
+      if (takeAll('line', segsAt(lines(), worldPt))) return out;
     }
     // A COLUMN, THEN THE BEAM IT HOLDS UP (Movie, 19 Oct: "I'd like to be
     // able to move the BEAM manually so that all the columns follow. i will
@@ -1228,8 +1242,7 @@
       if ((column) && take({ type: 'column', item: column })) return out;
     }
     if (filterAllows('beam')) {
-      const beam = segAt(beams(), worldPt);
-      if ((beam) && take({ type: 'beam', item: beam })) return out;
+      if (takeAll('beam', segsAt(beams(), worldPt))) return out;
     }
     // A STAIR BEATS THE FLOOR IT STANDS IN, which would otherwise take every
     // click inside the stairwell.
@@ -1240,24 +1253,23 @@
     // A SHAPE BEATS THE FLOOR UNDER IT: a suite outlined inside a floor would
     // otherwise be unreachable, every click inside it taking the floor.
     if (filterAllows('shape')) {
-      const shape = shapes().slice().reverse()
-        .find(sh => (sh.points || []).length >= 3 && pointInRing(sh.points, worldPt));
-      if ((shape) && take({ type: 'shape', item: shape })) return out;
+      const inside = shapes().slice().reverse()
+        .filter(sh => (sh.points || []).length >= 3 && pointInRing(sh.points, worldPt));
+      if (takeAll('shape', inside)) return out;
     }
     if (filterAllows('outline')) {
       // ON SITE, THE FOOTPRINT TOO (siteBodyAt): the ground storey's outline,
       // picked from inside its shading, so the grey box can be deleted from
-      // the level it is seen on.
-      const outline = outlineAt(worldPt) || siteBodyAt(worldPt);
-      if ((outline) && take({ type: 'outline', item: outline })) return out;
+      // the level it is seen on. After this level's own outlines, which are
+      // painted over it.
+      const body = siteBodyAt(worldPt);
+      if (takeAll('outline', [...outlinesAt(worldPt), ...(body ? [body] : [])])) return out;
     }
     if (filterAllows('floor')) {
-      const floor = floorAt(worldPt);
-      if ((floor) && take({ type: 'floor', item: floor })) return out;
+      if (takeAll('floor', floorsAt(worldPt))) return out;
     }
     if (filterAllows('roof')) {
-      const roof = roofAt(worldPt);
-      if ((roof) && take({ type: 'roof', item: roof })) return out;
+      if (takeAll('roof', roofsAt(worldPt))) return out;
     }
     // A HOLOGRAM LAST: it is under the drawing, so anything of this drawing's
     // own at the press is what the press means.
@@ -1283,21 +1295,26 @@
   // one of the things there in hand, takes the next one down that is not
   // already in hand -- an assembly's other walls are skipped -- and after
   // the last comes the first again. Anywhere else, the top one, as always.
-  const PICK_AGAIN_PX = 4;
+  //
+  // TEN PIXELS IS "THE SAME SPOT". It was four, and a hand that clicks twice
+  // on one line lands four pixels apart as often as not -- so the second
+  // click read as a fresh one and took the top thing again, which is the
+  // 6 Nov report ("right now it only picks the LINE"). Still well inside the
+  // grab, so a click meant for the next line along is not read as a repeat.
+  const PICK_AGAIN_PX = 10;
   let lastPick = null;
   const pickUnder = (sx, sy) => {
     const hits = hitsAt(toWorld(sx, sy));
     let at = 0;
     const again = lastPick && Math.hypot(sx - lastPick.sx, sy - lastPick.sy) <= PICK_AGAIN_PX;
     const held = h => selection.some(entry => entry.item === h.item);
-    const now = again ? hits.findIndex(held) : -1;
-    if (now >= 0 && hits.length > 1) {
-      for (let i = 1; i <= hits.length; i += 1) {
-        const k = (now + i) % hits.length;
-        if (!held(hits[k])) { at = k; break; }
-      }
-    }
-    lastPick = { sx, sy };
+    // WHERE THE CYCLE IS: the one in hand, or -- when the hand holds an
+    // assembly that owns several of the hits -- the one the last click took,
+    // so a group of three stacked lines steps through its own members too.
+    const lastAt = again && lastPick.item ? hits.findIndex(h => h.item === lastPick.item) : -1;
+    const now = lastAt >= 0 ? lastAt : again ? hits.findIndex(held) : -1;
+    if (now >= 0 && hits.length > 1) at = (now + 1) % hits.length;
+    lastPick = { sx, sy, item: hits[at]?.item || null };
     return { hit: hits[at] || null, at, of: hits.length, again: !!again };
   };
   // WHAT IS IN HAND, SAID: which of how many, so the drafter sees there is

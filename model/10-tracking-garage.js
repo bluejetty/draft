@@ -2635,6 +2635,25 @@
       if (picker) picker.click();
       else sayOnStrip('Use the PHOTO chip to bring in a site plan.');
     });
+    // IMPORT SITE PLAN FROM .DRAFT (jb, 6 Nov): "i think in alot of
+    // situations i will draw the site plan on a seperate draft file that i
+    // will bring in and place". The HOLOGRAM chip's own BRING IN, pressed
+    // for him: its picker reads a .draft, the file arrives in hand to be
+    // placed, and its lot line shows on SITE while this file has none of its
+    // own. The registration box then lists it, with USE to copy its lot in.
+    //
+    // THROUGH THE CHIP'S BUTTON, NOT THE FILE INPUT, because that button is
+    // what clears a REFRESH left armed by a cancelled file dialog -- clicking
+    // the input directly would hand this file to the hologram waiting on a
+    // refresh instead of bringing in a new one.
+    lotCard.querySelector('[data-lot-pick-import]').addEventListener('click', () => {
+      lotTouched = true;
+      lotAsked = true;
+      paintLotPick();
+      const bringIn = document.querySelector('[data-hologram-ask-upload]');
+      if (bringIn) bringIn.click();
+      else sayOnStrip('Use the HOLOGRAM chip to bring in a .draft site plan.');
+    });
     // A TYPED PAIR REPAINTS THE VERB, which is the only thing that reads it:
     // the button has to go live the moment both fields are sane and say what
     // it will draw.
