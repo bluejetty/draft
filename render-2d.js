@@ -836,6 +836,12 @@ if (!window.DraftRender2D) {
   // that changed with the lights would say one thing on screen and another
   // on paper. WHITE is opaque for the same reason -- it is the fill that
   // blanks what is under it, which is what a drafter reaches for it for.
+  // Exported as a FUNCTION, like every other name on the module's surface:
+  // the harness measures each export by emptying its body, and a table has
+  // no body to empty.
+  function shapeHatches() {
+    return SHAPE_HATCHES;
+  }
   const SHAPE_HATCHES = Object.freeze([
     Object.freeze({ id: 'black',       label: 'BLACK',       fill: '#000000' }),
     Object.freeze({ id: 'grey',        label: 'GREY',        fill: '#808080' }),
@@ -857,7 +863,9 @@ if (!window.DraftRender2D) {
     Object.freeze({ id: 'fieldstone',  label: 'FIELDSTONE',  fill: null, finish: 'fieldstone' }),
     Object.freeze({ id: 'brick',       label: 'BRICK',       fill: null, finish: 'brick' }),
   ]);
-  const shapeHatchOf = id => SHAPE_HATCHES.find(h => h.id === String(id ?? '')) || null;
+  function shapeHatchOf(id) {
+    return SHAPE_HATCHES.find(h => h.id === String(id ?? '')) || null;
+  }
 
   // AN EXTERIOR FINISH LAID FLAT IN THE PLAN: the shape's bounding box is
   // the "wall face", clipped to the shape, at the plan's own scale, in black
@@ -924,13 +932,13 @@ if (!window.DraftRender2D) {
   // has always worn, and DASHED means that same dash, so picking the chip
   // that is already lit changes nothing on the sheet.
   const SHAPE_DASH = Object.freeze([7, 4]);
-  const shapeDashOf = style => {
+  function shapeDashOf(style) {
     const id = String(style ?? 'dashed');
     if (id === 'dashed') return SHAPE_DASH;
     const LS = window.DraftLineStyles;
     const found = LS && LS.styleOf(id);
     return found ? found.dash : SHAPE_DASH;
-  };
+  }
 
   function drawShape2D(ctx, toS, shape, options = {}, env) {
     const points = shape?.points || [];
@@ -3880,7 +3888,7 @@ if (!window.DraftRender2D) {
     drawRoof2D,
     drawWallTops2D,
     drawShape2D,
-    SHAPE_HATCHES,
+    shapeHatches,
     shapeHatchOf,
     shapeDashOf,
     drawFixture2D,

@@ -1218,12 +1218,12 @@
       box.append(floorRow);
     }
     // HATCH: what fills the box. NONE is the wash every shape had before.
-    if (R?.SHAPE_HATCHES) {
+    if (R?.shapeHatches) {
       box.append(title('HATCH'));
       const hatchRow = document.createElement('div');
       hatchRow.className = 'chip-row';
       const hatchNow = same(s => (R.shapeHatchOf(s.hatch) ? s.hatch : null));
-      [{ id: null, label: 'NONE' }, ...R.SHAPE_HATCHES].forEach(h => {
+      [{ id: null, label: 'NONE' }, ...R.shapeHatches()].forEach(h => {
         hatchRow.append(chip({ shapeHatch: h.id || 'none' }, h.label, hatchNow === h.id, () => {
           writeShapeProps(shapes, { hatch: h.id });
         }));
