@@ -886,6 +886,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // AUTO DIMS / HAND DIMS beside the north arrow (Movie, 18 Oct):
             // each kind of string shown or hidden on the sheet.
             'AUTO DIMS', 'HAND DIMS',
+            // AND HOUSE FOOTPRINT (Movie, 6 Nov: "the AUTOHOUSE should be
+            // optional"): the building shown or hidden on the SITE plan. It
+            // writes a switch in the file and makes nothing, so no absence
+            // row moves.
+            'HOUSE FOOTPRINT',
             // AND ROWS (Movie, 26 Oct): the auto rows a side, ticked on or off
             // -- strings that measure what is drawn, so no absence row moves.
             'ROWS',
