@@ -304,6 +304,15 @@ test.describe('MODEL.html tier 1', () => {
       // construction elevation is. So with the pane gone the modules buy
       // nothing, and three pattern tables parsed on every load of the
       // biggest page in the repo is a cost with no reading behind it.
+      //
+      // ONE OF THEM IS BACK, WITH A READING BEHIND IT (jb, 6 Nov: "we have
+      // the exterior elevations hatching those can go into the 'area'
+      // hatches too"). A SHAPE can wear brick, stone, siding or shake as its
+      // hatch now, and render-2d.js draws them through DraftFinishPatterns
+      // -- so this page reads the finish table on every paint that has such
+      // a shape, which is exactly the reading the note above says was
+      // missing. The roof patterns stay off: nothing on this page asks.
+      './finish-patterns.js',
       './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
