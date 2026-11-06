@@ -1556,7 +1556,7 @@
     return activeTool === 'stretch' && !!stretchState?.base && !!cursorWorld;
   }
   const stretchByTyped = () => {
-    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    const parsed = readLength(lengthBox.value);
     if (!parsed.ok) { sayOnStrip(parsed.error); return; }
     const base = stretchState.base;
     const to = stretchDestination(cursorWorld);
