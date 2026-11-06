@@ -222,6 +222,22 @@
     }).reverse();
   };
   const outlineAt = worldPt => outlinesAt(worldPt)[0] || null;
+  // ── THE HOUSE FOOTPRINT, PICKED ON SITE (Movie, 6 Nov) ───────────────────
+  //
+  // "i decided not to AUTOBUILD a house, i just want to draw a site plan,
+  // but this GREY BOX appears and i can't seem to delete it". The grey box
+  // is the building's footprint, which the SITE level paints from the
+  // ground storey's outline (layout-plan.js sitePlanParts) -- an outline
+  // that lives on ANOTHER level, so outlines() never offered it here and no
+  // press on this level could reach it. These are the bodies the site plan
+  // is painting right now, offered where they are painted: anywhere INSIDE
+  // the shading, since the footprint is a filled shape here and not a line.
+  // A footprint switched off (HOUSE FOOTPRINT) is not painted, so
+  // sitePlanParts returns none and nothing is picked under an empty lot.
+  const siteBodies = () => (activeLevelId() === SITE_LEVEL_ID && !boneyardActive && window.DraftLayoutPlan
+    ? window.DraftLayoutPlan.sitePlanParts(drawing).bodies : []);
+  const siteBodyAt = worldPt => siteBodies().slice().reverse()
+    .find(body => (body.points || []).length >= 3 && pointInRing(body.points, worldPt)) || null;
 
   // ── AN OPENING ANSWERS A PRESS ───────────────────────────────────────────
   //
@@ -317,7 +333,7 @@
     // on it can mean. ALL LEVELS reaches them through their walls' levels
     // only where a record is filed that way, so it keeps the three it had.
     if (all) return out;
-    if (filterAllows('outline')) outlines().forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
+    if (filterAllows('outline')) [...outlines(), ...siteBodies()].forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
     if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
     if (filterAllows('roof')) pickRoofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
     if (filterAllows('beam')) beams().forEach(item => out.push({ type: 'beam', item, parts: seg(item), open: true }));
@@ -1068,8 +1084,12 @@
   // clicked on"). The site plan paints the ROOF level's roofs over the
   // footprint, so a roof painted there is a roof that can be picked there --
   // the rule above, kept, for the one level that draws another's roofs.
+  // AND NOT WHILE HOUSE FOOTPRINT IS OFF (6 Nov): a roof the site is not
+  // painting is not there to be picked, or DELETE could reach a building
+  // the drafter has just put out of sight.
   const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID
-    ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());
+    ? (drawing?.siteFootprint === false ? []
+      : (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID)) : roofs());
   const roofsAt = worldPt => pickRoofs().slice().reverse()
     .filter(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt));
   const roofAt = worldPt => roofsAt(worldPt)[0] || null;
@@ -1238,7 +1258,12 @@
       if (takeAll('shape', inside)) return out;
     }
     if (filterAllows('outline')) {
-      if (takeAll('outline', outlinesAt(worldPt))) return out;
+      // ON SITE, THE FOOTPRINT TOO (siteBodyAt): the ground storey's outline,
+      // picked from inside its shading, so the grey box can be deleted from
+      // the level it is seen on. After this level's own outlines, which are
+      // painted over it.
+      const body = siteBodyAt(worldPt);
+      if (takeAll('outline', [...outlinesAt(worldPt), ...(body ? [body] : [])])) return out;
     }
     if (filterAllows('floor')) {
       if (takeAll('floor', floorsAt(worldPt))) return out;

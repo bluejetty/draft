@@ -978,6 +978,37 @@
       markDirty();
       return true;
     }
+    // THE FOOTPRINT, DELETED FROM SITE, TAKES ITS ROOF WITH IT (Movie, 6
+    // Nov: "this GREY BOX appears and i can't seem to delete it"). The site
+    // plan paints the building as its roof plan over the ground storey's
+    // outline, so a press inside the grey box picks that outline
+    // (siteBodyAt) -- and taking the outline alone would leave the roof
+    // standing on nothing, still shaded, still the grey box he pressed
+    // DELETE on. Every ROOF-level roof over that body goes in the same press
+    // and comes back with the same UNDO. The walls on the storeys stay:
+    // they are not painted here, and a house he DID draw is his to take
+    // down floor by floor.
+    if (entry.type === 'outline' && activeLevelId() === SITE_LEVEL_ID
+      && Number(entry.item.levelId) !== SITE_LEVEL_ID) {
+      const removed = [];
+      const take = (list, item) => {
+        const index = list.indexOf(item);
+        if (index < 0) return;
+        list.splice(index, 1);
+        removed.push({ list, index, item });
+      };
+      const over = (drawing.roofs || []).filter(roof => Number(roof.levelId) === ROOF_LEVEL_ID
+        && (roof.points || []).length >= 3 && ringsOverlap(roof.points, entry.item.points || []));
+      take(drawing.outlines || [], entry.item);
+      if (!removed.length) return false;
+      over.forEach(roof => take(drawing.roofs || [], roof));
+      undoStack.push({ kind: 'remove-items', removed });
+      markDirty();
+      const storey = (drawing.levels || []).find(l => Number(l.id) === Number(entry.item.levelId));
+      sayOnStrip(`The footprint is off the site${over.length ? ' and its roof with it' : ''}`
+        + `${storey ? ` \u2014 any walls on ${storey.name} still stand` : ''}. UNDO puts it back.`);
+      return true;
+    }
     const key = SELECTION_LISTS[entry.type];
     const list = key ? drawing[key] : null;
     if (!Array.isArray(list)) return false;
@@ -987,6 +1018,18 @@
     undoStack.push({ kind: 'remove-item', list, index, item: entry.item });
     markDirty();
     return true;
+  };
+  // TWO RINGS SHARE GROUND when either holds a point of the other, or
+  // their boxes cross: a roof over a body is one or the other, and a roof
+  // beside it (a detached garage's) is neither.
+  const ringsOverlap = (a, b) => {
+    if (a.some(pt => pointInRing(b, pt)) || b.some(pt => pointInRing(a, pt))) return true;
+    const box = pts => ({
+      minX: Math.min(...pts.map(p => p.x)), maxX: Math.max(...pts.map(p => p.x)),
+      minZ: Math.min(...pts.map(p => p.z)), maxZ: Math.max(...pts.map(p => p.z)),
+    });
+    const ba = box(a), bb = box(b);
+    return ba.minX < bb.maxX && bb.minX < ba.maxX && ba.minZ < bb.maxZ && bb.minZ < ba.maxZ;
   };
 
   // ── COPY AND PASTE, ACROSS WORKSPACES ──────────────────────────────────────
