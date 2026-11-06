@@ -1390,16 +1390,29 @@
     });
     return out;
   };
-  // ON THE SITE ONLY. There the house is shown by its roof, whose corners
-  // live on the ROOF level, so they are the house's nodes, and the gold
-  // target is one with them. On a floor plan the target is worked out from
-  // the walls -- it is the house's own outside corner, a corner that catches
+  // ON THE SITE. There the house is shown by its roof, whose corners live
+  // on the ROOF level, so they are the house's nodes, and the gold target
+  // is one with them. On a floor plan the target is worked out from the
+  // walls -- it is the house's own outside corner, a corner that catches
   // already -- and a wall dragged there would be caught by its own corner.
+  //
+  // THE TARGET THAT IS PAINTED IS THE ONE THAT CATCHES (Movie, 6 Nov: "i
+  // thought the gold node target had SNAP with orange pulse earlier but not
+  // snapping now?" -- a lot line's end held on the target, nothing lit). The
+  // painter draws gridDatum(): the house's corner when there are walls to
+  // work it out from, else the file's own drawingOrigin. The node here was
+  // read from siteDatumNow() alone, so a SITE drawn before the house -- or
+  // with no house at all -- showed a target that caught nothing. And a
+  // target that is no wall's corner has no corner catching there already,
+  // so on a floor plan it is a node of its own too; the house's corner on a
+  // floor plan stays what it was, no node (tests/site-target-snap.spec.js).
   const siteSnapNodes = () => {
-    if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];
+    if (!drawing) return [];
     const out = [];
-    const target = siteDatumNow();
+    const onSite = Number(activeLevelId()) === SITE_SNAP_LEVEL;
+    const target = onSite || !siteDatumNow() ? gridDatum() : null;
     if (target && Number.isFinite(target.x) && Number.isFinite(target.z)) out.push({ x: target.x, y: 0, z: target.z });
+    if (!onSite) return out;
     (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {
       if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);
     }));
