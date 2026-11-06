@@ -4,9 +4,12 @@
 //
 // Movie, 26 Oct: "the roof plan doesn't seem to have NODE SNAPS working - i
 // really would like the REGISTRATION TARGET to have a node snap so i can
-// position the property site plan properly". Four seams: the target a node,
-// the roof's corners on the SITE, its edges on the SITE, and those corners
-// kept off the floor plans, the target with them.
+// position the property site plan properly". The seams: the target a node,
+// the roof's corners on the SITE, its edges on the SITE, those corners kept
+// off the floor plans and the target with them -- and, since 6 Nov ("i
+// thought the gold node target had SNAP with orange pulse earlier but not
+// snapping now?"), the target PAINTED is the one that catches, so a SITE
+// with no house behind the target still catches on it.
 //
 // Run: node proto/site-target-snap-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -36,6 +39,12 @@ const MUTANTS = [
     find: "    if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];\n",
     with: "    if (!drawing) return [];\n",
     test: 'no node' },
+  // Movie, 6 Nov: the target painted on a SITE with no house caught nothing.
+  { file: 'model/07-walls-magnet.js',
+    name: 'the node is the house\'s corner, not the target painted',
+    find: "    const target = gridDatum();\n",
+    with: "    const target = siteDatumNow();\n",
+    test: 'with no house' },
 ];
 
 const run = name => {

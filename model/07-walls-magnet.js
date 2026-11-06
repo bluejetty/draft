@@ -1390,15 +1390,27 @@
     });
     return out;
   };
-  // ON THE SITE ONLY. There the house is shown by its roof, whose corners
-  // live on the ROOF level, so they are the house's nodes, and the gold
-  // target is one with them. On a floor plan the target is worked out from
-  // the walls -- it is the house's own outside corner, a corner that catches
+  // ON THE SITE. There the house is shown by its roof, whose corners live
+  // on the ROOF level, so they are the house's nodes, and the gold target
+  // is one with them. On a floor plan the target is worked out from the
+  // walls -- it is the house's own outside corner, a corner that catches
   // already -- and a wall dragged there would be caught by its own corner.
+  //
+  // THE TARGET THAT IS PAINTED IS THE ONE THAT CATCHES (Movie, 6 Nov: "i
+  // thought the gold node target had SNAP with orange pulse earlier but not
+  // snapping now?" -- a lot line's end held on the target, nothing lit). The
+  // painter draws gridDatum(): the house's corner when there are walls to
+  // work it out from, else the file's own drawingOrigin. The node here was
+  // read from siteDatumNow() alone, so a SITE drawn before the house -- or
+  // with no house at all -- showed a target that caught nothing. On a floor
+  // plan the target stays no node of its own: with a house its corner
+  // catches already (above), and without one the outline is seeded on the
+  // bullseye and a first edge shorter than a node's reach would be pulled
+  // straight back home (tests/outline-45.spec.js, model-traced-build).
   const siteSnapNodes = () => {
     if (!drawing || Number(activeLevelId()) !== SITE_SNAP_LEVEL) return [];
     const out = [];
-    const target = siteDatumNow();
+    const target = gridDatum();
     if (target && Number.isFinite(target.x) && Number.isFinite(target.z)) out.push({ x: target.x, y: 0, z: target.z });
     (drawing.roofs || []).forEach(r => (r?.points || []).forEach(p => {
       if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) out.push(p);
