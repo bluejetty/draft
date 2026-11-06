@@ -16,7 +16,7 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/stack-cycle.spec.js';
-const CYCLE = 'click again on the same spot steps through every stacked thing, lines of the same kind included, and round again';
+const CYCLE = 'click again on the same spot steps through every stacked thing, lines of the same kind and of the same assembly included, and round again';
 const ORDER = 'ORDER: TO FRONT paints the held thing last of its kind and a click takes it first; TO BACK the reverse; UNDO puts the order back';
 
 const MUTANTS = [
