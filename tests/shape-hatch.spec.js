@@ -132,12 +132,22 @@ test('the SHAPE panel offers fourteen hatches, four linetypes, a label, SHOW ARE
   await expect(page.locator('[data-shape-area]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-shape-flooring="tile"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-shape-label]')).toHaveValue('KITCHEN');
+  // Written out again from the file as read, every field is still there.
+  shape = (await saved(page)).shapes[0];
+  expect([shape.hatch, shape.style, shape.showArea, shape.label]).toEqual(['black', 'dotted', true, 'KITCHEN']);
   // UNDO, one change at a time, back to a shape with none of it.
   await open(page, drawing([S('s1', square(0, 0, 10, 8))]), { keepStorage: true });
   const first = await zoomTo(page, 40);
   await selectShape(page, first.at, 5, 4);
   await page.locator('[data-shape-hatch="grey"]').click();
   await page.locator('[data-shape-style="solid"]').click();
+  // NONE TAKES THE HATCH OFF THE RECORD, not to a value spelled 'none'.
+  await page.locator('[data-shape-hatch="none"]').click();
+  shape = (await saved(page)).shapes[0];
+  expect('hatch' in shape).toBe(false);
+  await undo(page);
+  shape = (await saved(page)).shapes[0];
+  expect([shape.hatch, shape.style]).toEqual(['grey', 'solid']);
   await undo(page);
   shape = (await saved(page)).shapes[0];
   expect([shape.hatch, shape.style]).toEqual(['grey', undefined]);
@@ -152,7 +162,8 @@ test('the ink follows: BLACK is black, WHITE is white, TRANSPARENT is the page, 
     S('s2', square(12, 0, 10, 8), { hatch: 'white' }),
     S('s3', square(24, 0, 10, 8), { hatch: 'transparent' }),
     S('s4', square(0, 10, 10, 8), { hatch: 'dots' }),
-    S('s5', square(12, 10, 10, 8), { hatch: 'brick' }),
+    // A TRIANGLE, so its bounding box has a corner the shape does not cover.
+    S('s5', [{ x: 12, z: 10 }, { x: 22, z: 10 }, { x: 12, z: 18 }], { hatch: 'brick' }),
     S('s6', square(24, 10, 10, 8)),
   ]));
   await zoomTo(page, 20);
@@ -179,10 +190,14 @@ test('the ink follows: BLACK is black, WHITE is white, TRANSPARENT is the page, 
   // Brick at 20 px/ft: 2-5/8" courses are 4.4 px apart, over the gate, so
   // there is ink -- courses, joints and their relief shadow, as the
   // elevation draws them -- and it is not a block.
-  const brick = await inside(page, 17, 14, 30);
-  expect(brick.same).toBeLessThan(0.98);
-  expect(brick.tone).toBeGreaterThan(0.05);
+  const brick = await inside(page, 15, 13, 20);
+  expect(brick.same).toBeLessThan(0.7);
+  expect(brick.tone, 'brick is darker than bare page').toBeGreaterThan(clear.tone + 0.05);
   expect(brick.tone).toBeLessThan(0.6);
+  // AND CLIPPED TO THE SHAPE: the corner of its box the triangle leaves
+  // uncovered is bare page.
+  const beyond = await inside(page, 20, 16, 10);
+  expect(beyond.same, 'no brick outside the triangle').toBeGreaterThan(0.8);
 });
 
 test('the label and the area read on the sheet; SHOW AREA off hides the figure', async ({ page }) => {
@@ -210,18 +225,23 @@ test('two shapes picked together take one hatch in one undo, and the next shape 
   // 15 px/ft keeps the third shape, drawn below the two, inside the glass.
   const { at } = await zoomTo(page, 15);
   await selectShape(page, at, 5, 4);
+  await page.locator('[data-shape-hatch="black"]').click();
   // THE SECOND ONE JOINS IT, as a window-select would put them together.
   await page.evaluate(() => {
     setSelection(shapes().map(item => ({ type: 'shape', item })));
     showSelectionProps();
   });
+  // ONE BLACK AND ONE BARE: no hatch chip is lit, because the chips speak
+  // for every shape in hand and the two disagree.
+  await expect(page.locator('[data-shape-hatch="black"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-shape-hatch="none"]')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#props-slot [data-prop-span]')).toHaveText(/TOTAL AREA 160 SQ FT/);
   await page.locator('[data-shape-hatch="lightgrey"]').click();
   let d = await saved(page);
   expect(d.shapes.map(s => s.hatch)).toEqual(['lightgrey', 'lightgrey']);
   await undo(page);
   d = await saved(page);
-  expect(d.shapes.map(s => 'hatch' in s)).toEqual([false, false]);
+  expect(d.shapes.map(s => s.hatch)).toEqual(['black', undefined]);
   // THE LAST PICK IS THE NEXT SHAPE'S, as a LINE's weight is: picked again
   // on one shape, then a third shape drawn by hand carries it.
   await selectShape(page, at, 5, 4);
