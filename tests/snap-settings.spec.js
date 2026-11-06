@@ -154,6 +154,34 @@ test('MODEL reads the strength: at 150% every reach is half again as long', asyn
   expect(await page.evaluate(() => reachFt('suite'))).toBeCloseTo(0.375, 6);
 });
 
+// ── THE REACH SHRINKS AS YOU ZOOM IN (Movie, 6 Nov) ──────────────────────
+//
+// "can we make the snap change based on what zoom you are in, when i am
+// zoomed in close the snap is too strong" -- drawing a 1 3/16" shape edge
+// zoomed right in, where two inches was 30 px of screen and a hand an inch
+// off a node was caught by it. The one rule keeps its three parts: 2" on
+// the plan, never under 4 px (zoomed out, a hand on the node still has it),
+// and now never over 10 px, so close up only a hand nearly on the node
+// catches. Measured through reachFt, in pixels at each zoom.
+test('zoomed in close a node reaches 10 px, not two inches; zoomed out 4 px; between, the inches', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await page.goto('/MODEL.html');
+  await page.waitForFunction(() => typeof reachFt === 'function');
+  const pxAt = scale => page.evaluate(s => {
+    const was = view.scale;
+    view.scale = s;
+    const px = reachFt('node') * view.scale;
+    view.scale = was;
+    return px;
+  }, scale);
+  // 300 px a foot: two inches would be 50 px. Capped at ten.
+  expect(await pxAt(300)).toBeCloseTo(10, 6);
+  // 12 px a foot: two inches is 2 px, under the floor. Four.
+  expect(await pxAt(12)).toBeCloseTo(4, 6);
+  // 36 px a foot: two inches is 6 px, inside both. The inches.
+  expect(await pxAt(36)).toBeCloseTo(6, 6);
+});
+
 test('the Settings page saves the drafter name and phone', async ({ page }) => {
   await page.goto('/SETTINGS.html');
 

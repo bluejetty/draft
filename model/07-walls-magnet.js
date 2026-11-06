@@ -879,13 +879,18 @@
   // line 1", a suite lining up 3" ("both at 3""). Drawn on the screen that
   // is never under 4 px ("can we have a snap on the floor") -- a hand right
   // on top of a point still catches it, zoomed out or not -- and never over
-  // 30 px, so a corner close up does not grab from across the screen.
+  // 10 px, so a corner close up does not grab from across the screen. The
+  // cap was 30 px; Movie, 6 Nov, drawing a 1 3/16" shape edge zoomed right
+  // in: "can we make the snap change based on what zoom you are in, when i
+  // am zoomed in close the snap is too strong". Close up the inch is a lot
+  // of screen, and the reach is the ten pixels, not the two inches: a hand
+  // nearly on the node catches, a hand an inch off it does not.
   // SNAP STRENGTH (SETTINGS) scales the whole set; CTRL HELD switches every
   // catch off until it is let go ("hold Ctrl ... and the point goes exactly
   // where your mouse is").
   const SNAP_REACH_IN = Object.freeze({ node: 2, corner: 1.5, line: 1, track: 1, suite: 3 });
   const SNAP_FLOOR_PX = 4;
-  const SNAP_CEILING_PX = 30;
+  const SNAP_CEILING_PX = 10;
   // CTRL HELD (13-suites-trim-follow.js): nothing reaches, so every catch
   // below finds nothing and the point goes where the hand is.
   var snapHeldOff = false;
