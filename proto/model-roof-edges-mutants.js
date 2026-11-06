@@ -70,8 +70,8 @@ const MUTANTS = [
     with: "        roofScopeOne ? 'one' : 'assembly', id => { again(); }));\n",
     test: 'a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS ROOF alone' },
   { file: 'model/06-selection-pick.js', name: 'the SITE plan offers no roof to pick',
-    find: "    ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());\n",
-    with: "    ? [] : roofs());\n",
+    find: "      : (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID)) : roofs());\n",
+    with: "      : []) : roofs());\n",
     test: 'on SITE the roof picks, and the edge clicked takes its overhang' },
 ];
 const run = name => {
