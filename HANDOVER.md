@@ -622,6 +622,14 @@ mkrid/mkevt intact); retiring BLUEJETTY after the logo test.
    is `cricketRing` cutting the reflex corner back 2 ft each way, from his own
    ruling *"the valley 2ft from the corner so 2ft of extra watershed rather
    than valley running into the corner"*.
+6. **The REPORT DESK address** (6 Nov). The problem-report card
+   (`error-report.js`: ROUGH-DRAFTER HIT A PROBLEM on an uncaught error, and
+   REPORT A PROBLEM in the foot lane) mails reports through the backup-email
+   worker to `REPORT_TO` at the top of that file. He has no address yet
+   (*"not sure of the email i should use yet i will have to leave it empty
+   for now"*), so it ships EMPTY: with no desk and no copy address the button
+   says SAVE REPORT FILE and the report lands on the drafter's computer. Fill
+   in `REPORT_TO` the day he picks one; nothing else changes.
 
 ---
 

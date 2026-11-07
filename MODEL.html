@@ -43,6 +43,9 @@
      the foot, because the page MOUNTS them mid-body and a module that
      arrives after its own mount call is not a module, it is a crash. -->
 <script src="./shell-bars.js"></script>
+<!-- THE REPORT CARD listens from the head so a crash while the page boots
+     is caught too (error-report.js: ROUGH-DRAFTER HIT A PROBLEM / SEND). -->
+<script src="./error-report.js"></script>
 <!-- LANDSCAPE ON EVERY WORKING SCREEN (board #310): in portrait on a touch
      device this covers the page until the tablet is turned. ENTRY is the one
      screen that does not load it.

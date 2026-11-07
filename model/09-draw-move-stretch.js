@@ -2283,6 +2283,9 @@
     // an unknown id does: there is no such thing as no tool.
     const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;
     activeTool = next;
+    // A LINE ON THE REPORT'S TRAIL (error-report.js): which tool was armed
+    // is the first thing a fault report is read for.
+    if (window.DraftErrorReport) window.DraftErrorReport.note(`tool ${next}`);
     // THE BRUSH'S PRESS GOES DOWN AND ITS LOAD STAYS UP. Movie, 20 Sep: "if
     // they change to WALL command and start drawing a wall those 'selected'
     // drafting brush properties will remain". The brush takes pointerdown

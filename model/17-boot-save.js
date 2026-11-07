@@ -1686,3 +1686,30 @@
     // ask whether a lot is already drawn on.
     paintLotPick();
   });
+
+  // ── WHAT A FAULT REPORT SEES OF THIS PAGE ──────────────────────────────
+  // error-report.js (Movie, 6 Nov: "whenever it bugged out it would give me
+  // message about sending the report") prints these under APP STATE, and
+  // asks `file` ONLY when the drafter ticks INCLUDE MY DRAWING -- the
+  // drawing is theirs, so it never goes along by default. Untrimmed, like the
+  // HISTORY tab: a report wants the drawing as it stood when it broke.
+  if (window.DraftErrorReport) {
+    const counts = () => Object.fromEntries(['walls', 'lines', 'floors', 'roofs', 'fenestrations', 'dimensions',
+      'outlines', 'shapes', 'stairs', 'notes', 'roomTags', 'columns', 'beams', 'underlays']
+      .map(key => [key, Array.isArray(drawing?.[key]) ? drawing[key].length : 0]));
+    window.DraftErrorReport.attach({
+      state: () => ({
+        tool: activeTool,
+        level: drawing ? levelName() : '(no drawing yet)',
+        levels: (drawing?.levels || []).map(l => `${l.id}:${l.name}`).join(', '),
+        counts: counts(),
+        'undo steps': undoStack.length,
+        'last undo': undoStack.slice(-10).map(step => step.kind),
+        'last save': lastLocalSave ? lastLocalSave.name : '(none this session)',
+      }),
+      file: () => ({
+        name: lastLocalSave ? lastLocalSave.name : 'rough-drafter-drawing.draft',
+        text: JSON.stringify(serializeDrawing({ trim: false })),
+      }),
+    });
+  }
