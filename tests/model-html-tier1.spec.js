@@ -265,6 +265,13 @@ test.describe('MODEL.html tier 1', () => {
       // That is a real change in what a dependency can do to this page, and
       // it is said out loud rather than left for someone to discover.
       './shell-bars.js',
+      // THE PROBLEM REPORT CARD (Movie, 6 Nov: "whenever it bugged out it
+      // would give me message about sending the report to archicad"). In
+      // the head, after the bars, so a fault while the page boots is caught
+      // too. ITS HONEST COST: a third module that WRITES DOM, and the first
+      // that speaks off-site -- but only when a button on its card is
+      // pressed, never on load, which tests/no-third-party.spec.js holds.
+      './error-report.js',
       // THE LANDSCAPE GUARD (board #310), and by this list's own rule it is
       // the kind of entry to grow by: it DELETES a divergence rather than
       // adding a capability. The ruling names five pages -- "MODEL, LAYOUT,

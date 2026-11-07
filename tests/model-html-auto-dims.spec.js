@@ -259,10 +259,13 @@ test('the tuning comes from the module, not from a copy in the page',
     // The module is the only thing changed, and only in this page's memory.
     await page.evaluate(() => {
       const AD = window.DraftAutoDims;
+      // EVERY EXPORT CARRIED OVER, ONE NUMBER MOVED. This stub used to name
+      // three members and drop the rest, so the page's column strings
+      // (computeColumnDimStrings, added later) threw on the next build --
+      // silently, until error-report.js put a card over the page for it.
       window.DraftAutoDims = Object.freeze({
-        computeAutoDimStrings: AD.computeAutoDimStrings,
+        ...AD,
         STRING_SPACING_FT: AD.STRING_SPACING_FT * 3,
-        JOG_MERGE_FT: AD.JOG_MERGE_FT,
       });
     });
     await page.keyboard.press('Control+z');
