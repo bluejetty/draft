@@ -150,7 +150,68 @@ async function clearOfTheShelf(page, corners) {
     if (opened.some(([x, y]) => x < frame.box.x || x > frame.box.x + frame.box.width
       || y < frame.box.y || y > frame.box.y + frame.box.height)) break;
   }
-  throw new Error('no zoom puts every corner of this loop on the sheet — the '
+  // OR THE LOOP GOES BESIDE THE BOARD. Since 6 Nov the shelf is five slots
+  // wide (the standalone pair stands ahead of DETACHED GARAGE), and a loop
+  // zoomed wide enough to clear the row's ends stands taller than the sheet
+  // -- there is no zoom that opens the square past the shelf any more. The
+  // sheet still has its margins: the strips left and right of the board, and
+  // the one between the top chrome and the board's crown where the window is
+  // tall enough. So the view moves there instead: zoom OUT until the loop
+  // fits a strip, then pan it across with the right button, which is this
+  // page's own pan. Still the view and not the loop: every corner keeps its
+  // world coordinates, and elementFromPoint still says when they are clear.
+  const chrome = await page.evaluate(() => {
+    const box = document.getElementById('plan').getBoundingClientRect();
+    const at = (x, y) => {
+      const el = document.elementFromPoint(x, y);
+      return el && el.id !== 'plan' ? el.getBoundingClientRect() : null;
+    };
+    const topBar = at(box.width / 2, 8);
+    const foot = at(box.width / 2, box.height - 8);
+    const board = document.getElementById('dt-frame').getBoundingClientRect();
+    return { top: topBar ? topBar.bottom : box.top, bottom: foot ? foot.top : box.bottom, board,
+      left: box.left, right: box.right };
+  });
+  // THE SIDE TABS STAND ON THE SHEET'S EDGES (DRAFTING / BUILD on the left,
+  // LEVELS / NOTES on the right), so the strips keep clear of the edges by
+  // more than the board.
+  const PAD = 20, EDGE = 44;
+  const strips = [
+    { x0: chrome.left + EDGE, x1: chrome.board.left - PAD, y0: chrome.top + PAD, y1: chrome.bottom - PAD },
+    { x0: chrome.board.right + PAD, x1: chrome.right - EDGE, y0: chrome.top + PAD, y1: chrome.bottom - PAD },
+    { x0: chrome.left + EDGE, x1: chrome.right - EDGE, y0: chrome.top + PAD, y1: chrome.board.top - PAD },
+  ].filter(strip => strip.x1 > strip.x0 && strip.y1 > strip.y0);
+  const xs = corners.map(([x]) => x);
+  const zs = corners.map(([, z]) => z);
+  const spanX = Math.max(...xs) - Math.min(...xs);
+  const spanZ = Math.max(...zs) - Math.min(...zs);
+  for (const strip of strips) {
+    const fits = scale => spanX * scale <= strip.x1 - strip.x0 && spanZ * scale <= strip.y1 - strip.y0;
+    const aim = [(strip.x0 + strip.x1) / 2, (strip.y0 + strip.y1) / 2];
+    for (let notch = 0; notch < 24; notch += 1) {
+      frame = await h.planFrame(page);
+      if (fits(frame.scale)) break;
+      // AIMED AT THE STRIP ITSELF, which is sheet whatever the camera does.
+      await page.mouse.move(aim[0], aim[1]);
+      await page.mouse.wheel(0, 120);
+      await page.waitForTimeout(60);
+    }
+    frame = await h.planFrame(page);
+    if (!fits(frame.scale)) continue;
+    // Grab the sheet where it IS sheet -- the strip -- and drag by the
+    // delta that brings the loop's middle to the strip's middle; the right
+    // button pans by the same delta wherever it is pressed.
+    const from = frame.at(mid(0), mid(1));
+    await page.mouse.move(aim[0], aim[1]);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(aim[0] + (aim[0] - from[0]), aim[1] + (aim[1] - from[1]), { steps: 8 });
+    await page.mouse.up({ button: 'right' });
+    await page.waitForTimeout(120);
+    frame = await h.planFrame(page);
+    const points = corners.map(([x, z]) => frame.at(x, z));
+    if ((await onSheet(page, points)).every(Boolean)) return frame;
+  }
+  throw new Error('no zoom or pan puts every corner of this loop on the sheet — the '
     + 'board\'s shelf covers the drawing wherever the camera puts it');
 }
 
