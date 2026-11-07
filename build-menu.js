@@ -64,6 +64,44 @@ if (!window.DraftBuildMenu) {
   // `foundation` belongs to the DETACHED entries alone and pre-answers the
   // prompt that _commitDetachedGarageOutline raises after the loop closes.
   const BUILD_MENU = Object.freeze([
+    // A SITE PLAN AND NOTHING ELSE (Movie, 6 Nov: "when the AUTOHOUSE options
+    // is brought up at the begining - above it can we have an option - DRAW
+    // STANDALONE SITE PLAN ... put it like the RESIDENTIAL SUITES and
+    // COMMERCIAL SUITE - half size but put the STANDALONE SITE PLAN in a box
+    // on the right side of DETACHED GARAGE. leave a spot below i will want to
+    // ad somthing else there probably" -- "and then that plan will be only
+    // for the SITE PLAN layer - no other layers offered" -- and, shown it
+    // on the right: "oops i meant to the left of detached garage"). So it is
+    // FIRST ON THE SHELF, ahead of DETACHED GARAGE.
+    //
+    // NOT A HOUSE, AND NOT AN ORDER. No `type`, no bone: the press itself
+    // drops the board, builds nothing and lands the drafter on SITE, with
+    // `standalone: 'site'` written on the drawing so the LEVELS panel, the
+    // view rail and LAYOUT offer the site plan and nothing else. `standalone`
+    // is what reaches the file (drawing-format.js STANDALONE_KINDS).
+    // `stack: true` is the SUITE's shape, half a card each.
+    //
+    // AND THE HALF UNDER IT, which he kept empty for an hour and then named
+    // (Movie, 6 Nov: "i figured out what the button under the standalone
+    // site plan should be: just a blank drafting for just free drafting (no
+    // autohouse)" -- "TRADITIONAL" -- "CLASSIC that's even better" --
+    // "shorter lets go CLASSIC" -- "it will be more like 'classic' autocad
+    // drafting plus archicad features"). CLASSIC DRAFTING is the blank
+    // sheet as it is: every level kept, every tool, nothing built, no mark
+    // on the file. Its press drops the board and lands on MAIN FL.
+    // `free: true` says so; it has no `type` and no `standalone` because it
+    // writes nothing at all.
+    Object.freeze({
+      id: 'sitePlan',
+      label: 'SITE PLAN',
+      title: 'STANDALONE SITE PLAN — a lot and what stands on it, with no house built and no other level offered',
+      stack: true,
+      entries: Object.freeze([
+        Object.freeze({ id: 'site-standalone', label: 'DRAW STANDALONE SITE PLAN', standalone: 'site' }),
+        Object.freeze({ id: 'classic-drafting', label: 'CLASSIC DRAFTING', free: true,
+          title: 'CLASSIC DRAFTING — the blank sheet, every level and every tool, no house built: draw it yourself' }),
+      ]),
+    }),
     Object.freeze({
       id: 'detachedGarage',
       label: 'DETACHED GARAGE',

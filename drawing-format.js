@@ -1985,6 +1985,20 @@ if (!window.DraftDrawingFormat) {
   const SUITE_KINDS = Object.freeze(['residential', 'commercial']);
   const suiteKind = raw => oneOf(raw, SUITE_KINDS, null);
 
+  // A STANDALONE FILE IS ONE SHEET AND NOTHING ELSE (Movie, 6 Nov: "DRAW
+  // STANDALONE SITE PLAN ... that plan will be only for the SITE PLAN layer
+  // - no other layers offered"). 'site' is the only kind so far; the word
+  // names which level the file is about, so the LEVELS panel, the view rail
+  // and LAYOUT can offer that level and no other. 'classic' is CLASSIC
+  // DRAFTING (6 Nov: "just a blank drafting for just free drafting (no
+  // autohouse)" -- "we shouldn't allow them to make an autohouse later,
+  // because i think it will confuse things"): every level, every tool, and
+  // the drive-thru's house tiles locked. Null for every other drawing, and
+  // a word this list does not hold reads as null rather than hiding every
+  // level behind a typo.
+  const STANDALONE_KINDS = Object.freeze(['site', 'classic']);
+  const standalone = raw => oneOf(raw, STANDALONE_KINDS, null);
+
   // ── the board ─────────────────────────────────────────────────────────────
   // WHICH BOARD THIS DRAWING IS ON, and it belongs to the DRAWING rather than
   // the browser. GILLIGAN-TOY-BONES-WORKORDER §7: "the same drafter meets it
@@ -2642,6 +2656,8 @@ if (!window.DraftDrawingFormat) {
     buildType,
     SUITE_KINDS,
     suiteKind,
+    STANDALONE_KINDS,
+    standalone,
     BUILD_TYPES,
     CASEMENT_TYPES,
     DOOR_TYPES,

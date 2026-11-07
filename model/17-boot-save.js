@@ -105,6 +105,10 @@
       // A SUITE FILE'S KIND, normalised; dropped when it is not one.
       ...(parsed.suiteKind !== undefined && F.suiteKind(parsed.suiteKind)
         ? { suiteKind: F.suiteKind(parsed.suiteKind) } : { suiteKind: undefined }),
+      // A STANDALONE FILE'S KIND (a site plan and nothing else), the same
+      // way: normalised, and absent when it is not one.
+      ...(parsed.standalone !== undefined && F.standalone?.(parsed.standalone)
+        ? { standalone: F.standalone(parsed.standalone) } : { standalone: undefined }),
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: WT.WALL_TYPES,
         legacyWallTypes: WT.LEGACY_WALL_TYPES,

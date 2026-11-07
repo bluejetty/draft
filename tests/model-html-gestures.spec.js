@@ -657,6 +657,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // row close together: each starts a suite on the BONEYARD, a door
             // the table's boneyard row already carries.
             'RESIDENTIAL SUITE', 'COMMERCIAL SUITE',
+            // THE STANDALONE PAIR (Movie, 6 Nov), the half-size stack first
+            // on the shelf: DRAW STANDALONE SITE PLAN drops the board and
+            // goes to SITE with a mark on the file; CLASSIC DRAFTING drops
+            // it and goes to MAIN FL with a mark that locks the house tiles.
+            // Each is a goToLevel plus a flag; neither authors an entity, so
+            // no absence row moves.
+            'DRAW STANDALONE SITE PLAN', 'CLASSIC DRAFTING',
             'copy', 'paste',
             // THE STOREY ARROWS (Movie, 12 Oct: "id like UP and DOWN arrows
             // and when they are pressed the LEVEL goes either to the next one

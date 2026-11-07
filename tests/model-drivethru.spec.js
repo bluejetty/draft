@@ -559,7 +559,9 @@ test('the dog talks the drafter through it, and says what was ordered',
     // tiles cannot be showing two different things.
     await expect(page.locator('[data-drivethru-line]')).toContainText('BUNGALOW');
 
-    const entry = page.locator('#dt-tiles [data-build-entry]').first();
+    // THE OPEN SUBMENU'S FIRST TILE -- not the row's, which since 6 Nov
+    // holds the standalone site plan's own tile first.
+    const entry = page.locator('#build-entries [data-build-entry]').first();
     const ordered = (await entry.textContent()).trim();
     await entry.click();
     await expect(page.locator('[data-drivethru-line]')).toContainText(ordered);

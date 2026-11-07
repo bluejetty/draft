@@ -808,6 +808,13 @@
     // different tile and never saw the size asked.
     if (entryId !== chosenEntryId) chosenSizeId = null;
     chosenEntryId = entryId;
+    // NOT ON A CLASSIC SHEET (Movie, 6 Nov): the tiles are disabled, and a
+    // press that reaches here anyway -- a spec, a stale handler -- is
+    // refused the same way, so the lock is one rule and not a style.
+    if (classicLocked()) return;
+    // A HOUSE ORDERED ON A STANDALONE SITE PLAN MAKES IT A HOUSE FILE AGAIN:
+    // the levels it hid come back, because the house is about to need them.
+    if (drawing?.standalone) { delete drawing.standalone; markDirty(); }
     // THE PAGE DOES NOT TURN UNDER THE PRESS. Movie, 24 Sep: "after they make
     // their choice on this page, don't change the page. just light up their
     // choice and make the bone glow and pulse the glow so they will click it".
@@ -830,6 +837,17 @@
   // redraw of the sign -- one call site, not four.
   let paintSign = () => {};
 
+  // NO AUTOHOUSE ON A CLASSIC SHEET (Movie, 6 Nov): every tile that would
+  // order one is disabled, with the reason on its title. The CLASSIC
+  // DRAFTING tile itself stays live -- pressing it again is harmless -- and
+  // nothing else on the board can start an order.
+  const classicLocked = () => drawing?.standalone === 'classic';
+  const CLASSIC_LOCK_TITLE = 'CLASSIC DRAFTING \u2014 no autohouse on this sheet. Press NEW for a sheet that builds one.';
+  const lockTile = (button, entry) => {
+    if (!classicLocked() || entry?.free) return;
+    button.disabled = true;
+    button.title = CLASSIC_LOCK_TITLE;
+  };
   const syncBuildBar = () => {
     if (!drawing) return;
     familyRow.replaceChildren(...BM.BUILD_MENU.map(family => {
@@ -844,9 +862,18 @@
           button.type = 'button';
           button.dataset.buildEntry = entry.id;
           button.textContent = entry.label;
-          button.title = family.title;
+          button.title = entry.title || family.title;
           button.classList.toggle('chosen', entry.id === chosenEntryId);
-          button.onclick = () => { openFamilyId = null; pressEntry(entry.id); };
+          // A STANDALONE TILE IS THE WHOLE ORDER (Movie, 6 Nov: DRAW
+          // STANDALONE SITE PLAN). Nothing to choose and no bone to press
+          // after it: the press itself drops the board and goes there.
+          // CLASSIC DRAFTING (`free`) is the same shape of press for the
+          // blank sheet: the board goes down and nothing is written.
+          button.onclick = entry.standalone
+            ? () => startStandalone(entry.standalone)
+            : entry.free ? () => startClassic()
+              : () => { openFamilyId = null; pressEntry(entry.id); };
+          lockTile(button, entry);
           return button;
         }));
         return stack;
@@ -856,6 +883,7 @@
       button.dataset.buildFamily = family.id;
       dressTile(button, family.id, family.label);
       button.title = family.title;
+      lockTile(button, null);
       button.classList.toggle('open', openFamilyId === family.id);
       // A family with the chosen entry under it wears the mark, so the bar
       // says what the drawing carries even with every submenu shut.
@@ -877,6 +905,7 @@
       dressTile(button, entry.id, entry.label, 'entry');
       button.classList.toggle('chosen', entry.id === chosenEntryId);
       button.onclick = () => pressEntry(entry.id);
+      lockTile(button, entry);
       return button;
     }) : [];
     // Neighbouring tiles with no card go into one stacked slot (see the CSS).
@@ -1322,6 +1351,11 @@
         // NOTHING, now the build-now line says it (Movie, 4 Oct: the note
         // only repeated "PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE").
         : '';
+    } else if (classicLocked()) {
+      // THE LOCK, SAID OUT LOUD (Movie, 6 Nov): a board of greyed tiles
+      // with no word on why is a broken board, not a rule.
+      signLine.textContent = 'CLASSIC DRAFTING. NO AUTOHOUSE ON THIS SHEET.';
+      signNote.textContent = 'Draw it yourself. For a sheet that builds a house, press NEW.';
     } else if (open) {
       signLine.textContent = `${open.label} \u2014 WHICH ONE?`;
       signNote.textContent = open.title;
@@ -1383,6 +1417,56 @@
     // should be tabbed into. The sheet does not, so there it stays live.
     boneFoot.disabled = show && (BOARD_ART[theme] || {}).coversBone === true;
   };
+  // DRAW STANDALONE SITE PLAN (Movie, 6 Nov). The board goes down, nothing
+  // is built, the drawing is marked standalone and the drafter is stood on
+  // SITE -- where arriving with no lot asks the lot question, which is the
+  // right first question for a site plan. The mark is the file's
+  // (`standalone`, drawing-format.js STANDALONE_KINDS): the LEVELS panel,
+  // the view rail and LAYOUT read it and offer SITE PLAN alone -- "that plan
+  // will be only for the SITE PLAN layer - no other layers offered".
+  //
+  // THE ORDER ON THE BOARD IS CLEARED, not kept: a house half-chosen before
+  // this press is not part of a site plan, and a bone left pulsing for it
+  // would be asking to build the thing he just said he was not building.
+  const startStandalone = kind => {
+    if (!drawing) return;
+    const want = window.DraftDrawingFormat?.standalone?.(kind) || null;
+    if (!want) return;
+    openFamilyId = null;
+    chosenEntryId = null;
+    chosenSizeId = null;
+    if (drawing.standalone !== want) { drawing.standalone = want; markDirty(); }
+    setSign(false);
+    syncBuildBar();
+    goToLevel(SITE_LEVEL_ID);
+  };
+
+  // CLASSIC DRAFTING (Movie, 6 Nov: "just a blank drafting for just free
+  // drafting (no autohouse)" -- "'classic' autocad drafting plus archicad
+  // features"). The board goes down, nothing is built, every level stays,
+  // and the drafter is stood on MAIN FL -- the level a blank opens on --
+  // or the first floor the drawing has if MAIN FL is gone.
+  //
+  // AND THE FILE SAYS SO, with `standalone: 'classic'`, because he then
+  // ruled: "for this we shouldn't allow them to make an autohouse later,
+  // because i think it will confuse things". The house tiles on the board
+  // are locked on a classic file (syncBuildBar) and the sign says why; a
+  // house wants NEW. The site plan's mark, if any, is replaced: a classic
+  // sheet offers every level, which is the opposite of what 'site' hides.
+  const startClassic = () => {
+    if (!drawing) return;
+    openFamilyId = null;
+    chosenEntryId = null;
+    chosenSizeId = null;
+    if (drawing.standalone !== 'classic') { drawing.standalone = 'classic'; markDirty(); }
+    setSign(false);
+    syncBuildBar();
+    const levels = drawing.levels || [];
+    const main = levels.find(level => Number(level.id) === 3)
+      || window.DraftLayerViews.floorLevels(levels)[0] || levels[0];
+    if (main) goToLevel(main.id);
+  };
+
   // THE BUTTON LIGHTS BEFORE THE SIGN RISES (Movie, 15 Sep): the house
   // button glows, then the board comes up. One constant, because he said
   // he would want to change the length.
@@ -1490,7 +1574,9 @@
     // save and start clean, and never be told why the bone had gone dead. The
     // cap is enforced at the ORDER instead (:4746), which is the only place
     // that knows WHICH building he wants and can therefore ask about it.
-    signRefusal = {
+    // NOT ON A CLASSIC SHEET, where "pick a type off the board" is a lie:
+    // the board rises locked and paintSign says why (Movie, 6 Nov).
+    signRefusal = classicLocked() ? null : {
       line: 'NOTHING TO BUILD YET.',
       note: 'Pick a type off the board and I\u2019ll build it.',
     };

@@ -437,6 +437,12 @@
     levelsPanel.innerHTML = '';
     if (!levels.length) return;
 
+    // A STANDALONE SITE PLAN LISTS SITE AND NOTHING ELSE (Movie, 6 Nov:
+    // "that plan will be only for the SITE PLAN layer - no other layers
+    // offered"). The other levels are still in the file -- ordering a house
+    // off the board brings them back -- but the panel does not offer them,
+    // nor the elevations and sections a house would have, nor + ADD.
+    const standalone = drawing?.standalone || null;
     const head = document.createElement('div');
     head.className = 'lv-head';
     const title = document.createElement('div');
@@ -455,7 +461,7 @@
     add.textContent = '+ ADD';
     add.title = 'Add a level above the top floor';
     add.addEventListener('click', addLevel);
-    head.append(title, datum, add);
+    head.append(title, datum, ...(standalone ? [] : [add]));
     levelsPanel.append(head);
 
     // ── THE SHEET SET'S ORDER HERE TOO (Movie, 13 Oct) ──────────────────────
@@ -592,6 +598,7 @@
     // drafter who renames SITE still gets his order, and a drawing without one
     // simply starts at the elevations.
     levels.filter(level => Number(level.id) === SITE_LEVEL_ID).forEach(levelCard);
+    if (standalone === 'site') return;
 
     section('Elevations');
     const viewNow = params.get('view');
@@ -1442,6 +1449,9 @@
     // columns no longer line up anyway, and 1-2-3-4 in order is what he asked
     // for.
     planSeat(byId(SITE_LEVEL_ID), null, 'SITE PLAN');
+    // A STANDALONE SITE PLAN SEATS THAT ONE CARD (Movie, 6 Nov: "no other
+    // layers offered") -- no elevations, no roof, no storeys, no sections.
+    if (drawing?.standalone === 'site') return seats;
     ['E1', 'E2', 'E3', 'E4'].forEach(id => seats.push({ kind: 'cut', name: id }));
     planSeat(byId(ROOF_LEVEL_ID), null, 'ROOF PLAN');
     // ── A HALF FLOOR TAKES NO SEAT OF ITS OWN (Movie, 14 Oct) ──────────────

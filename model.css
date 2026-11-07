@@ -451,8 +451,11 @@
      than the foot's: the sign's disc is drawn larger, and Movie placed the
      number by eye on each (16 Oct): on the bone "lowered down because the
      BONE is in the middle", on the house "centered up down in the blue
-     button area in the house" -- "middle". */
-  #dt-bone-balance { position:absolute; left:0; right:0; top:80%;
+     button area in the house" -- "middle".
+     RAISED FROM 80% (Movie, 6 Nov: "the number 3 is a little off the button
+     sliding down should move up a bit"): at 80% the figure sat on the disc's
+     bottom rim; at 66% it sits inside the disc, under the bone. */
+  #dt-bone-balance { position:absolute; left:0; right:0; top:66%;
     transform:translateY(-50%); text-align:center; pointer-events:none;
     font-family: var(--font-ui); font-weight:700; color:#fff;
     text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em;
@@ -688,6 +691,10 @@
     cursor:pointer; color:#1f3f6b; padding:5px 10px; border-radius:2px;
     border:1px solid #1f3f6b; background:#f1e9d2; }
   #build-bar button:hover { background:#fff8e6; }
+  /* A LOCKED TILE (CLASSIC DRAFTING, 6 Nov: no autohouse on this sheet):
+     greyed and dead to the hand, the reason on its title and on the sign. */
+  #build-bar button:disabled { opacity:0.35; cursor:not-allowed; }
+  #build-bar button:disabled:hover { background:#f1e9d2; }
   /* A CARD IS THE WHOLE BUTTON. Movie drew one per house type, lettering and
      all, so the tile wearing one carries no text of its own -- the label
      stays in the DOM for the reader and the check, clipped out of sight,
