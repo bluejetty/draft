@@ -530,33 +530,11 @@ test.describe('MODEL.html tier 1', () => {
       // AND THE KEYS' FACES (Movie, 27 Oct): a small drawing and the tooltip
       // sentence per tool, data only, no dependency of its own.
       './tool-icons.js',
-      // THE THREE TOY MODULES, and this assertion caught them too -- though
-      // not the same hour, because the shard holding it was being cancelled at
-      // its 40-minute cap rather than reporting. They arrived with §3, the
-      // section whose own first finding was that MODEL.html was not loading
-      // them at all: the constraint path existed, the page never called it,
-      // and every TOY rule "passed" by never running. So these are not a new
-      // cost so much as the cost §3 was already supposed to be paying.
-      //
-      // toy-constraints.js is the rule engine -- what a drag is allowed to do
-      // to a welded group -- and it is the largest entry on this list at 787
-      // lines. It earns that the way cut-view.js does: MODEL.dc.html runs the
-      // same module, so the two boards cannot disagree about whether a move is
-      // legal. A second copy of these rules is the four-homes failure again,
-      // and this one would show up as two pages drawing different houses from
-      // one file.
-      //
-      // toy-context.js (206) is what turns a drawing into the question the
-      // engine answers -- welds, rings, neighbours -- and room-standards.js
-      // (129) is data, not code: the room sizes the constraints measure
-      // against. Neither has a dependency of its own; both resolve what they
-      // need at CALL time, so listing them costs a fetch and nothing else.
-      //
-      // room-standards.js is here because toy-constraints.js requires
-      // window.DraftRoomStandards, NOT because this page reads it directly --
-      // which is the kind of entry to watch. A transitive dependency is still
-      // a dependency, and the honest place to say so is here.
-      './room-standards.js', './toy-constraints.js', './toy-context.js',
+      // room-standards.js is data, not code: the room sizes the closet
+      // table and the room tags measure against. (toy-constraints.js and
+      // toy-context.js stood beside it here until 9 Nov 2026, when TOY MODE
+      // came out of the program.)
+      './room-standards.js',
       './level-assembly.js',
       // AND THIS LIST CAUGHT TWO MORE, the third time it has earned its keep
       // and the reason it stays an EXACT list rather than a `toContain` --

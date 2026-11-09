@@ -35,8 +35,8 @@ async function open(page, drawing = BLANK) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     try { localStorage.removeItem('draft.trace.on'); } catch { /* fine */ }
-    // THE LIGHTS START DARK: the foot light is remembered per browser.
-    try { localStorage.removeItem('draft-skin'); } catch { /* fine */ }
+    // THE LIGHTS START DARK: both are remembered per browser, and on by default since 9 Nov 2026.
+    try { localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight: false })); } catch { /* fine */ }
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: drawing });
@@ -103,7 +103,7 @@ test('with the T-SQUARE up the same drag goes where the hand went', async ({ pag
   expect(Math.abs(at.x / at.z - 2)).toBeLessThan(0.05);
 });
 
-test('the FOOT LIGHT lands the move on the whole foot, and TOY squares and rounds both', async ({ page }) => {
+test('the FOOT LIGHT lands the move on the whole foot, and a fresh browser squares and rounds it with both lights lit', async ({ page }) => {
   await open(page);
   await bringIn(page);
   await foot(page).click();
@@ -114,11 +114,17 @@ test('the FOOT LIGHT lands the move on the whole foot, and TOY squares and round
   expect(run).toBeGreaterThan(1.5);
   expect(whole(run), `a run of ${run} ft with the foot light lit`).toBe(true);
   expect(Math.abs(lit.x / lit.z - 2)).toBeLessThan(0.05);
-  // TOY: both instruments at once, with no chip lit.
-  await open(page, { ...BLANK, board: 'toy' });
+  // A FRESH BROWSER: both lights lit, nothing pressed (the feel TOY MODE used
+  // to give, since 9 Nov 2026), so the same drag is square AND on the foot.
+  await open(page);
+  await page.evaluate(() => { try { localStorage.removeItem('draft-skin'); } catch { /* fine */ } });
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await expect(foot(page)).toHaveClass(/lit/);
+  await expect(tsquare(page)).toHaveClass(/lit/);
   await bringIn(page);
-  const toy = await moveBy(page, 60, 30);
-  expect(toy.z).toBe(0);
-  expect(toy.x).toBeGreaterThan(1.5);
-  expect(whole(toy.x), `TOY moved it ${toy.x} ft`).toBe(true);
+  const fresh = await moveBy(page, 60, 30);
+  expect(fresh.z).toBe(0);
+  expect(fresh.x).toBeGreaterThan(1.5);
+  expect(whole(fresh.x), `a fresh browser moved it ${fresh.x} ft`).toBe(true);
 });

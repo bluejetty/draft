@@ -6,11 +6,10 @@
 // and, asked whether it governs drawing only or drawing and dragging:
 //   "so it can be turned on and off with that light" — ONE LIGHT, BOTH.
 //
-// THE SWITCH IS NOT A SECOND IMPLEMENTATION. The rounding already exists in
-// two places and this order adds no third: `onTheFoot` rounds a drawn run's
-// LENGTH along its own direction, and toy-constraints.js exports
-// `quantiseFeet` for a delta. Both are reached through a widened condition,
-// never a copy.
+// THE SWITCH IS NOT A SECOND IMPLEMENTATION. The rounding exists in two
+// places and this order adds no third: `onTheFoot` rounds a drawn run's
+// LENGTH along its own direction, and `quantiseFeet` rounds a delta. Both
+// are reached through one condition, never a copy.
 //
 // WHAT THE LIGHT IS NOT. It is not the T-SQUARE. It rounds DISTANCE and
 // squares nothing, so an off-axis wall stays off-axis with the light lit —
@@ -89,7 +88,7 @@ test('light OFF: a DRAFTING run commits the odd length the hand gave it',
   async ({ page }) => {
     await open(page, base({ board: 'drafting' }));
     const at = await frame(page);
-    expect(await lit(page), 'the light is off on a page that has never seen it')
+    expect(await lit(page), 'the light is off, as the suite remembers it')
       .toBe(false);
 
     await h.armWall(page);
@@ -169,39 +168,18 @@ test('light OFF: the same drag keeps the odd distance', async ({ page }) => {
     'DRAFTING with the light off does not round the drag').toBeGreaterThan(0.1);
 });
 
-test('the light survives a reload, and is off on a page that never saw it',
+test('the light survives a reload, and stays as the browser remembers it',
   async ({ page }) => {
+    // THE SUITE REMEMBERS IT OFF (playwright.config.js storageState); a fresh
+    // browser lights it, which tests/lights-on-by-default.spec.js pins.
     await open(page, base({ board: 'drafting' }));
-    expect(await lit(page), 'off by default').toBe(false);
+    expect(await lit(page), 'off, as remembered').toBe(false);
     await light(page).click();
     expect(await lit(page)).toBe(true);
 
     await page.reload();
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
     expect(await lit(page), 'the light outlives the tab').toBe(true);
-  });
-
-test('THE LEAK, BOTH WAYS: the light cannot unround TOY, and TOY does not arm it',
-  async ({ page }) => {
-    // §3's gate already carries "TOY LEAKS: every board goes through the
-    // constraint path". This is the same defect wearing the other coat: a
-    // switch that can reach the TOY arm would let a drafter unround TOY.
-    await open(page, base({ board: 'toy' }));
-    const at = await frame(page);
-    expect(await lit(page), 'opening TOY does not arm the DRAFTING light')
-      .toBe(false);
-
-    await h.armWall(page);
-    await page.mouse.click(...at(-3, 0));
-    await page.waitForTimeout(60);
-    await page.mouse.click(...at(-3 + ODD, 0));
-    await page.waitForTimeout(60);
-
-    const drawn = drawnWall(await saveAndRead(page));
-    expect(drawn, 'the wall reached the file').toBeTruthy();
-    const len = Math.hypot(drawn.end.x - drawn.start.x, drawn.end.z - drawn.start.z);
-    expect(len, 'TOY is rounded because it is TOY, light or no light')
-      .toBeCloseTo(6, 6);
   });
 
 test('the light is a page setting, not drawing data', async ({ page }) => {

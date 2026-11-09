@@ -191,19 +191,17 @@ test('an emptied NAME is refused; an emptied SIZE takes the line away', async ({
   expect('size' in tag, 'no blank size kept').toBe(false);
 });
 
-test('ROOM TAG is offered on TOY, like every other key', async ({ page }) => {
-  // IT USED TO BE A DRAFTING-ONLY KEY and this check said so. Movie, 15 Oct:
-  // "we should allow more features (they all go dim i notices) but maybe the
-  // features will be slightly limited (to ft and 90 degrees)" -- TOY takes no
-  // tool away any more, it holds the foot and the right angle. The press is
-  // checked rather than the attribute, because a key that lights and arms
-  // nothing is the same lie in the other direction.
+test('ROOM TAG is offered on a drawing that names no board, like every other key', async ({ page }) => {
+  // IT USED TO BE A DRAFTING-ONLY KEY and this check said so; the TOY board
+  // stopped taking tools away on 15 Oct and came out of the program on
+  // 9 Nov 2026. A file written while boards existed may still carry the
+  // word, and the key arms all the same. The press is checked rather than
+  // the attribute, because a key that lights and arms nothing is the same
+  // lie in the other direction.
   await open(page, HOUSE({ board: 'toy' }));
   await h.showLeftPane(page, 'drafting');
   const key = page.locator('[data-tool-key="roomtag"]');
   await expect(key).toBeEnabled();
   await key.click();
-  await expect(key, 'and it arms on the TOY board').toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('body'), 'arming it moved no board')
-    .toHaveAttribute('data-board', 'toy');
+  await expect(key, 'and it arms').toHaveAttribute('aria-pressed', 'true');
 });

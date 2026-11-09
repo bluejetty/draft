@@ -61,10 +61,35 @@ if (MUTATE) {
   process.exit(all ? 0 : 1);
 }
 global.window = {};
-['wall-types.js', 'room-standards.js', 'geometry-2d.js', 'toy-constraints.js', 'turtle.js']
+['wall-types.js', 'room-standards.js', 'geometry-2d.js', 'turtle.js']
   .forEach(file => { (0, eval)(fs.readFileSync(path.join(ROOT, file), 'utf8')); });
 const T = window.DraftTurtle;
-const C = window.DraftToyConstraints;
+// WHAT TOY-CONSTRAINTS USED TO ANSWER FOR THIS HARNESS, answered here since
+// the module went with TOY MODE (9 Nov 2026): a wall is square when it runs
+// along one axis; its thickness is its wall type's; and the clear gap between
+// two stored lines is the gap less whatever of each wall's body lies between
+// them (the body is on the right of a 'right' line, the left of a 'left' one,
+// and half each side of a 'center' one).
+const WT = window.DraftWallTypes;
+const C = {
+  isOrthogonal: wall => Math.abs(wall.end.x - wall.start.x) < 1e-9 || Math.abs(wall.end.z - wall.start.z) < 1e-9,
+  thicknessFt: wall => {
+    const type = (WT.WALL_TYPES || WT.types || []).find(t => t.id === (wall.wallType || 'stud_2x6'));
+    return (type ? type.totalIn : 5.5) / 12;
+  },
+  // `aSide` / `bSide` are the side of each line the OTHER wall is on (+1 = left of the run, -1 = right).
+  clearFromLineGap: (gapFt, a, aSide, b, bSide) => {
+    const eats = (wall, side) => {
+      const t = C.thicknessFt(wall);
+      const ref = wall.refLine || 'center';
+      if (ref === 'center') return t / 2;
+      // the stored line is the named FACE, so the body lies on the other side of it; it eats the gap when it faces the other wall
+      const bodyOn = ref === 'left' ? -1 : 1;
+      return bodyOn === side ? t : 0;
+    };
+    return gapFt - eats(a, aSide) - eats(b, bSide);
+  },
+};
 
 let passed = 0;
 const failures = [];
@@ -126,8 +151,7 @@ const box = (w, d, which = 'right') => T.walk([
 // ── 3 · ORTHOGONAL BY CONSTRUCTION ───────────────────────────────────────
 // Not a rule that runs afterwards -- there is no way to EXPRESS a non-square
 // wall with these two verbs. That is what makes TOY output TOY-editable by
-// definition, so the constraint module never has to call the turtle's own work
-// inert. Checked by asking that module, not by re-deriving what square means.
+// definition.
 {
   const wander = T.walk([
     { turn: 'straight', goFt: 9 }, { turn: 'left', goFt: 4 }, { turn: 'left', goFt: 3 },
@@ -137,10 +161,11 @@ const box = (w, d, which = 'right') => T.walk([
   check('every wall a wandering turtle draws is square',
     walls.length > 0 && walls.every(wall => C.isOrthogonal(wall)),
     JSON.stringify(walls.map(w => `${w.start.x},${w.start.z}->${w.end.x},${w.end.z}`)));
-  // And therefore none of it is inert to the toy: everything it drew can be
-  // grabbed by a grip tab afterwards.
-  check('so none of it is inert when the toy reads it back',
-    walls.every(wall => C.allowedMove(wall, 1, { walls }).reason !== C.REASON.NOT_ORTHOGONAL));
+  // And therefore every wall has a run axis a square move can be measured
+  // across: a wall that is square is one the T-square never has to argue
+  // with.
+  check('so every one of them runs along one axis',
+    walls.every(wall => Math.abs(wall.end.x - wall.start.x) < 1e-9 || Math.abs(wall.end.z - wall.start.z) < 1e-9));
 }
 
 // ── 4 · THE WALK CLOSES, OR IT DOES NOT ──────────────────────────────────
