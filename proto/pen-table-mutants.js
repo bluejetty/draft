@@ -15,6 +15,7 @@ const SPEC = 'tests/pen-table.spec.js';
 const SHEET = 'a sheet strokes each layer';
 const DXF = 'the DXF a sheet saves';
 const PAGE = 'STANDARDS offers a pen weight';
+const LEAK = 'never leaks onto the next layer';
 
 const MUTANTS = [
   { file: 'pen-table.js',
@@ -36,7 +37,7 @@ const MUTANTS = [
     name: 'naming a layer does not re-ink what the painter already set (the pen leaks onto the next layer)',
     find: "      state.pen = penFor(lookup(id));\n      applyPen();\n",
     with: "      state.pen = penFor(lookup(id));\n",
-    test: SHEET },
+    test: LEAK },
   { file: 'pen-table.js',
     name: 'the DXF lineweight is the raw figure, not AutoCAD\'s nearest listed weight',
     find: "      out.lineweight = ACAD_WEIGHTS.reduce((best, w) => (Math.abs(w - want) < Math.abs(best - want) ? w : best), ACAD_WEIGHTS[0]);\n",

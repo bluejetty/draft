@@ -258,3 +258,38 @@ test('STANDARDS offers a pen weight and a linetype per layer and keeps them in t
   await expect(page.locator('[data-layer-pen="weight"][data-layer-id="A-WALL-EXT"]')).toHaveValue('default');
   expect(await kept()).toEqual(['default', 'default', 'default', 'dashed', 'default']);
 });
+
+// THE PEN DOES NOT LEAK. plan-composition's strokeLines sets a hand line's
+// own ink and THEN names its layer; a dashed BOLD pen on the layer named
+// before it must not ride onto a line whose layer's pen is DEFAULT, and a
+// layer named with no ink set after it must still get its pen.
+test('naming a layer re-inks the context: a pen never leaks onto the next layer', async ({ page }) => {
+  await page.goto('/LAYOUT.html');
+  await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+  const log = await page.evaluate(() => {
+    const table = { 'A-DOOR': { weight: '5', linetype: 'dashed' }, draft: { weight: 'default', linetype: 'default' } };
+    const real = document.createElement('canvas').getContext('2d');
+    const log = [];
+    const spy = new Proxy(real, {
+      get: (t, p) => {
+        if (p === 'stroke') return () => { log.push([t.lineWidth, t.getLineDash().join(',')]); };
+        const v = t[p];
+        return typeof v === 'function' ? v.bind(t) : v;
+      },
+      set: (t, p, v) => { t[p] = v; return true; },
+    });
+    const ctx = window.DraftPenTable.wrap(spy, { lookup: id => table[id] || null, inkScale: 1 });
+    // The door: its layer named first, then its ink -- BOLD and dashed.
+    ctx.dxfLayer = 'A-DOOR'; ctx.lineWidth = 1.25; ctx.setLineDash([]); ctx.stroke();
+    // A hand line at XTRA-BOLD solid, its layer named after its ink.
+    ctx.lineWidth = 4.5; ctx.setLineDash([]); ctx.dxfLayer = 'draft'; ctx.stroke();
+    // Back to the door with no ink set at all: the pen alone.
+    ctx.dxfLayer = 'A-DOOR'; ctx.stroke();
+    return log;
+  });
+  expect(log[0][0]).toBe(3.5);
+  expect(log[0][1]).toBe('28,17.5');
+  expect(log[1]).toEqual([4.5, '']);
+  expect(log[2][0]).toBe(3.5);
+  expect(log[2][1]).toBe('28,17.5');
+});
