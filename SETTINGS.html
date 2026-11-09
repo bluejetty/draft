@@ -36,7 +36,7 @@
         }
         return allowed.includes(stored[nm]) ? stored[nm] : fallback;
       };
-      P.apply(document, pick('theme', P.THEMES, 'ruff'), pick('mode', P.MODES, 'night'));
+      P.apply(document, pick('theme', P.THEMES, P.homeTheme()), pick('mode', P.MODES, P.homeMode(pick('theme', P.THEMES, P.homeTheme()))));
     })();
   </script>
   <script src="./profile-manager.js"></script>

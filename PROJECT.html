@@ -51,8 +51,8 @@
       // and NIGHT/DAY are on this page and they write the same key. The skin
       // is still ONE choice across the app; there are simply two doors to it.
       window.__projectSkin = {
-        theme: pick('theme', P.THEMES, 'ruff'),
-        mode: pick('mode', P.MODES, 'night'),
+        theme: pick('theme', P.THEMES, P.homeTheme()),
+        mode: pick('mode', P.MODES, P.homeMode(pick('theme', P.THEMES, P.homeTheme()))),
       };
       P.apply(document, window.__projectSkin.theme, window.__projectSkin.mode);
     })();

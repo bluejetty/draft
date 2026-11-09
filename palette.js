@@ -631,9 +631,46 @@ if (!window.DraftPalette) {
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   }
 
+  // ── WHICH BRAND A FIRST VISIT WEARS IS THE DOOR IT CAME IN BY ──────────
+  //
+  // Movie, 9 Nov 2026: "when they come from ROUGHDRAFTER.COM (or bluejetty)
+  // i'd like them to go to the ROUGH DRAFTER VERSION first, if they go to
+  // RUFFDRAFTER.com, then the one with the bone first". A draftsman walking
+  // in off roughdrafter.com meets the plain board; the dog is on the door
+  // that says RUFF.
+  //
+  // A DEFAULT, NOT A RULING. Every page reads the stored `draft-skin` pick
+  // and a ?theme= in the address before it falls back here, so a drafter who
+  // pressed RUFF keeps RUFF on roughdrafter.com, and a pasted link still
+  // says what it says. This only decides the very first frame of a visit
+  // that has chosen nothing.
+  //
+  // A DESK IS RUFF. localhost, 127.0.0.1 and file: carry no brand, and the
+  // suite -- 784 specs written against the red bone -- runs on them; the
+  // door rule is about the public names, so a nameless host keeps the
+  // default the whole repo already assumed.
+  function homeTheme(hostname) {
+    const host = String(hostname == null
+      ? (typeof location !== 'undefined' ? location.hostname : '')
+      : hostname).trim().toLowerCase();
+    if (!host || host === 'localhost' || host === '127.0.0.1' || host === '[::1]') return 'ruff';
+    return host.includes('ruff') ? 'ruff' : 'rough';
+  }
+
+  // AND THE LIGHT FOLLOWS THE BRAND. Movie, 9 Nov 2026: "lets go day mode
+  // first for ROUGH and Night mode first for RUFF". A draftsman thinks on
+  // white paper, so the plain board opens on DAY; the bone keeps its night.
+  // Same standing as homeTheme: a fallback for a visit that has stored no
+  // mode, behind the stored pick and behind ?mode=.
+  function homeMode(theme) {
+    return theme === 'rough' ? 'day' : 'night';
+  }
+
   window.DraftPalette = Object.freeze({
     THEMES,
     MODES,
+    homeTheme,
+    homeMode,
     ROLES,
     TEXTURABLE,
     resolve,

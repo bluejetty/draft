@@ -54,8 +54,8 @@
       try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
       catch { return {}; }
     })();
-    const theme = params.get('theme') || stored.theme || 'ruff';
-    const mode = params.get('mode') || stored.skinMode || 'night';
+    const theme = params.get('theme') || stored.theme || P.homeTheme();
+    const mode = params.get('mode') || stored.mode || stored.skinMode || P.homeMode(theme);
     window.__byTheme = { theme, mode };
     window.__bySkin = P.apply(document, theme, mode);
   })();

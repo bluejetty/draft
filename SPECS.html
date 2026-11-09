@@ -38,8 +38,8 @@
         return allowed.includes(stored[name]) ? stored[name] : fallback;
       };
       window.__specsSkin = {
-        theme: pick('theme', P.THEMES, 'ruff'),
-        mode: pick('mode', P.MODES, 'night'),
+        theme: pick('theme', P.THEMES, P.homeTheme()),
+        mode: pick('mode', P.MODES, P.homeMode(pick('theme', P.THEMES, P.homeTheme()))),
       };
       P.apply(document, window.__specsSkin.theme, window.__specsSkin.mode);
     })();
