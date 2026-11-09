@@ -37,11 +37,15 @@ test('the tooltip names the tool first, then its key and what it does', async ({
   expect(await title('roomtag')).toBe('ROOM TAG — Place a room tag.');
 });
 
-test('MULTIPLE is a key in DRAW / EDIT that says it is coming and arms nothing', async ({ page }) => {
+// MULTIPLE'S PLACEHOLDER BECAME ARRAY (9 Nov): a key in DRAW / EDIT with no
+// letter, which arms a tool once something is picked and says so when
+// nothing is. tests/model-draft-commands.spec.js drives the tool itself.
+test('ARRAY stands where MULTIPLE did and asks for a pick before it arms', async ({ page }) => {
   await open(page);
-  const multiple = page.locator('[data-tool-group="draw"] [data-tool-key="multiple"]');
-  await expect(multiple).toHaveCount(1);
-  await multiple.click({ force: true });
-  await expect(page.locator('#strip-message')).toContainText('MULTIPLE is coming soon');
+  await expect(page.locator('[data-tool-key="multiple"]')).toHaveCount(0);
+  const array = page.locator('[data-tool-group="draw"] [data-tool-key="array"]');
+  await expect(array).toHaveCount(1);
+  await array.click({ force: true });
+  await expect(page.locator('#strip-message')).toContainText('ARRAY: pick what to copy first');
   expect(await page.evaluate(() => activeTool)).toBe('select');
 });

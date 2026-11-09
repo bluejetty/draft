@@ -834,7 +834,13 @@
      is the difference the colour is carrying. */
   .sel-chip.assembled { color: var(--accent); border-color: var(--accent); }
   .sel-chip.assembled:hover { border-color: var(--accent); }
-  .tool-keys { display:grid; grid-template-columns:repeat(4, 40px); gap:4px; }
+  /* FIVE ACROSS, NOT FOUR (9 Nov). The classic edits put four keys into
+     DRAW / EDIT and a fifth in ARRAY's place: eighteen keys in a four-wide
+     grid is five rows, and at 1366x768 the fifth row stood 40px below the
+     rail's fold (model-html-left-tabs measures it). Five wide, eighteen is
+     four rows again -- the height the column always had -- and BUILD's nine
+     drop from three rows to two. */
+  .tool-keys { display:grid; grid-template-columns:repeat(5, 40px); gap:4px; }
   /* THE BAR UNDER THE TOP BAR, FLUSH LEFT (Movie, 20 Oct: "the SELECT
      ASSEMBLY TRIM DIMENSIONS - new buttons overlap the tab - we should push
      those so they are right underneath the top bar and could also be pushed
@@ -908,7 +914,7 @@
      nothing, and it is the same occlusion cost Skipper measured and cut on the
      right. Fixing the slot's width makes the chips wrap inside it instead of
      stretching it. */
-  #tool-slot { width:172px; }
+  #tool-slot { width:216px; }   /* five 40px keys and four 4px gaps (9 Nov; 172 when it was four) */
   .sel-row { display:flex; flex-wrap:wrap; gap:3px; }
   .sel-chip { flex:0 1 auto; min-width:0; overflow-wrap:anywhere;
     padding:5px 4px; cursor:pointer;

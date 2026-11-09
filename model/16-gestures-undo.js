@@ -329,7 +329,8 @@
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || elevLineStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
-      || stretchState.a || stairHand.at);
+      || stretchState.a || stairHand.at || draftCommandsBusy());
+    draftCommandsCancel();
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
     if (dimPlacing) dimKeep();
@@ -705,6 +706,9 @@
     if (activeTool === 'stair') { stairHandPress(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'stretch') { stretchPress(at); return; }
+    // THE CLASSIC EDITS (18-draft-commands.js): OFFSET, MIRROR, ROTATE
+    // about a base point, FILLET, ARRAY.
+    if (DRAFT_CMD_TOOLS.includes(activeTool)) { draftCommandPress(at); return; }
     if (activeTool === 'dimension') { dimPress(at); return; }
     if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
     if (drawsRun()) {

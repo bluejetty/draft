@@ -639,6 +639,8 @@ test.describe('MODEL.html tier 1', () => {
       './model/15-panels.js',
       './model/16-gestures-undo.js',
       './model/17-boot-save.js',
+      // The classic edits (9 Nov): OFFSET, MIRROR, ROTATE, FILLET, ARRAY.
+      './model/18-draft-commands.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT

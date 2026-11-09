@@ -2306,6 +2306,9 @@
         paintHoverCorner();
         paintBand();
         paintStretch();
+        // The classic edits' ghosts (18-draft-commands.js, loaded after the
+        // boot, whose first paint runs before it).
+        if (typeof paintDraftCommands === 'function') paintDraftCommands();
         paintHologramHover();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
@@ -2686,6 +2689,7 @@
     syncRotateVerbs();
     syncFlipVerbs();
     syncOrderVerbs();
+    if (typeof syncDraftCommandBars === 'function') syncDraftCommandBars();
     syncRescaleVerbs();
     syncBreakVerb();
     syncMoveVerb();

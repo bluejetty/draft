@@ -866,6 +866,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'DONE',
             // ORDER's own row (Movie, 6 Nov): to the front, to the back, DONE.
             'TO FRONT', 'TO BACK', 'DONE',
+            // THE CLASSIC EDITS' ROWS (9 Nov): MIRROR's KEEP ORIGINAL toggle
+            // and ARRAY's MAKE. OFFSET, ROTATE and FILLET's rows are a box
+            // and words only.
+            'KEEP ORIGINAL', 'MAKE',
             // THE STAIR'S POPUP (Movie, 25 Oct: "give them a popup choice"):
             // the shape, the hand it turns, which way from this floor, and
             // DONE. The choices set what the STAIR tool's two presses make;
@@ -1120,6 +1124,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length',
             // ROTATE's typed angle, which turns what is held and authors nothing.
             'rotate-angle',
+            // THE CLASSIC EDITS' BOXES (9 Nov): OFFSET's distance, FILLET's
+            // radius, the base-point ROTATE's degrees and ARRAY's counts and
+            // spacings. Each is a number for a gesture that acts on what is
+            // drawn or picked; none authors a kind of thing the tool rows
+            // do not already name.
+            'offset-dist', 'fillet-radius', 'turn-angle',
+            'array-cols', 'array-dx', 'array-rows', 'array-dz',
             // and the hologram's .draft picker.
             'hologram-file',
             // THE LOT'S OWN TWO FIGURES (Movie, 13 Oct), behind CUSTOM on
