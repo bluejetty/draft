@@ -465,6 +465,13 @@ if (!window.DraftDxfWriter) {
     const out = [];
     const put = (code, value) => { out.push(String(code), String(value)); };
     const colorOf = new Map(layers.map(l => [layerName(l.name), l.color || 7]));
+    // THE PEN TABLE'S WORDS FOR A LAYER (jb, 9 Nov: "walls heavy, dims
+    // light, hidden dashed" into the DXF too): a linetype name from the
+    // LTYPE table above and a lineweight in 1/100 mm. pen-table.js
+    // `dxfLayerFor` writes them; a layer the caller says nothing about goes
+    // out CONTINUOUS with no weight, as every layer did before.
+    const penOf = new Map(layers.filter(l => l.linetype || l.lineweight != null)
+      .map(l => [layerName(l.name), { linetype: l.linetype || 'CONTINUOUS', lineweight: l.lineweight }]));
     const used = [...new Set(entities.map(e => layerName(e.layer)))];
     used.forEach(name => { if (!colorOf.has(name)) colorOf.set(name, cadColor(name)); });
     const b = bounds(entities);
@@ -494,7 +501,9 @@ if (!window.DraftDxfWriter) {
     put(0, 'ENDTAB');
     put(0, 'TABLE'); put(2, 'LAYER'); put(70, colorOf.size);
     colorOf.forEach((color, name) => {
-      put(0, 'LAYER'); put(2, name); put(70, 0); put(62, color); put(6, 'CONTINUOUS');
+      const pen = penOf.get(name);
+      put(0, 'LAYER'); put(2, name); put(70, 0); put(62, color); put(6, pen ? pen.linetype : 'CONTINUOUS');
+      if (pen && Number.isInteger(pen.lineweight)) put(370, pen.lineweight);
     });
     put(0, 'ENDTAB');
     put(0, 'TABLE'); put(2, 'STYLE'); put(70, 1);

@@ -344,7 +344,38 @@ if (!window.DraftLayoutPlan) {
   const ROOF_PLATE_INK = '#1d1f20';
 
   const LOWER_ROOF_PRINT = '#9a9a9a';
+  // ── THE COMPANY'S LAYER TABLE, read once per paint ──────────────────────
+  // STANDARDS.html writes visible / printable / weight / linetype into the
+  // active standards profile; this is the one place a sheet reads them back.
+  const layerTableNow = () => {
+    const profiles = window.DraftProfileManager;
+    const layerApi = window.DraftLayerStandards;
+    return profiles && layerApi
+      ? layerApi.normaliseLayerStandards(
+        profiles.getActive('standards')?.content?.model?.layerStandards)
+      : null;
+  };
+
+  // ── THE PEN TABLE GOES IN FRONT OF THE CONTEXT (jb, 9 Nov) ──────────────
+  //
+  // "walls heavy, dims light, hidden dashed", printed that way. Every public
+  // painter in this file hands its context through here first, so the canvas
+  // (screen, print and PDF) and the DXF recorder alike stroke each layer at
+  // the pen the company standard gives it -- pen-table.js listens for the
+  // `dxfLayer` plan-composition names before each piece. Wrapping twice is
+  // harmless (the proxy recognises itself), which is what lets drawPlan hand
+  // on to drawSitePlan and drawLevelMarks without each guarding the other.
+  // A page that has not loaded pen-table.js, or a standard with every pen
+  // at DEFAULT, paints exactly as before.
+  const penned = (ctx, env) => {
+    const pens = window.DraftPenTable;
+    const table = pens ? layerTableNow() : null;
+    if (!table) return ctx;
+    return pens.wrap(ctx, { lookup: id => table[id] || null, inkScale: env.inkScale });
+  };
+
   function drawRoofPlan(ctx, toS, saved, levelId, env = {}) {
+    ctx = penned(ctx, env);
     const geo = window.DraftGeometry2D;
     const render = window.DraftRender2D;
     if (!geo || !render) return false;
@@ -929,6 +960,7 @@ if (!window.DraftLayoutPlan) {
   // `dimensions: false` is for the roof path, whose own painter already
   // draws the level's strings; drawing them twice would double the ink.
   function drawLevelMarks(ctx, toS, saved, levelId, env = {}, { dimensions = true } = {}) {
+    ctx = penned(ctx, env);
     const composition = window.DraftPlanComposition;
     const geo = window.DraftGeometry2D;
     if (!composition || !geo) return false;
@@ -981,6 +1013,7 @@ if (!window.DraftLayoutPlan) {
   };
 
   function drawSitePlan(ctx, toS, saved, env = {}) {
+    ctx = penned(ctx, env);
     const geo = window.DraftGeometry2D;
     const { lot, bodies, roofs } = sitePlanParts(saved);
     // NOTHING BUT HIS OWN LINES IS STILL A SITE PLAN (Movie, 6 Nov): a lot
@@ -1096,6 +1129,7 @@ if (!window.DraftLayoutPlan) {
   }
 
   function drawPlan(ctx, toS, saved, levelId, env = {}) {
+    ctx = penned(ctx, env);
     const composition = window.DraftPlanComposition;
     const geo = window.DraftGeometry2D;
     if (!composition || !geo) return false;
@@ -1333,10 +1367,7 @@ if (!window.DraftLayoutPlan) {
         + ' is not loaded, so every layer draws regardless of its Visible tick '
         + '-- STANDARDS can be set and this sheet will ignore it.');
     }
-    const layerTable = profiles && layerApi
-      ? layerApi.normaliseLayerStandards(
-        profiles.getActive('standards')?.content?.model?.layerStandards)
-      : null;
+    const layerTable = layerTableNow();
 
     composition.drawPlan(ctx, toS, {
       levelId,

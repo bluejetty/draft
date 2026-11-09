@@ -453,6 +453,40 @@ if (!window.DraftProfileManager) {
 
   const flatLayerStandards = () => DEFAULT_LAYER_STANDARDS.flatMap(group => group.layers);
 
+  // ── THE PEN TABLE (jb, 9 Nov) ───────────────────────────────────────────
+  //
+  // "Line weights / a pen table. There is no way I could see to say 'walls
+  // heavy, dims light, hidden dashed' and have it print that way."
+  //
+  // A layer standard carries two more words: the PEN WEIGHT it prints with
+  // and the LINETYPE. Both default to 'default', which means THE PAINTER'S
+  // OWN -- a wall still strokes at the width render-2d.js gives it and an
+  // overhead line still dashes itself -- so a company standard saved before
+  // today prints exactly as it did. The weight ids are line-styles.js's six
+  // (1 HAIR .. 6 XTRA-BOLD) and the linetypes its four (solid, dashed,
+  // dotdash, dotted); the names are repeated here only so this file stays
+  // loadable on its own (STANDARDS.html and the node harnesses load it
+  // without line-styles.js). pen-table.js is what reads these back on a
+  // sheet, and dxf-writer.js what writes them into the LAYER table.
+  const PEN_WEIGHTS = Object.freeze([
+    Object.freeze({ id: 'default', name: 'DEFAULT' }),
+    Object.freeze({ id: '1', name: 'HAIR' }),
+    Object.freeze({ id: '2', name: 'FINE' }),
+    Object.freeze({ id: '3', name: 'MEDIUM' }),
+    Object.freeze({ id: '4', name: 'HEAVY' }),
+    Object.freeze({ id: '5', name: 'BOLD' }),
+    Object.freeze({ id: '6', name: 'XTRA-BOLD' }),
+  ]);
+  const PEN_LINETYPES = Object.freeze([
+    Object.freeze({ id: 'default', name: 'DEFAULT' }),
+    Object.freeze({ id: 'solid', name: 'SOLID' }),
+    Object.freeze({ id: 'dashed', name: 'DASHED' }),
+    Object.freeze({ id: 'dotdash', name: 'DOT DASH' }),
+    Object.freeze({ id: 'dotted', name: 'DOTTED' }),
+  ]);
+  const penWeightId = raw => (PEN_WEIGHTS.some(w => w.id === String(raw)) ? String(raw) : 'default');
+  const penLinetypeId = raw => (PEN_LINETYPES.some(l => l.id === String(raw)) ? String(raw) : 'default');
+
   const normaliseLayerStandards = value => {
     const stored = value && typeof value === 'object' ? value : {};
     return Object.fromEntries(flatLayerStandards().map(layer => {
@@ -462,7 +496,9 @@ if (!window.DraftProfileManager) {
         : layer.name;
       const printable = typeof entry.printable === 'boolean' ? entry.printable : layer.printable;
       const visible = typeof entry.visible === 'boolean' ? entry.visible : true;
-      return [layer.id, { name, printable, visible }];
+      const weight = penWeightId(entry.weight);
+      const linetype = penLinetypeId(entry.linetype);
+      return [layer.id, { name, printable, visible, weight, linetype }];
     }));
   };
 
@@ -563,6 +599,10 @@ if (!window.DraftProfileManager) {
   };
   window.DraftLayerStandards = {
     DEFAULT_LAYER_STANDARDS,
+    PEN_WEIGHTS,
+    PEN_LINETYPES,
+    penWeightId,
+    penLinetypeId,
     normaliseLayerStandards,
   };
   window.DraftStructureStandards = {
