@@ -599,8 +599,7 @@
   // the foot with the 1' light lit.
   const slideDelta = (slide, dx, dz) => {
     let t = dx * slide.u.x + dz * slide.u.z;
-    const Q = window.DraftToyConstraints;
-    if (footOn && Q) t = Q.quantiseFeet(t);
+    if (footOn) t = quantiseFeet(t);
     t = Math.max(slide.lo, Math.min(slide.hi, t));
     return { dx: slide.u.x * t, dz: slide.u.z * t };
   };

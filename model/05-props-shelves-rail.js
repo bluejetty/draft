@@ -837,7 +837,6 @@
     // run begun on MAIN FL and finished on a shelf would weld two workspaces
     // together through one wall.
     drawStart = null;
-    pendingBone = null;
     selection = [];
     buildChrome();
     paint();
@@ -1111,7 +1110,6 @@
     // STANDING ON THE CLOSED SHELF, the drafter is on the next one now: the
     // active shelf id moved above, and the rebuild reads it.
     drawStart = null;
-    pendingBone = null;
     buildChrome();
     paint();
     sayOnStrip(emptied

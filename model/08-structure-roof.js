@@ -182,9 +182,7 @@
   };
   const commitDrawnPiece = (from, to) => {
     if (activeTool !== 'line') {
-      const justified = toyJustifyAlongHardLine(from, to);
-      return { type: 'wall', item: commitWall(from, to,
-        { ...brushOptions('wall'), ...(justified ? { refLine: justified } : {}) }) };
+      return { type: 'wall', item: commitWall(from, to, brushOptions('wall')) };
     }
     const { levelId, viewId } = onActiveLevel();
     const lineView = wallHomeView(viewId);

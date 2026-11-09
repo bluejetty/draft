@@ -139,10 +139,9 @@
     home.append(help);
 
     syncFixturePanel = () => {
-      // The board answers through the roster, never a `board === 'toy'`
-      // written here -- so this panel and the keypad cannot disagree about a
-      // board. FIXTURE is not a TOY tool, so on TOY every chip is dead.
-      const on = window.DraftToolRoster?.availableOn('fixture', board) !== false;
+      // The roster answers, so this panel and the keypad cannot disagree
+      // about whether FIXTURE is on offer.
+      const on = window.DraftToolRoster?.availableOn('fixture') !== false;
       slot.querySelectorAll('[data-fixture-kind]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(activeTool === 'fixture' && !washroomPreset && !kitchenPreset && btn.dataset.fixtureKind === fixtureKindId));
@@ -354,11 +353,8 @@
       const key = window.DraftToolRoster?.keyFor('select')
         ? window.DraftToolRoster.bindings() : {};
       const gKey = window.DraftKeyboard?.keyBindingLabel(key.group) || '';
-      // §6: "the assembly verbs ... none of them operate in TOY". The board
-      // beats the selection count -- a TOY drafter with items selected must
-      // still find ASSEMBLY down, or the rule holds only while nothing is
-      // picked, which is the half nobody would test.
-      const on = window.DraftToolRoster?.panelOn('assembly', board) !== false;
+      // The roster answers first, then the selection count.
+      const on = window.DraftToolRoster?.panelOn('assembly') !== false;
       asmBtn.textContent = gKey ? `ASSEMBLY GROUP  [${gKey}]` : 'ASSEMBLY GROUP';
       asmBtn.disabled = !on || n === 0;
       // ASSEMBLY GROUP / ASSEMBLY BUST (Movie, 18 Oct): BREAK is the roof's
@@ -394,7 +390,7 @@
       // The old page's own two sentences (:23631-23633), and the red is its
       // own too: nothing selected is the state that stops the button working.
       help.textContent = !on
-        ? 'Assemblies are not offered on this board.'
+        ? 'Assemblies are not offered here.'
         : (n ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`
              : 'Select drawing items before assembling them.');
       help.toggleAttribute('data-engaged', !on || n === 0);
@@ -2688,7 +2684,7 @@
     if (ref) return { x: ref.x, z: ref.z };
     const dot = openingCentreAt(at);
     if (dot) return { x: dot.c.x, z: dot.c.z, ref: { openingId: String(dot.opening.id), x: dot.c.x, z: dot.c.z } };
-    const snap = board !== 'toy' ? drawSnap(at) : {};
+    const snap = drawSnap(at);
     const p = snap.pt || cornerSnap(at, []) || at;
     return { x: p.x, z: p.z, ...(snap.pt || cornerSnap(at, []) ? dimLinkAt(p) : {}) };
   };
@@ -2702,7 +2698,7 @@
   // points stand straight across the wall from the click.
   const DIM_FACE_CLEAR_PX = 3;
   const dimWallFacesAt = at => {
-    if (board === 'toy' || refPoint(at) || openingCentreAt(at) || cornerSnap(at, [])) return null;
+    if (refPoint(at) || openingCentreAt(at) || cornerSnap(at, [])) return null;
     const TE = window.DraftTrimExtend;
     if (!TE) return null;
     const clear = DIM_FACE_CLEAR_PX / view.scale;
@@ -3008,7 +3004,7 @@
     ctx.restore();
     if (dot) paintDonut(dot.c, 'orange');
     if (!dimPlacing && !dot) {
-      const snap = board !== 'toy' ? drawSnap(cursorWorld) : {};
+      const snap = drawSnap(cursorWorld);
       const lit = snap.pt || cornerSnap(cursorWorld, []);
       if (lit) {
         const s = toS(lit);

@@ -838,7 +838,7 @@
   // Acceptance #4 is what keeps this honest in the other direction: in
   // DRAFTING with the T-square down, nothing squares and the same gesture
   // commits the same off-axis wall it commits today. TOY must not leak.
-  const squaring = () => tsquareLive() || board === 'toy';
+  const squaring = () => tsquareLive();
 
   const squareTo = (from, at) => {
     if (!squaring() || !from) return at;
@@ -1138,6 +1138,7 @@
     // ONE INSTRUMENT HOLDS THE RUN AT A TIME: "when the protractor is lit
     // the T square should be UNLIT", and the other way round -- and the ANGLE.
     lightInstrument(tsquareOn ? null : 'tsquare');
+    rememberTsquare();
     clearNotice();
     stripRefresh();
     paint();
@@ -1238,12 +1239,17 @@
     sayOnStrip(`TRACK ${trackOn ? 'on — the cross lines square to a node, and a point near one lands on it' : 'off'}`);
     stripRefresh(); paint();
   });
-  scaleChip.addEventListener('click', () => {
-    footOn = !footOn;
+  // THE TWO LIGHTS ARE REMEMBERED PER BROWSER, in SKIN_KEY with the theme.
+  const rememberLight = (key, on) => {
     try {
       const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
-      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, footLight: footOn }));
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [key]: on }));
     } catch { /* a browser refusing storage still gets the light, for this tab */ }
+  };
+  const rememberTsquare = () => rememberLight('tsquare', tsquareOn);
+  scaleChip.addEventListener('click', () => {
+    footOn = !footOn;
+    rememberLight('footLight', footOn);
     stripRefresh();
     paint();
   });
@@ -2931,7 +2937,7 @@
   // THE CORNER IN HAND ON A HOUSE NODE OR FACE CORNER, `{ dx, dz, lit }`, or
   // null. The house's points only: suite meets suite by the end lines.
   const suitePointLock = m => {
-    if (!m.grab || !snapLive() || board === 'toy') return null;
+    if (!m.grab || !snapLive()) return null;
     const at = { x: m.grab.x + (m.underlay.x - m.before.x), z: m.grab.z + (m.underlay.z - m.before.z) };
     m.magnet ||= { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: [] };
     const hit = pointCatch(at, m.magnet);
@@ -3579,7 +3585,7 @@
       // press on an opening gives it these properties (the dispatch below
       // asks the brush first). A WALL lifted keeps the brush up instead:
       // "a WALL will only change another WALL", and the next press is that.
-      const arms = kind === 'fenestration' && window.DraftToolRoster?.availableOn('fenestration', board);
+      const arms = kind === 'fenestration' && window.DraftToolRoster?.availableOn('fenestration');
       if (arms) {
         fenestrationType = brushLoad.props.type === 'window' ? 'window' : 'door';
         setTool('fenestration');

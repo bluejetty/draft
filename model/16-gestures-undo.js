@@ -91,7 +91,7 @@
     return best;
   };
   const breakCornerByShift = () => {
-    if (activeTool !== RESTING_TOOL || moveDrag || board === 'toy' || modalUp()) return;
+    if (activeTool !== RESTING_TOOL || moveDrag || modalUp()) return;
     const hit = cornerToBreak();
     if (!hit) return;
     const { run, v } = hit;
@@ -139,162 +139,6 @@
     lengthBox.classList.add('live');
   };
 
-  // ── §3: MOVING A BONE ────────────────────────────────────────────────────
-  //
-  // THE WALL MOVES PERPENDICULAR TO ITSELF. A wall running along x travels in
-  // z and vice versa; the component along its own run is dropped rather than
-  // constrained, because sliding a wall lengthwise is not a move this board
-  // offers.
-  const runAxisOf = w => (Math.abs(w.end.x - w.start.x) >= Math.abs(w.end.z - w.start.z)
-    ? 'x' : 'z');
-  const posOnMoveAxis = w => (runAxisOf(w) === 'x' ? w.start.z : w.start.x);
-
-  // THE FIRST NUDGE OF AN OFF-GRID WALL LANDS IT ON THE FOOT MARK. Movie,
-  // 13 Sep: "make the first point land on a ft point how about so we don't
-  // have that problem" -- so a wall at 12'-0½" goes to 13'-0", then 14'-0".
-  //
-  // WHY THIS LIVES HERE AND NOT IN THE MODULE. allowedMove quantises the
-  // DELTA, never the position: quantiseFeet(d, step) = round(d/step)*step. It
-  // cannot land a wall on the grid because it never looks at where the wall
-  // is. Teaching it to is the second constraint path §3 forbids. So the PAGE
-  // decides what distance to ask for, and the module still decides whether
-  // that distance is allowed -- which is the division of labour the order
-  // describes.
-  //
-  // The half-inch is given up ONCE, on the wall the drafter deliberately
-  // moved. A wall nobody touches is never re-gridded, which is what keeps the
-  // 31 Aug rule intact: opening an old plan in TOY moves nothing.
-  const FOOT = 1;
-  const offGridBy = pos => {
-    const frac = pos - Math.floor(pos);
-    return Math.min(frac, FOOT - frac) < 1e-6 ? 0 : frac;
-  };
-  // ONE FUNCTION, AND IT RETURNS THE STEP. This was a landingDelta returning
-  // null for an on-grid wall, and a caller turning that null into FOOT -- and
-  // the gate showed the null branch was redundant twice over: with `ask` now
-  // always the drafter's distance, an on-grid wall computes a step of exactly
-  // FOOT down either path, so the two arms produced identical answers and the
-  // mutant deleting the guard changed nothing.
-  //
-  // The distance to the next foot mark IN THE DIRECTION OF TRAVEL is the whole
-  // rule, and on a wall already on the grid that distance IS a foot. Saying it
-  // once is shorter than saying it twice and calling one of them a special
-  // case.
-  const landingStep = (pos, direction) => {
-    const frac = offGridBy(pos);
-    if (!frac) return FOOT;
-    return direction > 0 ? FOOT - frac : frac;
-  };
-
-  // THE MODULE'S REASONS, IN THE DRAFTER'S WORDS. toy-constraints.js names
-  // them as codes on purpose -- it is a node module with no screen -- so the
-  // page is where they become a sentence. Movie's rule for TOY is that a
-  // refusal is explained "in the room's own words", and a code is not that.
-  //
-  // The default is the code itself rather than a shrug: an unnamed reason is a
-  // bug in this list, and printing it is how anyone finds out. A generic
-  // "cannot move that" would hide the gap for ever.
-  const BLOCKER_WORDS = {
-    NOT_ORTHOGONAL: 'this wall is not square, so the toy cannot move it',
-    TOUCHES_NON_ORTHOGONAL: 'this wall meets an angled wall, so the toy cannot move it',
-    MIN_ROOM: 'that would make a room too small',
-    OPENING_WOULD_NOT_FIT: 'a door or window would not fit after that',
-    CANTILEVER: 'that would overhang more than 2 ft — bring the foundation out first',
-    GROUP_MEMBER_BLOCKED: 'a wall joined to this one cannot move that far',
-    OBJECT_CLEARANCE: 'something in the room would not have room left',
-    NEEDS_A_BEAM: 'that span would need a beam',
-    // The wall the drafter grabbed is square and so is its neighbour; moving
-    // it is what would bend one. So this says what the MOVE would do, not what
-    // the wall is -- the other two ortho lines above are about the wall.
-    WOULD_ANGLE_NEIGHBOUR: 'that would leave the next wall on an angle — break it first',
-  };
-  const blockerSays = verdict =>
-    BLOCKER_WORDS[verdict.reason] || `cannot move it: ${verdict.reason}`;
-
-  const toyWallDelta = (md, dx, dz) => {
-    const T = window.DraftToyConstraints;
-    const C = window.DraftToyContext;
-    const wall = md.body;
-    if (!T || !C || !wall) return null;
-    const axis = runAxisOf(wall);
-    // Perpendicular only. The along-run component is discarded, not clamped.
-    const wanted = axis === 'x' ? dz : dx;
-    if (!wanted) return { dx: 0, dz: 0 };
-
-    // TWO THINGS, AND I REMOVED ONE OF THEM AS REDUNDANT AN HOUR AGO. The gate
-    // had shown `ask = land` changing nothing, so I dropped it -- but it was
-    // only ever exercised pulling -z, where the distance to the mark behind is
-    // 0.958 and quantising a one-foot ask by 0.958 lands on the mark anyway.
-    // Push +z from the same wall and the distance to the mark AHEAD is 0.042:
-    // quantising a one-foot ask by 0.042 gives 1.008, and the wall sails past
-    // the mark to -5.03.
-    //
-    // So the step alone does not carry the rule. THE FIRST NUDGE OF AN
-    // OFF-GRID WALL IS THE LANDING, whatever the drag distance -- that is what
-    // `ask` says -- and the step is what stops the module rounding the landing
-    // back off the grid. Both, and neither is decoration.
-    //
-    // The lesson is the one from the fixture that only ran -z: a gate result
-    // is only as good as the directions the checks take. I generalised from
-    // one arm of a branch and deleted a line that carried the other.
-    const pos = posOnMoveAxis(wall);
-    const dir = Math.sign(wanted);
-    const land = landingStep(pos, dir);
-    const ask = offGridBy(pos) ? dir * land : wanted;
-    const probe = { ...wall, stepFt: land };
-    // ZERO-LENGTH WALLS ARE NOT GEOMETRY, and handing one to the module makes
-    // it refuse the very drag that is about to give the wall its length. §4's
-    // connector is born with both ends at the same point; `isOrthogonal`
-    // reports false for a run of no length, so `inertReason` sees the dragged
-    // wall TOUCHING a non-orthogonal wall and calls it inert. The move is
-    // refused by the thing the move creates.
-    //
-    // The format drops anything under 1e-6 on load, so a wall this short is
-    // not a record the drawing will keep either. The module is asked about
-    // real walls.
-    const ctx = C.gather({ walls: (drawing.walls || [])
-      .filter(w => Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) >= 1e-6)
-      .map(w => ({ ...w })) });
-    // THE PAGE HAS TO SAY WHAT ACTUALLY MOVES, and until now it did not.
-    //
-    // Left to itself the module builds a weld group: any two walls whose ends
-    // touch are welded, so a CLOSED ROOM is one group and dragging any wall of
-    // it is judged as picking the whole house up and setting it down a foot
-    // away. That is trivially legal, which is why `allowedMove` has answered
-    // an unconditional yes here since §3 landed -- every room minimum, every
-    // cantilever band, every beam-span rule in the module was unreachable from
-    // this page, and no mutant could show it because the answer is the same
-    // whether the rules work or not.
-    //
-    // Measured: dragging `n` on the plain square returned group [n,e,s,w] and
-    // no stretches. The page then moved ONE wall and stretched its neighbours,
-    // which is a different operation from the one that was approved.
-    //
-    // `welds` is the module's own override, so this is telling it the truth
-    // rather than defeating it: the group is the dragged wall, and the walls
-    // hanging off its corners are STRETCHES -- which is exactly what this page
-    // does to them.
-    const verdict = T.allowedMove(probe, ask,
-      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]],
-        // §4: the corners this drag already unshared. Their neighbours still
-        // sit at the same coordinates until the first delta lands, so without
-        // this the module refuses the bump-out as a diagonal it would have
-        // caused -- a refusal about geometry the page has already resolved.
-        detached: (md.connectors || []).map(c => c.detachedFrom).filter(Boolean) });
-    // §3: "A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY. Never elastic."
-    // The saying is the half that was missing: allowedMove has always returned
-    // a reason and this page has always stored it, and nothing put it on
-    // screen. That is the same fault as a refusal written and overwritten --
-    // a rule that exists to speak, silent -- so it goes through sayOnStrip
-    // like every other thing this page says, and the next drag that actually
-    // moves something clears it.
-    const stopped = verdict.reason && verdict.delta === 0;
-    md.blocked = stopped ? verdict : null;
-    if (stopped) sayOnStrip(blockerSays(verdict));
-    else if (verdict.delta) clearNotice();
-    const moved = verdict.delta || 0;
-    return axis === 'x' ? { dx: 0, dz: moved } : { dx: moved, dz: 0 };
-  };
   // ── EVERY HALF-FINISHED GESTURE, PUT DOWN ────────────────────────────
   //
   // Movie, 27 Sep: *"do we have control over anything that happens when the
@@ -327,7 +171,7 @@
   // capture would leave the browser holding a pointer this page had
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
-    const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || elevLineStart
+    const had = !!(drawStart || rulerFrom || cutStart || beamStart || elevLineStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
       || stretchState.a || stairHand.at);
     drawStart = null;
@@ -348,7 +192,6 @@
     floorCorners = [];
     shapeCorners = [];
     outlineFamily = null;
-    if (pendingBone) { pendingBone = null; sayOnStrip('run cancelled'); }
     return had;
   };
 
@@ -1013,7 +856,7 @@
         sx: e.clientX, sy: e.clientY, active: false,
       };
       // ALT ONLY (Movie, 26 Oct): CTRL held is snapping off now.
-      if (corner && e.altKey && board !== 'toy') detachCorner(moveDrag, corner);
+      if (corner && e.altKey) detachCorner(moveDrag, corner);
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -1068,7 +911,6 @@
         // §4: unshare any corner this wall shares with a COLLINEAR neighbour,
         // before the first delta lands, so the connector grows with the drag
         // instead of appearing at the end of it.
-        splitRunCorners(md);
       }
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
@@ -1092,8 +934,7 @@
           // the undo step's copies keep the points they were taken with.
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
           // BY THE FOOT with the 1' light lit, as an assembly goes.
-          const Q = window.DraftToyConstraints;
-          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          if (footOn) { dx = quantiseFeet(dx); dz = quantiseFeet(dz); }
           const by = p => ({ ...p, x: p.x + dx, z: p.z + dz });
           md.items.forEach(({ type, item, before }) => {
             if (type === 'line') { item.start = by(before.start); item.end = by(before.end); }
@@ -1117,9 +958,8 @@
           // which is what links the corner to it -- else to the hand, by the
           // foot with the 1' light lit. A NEW ARRAY EACH EVENT, never the old
           // one edited: the undo step holds the corners the drag began with.
-          const Q = window.DraftToyConstraints;
           let x = raw.x, z = raw.z;
-          if (footOn && Q) { x = Q.quantiseFeet(x); z = Q.quantiseFeet(z); }
+          if (footOn) { x = quantiseFeet(x); z = quantiseFeet(z); }
           // A WALL'S NODE TAKES THE CORNER AS ITSELF; a face corner (the
           // inside corner of two walls, say) takes it at its offset from the
           // nearest wall end, so the floor follows that wall too.
@@ -1188,14 +1028,13 @@
           // WITH THE FOOT LIGHT LIT THE FOOT IS THE SNAP, per axis, exactly as
           // the wall drag does it -- quantiseFeet reached rather than rounding
           // written here again.
-          const Q = window.DraftToyConstraints;
-          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          if (footOn) { dx = quantiseFeet(dx); dz = quantiseFeet(dz); }
           md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
           md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
           // HELD BY A CORNER, that corner lands exactly on a node, a face
           // corner or a line it is brought to -- a point before the faces.
           md.lit = null;
-          if (md.corner && snapLive() && board !== 'toy') {
+          if (md.corner && snapLive()) {
             const held = { x: md.corner.x + dx, z: md.corner.z + dz };
             md.magnet ||= magnetExcluding(stairCorners({ ...md.stair, start: md.start, end: md.end }));
             const hit = pointCatch(held, md.magnet);
@@ -1276,11 +1115,10 @@
           // travel wins.
           // TWO ANCHORS ON A LINE: along it only, like a window (anchorSlide).
           if (md.slide) ({ dx, dz } = slideDelta(md.slide, dx, dz));
-          else if (tsquareLive() && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+          else if (tsquareLive()) { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
           // AND BY THE FOOT with the 1' light lit, the MOVE verb's rule
           // (Movie, 20 Oct: "make it work for when i moved grouped stuff too").
-          const Q = window.DraftToyConstraints;
-          if (footOn && Q && !md.slide) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          if (footOn && !md.slide) { dx = quantiseFeet(dx); dz = quantiseFeet(dz); }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
           md.before.forEach(b => relinkVertex(b.vtx));
           // THE LOCKED SIBLINGS DO NOT MOVE HERE. They move ONCE, on the
@@ -1348,7 +1186,7 @@
           const fixed = tsquareLive() ? squaredAxis(from, raw) : null;
           // THE MAGNET ON A DRAG TOO, with SNAP lit off TOY: the corners and
           // faces of every wall the node does not belong to.
-          const magnet = snapLive() && board !== 'toy' ? (md.magnet ||= dragMagnet(grabbed.vtx)) : null;
+          const magnet = snapLive() ? (md.magnet ||= dragMagnet(grabbed.vtx)) : null;
           const hit = fixed
             ? axisMagnet(wanted, fixed, grabbed.vtx, magnet)
             : dragMagnetAt(wanted, grabbed.vtx, magnet);
@@ -1365,7 +1203,7 @@
           // inside corner of the room it is being trimmed to, as often as
           // not -- off the magnet's own corners (trackingNodes), never the
           // dragged wall's own, which travel with the hand.
-          const tracked = !snapped && !fixed && board !== 'toy'
+          const tracked = !snapped && !fixed
             ? trackSnap(wanted, [], (md.rays ||= dragMagnet(grabbed.vtx).corners)) : null;
           // MIN 0 FEET, not the drawn run's 1: a nudge of less than half a foot
           // rounds back to where the corner started, and a corner that stayed
@@ -1381,8 +1219,7 @@
             : footed);
           // AND WITHIN AN INCH OF A LINE THE RUN CROSSES, THE END IS ON IT
           // (inchJoin): a catch that beats the foot, as every catch does.
-          const joined = board !== 'toy'
-            ? inchJoin(grabbed.vtx, landed, (md.segs ||= dragMagnet(grabbed.vtx).segs)) : null;
+          const joined = inchJoin(grabbed.vtx, landed, (md.segs ||= dragMagnet(grabbed.vtx).segs));
           const pt = joined ? joined.pt : landed;
           grabbed.vtx.x = pt.x;
           grabbed.vtx.z = pt.z;
@@ -1393,7 +1230,7 @@
           // with no body, so it is found -- and only when there is one wall.
           const own = md.body && walls().includes(md.body) ? md.body
             : (() => { const at = walls().filter(w => w.start === grabbed.vtx || w.end === grabbed.vtx); return at.length === 1 ? at[0] : null; })();
-          if (board !== 'toy' && own) {
+          if (own) {
             const other = own.start === grabbed.vtx ? own.end : own.start;
             if (md.faceFrom === undefined) {
               md.faceFrom = looseEnd(other, own) ? { x: other.x, z: other.z } : null;
@@ -1403,7 +1240,7 @@
             if (!shift && md.faceFrom) { other.x = md.faceFrom.x; other.z = md.faceFrom.z; relinkVertex(other); }
           }
           // THE DOORS AND WINDOWS ON THE WALLS THIS END BELONGS TO STAY PUT.
-          if (board !== 'toy') keepOpeningsPut(md, grabbed);
+          keepOpeningsPut(md, grabbed);
         } else {
           // A WALL MOVES BY THE DELTA, and the delta is measured from where
           // the press landed to where the cursor is now — never accumulated
@@ -1414,13 +1251,13 @@
           // ALT HELD: the wall goes on its own, its corners let go. (SHIFT
           // until 27 Oct; Shift holds the drag square now, as ARCHICAD's does,
           // and Alt is the corner's own key -- Alt-drag detaches a corner.)
-          if (board !== 'toy') setWallLoose(md, e.altKey);
+          setWallLoose(md, e.altKey);
           // THE T-SQUARE HOLDS A MOVED WALL SQUARE (Movie, 18 Oct: "i like how
           // the walls move, but when the T is on they should stay moving 90
           // degrees it is free moving right now but the T is on"). The wall
           // slides across its own run only, so the walls meeting its ends
           // stretch along their own lines and stay at 90.
-          if (tsquareLive() && board !== 'toy' && md.body?.start && md.body?.end) {
+          if (tsquareLive() && md.body?.start && md.body?.end) {
             const ux = md.body.end.x - md.body.start.x, uz = md.body.end.z - md.body.start.z;
             const len = Math.hypot(ux, uz);
             if (len > 1e-6) {
@@ -1428,21 +1265,15 @@
               dx = nx * across; dz = nz * across;
             }
           }
-          // §3: ON THE TOY BOARD THE MOVE IS toy-constraints.js's TO DECIDE.
-          // Not a second constraint path -- the page proposes a distance and
-          // allowedMove rounds it, welds the group, refuses what it must and
-          // says why. DRAFTING keeps wallSnapDelta exactly as it was.
-          const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;
           // THE FACES SEEK, after the ends' own corner snap and before the
           // foot: a face that catches beats the foot, the corner drag's own
           // rule ("a snap that lands on a real corner is the one case where
           // the foot gives way").
-          const ends = !toy && !footOn ? wallSnapDelta(md.before, dx, dz) : null;
-          const seek = !toy && !ends && snapLive() ? wallFaceSeek(md, dx, dz) : null;
+          const ends = !footOn ? wallSnapDelta(md.before, dx, dz) : null;
+          const seek = !ends && snapLive() ? wallFaceSeek(md, dx, dz) : null;
           md.lit = seek ? seek.lit : null;
           md.cursor = raw;
-          if (toy) { dx = toy.dx; dz = toy.dz; }
-          else if (ends) { dx = ends.dx; dz = ends.dz; }
+          if (ends) { dx = ends.dx; dz = ends.dz; }
           else if (seek) {
             dx = seek.dx; dz = seek.dz;
             // AND THE OTHER AXIS STILL LANDS ON THE FOOT (Movie, 20 Oct: "the
@@ -1455,16 +1286,8 @@
             if (footOn) { const q = footAlongRun(md.body, dx, dz); dx = q.dx; dz = q.dz; }
           }
           else if (footOn) {
-            // THE FOOT LIGHT'S DRAG, and it is NOT the TOY path with a
-            // different name. toyWallDelta discards the along-run component,
-            // welds the group and refuses a move that would leave a
-            // neighbour on an angle -- all correct for TOY and all wrong
-            // here, because acceptance 6 says DRAFTING's other freedoms are
-            // untouched. The light rounds DISTANCE. That is the whole of it.
-            //
-            // quantiseFeet is toy-constraints.js's own `round(d/step)*step`,
-            // reached rather than copied: the order says if you find yourself
-            // writing rounding code you are in the wrong function.
+            // THE FOOT LIGHT'S DRAG. The light rounds DISTANCE. That is the
+            // whole of it.
             //
             // PER AXIS, because a free drag has two components and the wall
             // must land a whole foot in each. Quantising the MAGNITUDE and
@@ -1472,12 +1295,11 @@
             // foot -- the same answer -- but leave a diagonal drag's ends on
             // no foot at all, which is the opposite of what the light says.
             //
-            // It replaces wallSnapDelta rather than running after it, the way
-            // the TOY arm replaces it: with the light lit the foot IS the
-            // snap, and rounding a corner snap afterwards would pull the wall
-            // back off the corner it had just caught.
-            const Q = window.DraftToyConstraints;
-            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+            // It replaces wallSnapDelta rather than running after it: with the
+            // light lit the foot IS the snap, and rounding a corner snap
+            // afterwards would pull the wall back off the corner it had just
+            // caught.
+            dx = quantiseFeet(dx); dz = quantiseFeet(dz);
           }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
         }
@@ -1505,7 +1327,7 @@
       // LET GO OF SHIFT, THE FIRST REAL MOVE FREES THE CURSOR (refPoint);
       // UNLOCKED, THE NODE UNDER IT IS THE ONE SHIFT WILL LINE UP ON.
       if (refLock?.released && cursorWorld && Math.hypot(at.x - refLock.at.x, at.z - refLock.at.z) * view.scale > 6) dropRefLock();
-      if (!refLock && REF_TOOLS.has(activeTool) && board !== 'toy') {
+      if (!refLock && REF_TOOLS.has(activeTool)) {
         const node = snapNodeAt(at);
         if (node) refHover = { x: node.x, z: node.z };
       }
@@ -1777,7 +1599,7 @@
           ...(md.loose ? { loose: { wall: md.body, shared: md.loose.shared.map(b => b.vtx), fresh: md.loose.fresh.map(f => f.vtx) } } : {}) };
         // AN END DRAGGED SETTLES ITS WALLS' OPENINGS (settleOpeningsPut): the
         // steps ride the move's as one batch, so one UNDO puts it all back.
-        const settledOpenings = md.kind === 'corner' && board !== 'toy' ? settleOpeningsPut(md) : [];
+        const settledOpenings = md.kind === 'corner' ? settleOpeningsPut(md) : [];
         undoStack.push(settledOpenings.length ? { kind: 'batch', steps: [moveStep, ...settledOpenings] } : moveStep);
         markDirty();
         // §5: the bone moved, so what the storey above covers has changed and
@@ -1795,7 +1617,6 @@
           const a = md.before[0];
           applyLevelLockDelta(md.group, a.vtx.x - a.x, a.vtx.z - a.z);
         }
-        if (board === 'toy') { boneFollows(md.before, md.body?.levelId); rebuildRoofs(); }
         // §4: A MASTER POINT MOVED, so every level that follows it moves now.
         // On the RELEASE rather than each pointermove, for §5's reason: the
         // riders are hundreds of records and a drag is hundreds of events.
@@ -1844,24 +1665,11 @@
         // empty when no level lock carries siblings, and `!md.lockBefore`
         // refused the typed length to every one of them -- which is why L
         // mid-drag under SELECT moved nothing until 20 Oct.
-        moveTyped = !offered && board !== 'toy' && !md.loose && !(md.lockBefore && md.lockBefore.length) && !master
+        moveTyped = !offered && !md.loose && !(md.lockBefore && md.lockBefore.length) && !master
           && (md.kind === 'wall' || md.kind === 'group' || md.kind === 'corner') && Math.hypot(ddx, ddz) > 1e-6
           ? { drag: true, before: md.before, dx: ddx, dz: ddz, step: moveStep } : null;
         if (moveTyped) stripRefresh();
         finishTypedMidDrag();
-      } else if (board === 'toy' && md.kind === 'wall' && md.body
-        && walls().includes(md.body)) {
-        // §4's CLICK, and it costs no new gesture. `segmentBodyAt` only
-        // returns a wall or line that is ALREADY SELECTED, so reaching here
-        // means the drafter pressed one he had already chosen and let go
-        // without dragging -- which is the click the order describes, and is
-        // not a press that could have been anything else. The drag is still
-        // the move; this is the look.
-        //
-        // AND IT IS A BONE'S CLICK, so it asks whether the body IS a wall.
-        // The grab answers for a selected LINE now as well, and a line is not
-        // a bone: BREAK HERE would offer to put a joint in one.
-        offerBoneChoice(md.body, md.grab);
       } else if (e && !e.shiftKey && activeTool !== 'assembly') {
         // A PRESS ON WHAT IS ALREADY IN HAND, let go where it was, IS THE
         // CLICK AGAIN: it takes the next thing under it (pickUnder).
@@ -2242,18 +2050,10 @@
       if (brushWarned || (brushWarnBox && !brushWarnBox.hidden)) { brushWarnClear(); return; }
       if (brushLoad) { brushDrop(); return; }
       // THROUGH THE SHARED LIST, which is what turned this line from a claim
-      // into a fact. It used to be `drawStart = null` plus the ruler and the
-      // bone, under a note promising every half-taken gesture on the page --
-      // and the cut, the beam, the floor and the outline were not in it.
-      //
-      // AND THE UNFINISHED BONE GOES WITH IT. The refusal elsewhere says
-      // "finish or cancel the run you started", so a cancel has to exist -- a
-      // message naming a way out that the page does not offer is worse than no
-      // message. It is in cancelGestures with the rest of them, so the right
-      // button cancels it too, which is the same sentence said twice by one
-      // piece of code rather than two.
+      // into a fact. It used to be `drawStart = null` plus the ruler, under a
+      // note promising every half-taken gesture on the page -- and the cut,
+      // the beam, the floor and the outline were not in it.
       cancelGestures();
-      if (boneChoiceFor) { closeBoneChoice(); return; }
       // ESC WITH NOTHING SELECTED RELEASES THE FILTER, which is the release
       // the filter help line promises in writing (:22418-22419). With
       // something selected Esc clears the selection first, so a drafter never

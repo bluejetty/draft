@@ -564,22 +564,6 @@
      `.promote-row` stay in the stylesheet -- the bone choice beside this uses
      them, and so does the footprint card. -->
 
-<!-- §4's CHOICE. Movie: "they will be allowed to 'BREAK the bone' every foot
-     if they want to by clicking on it". A click on a bone offers both ways on,
-     because the order names both -- and MOVE THIS WALL is not decoration even
-     though the drag already moves it: a drafter who clicked to look must be
-     able to leave without changing anything, and a choice with one button is
-     an announcement. -->
-<div id="bone-choice" data-bone-choice hidden>
-  <div class="promote-card">
-    <p data-bone-text>Break the bone here, or move this wall?</p>
-    <div class="promote-row">
-      <button type="button" data-break-here>Break here</button>
-      <button type="button" data-break-move>Move this wall</button>
-    </div>
-  </div>
-</div>
-
 <!-- THE BONE'S SECOND PRESS. Movie, 19 Sep: "when the bone is pressed we
      should go to the DRIVE THRU menu always on the first press, and then on
      the 2nd press ask them REQUEST TO CHANGE HOUSE PROPERTIES or BUILD
@@ -595,8 +579,7 @@
      press changes is WHICH HOUSE, so neither word is right for it and the
      buttons say what they do instead.
 
-     NOT #bone-choice, which is the TOY board's break-or-move question about
-     a different bone. -->
+     -->
 <div id="build-choice" data-build-choice hidden>
   <div class="promote-card">
     <p>Ready to build <span data-build-choice-house></span>.</p>
@@ -1160,17 +1143,10 @@
      profile-manager.js for the SETTINGS remaps, so it comes after it. -->
 <script src="./tool-roster.js"></script>
 <script src="./tool-icons.js"></script>
-<!-- §3's CONSTRAINT PATH, AND IT WAS NEVER LOADED HERE. toyWallDelta asked for
-     window.DraftToyConstraints, got undefined, and returned null -- so the TOY
-     bone drag silently fell through to wallSnapDelta and behaved exactly like
-     DRAFTING. Nothing threw: the guard `if (!T || !C || !wall) return null` is
-     written to be safe on a page without the modules, which made a missing
-     script indistinguishable from a wall that needs no constraining.
-     room-standards.js comes with them because toy-constraints.js reads it at
-     call time; MODEL.dc.html:25-29 loads the same three, in this order. -->
+<!-- The room sizes the closet table and the room tags measure against.
+     (toy-constraints.js and toy-context.js loaded here beside it until
+     9 Nov 2026, when TOY MODE came out of the program.) -->
 <script src="./room-standards.js"></script>
-<script src="./toy-constraints.js"></script>
-<script src="./toy-context.js"></script>
 <!-- Stairs. stair-geometry.js is the riser math and the plan parts; it is not
      a painter either, it is the two ANSWERS drawStairs2D asks its caller for
      (layoutFor, partsFor), which lived on the MODEL.dc.html component.

@@ -57,7 +57,7 @@
   window.addEventListener('keydown', e => {
     // ALT, NOT SHIFT, since 27 Oct: Shift holds the run square, as ARCHICAD's
     // does, and lining up on a node moved over to Alt.
-    if (e.key !== 'Alt' || e.repeat || !refHover || refLock || !REF_TOOLS.has(activeTool) || board === 'toy') return;
+    if (e.key !== 'Alt' || e.repeat || !refHover || refLock || !REF_TOOLS.has(activeTool)) return;
     const t = e.target;
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
     // The browser's own Alt (its menu bar) is not wanted on the sheet.
@@ -123,24 +123,17 @@
     // or the bullseye beats the foot on either board; TOY still takes no face
     // and no cross line. Held square, the run slides along its square to the
     // lit point, as axisSnap does on DRAFTING.
-    const caught = !fixed || board === 'toy' ? drawSnap(at) : {};
+    const caught = !fixed ? drawSnap(at) : {};
     const lit = caught.node || caught.bullseye ? caught.pt : null;
     if (fixed && lit) return fixed === 'z' ? { x: lit.x, y: 0, z: wanted.z } : { x: wanted.x, y: 0, z: lit.z };
-    const snap = !fixed && (board !== 'toy' || lit) ? caught : {};
+    const snap = !fixed ? caught : {};
     if (snap.pt && !snap.node && !snap.face && onTheFoot_if()) return onTheFoot(drawStart, snap.pt);
     const held = fixed ? handPoint(at, drawMagnet()) : null;
     if (held) return held.pt;
-    const snapped = fixed ? axisSnap(wanted, fixed, [], board !== 'toy' ? drawMagnet() : null)
+    const snapped = fixed ? axisSnap(wanted, fixed, [], drawMagnet())
       : (snap.pt || cornerSnap(wanted, []));
     if (snapped) return snapped;
     const free = { x: wanted.x, y: 0, z: wanted.z };
-    // INSIDE THE HOUSE, TOY'S GRAIN comes before the foot: the point lands on
-    // the 6" grid or a hard line, and the run's length is whatever that makes
-    // it. A run that starts outside or leaves the house is the foot's.
-    const grain = toyInteriorGrain();
-    if (grain && inHouse(grain, free) && (!drawStart || inHouse(grain, drawStart))) {
-      return toyGrainPoint(grain, free, fixed);
-    }
     return onTheFoot_if() ? onTheFoot(drawStart, free) : free;
   };
 
@@ -292,36 +285,6 @@
     return tail;
   };
 
-  // ── §4's SECOND HALF: THE CONNECTOR ──────────────────────────────────────
-  //
-  // "After a break the two halves are independent bones and each obeys §3."
-  // A joint alone does not deliver that. The halves of a broken run are
-  // COLLINEAR and share a corner, so dragging one swings the other -- §3b
-  // refuses it rather than produce a diagonal, which is safe and leaves the L
-  // and the bump-out the order names as the POINT of §4 unreachable.
-  //
-  // What makes them reachable: the drag UNSHARES that corner. The dragged
-  // wall takes its own vertex, the neighbour keeps the old one, and a
-  // connector wall spans the two. As the drag proceeds the connector grows --
-  // perpendicular to the wall being dragged, because the move is -- and that
-  // connector IS the side of the bump-out. Nothing is left angled, so §3b has
-  // nothing to refuse.
-  //
-  // ONLY FOR COLLINEAR NEIGHBOURS. A perpendicular neighbour just gets longer
-  // and stays square, which is §3's whole behaviour on an ordinary house;
-  // splitting corners there would drop a zero-length wall into the drawing on
-  // every drag.
-  //
-  // ONCE, WHEN THE DRAG ARMS, not on every pointermove -- a connector per
-  // mouse event would be several hundred walls across one gesture.
-  const collinearWith = (wall, other) => {
-    const rx = wall.end.x - wall.start.x, rz = wall.end.z - wall.start.z;
-    const ox = other.end.x - other.start.x, oz = other.end.z - other.start.z;
-    const a = Math.hypot(rx, rz), b = Math.hypot(ox, oz);
-    if (a < 1e-9 || b < 1e-9) return false;
-    return Math.abs((rx * oz - rz * ox) / (a * b)) < 1e-6;
-  };
-
   // ── SHIFT LETS A WALL GO OF ITS CORNERS (Movie, 18 Oct) ───────────────
   //
   // "an option to DISCONNECT the nodes at corners, maybe by pressing SHIFT
@@ -439,216 +402,15 @@
     if (gone.length) sayOnStrip(`${gone.length} off the wall now, deleted. UNDO brings ${gone.length === 1 ? 'it' : 'them'} back.`);
     return [...(edits.length ? [{ kind: 'props', edits }] : []), ...gone];
   };
-  const splitRunCorners = md => {
-    if (board !== 'toy' || md.kind !== 'wall' || !md.body) return;
-    const wall = md.body;
-    md.before.forEach(b => {
-      const v = b.vtx;
-      const touching = (drawing.walls || [])
-        .filter(w => w !== wall && (w.start === v || w.end === v));
-      if (!touching.some(other => collinearWith(wall, other))) return;
-      // A SEPARATE VERTEX AT THE SAME PLACE, and poolVertex must not be used:
-      // mergeVertex merges by position and would hand back the very corner
-      // being unshared. The pool's own rule allows this -- "two corners at the
-      // same place are still two corners if the pool never merged them".
-      const fresh = { x: v.x, y: 0, z: v.z,
-        srcId: v.srcId ?? null, offX: v.offX ?? 0, offZ: v.offZ ?? 0 };
-      vertexPool.push(fresh);
-      if (wall.start === v) wall.start = fresh; else wall.end = fresh;
-      b.vtx = fresh;
-      const conn = { ...wall, id: newDrawingItemId('wall'), start: fresh, end: v };
-      // Which neighbour this corner was shared WITH, so the constraint call
-      // can be told it is no longer carried by the move.
-      conn.detachedFrom = (touching.find(other => collinearWith(wall, other)) || {}).id;
-      drawing.walls.push(conn);
-      undoStack.push({ kind: 'add', wall: conn });
-      md.connectors = (md.connectors || []).concat(conn);
-    });
-    if (md.connectors) markDirty();
-  };
-
-  // ── §5: A ROOF OVER WHATEVER NOTHING SITS ON ─────────────────────────────
-  //
-  // Movie, 14 Sep: a roof belongs to "every part of a floor that nothing sits
-  // on" -- so it is a FUNCTION of the difference between one storey's
-  // footprint and the one above it, recomputed when either bone moves, not a
-  // thing attached to the top storey. A ranch is the degenerate case.
-  //
-  // THE GEOMETRY IS geometry-2d.js's, not a second opinion. uncoveredRegions
-  // does the rectilinear difference and returns rectangles, because a storey
-  // set back on all sides leaves a RING and the format's roof has `points`
-  // with no holes.
-  //
-  // WHICH ROOFS ARE OURS: `sourceShapeId`, which the format already carries
-  // (drawing-format.js:490) and which means "where this came from". A roof
-  // built from a bone names that bone; a roof a drafter drew names nothing and
-  // is NEVER touched here. No new field, and no guessing.
-  const storeyAbove = levelId => {
-    const here = (drawing.levels || []).find(l => Number(l.id) === Number(levelId));
-    if (!here) return null;
-    return (drawing.levels || [])
-      .filter(l => (Number(l.elev) || 0) > (Number(here.elev) || 0))
-      .sort((a, b) => (Number(a.elev) || 0) - (Number(b.elev) || 0))[0] || null;
-  };
-
-  // THE LOT IS NOT A STOREY. The SITE level's outline is the lot (`site:
-  // true`); taken as a bone it roofed the whole lot less the storey above it
-  // -- Movie's PHASE2 (28 Oct), six lot-sized hips on SITE after a BONEYARD
-  // drag.
-  const boneOf = levelId => (drawing.outlines || [])
-    .find(o => Number(o.levelId) === Number(levelId) && o.site !== true) || null;
-
-  // The edge that dies into the storey above is a GABLE -- ruled 14 Sep, "the
-  // roof should terminate where it meets the upper storey wall like a garage
-  // roof that is dropped". A gable end is vertical and carries no eave
-  // overhang, which is the property that matters: an eave there would hang two
-  // feet of roof straight into the house above.
-  //
-  // The format has no third kind -- an edge is `gable` if it says so and
-  // `eave` otherwise -- so this needs no format change and no older reader
-  // sees anything it cannot read.
-  const edgeKinds = (ring, upper) => {
-    if (!upper) return ring.map(() => 'eave');
-    const onUpper = pt => (upper.points || []).some((a, i) => {
-      const b = upper.points[(i + 1) % upper.points.length];
-      const cross = (b.x - a.x) * (pt.z - a.z) - (b.z - a.z) * (pt.x - a.x);
-      const len = Math.hypot(b.x - a.x, b.z - a.z);
-      if (len < 1e-9 || Math.abs(cross) / len > 1e-6) return false;
-      const t = ((pt.x - a.x) * (b.x - a.x) + (pt.z - a.z) * (b.z - a.z)) / (len * len);
-      return t >= -1e-6 && t <= 1 + 1e-6;
-    });
-    return ring.map((pt, i) => {
-      const next = ring[(i + 1) % ring.length];
-      return onUpper(pt) && onUpper(next) ? 'gable' : 'eave';
-    });
-  };
-
-  // THE BONE FOLLOWS THE DRAG, and until §5 it did not.
-  //
-  // §2 is explicit: "a level's bone drives that level's FLOOR and WALL nodes"
-  // and "the bone is not a separate drawing that happens to look like the
-  // plan". But §3's drag moves wall VERTICES and nothing else, so every TOY
-  // drag left the outline behind as a stale snapshot of where the house used
-  // to be. Invisible on screen -- the walls are what paints -- and invisible
-  // to every §3 check, which all read walls.
-  //
-  // §5 is what made it bite: roofs derive from the bone, so a bone that never
-  // moved produced a roof over the old footprint. The drag moved the wall a
-  // foot and the roof stayed where it was.
-  //
-  // By the ORIGINAL position, not by identity: an outline point is a plain
-  // record, not the pooled vertex object the wall holds, so the two are only
-  // ever connected by where they sit.
-  //
-  // ON THIS LEVEL ONLY. The first version walked every outline in the drawing
-  // and moved any point sitting at the dragged corner -- so dragging the main
-  // floor's wall silently reshaped the SECOND FLOOR's bone, because storeys
-  // stacked on the same footprint have points at identical coordinates. A
-  // §5 check caught it: the storey above followed the floor below and the
-  // roof between them never changed. Matching by position is right; matching
-  // by position across levels is not.
-  const boneFollows = (before, levelId) => {
-    const rings = (drawing.outlines || [])
-      .filter(o => Number(o.levelId) === Number(levelId));
-    before.forEach(b => {
-      if (b.x === b.vtx.x && b.z === b.vtx.z) return;
-      rings.forEach(ring => (ring.points || []).forEach(pt => {
-        if (Math.hypot(pt.x - b.x, pt.z - b.z) > 1e-6) return;
-        pt.x = b.vtx.x;
-        pt.z = b.vtx.z;
-      }));
-    });
-  };
-
-  const rebuildRoofs = () => {
-    const G = window.DraftGeometry2D;
-    if (!G || !G.uncoveredRegions) return;
-    const mine = new Set();
-    (drawing.levels || []).forEach(level => {
-      const bone = boneOf(level.id);
-      if (!bone) return;
-      mine.add(String(bone.id));
-      const above = storeyAbove(level.id);
-      const cover = above ? boneOf(above.id) : null;
-      const regions = G.uncoveredRegions(bone.points || [], cover ? cover.points : null);
-      // DROP THIS BONE'S OLD ROOFS FIRST, so a storey pushed back out takes
-      // its roof away with it rather than leaving the old one behind. "A roof
-      // appears" is satisfied by an implementation that only ever adds.
-      drawing.roofs = (drawing.roofs || [])
-        .filter(r => String(r.sourceShapeId || '') !== String(bone.id));
-      regions.forEach(ring => {
-        drawing.roofs.push({
-          id: newDrawingItemId('roof'),
-          points: ring.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
-          levelId: Number(level.id),
-          sourceLevelId: above ? Number(above.id) : null,
-          sourceShapeId: String(bone.id),
-          edges: edgeKinds(ring, cover),
-          // THE FORMAT'S OWN DEFAULTS, written out rather than left implicit:
-          // pitch 4 is the 4/12 that was ruled, overhang 2 is what a roof
-          // reads back as anyway (drawing-format.js:493-494).
-          overhang: 2,
-          pitch: 4,
-          garage: false,
-        });
-      });
-    });
-    markDirty();
-  };
-
-  const boneChoice = document.getElementById('bone-choice');
-  let boneChoiceFor = null;
-  const closeBoneChoice = () => { boneChoiceFor = null; boneChoice.hidden = true; };
-  const offerBoneChoice = (wall, at) => {
-    const pt = breakMarkOn(wall, at);
-    if (!pt) { sayOnStrip('this wall is too short to break'); return; }
-    boneChoiceFor = { wall, pt };
-    boneChoice.hidden = false;
-    boneChoice.querySelector('[data-break-here]').focus();
-  };
-  boneChoice.querySelector('[data-break-here]').addEventListener('click', () => {
-    const pick = boneChoiceFor;
-    closeBoneChoice();
-    if (pick) breakBoneAt(pick.wall, pick.pt);
-  });
-  // NOTHING AT ALL, the same contract as Stay in TOY: the drag already moves
-  // the wall, so this button's whole job is to leave without changing
-  // anything. A choice that always did something would not be a choice.
-  boneChoice.querySelector('[data-break-move]').addEventListener('click', closeBoneChoice);
-
-  const toyOpenEnd = at => {
-    if (board !== 'toy' || !pendingBone) return null;
-    const open = pendingBone.points[pendingBone.points.length - 1];
-    if (!open) return null;
-    const reach = CORNER_GRAB_PX / view.scale;
-    return Math.hypot(at.x - open.x, at.z - open.z) <= reach
-      ? { x: open.x, y: 0, z: open.z }
-      : null;
-  };
-
-  const toyRunRefused = at => {
-    if (board !== 'toy' || !pendingBone) return false;
-    if (endsAt(pendingBone, at)) return false;      // this press continues it
-    // NAMES BOTH WAYS OUT, because the order's wording does: "finish or cancel
-    // the run you started". Escape is the cancel.
-    sayOnStrip('finish or cancel the run you started — Esc cancels');
-    return true;
-  };
-
   const drawPress = at => {
     if (!drawStart) {
-      // Resume before refusing: a press on the open end is the drafter
-      // carrying on, which is the one case the refusal must not catch.
-      const open = activeTool === 'wall' ? toyOpenEnd(at) : null;
-      // stripRefresh BESIDE THE PAINT, on both openings. Without it the strip
+      // stripRefresh BESIDE THE PAINT. Without it the strip
       // still read "wall — first point" with a first point already down, and
       // the length box and angle box -- which stripRefresh is what enables --
       // stayed dead until the pointer happened to move. A mouse always moves,
       // so this was invisible on a PC and wrong on a tablet, where a tap sets
       // the anchor and nothing moves afterwards. Found by a check asserting
       // the strip SAID second point rather than that drawStart was set.
-      if (open) { clearNotice(); drawStart = open; stripRefresh(); paint(); return; }
-      if (activeTool === 'wall' && toyRunRefused(drawPoint(at))) return;
       clearNotice();
       drawStart = drawPoint(at); stripRefresh(); paint(); return;
     }
@@ -765,7 +527,7 @@
     // moment the hand is in line with it, and none before, so a house's
     // dozens of corners do not fill the sheet with lines.
     const md = moveDrag;
-    if (md && md.kind === 'corner' && md.active && board !== 'toy') {
+    if (md && md.kind === 'corner' && md.active) {
       md.rays ||= dragMagnet(md.before[0].vtx).corners;
       return md.rays.filter(c => litRays([c], cursorWorld).length);
     }
@@ -897,7 +659,7 @@
   let moveHoverCache = { key: '', magnet: null };
   const moveHover = () => {
     if (!moveState?.on || moveState.drag || moveState.roof || !selection.length || !cursorWorld) return null;
-    if (!snapLive() || board === 'toy' || selection.every(e => e.type === 'beam')) return null;
+    if (!snapLive() || selection.every(e => e.type === 'beam')) return null;
     const key = `${modelEpoch}|${undoStack.length}|${selection.map(e => `${e.type}:${e.item?.id ?? ''}`).join(',')}`;
     if (moveHoverCache.key !== key) moveHoverCache = { key, magnet: magnetExcluding(carriedPoints(selectionEntries())) };
     return { magnet: moveHoverCache.magnet, lit: pointCatch(cursorWorld, moveHoverCache.magnet) };
@@ -1049,7 +811,7 @@
     // square.
     const runFrom = drawStart
       || (activeTool === 'outline' ? outlineTail() : loopCornersInHand()?.at(-1)) || null;
-    const runs = (drawsRun() || tracesLoop) && board !== 'toy' && runFrom;
+    const runs = (drawsRun() || tracesLoop) && runFrom;
     const steered = runs && (lockedPoint(runFrom, cursorWorld) || protractorPoint(runFrom, cursorWorld));
     const fixed = runs && !steered ? squaredAxis(runFrom, cursorWorld) : null;
     const magnet = (drawsRun() || tracesLoop) && !steered ? drawMagnet() : null;
@@ -1066,7 +828,7 @@
     // glow at all (Movie, 19 Oct: "looks like the LINE does attach to nodes,
     // but the rollover doesn't glow so the user is unaware of this").
     let snap = drawSnap(cursorWorld);
-    if (!snap.pt && (drawsRun() || tracesLoop) && board !== 'toy') {
+    if (!snap.pt && (drawsRun() || tracesLoop)) {
       const caught = cornerSnap(cursorWorld, []);
       if (caught) snap = { pt: { x: caught.x, y: 0, z: caught.z }, node: caught };
     }
@@ -1342,15 +1104,13 @@
   // the whole loop sits on whole feet from where it started and the last
   // edge can come home square.
   //
-  // ── AND ON DRAFTING, 45s (Movie, 17 Oct) ──────────────────────────────
+  // ── 45s (Movie, 17 Oct) ───────────────────────────────────────────────
   // The North Point building has one chamfered corner, 10' x 10' on its grid
   // lines, and an outline that only turned square could not trace it: "the
-  // 45 angle i need it too". So on DRAFTING the outline turns in eighth
-  // turns -- square or 45, nothing between -- and the hand, the protractor
-  // and the typed boxes all take it. TOY keeps the quarter turn: a 45 is a
-  // building TOY cannot make, and the ANGLE box typed 45 is what moves the
-  // board, as it always was.
-  const outlineStep = () => (board === 'toy' ? 90 : 45);
+  // 45 angle i need it too". So the outline turns in eighth turns -- square
+  // or 45, nothing between -- and the hand, the protractor and the typed
+  // boxes all take it.
+  const outlineStep = () => 45;
   const outlineTail = () => outlineCorners[outlineCorners.length - 1] || null;
   // ── THE ATTACHED GARAGE'S OPEN RUN (MODEL.dc.html's, Movie 6 Oct) ─────
   // A traced house's garage can be drawn the old page's way: first corner ON
@@ -1434,7 +1194,7 @@
     if (!from) {
       const corner = cornerSnap(at, []);
       if (corner) return { x: corner.x, z: corner.z };
-      const snap = board !== 'toy' ? drawSnap(at) : {};
+      const snap = drawSnap(at);
       if (snap.node || snap.bullseye) return { x: snap.pt.x, z: snap.pt.z };
       const house = garageRunHouse();
       const onHouse = house && snapOntoHouse(house, at);
@@ -1459,9 +1219,8 @@
     // locked it holds it; with neither the hand is FREE, and a pressed corner
     // is not rounded to the foot unless the 1' light is on -- it lands where
     // it is pressed, or on a corner, or on the first corner's line square to
-    // it (the orange ray), so the loop can always be brought home. TOY keeps
-    // its law: square, on the foot.
-    if (board !== 'toy' && !locked) {
+    // it (the orange ray), so the loop can always be brought home.
+    if (!locked) {
       // SQUARE, AND SNAPPED ALONG THE SQUARE (Movie, 27 Oct: "the lines for
       // the outline house aren't landing on the proper spot perpendicular to
       // the point selected ... even with the T on"). The squared corner took
@@ -1525,9 +1284,8 @@
   const stepTurn = deg => (deg % 45 === 0 ? eighthTurn(deg)
     : [Math.cos(deg * Math.PI / 180), -Math.sin(deg * Math.PI / 180)]);
   // THE PROTRACTOR'S POINT for a run from `from`, or null when it is dark.
-  // Not on TOY, which holds every run square already.
   const protractorPoint = (from, at) => {
-    if (!protractorOn || board === 'toy' || !from || !at) return null;
+    if (!protractorOn || !from || !at) return null;
     const p = outlineHand(from, at, protractorStep);
     return { x: p.x, y: 0, z: p.z };
   };
@@ -1560,14 +1318,14 @@
   const OUTLINE_HOME_FT = 1 / 96;
   const homeTail = () => {
     const first = outlineCorners[0], last = outlineTail();
-    // FREE, THE EDGE HOME IS WHATEVER IT IS: on DRAFTING with no instrument
-    // lit the outline turns at any angle, so its last edge may too.
-    if (board !== 'toy' && !tsquareLive() && !protractorOn && angleLockDeg() == null) return last;
+    // FREE, THE EDGE HOME IS WHATEVER IT IS: with no instrument lit the
+    // outline turns at any angle, so its last edge may too.
+    if (!tsquareLive() && !protractorOn && angleLockDeg() == null) return last;
     const prev = outlineCorners[outlineCorners.length - 2];
     const dx = first.x - last.x, dz = first.z - last.z;
     const r = Math.SQRT1_2;
     const ways = outlineStep() === 90 ? [[1, 0], [0, 1]]
-      : board !== 'toy' && protractorOn && protractorStep === 30
+      : protractorOn && protractorStep === 30
         ? [0, 30, 60, 90, 120, 150].map(stepTurn)
         : [[1, 0], [0, 1], [r, r], [r, -r]];
     let best = null;
@@ -1775,11 +1533,6 @@
     const join = cornerJoinOf(loop, decided);
     if (join) {
       const asked = new Set([...decided, cornerKey(join.ring[join.k])]);
-      if (board === 'toy') {
-        outlineCorners = shiftAtCorner(join, 1);
-        sayOnStrip('The garage wall moved over 1 ft from the house corner, so its foundation bears full on the house wall.');
-        return commitOutline(asked);
-      }
       if (cornerCard) {
         cornerPending = { ...join, decided };
         const inches = Math.round(garageFoundationFt() * 12);
@@ -1952,7 +1705,7 @@
     // would each hunt a wall that was already gone.
     const mark = undoStack.length;
     const walls = runs.map(run => commitWall(run.start, run.end,
-      { bone: false, refLine }));
+      { refLine }));
     undoStack.length = mark;
     // `outline: null` -- the loop is the DRAFTER'S and it stays. See the
     // 'built' branch in undo, which now asks before it splices.

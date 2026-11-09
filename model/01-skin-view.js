@@ -126,7 +126,12 @@
   let notePointer = false;
   let noteEnd = 'line';
   let elevPointerTip = null;  // { u, e } -- POINTER's first tap, waiting for the text
-  let tsquareOn = false;    // T-SQUARE down: the run in hand is held square
+  // T-SQUARE DOWN: the run in hand is held square. ON UNLESS TURNED OFF, and
+  // remembered per browser in SKIN_KEY beside the 1 FT light. Movie, 9 Nov
+  // 2026, taking TOY MODE out of the program: "we can have those features
+  // like TSQUARE and 1FT engaged so that it will be kind of like toy mode,
+  // but he can turn it off easy". One press on the chip, or T, turns it off.
+  let tsquareOn = stored.tsquare !== false;
   // SHIFT HOLDS IT SQUARE, as ARCHICAD's Shift does (Movie, 27 Oct: "it has
   // the SHIFT for the 90 degree lines (like our T SQUARE) ... get it working
   // fairly similar to ARCHICAD, but also change it so its a little better").
@@ -138,18 +143,16 @@
   const tsquareLive = () => tsquareOn || shiftSquare;
   // THE FOOT LIGHT. A PAGE SETTING, NOT DRAWING DATA -- a drawing carrying
   // "the foot light was on" would arrive in someone else's session and start
-  // rounding his walls, so it rides in SKIN_KEY with the theme. (The board
-  // used to ride there too; it stopped on 15 Oct, when "always start the
-  // users in TOY MODE" made a remembered board the wrong answer.)
-  //
-  // THE ORDER SAYS IT RIDES WITH THE T-SQUARE, "same store, same restore-on-
-  // load". Measured, the T-SQUARE HAS NO STORE: `tsquareOn` is a plain `let`
-  // that resets to false on every load, and nothing writes it anywhere. So
-  // the instruction cannot be followed literally; what it asks for is
-  // acceptance 3 -- survives reload, off on a page that has never seen it --
-  // and SKIN_KEY is where this page already keeps exactly that kind of
-  // setting. Reported rather than quietly reinterpreted.
-  let footOn = stored.footLight === true;
+  // rounding his walls, so it rides in SKIN_KEY with the theme, beside the
+  // T-square. ON UNLESS TURNED OFF since 9 Nov 2026 (the TOY removal): a
+  // fresh browser draws square and on the whole foot, which is the feel TOY
+  // used to give, and one press on the 1' tile turns it off.
+  let footOn = stored.footLight !== false;
+  // THE FOOT ITSELF: a distance rounded to the nearest whole foot. This was
+  // toy-constraints.js's quantiseFeet, reached from here so that "on the
+  // foot" meant one thing on the page; the module went with TOY and the one
+  // line it was asked for lives here now.
+  const quantiseFeet = ft => Math.round(Number(ft) || 0);
   // SNAP AND TRACK, ON UNLESS TURNED OFF (Movie, 17 Oct: "make those 2
   // features that we can turn on and off in the Instrument pannel" -- "have
   // them ON default yes"). Kept beside the 1' light, for the same reason.

@@ -106,80 +106,10 @@
   // with a mouse. The DIRECTION is the one the cursor is already giving --
   // squared first if the T-square is down -- so the typed number replaces the
   // distance and nothing else.
-  // ── the promotion, which used to be a question ──────────────────────────
-  // §7 of the TOY bones order: "Entering an exact length anywhere promotes the
-  // drawing to DRAFTING", and the drafter was ASKED before it happened --
-  // Continue / Stay in TOY, once per drawing. That was right while DRAFTING
-  // was somewhere a drafter CHOSE to go and TOY took sixteen tools away with
-  // him. Movie settled it the other way on 15 Oct and the card is gone; see
-  // promoteForNumber below for what replaced it and why the asking had to go
-  // with it.
-  // ── WHAT TOY ITSELF WOULD HAVE MADE ──────────────────────────────────────
-  //
-  // Movie, 27 Sep: *"allow the use while in 'TOY MODE' to enter a 'L' or 'R'
-  // value - if it is to the nearest foot accept it and don't change to
-  // DRAFTING MODE (i tried this and it made me switch because it considered
-  // it a 'precise' length)"*, and again, plainly: *"allow a TOY MODE user to
-  // stay in toy mode if they enter an exact foot length"*.
-  //
-  // THE GATE NEVER LOOKED AT THE VALUE. It asked whether the board was TOY and
-  // whether the drafter had been asked before, and nothing whatever about what
-  // had been typed -- so a flat 12 raised the same "this switches your drawing
-  // to DRAFTING" question that 12'-6" does, and a drafter doing a thing TOY
-  // does natively was told he was leaving TOY to do it.
-  //
-  // AND THIS IS NOT AN EXCEPTION TO TOY'S LAW, IT IS A BETTER READING OF IT.
-  // The rule was written down as "entering an EXACT length promotes", and the
-  // first gate read "exact" as "typed". TOY's own law is that everything lands
-  // on the whole foot -- which is WHY the promotion exists. A typed 12 lands
-  // there. That is not a precision TOY cannot hold; it is the only precision
-  // TOY has. The note below still stands on its own terms: TOY keeps one law
-  // with no exceptions, and this is the law rather than a hole in it.
-  //
-  // ASKED OF toy-constraints, NOT OF A MODULUS WRITTEN HERE. quantiseFeet is
-  // the same function the drag arm rounds with, so "on the foot" means one
-  // thing on this page and cannot quietly come to mean two.
-  const toyCouldMakeLength = feet => {
-    const Q = window.DraftToyConstraints;
-    return !!Q && Math.abs(Q.quantiseFeet(feet) - feet) < 1e-9;
-  };
-  // AND THE SAME QUESTION ABOUT A BEARING, because TOY squares every run to an
-  // axis: a typed 0 or 90 is a wall TOY would have drawn, and 37 is not. The
-  // protractor reads -180..180, and every multiple of 90 in that range is an
-  // axis, which is the whole of the test.
-  const toyCouldMakeAngle = deg => Math.abs(deg % 90) < 1e-9;
-
-  // ── THE PROMOTION IS AUTOMATIC NOW, AND IT IS NOT A QUESTION ────────────
-  //
-  // Movie, 15 Oct: "if they enter a ANGLE or length other than 1ft, it will
-  // automatically place them in DRAFTING MODE. so it ill be basically a LIGHT
-  // -- not a button".
-  //
-  // WHAT THIS REPLACES was a card -- Continue / Stay in TOY -- raised before
-  // the first finer length and remembered per drawing. It was the right shape
-  // under the older ruling, where DRAFTING was a place the drafter CHOSE to
-  // go and TOY took sixteen tools away; leaving TOY was a decision and a
-  // decision gets asked about. It is the wrong shape under this one. TOY now
-  // takes nothing away, so the drafter is not being moved anywhere he could
-  // have refused to go: he typed 12'-6", there is only one drawing that can
-  // be, and the page's job is to make it and say what happened.
-  //
-  // SAID, THOUGH. A mode that changes silently is the "hidden mode flip" the
-  // old card existed to avoid, and the lamp alone is too quiet for the moment
-  // it happens -- a drafter watching his wall is not watching the corner. So
-  // the strip says it once, in the same breath as the number that did it.
-  const promotionWord = said => `${said} is finer than TOY draws — DRAFTING now`;
-  const promoteForNumber = (toyCouldHoldIt, said) => {
-    if (board !== 'toy' || toyCouldHoldIt) return false;
-    setBoard('drafting');
-    sayOnStrip(promotionWord(said));
-    return true;
-  };
-
-  // THE OUTLINE'S TYPED EDGE: square (or 45 on DRAFTING), along the way the
-  // cursor is pointing (or the typed bearing). Whole feet are TOY's law and the
-  // light's, not the outline's: a number typed in inches moves the board,
-  // as it does for a wall (typedOutlineFeet).
+  // THE OUTLINE'S TYPED EDGE: square or 45, along the way the cursor is
+  // pointing (or the typed bearing). Whole feet are the 1 FT light's law, not
+  // the outline's: a number typed in inches is the number he gets
+  // (typedOutlineFeet).
   const typedOutlineEdge = ({ feet = null, deg = null }) => {
     const from = outlineTail();
     if (!from || !cursorWorld) return;
@@ -607,20 +537,10 @@
       if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
       const feet = typedOutlineFeet();
       if (feet !== undefined) {
-        // AND THE NUMBER MOVES THE BOARD, as a typed wall length does. This
-        // box used to answer "the outline goes in whole feet" on every board,
-        // and on TOY there was nothing else to press: the board is a lamp,
-        // and a drafter tracing a real building (Movie, 17 Oct, 5-2 in hand:
-        // "no way to turn it off but to enter precise numbers") was refused
-        // by the one thing that could have turned it off. The outline he
-        // typed is the outline he gets, and the lamp changes behind it --
-        // BEFORE the corner goes down, so it goes down on the board it
-        // belongs to, and said again AFTER, because the corner's own "next
-        // corner" would otherwise talk over the board's word.
-        const said = String(lengthBox.value).trim();
-        const promoted = promoteForNumber(toyCouldMakeLength(feet), said);
+        // THE OUTLINE HE TYPED IS THE OUTLINE HE GETS, inches and all (Movie,
+        // 17 Oct, 5-2 in hand: "no way to turn it off but to enter precise
+        // numbers"); nothing is rounded and nothing is refused.
         typedOutlineEdge({ feet });
-        if (promoted) sayOnStrip(promotionWord(said));
       }
       lengthBox.blur();
       return;
@@ -640,14 +560,9 @@
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
     if (!(feet > 0) || !drawStart || !cursorWorld) return;
-    // AND THE NUMBER ITSELF MOVES THE BOARD, if a whole foot cannot hold it.
-    // Nothing is asked and nothing is refused: the wall the drafter typed is
-    // the wall he gets, and the lamp changes behind it.
-    // SAID IN HIS OWN WORDS, the box's text rather than a re-formatted number:
-    // a drafter who typed 12-6 reads "12-6", and a line that answered
-    // 12'-6" would be the page correcting him in the middle of telling him
-    // something else.
-    promoteForNumber(toyCouldMakeLength(feet), String(lengthBox.value).trim());
+    // THE WALL HE TYPED IS THE WALL HE GETS: nothing is asked and nothing is
+    // refused, whatever the 1 FT light says -- a typed number is the drafter
+    // being exact on purpose.
     // LINED UP ON A NODE, THE LENGTH IS MEASURED FROM IT (refTyped).
     const fromRef = refTyped(feet);
     const aim = lockedPoint(drawStart, cursorWorld) || squareTo(drawStart, cursorWorld);
@@ -693,13 +608,7 @@
     // that angle with their line and lock it at that angle".
     lightInstrument('angle');
     angleBox.blur();
-    // "if they enter a ANGLE or length other than 1ft" -- an angle TOY would
-    // have drawn is every multiple of 90, and anything else is the drafter
-    // asking for a building TOY cannot make. The promotion speaks for itself
-    // here; the ANGLE line below would otherwise talk over it.
-    if (!promoteForNumber(toyCouldMakeAngle(deg), `${deg}°`)) {
-      sayOnStrip(`ANGLE LOCKED ${deg}° — clear the box to swing free`);
-    }
+    sayOnStrip(`ANGLE LOCKED ${deg}° — clear the box to swing free`);
     stripRefresh();
     paint();
   };
@@ -926,77 +835,10 @@
     },
   });
 
-  // ── THE BOARD IS A LIGHT, AND EVERY DRAWING STARTS IN TOY ───────────────
-  //
-  // Movie, 15 Oct: *"lets always start the users in TOY MODE"*, and *"maybe
-  // don't even offer them to change to DRAFTING MODE, but if they enter a
-  // ANGLE or length other than 1ft, it will automatically place them in
-  // DRAFTING MODE. so it ill be basically a LIGHT -- not a button"*.
-  //
-  // SO THE SEED IS GONE. It used to be the board the drafter last used, kept
-  // in localStorage so a fresh page opened where he left off -- which is
-  // exactly what "always start the users in TOY MODE" rules out: one typed
-  // 12'-6" in one drawing would have put every later drawing on DRAFTING
-  // before its first wall. A drawing that has RECORDED a board still wins, so
-  // a promoted drawing still reloads as DRAFTING -- that is a fact about one
-  // file, and the reason the board was moved onto the drawing in the first
-  // place.
-  const BOARDS = ['toy', 'drafting'];
-  let board = 'toy';
-
-  const boardOfDrawing = () =>
-    window.DraftDrawingFormat.board(drawing?.board) || 'toy';
-  const applyBoard = () => {
-    document.body.setAttribute('data-board', board);
-    paintBoardLamp();
-    boardListeners.forEach(fn => fn(board));
-  };
-
-  // WHAT THE LAMP SAYS. Two rows: the board, and what being on it MEANS --
-  // "so if its in TOY MODE the user will know its 90s / and 1ft". A lamp that
-  // only said TOY would be a label; the second row is the instrument.
-  //
-  // LIT ON TOY ONLY. TOY is the state with a rule in it, so it is the state
-  // worth announcing; DRAFTING is the page with nothing held back, and the
-  // lamp goes quiet without going blank -- it still says which board the
-  // drawing is on, because that does not stop being true.
-  const boardLamp = document.querySelector('[data-board-light]');
-  const paintBoardLamp = () => {
-    if (!boardLamp) return;
-    const toy = board === 'toy';
-    boardLamp.querySelector('[data-board-lamp]').textContent = toy ? 'TOY' : 'DRAFTING';
-    boardLamp.querySelector('[data-board-lamp-note]').textContent = toy
-      ? '1 FT · 90°' : 'ANY LENGTH';
-    boardLamp.toggleAttribute('data-lit', toy);
-    // THE TITLE IS THE LAMP'S OWN, set here beside the words it explains --
-    // the switch's titles were set from script for the same reason, and the
-    // one thing that must not happen is a lamp whose hover describes the
-    // other board.
-    boardLamp.title = toy
-      ? 'TOY — every tool, but square and on the whole foot. Type a finer '
-        + 'length or an off-square angle and the drawing moves to DRAFTING.'
-      : 'DRAFTING — any length, any angle. This drawing left TOY when a '
-        + 'number was typed that a whole foot could not hold.';
-  };
-
-  // ONE PLACE THE BOARD CHANGES, so the drawing and the lamp cannot drift.
-  // There is no longer anything that moves it BACK: the promotion below is
-  // the only caller, and a drafter who wants TOY again starts a drawing.
-  const setBoard = next => {
-    if (!BOARDS.includes(next) || next === board) return;
-    board = next;
-    if (drawing) {
-      drawing.board = window.DraftDrawingFormat.board(next);
-      markDirty();
-    }
-    applyBoard();
-  };
-
   markSwitch(themeButtons, 'theme', theme);
   markSwitch(modeButtons, 'skinMode', mode);
   paintBonePress();
   paintSignBoard();
-  applyBoard();
   stripRefresh();
 
   // ONE LISTENER, THE REGISTER'S. #398 wrote this against the armed
@@ -1105,16 +947,13 @@
     document.querySelectorAll('[data-tool-key]').forEach(btn => {
       const tool = roster.get(btn.dataset.toolKey);
       if (!tool) return;
-      // STILL ASKED, THOUGH THE ANSWER IS NOW ALWAYS YES on both boards
-      // (Movie, 15 Oct). The roster is the one place that decides, and a
-      // keypad that stopped asking would be the day a board takes something
-      // away again and the keys do not hear about it.
-      const usable = roster.availableOn(tool.id, board);
+      // STILL ASKED, THOUGH THE ANSWER IS NOW ALWAYS YES. The roster is the
+      // one place that decides, and a keypad that stopped asking would be the
+      // day a tool is taken away again and the keys do not hear about it.
+      const usable = roster.availableOn(tool.id);
       btn.disabled = !usable;
       // The title is the whole name, because the face is 40px and
-      // FENESTRATION does not fit on it at a readable size. The refusal that
-      // used to go here -- "the TOY board does not offer this tool" -- went
-      // with the ruling: there is no tool TOY does not offer.
+      // FENESTRATION does not fit on it at a readable size.
       // "WALL — press W to draw a wall." (Movie, 27 Oct: "when the user
       // scolls over the tool name should be first ... to explain the KEY,
       // and what it does").
@@ -1204,44 +1043,26 @@
     const tool = roster.TOOLS.find(entry => entry.command
       && kb.eventMatchesBinding(event, map[entry.command]));
     if (!tool) return;
-    // ASKED OF THE BOARD BEFORE THE PRESS IS SPENT. setTool would refuse a
-    // tool the board does not offer and fall back to SELECT, which would put
+    // ASKED OF THE ROSTER BEFORE THE PRESS IS SPENT. setTool would refuse a
+    // tool the roster does not offer and fall back to SELECT, which would put
     // down the tool the drafter was holding as the price of a key that was
     // never going to work.
-    if (!roster.availableOn(tool.id, board)) return;
+    if (!roster.availableOn(tool.id)) return;
     event.preventDefault();
     pressToolKey(tool.id);
   });
 
-  // A BOARD CHANGE PUTS DOWN A TOOL THE NEW BOARD DOES NOT OFFER, and ONLY
-  // such a tool. Leaving it armed would keep ROOF live behind a greyed ROOF
-  // key -- the column telling the truth about the key and a lie about the
-  // state, and the next drag still drawing a roof on the toy board.
-  //
-  // THE CONDITION IS NOT DECORATION. The first version called setTool on every
-  // board change, and setTool clears `drawStart` because a tool change
-  // abandons the gesture that belonged to the old tool. A BOARD change is not
-  // a tool change: PROMOTION crosses boards in the middle of a run on purpose
-  // -- typing a length in TOY offers DRAFTING and then commits that same run
-  // -- so disarming unconditionally cut the anchor out from under the commit
-  // and the wall was never made. model-toy-board.spec.js:224 caught it; the
-  // gesture survives a crossing that keeps its tool.
-  boardListeners.push(() => {
-    const roster = window.DraftToolRoster;
-    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);
+  // A DRAWING OPENED REFRESHES EVERY TOOL SURFACE: the keypad, the selection
+  // panel, the assembly verbs and the fixture chips. This was the board
+  // listener while a drawing could land on TOY or DRAFTING; the roster offers
+  // every tool now, so nothing is put down, but the four surfaces still read
+  // the page's state and openDrawing still asks them to.
+  const syncToolSurfaces = () => {
     refreshToolAvailability();
-    // THE OTHER TWO SURFACES. Leaving these out is exactly the gap that made
-    // §6 a third built: the keys obeyed the board and the panels did not, and
-    // nothing said so because the spec only looked at keys.
     syncSelectionPanel();
     syncAssembly();
-    // AND THE FIXTURE PANEL, for the reason stated three lines up -- which is
-    // the gap this very listener was written to close, and which the fixture
-    // panel promptly fell into: built before the board settles, its chips read
-    // TOY's answer and stayed dead on the drafting board. The keys obeyed the
-    // board and one more panel did not.
     syncFixturePanel();
-  });
+  };
 
   // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
   // THE HELP STRINGS ARE THE OLD PAGE'S, VERBATIM (:23597 and :23619). They are
@@ -1353,10 +1174,9 @@
         FILTERS.map(f => chip('selFilter', f, setSelectFilter)), filterHelpEl));
 
     syncSelectionPanel = () => {
-      // §6: "the selection filters ... none of them operate in TOY". The board
-      // answer comes from the roster, not from a `board === 'toy'` written
-      // here, so this panel and the keypad cannot disagree about a board.
-      const on = window.DraftToolRoster?.panelOn('selection', board) !== false;
+      // The answer comes from the roster, so this panel and the keypad
+      // cannot disagree about whether the filters are on offer.
+      const on = window.DraftToolRoster?.panelOn('selection') !== false;
       slot.querySelectorAll('[data-sel-mode]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(btn.dataset.selMode === selectionMode));
@@ -1368,17 +1188,12 @@
         btn.disabled = !on;
       });
       // THE HELP SAYS WHY, and it replaces the mode help rather than sitting
-      // beside it: MODE_HELP describes a shortcut for a gesture this board
-      // does not have, and leaving it up would teach a drafter a control that
-      // is right there and dead.
-      // THE REFUSAL BRANCH IS UNREACHABLE SINCE 15 OCT -- no board puts these
-      // chips away any more -- and it is kept rather than deleted because the
-      // roster is still the one place that decides, and the day a board
-      // refuses again this is where the drafter is told. What went is the
-      // SENTENCE: "on the DRAFTING board" named a switch that no longer
-      // exists, so it would have sent him looking for a button.
+      // beside it. The refusal branch is unreachable today -- the roster puts
+      // nothing away -- and it is kept because the roster is still the one
+      // place that decides, and the day it refuses again this is where the
+      // drafter is told.
       modeHelp.textContent = on ? MODE_HELP[selectionMode]
-        : 'Selection modes and filters are not offered on this board.';
+        : 'Selection modes and filters are not offered here.';
       filterHelpEl.textContent = on ? filterHelp() : '';
       // RED WHENEVER A FILTER IS ENGAGED -- not when the cursor is over
       // something the filter excludes. selectFilterHelpColor (:23622) is a
@@ -1454,7 +1269,7 @@
     if (id === RESTING_TOOL) {
       if (selectPicking) { setSelectPicking(false); return; }
       if (!fromBar && activeTool === RESTING_TOOL && toolBeforeSelect
-        && window.DraftToolRoster?.availableOn(toolBeforeSelect, board)) {
+        && window.DraftToolRoster?.availableOn(toolBeforeSelect)) {
         const back = toolBeforeSelect;
         toolBeforeSelect = null;
         setTool(back);

@@ -260,11 +260,12 @@ if (!window.DraftShellBars) {
         title="Read this drawing in metres">METRIC</button>
     </div>
   </div>
-<!-- THE MODE CORNER (§7b): WHAT THE DRAWING IS. Carried whole out of the foot
-     strip -- same buttons, same data-* attributes, same listeners. TOY still
-     means cardinal, square and whole-foot and DRAFTING is still one-way; a
-     control that changed meaning because it changed corner would be the
-     re-scope §7b forbids. -->
+<!-- THE MODE CORNER (§7b): HOW THE DRAWING IS LOOKED AT. Carried whole out
+     of the foot strip -- same buttons, same data-* attributes, same listeners.
+     THE BOARD LAMP (TOY / DRAFTING) STOOD HERE UNTIL 9 NOV 2026, when Movie
+     took TOY MODE out of the program altogether: "it causes more problems".
+     The square-and-whole-foot feel TOY gave is the T-SQUARE and the 1 FT
+     light on the strip now, lit by default and one press to turn off. -->
 <div id="mode-corner" data-mode-corner data-switch-home>
   <!-- HOW THE SHEET IS LOOKED AT, BACK BESIDE THE UNITS. Movie, 17 Sep: "put
        NIGHT DAY up beside IMPERIAL METRIC (and change the style to match the
@@ -272,10 +273,10 @@ if (!window.DraftShellBars) {
        left of NIGHT DAY before the last one which will be TOY DRAFTING", then
        "make them the same style as up top style".
     
-       SO THE BAR NOW READS AS FOUR STACKED PAIRS: units, finish, mode, board.
+       SO THE BAR NOW READS AS STACKED PAIRS: units, finish, mode.
        They were sent downstairs on 15 Sep on the argument that a switch is not
        an instrument -- which is still true, and is now answered by the shape
-       instead of the distance: four pairs built to one pattern read as one
+       instead of the distance: pairs built to one pattern read as one
        family of "which way am I looking at this", and the strip's instruments
        are chips, not stacks. Nothing about what they DO moved; same data-*
        attributes, same listeners, same aria-pressed shading.
@@ -290,31 +291,6 @@ if (!window.DraftShellBars) {
     <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
     <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
   </span>
-  <!-- THE BOARD IS A LIGHT NOW, NOT A SWITCH.
-
-       Movie, 15 Oct: "maybe don't even offer them to change to DRAFTING MODE,
-       but if they enter a ANGLE or length other than 1ft, it will
-       automatically place them in DRAFTING MODE. so it ill be basically a
-       LIGHT -- not a button... make sense?", and "so if its in TOY MODE the
-       user will know its 90s / and 1ft".
-
-       SO THERE IS NOTHING TO PRESS. Every drawing starts in TOY and the first
-       number a foot cannot hold moves it to DRAFTING by itself -- the drafter
-       never chooses, he is told. Two rows, because the lamp has to say both
-       WHICH board and WHAT that means: a drafter who only ever sees the word
-       TOY has been given a label, not an instrument.
-
-       IT KEEPS THE STACK'S SHAPE so it still reads as one of the family in
-       this corner, and its rows are SPANS: a thing that cannot be pressed
-       must not be a button, or the first drafter to click it learns that this
-       page's buttons sometimes do nothing.
-
-       NO title HERE, for the reason the switch had none: the wording is set
-       from script, beside the check that holds it to the truth. -->
-  <span class="set stack lamp" data-board-light>
-    <span data-board-lamp>TOY</span>
-    <span data-board-lamp-note>1 FT &middot; 90&deg;</span>
-  </span>
 </div>
 <!-- RUFF/ROUGH AND NIGHT/DAY CAME BACK (Movie, 17 Sep) and now stand in the
      mode corner above, stacked like the units and the board. They went down
@@ -323,7 +299,7 @@ if (!window.DraftShellBars) {
      argument is now made by the SHAPE. Four stacked pairs in one corner, all
      built to the unit rows, read as one family; a chip on the strip reads as
      a tool. Distance was the cruder way to say the same thing, and it cost
-     the two switches their kinship with TOY/DRAFTING, which is the control
+     the two switches their kinship with the units pair, which is the control
      they are most like. -->
   <div class="grow"></div>`;
   const INSTRUMENTS = `  <div id="strip-center" data-strip-center>
@@ -1052,7 +1028,7 @@ ${trio(true)}
   //
   // THE SEAM AT THE TOP OF THIS FILE HAD ONE SIDE MISSING. "The bar owns the
   // FURNITURE; the page owns what the furniture DOES" is true, and the file
-  // row, PRINTSCREEN, the units pair, TOY/DRAFTING and the instrument chips
+  // row, PRINTSCREEN, the units pair and the instrument chips
   // are all furniture -- so six pages mount them and ONE page does anything
   // with most of them. On the other five they looked exactly as live as they
   // do on MODEL: full ink, a hover border, a pointer cursor, and nothing at
@@ -1093,17 +1069,6 @@ ${trio(true)}
     'file-ext': Object.freeze({ sel: '#file-ext' }),
     printscreen: Object.freeze({ sel: '#printscreen' }),
     units: Object.freeze({ sel: '#units-corner button[data-units]' }),
-    // THE BOARD LAMP IS HIDDEN, NOT GREYED, on a page that does not wire it.
-    // It used to be a pair of buttons and greying them said "this control
-    // lives elsewhere", which is a true thing to say about a control. Since
-    // 15 Oct it is an OUTPUT, and a greyed-out fact is not a sentence: a lamp
-    // reading TOY on a page that never sets it would be claiming a constraint
-    // that page does not have, and a dimmed one would claim it quietly.
-    board: Object.freeze({
-      sel: '[data-mode-corner] [data-board-light]',
-      down: el => { el.hidden = true; },
-    }),
-
     // THE INSTRUMENTS STAND DOWN BY CLASS AS WELL AS BY PROPERTY, and the
     // reasons are Construction Layout's, which found both of them the hard
     // way. A CHIP IS NOT ALWAYS A BUTTON -- brush, ruler, T-square, scale and
@@ -1132,7 +1097,7 @@ ${trio(true)}
   // not said otherwise.
   const IMPLEMENTS = Object.freeze({
     model: Object.freeze(['file-new', 'file-open', 'save', 'file-save-as',
-      'file-ext', 'printscreen', 'units', 'board', 'instruments']),
+      'file-ext', 'printscreen', 'units', 'instruments']),
     project: Object.freeze(['file-new', 'save']),
     'ext-finish': Object.freeze(['file-new']),
     boneyard: Object.freeze([]),
@@ -1194,11 +1159,6 @@ ${trio(true)}
       // scale ladder rather than a conversion.
       construction: 'The construction sheet reads in architectural scales, '
         + 'which are imperial — see the VIEWPORT SCALE list' }),
-    // THE LAMP IS HIDDEN RATHER THAN TITLED, so this is never read -- but
-    // every verb has a WHY and the stand-down walks the table, so a verb
-    // without one would throw on the first page that lacks it.
-    board: Object.freeze({
-      default: 'The board is set where the house is drawn, in the MODEL space' }),
     instruments: Object.freeze({
       default: 'Drawing instruments live in the MODEL space' }),
   });

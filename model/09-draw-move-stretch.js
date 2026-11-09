@@ -44,7 +44,7 @@
   // z-index 7 and asks a question that has to be answered first; the foot
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
-  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join', 'garage-align',
+  const MODAL_IDS = ['build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join', 'garage-align',
     'trace-ask', 'trace-insert', 'footprint-ask', 'stair-fit'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
@@ -1527,7 +1527,7 @@
   const stretchDestination = at => {
     const base = stretchState.base;
     let to = drawSnap(at).pt || at;
-    if (base && tsquareLive() && board !== 'toy') {
+    if (base && tsquareLive()) {
       to = Math.abs(to.x - base.x) >= Math.abs(to.z - base.z) ? { x: to.x, z: base.z } : { x: base.x, z: to.z };
     }
     return { x: to.x, z: to.z };
@@ -1828,7 +1828,7 @@
       // measured along that axis (moveSeek), and a free move reads them in
       // both.
       let axis = null;
-      if (tsquareLive() && board !== 'toy' && !d.set.across) {
+      if (tsquareLive() && !d.set.across) {
         if (Math.abs(at.x - d.at.x) >= Math.abs(at.z - d.at.z)) { dz = 0; axis = 'x'; } else { dx = 0; axis = 'z'; }
       }
       // BY THE FOOT WITH THE 1' LIGHT LIT (Movie, 20 Oct: "when i MOVE a group
@@ -1836,9 +1836,8 @@
       // '1'' key doesn't make it go 'by the foot'"). Each axis rounded to a
       // whole foot, as a dragged wall or stair is -- after the T-square, so
       // the axis is the hand's, and before the magnet, so a catch still wins.
-      const Q = window.DraftToyConstraints;
-      if (footOn && Q && !d.set.across) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
-      if (!d.set.across && snapLive() && board !== 'toy') {
+      if (footOn && !d.set.across) { dx = quantiseFeet(dx); dz = quantiseFeet(dz); }
+      if (!d.set.across && snapLive()) {
         d.magnet ||= magnetExcluding(d.set.points);
         const seek = moveSeek(d, dx, dz, axis);
         d.lit = seek?.lit || null;
@@ -1859,7 +1858,7 @@
     const across = Math.abs(dx) >= Math.abs(dz);
     if (squareMove) { if (across) dz = 0; else dx = 0; }
     // A WHOLE ROOF SEEKS by its corners, the way a selection does.
-    if (d.kind === 'roof' && snapLive() && board !== 'toy') {
+    if (d.kind === 'roof' && snapLive()) {
       const carried = d.targets.flatMap(r => [...r.points, ...(r.footprint || [])]);
       const seek = pointsSeek(d.befores.flatMap(b => b.points), dx, dz, (d.magnet ||= magnetExcluding(carried)));
       d.lit = seek?.lit || null;
@@ -1885,7 +1884,7 @@
         // A ROOF'S CORNER IN HAND reads the three tiers and the cross lines,
         // never itself: its own place is kept out of the magnet.
         const own = b.points[d.node];
-        const magnet = snapLive() && board !== 'toy' ? (d.magnet ||= magnetExcluding([own])) : null;
+        const magnet = snapLive() ? (d.magnet ||= magnetExcluding([own])) : null;
         let to;
         if (squareMove) {
           // Square to where it started; what it catches sets the free
@@ -1921,7 +1920,7 @@
         const stops = [roof.points[(i - 1 + n) % n], roof.points[(i + 2) % n]]
           .map(p => (p.x - a.x) * nn.x + (p.z - a.z) * nn.z)
           .filter(cd => Math.abs(cd) > 1e-6 && Math.sign(cd) === Math.sign(dist || cd));
-        const catchFt = snapLive() && board !== 'toy' ? ROOF_EDGE_STOP_IN / 12 * snapStrength() : 0;
+        const catchFt = snapLive() ? ROOF_EDGE_STOP_IN / 12 * snapStrength() : 0;
         stops.sort((p, q) => Math.abs(p) - Math.abs(q));
         const stop = stops[0];
         if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;
@@ -2263,13 +2262,6 @@
     }
     if (roofPickCard && storeyHere()) roofPickCard.hidden = false;
   });
-  // THE BOARD'S LISTENERS ARE DECLARED HERE, beside the tool's, for one dull
-  // reason: `applyBoard` runs at load and the tool column builder is a `const`
-  // defined several hundred lines further down, so applyBoard cannot name it
-  // without landing in its temporal dead zone. An array declared up here can
-  // be filled in later and fired from anywhere.
-  const boardListeners = [];
-
   const setTool = id => {
     const roster = window.DraftToolRoster;
     // An unknown id would silently arm nothing and read as "select is on",
@@ -2281,7 +2273,7 @@
     // gesture finishes. Refusing here is what makes the board a rule rather
     // than a look, and it falls back to the resting tool for the same reason
     // an unknown id does: there is no such thing as no tool.
-    const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;
+    const next = roster && roster.availableOn(id) ? id : RESTING_TOOL;
     activeTool = next;
     // A LINE ON THE REPORT'S TRAIL (error-report.js): which tool was armed
     // is the first thing a fault report is read for.
@@ -2343,20 +2335,13 @@
   // where the foot gives way: the corner is where the geometry actually joins.
   // THE FOOT IS ROUNDED FOR TWO REASONS AND THE SWITCH REACHES ONE OF THEM.
   // Read this beside `squaring()` -- same shape, same reason. `||` is what
-  // makes the leak impossible in both directions that matter:
-  //
-  //   TOY cannot be UNROUNDED by the light, because the board arm does not
-  //   consult it. §3's gate carries "TOY LEAKS: every board goes through the
-  //   constraint path"; a light that could unround TOY is that same defect
-  //   wearing the other coat, and the order asks for a check on both.
-  //
-  //   DRAFTING is not rounded unless the drafter lit it. Off by default, and
-  //   a drafter who has never touched it never finds his plan on the grid.
+  // makes the rule one rule: nothing is rounded unless the light is lit, and
+  // the light is lit until the drafter turns it off.
   //
   // AND IT ROUNDS DISTANCE ONLY. onTheFoot takes the run's LENGTH to the
   // nearest foot along the direction the hand gave it; it does not square.
   // The T-SQUARE is a different instrument and this is not a second one.
-  const onTheFoot_if = () => board === 'toy' || footOn;
+  const onTheFoot_if = () => footOn;
 
   // `minFeet` IS A DRAWING RULE, NOT A ROUNDING RULE, which is why it is a
   // parameter rather than the constant it used to be. A run being DRAWN is at
@@ -2375,167 +2360,4 @@
     return { x: from.x + (dx / len) * feet, y: 0, z: from.z + (dz / len) * feet };
   };
 
-  // ── TOY'S 6" GRAIN INSIDE THE HOUSE (Movie, 16 Oct) ──────────────────
-  //
-  // "this 6" spacing should be based on the 1ft exterior grid ... if the line
-  // isn't connected to a CORNER, the GRID used for the interior 6" snap grid
-  // will be based on the 1ft exterior house wall corners", and, correcting an
-  // earlier wording: "its not measure off inside face - the 6" grid is based
-  // on the ext corners of the house (1ft grid)".
-  //
-  // THE GRID IS THE OUTLINE'S OWN FOOT GRID, HALVED. Its datum is an exterior
-  // corner of the house on this level -- every corner of a TOY outline stands
-  // a whole foot from every other, so any one of them gives the same grid,
-  // and the lowest-left is named so the answer is one answer. Not the inside
-  // faces, not a room, not the world origin: a house at 12'-0\u00bd" has its
-  // grid at 12'-0\u00bd".
-  //
-  // A POSITION, NOT A LENGTH. The foot rule (onTheFoot) rounds a run's
-  // LENGTH from wherever it started; this lands each POINT on the grid, so a
-  // run that starts on an inside face still ends on the grid. It applies only
-  // while a house outline exists on the level and the run is inside it: the
-  // house being drawn, and anything outside it, keeps the whole foot.
-  //
-  // THE HARD LINES BEAT THE GRID. "the interior walls allows the connection
-  // at the 5.5" corner (usually default) rather than the 6" so it lines up
-  // and the stair opening is a similar line-up method which deviates from the
-  // 6" grid (in most cases)" -- "the interior walls should be 'cut' at the
-  // interior wall line of the exterior wall". Two kinds of line: the INSIDE
-  // FACE of every exterior wall, read off its wall type (5\u00bd" for a 2x6, 8"
-  // concrete, whatever stands there -- "at the corners the int walls will
-  // just move to the req 1/2" for 5.5" wall or whatever in need for the
-  // thicker ... or thinner wall"), and every square edge of a floor opening
-  // (a stair well, a hole) on the level. A face line runs the width of the
-  // house, so a wall running square into the exterior wall ends on it, and a
-  // wall continuing the face line past an inside corner lies along it --
-  // "so that the interior wall line of the EXT wall is inline with the line
-  // of the interior wall so those 2 lines line up".
-  //
-  // WHY THE FACE MUST WIN, written down: 5\u00bd" and 6" are half an inch apart
-  // and indistinguishable by eye. If the grid won, every interior wall meeting
-  // an exterior wall would miss the inside face by \u00bd" -- a drawing that looks
-  // right and builds wrong. So a hard line takes the point when the hand is
-  // within half a grain of it (nearer the line than any other grid point
-  // could be), AND when the grid point the hand would otherwise get lies in
-  // the band the line owns: for a face, the whole thickness of the exterior
-  // wall behind it and an inch past it -- a hand inside the wall's body wants
-  // the face, not the wall's line -- and for an opening edge an inch either
-  // side. The face owns the grid point beside it either way.
-  //
-  // THE TOY LIGHT STAYS ON. None of this is a typed number; a 6" position,
-  // a face or an opening edge comes from the house's own geometry, not from a
-  // precision TOY cannot hold, and nothing here reaches promoteForNumber.
-  const GRAIN_OWNS_IN = 1;   // a grid point this close to a hard line is the line's
-  const HARD_LINE_REACH_FT = () => window.DraftToyConstraints.HALF_FOOT_FT / 2;
-  const toyInteriorGrain = () => {
-    if (board !== 'toy' || activeTool !== 'wall') return null;
-    const house = houseOutlineOn(activeLevelId());
-    const pts = house && house.points;
-    if (!pts || pts.length < 3) return null;
-    return { pts, datum: {
-      x: Math.min(...pts.map(p => Number(p.x))),
-      z: Math.min(...pts.map(p => Number(p.z))) } };
-  };
-  const inHouse = (grain, pt) => window.DraftBuildingBodies.pointInLoop(grain.pts, pt);
-  // Every hard line on the level, as { axis, c }: a line of constant x or z.
-  const toyHardLines = grain => {
-    const G = window.DraftGeometry2D;
-    const FG = window.DraftFixtureGeometry;
-    const levelId = activeLevelId();
-    const lines = [];
-    const ring = G.loopSegments(grain.pts);
-    (drawing.walls || []).forEach(wall => {
-      if (Number(wall.levelId) !== Number(levelId) || (wall.view || 'plan') !== 'plan') return;
-      if (!wall.start || !wall.end || !G.edgeOnLoop(wall.start, wall.end, ring)) return;
-      const frame = FG && FG.wallFrame(wall);
-      if (!frame) return;
-      const alongX = Math.abs(frame.uz) < 1e-6, alongZ = Math.abs(frame.ux) < 1e-6;
-      if (!alongX && !alongZ) return;
-      // WHICH SIDE THE HOUSE IS ON: a probe a foot in along the frame's normal.
-      // The body's far edge on that side is the inside face, whichever way the
-      // wall was drawn and whatever its reference line.
-      const inside = inHouse(grain, frame.at(frame.len / 2, 1));
-      const faceAcross = inside ? frame.endOff : frame.startOff;
-      const face = frame.at(frame.len / 2, faceAcross);
-      const line = frame.at(frame.len / 2, 0);
-      const owns = (a, b) => ({ lo: Math.min(a, b) - GRAIN_OWNS_IN / 12, hi: Math.max(a, b) + GRAIN_OWNS_IN / 12 });
-      // AWAY is the house's side of the face: +1 or -1 along the line's axis.
-      // The frame's normal points to +n; the house is there when the probe
-      // landed inside, else on -n.
-      const nAlongAxis = alongX ? Math.sign(frame.nz) : Math.sign(frame.nx);
-      const away = inside ? nAlongAxis : -nAlongAxis;
-      lines.push(alongX ? { axis: 'z', c: face.z, away, kind: 'face', ...owns(face.z, line.z) }
-        : { axis: 'x', c: face.x, away, kind: 'face', ...owns(face.x, line.x) });
-    });
-    (drawing.surfaceOpenings || []).forEach(opening => {
-      if (Number(opening.levelId) !== Number(levelId) || opening.hostType !== 'floor') return;
-      const op = opening.points || [];
-      // AWAY from the hole: the edge seen from the opening's middle.
-      const mid = op.reduce((m, p) => ({ x: m.x + p.x / op.length, z: m.z + p.z / op.length }), { x: 0, z: 0 });
-      op.forEach((p, i) => {
-        const q = op[(i + 1) % op.length];
-        const band = (axis, c) => ({ axis, c, kind: 'opening', away: Math.sign(c - mid[axis]) || 1,
-          lo: c - GRAIN_OWNS_IN / 12, hi: c + GRAIN_OWNS_IN / 12 });
-        if (Math.abs(p.x - q.x) < 1e-6) lines.push(band('x', p.x));
-        else if (Math.abs(p.z - q.z) < 1e-6) lines.push(band('z', p.z));
-      });
-    });
-    return lines;
-  };
-  const toyGrainCoord = (grain, lines, axis, value) => {
-    const Q = window.DraftToyConstraints;
-    const reach = HARD_LINE_REACH_FT();
-    const grid = Q.onGrain(value, Q.HALF_FOOT_FT, axis === 'x' ? grain.datum.x : grain.datum.z);
-    let best = null;
-    lines.forEach(line => {
-      if (line.axis !== axis) return;
-      const d = Math.abs(line.c - value);
-      const owns = grid >= line.lo - 1e-9 && grid <= line.hi + 1e-9;
-      if ((d <= reach || owns) && (!best || d < best.d)) best = { c: line.c, d };
-    });
-    return best ? best.c : grid;
-  };
-  // `fixedAxis` is the coordinate the square holds (squaredAxis); it is kept
-  // exactly and only the free one lands on the grain.
-  const toyGrainPoint = (grain, pt, fixedAxis) => {
-    const lines = toyHardLines(grain);
-    return {
-      x: fixedAxis === 'x' ? pt.x : toyGrainCoord(grain, lines, 'x', pt.x),
-      y: 0,
-      z: fixedAxis === 'z' ? pt.z : toyGrainCoord(grain, lines, 'z', pt.z),
-    };
-  };
-
-  // ── ALONG A HARD LINE, THE SIDE IS NOT THE DRAFTER'S TO GET WRONG ──────
-  //
-  // A wall whose line lies ON an inside face or an opening edge has one side
-  // it can stand on: into the room off a face, away from the hole off an
-  // opening edge. Put it on the other and the wall sits inside the exterior
-  // wall, or hangs over the well. So a run that lies along a hard line is
-  // justified by the line, whatever the WALL panel says -- and the panel's
-  // pick is left as it was, since the drafter did not change his mind, the
-  // geometry answered for him. Asked at commit, from the geometry, not from
-  // a note left behind by the snap: the typed-length commit never passes
-  // through drawPoint, and a stale note from the preview would be wrong on
-  // exactly the run it was not written for.
-  //
-  // THE SIDE, IN THE RECORD'S TERMS: the body of a 'left' wall lies on +n
-  // of the run (n = (-uz, ux)), a 'right' wall's on -n. So the body goes
-  // where `away` points: 'left' when away agrees with n, else 'right'.
-  const toyJustifyAlongHardLine = (from, to) => {
-    const grain = toyInteriorGrain();
-    if (!grain || !from || !to) return null;
-    const dx = to.x - from.x, dz = to.z - from.z;
-    const len = Math.hypot(dx, dz);
-    if (len < 1e-9) return null;
-    const alongX = Math.abs(dz) < 1e-9, alongZ = Math.abs(dx) < 1e-9;
-    if (!alongX && !alongZ) return null;
-    const axis = alongX ? 'z' : 'x';
-    const line = toyHardLines(grain).find(l => l.axis === axis
-      && Math.abs(from[axis] - l.c) < 1e-6 && Math.abs(to[axis] - l.c) < 1e-6);
-    if (!line) return null;
-    const ux = dx / len, uz = dz / len;
-    const nAlongAxis = axis === 'z' ? ux : -uz;    // n = (-uz, ux), read on the line's axis
-    return line.away * nAlongAxis > 0 ? 'left' : 'right';
-  };
 
