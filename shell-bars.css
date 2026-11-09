@@ -272,7 +272,13 @@
        `scrollbar-gutter:stable` below reserves that lane whether the bar is
        showing or not, so a rail that grows past a screenful does not jog its
        contents sideways when the bar appears. */
-    --rail-w: 210px; }
+    --rail-w: 252px; }
+  /* 252, NOT 210 (9 Nov): the tool column went five keys wide for the classic
+     edits (model.css, .tool-keys), and five 40px keys with four 4px gaps are
+     216px. 216 + 20 padding + 15 scrollbar lane + 1 border is 252, under the
+     277 ceiling model-html-shell measures as the edge every tap in the suite
+     clears. The right rail takes the same width, as it always has; its seat
+     grid stands in it with room to spare. */
   /* AT THE TOP OF THE SHEET NOW, not the foot (§7b). Movie: the drive-thru
      sign rises from the bottom and covers the house row, so nothing the
      drafter reads WHILE DRAWING may live down there. */
