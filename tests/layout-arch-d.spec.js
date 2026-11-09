@@ -55,9 +55,9 @@ const ready = page => page.waitForFunction(() => document.body.dataset.layoutRea
 
 test('24 x 36 is offered, the sheet takes it and reads it back, and the frames move to the D set', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  await expect(page.getByText('17" × 11"')).toBeVisible();
+  await expect(page.getByText('11" × 17" LANDSCAPE')).toBeVisible();
   await page.getByRole('button', { name: '24 × 36' }).click();
-  await expect(page.getByText('36" × 24"')).toBeVisible();
+  await expect(page.getByText('24" × 36" LANDSCAPE')).toBeVisible();
   await expect.poll(async () => (await savedDrawing(page)).layout.paperKey).toBe('24x36');
   // The titleblock offered is the D set, same shape as before.
   const frames = await page.locator('[data-layout-frame] option').allTextContents();
@@ -69,16 +69,16 @@ test('24 x 36 is offered, the sheet takes it and reads it back, and the frames m
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await ready(page);
-  await expect(page.getByText('36" × 24"')).toBeVisible();
+  await expect(page.getByText('24" × 36" LANDSCAPE')).toBeVisible();
   expect((await savedDrawing(page)).layout.paperKey).toBe('24x36');
 });
 
 test('22 x 34 is the other D sheet, and portrait turns it up', async ({ page }) => {
   await openLayout(page, houseDrawing());
   await page.getByRole('button', { name: '22 × 34' }).click();
-  await expect(page.getByText('34" × 22"')).toBeVisible();
+  await expect(page.getByText('22" × 34" LANDSCAPE')).toBeVisible();
   await page.getByRole('button', { name: 'PORT', exact: true }).click();
-  await expect(page.getByText('22" × 34"')).toBeVisible();
+  await expect(page.getByText('22" × 34" PORTRAIT')).toBeVisible();
   await expect.poll(async () => (await savedDrawing(page)).layout.paperKey).toBe('22x34');
   const frames = await page.locator('[data-layout-frame] option').allTextContents();
   expect(frames).toEqual(['PSQUARE04', 'PBAND04', 'PROUND04']);

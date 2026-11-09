@@ -23,7 +23,7 @@ const FIT_MARGIN = 60;
 const STRIP_X = PW - 0.5 - 1.15 / 2; // strip centreline
 const INNER_H = PH - 1;
 const ARROW_MID_Y = 0.5 + INNER_H * 0.05; // inside the north-arrow cell
-const WORDS_MID_Y = 0.5 + INNER_H * ((0.44 + 0.62) / 2);
+const WORDS_MID_Y = 0.5 + INNER_H * ((0.42 + 0.56) / 2);
 const SHEET_MID_Y = 0.5 + INNER_H * ((0.92 + 1) / 2);
 
 // The BAND alternate: bottom 1.5" inside the 0.5" margin.
@@ -163,7 +163,7 @@ test('the frame and the mark are two choices now, and neither drags the other', 
   expect(saved.titleblockMark).toBe('bluejetty');
 });
 
-test('LSQUARE01 wears sharp corners, LROUND01 the rounded ones; the arrow cell starts bare', async ({ page }) => {
+test('LSQUARE01 wears sharp corners, LROUND01 the rounded ones; the arrow cell starts flown', async ({ page }) => {
   await openLayout(page, houseDrawing());
   // The default ROUGH DRAFTER border turns a square 90° corner: ink sits
   // right at the margin corner point.
@@ -175,25 +175,29 @@ test('LSQUARE01 wears sharp corners, LROUND01 the rounded ones; the arrow cell s
   const arcMid = r - r / Math.SQRT2 + 0.02;
   expect(await inkAround(page, 0.5 + 0.02, 0.5 + 0.02, 0.06)).toBe(0);
   expect(await inkAround(page, 0.5 + arcMid, 0.5 + arcMid, 0.08)).toBeGreaterThan(0);
-  // The north-arrow corner stays bare until the toggle raises it. Only a
-  // SITE PLAN sheet flies it by convention (Movie, 16 Oct: "north arrow ON
-  // by default"), and this drawing deals none: it is the house alone, with
-  // no sheets dealt.
-  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBe(0);
+  // The north-arrow corner is flown from the start (9 Nov, the draftsman's
+  // review: "north arrow off by default"); the toggle is how it is lowered.
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBeGreaterThan(20);
 });
 
-test('the NORTH ARROW toggle inks the arrow cell and persists on the drawing', async ({ page }) => {
+test('the NORTH ARROW starts on; the toggle lowers it and the drawing remembers', async ({ page }) => {
   await openLayout(page, houseDrawing());
+  await expect(page.locator('[data-layout-north]')).toContainText('On');
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBeGreaterThan(20);
+  await withLayoutSave(page, () => page.locator('[data-layout-north]').click());
   await expect(page.locator('[data-layout-north]')).toContainText('Off');
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBe(0);
+  expect((await savedDrawing(page)).layout.northArrow).toBe(false);
+  // The lowered arrow survives a reload: the file's false beats the default.
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+  await expect(page.locator('[data-layout-north]')).toContainText('Off');
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBe(0);
+  // And raising it again inks the cell and writes true.
   await withLayoutSave(page, () => page.locator('[data-layout-north]').click());
   await expect(page.locator('[data-layout-north]')).toContainText('On');
   expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBeGreaterThan(20);
   expect((await savedDrawing(page)).layout.northArrow).toBe(true);
-  // The raised arrow survives a reload.
-  await page.reload();
-  await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
-  await expect(page.locator('[data-layout-north]')).toContainText('On');
-  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBeGreaterThan(20);
 });
 
 test('the BAND frame keeps the original bottom strip', async ({ page }) => {

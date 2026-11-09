@@ -646,6 +646,8 @@
         <div>
           <div class="field-label">Project name</div>
           <input class="field" data-project-name aria-label="Project name" />
+          <div class="field-label">Project no.</div>
+          <input class="field" data-project-number aria-label="Project number" placeholder="2026-014" />
           <div class="field-label">Owner</div>
           <input class="field" data-project-owner aria-label="Owner" />
         </div>
@@ -654,6 +656,12 @@
           <input class="field" data-project-contractor aria-label="Contractor" />
           <div class="field-label">Civic address</div>
           <input class="field" data-project-civic aria-label="Civic address" />
+          <!-- CHECKED BY is a project fact, not a drafter one: the drafter's
+               name rides SETTINGS and goes on every sheet he draws; who
+               checks a set changes job to job, so it sits here beside the
+               project number and both print in the titleblock. -->
+          <div class="field-label">Checked by</div>
+          <input class="field" data-project-checked aria-label="Checked by" />
         </div>
         <div>
           <div class="field-label">Legal land description</div>
@@ -1476,6 +1484,8 @@
       // them, and old drawings open with their values in the right boxes.
       const identity = [
         ['[data-project-name]', 'name'],
+        ['[data-project-number]', 'projectNumber'],
+        ['[data-project-checked]', 'checkedBy'],
         ['[data-project-owner]', 'client'],
         ['[data-project-contractor]', 'contractor'],
         ['[data-project-civic]', 'address'],

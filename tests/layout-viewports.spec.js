@@ -242,7 +242,7 @@ test('paper size and orientation persist onto the drawing', async ({ page }) => 
   // The sheet reads them back on reload.
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
-  await expect(page.getByText('8.5" × 11"')).toBeVisible();
+  await expect(page.getByText('8.5" × 11" PORTRAIT')).toBeVisible();
 });
 
 // THE ONE BUTTON THAT MAKES SOMETHING MUST BE ON SCREEN.

@@ -74,12 +74,18 @@ check('it carries all three viewport kinds',
 check('it spans more than one sheet',
   new Set(raw.layout.viewports.map(v => v.sheet)).size > 1, true);
 // THE TWO FIELDS WHOSE DEFAULT WOULD MASK A READER THAT IGNORES THEM.
-// `titleblock` falls back to 'roughdrafter' and `northArrow` to false, so a
-// fixture wearing the defaults cannot tell a reader that read them from one
-// that returned its own.
+// `titleblock` falls back to 'roughdrafter' and `northArrow` (since 9 Nov)
+// to true, so a fixture wearing the defaults cannot tell a reader that read
+// them from one that returned its own. The fixture flies its arrow, which
+// the old default could not have handed back; the lowered case is checked
+// explicitly below, because that is the one the new default would mask.
 check('it wears a titleblock that is not the fallback',
   raw.layout.titleblock !== 'roughdrafter', true);
 check('it carries the north arrow raised', raw.layout.northArrow, true);
+check('a record that lowered its arrow opens with it lowered',
+  FORMAT.layout({ ...raw.layout, northArrow: false }, new Set(), new Set()).northArrow, false);
+check('a record that never carried the field opens with it raised, as a new drawing does',
+  FORMAT.layout({ ...raw.layout, northArrow: undefined }, new Set(), new Set()).northArrow, true);
 
 // ── THE RECORD OPENS WHOLE ──────────────────────────────────────────────
 // Read exactly the way LAYOUT.dc.html's _loadDrawing reads it, including that

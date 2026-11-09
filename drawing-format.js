@@ -1912,6 +1912,12 @@ if (!window.DraftDrawingFormat) {
     };
     return {
       name: line(raw?.name),
+      // PROJECT NO. and CHECKED BY (9 Nov) ride the drawing like the rest:
+      // the number is the job's, and the checker changes job to job where
+      // the drafter's own name lives in SETTINGS. Additive -- old drawings
+      // load with them empty and the titleblock prints the empty cell.
+      projectNumber: line(raw?.projectNumber).slice(0, 40),
+      checkedBy: line(raw?.checkedBy).slice(0, 60),
       client: line(raw?.client),
       contractor: line(raw?.contractor),
       address: line(raw?.address),
@@ -2350,7 +2356,9 @@ if (!window.DraftDrawingFormat) {
   // on a numbered page; `auto` marks a composition the bone dealt, which a
   // rebuild may replace — the flag clears on the drafter's first manual edit
   // so a hand-adjusted layout is never thrown away.
-  const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11', '24x36', '22x34'];
+  // THE SAME RACK AS titleblock.js PAPERS, kept here as a list because this
+  // reader runs without that file; the titleblock harness checks they agree.
+  const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11', '9x12', '12x18', '17x22', '18x24', '22x34', '24x36', 'A3', 'A1'];
   const tbName = value => (typeof value === 'string' && value && value.length <= 64 ? value : null);
   const LAYOUT_ELEV_IDS = ['E1', 'E2', 'E3', 'E4'];
   const layout = (raw, levelIds, cutIds = new Set()) => {
@@ -2431,7 +2439,10 @@ if (!window.DraftDrawingFormat) {
       orientation: oneOf(raw?.orientation, ['landscape', 'portrait'], null),
       titleblock: tbName(raw?.titleblock) || 'roughdrafter',
       titleblockMark: tbName(raw?.titleblockMark),
-      northArrow: raw?.northArrow === true,
+      // ON UNLESS THE DRAWING SAYS OFF (9 Nov, the review: "north arrow off
+      // by default"). A record that never carried the field is one the
+      // LAYOUT page never wrote, and it opens the way a new drawing does.
+      northArrow: raw?.northArrow !== false,
       // THE TWO NORTHS (Movie, 1 Oct): construction north in quarter turns
       // clockwise of up the plan, true north in whole degrees right (+) or
       // left (-) of it. Kept here, on the record MODEL and the Construction
