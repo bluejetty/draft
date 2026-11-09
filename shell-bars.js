@@ -799,11 +799,14 @@ ${trio(true)}
     <span data-bar-hint data-fillet-say>press the first line, then the second</span>
   </span>
   <span id="array-bar" data-array-bar hidden>
-    <span data-bar-hint>ARRAY</span>
-    <input id="array-cols" type="text" data-array-cols inputmode="numeric" placeholder="ACROSS" aria-label="Copies across" title="How many across, the original counted">
-    <input id="array-dx" type="text" data-array-dx inputmode="decimal" placeholder="SPACING" aria-label="Spacing across" title="Centre to centre across; a minus runs it left">
-    <input id="array-rows" type="text" data-array-rows inputmode="numeric" placeholder="DOWN" aria-label="Copies down" title="How many down, the original counted">
-    <input id="array-dz" type="text" data-array-dz inputmode="decimal" placeholder="SPACING" aria-label="Spacing down" title="Centre to centre down; a minus runs it up">
+    <span data-bar-hint>ACROSS</span>
+    <input id="array-cols" type="text" data-array-cols inputmode="numeric" placeholder="N" aria-label="Copies across" title="How many across, the original counted">
+    <span data-bar-hint>&times;</span>
+    <input id="array-dx" type="text" data-array-dx inputmode="decimal" placeholder="FT" aria-label="Spacing across" title="Centre to centre across; a minus runs it left">
+    <span data-bar-hint>DOWN</span>
+    <input id="array-rows" type="text" data-array-rows inputmode="numeric" placeholder="N" aria-label="Copies down" title="How many down, the original counted">
+    <span data-bar-hint>&times;</span>
+    <input id="array-dz" type="text" data-array-dz inputmode="decimal" placeholder="FT" aria-label="Spacing down" title="Centre to centre down; a minus runs it up">
     <button type="button" data-array-make title="Make the copies">MAKE</button>
   </span>
     </div>

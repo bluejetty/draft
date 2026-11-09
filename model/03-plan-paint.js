@@ -2689,11 +2689,13 @@
     syncRotateVerbs();
     syncFlipVerbs();
     syncOrderVerbs();
-    if (typeof syncDraftCommandBars === 'function') syncDraftCommandBars();
     syncRescaleVerbs();
     syncBreakVerb();
     syncMoveVerb();
     syncWallOffVerb();
+    // LAST, because it stands OVER every verb above while one of the
+    // classic edits is up (18-draft-commands.js, loaded after the boot).
+    if (typeof syncDraftCommandBars === 'function') syncDraftCommandBars();
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;

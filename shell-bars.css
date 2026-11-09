@@ -879,7 +879,7 @@
   #offset-bar input, #turn-bar input, #fillet-bar input, #array-bar input { width:58px; font-family: var(--font-ui); font-size:12px; padding:5px 6px;
     color: var(--ink-primary); background: var(--surface-chip); border:1px solid var(--accent);
     border-radius:6px; text-align:center; }
-  #array-bar input { width:50px; }
+  #array-bar input { width:42px; }
   [data-bar-hint] { font-family: var(--font-ui); font-size:10px; letter-spacing:0.06em; color: var(--ink-quiet); white-space:nowrap; }
 
   /* THE MIDDLE PRESS: the bone, the one press the sign covers. DELETE, COPY

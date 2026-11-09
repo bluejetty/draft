@@ -686,7 +686,7 @@
       if (!bar.hidden) any = true;
     });
     if (!any) return;
-    [deleteButton, undoButton, copyButton, pasteButton, rotateButton, flipButton, orderButton, moveButton, breakButton, rescaleButton]
+    [deleteButton, undoButton, copyButton, pasteButton, rotateButton, flipButton, orderButton, moveButton, breakButton, rescaleButton, wallOffButton]
       .forEach(b => { if (b) b.hidden = true; });
     [rotateBar, flipBar, orderBar, rescaleBar].forEach(b => { if (b) b.hidden = true; });
   }
