@@ -284,6 +284,28 @@
     roomDrag = null;
     paint();
   };
+  // SHIFT ADDS OR REMOVES, which is what the mode help line promises and the
+  // only way to build a selection of more than one by clicking. A shift-click
+  // on something already selected takes it OUT -- the old page's own toggle,
+  // and the reason the help says "adds or removes" rather than "adds"; a
+  // shift-click on it again puts it back.
+  // ASSEMBLING, EVERY CLICK IS A SHIFT-CLICK: the set is being built, and a
+  // click that threw it away would make the drafter start over.
+  // A shift-click on empty space keeps the selection. Clearing it would make
+  // an inaccurate shift-click destroy the set a drafter just built.
+  function shiftToggle(hit) {
+    if (!hit) return;
+    const at = selection.findIndex(entry => entry.item === hit.item);
+    // ASSEMBLING TAKES A WHOLE ASSEMBLY AT A CLICK: a WC picked by one of its
+    // walls goes in entire, rather than that one wall being pulled out of the
+    // WC into the new unit.
+    const owner = activeTool === 'assembly' ? groupOf(hit) : null;
+    const whole = owner ? itemsOfGroup(owner) : withGroup(hit);
+    setSelection(at >= 0
+      ? selection.filter(entry => !whole.some(w => w.item === entry.item))
+      : selection.concat(whole.filter(w => !selection.some(entry => entry.item === w.item))));
+  }
+
   canvas.addEventListener('pointerup', endRoomDrag);
   canvas.addEventListener('pointercancel', endRoomDrag);
   // ── EDITING A NOTE'S WORDS ─────────────────────────────────────────────
@@ -1683,6 +1705,18 @@
           ? { drag: true, before: md.before, dx: ddx, dz: ddz, step: moveStep } : null;
         if (moveTyped) stripRefresh();
         finishTypedMidDrag();
+      } else if (e && e.shiftKey && activeTool !== 'assembly') {
+        // A SHIFT-PRESS ON WHAT IS ALREADY IN HAND, let go where it was, IS
+        // THE SHIFT-CLICK, and it TAKES THAT PIECE OUT (jb, 10 Nov 2026:
+        // box-select the lines, then "hold SHIFT while clicking on items that
+        // will be un grouped from the package"). Several lines in hand arm a
+        // move-together drag on the press, a wall arms its body drag, and
+        // until now the release of one that never travelled did nothing --
+        // so the removal the help line promises was the one shift-click that
+        // failed, and only on a selection worth trimming.
+        const rect = canvas.getBoundingClientRect();
+        shiftToggle(hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top)));
+        paint();
       } else if (e && !e.shiftKey && activeTool !== 'assembly') {
         // A PRESS ON WHAT IS ALREADY IN HAND, let go where it was, IS THE
         // CLICK AGAIN: it takes the next thing under it (pickUnder).
@@ -1781,20 +1815,7 @@
         if (list.length) pickRoofNodes(shiftNode.roof, list); else moveState.node = null;
         syncBreakVerb();
       } else if (e.shiftKey || activeTool === 'assembly') {
-        if (hit) {
-          const at = selection.findIndex(entry => entry.item === hit.item);
-          // ASSEMBLING TAKES A WHOLE ASSEMBLY AT A CLICK: a WC picked by one
-          // of its walls goes in entire, rather than that one wall being
-          // pulled out of the WC into the new unit.
-          const owner = activeTool === 'assembly' ? groupOf(hit) : null;
-          const whole = owner ? itemsOfGroup(owner) : withGroup(hit);
-          setSelection(at >= 0
-            ? selection.filter(entry => !whole.some(w => w.item === entry.item))
-            : selection.concat(whole.filter(w =>
-              !selection.some(entry => entry.item === w.item))));
-        }
-        // A shift-click on empty space keeps the selection. Clearing it would
-        // make an inaccurate shift-click destroy the set a drafter just built.
+        shiftToggle(hit);
       } else {
         // An empty click clears, which is the other half of select: without it
         // the drafter has no way to put a selection down.
