@@ -1062,6 +1062,19 @@
     background: var(--pad); color: var(--pad-ink); border:1px solid var(--pad-ink);
     border-radius:2px; }
   .np-clear:hover { background:#fff; }
+  /* THE FOOT: SAVE AS TXT and CLEAR, then the five page keys, all to the
+     right as Movie drew them (10 Nov). */
+  .np-foot { display:flex; flex-direction:column; align-items:flex-end; gap:4px; padding:4px 6px 6px;
+    order:9; }   /* last in the column, under the pad, the calculator and the turtle alike */
+  .np-foot[hidden] { display:none; }
+  .np-foot-row { display:flex; gap:4px; }
+  .np-foot-row[hidden] { display:none; }
+  .np-page { font-family: var(--font-ui); font-size:9px; font-weight:700; width:18px; height:16px;
+    padding:0; line-height:1; cursor:pointer; background: var(--pad); color: var(--pad-ink);
+    border:1px solid var(--pad-ink); border-radius:2px; opacity:0.55; }
+  .np-page[data-written] { opacity:0.85; }
+  .np-page[aria-pressed="true"] { opacity:1; background: var(--pad-ink); color: var(--pad); }
+  .np-page:hover { opacity:1; }
   .np-text { flex:1; min-height:0; width:100%; box-sizing:border-box;
     resize:none; border:0; outline:none; margin:0; padding:4px 8px;
     overflow-y:auto; color: var(--pad-ink); font-family: var(--font-ui);
@@ -1133,6 +1146,12 @@
     width:18px; height:20px; padding:0; border:1px solid var(--pad-gum); border-radius:2px;
     background: rgba(255,255,255,0.45); color: var(--pad-ink); cursor:pointer; }
   .turtle-row .turtle-row-keys button:hover { border-color: var(--pad-ink); }
+  .turtle-as { display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; letter-spacing:0.1em; }
+  .turtle-as span { margin-right:2px; opacity:0.7; }
+  .turtle-as button { flex:1; font-family: var(--font-ui); font-size:9px; font-weight:700; letter-spacing:0.04em; padding:4px 0;
+    border:1px solid var(--pad-gum); border-radius:2px; background: rgba(255,255,255,0.45); color: var(--pad-ink); cursor:pointer; opacity:0.7; }
+  .turtle-as button:hover { border-color: var(--pad-ink); opacity:1; }
+  .turtle-as button[aria-pressed="true"] { opacity:1; background: var(--pad-ink); color: var(--pad); border-color: var(--pad-ink); }
   .turtle-keys { display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
   .turtle-keys button { font-family: var(--font-ui); font-size:10px; font-weight:700; letter-spacing:0.04em; padding:6px 0;
     border:1px solid var(--pad-gum); border-radius:2px; background: rgba(255,255,255,0.45); color: var(--pad-ink); cursor:pointer; }

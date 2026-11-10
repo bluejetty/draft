@@ -291,13 +291,29 @@
         <button type="button" class="np-tab" data-pad-tab="turtle" role="tab" aria-selected="false">TURTLE</button>
       </span>
       <span class="np-title"></span>
-      <span class="np-count" data-notes-count></span>
-      <button class="np-clear" type="button" data-notes-save-txt
-        title="Save the notes as a .txt file, beside your .draft files">SAVE AS TXT</button>
-      <button class="np-clear" type="button" data-notes-clear
-        title="Clear every note on the pad">CLEAR</button></div>
+      <span class="np-count" data-notes-count></span></div>
     <textarea class="np-text" data-notes-text spellcheck="false"
       aria-label="Notes" placeholder="Type or paste notes, numbers, anything..."></textarea>
+    <!-- SAVE AS TXT and CLEAR AT THE FOOT, and the five PAGE keys under them
+         (Movie's mockup, 10 Nov): one page per project, or whatever the
+         drafter wants apart. The keys are every tab's: five pads, five
+         calculators, five turtle tables. -->
+    <div class="np-foot" data-notes-foot>
+      <div class="np-foot-row" data-notes-save-row>
+        <button class="np-clear" type="button" data-notes-save-txt
+          title="Save every page of NOTES, CALC and TURTLE as one .txt file, beside your .draft files">SAVE AS TXT</button>
+        <button class="np-clear" type="button" data-notes-open-txt
+          title="Open a notepad .txt saved here, onto all three tabs">OPEN TXT</button>
+        <input type="file" accept=".txt,text/plain" data-notes-open-file hidden>
+        <button class="np-clear" type="button" data-notes-clear
+          title="Clear this page of the notes">CLEAR</button></div>
+      <div class="np-foot-row np-pages" role="tablist" aria-label="Notes pages">
+        <button class="np-page" type="button" data-notes-page="1" title="Page 1">1</button>
+        <button class="np-page" type="button" data-notes-page="2" title="Page 2">2</button>
+        <button class="np-page" type="button" data-notes-page="3" title="Page 3">3</button>
+        <button class="np-page" type="button" data-notes-page="4" title="Page 4">4</button>
+        <button class="np-page" type="button" data-notes-page="5" title="Page 5">5</button></div>
+    </div>
     <!-- THE CALCULATOR: a tape of every line worked, the line being typed,
          the answer in ft-in and metric, and a keypad. calc-engine.js does
          the arithmetic. -->
@@ -351,6 +367,14 @@
       </div>
       <div class="turtle-cols"><span>DIRECTION</span><span>DISTANCE</span><span></span></div>
       <div class="turtle-rows" data-turtle-rows></div>
+      <!-- DRAW AS (Movie, 10 Nov): a string of lines, the SITE PLAN's lot,
+           the BUILD house outline, or an AREA / SHAPE. The loops need the
+           path to come home. -->
+      <div class="turtle-as" role="radiogroup" aria-label="Draw as"><span>DRAW AS</span>
+        <button type="button" data-turtle-kind="lines" aria-pressed="true" title="A string of lines on this level, one assembly">LINES</button>
+        <button type="button" data-turtle-kind="lot" aria-pressed="false" title="The SITE PLAN's lot line (replaces the lot the file has)">LOT</button>
+        <button type="button" data-turtle-kind="house" aria-pressed="false" title="The house OUTLINE the bone builds on, on every level">HOUSE</button>
+        <button type="button" data-turtle-kind="area" aria-pressed="false" title="An AREA / SHAPE on this level">AREA</button></div>
       <div class="turtle-keys">
         <button type="button" data-turtle-do="target" title="Draw the path starting at the gold registration target">DRAW AT TARGET</button>
         <button type="button" data-turtle-do="point" title="Press a start point on the sheet, then the path is drawn from it">DRAW AT POINT</button>

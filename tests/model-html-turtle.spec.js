@@ -138,7 +138,8 @@ test('DRAW AT TARGET draws the moves as one TURTLE assembly of lines from the go
   const file = await saved(page);
   expect(file.turtles).toHaveLength(1);
   expect(file.turtles[0].rows).toEqual(SQUARE.map(([dir, dist]) => ({ dir, dist })));
-  expect(file.turtles[0].lineIds).toEqual(lines.map(l => l.id));
+  expect(file.turtles[0].itemIds).toEqual(lines.map(l => l.id));
+  expect(file.turtles[0].kind).toBe('lines');
   expect(file.turtles[0].start).toEqual({ x: 0, z: 0 });
   // One UNDO takes the whole path out, lines, assembly and table record.
   await page.keyboard.press('Control+z');
@@ -265,4 +266,153 @@ test('FROM NOTES reads the moves off the pad the way Movie wrote them', async ({
   await expect(box(page)).toBeHidden();
   await chip(page).click();
   await expect(box(page)).toBeVisible();
+});
+
+// DRAW AS (Movie, 10 Nov: "the turtle should be able to be used for the
+// SITE PLAN for sure, and then also for the build house outline ... or a
+// choice ... AREA / SHAPE").
+const kind = (page, k) => page.locator(`[data-turtle-kind="${k}"]`);
+test('DRAW AS LOT makes the SITE PLAN lot line from a closed path, and REGENERATE moves its corners in place', async ({ page }) => {
+  await open(page);
+  await openTurtle(page);
+  await typeRows(page, [['W', '86.86'], ['N', '106.87'], ['E', '106.86'], ['S', '106.87']]);
+  await kind(page, 'lot').click();
+  await expect(kind(page, 'lot')).toHaveAttribute('aria-pressed', 'true');
+  // Open by 20 feet: nothing is drawn, and the strip says so.
+  await act(page, 'target').click();
+  await expect(page.locator('#strip-message')).toContainText(`LOT needs the path to come home`);
+  expect(await page.evaluate(() => (drawing.outlines || []).length)).toBe(0);
+  await distAt(page, 0).fill('106.86');
+  await act(page, 'target').click();
+  const lots = await page.evaluate(() => drawing.outlines.map(o => ({ id: o.id, site: o.site, levelId: o.levelId,
+    points: o.points.map(p => [+p.x.toFixed(2), +p.z.toFixed(2)]) })));
+  expect(lots).toHaveLength(1);
+  expect(lots[0].site).toBe(true);
+  expect(lots[0].levelId).toBe(8);
+  expect(lots[0].points).toEqual([[0, 0], [-106.86, 0], [-106.86, -106.87], [0, -106.87]]);
+  expect(await page.evaluate(() => drawing.lot)).toEqual({ widthFt: 106.86, depthFt: 106.87, tier: null });
+  await expect(page.locator('[data-turtle-name]')).toHaveText('LOT');
+  // Deeper: the same outline, its corners moved; the second lot takes the
+  // first's place rather than standing beside it.
+  await distAt(page, 1).fill('120');
+  await distAt(page, 3).fill('120');
+  await act(page, 'regen').click();
+  const again = await page.evaluate(() => drawing.outlines.map(o => ({ id: o.id, points: o.points.map(p => [+p.x.toFixed(2), +p.z.toFixed(2)]) })));
+  expect(again).toHaveLength(1);
+  expect(again[0].id).toBe(lots[0].id);
+  expect(again[0].points[2]).toEqual([-106.86, -120]);
+  const file = await saved(page);
+  expect(file.turtles[0].kind).toBe('lot');
+  expect(file.turtles[0].itemIds).toEqual([lots[0].id]);
+});
+
+test('DRAW AS HOUSE makes the outline the bone builds on, a copy on every level; AREA makes a shape', async ({ page }) => {
+  await open(page);
+  await openTurtle(page);
+  await typeRows(page, [['E', '40'], ['N', '30'], ['W', '40'], ['S', '30']]);
+  await kind(page, 'house').click();
+  await act(page, 'target').click();
+  const house = await page.evaluate(() => ({
+    masters: (drawing.boneyardOutlines || []).length,
+    copies: drawing.outlines.map(o => ({ levelId: o.levelId, masterId: o.masterId, n: o.points.length })),
+    picked: selection.map(e => `${e.type}:${e.item.levelId}`),
+  }));
+  expect(house.masters).toBe(1);
+  expect(house.copies.map(c => c.levelId).sort()).toEqual([1, 3, 5, 7, 8]);
+  expect(house.copies.every(c => c.n === 4 && c.masterId)).toBe(true);
+  expect(house.picked).toEqual(['outline:3']);
+  await expect(page.locator('#strip-message')).toContainText('press the bone to build on it');
+  // Wider: every copy and the master move together, the same records.
+  await distAt(page, 0).fill('50');
+  await distAt(page, 2).fill('50');
+  await act(page, 'regen').click();
+  const wider = await page.evaluate(() => ({
+    master: drawing.boneyardOutlines[0].points.map(p => [p.x, p.z]),
+    copies: drawing.outlines.map(o => o.points[1].x),
+  }));
+  expect(wider.master).toEqual([[0, 0], [50, 0], [50, -30], [0, -30]]);
+  expect(wider.copies).toEqual([50, 50, 50, 50, 50]);
+  // AREA on a new page: a shape on this level.
+  await page.locator('[data-notes-page="2"]').click();
+  await expect(page.locator('[data-turtle-row]')).toHaveCount(1);
+  await typeRows(page, [['N', '10'], ['E', '10'], ['S', '10'], ['W', '10']]);
+  await kind(page, 'area').click();
+  await act(page, 'target').click();
+  const shapes = await page.evaluate(() => drawing.shapes.map(sh => ({ levelId: sh.levelId, layer: sh.layer, n: sh.points.length })));
+  expect(shapes).toEqual([{ levelId: 3, layer: 'SHAPE', n: 4 }]);
+  await expect(page.locator('[data-turtle-name]')).toHaveText('AREA / SHAPE');
+  // Back on page 1 the house's table is still there, lit as HOUSE.
+  await page.locator('[data-notes-page="1"]').click();
+  await expect(page.locator('[data-turtle-name]')).toHaveText('HOUSE OUTLINE');
+  await expect(distAt(page, 0)).toHaveValue('50');
+  // One UNDO per draw.
+  await page.keyboard.press('Control+z');
+  expect(await page.evaluate(() => (drawing.shapes || []).length)).toBe(0);
+});
+
+// FIVE PAGES ON EVERY TAB (Movie, 10 Nov: "the number should apply for
+// notes, and then also for CALC ... and for TURTLE they can make multiple
+// outlines / site plan etc"), all of it in the .draft ("keep it all in the
+// draft package with the plans") and in one .txt (SAVE AS TXT / OPEN TXT).
+test('CALC and TURTLE pages are each their own, ride in the .draft, and the whole pad saves to one .txt and opens from it', async ({ page }) => {
+  await open(page);
+  await openTurtle(page);
+  await typeRows(page, [['N', '10'], ['R', '10']]);
+  await page.locator('[data-notes-page="3"]').click();
+  await expect(page.locator('[data-turtle-row]')).toHaveCount(1);
+  await expect(page.locator('[data-notes-page="1"]')).toHaveAttribute('data-written', '');
+  await typeRows(page, [['S', '5']]);
+  await kind(page, 'lot').click();
+  // CALC: a sum on page 1, another on page 2; page 1 keeps its tape.
+  await page.locator('[data-pad-tab="calc"]').click();
+  await expect(page.locator('[data-notes-page="1"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-calc-line]').fill('12 x 10');
+  await page.keyboard.press('Enter');
+  await page.locator('[data-notes-page="2"]').click();
+  await expect(page.locator('[data-calc-row]')).toHaveCount(0);
+  await page.locator('[data-calc-line]').fill("10' + 2'");
+  await page.keyboard.press('Enter');
+  await page.locator('[data-calc-line]').fill('3 x');
+  await page.locator('[data-notes-page="1"]').click();
+  await expect(page.locator('[data-calc-row]')).toHaveCount(1);
+  await expect(page.locator('[data-calc-row] .an')).toHaveText('120 sq ft');
+  await page.locator('[data-pad-tab="notes"]').click();
+  await page.locator('[data-notes-text]').fill('lot one');
+  // In the file.
+  const file = await saved(page);
+  expect(file.calcPages.pages[0].map(r => r.line)).toEqual(['12 x 10']);
+  expect(file.calcPages.pages[1].map(r => r.main)).toEqual([`12'-0"`]);
+  expect(file.calcPages.lines[1]).toBe('3 x');
+  expect(file.turtlePages[0]).toEqual({ rows: [{ dir: 'N', dist: '10' }, { dir: 'R', dist: '10' }], kind: 'lines' });
+  expect(file.turtlePages[2]).toEqual({ rows: [{ dir: 'S', dist: '5' }], kind: 'lot' });
+  // The file opened fresh in a browser that kept nothing brings them back.
+  await page.evaluate(() => ['draft.notepad', 'draft.notepad.pages', 'draft.calc', 'draft.turtle', 'draft.turtle.page'].forEach(k => localStorage.removeItem(k)));
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await openTurtle(page);
+  await page.locator('[data-notes-page="3"]').click();
+  await expect(distAt(page, 0)).toHaveValue('5');
+  await expect(kind(page, 'lot')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-pad-tab="calc"]').click();
+  await page.locator('[data-notes-page="2"]').click();
+  await expect(page.locator('[data-calc-row]')).toHaveCount(1);
+  await expect(page.locator('[data-calc-line]')).toHaveValue('3 x');
+  // The one .txt: every page headed, and read back the same.
+  const text = await page.evaluate(() => notepadAsText());
+  expect(text).toContain('=== NOTES PAGE 1 ===\nlot one');
+  expect(text).toContain('=== CALC PAGE 1 ===\n12 x 10 = 120 sq ft');
+  expect(text).toContain(`=== CALC PAGE 2 ===\n10' + 2' = 12'-0"\n3 x`);
+  expect(text).toContain('=== TURTLE PAGE 1 (LINES) ===\nN\t10\nR\t10');
+  expect(text).toContain('=== TURTLE PAGE 3 (LOT) ===\nS\t5');
+  const back = await page.evaluate(t => notepadFromText(t), text);
+  expect(back.notes[0]).toBe('lot one');
+  expect(back.calc[0].tape.map(r => r.main)).toEqual(['120 sq ft']);
+  expect(back.calc[1].line).toBe('3 x');
+  expect(back.turtle[0].rows).toEqual([{ dir: 'N', dist: '10' }, { dir: 'R', dist: '10' }]);
+  expect(back.turtle[2]).toEqual({ rows: [{ dir: 'S', dist: '5' }], kind: 'lot' });
+  // A plain .txt with no headings is page 1's notes.
+  expect((await page.evaluate(() => notepadFromText('just notes\nmore'))).notes[0]).toBe('just notes\nmore');
+  // OPEN TXT is beside SAVE AS TXT, on every tab.
+  await expect(page.locator('[data-notes-open-txt]')).toBeVisible();
+  await expect(page.locator('[data-notes-clear]')).toBeHidden();
 });
