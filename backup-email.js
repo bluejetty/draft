@@ -108,11 +108,16 @@
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
+  // "Failed to fetch" is all a browser says when the worker never answered:
+  // it is down, or it does not list this site (location.host) among the
+  // origins it answers -- say that in words a drafter can act on.
+  const unreachable = () => `the mail server did not answer ${location.host || 'this page'} -- it may be down, or not yet set up for this site`;
   const post = async (to, piece) => {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ app: APP, email: to, filename: piece.filename, dataUrl: await asDataUrl(piece.blob) }),
-    });
+    const body = JSON.stringify({ app: APP, email: to, filename: piece.filename, dataUrl: await asDataUrl(piece.blob) });
+    let res;
+    try {
+      res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    } catch { throw new Error(unreachable()); }
     if (!res.ok) throw new Error(`the mail server replied ${res.status}`);
   };
 

@@ -92,6 +92,19 @@ test('no BACKUP FILE email without 3 bones, and a failed send costs nothing', as
   expect(await balance(page), 'nothing spent on a failure').toBe(4);
 });
 
+test('a mail server that never answers (CORS or down) is said in words, and costs nothing', async ({ page }) => {
+  await openModel(page);
+  await page.route(WORKER, route => route.abort('failed'));
+  await bones(page, 4);
+  await page.locator('#file-save-as').click();
+  await page.locator('[data-save-as-go]').click();
+  await popup(page).locator('[data-bk-to]').fill('kris@example.com');
+  await popup(page).locator('[data-bk-send]').click();
+  await expect(popup(page).locator('[data-bk-status]')).toContainText('Could not send (the mail server did not answer');
+  await expect(popup(page).locator('[data-bk-status]')).toContainText('not yet set up for this site');
+  expect(await balance(page), 'nothing spent when the server is unreachable').toBe(4);
+});
+
 test('a big file goes zipped, in numbered parts each under the limit', async ({ page }) => {
   await openModel(page);
   const parts = await page.evaluate(async () => {
