@@ -58,6 +58,15 @@ async function openModel(page, {
     sessionStorage.setItem('draft-test-storage-cleared', '1');
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
+    // THE SUITE DRAFTS WITH THE T-SQUARE AND THE 1 FT LIGHT OFF. Since 9 Nov
+    // 2026 a fresh browser lights both (the feel TOY MODE used to give, now
+    // that TOY is out of the program), and every spec written before then
+    // drew free-hand runs and odd drags on the assumption that nothing
+    // squares or rounds until a chip is pressed. So the suite starts with
+    // the two lights remembered OFF, exactly as a drafter who turned them off
+    // would be; tests/lights-on-by-default.spec.js forgets this and pins the
+    // fresh-browser default, and a spec that wants a light presses its chip.
+    localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight: false }));
     if (seedWallet) {
       localStorage.setItem('draft-bone-wallet',
         JSON.stringify({ balance: 999, lastDripAt: Date.now(), createdAt: Date.now() }));

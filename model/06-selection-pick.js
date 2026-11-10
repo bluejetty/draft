@@ -234,10 +234,26 @@
   // the shading, since the footprint is a filled shape here and not a line.
   // A footprint switched off (HOUSE FOOTPRINT) is not painted, so
   // sitePlanParts returns none and nothing is picked under an empty lot.
-  const siteBodies = () => (activeLevelId() === SITE_LEVEL_ID && !boneyardActive && window.DraftLayoutPlan
-    ? window.DraftLayoutPlan.sitePlanParts(drawing).bodies : []);
-  const siteBodyAt = worldPt => siteBodies().slice().reverse()
-    .find(body => (body.points || []).length >= 3 && pointInRing(body.points, worldPt)) || null;
+  const siteParts = () => (activeLevelId() === SITE_LEVEL_ID && !boneyardActive && window.DraftLayoutPlan
+    ? window.DraftLayoutPlan.sitePlanParts(drawing) : { lot: null, bodies: [], roofs: [] });
+  // INSIDE THE SHADING, OR ON ITS EDGE. A shadow on SITE is a filled shape,
+  // so a press anywhere inside it is a press on it -- and a press within
+  // grab reach of its outline counts too, because a shape can be too thin
+  // to have an inside a hand can land in. Movie, 9 Nov, a three-point sliver
+  // left on 2ND FL and shaded on SITE once MAIN FL's footprint came off:
+  // "the box with shading was created and i can't select or delete it".
+  const onRingOrEdge = (pts, worldPt) => {
+    if ((pts || []).length < 3) return false;
+    if (pointInRing(pts, worldPt)) return true;
+    const G = window.DraftGeometry2D;
+    const thresh = SELECT_GRAB_PX / view.scale;
+    return pts.some((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      return !!a && !!b && G.pointToSegment(worldPt, { start: a, end: b }).d < thresh;
+    });
+  };
+  const siteBodiesAt = worldPt => siteParts().bodies.slice().reverse()
+    .filter(body => onRingOrEdge(body.points, worldPt));
 
   // ── AN OPENING ANSWERS A PRESS ───────────────────────────────────────────
   //
@@ -333,7 +349,7 @@
     // on it can mean. ALL LEVELS reaches them through their walls' levels
     // only where a record is filed that way, so it keeps the three it had.
     if (all) return out;
-    if (filterAllows('outline')) [...outlines(), ...siteBodies()].forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
+    if (filterAllows('outline')) [...outlines(), ...siteParts().bodies].forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
     if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
     if (filterAllows('roof')) pickRoofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
     if (filterAllows('beam')) beams().forEach(item => out.push({ type: 'beam', item, parts: seg(item), open: true }));
@@ -599,8 +615,7 @@
   // the foot with the 1' light lit.
   const slideDelta = (slide, dx, dz) => {
     let t = dx * slide.u.x + dz * slide.u.z;
-    const Q = window.DraftToyConstraints;
-    if (footOn && Q) t = Q.quantiseFeet(t);
+    if (footOn) t = quantiseFeet(t);
     t = Math.max(slide.lo, Math.min(slide.hi, t));
     return { dx: slide.u.x * t, dz: slide.u.z * t };
   };
@@ -1102,11 +1117,15 @@
   // AND NOT WHILE HOUSE FOOTPRINT IS OFF (6 Nov): a roof the site is not
   // painting is not there to be picked, or DELETE could reach a building
   // the drafter has just put out of sight.
-  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID
-    ? (drawing?.siteFootprint === false ? []
-      : (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID)) : roofs());
+  // EVERY ROOF THE SITE PLAN PAINTS, from the same list it paints
+  // (sitePlanParts), so a shaded roof is always a roof that can be picked:
+  // a roof filed on a storey rather than on ROOF, say, was painted on SITE
+  // and could not be pressed there. On SITE the press may land on a roof's
+  // edge as well as inside it (onRingOrEdge), for the sliver's reason.
+  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? siteParts().roofs : roofs());
   const roofsAt = worldPt => pickRoofs().slice().reverse()
-    .filter(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt));
+    .filter(roof => (activeLevelId() === SITE_LEVEL_ID ? onRingOrEdge(roof.points, worldPt)
+      : (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)));
   const roofAt = worldPt => roofsAt(worldPt)[0] || null;
 
   // Returns { type, item } or null, in the old page's precedence.
@@ -1273,12 +1292,11 @@
       if (takeAll('shape', inside)) return out;
     }
     if (filterAllows('outline')) {
-      // ON SITE, THE FOOTPRINT TOO (siteBodyAt): the ground storey's outline,
-      // picked from inside its shading, so the grey box can be deleted from
-      // the level it is seen on. After this level's own outlines, which are
-      // painted over it.
-      const body = siteBodyAt(worldPt);
-      if (takeAll('outline', [...outlinesAt(worldPt), ...(body ? [body] : [])])) return out;
+      // ON SITE, THE FOOTPRINT TOO (siteBodiesAt): the ground storey's
+      // outlines, picked from inside their shading or on its edge, so the
+      // grey box can be deleted from the level it is seen on. After this
+      // level's own outlines, which are painted over it.
+      if (takeAll('outline', [...outlinesAt(worldPt), ...siteBodiesAt(worldPt)])) return out;
     }
     if (filterAllows('floor')) {
       if (takeAll('floor', floorsAt(worldPt))) return out;

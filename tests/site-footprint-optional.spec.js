@@ -165,3 +165,57 @@ test('the switch is read by the sheet painter, not only the screen', async ({ pa
   await expect(chip(page)).toBeVisible();
   await expect(chip(page)).toHaveAttribute('aria-pressed', 'false');
 });
+
+// ── A SHADOW CAN ALWAYS BE PRESSED (Movie, 9 Nov) ─────────────────────────
+//
+// "i'm trying to draw the site plan ... then the box with shading was
+// created and i can't select or delete it, what is it?" It was a three-point
+// sliver on 2ND FL: once MAIN FL's footprint came off the site, 2ND FL was
+// the lowest storey and the site plan shaded ITS outline -- a shape too thin
+// to have an inside a hand could land in, and the press only ever asked
+// inside. So on SITE a press on a shadow's EDGE picks it too, for bodies and
+// for roofs, and every roof the site plan paints is a roof that can be
+// picked there, not only ROOF level's.
+const sliver = ({ roofOnStorey = false } = {}) => ({
+  ...file({ footprint: false, roof: false }),
+  levels: [{ id: SITE, name: 'SITE', elev: 0 }, { id: ROOF, name: 'ROOF', elev: 0 },
+    { id: 5, name: '2ND FL', elev: 9 }, { id: MAIN, name: 'MAIN FL', elev: 0 }, { id: 1, name: 'FOUNDATION', elev: -8 }],
+  activeLevelIdx: 3,
+  outlines: [
+    { id: 'lot', levelId: SITE, site: true, garage: false, detached: false, masterId: null,
+      foundation: null, closed: true, points: ring([60, 120]), overriddenSrcIds: [] },
+    // A SLIVER ON 2ND FL: 30 ft long, a tenth of a foot wide at its widest.
+    { id: 'sliver', levelId: 5, closed: true, masterId: null, garage: false, detached: false,
+      foundation: null, points: [{ x: -15, y: 0, z: 0 }, { x: 15, y: 0, z: -0.1 }, { x: 15, y: 0, z: 0.1 }], overriddenSrcIds: [] },
+  ],
+  roofs: roofOnStorey ? [{
+    id: 'roof-storey', levelId: MAIN, sourceLevelId: null, sourceShapeId: null,
+    points: [{ x: -20, y: 0, z: 20 }, { x: 20, y: 0, z: 20 }, { x: 20, y: 0, z: 20.1 }], edges: ['eave', 'eave', 'eave'],
+    overhang: 2, edgeOverhang: [2, 2, 2], pitch: 4, fascia: 5.5,
+    garage: false, follows: 'none', layer: 'A-ROOF',
+  }] : [],
+});
+
+test('a sliver shaded on SITE is picked on its edge, and DELETE takes it off', async ({ page }) => {
+  await openOnSite(page, sliver());
+  expect(await painted(page), 'the sliver is the body the site plan shades').toEqual({ bodies: 1, roofs: 0, lot: true });
+  await pressPlan(page, 0, 0);
+  await expect(page.locator('#readout')).toContainText('1 selected');
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(300);
+  const after = await saved(page);
+  expect((after.outlines || []).map(o => o.id), 'the sliver is gone and the lot stays').toEqual(['lot']);
+  expect(await painted(page)).toEqual({ bodies: 0, roofs: 0, lot: true });
+});
+
+test('a roof the site plan paints is picked there whatever level it is filed on, edge or inside', async ({ page }) => {
+  await openOnSite(page, sliver({ roofOnStorey: true }));
+  expect(await painted(page)).toEqual({ bodies: 1, roofs: 1, lot: true });
+  await pressPlan(page, 0, 20);
+  await expect(page.locator('#readout')).toContainText('1 selected');
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(300);
+  const after = await saved(page);
+  expect(after.roofs || [], 'the roof is gone').toEqual([]);
+  expect((after.outlines || []).map(o => o.id).sort(), 'and nothing else went with it').toEqual(['lot', 'sliver']);
+});

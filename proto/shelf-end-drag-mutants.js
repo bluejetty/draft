@@ -33,7 +33,7 @@ const MUTANTS = [
     test: 'with the SNAP light off the cross line alone pulls' },
   { file: 'model/16-gestures-undo.js',
     name: 'no inch join',
-    find: "          const joined = board !== 'toy'\n            ? inchJoin(grabbed.vtx, landed, (md.segs ||= dragMagnet(grabbed.vtx).segs)) : null;\n",
+    find: "          const joined = inchJoin(grabbed.vtx, landed, (md.segs ||= dragMagnet(grabbed.vtx).segs));\n",
     with: "          const joined = null;\n",
     test: 'dropped within an inch of a face it crosses' },
   { file: 'model/07-walls-magnet.js',

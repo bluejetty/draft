@@ -585,18 +585,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       //   - RUFF/ROUGH and NIGHT/DAY set skin state. They change what the
       //     page LOOKS like and what it remembers, and no absence row is
       //     about either. TOY/DRAFTING sat here too until 15 Oct, when the
-      //     board became a lamp; the same sentence covered it.
-      //   - CONTINUE and STAY IN TOY were the promotion confirm's two
-      //     answers, raised by typing a length on the TOY board. The card is
-      //     gone -- the board promotes itself and says so on the strip -- and
-      //     since neither answer ever made anything, nothing here moves but
-      //     the list.
-      //   - BREAK HERE and MOVE THIS WALL are §4's two answers, raised by
-      //     clicking a wall that is already selected on the TOY board. BREAK
-      //     HERE puts a joint in an existing bone at a foot mark; MOVE THIS
-      //     WALL does nothing at all, and the move it names is the drag that
-      //     was already there. So neither MAKES anything either, and no
-      //     absence row is about either.
+      //     board became a lamp; the lamp, the promotion confirm (CONTINUE /
+      //     STAY IN TOY) and the bone card (BREAK HERE / MOVE THIS WALL)
+      //     all left with TOY MODE on 9 Nov 2026. None of them ever made
+      //     anything, so no absence row is about any of them.
       //
       // So every `absent` row below still stands. The list grows; the table
       // does not change.
@@ -839,16 +831,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // them away. Both only SHOW what the page already counted, so no
             // absence row moves.
             'readout-tab', 'readout-close',
-            // TOY AND DRAFTING ARE NOT BUTTONS ANY MORE (Movie, 15 Oct:
-            // "it ill be basically a LIGHT -- not a button"). The mode corner
-            // carries a lamp of two SPANS, which this census does not collect
-            // and should not: it is an output, and a page's controls are what
-            // can be pressed. CONTINUE and STAY IN TOY went with it -- the
-            // promotion asks nothing now -- so four entries leave this list
-            // and no absence row moves, for the reason the paragraph above
-            // gives: none of the four ever made anything.
+            // TOY AND DRAFTING ARE GONE (9 Nov 2026): no lamp, no board,
+            // no bone card. The mode corner keeps the two skin pairs.
             'RUFF', 'ROUGH', 'NIGHT', 'DAY',
-            'Break here', 'Move this wall',
             'CLEAR',   // the NOTES pad's, beside 'notes-tab' above
             'SAVE AS TXT',   // and its backup to a .txt (Movie, 18 Oct)
             // AND ITS CALC TAB (Movie, 18 Oct: "can we add a construction

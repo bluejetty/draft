@@ -152,58 +152,6 @@ test('the selection panel speaks the same words, and a wall-type change leaves t
     expect(w.refLine).toBe('right');
   });
 
-test('along an inside face the wall takes the room side, whatever the panel says, and the pick is left alone',
-  async ({ page }) => {
-    await open(page, house('toy'));
-    await h.armWall(page);
-    await pressSide(page, 'LEFT SIDE');
-    // Along the north wall's inside face, left to right: both ends snap to
-    // z = -10 + 5½". Travelling +x the drafter's LEFT is the exterior wall,
-    // so LEFT SIDE would stand the wall inside the 2x6. The face answers:
-    // the body goes into the room, which is refLine 'left' for this travel.
-    await drawRun(page, -6, -9.6, 6, -9.6);
-    // And right to left along the same face: the room is now on the
-    // drafter's left, which is refLine 'right'.
-    await drawRun(page, 6, -9.6, -6, -9.6);
-    const walls = drawnWalls(await saveAndRead(page));
-    expect(walls.length).toBe(2);
-    walls.forEach(w => {
-      expect(w.start.z, 'on the face').toBeCloseTo(-10 + T_2X6, 9);
-      expect(w.end.z, 'on the face').toBeCloseTo(-10 + T_2X6, 9);
-    });
-    expect(walls.map(w => w.refLine), 'into the room, both ways round').toEqual(['left', 'right']);
-    await expect(sideChip(page, 'right'), 'the panel still says LEFT SIDE').toHaveAttribute('aria-pressed', 'true');
-  });
-
-test('along an opening edge the wall goes away from the hole', async ({ page }) => {
-  await open(page, house('toy', {
-    floors: [{ id: 'fl', levelId: 3, points: [V(-10, -10), V(10, -10), V(10, 10), V(-10, 10)] }],
-    surfaceOpenings: [{ id: 'well', levelId: 3, hostType: 'floor', hostId: 'fl',
-      points: [V(2, -3), V(6 + 2.5 / 12, -3), V(6 + 2.5 / 12, 3), V(2, 3)] }],
-  }));
-  await h.armWall(page);
-  // CENTERLINE is the pick; the edge decides. Along the well's north edge
-  // from its west corner to its east, travelling +x: the hole is on the
-  // drafter's right, so the body goes left of the line, refLine 'right'.
-  await drawRun(page, 2.2, -2.9, 6.0, -2.9);
-  const [w] = drawnWalls(await saveAndRead(page));
-  expect(w, 'the wall reached the file').toBeTruthy();
-  expect([w.start.x, w.start.z]).toEqual([2, -3]);
-  expect(w.end.x).toBeCloseTo(6 + 2.5 / 12, 9);
-  expect(w.end.z).toBe(-3);
-  expect(w.refLine, 'the body is away from the hole').toBe('right');
-});
-
-test('a run square INTO the face is not along it: the panel\'s pick stands', async ({ page }) => {
-  await open(page, house('toy'));
-  await h.armWall(page);
-  await pressSide(page, 'LEFT SIDE');
-  await drawRun(page, 3.3, 2.2, 3.3, -9.8);         // ends on the face, runs along z
-  const [w] = drawnWalls(await saveAndRead(page));
-  expect(w.end.z, 'cut at the face').toBeCloseTo(-10 + T_2X6, 9);
-  expect(w.refLine, 'but the face is not its line, so the pick holds').toBe('right');
-});
-
 // THE WALL TYPE, PICKED BEFORE DRAWING (Movie, 18 Oct: "under the WALL title
 // can we put the TYPE of WALL - 2x4, 2X6, 2X8, 11.25" (6"CORE) ICF 13.25
 // (8"CORE) ICF, 8" CONC" -- "so i can select a wall type / thickness before

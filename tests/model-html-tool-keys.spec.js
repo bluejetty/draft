@@ -132,27 +132,19 @@ test('a letter typed into a field is a character, not a tool', async ({ page }) 
   expect(await armed(page), 'the field kept the keystrokes').toEqual(['select']);
 });
 
-test('no board swallows a letter any more, and picking up a tool does not dim the lamp',
+test('no letter is swallowed: every tool key arms its tool',
   async ({ page }) => {
-    await open(page, base({ board: 'toy' }));
+    await open(page, base());
     expect(await armed(page)).toEqual(['select']);
 
     // THIS TEST USED TO WATCH A LETTER BEING SWALLOWED. ROOF was off the TOY
     // board, greying its key is presentation, presentation can be got round --
     // a letter is exactly how -- so the refusal had to hold at the register.
-    //
-    // THE RULING CHANGED UNDER IT (Movie, 15 Oct: "the TOY should be a light
-    // not a button"). TOY says how fine the numbers are, not which tools
-    // exist. There is no board that refuses a tool, so there is no letter
-    // left to swallow, and the key arms ROOF here as it would anywhere.
+    // The TOY board stopped refusing tools on 15 Oct and came out of the
+    // program on 9 Nov 2026; the roster offers every tool, so there is no
+    // letter left to swallow, and the key arms ROOF here as it would anywhere.
     await page.keyboard.press('O');
-    expect(await armed(page), 'O arms ROOF, on TOY as on any board').toEqual(['roof']);
-
-    // AND THE LIGHT IS STILL ON, which is the half of the new ruling a letter
-    // can break: only a number TOY could not have made puts it out. Picking
-    // up a tool is not a number, and a drafter reaching for ROOF has not asked
-    // to leave the whole-foot board.
-    await expect(page.locator('[data-board-light]')).toHaveAttribute('data-lit', '');
+    expect(await armed(page), 'O arms ROOF').toEqual(['roof']);
 
     // A SECOND LETTER TAKES THE TOOL IT NAMES, rather than dropping the
     // drafter back to SELECT the way a refused one used to.

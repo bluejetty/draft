@@ -305,21 +305,18 @@ const armDimension = async page => {
   await page.waitForTimeout(150);
 };
 
-test('the DIMENSION key is live on TOY, as it is on DRAFTING', async ({ page }) => {
+test('the DIMENSION key is live on a drawing that names no board', async ({ page }) => {
   // IT USED TO BE DOWN ON TOY, and this check said so: the TOY board offered
   // three tools and the panel must not be reachable where the tool is not.
-  // Movie opened TOY to the whole roster on 15 Oct -- "we should allow more
-  // features (they all go dim i notices)" -- so the claim turns over with it.
-  // The press is still checked rather than the attribute: a key that lights
-  // and arms nothing is the same lie in the other direction.
+  // TOY stopped taking tools away on 15 Oct and came out of the program on
+  // 9 Nov 2026. The press is still checked rather than the attribute: a key
+  // that lights and arms nothing is the same lie in the other direction.
   await openBoards(page);
   await expect(page.locator('[data-tool-key="dimension"]')).toBeEnabled();
   await page.locator('[data-tool-key="dimension"]').click();
   await page.waitForTimeout(150);
   await expect(page.locator('[data-auto-dims]'),
-    'arming it on TOY offers the press that belongs to it').toBeVisible();
-  await expect(page.locator('body'), 'and arming it moved no board')
-    .toHaveAttribute('data-board', 'toy');
+    'arming it offers the press that belongs to it').toBeVisible();
 });
 
 test('arming DIMENSION offers AUTO DIMS, and putting it down takes it away',

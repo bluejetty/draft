@@ -126,13 +126,7 @@ const MUTANTS = [
     with: '        best.p.x += 0; best.p.z += 0;',
     test: 'takes the eave with it' },
 
-  { file: 'model/07-walls-magnet.js',
-    name: 'the TOY board gets the card too, in the middle of a child\'s drag',
-    find: "    if (board === 'toy' || !footprintCard) {",
-    with: '    if (!footprintCard) {',
-    test: 'the TOY board is never asked' },
-
-  // ── AND THE INWARD HALF ─────────────────────────────────────────────────
+    // ── AND THE INWARD HALF ─────────────────────────────────────────────────
   { file: 'model/07-walls-magnet.js',
     name: 'the middle of what moved is never probed: a wall pushed IN reads '
       + 'as nothing having left the footprint',

@@ -19,7 +19,7 @@ const SPEC = 'tests/protractor-steps.spec.js';
 const MUTANTS = [
   { file: 'model/10-tracking-garage.js',
     name: "the lit protractor turns nothing",
-    find: "    if (!protractorOn || board === 'toy' || !from || !at) return null;\n",
+    find: "    if (!protractorOn || !from || !at) return null;\n",
     with: "    return null;\n",
     test: "lit, the PROTRACTOR turns the run in 45s: an aim at 41 degrees lands on 45" },
   { file: 'model/10-tracking-garage.js',

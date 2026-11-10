@@ -291,18 +291,6 @@ test('one Ctrl+Z puts the wall, the footprint and the pile back', async ({ page 
   expect(saved.columns || [], 'and the pile it placed is gone').toHaveLength(0);
 });
 
-test('the TOY board is never asked', async ({ page }) => {
-  // Nothing on that board has a foundation to cantilever off, and a modal in
-  // the middle of a child's drag is the one thing the board is built not to
-  // do. It takes the whole-building answer, which is what a push means there.
-  await open(page, { board: 'toy' });
-  await pullCorner(page, 14, -10);
-  await expect(card(page), 'no card on the bone board').toBeHidden();
-
-  const saved = await saveAndRead(page);
-  const { outline } = corner(saved);
-  expect(outline.x, 'and the footprint went with the wall anyway').toBeCloseTo(14, 2);
-});
 
 test('a corner slid ALONG its own wall is not off the footprint', async ({ page }) => {
   // The card asks about a wall that LEFT the footprint, and the measure is
