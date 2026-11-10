@@ -130,10 +130,10 @@ test('a HOLOGRAM file brought in on the SITE plan lands on the SITE and is drawn
   await expect(page.locator('[data-hologram-name]').first()).toContainText('HOLOGRAM · SHELF 1');
   await page.locator('[data-hologram-where]').first().click();
   await expect(page.locator('[data-hologram-floor-up]')).toHaveText('LEVEL ▲');
+  await page.screenshot({ path: 'test-results/shelf-hologram-on-site.png' });
   await page.locator('[data-hologram-floor-up]').click();
   await page.locator('#hologram-ask-close').click();
   expect((await saved(page)).holograms[0].levelMap, 'MAIN FL is the next level up (then ROOF)').toEqual({ '-1': 3 });
-  await page.screenshot({ path: 'test-results/shelf-hologram-on-site.png' });
 });
 
 test('the same outline saved as a RESIDENTIAL SUITE stands on a floor, as suites do', async ({ page }) => {
