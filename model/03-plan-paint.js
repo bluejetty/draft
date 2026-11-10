@@ -281,6 +281,9 @@
     // only kind it can hold.
     notes().forEach(note =>
       R.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, { pxPerFt: view.scale }, env));
+    // The ANNOTATION tool's own preview: POINTER's leader from the thing
+    // tapped to the cursor (model/13, paintPlanNotePreview).
+    if (typeof paintPlanNotePreview === 'function') paintPlanNotePreview();
   };
 
   // The name, and the size under it when there is one -- exactly as typed.
