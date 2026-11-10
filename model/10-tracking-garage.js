@@ -759,10 +759,12 @@
       grabMark(suiteHover);
       return;
     }
-    // A FLOORING CORNER IN HAND shows the corner it will land on.
-    if (moveDrag?.kind === 'roomcorner' && moveDrag.lit) {
+    // A FLOORING CORNER IN HAND shows what has it, as a wall's node does:
+    // the magnets near the hand and the ring on the one it will land on.
+    if (moveDrag?.kind === 'roomcorner' && moveDrag.active) {
       canvas.removeAttribute('data-snap-node');
-      paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
+      paintMagnets(moveDrag.cursor, moveDrag.magnet, moveDrag.lit);
+      if (moveDrag.lit) paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
       markMagnet(moveDrag.lit);
       return;
     }

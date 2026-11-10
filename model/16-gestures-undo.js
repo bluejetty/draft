@@ -967,33 +967,67 @@
           return;
         }
         if (md.kind === 'roomcorner') {
-          // ONTO A WALL'S NODE when one is in reach -- the node's own object,
-          // which is what links the corner to it -- else to the hand, by the
-          // foot with the 1' light lit. A NEW ARRAY EACH EVENT, never the old
-          // one edited: the undo step holds the corners the drag began with.
-          let x = raw.x, z = raw.z;
-          if (footOn) { x = quantiseFeet(x); z = quantiseFeet(z); }
-          // A WALL'S NODE TAKES THE CORNER AS ITSELF; a face corner (the
-          // inside corner of two walls, say) takes it at its offset from the
-          // nearest wall end, so the floor follows that wall too.
-          // THE NEARER OF THE TWO WINS (Movie, 25 Oct: "i had a hard time
-          // getting the flooring area shape to locate exactly onto the inside
-          // corner"): the wall's centre node used to be asked first, so a
-          // corner taken into an inside corner went to the middle of the wall
-          // a couple of inches away whenever the node was in reach too.
-          // ONE SNAPPING RULE (Movie, 26 Oct): a node from 2", a face corner
-          // from 1 1/2", each held between 4 and 30 px on the screen, with the
-          // circle on what it will take (paintSnapNode).
-          const caught = window.DraftGeometry2D.nearestVertex(snapCandidates([md.points[md.index]]), raw, reachFt(NODE_REACH));
-          const face = window.DraftGeometry2D.nearestVertex(wallFaceNodes(), raw, reachFt(CORNER_REACH));
-          const far = q => (q ? Math.hypot(q.x - raw.x, q.z - raw.z) : Infinity);
+          // THE INSTRUMENTS READ ON A LOOP CORNER'S DRAG AS ON A WALL'S (jb,
+          // 10 Nov 2026: "when placing the AREA / SHAPE i'd like to be able
+          // to use the node snap and T Square functions, they don't seem to
+          // work for placing or changing the nodes"). Placing went through
+          // loopPoint -> drawPoint and had them; a corner DRAGGED caught a
+          // wall's node or face corner and nothing else -- not a line's end,
+          // not another shape's corner, not a fixture's, no cross line, no
+          // square -- and rounded its coordinates, not its travel, by the
+          // foot. So this is the wall corner's own order (md.kind ===
+          // 'corner' below), through the same helpers: square from where the
+          // corner started, then the magnet (axis-projected while squaring),
+          // then the cross lines, then the foot when nothing caught.
+          // THE MAGNET IS EVERYTHING ON THE LEVEL BUT THE CORNER IN HAND
+          // (magnetExcluding: by reference and by position, worked out once
+          // per drag), so the corner cannot catch itself and stick.
+          const held = md.points[md.index];
+          const from = (md.from ||= { x: held.x, z: held.z });
+          const wanted = tsquareLive() ? squareTo(from, raw) : raw;
+          const fixed = tsquareLive() ? squaredAxis(from, raw) : null;
+          const magnet = snapLive() ? (md.magnet ||= magnetExcluding([held])) : null;
+          // THE NEARER OF A NODE AND A FACE CORNER WINS (Movie, 25 Oct: "i
+          // had a hard time getting the flooring area shape to locate
+          // exactly onto the inside corner"): strongerPoint's rule, asked
+          // before any node-first catch, so a wall's centre node two inches
+          // off never beats the inside corner the hand is on. Nothing in
+          // reach, the square's axis takes the faces it crosses and a free
+          // hand takes the nearest face, as a wall's node does.
+          const catchAt = p => (magnet ? strongerPoint(p, magnet.nodes, magnet.corners) : null);
+          const point = catchAt(wanted);
+          const hit = point
+            ? { pt: fixed === 'z' ? { x: point.v.x, y: 0, z: wanted.z } : fixed === 'x' ? { x: wanted.x, y: 0, z: point.v.z }
+              : { x: point.v.x, y: 0, z: point.v.z }, corner: point.v, node: !!point.node }
+            : fixed ? axisMagnet(wanted, fixed, held, magnet)
+              : (f => (f ? { pt: { x: f.pt.x, y: 0, z: f.pt.z }, seg: f.seg } : null))(magnet ? nearestFace(magnet.segs, wanted) : null);
+          md.lit = hit;
+          md.cursor = raw;
+          cursorWorld = raw;
+          const snapped = hit?.pt || null;
+          const tracked = !snapped && !fixed
+            ? trackSnap(wanted, [held], (md.rays ||= (m => [...m.nodes, ...m.corners])(magnetExcluding([held])))) : null;
+          // MIN 0 FEET, the dragged corner's rule: a nudge rounds back home.
+          const footed = footOn ? onTheFoot(from, { x: wanted.x, z: wanted.z }, 0) : wanted;
+          const landed = snapped || (tracked
+            ? { x: tracked.rays.some(r => r.axis === 'x') ? tracked.pt.x : footed.x,
+              z: tracked.rays.some(r => r.axis === 'z') ? tracked.pt.z : footed.z }
+            : footed);
+          // A ROOM TAG'S CORNER ON A WALL'S NODE TAKES THE NODE AS ITSELF --
+          // the node's own object, which is what links the corner to it --
+          // and on a face corner (the inside corner of two walls, say) takes
+          // it at its offset from the nearest wall end, so the floor follows
+          // that wall too. THE NEARER OF THE TWO WINS (Movie, 25 Oct: "i had
+          // a hard time getting the flooring area shape to locate exactly
+          // onto the inside corner"), which is strongerPoint's rule.
+          const corner = hit?.corner || null;
+          const wallNode = corner && hit.node && walls().some(w => w.start === corner || w.end === corner) ? corner : null;
           let pt;
-          if (face && far(face) < far(caught)) {
-            const link = roomLinkAt(face);
-            pt = { x: face.x, z: face.z, ...(link ? { link } : {}) };
-          } else pt = caught || { x, z };
-          md.lit = face && far(face) < far(caught) ? { pt: { x: face.x, y: 0, z: face.z }, corner: face, node: false }
-            : caught ? { pt: { x: caught.x, y: 0, z: caught.z }, corner: caught, node: true } : null;
+          if (md.loopKind === 'roomtag' && wallNode) pt = wallNode;
+          else if (md.loopKind === 'roomtag' && corner && !hit.node) {
+            const link = roomLinkAt(corner);
+            pt = { x: corner.x, z: corner.z, ...(link ? { link } : {}) };
+          } else pt = { x: landed.x, z: landed.z };
           // A SHAPE'S OR FLOOR'S CORNER TAKES THE NUMBERS ONLY: no node, no link.
           if (md.loopKind !== 'roomtag') pt = md.loopKind === 'floor' ? { x: pt.x, y: 0, z: pt.z } : { x: pt.x, z: pt.z };
           md.points = md.points.map((p, i) => (i === md.index ? pt : p));
