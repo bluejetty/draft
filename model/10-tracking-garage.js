@@ -347,6 +347,11 @@
   // with the wall -- the footprint card is not asked: a jog is a shape the
   // drafter drew, not a wall off its footprint.
   const INLINE_EPS = 1e-3;
+  // THE PIECES THIS RULE MADE, this session: only one of these is tidied
+  // away when it is pushed back to nothing. Any other wall that a drag
+  // shrinks to no length (a wall dragged onto the far wall) stays, as it
+  // always has -- model-html-move-wall.spec.js counts on its four walls.
+  const jogPieces = new WeakSet();
   const segmentsOnCorner = v => [...walls(), ...lines()].filter(s => s.start === v || s.end === v);
   const ringPointAt = (ring, p) => (ring.points || []).find(q =>
     Math.abs(q.x - p.x) < 1e-6 && Math.abs(q.z - p.z) < 1e-6) || null;
@@ -395,6 +400,7 @@
       const piece = { ...body, id: newDrawingItemId(isWall ? 'wall' : 'line'), start: v, end: fresh };
       const at = list.indexOf(body);
       list.splice(at + 1, 0, piece);
+      jogPieces.add(piece);
       md.before[i] = { vtx: fresh, x: b.x, z: b.z, offX: fresh.offX, offZ: fresh.offZ };
       // THE RING, where the wall is on one: the jog corner goes in beside
       // the node, on the wall's side of it.
@@ -456,7 +462,7 @@
     const tidied = [];
     md.before.forEach(b => {
       const v = b.vtx;
-      segmentsOnCorner(v).filter(s => s !== md.body).forEach(o => {
+      segmentsOnCorner(v).filter(s => s !== md.body && jogPieces.has(s)).forEach(o => {
         if (Math.hypot(o.end.x - o.start.x, o.end.z - o.start.z) >= 1e-6) return;
         const u = o.start === v ? o.end : o.start;
         if (u === v) return;
