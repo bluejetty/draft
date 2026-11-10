@@ -751,3 +751,6 @@
   });
   Object.values(arrayBoxes).forEach(box => draftBox(box, arrayMake));
   arrayBar?.querySelector('[data-array-make]')?.addEventListener('click', arrayMake);
+  // THE TURTLE TABLE FOLLOWS THE SELECTION (model/04): hooked here because
+  // the watchers are declared in model/06, after the pad's script ran.
+  selectionWatchers.push(() => turtleFollowSelection());

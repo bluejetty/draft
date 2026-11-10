@@ -36,8 +36,12 @@
     let i = 0;
     const ws = () => { while (i < s.length && /\s/.test(s[i])) i += 1; };
     const peekNum = j => /[0-9.]/.test(s[j] || '');
+    // "106." WHILE IT IS BEING TYPED is 106, not a loop: the line is worked
+    // on every keystroke, and a dot with no digit after it used to match
+    // nothing, move nothing, and spin the pad forever (found 10 Nov by the
+    // TURTLE table, which reads distances the same way).
     const readNum = () => {
-      const m = /^\d*\.?\d+/.exec(s.slice(i));
+      const m = /^(\d+\.?\d*|\.\d+)/.exec(s.slice(i));
       if (!m) return null;
       i += m[0].length;
       return Number(m[0]);
@@ -91,6 +95,7 @@
         continue;
       }
       const n = readNum();
+      if (n === null) throw new Error(`can't read "${s.slice(i, i + 6)}"`);
       // FEET AND INCHES WITH A DASH: "367-10 1/4" -- the dash right against
       // both numbers. "367 - 10" with spaces is a minus.
       if (s[i] === '-' && /\d/.test(s[i + 1] || '') && Number.isInteger(n) && start === i - String(n).length) {

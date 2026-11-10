@@ -164,45 +164,203 @@
       grip.addEventListener('pointerup', up);
     });
   });
+  // FIVE PAGES (Movie, 10 Nov: "i also put 5 buttons put 1 / 2 / 3 / 4 / 5
+  // (those will be pages they can flip to another page for info on another
+  // project"). Each page is its own 15,000 characters. Page 1 is still
+  // `notepad` in the .draft, so every file written before today opens as it
+  // did; pages 2 to 5 ride as `notepadPages` (all five, in order) only when
+  // one of them has something on it. The page showing is this browser's.
   const NOTES_MAX = 15000;
+  const NOTES_PAGES = 5;
   const NOTES_KEY = 'draft.notepad';
+  const NOTES_PAGES_KEY = 'draft.notepad.pages';
+  const NOTES_PAGE_KEY = 'draft.notepad.page';
   const notesText = document.querySelector('[data-notes-text]');
   const notesCount = document.querySelector('[data-notes-count]');
+  const notesFoot = document.querySelector('[data-notes-foot]');
   notesText.maxLength = NOTES_MAX;
-  const notesStored = () => {
-    try { return localStorage.getItem(NOTES_KEY) || ''; } catch { return ''; }
+  const blankPages = () => Array.from({ length: NOTES_PAGES }, () => '');
+  const pagesOf = raw => {
+    const out = blankPages();
+    (Array.isArray(raw) ? raw : []).slice(0, NOTES_PAGES).forEach((t, i) => { out[i] = String(t ?? '').slice(0, NOTES_MAX); });
+    return out;
   };
-  const storeNotes = text => {
+  let notesPages = blankPages();
+  let notesPage = 0;
+  try { notesPage = Math.min(NOTES_PAGES - 1, Math.max(0, Number(localStorage.getItem(NOTES_PAGE_KEY)) || 0)); } catch { notesPage = 0; }
+  const notesStored = () => {
+    let pages = blankPages();
     try {
-      if (text) localStorage.setItem(NOTES_KEY, text);
+      pages = pagesOf(JSON.parse(localStorage.getItem(NOTES_PAGES_KEY) || '[]'));
+      pages[0] = (localStorage.getItem(NOTES_KEY) || '').slice(0, NOTES_MAX);
+    } catch { /* nothing kept */ }
+    return pages;
+  };
+  const storeNotes = pages => {
+    try {
+      if (pages[0]) localStorage.setItem(NOTES_KEY, pages[0]);
       else localStorage.removeItem(NOTES_KEY);
+      if (pages.slice(1).some(Boolean)) localStorage.setItem(NOTES_PAGES_KEY, JSON.stringify(pages));
+      else localStorage.removeItem(NOTES_PAGES_KEY);
+      localStorage.setItem(NOTES_PAGE_KEY, String(notesPage));
     } catch { /* private window: the .draft still carries them */ }
   };
   const syncNotesCount = () => {
     const used = notesText.value.length;
-    const pages = Math.max(1, Math.ceil(used / (NOTES_MAX / 5)));
-    notesCount.textContent = used >= NOTES_MAX ? 'PAD FULL' : `PAGE ${pages} OF 5`;
+    notesCount.textContent = used >= NOTES_MAX ? `PAGE ${notesPage + 1} FULL` : `PAGE ${notesPage + 1} OF ${NOTES_PAGES}`;
     notesCount.toggleAttribute('data-full', used >= NOTES_MAX);
+    syncPageKeys();
   };
-  const showNotes = text => {
-    notesText.value = String(text).slice(0, NOTES_MAX);
+  // THE PAGE KEYS 1 TO 5 ARE EVERY TAB'S (Movie, 10 Nov: "the number should
+  // apply for notes, and then also for CALC - they can leave 1 open and go
+  // to another calc leaving the old numbers on the 1st calc... and for
+  // TURTLE they can make multiple outlines / site plan etc"). Each tab
+  // keeps its own page in hand; the keys show the tab's, the one showing
+  // lit and a page with something on it marked. The tabs fill in their
+  // own entry here as they are built below.
+  let padShowing = 'notes';
+  const padPages = {
+    notes: { at: () => notesPage, written: i => Boolean(notesPages[i]), turn: i => notesTurnTo(i) },
+  };
+  const syncPageKeys = () => {
+    const tab = padPages[padShowing] || padPages.notes;
+    notesFoot.querySelectorAll('[data-notes-page]').forEach(b => {
+      const i = Number(b.dataset.notesPage) - 1;
+      b.setAttribute('aria-pressed', String(i === tab.at()));
+      b.toggleAttribute('data-written', tab.written(i));
+    });
+  };
+  // The page showing, onto the pad.
+  const showNotesPage = () => {
+    notesText.value = notesPages[notesPage];
     syncNotesCount();
+  };
+  const showNotes = (text, page = 0) => {
+    notesPages[page] = String(text).slice(0, NOTES_MAX);
+    if (page === notesPage) showNotesPage(); else syncNotesCount();
   };
   // ON THE DRAWING ONLY WHEN THERE IS SOMETHING TO SAY: a drawing opened and
   // saved with an empty pad comes back key for key.
-  const notesOntoDrawing = text => {
+  const notesOntoDrawing = pages => {
     if (!drawing) return;
-    if (text) drawing.notepad = text;
+    if (pages[0]) drawing.notepad = pages[0];
     else delete drawing.notepad;
+    if (pages.slice(1).some(Boolean)) drawing.notepadPages = pages.slice();
+    else delete drawing.notepadPages;
+  };
+  const notesChanged = () => {
+    storeNotes(notesPages);
+    if (!drawing) return;
+    const was = JSON.stringify([drawing.notepad || '', drawing.notepadPages || null]);
+    notesOntoDrawing(notesPages);
+    if (JSON.stringify([drawing.notepad || '', drawing.notepadPages || null]) !== was) markDirty();
+  };
+  // THE WHOLE NOTEPAD AS ONE TEXT FILE (Movie, 10 Nov: "can we SAVE AS
+  // (save the notepad save all the notepad and turtle info for the 5 pages
+  // that can be OPEN NOTEPAD TXT file?"): every page of NOTES, CALC and
+  // TURTLE with something on it, each under a heading a person can read,
+  // and OPEN TXT reads the same file back. A file with no headings at all
+  // is notes for page 1, so a plain .txt opens too.
+  const NOTEPAD_HEAD = 'ROUGH-DRAFTER NOTEPAD';
+  const notepadAsText = () => {
+    const parts = [NOTEPAD_HEAD];
+    notesPages.forEach((t, i) => { if (t) parts.push(`=== NOTES PAGE ${i + 1} ===\n${t}`); });
+    calcState.pages.forEach((tape, i) => {
+      const line = calcState.lines[i] || '';
+      if (!tape.length && !line) return;
+      parts.push(`=== CALC PAGE ${i + 1} ===\n${[...tape.map(r => `${r.line} = ${r.main}`), ...(line ? [line] : [])].join('\n')}`);
+    });
+    turtlePages.forEach((p, i) => {
+      const rows = p.record ? p.record.rows : p.rows;
+      if (!rows.length) return;
+      const kind = turtleKindOf(p.record ? p.record.kind : p.kind);
+      parts.push(`=== TURTLE PAGE ${i + 1} (${kind.toUpperCase()}) ===\n${rows.map(r => `${r.dir}\t${r.dist}`).join('\n')}`);
+    });
+    return parts.join('\n\n') + '\n';
+  };
+  const notepadFromText = text => {
+    const src = String(text ?? '').replace(/\r/g, '');
+    const re = /^=== (NOTES|CALC|TURTLE) PAGE ([1-5])(?: \((LINES|LOT|HOUSE|AREA)\))? ===$/gm;
+    const heads = [];
+    let m;
+    while ((m = re.exec(src))) heads.push({ tab: m[1], page: Number(m[2]) - 1, kind: (m[3] || 'lines').toLowerCase(), at: m.index, end: m.index + m[0].length });
+    const out = { notes: blankPages(), calc: Array.from({ length: NOTES_PAGES }, () => ({ tape: [], line: '' })),
+      turtle: Array.from({ length: NOTES_PAGES }, () => ({ rows: [], kind: 'lines' })) };
+    if (!heads.length) { out.notes[0] = src.replace(new RegExp(`^${NOTEPAD_HEAD}\\n*`), '').slice(0, NOTES_MAX); return out; }
+    heads.forEach((h, k) => {
+      const body = src.slice(h.end + 1, k + 1 < heads.length ? heads[k + 1].at : src.length).replace(/\n+$/, '');
+      if (h.tab === 'NOTES') out.notes[h.page] = body.slice(0, NOTES_MAX);
+      else if (h.tab === 'CALC') {
+        const lines = body.split('\n').filter(Boolean);
+        lines.forEach(l => {
+          const eq = l.lastIndexOf(' = ');
+          if (eq > 0) {
+            const line = l.slice(0, eq).trim();
+            const r = window.DraftCalc.work(line, { metric: calcState.metric });
+            if (r.ok) out.calc[h.page].tape.push({ line, main: r.main, reuse: reusable(r) });
+          } else out.calc[h.page].line = l.trim().slice(0, 200);
+        });
+      } else {
+        out.turtle[h.page].kind = h.kind;
+        out.turtle[h.page].rows = body.split('\n').filter(l => l.trim()).map(l => {
+          const tab = l.indexOf('\t');
+          if (tab >= 0) return { dir: l.slice(0, tab).trim(), dist: l.slice(tab + 1).trim() };
+          const rows = window.DraftTurtlePath.rowsFromText(l);
+          return rows[0] || { dir: l.trim(), dist: '' };
+        }).slice(0, TURTLE_ROWS_MAX);
+      }
+    });
+    return out;
+  };
+  // OPEN TXT puts the file's pages on the pad: notes and calcs page for
+  // page, and turtle tables onto pages not holding a drawn path.
+  const notepadOpen = read => {
+    notesPages = read.notes;
+    showNotesPage();
+    notesChanged();
+    read.calc.forEach((pg, i) => { calcState.pages[i] = pg.tape.slice(-60); calcState.lines[i] = pg.line; });
+    calcState.tape = calcState.pages[calcState.page];
+    calcLine.value = calcState.lines[calcState.page] || '';
+    keepCalc();
+    drawTape();
+    showAnswer();
+    read.turtle.forEach((pg, i) => { if (!turtlePages[i].record) turtlePages[i] = { rows: turtleRowsOf(pg.rows), kind: turtleKindOf(pg.kind), record: null }; });
+    turtleCur = turtlePages[turtlePage];
+    turtleKeep();
+    turtleRender();
+    syncPageKeys();
+  };
+  const notepadOpenInput = document.querySelector('[data-notes-open-file]');
+  document.querySelector('[data-notes-open-txt]').addEventListener('click', () => { notepadOpenInput.value = ''; notepadOpenInput.click(); });
+  notepadOpenInput.addEventListener('change', async () => {
+    const file = notepadOpenInput.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const has = notesPages.some(Boolean) || calcState.pages.some(t => t.length) || turtlePages.some(p => !p.record && p.rows.length);
+    if (has && !window.confirm(`Open ${file.name} over the notes, calcs and turtle tables on the pad?`)) return;
+    notepadOpen(notepadFromText(text));
+    sayOnStrip(`${file.name} opened onto the pad.`);
+  });
+  const notesTurnTo = page => {
+    notesPage = Math.min(NOTES_PAGES - 1, Math.max(0, page));
+    try { localStorage.setItem(NOTES_PAGE_KEY, String(notesPage)); } catch { /* fine */ }
+    showNotesPage();
   };
   // Called by adoptFile once the drawing is built -- open, NEW and a re-read
   // all come through there.
   const adoptNotes = () => {
-    const own = typeof drawing?.notepad === 'string' ? drawing.notepad.slice(0, NOTES_MAX) : '';
-    if (own) { showNotes(own); storeNotes(own); }
-    notesOntoDrawing(notesText.value);
+    const ownFirst = typeof drawing?.notepad === 'string' ? drawing.notepad.slice(0, NOTES_MAX) : '';
+    const ownRest = Array.isArray(drawing?.notepadPages) ? pagesOf(drawing.notepadPages) : null;
+    if (ownFirst || (ownRest && ownRest.slice(1).some(Boolean))) {
+      notesPages = ownRest || blankPages();
+      notesPages[0] = ownFirst || notesPages[0];
+      storeNotes(notesPages);
+    }
+    showNotesPage();
+    notesOntoDrawing(notesPages);
   };
-  showNotes(notesStored());
+  notesPages = notesStored();
+  showNotesPage();
   // RIGHT UNDER LEVELS / LAYERS, wherever that tab's word ends. The stylesheet
   // can only place it under the tab's 32vh CAP, which left a hand's width of
   // empty edge between the two at every window height.
@@ -223,20 +381,25 @@
     new ResizeObserver(seatNotesTab).observe(notesTab);
   }
   notesText.addEventListener('input', () => {
+    notesPages[notesPage] = notesText.value;
     syncNotesCount();
-    storeNotes(notesText.value);
-    if (!drawing) return;
-    const was = drawing.notepad || '';
-    notesOntoDrawing(notesText.value);
-    if ((drawing.notepad || '') !== was) markDirty();
+    notesChanged();
   });
-  // CLEAR ASKS FIRST, so one stray press cannot wipe five pages.
+  // THE PAGE KEYS 1 TO 5 (Movie's mockup, 10 Nov): under SAVE AS TXT and
+  // CLEAR at the foot of the pad; the one showing is lit, a page with
+  // something on it is marked.
+  notesFoot.querySelectorAll('[data-notes-page]').forEach(b => b.addEventListener('click', () => {
+    (padPages[padShowing] || padPages.notes).turn(Number(b.dataset.notesPage) - 1);
+    syncPageKeys();
+  }));
+  // CLEAR ASKS FIRST, so one stray press cannot wipe a page; it clears the
+  // page showing, not the other four.
   document.querySelector('[data-notes-clear]').addEventListener('click', () => {
     if (!notesText.value) return;
-    if (!window.confirm('Clear all notes?')) return;
-    showNotes('');
-    storeNotes('');
-    if (drawing && drawing.notepad !== undefined) { notesOntoDrawing(''); markDirty(); }
+    if (!window.confirm(`Clear page ${notesPage + 1} of the notes?`)) return;
+    notesPages[notesPage] = '';
+    showNotesPage();
+    notesChanged();
   });
 
   // ── THE CALCULATOR, THE PAD'S OTHER TAB (Movie, 18 Oct: "a construction
@@ -253,18 +416,76 @@
   const calcAnswer = document.querySelector('[data-calc-answer]');
   const calcTape = document.querySelector('[data-calc-tape]');
   const CALC_KEY = 'draft.calc';
+  // FIVE CALC PAGES (Movie, 10 Nov), each its own tape and line, so page 1's
+  // numbers stay while page 2 is worked. `tape` is the page in hand; page
+  // 1's tape is still kept as `tape` in the store, as it was.
   const calcState = (() => {
-    try { const v = JSON.parse(localStorage.getItem(CALC_KEY) || '{}');
-      return { tape: Array.isArray(v.tape) ? v.tape.slice(-60) : [], metric: v.metric === true }; }
-    catch { return { tape: [], metric: false }; }
+    const pages = Array.from({ length: NOTES_PAGES }, () => []);
+    const lines = Array.from({ length: NOTES_PAGES }, () => '');
+    let metric = false, page = 0;
+    try {
+      const v = JSON.parse(localStorage.getItem(CALC_KEY) || '{}');
+      if (Array.isArray(v.tape)) pages[0] = v.tape.slice(-60);
+      (Array.isArray(v.pages) ? v.pages : []).slice(0, NOTES_PAGES).forEach((t, i) => { if (Array.isArray(t)) pages[i] = t.slice(-60); });
+      (Array.isArray(v.lines) ? v.lines : []).slice(0, NOTES_PAGES).forEach((t, i) => { lines[i] = String(t ?? '').slice(0, 200); });
+      metric = v.metric === true;
+      page = Math.min(NOTES_PAGES - 1, Math.max(0, Number(v.page) || 0));
+    } catch { /* nothing kept */ }
+    return { tape: pages[page], pages, lines, metric, page };
   })();
-  const keepCalc = () => { try { localStorage.setItem(CALC_KEY, JSON.stringify(calcState)); } catch { /* this tab only */ } };
+  // AND IN THE .DRAFT (Movie, 10 Nov: "do the notepads save when a draft
+  // file is saved in that draft file?"): the five tapes and lines ride as
+  // `calcPages` when any has something on it, as the notes ride as
+  // `notepad`; a file that has them wins on open, as a file's notes do.
+  const calcOntoDrawing = () => {
+    if (!drawing) return;
+    const was = JSON.stringify(drawing.calcPages || null);
+    if (calcState.pages.some(t => t.length) || calcState.lines.some(Boolean)) {
+      drawing.calcPages = { pages: calcState.pages.map(t => t.slice()), lines: calcState.lines.slice() };
+    } else delete drawing.calcPages;
+    if (JSON.stringify(drawing.calcPages || null) !== was) markDirty();
+  };
+  const keepCalc = () => {
+    calcState.pages[calcState.page] = calcState.tape;
+    calcState.lines[calcState.page] = calcLine.value;
+    try { localStorage.setItem(CALC_KEY, JSON.stringify({ tape: calcState.pages[0], pages: calcState.pages,
+      lines: calcState.lines, metric: calcState.metric, page: calcState.page })); } catch { /* this tab only */ }
+    calcOntoDrawing();
+  };
+  const adoptCalc = () => {
+    const own = drawing?.calcPages;
+    if (own && typeof own === 'object') {
+      (Array.isArray(own.pages) ? own.pages : []).slice(0, NOTES_PAGES).forEach((t, i) => {
+        calcState.pages[i] = Array.isArray(t) ? t.filter(r => r && typeof r.line === 'string').slice(-60) : [];
+      });
+      (Array.isArray(own.lines) ? own.lines : []).slice(0, NOTES_PAGES).forEach((t, i) => { calcState.lines[i] = String(t ?? '').slice(0, 200); });
+      calcState.tape = calcState.pages[calcState.page];
+      calcLine.value = calcState.lines[calcState.page] || '';
+    }
+    keepCalc();
+    drawTape();
+    showAnswer();
+  };
+  const calcTurnTo = i => {
+    keepCalc();
+    calcState.page = Math.min(NOTES_PAGES - 1, Math.max(0, i));
+    calcState.tape = calcState.pages[calcState.page];
+    calcLine.value = calcState.lines[calcState.page] || '';
+    keepCalc();
+    drawTape();
+    showAnswer();
+    calcLine.focus();
+  };
+  padPages.calc = { at: () => calcState.page, written: i => Boolean(calcState.pages[i].length || calcState.lines[i]), turn: calcTurnTo };
   const showPad = which => {
     padTabs.forEach(b => b.setAttribute('aria-selected', String(b.dataset.padTab === which)));
     notesText.hidden = which !== 'notes';
     calcBox.hidden = which !== 'calc';
+    document.querySelector('[data-turtle]').hidden = which !== 'turtle';
     notesCount.hidden = which !== 'notes';
-    document.querySelectorAll('[data-notes-save-txt], [data-notes-clear]').forEach(b => { b.hidden = which !== 'notes'; });
+    padShowing = which;
+    document.querySelector('[data-notes-clear]').hidden = which !== 'notes';
+    syncPageKeys();
     if (which === 'calc') calcLine.focus();
   };
   padTabs.forEach(b => b.addEventListener('click', () => showPad(b.dataset.padTab)));
@@ -329,14 +550,13 @@
       if (!r || !r.ok) return;
       const line = `${calcLine.value.trim()} = ${r.main}`;
       const text = notesText.value ? `${notesText.value.replace(/\s*$/, '')}\n${line}` : line;
-      showNotes(text);
-      storeNotes(notesText.value);
-      if (drawing) { notesOntoDrawing(notesText.value); markDirty(); }
+      showNotes(text, notesPage);
+      notesChanged();
       sayOnStrip(`On the NOTES pad: ${line}`);
     }
     if (what !== 'notes') calcLine.focus();
   }));
-  calcLine.addEventListener('input', showAnswer);
+  calcLine.addEventListener('input', () => { showAnswer(); keepCalc(); });
   // THE PAGE'S KEYS STAY OFF THIS LINE: a D typed here is a D, not DIMENSION.
   calcLine.addEventListener('keydown', e => {
     e.stopPropagation();
@@ -345,6 +565,640 @@
   });
   syncUnits();
   drawTape();
+  calcLine.value = calcState.lines[calcState.page] || '';
+  showAnswer();
+
+  // ── THE TURTLE, THE PAD'S THIRD TAB (Movie, 10 Nov: "was thinking of
+  // adding a column / TURTLE ... i'd like a 2 column s, each row will be a
+  // new MOVE for the line ... i can enter all the directions and
+  // measurements in that TURTLE columns and then i can either press (draw on
+  // registration point the GOLD target) or select location to start as 2nd
+  // option"). ────────────────────────────────────────────────────────────
+  //
+  // ONE ROW IS ONE MOVE: a direction and a distance. turtle-path.js reads
+  // both and walks them into points; this is the table, the two DRAW keys,
+  // and the link between a table and the lines it drew.
+  //
+  // THE TABLE STAYS WITH ITS LINES. A DRAW writes the lines as one assembly
+  // (TURTLE n) and files the table on the drawing (`turtles`, by the lines'
+  // ids), so picking any of those lines brings its table back up and
+  // REGENERATE redraws them from new numbers -- IN PLACE, the same line
+  // records and ids, from the same start, so a dimension hung on a corner
+  // rides with it (Movie: "select the TURTLE CREATED item ... press
+  // REGENERATE and it will go to the new numbers, same start point, all the
+  // dimensions should still link properly"). A row added or taken out adds
+  // or drops a line at that place; the lines before it keep their corners.
+  //
+  // THE LAMP GOES GREEN when the last move comes home within an inch
+  // (Movie: "once the guy returns perfectly the position where he started
+  // all the TURTLE numbers glow green so he knows it lines up and will be a
+  // completed shape"), and the turtle chip on the instrument strip with it.
+  //
+  // A table with no lines yet (typed before any DRAW) is kept per browser,
+  // so a reload does not lose a lot half typed.
+  const turtleBox = document.querySelector('[data-turtle]');
+  const turtleRowsBox = document.querySelector('[data-turtle-rows]');
+  const turtleStatus = document.querySelector('[data-turtle-status]');
+  const turtleNameOut = document.querySelector('[data-turtle-name]');
+  const TURTLE_KEY = 'draft.turtle';
+  const TURTLE_ROWS_MAX = 200;
+  // WHAT A PAGE DRAWS AS (Movie, 10 Nov: "the turtle should be able to be
+  // used for the SITE PLAN for sure, and then also for the build house
+  // outline ... or a choice ... could be AREA too ... AREA / SHAPE"):
+  //   lines  -- a string of LINEs on the open level, one TURTLE n assembly
+  //   lot    -- the SITE PLAN's lot line (an outline carrying site: true on
+  //             the SITE level, replacing the one the file has, as AUTOSITE
+  //             does)
+  //   house  -- the BUILD house outline, the master and its copy on every
+  //             level, the way a traced OUTLINE closes (commitOutline)
+  //   area   -- a SHAPE on the open level
+  // The three loops need the path to come home; LINES does not.
+  const TURTLE_KINDS = ['lines', 'lot', 'house', 'area'];
+  const TURTLE_KIND_NAMES = { lines: 'LINES', lot: 'LOT', house: 'HOUSE OUTLINE', area: 'AREA / SHAPE' };
+  const turtleKindOf = raw => (TURTLE_KINDS.includes(raw) ? raw : 'lines');
+  const turtleKind = () => turtleKindOf(turtleCur.record ? turtleCur.record.kind : turtleCur.kind);
+  const turtleIsLoop = kind => kind !== 'lines';
+  const turtleRowsOf = raw => (Array.isArray(raw) ? raw : []).slice(0, TURTLE_ROWS_MAX)
+    .map(r => ({ dir: String(r?.dir ?? '').slice(0, 24), dist: String(r?.dist ?? '').slice(0, 40) }));
+  // FIVE TURTLE PAGES (Movie, 10 Nov: "for TURTLE they can make multiple
+  // outlines / site plan etc"): each page is a table of its own, with the
+  // record on the drawing it belongs to once drawn. The scratch tables
+  // (typed, not yet drawn) are kept per browser, page by page.
+  const turtleScratch = () => {
+    const pages = Array.from({ length: NOTES_PAGES }, () => ({ rows: [], kind: 'lines' }));
+    try {
+      const v = JSON.parse(localStorage.getItem(TURTLE_KEY) || '[]');
+      if (Array.isArray(v) && v.every(Array.isArray)) v.slice(0, NOTES_PAGES).forEach((rows, i) => { pages[i] = { rows: turtleRowsOf(rows), kind: 'lines' }; });
+      else if (Array.isArray(v) && v.every(pg => pg && Array.isArray(pg.rows))) v.slice(0, NOTES_PAGES).forEach((pg, i) => { pages[i] = { rows: turtleRowsOf(pg.rows), kind: turtleKindOf(pg.kind) }; });
+      else pages[0] = { rows: turtleRowsOf(v), kind: 'lines' };
+    } catch { /* nothing kept */ }
+    return pages;
+  };
+  let turtlePage = 0;
+  try { turtlePage = Math.min(NOTES_PAGES - 1, Math.max(0, Number(localStorage.getItem(`${TURTLE_KEY}.page`)) || 0)); } catch { turtlePage = 0; }
+  const turtlePages = turtleScratch().map(pg => ({ rows: pg.rows, kind: pg.kind, record: null }));
+  // What the tab shows: the page in hand's rows, and the record on the
+  // drawing they belong to (null while the path has not been drawn).
+  let turtleCur = turtlePages[turtlePage];
+  const turtleSetCur = cur => { turtleCur = cur; turtlePages[turtlePage] = cur; };
+  let turtlePickArmed = false;
+  const turtleRecords = () => (Array.isArray(drawing?.turtles) ? drawing.turtles : []);
+  const turtleOntoDrawing = () => {
+    if (!drawing) return;
+    const was = JSON.stringify(drawing.turtlePages || null);
+    const pages = turtlePages.map(p => (p.record ? { rows: [], kind: turtleKindOf(p.record.kind) } : { rows: p.rows, kind: turtleKindOf(p.kind) }));
+    if (pages.some(p => p.rows.length)) drawing.turtlePages = pages; else delete drawing.turtlePages;
+    if (JSON.stringify(drawing.turtlePages || null) !== was) markDirty();
+  };
+  const turtleKeep = () => {
+    if (turtleCur.record && drawing) markDirty();
+    turtleOntoDrawing();
+    try {
+      localStorage.setItem(TURTLE_KEY, JSON.stringify(turtlePages.map(p => ({ rows: p.record ? [] : p.rows, kind: turtleKindOf(p.record ? p.record.kind : p.kind) }))));
+      localStorage.setItem(`${TURTLE_KEY}.page`, String(turtlePage));
+    } catch { /* this tab only */ }
+  };
+  const turtleTurnTo = i => {
+    turtleDisarmPick();
+    turtlePage = Math.min(NOTES_PAGES - 1, Math.max(0, i));
+    turtleCur = turtlePages[turtlePage];
+    turtleKeep();
+    turtleRender();
+  };
+  padPages.turtle = { at: () => turtlePage, written: i => Boolean(turtlePages[i].rows.length || turtlePages[i].record), turn: turtleTurnTo };
+  // THE LIVE LINES of a record, in the table's order; a line deleted on the
+  // sheet is simply not there.
+  // THE LIVE ITEMS of a record, in the table's order: a lot's or shape's
+  // one loop, a house's copies (the open level's first), a path's lines.
+  // An item deleted on the sheet is simply not there.
+  const turtleLiveItems = rec => {
+    if (!rec || !drawing) return [];
+    const ids = (rec.itemIds || rec.lineIds || []).map(String);
+    const kind = turtleKindOf(rec.kind);
+    const list = kind === 'lines' ? (drawing.lines || []) : kind === 'area' ? (drawing.shapes || []) : (drawing.outlines || []);
+    const found = ids.map(id => list.find(item => String(item.id) === id)).filter(Boolean);
+    if (kind !== 'house') return found;
+    const onLevel = found.find(copy => Number(copy.levelId) === activeLevelId());
+    return onLevel ? [onLevel, ...found.filter(copy => copy !== onLevel)] : found;
+  };
+  const turtleLiveLines = rec => (turtleKindOf(rec?.kind) === 'lines' ? turtleLiveItems(rec) : []);
+  // WHERE THE PATH STANDS: its first corner as it lies now, so a path moved
+  // whole on the sheet regenerates where it was moved to.
+  const turtleStartOf = (rec, live) => {
+    if (!live.length) return rec?.start || null;
+    const first = turtleKindOf(rec.kind) === 'lines' ? live[0].start : live[0].points?.[0];
+    return first ? { x: first.x, z: first.z } : (rec?.start || null);
+  };
+  // THE CORNERS a loop takes from a walk: every point but the last, which
+  // is home again.
+  const turtleLoopPoints = w => w.points.slice(0, -1).map(p => ({ x: p.x, z: p.z }));
+  const turtleWalk = (start = null) => window.DraftTurtlePath.walk(turtleCur.rows,
+    start || { x: 0, z: 0 }, { calc: window.DraftCalc, metric: drawing?.units === 'metric' });
+  const turtleGapText = ft => (drawing?.units === 'metric'
+    ? `${(ft / window.DraftCalc.FT_PER_M).toFixed(2)} m` : window.DraftCalc.feetInches(ft, 16));
+  // The lamp on the strip (shell-bars.js), lit with the pad's own.
+  const turtleSyncChip = closed => {
+    const chip = document.querySelector('[data-turtle-lamp-chip]');
+    if (chip) chip.classList.toggle('home', closed);
+  };
+  // A ROW'S LINE OR EDGE as it lies, for the "edited on the plan" mark.
+  const turtleEdgeOf = (rec, live, k) => {
+    if (turtleKindOf(rec.kind) === 'lines') { const l = live[k]; return l ? { from: l.start, to: l.end } : null; }
+    const pts = live[0]?.points || [];
+    if (!pts.length || k >= pts.length) return null;
+    return { from: pts[k], to: pts[(k + 1) % pts.length] };
+  };
+  // REFRESH: the status, the lamp, each row's bad marks and its "edited on
+  // the plan" mark -- without rebuilding the inputs, so typing keeps focus.
+  const turtleRefresh = () => {
+    const rec = turtleCur.record;
+    const live = rec ? turtleLiveItems(rec) : [];
+    const start = rec ? turtleStartOf(rec, live) : null;
+    const w = turtleWalk(start);
+    const kind = turtleKind();
+    const badAt = new Map(w.bad.map(b => [b.row, b]));
+    const legAt = new Map(w.legs.map(l => [l.row, l]));
+    const offFt = 0.01;
+    turtleRowsBox.querySelectorAll('[data-turtle-row]').forEach(rowEl => {
+      const i = Number(rowEl.dataset.turtleRow);
+      const bad = badAt.get(i);
+      const dirIn = rowEl.querySelector('[data-turtle-dir]'), distIn = rowEl.querySelector('[data-turtle-dist]');
+      if (bad?.dir) dirIn.setAttribute('data-bad', ''); else dirIn.removeAttribute('data-bad');
+      if (bad?.dist) distIn.setAttribute('data-bad', ''); else distIn.removeAttribute('data-bad');
+      // THE PLAN DISAGREES with this row: its line was dragged, or is gone.
+      const leg = legAt.get(i);
+      const k = w.legs.indexOf(leg);
+      const edge = leg && rec && live.length ? turtleEdgeOf(rec, live, k) : null;
+      const off = leg && rec && (!edge
+        || Math.hypot(edge.from.x - leg.from.x, edge.from.z - leg.from.z) > offFt
+        || Math.hypot(edge.to.x - leg.to.x, edge.to.z - leg.to.z) > offFt);
+      if (off) rowEl.setAttribute('data-off', ''); else rowEl.removeAttribute('data-off');
+      rowEl.title = off ? (edge ? 'This was moved on the plan; REGENERATE puts it back to the numbers' : 'This is gone from the plan; REGENERATE draws it again') : '';
+    });
+    if (w.closed) turtleBox.setAttribute('data-closed', ''); else turtleBox.removeAttribute('data-closed');
+    turtleSyncChip(w.closed);
+    const n = w.legs.length;
+    turtleStatus.textContent = !n ? 'NO MOVES YET'
+      : w.closed ? `CLOSED · ${n} MOVE${n === 1 ? '' : 'S'}`
+        : `OPEN · ${n} MOVE${n === 1 ? '' : 'S'} · GAP ${turtleGapText(w.gapFt)}`;
+    turtleNameOut.textContent = rec
+      ? (kind === 'lines' ? (groups().find(g => g.id === rec.groupId)?.name || 'TURTLE') : TURTLE_KIND_NAMES[kind])
+      : 'NEW PATH';
+    turtleBox.querySelectorAll('[data-turtle-kind]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.turtleKind === kind)));
+    const regen = turtleBox.querySelector('[data-turtle-do="regen"]');
+    if (regen) regen.disabled = !rec;
+    syncPageKeys();
+    return w;
+  };
+  // RENDER: the rows as inputs, plus one blank row to type the next move in.
+  const turtleRender = ({ focusRow = -1, focusCol = 'dir' } = {}) => {
+    turtleRowsBox.textContent = '';
+    const shown = [...turtleCur.rows, { dir: '', dist: '' }];
+    shown.forEach((row, i) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'turtle-row';
+      rowEl.dataset.turtleRow = String(i);
+      const dirIn = document.createElement('input');
+      dirIn.type = 'text'; dirIn.id = `turtle-dir-${i}`; dirIn.dataset.turtleDir = ''; dirIn.value = row.dir; dirIn.placeholder = i ? '' : 'N';
+      dirIn.spellcheck = false; dirIn.autocomplete = 'off'; dirIn.setAttribute('aria-label', `Move ${i + 1} direction`);
+      const distIn = document.createElement('input');
+      distIn.type = 'text'; distIn.id = `turtle-dist-${i}`; distIn.dataset.turtleDist = ''; distIn.value = row.dist; distIn.placeholder = i ? '' : '106.87';
+      distIn.spellcheck = false; distIn.autocomplete = 'off'; distIn.setAttribute('aria-label', `Move ${i + 1} distance`);
+      const keys = document.createElement('span');
+      keys.className = 'turtle-row-keys';
+      const plus = document.createElement('button');
+      plus.type = 'button'; plus.textContent = '+'; plus.dataset.turtleInsert = String(i); plus.title = 'Put a new move in after this one';
+      const cut = document.createElement('button');
+      cut.type = 'button'; cut.textContent = '×'; cut.dataset.turtleRemove = String(i); cut.title = 'Take this move out';
+      const trailing = i === turtleCur.rows.length;
+      if (trailing) { plus.hidden = true; cut.hidden = true; }
+      keys.append(plus, cut);
+      rowEl.append(dirIn, distIn, keys);
+      turtleRowsBox.append(rowEl);
+    });
+    turtleRefresh();
+    if (focusRow >= 0) {
+      const el = turtleRowsBox.querySelector(`[data-turtle-row="${focusRow}"] [data-turtle-${focusCol}]`);
+      if (el) { el.focus(); el.select(); }
+    }
+  };
+  // THE TRAILING BLANK ROW becomes a real row the moment something is
+  // typed in it, and a new blank one appears under it.
+  const turtleRowTyped = (i, col, value) => {
+    const rows = turtleCur.rows;
+    if (i === rows.length) {
+      if (!value.trim()) return;
+      if (rows.length >= TURTLE_ROWS_MAX) return;
+      rows.push({ dir: '', dist: '' });
+      rows[i][col] = value;
+      turtleKeep();
+      turtleRender({ focusRow: i, focusCol: col });
+      const el = turtleRowsBox.querySelector(`[data-turtle-row="${i}"] [data-turtle-${col}]`);
+      if (el) { el.focus(); el.setSelectionRange(value.length, value.length); }
+      return;
+    }
+    if (!rows[i]) return;
+    rows[i][col] = value;
+    turtleKeep();
+    turtleRefresh();
+  };
+  turtleRowsBox.addEventListener('input', e => {
+    const rowEl = e.target.closest('[data-turtle-row]');
+    if (!rowEl) return;
+    const col = 'turtleDir' in e.target.dataset ? 'dir' : 'turtleDist' in e.target.dataset ? 'dist' : null;
+    if (!col) return;
+    turtleRowTyped(Number(rowEl.dataset.turtleRow), col, e.target.value);
+  });
+  // THE PAGE'S KEYS STAY OFF THE TABLE (a D typed here is a D); ENTER and
+  // TAB walk the cells like a sheet: direction, distance, next row.
+  turtleRowsBox.addEventListener('keydown', e => {
+    e.stopPropagation();
+    const rowEl = e.target.closest('[data-turtle-row]');
+    if (!rowEl) return;
+    const i = Number(rowEl.dataset.turtleRow);
+    const isDir = 'turtleDir' in e.target.dataset;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const next = isDir ? turtleRowsBox.querySelector(`[data-turtle-row="${i}"] [data-turtle-dist]`)
+        : turtleRowsBox.querySelector(`[data-turtle-row="${i + 1}"] [data-turtle-dir]`);
+      if (next) { next.focus(); next.select(); }
+    } else if (e.key === 'Escape') { e.target.blur(); }
+  });
+  turtleRowsBox.addEventListener('click', e => {
+    const insert = e.target.closest('[data-turtle-insert]');
+    const remove = e.target.closest('[data-turtle-remove]');
+    if (insert) {
+      const i = Number(insert.dataset.turtleInsert);
+      if (turtleCur.rows.length >= TURTLE_ROWS_MAX) return;
+      turtleCur.rows.splice(i + 1, 0, { dir: '', dist: '' });
+      turtleKeep();
+      turtleRender({ focusRow: i + 1 });
+    } else if (remove) {
+      const i = Number(remove.dataset.turtleRemove);
+      turtleCur.rows.splice(i, 1);
+      turtleKeep();
+      turtleRender({ focusRow: Math.min(i, turtleCur.rows.length) });
+    }
+  });
+
+  // ── DRAWING THE PATH ────────────────────────────────────────────────────
+  const turtleGroupOf = rec => groups().find(g => g.id === rec?.groupId) || null;
+  const turtleLineRecord = (leg, levelId, view) => ({
+    id: newDrawingItemId('line'),
+    start: poolVertex({ x: leg.from.x, z: leg.from.z }, levelId, view),
+    end: poolVertex({ x: leg.to.x, z: leg.to.z }, levelId, view),
+    levelId,
+    view,
+    layer: 'draft',
+    ...lineStyleDefaults(),
+  });
+  const turtleSelect = (kind, made) => setSelection(made
+    .filter(item => kind !== 'house' || Number(item.levelId) === activeLevelId())
+    .map(item => ({ type: kind === 'lines' ? 'line' : kind === 'area' ? 'shape' : 'outline', item })));
+  // The path's assembly: two or more lines are one TURTLE n, as a drawn
+  // string of lines is one LINES n (sealDrawnChain); one line stands alone.
+  const turtleGroupLines = (rec, made) => {
+    drawing.groups = drawing.groups || [];
+    let group = turtleGroupOf(rec);
+    if (made.length < 2) {
+      if (group) drawing.groups.splice(drawing.groups.indexOf(group), 1);
+      rec.groupId = null;
+      return null;
+    }
+    if (!group) {
+      const n = Number(drawing.nextGroupId) > 0 ? Number(drawing.nextGroupId) : groups().length + 1;
+      group = { id: `group-${n}`, name: `TURTLE ${n}`, fixed: true, stretchBehavior: 'rigid', members: [], wallSettings: null };
+      drawing.groups.push(group);
+      drawing.nextGroupId = n + 1;
+      rec.groupId = group.id;
+    }
+    group.members = made.map(line => ({ type: 'line', id: line.id }));
+    return group;
+  };
+  // EVERYTHING A DRAW OR A REGENERATE CAN TOUCH, as it stands, so one UNDO
+  // puts the lot back: the lists, each item's own corners, the assemblies,
+  // the records, the corner pool and the lot's size.
+  const turtleSnapshot = rec => ({
+    lines: (drawing.lines || []).slice(),
+    ends: (drawing.lines || []).map(l => [l, l.start, l.end]),
+    outlines: (drawing.outlines || []).slice(),
+    masters: (drawing.boneyardOutlines || []).slice(),
+    shapes: (drawing.shapes || []).slice(),
+    loops: [...(drawing.outlines || []), ...(drawing.boneyardOutlines || []), ...(drawing.shapes || [])].map(it => [it, it.points]),
+    hadOutlines: 'outlines' in drawing, hadMasters: 'boneyardOutlines' in drawing, hadShapes: 'shapes' in drawing,
+    lot: drawing.lot,
+    groups: (drawing.groups || []).slice(),
+    members: new Map((drawing.groups || []).map(g => [g, g.members])),
+    nextGroupId: drawing.nextGroupId,
+    turtles: (drawing.turtles || []).slice(),
+    hadTurtles: 'turtles' in drawing,
+    rec: rec ? { kind: rec.kind, groupId: rec.groupId, itemIds: (rec.itemIds || []).slice(), masterId: rec.masterId || null,
+      start: rec.start ? { ...rec.start } : null, levelId: rec.levelId, view: rec.view } : null,
+    pool: vertexPool.slice(),
+  });
+  const turtleRestore = (snap, rec) => {
+    drawing.lines = snap.lines;
+    snap.ends.forEach(([l, s, e]) => { l.start = s; l.end = e; });
+    if (snap.hadOutlines) drawing.outlines = snap.outlines; else delete drawing.outlines;
+    if (snap.hadMasters) drawing.boneyardOutlines = snap.masters; else delete drawing.boneyardOutlines;
+    if (snap.hadShapes) drawing.shapes = snap.shapes; else delete drawing.shapes;
+    snap.loops.forEach(([it, points]) => { it.points = points; });
+    drawing.lot = snap.lot;
+    drawing.groups = snap.groups;
+    snap.members.forEach((members, g) => { g.members = members; });
+    drawing.nextGroupId = snap.nextGroupId;
+    if (snap.hadTurtles) drawing.turtles = snap.turtles; else delete drawing.turtles;
+    if (rec && snap.rec) { delete rec.masterId; Object.assign(rec, snap.rec); }
+    vertexPool.splice(0, vertexPool.length, ...snap.pool);
+    setSelection([]);
+    turtlePages.forEach((p, i) => { if (p.record && !(drawing.turtles || []).includes(p.record)) turtlePages[i] = { rows: p.rows, kind: p.record.kind, record: null }; });
+    turtleCur = turtlePages[turtlePage];
+    turtleRender();
+  };
+  // THE ITEMS A WALK MAKES, by kind, from nothing.
+  const turtleMake = (kind, w, levelId, homeView, rec) => {
+    if (kind === 'lines') {
+      drawing.lines = drawing.lines || [];
+      const made = w.legs.map(leg => turtleLineRecord(leg, levelId, homeView));
+      made.forEach(line => drawing.lines.push(line));
+      turtleGroupLines(rec, made);
+      return made;
+    }
+    const loop = turtleLoopPoints(w);
+    if (kind === 'area') {
+      drawing.shapes = drawing.shapes || [];
+      const shape = { id: newDrawingItemId('shape'), points: loop.map(p => ({ x: p.x, y: 0, z: p.z })), levelId,
+        sourceLevelId: null, flooring: null, layer: 'SHAPE',
+        ...(typeof shapeStyleDefaults === 'function' ? shapeStyleDefaults() : {}) };
+      drawing.shapes.push(shape);
+      return [shape];
+    }
+    drawing.outlines = drawing.outlines || [];
+    if (kind === 'lot') {
+      // ONE LOT A FILE: this one takes the old one's place, as AUTOSITE's does.
+      const was = window.DraftLotSizes.siteOutlineOf(drawing.outlines);
+      const lot = { id: newDrawingItemId('outline'), masterId: null, levelId: SITE_LEVEL_ID, garage: false, site: true,
+        detached: false, foundation: null, points: loop.map(p => ({ x: p.x, y: 0, z: p.z })), overriddenSrcIds: [] };
+      if (was) drawing.outlines.splice(drawing.outlines.indexOf(was), 1, lot); else drawing.outlines.push(lot);
+      const xs = loop.map(p => p.x), zs = loop.map(p => p.z);
+      drawing.lot = { widthFt: Math.max(...xs) - Math.min(...xs), depthFt: Math.max(...zs) - Math.min(...zs), tier: null };
+      return [lot];
+    }
+    // HOUSE: the master on the shelf and a copy on every level, exactly as
+    // a traced OUTLINE closes (model/10 commitOutline).
+    const OM = window.DraftOutlineMaster;
+    const master = OM.storageMaster(OM.masterFromLoop({ points: loop, shelfId: activeShelfId(), sourceLevelId: activeLevelId(),
+      newItemId: () => newDrawingItemId('outline'), newPointId: () => newDrawingItemId('op') }));
+    const copies = OM.copiesForLevels(master, drawing.levels || [], { newItemId: () => newDrawingItemId('outline') });
+    drawing.boneyardOutlines = drawing.boneyardOutlines || [];
+    drawing.boneyardOutlines.push(master);
+    copies.forEach(copy => drawing.outlines.push(copy));
+    rec.masterId = master.id;
+    return copies;
+  };
+  // THE SAME ITEMS, MOVED TO THE WALK: a loop keeps its record and takes the
+  // new corners in place (a corner added or dropped is a new point in the
+  // ring; the others keep their place, so a dimension on them follows); a
+  // house's master and every copy move together.
+  const turtleMove = (kind, live, w, rec) => {
+    const loop = turtleLoopPoints(w);
+    if (kind === 'area' || kind === 'lot') {
+      const item = live[0];
+      item.points = loop.map((p, i) => ({ ...(item.points[i] || {}), x: p.x, y: item.points[i]?.y ?? 0, z: p.z }));
+      if (kind === 'lot') {
+        const xs = loop.map(p => p.x), zs = loop.map(p => p.z);
+        drawing.lot = { widthFt: Math.max(...xs) - Math.min(...xs), depthFt: Math.max(...zs) - Math.min(...zs), tier: null };
+      }
+      return live;
+    }
+    const OM = window.DraftOutlineMaster;
+    const master = (drawing.boneyardOutlines || []).find(m => String(m.id) === String(rec.masterId));
+    if (!master) return null;
+    master.points = loop.map((p, i) => ({ ...(master.points[i] || { id: newDrawingItemId('op') }), x: p.x, z: p.z }));
+    live.forEach(copy => {
+      copy.points = loop.map((p, i) => ({ ...(copy.points[i] || { bulge: 0, attach: null }), x: p.x, y: copy.points[i]?.y ?? 0, z: p.z,
+        srcId: OM.masterPointId(master.points[i]) }));
+    });
+    return live;
+  };
+  const turtleRemove = (kind, items) => {
+    const list = kind === 'lines' ? drawing.lines : kind === 'area' ? drawing.shapes : drawing.outlines;
+    items.forEach(item => { const at = list.indexOf(item); if (at >= 0) list.splice(at, 1); });
+    if (kind === 'house') {
+      const k = (drawing.boneyardOutlines || []).findIndex(m => String(m.id) === String(items[0]?.masterId));
+      if (k >= 0) drawing.boneyardOutlines.splice(k, 1);
+    }
+  };
+  const turtleSays = (kind, n, w, verb) => sayOnStrip(kind === 'lines'
+    ? `TURTLE: ${n} line${n === 1 ? '' : 's'} ${verb}${w.closed ? ', and the path closes' : `, open by ${turtleGapText(w.gapFt)}`}.`
+    : `TURTLE: ${TURTLE_KIND_NAMES[kind]} ${verb}, ${n} corners${kind === 'house' ? ' — press the bone to build on it' : ''}.`);
+  // A LOOP KIND NEEDS THE PATH HOME; said once, and nothing is drawn.
+  const turtleLoopReady = (kind, w) => {
+    if (!turtleIsLoop(kind)) return true;
+    if (w.legs.length < 3) { sayOnStrip(`TURTLE: ${TURTLE_KIND_NAMES[kind]} needs three moves at least.`); return false; }
+    if (!w.closed) { sayOnStrip(`TURTLE: ${TURTLE_KIND_NAMES[kind]} needs the path to come home — it is open by ${turtleGapText(w.gapFt)}.`); return false; }
+    if (window.DraftGeometry2D.selfIntersects(turtleLoopPoints(w))) { sayOnStrip(`TURTLE: that ${TURTLE_KIND_NAMES[kind]} crosses itself, so it encloses no area.`); return false; }
+    return true;
+  };
+  // DRAW: new items from `start`, as a new record (or, for a record whose
+  // items are all gone from the sheet, that record again at its old start).
+  const turtleDraw = (start, record = null) => {
+    if (!drawing) return false;
+    const kind = record ? turtleKindOf(record.kind) : turtleKind();
+    const w = turtleWalk(start);
+    if (!w.legs.length) { sayOnStrip('TURTLE: type a direction and a distance on at least one row first.'); return false; }
+    if (!turtleLoopReady(kind, w)) return false;
+    const { levelId, viewId } = onActiveLevel();
+    const homeView = record?.view || wallHomeView(viewId);
+    const level = kind === 'lot' ? SITE_LEVEL_ID : record ? record.levelId : levelId;
+    const snap = turtleSnapshot(record);
+    const rec = record || { id: `turtle-${Date.now().toString(36)}`, rows: turtleCur.rows };
+    rec.kind = kind; rec.levelId = level; rec.view = homeView;
+    rec.start = { x: w.points[0].x, z: w.points[0].z };
+    const made = turtleMake(kind, w, level, homeView, rec);
+    rec.itemIds = made.map(item => item.id);
+    delete rec.lineIds;
+    if (!record) drawing.turtles = [...turtleRecords(), rec];
+    turtleSetCur({ rows: rec.rows, kind, record: rec });
+    undoStack.push({ kind: 'node', undo: () => turtleRestore(snap, record) });
+    markDirty();
+    turtleSelect(kind, made);
+    paint();
+    turtleRender();
+    turtleSays(kind, kind === 'lines' ? made.length : turtleLoopPoints(w).length, w, 'drawn');
+    return true;
+  };
+  // REGENERATE: the same items, moved to the new numbers from the same
+  // start -- the first corner as it stands, so a path MOVED on the sheet
+  // regenerates where it was moved to. For a string of lines, extra rows
+  // add lines after the last; rows taken out drop lines from the end of
+  // what is live, by position, so the rows before an insert keep their
+  // corners.
+  const turtleRegenerate = () => {
+    const rec = turtleCur.record;
+    if (!drawing || !rec) { sayOnStrip('TURTLE: pick a turtle path on the sheet first, or DRAW one.'); return false; }
+    const kind = turtleKindOf(rec.kind);
+    const live = turtleLiveItems(rec);
+    if (!live.length) return turtleDraw(rec.start || gridDatum() || { x: 0, z: 0 }, rec);
+    const start = turtleStartOf(rec, live);
+    const w = turtleWalk(start);
+    if (!w.legs.length) { sayOnStrip('TURTLE: no moves read; the drawing was left as it is.'); return false; }
+    if (!turtleLoopReady(kind, w)) return false;
+    const snap = turtleSnapshot(rec);
+    let kept;
+    if (kind === 'lines') {
+      const levelId = live[0].levelId, homeView = live[0].view || 'plan';
+      const stale = new Set();
+      kept = [];
+      w.legs.forEach((leg, i) => {
+        let line = live[i];
+        if (line) {
+          stale.add(line.start); stale.add(line.end);
+          line.start = poolVertex({ x: leg.from.x, z: leg.from.z }, levelId, homeView);
+          line.end = poolVertex({ x: leg.to.x, z: leg.to.z }, levelId, homeView);
+        } else {
+          line = turtleLineRecord(leg, levelId, homeView);
+          const after = kept[kept.length - 1];
+          const at = after ? drawing.lines.indexOf(after) + 1 : drawing.lines.length;
+          drawing.lines.splice(at, 0, line);
+        }
+        kept.push(line);
+      });
+      live.slice(w.legs.length).forEach(line => {
+        stale.add(line.start); stale.add(line.end);
+        const at = drawing.lines.indexOf(line);
+        if (at >= 0) drawing.lines.splice(at, 1);
+      });
+      retirePoolCorners([...stale]);
+      turtleGroupLines(rec, kept);
+    } else {
+      kept = turtleMove(kind, live, w, rec);
+      if (!kept) { turtleRemove(kind, live); kept = turtleMake(kind, w, rec.levelId, rec.view, rec); }
+    }
+    rec.itemIds = kept.map(item => item.id);
+    delete rec.lineIds;
+    rec.start = start;
+    undoStack.push({ kind: 'node', undo: () => turtleRestore(snap, rec) });
+    markDirty();
+    turtleSelect(kind, kept);
+    paint();
+    turtleRender();
+    turtleSays(kind, kind === 'lines' ? kept.length : turtleLoopPoints(w).length, w, 'regenerated');
+    return true;
+  };
+  // THE PRESSED START (model/16 hands the press here while armed): the
+  // nearest corner on the level within the grab reach, else the press.
+  const turtlePickAt = at => {
+    turtlePickArmed = false;
+    turtleBox.querySelector('[data-turtle-do="point"]')?.removeAttribute('data-armed');
+    const reach = SELECT_GRAB_PX / view.scale;
+    let best = null, bestD = reach;
+    const take = p => { if (!p) return; const d = Math.hypot(p.x - at.x, p.z - at.z); if (d < bestD) { bestD = d; best = { x: p.x, z: p.z }; } };
+    take(gridDatum());
+    [...walls(), ...lines()].forEach(seg => { take(seg.start); take(seg.end); });
+    [...outlines(), ...floors(), ...shapes()].forEach(loop => (loop.points || []).forEach(take));
+    turtleDraw(best || { x: at.x, z: at.z });
+  };
+  const turtleArmPick = () => {
+    turtlePickArmed = true;
+    turtleBox.querySelector('[data-turtle-do="point"]')?.setAttribute('data-armed', '');
+    sayOnStrip('TURTLE: press the start point on the sheet (Esc to put it down).');
+  };
+  const turtleDisarmPick = () => {
+    if (!turtlePickArmed) return;
+    turtlePickArmed = false;
+    turtleBox.querySelector('[data-turtle-do="point"]')?.removeAttribute('data-armed');
+  };
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') turtleDisarmPick(); }, true);
+  // THE SELECTION BRINGS ITS TABLE UP: any line of a turtle path picked
+  // shows that path's rows (model/18 hooks this on the selection watchers,
+  // which are declared after this file runs).
+  const turtleFollowSelection = () => {
+    if (!drawing || !selection.length) return;
+    const ids = new Set(selection.filter(e => ['line', 'outline', 'shape'].includes(e.type)).map(e => String(e.item?.id)));
+    const rec = turtleRecords().find(r => (r.itemIds || r.lineIds || []).some(id => ids.has(String(id))));
+    if (!rec || rec === turtleCur.record) return;
+    rec.rows = turtleRowsOf(rec.rows);
+    // ON THE PAGE THAT ALREADY HOLDS IT, else the page in hand.
+    const held = turtlePages.findIndex(p => p.record === rec);
+    if (held >= 0 && held !== turtlePage) { turtlePage = held; turtleKeep(); }
+    turtleSetCur({ rows: rec.rows, kind: turtleKindOf(rec.kind), record: rec });
+    turtleRender();
+  };
+  // A fresh table, the pad's own, for the next path.
+  const turtleNewPath = () => {
+    turtleDisarmPick();
+    turtleSetCur({ rows: [], kind: turtleKind(), record: null });
+    turtleKeep();
+    turtleRender({ focusRow: 0 });
+  };
+  // AND ANOTHER DRAWING OPENED drops a record that is not in it.
+  const turtleOnDrawingChanged = () => {
+    turtlePages.forEach((p, i) => { if (p.record && !turtleRecords().includes(p.record)) turtlePages[i] = { rows: turtleRowsOf(p.rows), kind: turtleKindOf(p.record.kind), record: null }; });
+    // THE FILE'S OWN TABLES WIN, as its notes do.
+    const own = Array.isArray(drawing?.turtlePages) ? drawing.turtlePages : null;
+    if (own && own.some(pg => Array.isArray(pg?.rows) && pg.rows.length)) {
+      own.slice(0, NOTES_PAGES).forEach((pg, i) => {
+        if (!turtlePages[i].record) turtlePages[i] = { rows: turtleRowsOf(pg?.rows), kind: turtleKindOf(pg?.kind), record: null };
+      });
+    }
+    turtleCur = turtlePages[turtlePage];
+    turtleKeep();
+    turtleRender();
+    adoptCalc();
+  };
+  // DRAW AS: the choice sticks to the page, and to the record once drawn
+  // (a drawn path keeps what it is; a NEW PATH takes the choice).
+  turtleBox.querySelectorAll('[data-turtle-kind]').forEach(b => b.addEventListener('click', () => {
+    const kind = turtleKindOf(b.dataset.turtleKind);
+    if (turtleCur.record && turtleLiveItems(turtleCur.record).length && turtleKindOf(turtleCur.record.kind) !== kind) {
+      // What is drawn stays what it is: the choice starts a new table from
+      // these numbers.
+      turtleSetCur({ rows: turtleRowsOf(turtleCur.rows), kind, record: null });
+    } else if (turtleCur.record) { turtleCur.record.kind = kind; turtleCur.kind = kind; }
+    else turtleCur.kind = kind;
+    turtleKeep();
+    turtleRender();
+  }));
+  turtleBox.querySelectorAll('[data-turtle-do]').forEach(b => b.addEventListener('click', () => {
+    const what = b.dataset.turtleDo;
+    if (what === 'target') {
+      turtleDisarmPick();
+      const at = gridDatum();
+      if (!at) { sayOnStrip('TURTLE: this drawing has no registration target yet; use DRAW AT POINT.'); return; }
+      if (turtleCur.record && turtleLiveItems(turtleCur.record).length) {
+        // A drawn path drawn again is a SECOND path from the same numbers.
+        turtleSetCur({ rows: turtleRowsOf(turtleCur.rows), kind: turtleKind(), record: null });
+      }
+      turtleDraw(at);
+    } else if (what === 'point') {
+      if (turtlePickArmed) { turtleDisarmPick(); return; }
+      if (turtleCur.record && turtleLiveItems(turtleCur.record).length) turtleSetCur({ rows: turtleRowsOf(turtleCur.rows), kind: turtleKind(), record: null });
+      turtleArmPick();
+    } else if (what === 'regen') { turtleDisarmPick(); turtleRegenerate(); }
+    else if (what === 'new') turtleNewPath();
+    else if (what === 'notes') {
+      const rows = window.DraftTurtlePath.rowsFromText(notesText.value);
+      if (!rows.length) { sayOnStrip('TURTLE: no moves found on the NOTES pad -- it reads lines like W 86.86 or N 30 E 50.'); return; }
+      turtleCur.rows.splice(0, turtleCur.rows.length, ...rows.slice(0, TURTLE_ROWS_MAX));
+      turtleKeep();
+      turtleRender();
+      sayOnStrip(`TURTLE: ${rows.length} move${rows.length === 1 ? '' : 's'} read off the NOTES pad.`);
+    } else if (what === 'clear') {
+      if (turtleCur.rows.length && !window.confirm('Clear every move on the TURTLE table?')) return;
+      turtleCur.rows.splice(0, turtleCur.rows.length);
+      turtleKeep();
+      turtleRender({ focusRow: 0 });
+    }
+  }));
+  // THE STRIP LAMP PRESSED opens the pad on TURTLE (the chip is built by
+  // shell-bars.js, so the press is heard on the document).
+  document.addEventListener('click', e => {
+    if (!e.target.closest?.('[data-turtle-lamp-chip]')) return;
+    if (paneShowing() !== 'notes' || !railOpen('right')) setPane('notes');
+    showPad('turtle');
+  });
+  turtleRender();
 
   // ── AND THE SAME TWO FACTS ON THE LEFT ──────────────────────────────────
   //

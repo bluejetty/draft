@@ -168,6 +168,7 @@
       fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };
     adoptNotes();
+    turtleOnDrawingChanged();
     trimSlivers({ walls: true });
     dropLotRoofs();
     // THE HALF INCH OFF A CROSSING WALL, on every drawing opened (Movie, 23
@@ -789,7 +790,8 @@
   // backup". The dialog opens where the last .draft went; a browser with no
   // save dialog downloads it, and the chip says so, as a .draft download does.
   const saveNotesAsText = async () => {
-    const text = notesText.value || '';
+    // EVERY PAGE OF NOTES, CALC AND TURTLE with something on it, headed.
+    const text = notepadAsText() || '';
     const name = `${generatedFileName().replace(/\.[^.]+$/, '')} NOTES.txt`;
     if (window.showSaveFilePicker) {
       let handle = null;

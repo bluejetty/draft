@@ -492,14 +492,21 @@ if (!window.DraftShellBars) {
         <path d="M5.5 14.5 V11.5 H7.5 V14.5" stroke-width="0.9"></path>
       </svg>
     </button>
-    <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
-        <circle cx="6" cy="6.5" r="0.9" stroke-width="0.9"></circle>
-        <path d="M9 9.5 H12" stroke-width="0.9"></path>
-        <path d="M9.5 6 L11.5 7.5" stroke-width="0.9"></path>
+    <!-- THE TURTLE LAMP (Movie, 10 Nov: "a little turtle illuminated thing
+         that turn green when he connects and is black otherwise ... put the
+         turtle light up on the main panel"). It stands where the ERASING
+         SHIELD's dormant chip did -- the one instrument that was never
+         built. Green when the TURTLE table on the NOTES pad comes home;
+         pressed, it opens the pad on TURTLE. -->
+    <button type="button" id="strip-turtle" class="chip turtle" data-turtle-lamp-chip
+      title="TURTLE — green when the turtle path on the NOTES pad comes home to its start; press to open the pad">
+      <svg width="17" height="13" viewBox="0 0 18 14" fill="currentColor" stroke="none" aria-hidden="true">
+        <ellipse cx="8" cy="7.5" rx="6" ry="4.2"></ellipse>
+        <circle cx="15" cy="6.2" r="2"></circle>
+        <rect x="3" y="10.5" width="2.2" height="3" rx="0.8"></rect><rect x="10.5" y="10.5" width="2.2" height="3" rx="0.8"></rect>
+        <path d="M2.2 6.8 L0.2 5.8 L1.4 7.9 Z"></path>
       </svg>
-    </span>
+    </button>
    </span>
   </div>`;
   const TOPTAIL = `

@@ -159,7 +159,7 @@ test('CLEAR asks first; NO keeps them, YES wipes the pad and the file', async ({
   await open(page, drawing({ notepad: 'KEEP ME' }));
   await openPad(page);
   await expect(pad(page)).toHaveValue('KEEP ME');
-  page.once('dialog', d => { expect(d.message()).toBe('Clear all notes?'); d.dismiss(); });
+  page.once('dialog', d => { expect(d.message()).toBe('Clear page 1 of the notes?'); d.dismiss(); });
   await page.locator('[data-notes-clear]').click();
   await expect(pad(page)).toHaveValue('KEEP ME');
   page.once('dialog', d => d.accept());
@@ -172,14 +172,14 @@ test('CLEAR asks first; NO keeps them, YES wipes the pad and the file', async ({
   await expect(pad(page), 'and the browser copy went with them').toHaveValue('');
 });
 
-test('about five pages and no more: 15,000 characters, the head counts the pages', async ({ page }) => {
+test('a page is 15,000 characters and no more; the head names the page', async ({ page }) => {
   await open(page);
   await openPad(page);
   await expect(page.locator('[data-notes-count]')).toHaveText('PAGE 1 OF 5');
   await pad(page).fill('x'.repeat(7000));
   await pad(page).dispatchEvent('input');
-  await expect(page.locator('[data-notes-count]')).toHaveText('PAGE 3 OF 5');
-  // A paste past the end is cut at the fifth page.
+  await expect(page.locator('[data-notes-count]')).toHaveText('PAGE 1 OF 5');
+  // A paste past the end is cut at the page's end.
   await pad(page).focus();
   await page.evaluate(() => {
     const t = document.querySelector('[data-notes-text]');
@@ -187,10 +187,60 @@ test('about five pages and no more: 15,000 characters, the head counts the pages
   });
   await page.keyboard.insertText('y'.repeat(10000));
   await expect(pad(page)).toHaveValue(/^x{7000}y{8000}$/);
-  await expect(page.locator('[data-notes-count]')).toHaveText('PAD FULL');
+  await expect(page.locator('[data-notes-count]')).toHaveText('PAGE 1 FULL');
   // And the page scrolls inside the pad, not off the rail.
   const s = await pad(page).evaluate(el => ({ sh: el.scrollHeight, ch: el.clientHeight }));
   expect(s.sh).toBeGreaterThan(s.ch);
+});
+
+// FIVE PAGES (Movie, 10 Nov: "i also put 5 buttons put 1 / 2 / 3 / 4 / 5
+// (those will be pages they can flip to another page for info on another
+// project"), with SAVE AS TXT and CLEAR moved down to the foot above them.
+test('five pages under SAVE AS TXT and CLEAR at the foot: each its own notes, saved in the file, a reload keeps the page', async ({ page }) => {
+  await open(page);
+  await openPad(page);
+  const foot = page.locator('[data-notes-foot]');
+  const [padBox, saveBox, clearBox, keysBox] = await Promise.all([pad(page).boundingBox(),
+    page.locator('[data-notes-save-txt]').boundingBox(), page.locator('[data-notes-clear]').boundingBox(),
+    page.locator('[data-notes-page="5"]').boundingBox()]);
+  expect(saveBox.y, 'SAVE AS TXT under the pad').toBeGreaterThan(padBox.y + padBox.height - 1);
+  expect(keysBox.y, 'the page keys under SAVE AS TXT').toBeGreaterThan(saveBox.y + saveBox.height - 1);
+  expect(clearBox.x + clearBox.width, 'to the right').toBeGreaterThan(padBox.x + padBox.width - 40);
+  expect(keysBox.x + keysBox.width, 'the keys to the right too').toBeGreaterThan(padBox.x + padBox.width - 40);
+  await expect(foot.locator('[data-notes-page]')).toHaveCount(5);
+  await expect(page.locator('[data-notes-page="1"]')).toHaveAttribute('aria-pressed', 'true');
+  await pad(page).fill('lot one');
+  await page.locator('[data-notes-page="2"]').click();
+  await expect(page.locator('[data-notes-page="2"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-notes-page="1"]')).toHaveAttribute('data-written', '');
+  await expect(page.locator('[data-notes-count]')).toHaveText('PAGE 2 OF 5');
+  await expect(pad(page)).toHaveValue('');
+  await pad(page).fill('other project');
+  // CLEAR clears the page showing, not the other.
+  page.once('dialog', d => d.accept());
+  await page.locator('[data-notes-clear]').click();
+  await expect(pad(page)).toHaveValue('');
+  await pad(page).fill('other project again');
+  await page.locator('[data-notes-page="1"]').click();
+  await expect(pad(page)).toHaveValue('lot one');
+  // In the file: page 1 as `notepad`, as before, and all five as `notepadPages`.
+  const file = await saved(page);
+  expect(file.notepad).toBe('lot one');
+  expect(file.notepadPages).toEqual(['lot one', 'other project again', '', '', '']);
+  // A reload opens on the page that was showing, with every page kept.
+  await page.locator('[data-notes-page="2"]').click();
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await openPad(page);
+  await expect(pad(page)).toHaveValue('other project again');
+  await expect(page.locator('[data-notes-page="2"]')).toHaveAttribute('aria-pressed', 'true');
+  // A file with only `notepad` (written before today) is page 1, the rest blank.
+  await open(page, drawing({ notepad: 'old file' }));
+  await openPad(page);
+  await page.locator('[data-notes-page="1"]').click();
+  await expect(pad(page)).toHaveValue('old file');
+  await page.locator('[data-notes-page="3"]').click();
+  await expect(pad(page)).toHaveValue('');
 });
 
 // SAVE AS TXT (Movie, 18 Oct): "can we put in the notepad a 'SAVE AS TXT
@@ -207,7 +257,8 @@ test('SAVE AS TXT downloads the pad as a .txt where there is no save dialog, and
   ]);
   expect(download.suggestedFilename()).toMatch(/ NOTES\.txt$/);
   const fs = require('fs');
-  expect(fs.readFileSync(await download.path(), 'utf8')).toBe('NORTH POINT 895-2 3/8ft x 349 ft');
+  // THE WHOLE PAD (10 Nov): headed, so OPEN TXT can read it back.
+  expect(fs.readFileSync(await download.path(), 'utf8')).toBe('ROUGH-DRAFTER NOTEPAD\n\n=== NOTES PAGE 1 ===\nNORTH POINT 895-2 3/8ft x 349 ft\n');
   await expect(page.locator('#saved-where')).toContainText('NOTES.txt');
 });
 
@@ -239,7 +290,7 @@ test('with a save dialog, it opens beside the last .draft saved and writes the t
   expect(got.startInIsDraft, 'the dialog opens where the .draft went').toBe(true);
   expect(got.name).toMatch(/ NOTES\.txt$/);
   expect(got.types).toEqual({ 'text/plain': ['.txt'] });
-  expect(got.written).toBe('GRID 1 TO 29');
+  expect(got.written).toBe('ROUGH-DRAFTER NOTEPAD\n\n=== NOTES PAGE 1 ===\nGRID 1 TO 29\n');
 });
 
 // THREE GRAB SPOTS (Movie, 18 Oct): "that ia a good DEFAULT size, but can you

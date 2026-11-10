@@ -49,7 +49,7 @@ const MUTANTS = [
     with: "",
     test: "a volume is refused and says why" },
   { file: 'model/04-levels-notes-bars.js', name: "-> NOTES is not saved with the drawing", spec: 'tests/model-html-calc.spec.js',
-    find: "      if (drawing) { notesOntoDrawing(notesText.value); markDirty(); }\n",
+    find: "    notesOntoDrawing(notesPages);\n    if (JSON.stringify([drawing.notepad || '', drawing.notepadPages || null]) !== was) markDirty();\n",
     with: "",
     test: "NOTES writes the line and its answer on the pad" },
 ];

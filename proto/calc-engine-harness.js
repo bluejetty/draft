@@ -38,6 +38,7 @@ check('a fraction on its own is inches, never feet', C => [main(C, '3/8'), `0'-0
 check('a whole number and a fraction are inches too', C => [main(C, '3/8 + 1 1/2'), `0'-1 7/8"`]);
 check('decimal feet', C => [main(C, `50.5'`), `50'-6"`]);
 check('inches alone', C => [main(C, '30"'), `2'-6"`]);
+check('a number still being typed, 106. and 5-, reads or refuses -- never hangs', C => [`${main(C, '106.')} | ${main(C, '5-')} | ${main(C, '.5')}`, `106 | !! the line ends too soon | 0.5`]);
 check('metres and millimetres read and added', C => [main(C, '1.5m + 300mm', { metric: true }), '1,800 mm']);
 
 // ── THE UNITS CARRIED ────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ const MUTATIONS = [
     s => s.replace("mm: [FT_PER_M / 1000, 1]", "mm: [FT_PER_M, 1]")],
   ['metric makes no difference to a bare number',
     s => s.replace("const lengthOfBare = v => v * (metric ? FT_PER_M : 1);", "const lengthOfBare = v => v;")],
+  ['a trailing dot spins', s => s.replace("const m = /^(\\d+\\.?\\d*|\\.\\d+)/.exec(s.slice(i));", "const m = /^\\d*\\.?\\d+/.exec(s.slice(i));")],
   ['brackets are ignored', s => s.replace("      else if (t.t === '(') {\n        x = sum();", "      else if (false) {\n        x = sum();")],
   ['the root is not taken', s => s.replace("      if (x.dim === 2) return { v: Math.sqrt(x.v), dim: 1 };", "      if (x.dim === 2) return { v: x.v, dim: 1 };")],
   ['the square is not squared', s => s.replace("    const square = x => mul(x, x);", "    const square = x => x;")],
