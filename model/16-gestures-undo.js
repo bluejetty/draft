@@ -173,7 +173,8 @@
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || cutStart || beamStart || elevLineStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
-      || stretchState.a || stairHand.at);
+      || stretchState.a || stairHand.at || draftCommandsBusy());
+    draftCommandsCancel();
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
     if (dimPlacing) dimKeep();
@@ -548,6 +549,9 @@
     if (activeTool === 'stair') { stairHandPress(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'stretch') { stretchPress(at); return; }
+    // THE CLASSIC EDITS (18-draft-commands.js): OFFSET, MIRROR, ROTATE
+    // about a base point, FILLET, ARRAY.
+    if (DRAFT_CMD_TOOLS.includes(activeTool)) { draftCommandPress(at); return; }
     if (activeTool === 'dimension') { dimPress(at); return; }
     if (activeTool === 'trim' || activeTool === 'extend') { trimPress(at, e, activeTool); return; }
     if (drawsRun()) {
@@ -636,8 +640,12 @@
     // (Movie, 10 Oct: a group "moves as one piece, notes included"). Walls
     // keep their own corner and body drags, so a selection with a wall in it
     // is not armed here.
+    // A CORNER OF A PICKED ASSEMBLY BEATS THE PIECE DRAG: a lot of lines
+    // held whole offers its corners now (assemblyCornerAt), and the press on
+    // one is a corner drag, not the lot sliding.
     const movable = selection.length > 1
-      && selection.every(entry => MOVE_TOGETHER.has(entry.type));
+      && selection.every(entry => MOVE_TOGETHER.has(entry.type))
+      && !cornerAt(at);
     if (movable) {
       const grabbed = noteAt(at) || lineAt(at);
       if (grabbed && selection.some(entry => entry.item === grabbed)) {
@@ -851,8 +859,10 @@
         body,
         grab: at,
         before,
-        // A ONE-ANCHOR ASSEMBLY ON A CORNER IN HAND rides it (anchorFollowers).
-        follow: anchorFollowers(before, corner ? null : body),
+        // A ONE-ANCHOR ASSEMBLY ON A CORNER IN HAND rides it (anchorFollowers),
+        // AND SO DO THE CORNERS SHARING ITS SPOT inside a picked assembly.
+        follow: anchorFollowers(before, corner ? null : body)
+          .concat(corner ? assemblyRiders(corner, before[0]) : []),
         sx: e.clientX, sy: e.clientY, active: false,
       };
       // ALT ONLY (Movie, 26 Oct): CTRL held is snapping off now.
@@ -1699,11 +1709,12 @@
     // puts the gesture in hand down, as it did before the pan moved here.
     if (dragging.pan) {
       if (dragging.moved <= 4) {
-        // ON A DIMENSION THE RIGHT BUTTON ENDS, it does not cancel (Movie,
-        // 23 Oct: "for ESC where the string is abandoned and deleted don't
-        // use RIGHT mouse button, only use esc key").
-        if (dimInHand()) { dimOnceEnds(); stripRefresh(); paint(); }
-        else if (cancelGestures()) { stripRefresh(); paint(); }
+        // THE RIGHT CLICK IS ENTER (jb, 9 Nov, "how AUTOCAD did it"): it
+        // FINISHES what is in hand -- the run, the loop, the string, the
+        // step -- and at an empty prompt repeats the last tool. It used to
+        // cancel (Movie, 27 Sep); Esc alone does that now. See the ENTER
+        // rule in 14-promotion-tools.js.
+        if (finishOrRepeat()) { stripRefresh(); paint(); }
       }
       dragging = null;
       canvas.classList.remove('dragging');
@@ -2391,8 +2402,9 @@
       // word back rather than restoring a copy of the roof -- a copy would
       // detach the record every other reader already holds by reference.
       step.roof.edges[step.index] = step.was;
-    } else if (step.kind === 'node') {
-      // A BREAK's node: the step carries its own way back.
+    } else if (step.kind === 'node' || step.kind === 'assembly') {
+      // A BREAK's node, or an assembly made or busted: the step carries its
+      // own way back.
       step.undo();
     } else if (step.kind === 'add-item') {
       // Structure placement. The list is captured in the step, so this works

@@ -42,6 +42,13 @@ const ROSTER = [
   // MOVE and STRETCH (Movie, 20 Oct: "MOVE "M" and also STRETCH" -- "HHHHHH").
   ['draw', 'move', 'MOVE', 'M'],
   ['draw', 'stretch', 'STRETCH', 'H'],
+  // THE CLASSIC EDITS (jb, 9 Nov: "OFFSET, MIRROR, ROTATE, FILLET, ARRAY")
+  // on the four letters that were still free; ARRAY, below, took MULTIPLE's
+  // place and, like ANNOTATION, has no letter.
+  ['draw', 'offset', 'OFFSET', 'I'],
+  ['draw', 'mirror', 'MIRROR', 'J'],
+  ['draw', 'rotate', 'ROTATE', 'Z'],
+  ['draw', 'fillet', 'FILLET', 'V'],
   // SUPERNODE (Movie, 20 Oct) stood here on N, and is gone (26 Oct: "maybe
   // we can get rid of that, it didn't work that good").
   ['draw', 'line', 'LINE', 'L'],
@@ -55,9 +62,9 @@ const ROSTER = [
   // ASSEMBLY (Movie, 18 Oct): "put it up in with the other main letters" --
   // Y, the binding the old page carried for `group`.
   ['draw', 'assembly', 'ASSEMBLY', 'Y'],
-  // MULTIPLE (Movie, 27 Oct): "put a button in the DRAFTING menu we can work
-  // on it later" -- a placeholder, no letter yet.
-  ['draw', 'multiple', 'MULTIPLE', ''],
+  // ARRAY (9 Nov) where MULTIPLE's placeholder stood (Movie, 27 Oct: "put a
+  // button in the DRAFTING menu we can work on it later").
+  ['draw', 'array', 'ARRAY', ''],
   ['build', 'wall', 'WALL', 'W'],
   ['build', 'fenestration', 'FENESTRATION', 'E'],
   ['build', 'floor', 'FLOOR', 'F'],
@@ -112,7 +119,7 @@ const keys = page => page.locator('[data-tool-key]').evaluateAll(els => els.map(
   armed: el.getAttribute('aria-pressed') === 'true',
 })));
 
-test('twenty-two keys, in the old page\'s order and grouping', async ({ page }) => {
+test('twenty-six keys, in the old page\'s order and grouping', async ({ page }) => {
   await openColumn(page);
   const got = await keys(page);
 
@@ -128,7 +135,7 @@ test('twenty-two keys, in the old page\'s order and grouping', async ({ page }) 
     .toHaveText('BUILD');
 });
 
-test('fifteen keys carry a letter and eight are deliberately bare',
+test('nineteen keys carry a letter and eight are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -138,9 +145,9 @@ test('fifteen keys carry a letter and eight are deliberately bare',
     // Stated as a count as well as a table, because the table above would also
     // be satisfied by a build that prints nothing on ANY face if the expected
     // letters were ever loosened to ''.
-    expect(got.filter(k => k.key !== '')).toHaveLength(15);
+    expect(got.filter(k => k.key !== '')).toHaveLength(19);
     expect(got.filter(k => k.key === '').map(k => k.id))
-      .toEqual(['annotation', 'roomtag', 'multiple', 'dormer', 'column', 'beam', 'stair', 'fixture']);
+      .toEqual(['annotation', 'roomtag', 'array', 'dormer', 'column', 'beam', 'stair', 'fixture']);
   });
 
 test('a SETTINGS remap moves the letter on the key face', async ({ page }) => {

@@ -2338,11 +2338,19 @@ if (!window.DraftDrawingFormat) {
   const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11', '9x12', '12x18', '17x22', '18x24', '22x34', '24x36', 'A3', 'A1'];
   const tbName = value => (typeof value === 'string' && value && value.length <= 64 ? value : null);
   const LAYOUT_ELEV_IDS = ['E1', 'E2', 'E3', 'E4'];
+  // TWO MORE KINDS (jb, 9 Nov), each with its own reference:
+  //   schedule  → table, 'door' or 'window' -- the opening schedule it lists
+  //   detail    → detail, the wall section or one of its three windows
+  // Neither points into the model: a schedule is rebuilt from the openings
+  // and a detail from PROJECT's numbers on every paint, so there is nothing
+  // to go stale -- only an unknown name is refused, like an unknown kind.
+  const LAYOUT_SCHEDULE_TABLES = ['door', 'window'];
+  const LAYOUT_DETAIL_IDS = ['wallsection', 'eave', 'floor', 'footing'];
   const layout = (raw, levelIds, cutIds = new Set()) => {
     const seen = new Set();
     const viewports = (Array.isArray(raw?.viewports) ? raw.viewports : []).map(viewport => {
       const id = Number(viewport?.id);
-      const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation'], viewport?.kind == null ? 'plan' : null);
+      const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation', 'schedule', 'detail'], viewport?.kind == null ? 'plan' : null);
       const pif = positive(viewport?.pif, null);
       const xIn = num(viewport?.xIn);
       const yIn = num(viewport?.yIn);
@@ -2405,6 +2413,18 @@ if (!window.DraftDrawingFormat) {
         if (!Number.isInteger(cutId) || !cutIds.has(cutId)) return null;
         seen.add(id);
         return { ...base, cutId };
+      }
+      if (kind === 'schedule') {
+        const table = oneOf(viewport?.table, LAYOUT_SCHEDULE_TABLES, null);
+        if (table == null) return null;
+        seen.add(id);
+        return { ...base, table };
+      }
+      if (kind === 'detail') {
+        const detail = oneOf(viewport?.detail, LAYOUT_DETAIL_IDS, null);
+        if (detail == null) return null;
+        seen.add(id);
+        return { ...base, detail };
       }
       const elevId = oneOf(viewport?.elevId, LAYOUT_ELEV_IDS, null);
       if (elevId == null) return null;

@@ -507,7 +507,7 @@
     }
     const here = shedPoint(s, at);
     // A PRESS ON THE LAST CORNER IS NO CORNER: the second click of a double
-    // lands where its first did (see the loop rule at seriesKeyPress).
+    // lands where its first did (see closeLoop in 14-promotion-tools.js).
     if (loopTailIs(s.corners, here)) return;
     s.corners.push(here);
     paint();
@@ -719,9 +719,9 @@
   roofPickCard?.querySelector('[data-roof-pick-cancel]')?.addEventListener('click', () => {
     roofPickCard.hidden = true;
   });
-  // ESCAPE STEPS OUT, the popup with it. ENTER and SPACE are the loop rule's
-  // (seriesKeyPress, below): once is a corner at the cursor, twice quickly
-  // closes the outline on its first corner, as a double-click does.
+  // ESCAPE STEPS OUT, the popup with it. ENTER, SPACE and the right click
+  // are FINISH (14-promotion-tools.js): they close the outline on its first
+  // corner, as a double-click does.
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && roofPickCard && !roofPickCard.hidden) { roofPickCard.hidden = true; return; }
     if (!shedRoof) return;
@@ -1073,7 +1073,11 @@
     return held.length;
   };
 
-  const pasteHeld = () => {
+  // `nudge: false` LANDS EVERY COPY EXACTLY ON ITS ORIGINAL -- for MIRROR
+  // and ARRAY (18-draft-commands.js), which move the copies themselves and
+  // would otherwise carry the paste's 2 ft dimension step and the stair's
+  // sideways step along into the mirror image or the grid.
+  const pasteHeld = ({ nudge = true } = {}) => {
     if (!drawing || !held.length) return 0;
     const owner = activeLevelId();
     const landed = [];
@@ -1164,7 +1168,7 @@
         // sliding one would carry both. From here he slides it in or out.
         const dx = copy.end.x - copy.start.x, dz = copy.end.z - copy.start.z;
         const len = Math.hypot(dx, dz) || 1;
-        const out = { x: -dz / len * 2, z: dx / len * 2 };
+        const out = nudge ? { x: -dz / len * 2, z: dx / len * 2 } : { x: 0, z: 0 };
         copy.start = { ...copy.start, x: copy.start.x + out.x, z: copy.start.z + out.z };
         copy.end = { ...copy.end, x: copy.end.x + out.x, z: copy.end.z + out.z };
       }
@@ -1178,7 +1182,7 @@
         delete copy.auto;
         const dx = copy.end.x - copy.start.x, dz = copy.end.z - copy.start.z;
         const len = Math.hypot(dx, dz) || 1;
-        const by = (Number(copy.widthFt) || 3) + 1;
+        const by = nudge ? (Number(copy.widthFt) || 3) + 1 : 0;
         const side = { x: -dz / len * by, z: dx / len * by };
         copy.start = { ...copy.start, x: copy.start.x + side.x, z: copy.start.z + side.z };
         copy.end = { ...copy.end, x: copy.end.x + side.x, z: copy.end.z + side.z };

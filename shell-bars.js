@@ -749,6 +749,42 @@ ${trio(true)}
     <span data-rescale-hint>CORNER keeps proportions &middot; SIDE stretches one way</span>
     <button type="button" data-rescale-done title="Put RESCALE down">DONE</button>
   </span>
+  <!-- THE CLASSIC EDITS' ROWS (jb, 9 Nov: "OFFSET, MIRROR, ROTATE, FILLET,
+       ARRAY"). Each stands over the verbs while its tool is armed from the
+       DRAFTING column, as ROTATE's row does, and holds the one or two
+       numbers the gesture needs: a distance, a radius, an angle, a count.
+       model/18-draft-commands.js reads them. -->
+  <span id="offset-bar" data-offset-bar hidden>
+    <span data-bar-hint>OFFSET</span>
+    <input id="offset-dist" type="text" data-offset-dist inputmode="decimal" placeholder="DIST" aria-label="Offset distance">
+    <span data-bar-hint data-offset-say>press the line, then the side</span>
+  </span>
+  <span id="mirror-bar" data-mirror-bar hidden>
+    <span data-bar-hint>MIRROR</span>
+    <button type="button" data-mirror-keep aria-pressed="true" title="Keep the original and make a mirrored copy; off, the original is mirrored in place">KEEP ORIGINAL</button>
+    <span data-bar-hint data-mirror-say>press two points on the mirror line</span>
+  </span>
+  <span id="turn-bar" data-turn-bar hidden>
+    <span data-bar-hint>ROTATE</span>
+    <input id="turn-angle" type="text" data-turn-angle inputmode="decimal" placeholder="DEG" aria-label="Turn by degrees, clockwise">
+    <span data-bar-hint data-turn-say>press the base point</span>
+  </span>
+  <span id="fillet-bar" data-fillet-bar hidden>
+    <span data-bar-hint>FILLET</span>
+    <input id="fillet-radius" type="text" data-fillet-radius inputmode="decimal" placeholder="RADIUS" aria-label="Fillet radius, blank for a square corner">
+    <span data-bar-hint data-fillet-say>press the first line, then the second</span>
+  </span>
+  <span id="array-bar" data-array-bar hidden>
+    <span data-bar-hint>ACROSS</span>
+    <input id="array-cols" type="text" data-array-cols inputmode="numeric" placeholder="N" aria-label="Copies across" title="How many across, the original counted">
+    <span data-bar-hint>&times;</span>
+    <input id="array-dx" type="text" data-array-dx inputmode="decimal" placeholder="FT" aria-label="Spacing across" title="Centre to centre across; a minus runs it left">
+    <span data-bar-hint>DOWN</span>
+    <input id="array-rows" type="text" data-array-rows inputmode="numeric" placeholder="N" aria-label="Copies down" title="How many down, the original counted">
+    <span data-bar-hint>&times;</span>
+    <input id="array-dz" type="text" data-array-dz inputmode="decimal" placeholder="FT" aria-label="Spacing down" title="Centre to centre down; a minus runs it up">
+    <button type="button" data-array-make title="Make the copies">MAKE</button>
+  </span>
     </div>
   </div>
   <div class="grow"></div>`;

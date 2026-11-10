@@ -85,6 +85,12 @@ function loadDraftModules() {
     'areas.js',
     // AND THE QUANTITIES OFF THE DRAWING (Movie, 23 Oct), with the spec
     // master whose order and numbers they are laid out under.
+    // AND THE SCHEDULES the estimate's door and window rows are grouped by
+    // (jb, 9 Nov), read at call time, so the order is not load-bearing.
+    'schedules.js',
+    // AND THE WALL SECTION a sheet prints off PROJECT's numbers (jb, 9 Nov),
+    // with PROJECT's own builder behind it.
+    'project-page.js', 'wall-section.js',
     'spec-master.js', 'estimates.js',
     'room-standards.js', 'level-assembly.js',
     // AND THE STOREY LADDER, which layout-plan reads to find the floor

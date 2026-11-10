@@ -661,42 +661,12 @@
   // The setting SETTINGS.html already writes (#bone-reveal), read the way
   // this page reads every other one: through the active package, defaulting
   // ON, so a drafter who has never opened SETTINGS still gets the show.
-  // ── AND THE SITE IS THE NEXT QUESTION (Movie, 15 Oct) ──────────────────
-  //
-  // "basically after the house is AUTOBUILD, how about once they see it all
-  // pop up, after that directly go into asking them about the site popup ...
-  // don't use anything default", and again: "just ask them about the SITE
-  // right after the AUTOHOUSE is built".
-  //
-  // AFTER THE SHOW, NOT BEFORE IT. The build already owns one question that
-  // holds the grow trip (see presentBuild), and this is the opposite kind:
-  // "once they see it all pop up, AFTER THAT" -- the bones grow, the house
-  // climbs out of the ground on E1, and the lot is what he is asked next.
-  // So the flag is set when the reveal starts and spent when the curtain
-  // finishes.
-  //
-  // IT GOES TO THE SITE TO ASK. The card's own answers assume the drafter is
-  // standing on the lot -- DRAW IT MYSELF arms the OUTLINE tool "on the SITE
-  // level the drafter is already standing on" -- so raising it over an
-  // elevation would offer a lot line drawn on E1. Arriving at SITE is also
-  // what frames the site and what the question was built for.
-  //
-  // NOTHING DEFAULT IS DRAWN, which was the whole of his second thought: an
-  // AUTOSITE laid for him and corrected afterwards is a lot he never chose.
-  let askSiteWhenShown = false;
-  const askAboutTheSite = () => {
-    if (!drawing) return false;
-    // A LOT ALREADY THERE IS NOT A QUESTION. A rebuild on a drawing that has
-    // its site -- or one opened from a file that carries one -- must not be
-    // marched back to a card it has already answered.
-    if (window.DraftLotSizes?.siteOutlineOf(drawing.outlines)) return false;
-    // ASKED AGAIN BECAUSE THE BUILD IS A NEW EVENT. A NOT NOW pressed before
-    // there was a house to put on a lot is not an answer to this.
-    lotAsked = false;
-    if (Number(activeLevelId()) === SITE_LEVEL_ID) { paintLotPick(); return true; }
-    goToLevel(SITE_LEVEL_ID);
-    return true;
-  };
+  // THE SITE IS NOT ASKED AFTER THE BUILD ANY MORE. Movie's 15 Oct rule
+  // ("just ask them about the SITE right after the AUTOHOUSE is built")
+  // marched the drafter to SITE and raised the lot card once the curtain
+  // fell; jb ended that on 9 Nov 2026 ("that popup popuped up in bad placed
+  // too many times"). The card now opens only from the SITE PLAN key at the
+  // end of the BUILD keys (10-tracking-garage.js, openLotCard).
 
   const boneRevealOn = () => window.DraftProfileManager
     ?.getActive('settings')?.content?.model?.boneReveal !== false;
@@ -712,7 +682,6 @@
     setRail('right', true);
     revealStart = performance.now() + window.DraftTour.REVEAL_HOLD_MS;
     revealActive = true;
-    askSiteWhenShown = true;
     // CUT_VIEW + the id, the way every other caller reaches a cut. The first
     // draft of this passed the bare 'E1' and would have jumped to a view that
     // does not resolve -- the exact fault the comment on cutForViewId already
@@ -757,10 +726,7 @@
     // REVEAL off, or a drawing with no E1 to jump to, still built a house --
     // and the thing he is asked next does not depend on whether he watched it
     // go up.
-    if (!boneRevealOn() || !autoElevationCuts().some(cut => String(cut.id) === 'E1')) {
-      askAboutTheSite();
-      return;
-    }
+    if (!boneRevealOn() || !autoElevationCuts().some(cut => String(cut.id) === 'E1')) return;
     const grow = async () => {
       if (!(await save())) { startBoneReveal(); return; }
       const back = new URLSearchParams(location.search);
@@ -2216,13 +2182,6 @@
           if (elapsed <= window.DraftTour.REVEAL_MS) requestAnimationFrame(paint);
           else {
             revealActive = false;
-            // THE CURTAIN IS DOWN, so the house has been seen and the lot is
-            // the next question. On its own tick: askAboutTheSite goes to a
-            // level, which paints, and paint is the function we are inside.
-            if (askSiteWhenShown) {
-              askSiteWhenShown = false;
-              setTimeout(askAboutTheSite, 0);
-            }
           }
         }
       } else if (stairWorkspaceOn()) {
@@ -2306,6 +2265,9 @@
         paintHoverCorner();
         paintBand();
         paintStretch();
+        // The classic edits' ghosts (18-draft-commands.js, loaded after the
+        // boot, whose first paint runs before it).
+        if (typeof paintDraftCommands === 'function') paintDraftCommands();
         paintHologramHover();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
@@ -2690,6 +2652,9 @@
     syncBreakVerb();
     syncMoveVerb();
     syncWallOffVerb();
+    // LAST, because it stands OVER every verb above while one of the
+    // classic edits is up (18-draft-commands.js, loaded after the boot).
+    if (typeof syncDraftCommandBars === 'function') syncDraftCommandBars();
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;

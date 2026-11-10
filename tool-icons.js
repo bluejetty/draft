@@ -36,8 +36,12 @@ if (!window.DraftToolIcons) {
       + '<path d="M12 8v8" /><path d="M16 12l3-2v4z" />',
     assembly: '<rect x="4" y="4" width="7" height="7" /><rect x="13" y="4" width="7" height="7" />'
       + '<rect x="4" y="13" width="16" height="7" /><path d="M2 2h20v20H2z" stroke-dasharray="2 1.6" />',
-    multiple: '<rect x="3" y="8" width="5" height="8" /><rect x="10" y="8" width="5" height="8" />'
-      + '<rect x="17" y="8" width="5" height="8" stroke-dasharray="1.6 1.4" />',
+    offset: '<path d="M4 18L18 4" /><path d="M8 21L21 8" stroke-dasharray="2 1.6" />',
+    mirror: '<path d="M12 3v18" stroke-dasharray="2 1.6" /><path d="M9 7L4 12l5 5z" /><path d="M15 7l5 5-5 5z" />',
+    rotate: '<path d="M19 12a7 7 0 1 1-2-4.9" /><path d="M19 3v4.5h-4.5" /><circle cx="12" cy="12" r="1.2" />',
+    fillet: '<path d="M4 20V11a7 7 0 0 1 7-7h9" /><path d="M4 7V4h3" stroke-dasharray="1.6 1.6" />',
+    array: '<rect x="3" y="3" width="6" height="6" /><rect x="15" y="3" width="6" height="6" />'
+      + '<rect x="3" y="15" width="6" height="6" /><rect x="15" y="15" width="6" height="6" />',
     wall: '<path d="M3 8h18M3 16h18" /><path d="M5 16l8-8M11 16l8-8M17 16l4-4M3 12l4-4" stroke-width="1" />',
     fenestration: '<path d="M2 18h6M20 18h2" /><path d="M8 18V6" /><path d="M8 6a12 12 0 0 1 12 12" stroke-dasharray="2 1.6" />',
     floor: '<path d="M3 17l5-10h13l-5 10z" /><path d="M7.5 17l5-10M12 17l5-10" stroke-width="1" />',
@@ -48,6 +52,12 @@ if (!window.DraftToolIcons) {
       + '<path d="M6 12h12" stroke-dasharray="3 1.8" />',
     stair: '<path d="M3 21h5v-5h4v-5h4V6h5" /><path d="M3 21V16" stroke-width="1" />',
     fixture: '<rect x="7" y="3" width="10" height="5" rx="1" /><ellipse cx="12" cy="14.5" rx="5" ry="6.5" />',
+    // SITE PLAN (jb, 9 Nov: "make it look like a site plan"): the lot line
+    // dot-dashed the way the plan draws it, the house footprint inside with
+    // its gable, and a north arrow in the corner.
+    siteplan: '<path d="M3 4h18v16H3z" stroke-dasharray="3 1.4 0.8 1.4" />'
+      + '<path d="M7 17v-6l4-3 4 3v6z" /><path d="M7 11h8" stroke-width="1" />'
+      + '<path d="M18 11V6.5" stroke-width="1.2" /><path d="M16.6 8.2L18 6.3l1.4 1.9" stroke-width="1.2" />',
   });
 
   // THE REST OF THE TOOLTIP: "WALL — press W to draw a wall."
@@ -65,7 +75,11 @@ if (!window.DraftToolIcons) {
     roomtag: 'place a room tag',
     cut: 'cut a section',
     assembly: 'make the picked items one assembly',
-    multiple: 'make copies in a row (coming soon)',
+    offset: 'copy a line, wall or shape a set distance over',
+    mirror: 'mirror what is picked across a line',
+    rotate: 'turn what is picked about a base point',
+    fillet: 'join two lines or walls at a corner, square or rounded',
+    array: 'make copies of what is picked in a row or a grid',
     wall: 'draw a wall',
     fenestration: 'place a door or window',
     floor: 'draw a floor',
@@ -75,6 +89,7 @@ if (!window.DraftToolIcons) {
     beam: 'place a beam',
     stair: 'place a stair',
     fixture: 'place a fixture',
+    siteplan: 'size the lot, draw it, or bring a site plan in',
     outline: 'trace the house outline',
   });
 

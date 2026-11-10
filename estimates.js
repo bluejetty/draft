@@ -202,49 +202,29 @@ if (!window.DraftEstimates) {
   };
 
   // ── 8-A DOORS, 8-B WINDOWS: counted by size ─────────────────────────────
-  const sizeIn = (ft, metric) => (metric
-    ? `${window.DraftFenLabels.mmTo(ft, 5)}` : `${Math.round(ft * 12)}`);
-  const STYLE_WORD = { single: '', french: 'FRENCH', pocket: 'POCKET', barn: 'BARN', slide: 'SLIDING', bypass: 'BYPASS', garden: 'GARDEN', overhead: 'OVERHEAD' };
+  // THE GROUPING LIVES IN schedules.js NOW (jb, 9 Nov: "will you put the
+  // window schedules in the ESTIMATES section? ... and doors"): the DOOR and
+  // WINDOW SCHEDULE sheets and these two sections read the same groups, so a
+  // row here is a row there, under the same mark. The keys are unchanged --
+  // a price is stored against its key -- and the labels read as they did;
+  // `mark` is the one new field, and the page prints it beside the item.
+  const STYLE_WORD = { single: '', french: 'FRENCH', pocket: 'POCKET', barn: 'BARN', slide: 'SLIDING', bypass: 'BYPASS', garden: 'GARDEN', sidelight: 'SIDELIGHT', overhead: 'OVERHEAD' };
+  const schedulesOf = d => window.DraftSchedules.openingSchedules(
+    { fenestrations: d.fenestrations, levels: d.levels, metric: d.metric });
   const doorRows = d => {
-    const groups = new Map();
-    d.fenestrations.filter(o => o.type === 'door').forEach(o => {
-      const garage = o.garage === true || o.doorType === 'garage';
-      const w = sizeIn(o.width, d.metric);
-      const h = sizeIn(o.headHeight, d.metric);
-      const kind = garage ? 'garage' : (o.doorType === 'ext' ? 'ext' : 'int');
-      const style = garage ? 'overhead' : (o.doorStyle || 'single');
-      const key = garage ? `8-A:garage:${w}x${h}` : `8-A:${kind}:${style}:${w}`;
-      if (!groups.has(key)) {
-        groups.set(key, { key, count: 0, garage, kind, style, w, h });
-      }
-      groups.get(key).count += 1;
-    });
     const unit = d.metric ? 'mm' : '"';
-    const rank = { ext: 0, int: 1, garage: 2 };
-    return [...groups.values()]
-      .sort((a, b) => rank[a.kind] - rank[b.kind] || Number(a.w) - Number(b.w))
-      .map(g => ({
-        key: g.key, unit: 'EA', qty: g.count, waste: 0, net: g.count,
-        label: g.garage ? `OVERHEAD DOOR ${g.w}${unit} x ${g.h}${unit}`
-          : [g.kind === 'ext' ? 'EXTERIOR' : 'INTERIOR', STYLE_WORD[g.style] || g.style.toUpperCase(), `${g.w}${unit} WIDE`].filter(Boolean).join(' '),
-        detail: g.garage ? '' : `${g.h}${unit} high`,
-      }));
+    return schedulesOf(d).doors.map(g => ({
+      key: g.key, mark: g.mark, unit: 'EA', qty: g.count, waste: 0, net: g.count,
+      label: g.garage ? `OVERHEAD DOOR ${g.w}${unit} x ${g.h}${unit}`
+        : [g.kind === 'ext' ? 'EXTERIOR' : 'INTERIOR', STYLE_WORD[g.style] || g.style.toUpperCase(), `${g.w}${unit} WIDE`].filter(Boolean).join(' '),
+      detail: g.garage ? '' : `${g.h}${unit} high`,
+    }));
   };
   const windowRows = d => {
-    const groups = new Map();
-    d.fenestrations.filter(o => o.type === 'window').forEach(o => {
-      const w = sizeIn(o.width, d.metric);
-      const height = (Number(o.headHeight) || 0) - (Number(o.sillHeight) || 0);
-      const h = height > 0 ? sizeIn(height, d.metric) : '?';
-      const key = `8-B:${w}x${h}`;
-      if (!groups.has(key)) groups.set(key, { key, count: 0, w, h, width: o.width });
-      groups.get(key).count += 1;
-    });
     const unit = d.metric ? ' mm' : '"';
-    return [...groups.values()]
-      .sort((a, b) => a.width - b.width || Number(a.h) - Number(b.h))
-      .map(g => ({ key: g.key, unit: 'EA', qty: g.count, waste: 0, net: g.count,
-        label: `WINDOW ${g.w} x ${g.h}${unit}`, detail: `${g.w}${unit} wide, ${g.h}${unit} high` }));
+    return schedulesOf(d).windows.map(g => ({
+      key: g.key, mark: g.mark, unit: 'EA', qty: g.count, waste: 0, net: g.count,
+      label: `WINDOW ${g.w} x ${g.h}${unit}`, detail: `${g.w}${unit} wide, ${g.h}${unit} high` }));
   };
 
   // ── THE SECTIONS, IN THE SPEC'S ORDER ────────────────────────────────────

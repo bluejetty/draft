@@ -633,6 +633,21 @@
       .filter(v => v !== lead.vtx && !before.some(b => b.vtx === v))
       .map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ, follows: lead }));
   });
+  // THE CORNERS THAT SHARE A GRABBED CORNER'S SPOT inside the picked fixed
+  // assemblies ride with it (10 Nov: "the connected nodes will move to the
+  // same location"). Pooled corners are one object already; these are the
+  // separate records standing on the same point -- a line's end on a wall's
+  // corner, a floor's corner on either -- which a drag of one would otherwise
+  // leave behind, tearing the assembly at its own joint. Riders go in
+  // `follow`, so followAnchors moves them by the lead's travel on every
+  // pointermove and the undo step puts them back with it.
+  const assemblyRiders = (corner, lead) => {
+    const seen = new Set([corner]);
+    return selectedGroups().filter(group => group.fixed === true).flatMap(group =>
+      window.DraftLevelLock.uniquePoints(itemsOfGroupAnywhere(group))
+        .filter(v => !seen.has(v) && Math.hypot(v.x - corner.x, v.z - corner.z) < 1e-4 && seen.add(v))
+        .map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ, follows: lead })));
+  };
   // THE ANCHORS, AQUA (Movie, 22 Oct: "SUPERNODe color Aqua Turquoise"), on
   // this level's assemblies; a ring round each of the assembly whose anchors
   // are being picked, so the drafter sees which corners can take one.

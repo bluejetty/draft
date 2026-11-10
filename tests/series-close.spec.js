@@ -95,46 +95,49 @@ test('a double-click ends a WALL run with its point as the last corner', async (
   expect(d.walls.map(seg)).toEqual([[2, 2, 8, 2], [8, 2, 8, 6], [12, 6, 12, 9]]);
 });
 
-test('ENTER or SPACE once is a corner at the cursor, twice ends the LINE run', async ({ page }) => {
+// ENTER, SPACE AND THE RIGHT CLICK ARE FINISH (jb, 9 Nov: "how AUTOCAD did
+// it"). They used to put a corner at the cursor and end the run only when
+// pressed twice quickly (Movie, 20 Oct); now one press ends the run, and a
+// point comes from the left button only.
+test('ENTER, SPACE or the right button once ends the LINE run; none of them is a corner', async ({ page }) => {
   await open(page);
   await arm(page, 'line');
   await tapWorld(page, 2, 2);
-  await hover(page, 8, 2);
-  await key(page, 'Enter');
+  await tapWorld(page, 8, 2);
   await hover(page, 8, 6);
-  await key(page, 'Enter', 2);
+  await key(page, 'Enter');
   await expect(page.locator('#strip-message')).toContainText(/run ended/i);
-  // SPACE starts a run where the cursor stands, lands the next corner, and
-  // twice ends it.
-  await hover(page, 12, 6);
-  await key(page, ' ');
-  await hover(page, 12, 9);
-  await key(page, ' ');
+  // A FRESH RUN after it, ended by SPACE: the cursor's spot is not a corner.
+  await tapWorld(page, 12, 6);
+  await tapWorld(page, 12, 9);
   await hover(page, 16, 9);
-  await key(page, ' ', 2);
+  await key(page, ' ');
+  await expect(page.locator('#strip-message')).toContainText(/run ended/i);
+  // And one ended by the right button, which no longer cancels it.
+  await tapWorld(page, 20, 2);
+  await tapWorld(page, 20, 6);
+  const { px, py } = await pixelOf(page, 24, 6);
+  await page.mouse.click(px, py, { button: 'right' });
+  await page.waitForTimeout(80);
   await expect(page.locator('#strip-message')).toContainText(/run ended/i);
   const d = await save(page);
-  expect(d.lines.map(seg)).toEqual([[2, 2, 8, 2], [8, 2, 8, 6], [12, 6, 12, 9], [12, 9, 16, 9]]);
+  expect(d.lines.map(seg)).toEqual([[2, 2, 8, 2], [12, 6, 12, 9], [20, 2, 20, 6]]);
   expect(d.walls, 'a LINE writes lines').toHaveLength(0);
 });
 
-test('a second press after a pause, or after the cursor moved on, is not an end', async ({ page }) => {
+test('ENTER with nothing in hand puts no corner down, and the tool stays up', async ({ page }) => {
   await open(page);
   await arm(page, 'wall');
-  await tapWorld(page, 2, 2);
   await hover(page, 8, 2);
   await key(page, 'Enter');
-  // THE SAME SPOT, BUT LATE: the run stays in hand.
-  await page.waitForTimeout(700);
-  await key(page, 'Enter');
-  await expect(page.locator('#strip-message')).not.toContainText(/run ended/i);
-  // QUICK, BUT THE CURSOR MOVED ON: the next corner, not the end.
-  await hover(page, 8, 6);
-  await key(page, 'Enter');
-  await expect(page.locator('#strip-message')).not.toContainText(/run ended/i);
+  await key(page, ' ');
+  await expect(page.locator('#strip-message')).toContainText(/first point/i);
+  expect(await page.evaluate(() => activeTool)).toBe('wall');
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 8, 2);
   await page.keyboard.press('Escape');
   const d = await save(page);
-  expect(d.walls.map(seg)).toEqual([[2, 2, 8, 2], [8, 2, 8, 6]]);
+  expect(d.walls.map(seg)).toEqual([[2, 2, 8, 2]]);
 });
 
 test('SPACE typed in the LENGTH box is a space, not a corner', async ({ page }) => {

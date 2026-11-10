@@ -150,57 +150,48 @@
     return feet > 0 ? feet : undefined;
   };
 
-  // ENTER PLACES THE POINT THE CURSOR SHOWS (Movie, 17 Oct: "to place the
-  // walls the click choose direction and length and then click again or
-  // ENTER"). With nothing typed, Enter on a run in hand is the click it
-  // stands for; a typed LENGTH still takes its own Enter, in its own box.
-  // ONCE A NODE, TWICE THE END (Movie, 20 Oct): "when drawing a series of
-  // LINE, DIMENSION WALL, if the user esc, end the series of items being
-  // drawn (as it does now) also make the DOUBLE CLICK on mouse close it off
-  // in the same way. If the user presses one click on mouse it makes a NODE,
-  // if DOUBLE click it closes.. also make the ENTER and SPACE act in the
-  // same way where 1 click makes a NODE but a double click for ENTER or
-  // SPACE closes the series".
+  // ── ENTER, SPACE AND THE RIGHT CLICK MEAN FINISH (jb, 9 Nov) ────────────
   //
-  // For a WALL or LINE run: ENTER or SPACE once puts a corner where the
-  // cursor stands (and starts the run there when none is in hand); the same
-  // key again inside SERIES_TWICE_MS, WITH THE CURSOR WHERE IT WAS, ends the
-  // run, so the corner the first press put down is the run's last -- the
-  // same shape as the double-click below, whose first click is a corner and
-  // whose second lands on it. A quick second press after the cursor has
-  // moved on is the next corner, not the end: a drafter who presses, moves,
-  // presses is drawing, however fast.
-  // AND THE SAME RULE CLOSES A LOOP -- a FLOOR, a SHAPE, an OUTLINE or the
-  // single slope ROOF's outline (Movie, 22 Oct: "for when a user is
-  // completing a shape like FLOOR, ROOF or SHAPE once the user is ready to
-  // make the LAST / at FIRST point location by DOUBLE clicking, or pressing
-  // ENTER or SPACEBAR twice quickly"). Once is a corner at the cursor; the
-  // same key again, quickly, with the cursor where it was, closes the loop
-  // on its first corner, and a double-click closes it the same way: its first
-  // click is the last corner, its second lands on it (no corner: loopTailIs),
-  // and the dblclick that follows closes. Below three corners nothing closes
-  // -- two enclose no area -- and the strip says so.
-  // DIMENSION KEEPS ITS OWN RULE, refined (Movie, 23 Oct: "to end a string
-  // and go to the Line placement part, press SPACE BAR once (or ENTER key)
-  // or the RIGHT mouse button ... right click / space / enter to end the
-  // line placement and finish the dimension string"): ONCE ends -- the
-  // points, or the lines (dimOnceEnds); the right button says the same. Esc
-  // alone abandons the string. SPACE in a box is a space: typed lengths
-  // carry them ("4 6"), which the target guard keeps.
-  const SERIES_TWICE_MS = 450;
-  let seriesKeyLast = { key: null, at: 0, where: null };
+  // "yes lets do the enter space and right and left clicks how AUTOCAD did
+  // it." The left button places points and picks things; ENTER, SPACE and a
+  // right click that does not travel all say the same word, FINISH:
+  //
+  //   a WALL or LINE run in hand      -- the run ends on its last corner;
+  //   a FLOOR, SHAPE, OUTLINE or the
+  //   single slope ROOF's outline     -- the loop closes on its first corner
+  //                                      (under three corners the strip says
+  //                                      so and the corners stay);
+  //   a DIMENSION string              -- the points end, then the lines
+  //                                      (dimOnceEnds, as before);
+  //   an ASSEMBLY being gathered      -- it closes as one unit;
+  //   STRETCH past its base point     -- it goes where the cursor is;
+  //   OFFSET, MIRROR, ROTATE, FILLET
+  //   past their first press          -- the step is taken at the cursor;
+  //   ARRAY                           -- MAKE;
+  //   nothing in hand, SELECT up      -- the last tool is armed again
+  //                                      (AutoCAD's repeat at an empty
+  //                                      prompt).
+  //
+  // WHAT THIS RETIRES. Movie, 20 Oct, had ENTER and SPACE put a CORNER at
+  // the cursor, and twice quickly end the run or close the loop; Movie, 27
+  // Sep, had the right click CANCEL the gesture in hand. Both go: a point
+  // comes from the left button only, and Esc alone abandons a gesture. The
+  // double-click keeps ending a run and closing a loop, as it did.
+  //
+  // SPACE IN A BOX IS A SPACE. Typed lengths carry them ("4 6"), and the
+  // target guard on both handlers keeps every text field's keys its own.
+  // ENTER on a focused button presses that button, so BUTTON is guarded too.
   const endDrawRun = () => {
     drawStart = null;
-    seriesKeyLast = { key: null, at: 0, where: null };
-    sayOnStrip(`${activeTool.toUpperCase()} — run ended. Press, ENTER or SPACE to start another.`);
+    sayOnStrip(`${activeTool.toUpperCase()} — run ended. Press to start another.`);
   };
   // THE LOOP IN HAND: a corner or more on one of the loop tools.
   const loopInHand = () => traceCorners().length > 0;
   const dimInHand = () => activeTool === 'dimension' && dimPoints.length > 0;
-  // ONE PRESS ON THE LOOP TOOL ARMED, from the pointer or from a key at the
-  // cursor. A double-click ON THE FIRST CORNER closes on its first click, and
-  // every close puts the tool down (setTool(RESTING_TOOL) in each commit), so
-  // its second click is a resting press, not the start of a new loop.
+  // ONE PRESS ON THE LOOP TOOL ARMED, from the pointer. A double-click ON
+  // THE FIRST CORNER closes on its first click, and every close puts the
+  // tool down (setTool(RESTING_TOOL) in each commit), so its second click is
+  // a resting press, not the start of a new loop.
   const loopPress = at => {
     if (activeTool === 'roof') shedPress(at);
     else if (activeTool === 'outline') outlinePress(at);
@@ -211,7 +202,6 @@
   const closeLoop = () => {
     const corners = traceCorners();
     if (!corners.length) return false;
-    seriesKeyLast = { key: null, at: 0, where: null };
     if (corners.length < 3) {
       sayOnStrip(`A ${activeTool.toUpperCase()} needs three corners before it can close on the first.`);
       return true;
@@ -225,38 +215,35 @@
     else if (activeTool === 'roof') commitShedRoof();
     return true;
   };
-  const seriesKeyPress = (key, place) => {
-    const now = Date.now();
-    const still = seriesKeyLast.where && cursorWorld
-      && Math.hypot(cursorWorld.x - seriesKeyLast.where.x, cursorWorld.z - seriesKeyLast.where.z) < 0.01;
-    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;
-    seriesKeyLast = { key, at: now, where: cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : null };
-    if (twice && loopInHand()) return closeLoop();
-    if (twice && drawsRun() && drawStart) { endDrawRun(); return true; }
-    return place();
-  };
-  const enterPlaces = () => {
-    if (!cursorWorld) return false;
-    if (loopInHand()) { loopPress(cursorWorld); return true; }
-    // With or without a run in hand: a first press starts one at the cursor.
-    const run = drawsRun();
-    if (run) { drawPress(cursorWorld); return true; }
+  // THE LAST TOOL ARMED, for the repeat: every tool but SELECT, as it goes
+  // through the register.
+  let lastToolArmed = null;
+  toolListeners.push(next => { if (next !== RESTING_TOOL) lastToolArmed = next; });
+  // FINISH what is in hand; true when something was.
+  const finishInHand = () => {
+    if (loopInHand()) return closeLoop();
+    if (drawsRun() && drawStart) { endDrawRun(); return true; }
     if (dimInHand()) return dimOnceEnds();
+    if (activeTool === 'assembly') { closeAssemblyKey(); return true; }
+    if (stretchTypable()) { stretchPress(cursorWorld); return true; }
+    if (typeof draftCommandFinish === 'function' && draftCommandFinish()) return true;
     return false;
   };
+  // REPEAT the last tool at an empty prompt: SELECT up and nothing in hand.
+  // Through pressToolKey, so a tool that needs a pick says so instead.
+  const repeatLastTool = () => {
+    if (activeTool !== RESTING_TOOL || !lastToolArmed) return false;
+    if (!window.DraftToolRoster?.availableOn(lastToolArmed, board)) return false;
+    pressToolKey(lastToolArmed);
+    return true;
+  };
+  const finishOrRepeat = () => finishInHand() || repeatLastTool();
+  const keyIsTyping = t => t instanceof HTMLElement
+    && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName));
   window.addEventListener('keydown', e => {
-    if (e.key !== 'Enter' || e.repeat || modalUp()) return;
-    const t = e.target;
-    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
-    if (seriesKeyPress('Enter', enterPlaces)) { e.preventDefault(); stripRefresh(); paint(); }
-  });
-  window.addEventListener('keydown', e => {
-    if (e.key !== ' ' || e.repeat || !(drawsRun() || loopInHand() || dimInHand()) || modalUp()) return;
-    const t = e.target;
-    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
-    if (!cursorWorld) return;
-    e.preventDefault();
-    if (seriesKeyPress(' ', enterPlaces)) { stripRefresh(); paint(); }
+    if ((e.key !== 'Enter' && e.key !== ' ') || e.repeat || modalUp() || keyIsTyping(e.target)) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (finishOrRepeat()) { e.preventDefault(); stripRefresh(); paint(); }
   });
   // A DOUBLE-CLICK ENDS THE RUN. Its first click is an ordinary press -- a
   // corner, committed by the run's own pointerup -- and its second lands on
@@ -534,7 +521,7 @@
       return;
     }
     if (activeTool === 'outline') {
-      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
+      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
       const feet = typedOutlineFeet();
       if (feet !== undefined) {
         // THE OUTLINE HE TYPED IS THE OUTLINE HE GETS, inches and all (Movie,
@@ -549,13 +536,13 @@
     // 2 for sure" -- typed lengths and dragging corners, as WALL and LINE
     // have): that far from the last corner, the way the cursor points.
     if (loopTypable()) {
-      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
+      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
       const feet = typedOutlineFeet();
       if (feet !== undefined) typedLoopCorner(feet);
       lengthBox.blur();
       return;
     }
-    if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
+    if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
     const parsed = readLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
@@ -903,11 +890,33 @@
         // therefore a no-op, which is right: it is the resting state.
         btn.addEventListener('click', () => {
           // A PLACEHOLDER KEY says it is coming and arms nothing.
-          if (tool.placeholder) { sayOnStrip(`${tool.name} is coming soon — copies in a row or a grid.`); return; }
+          if (tool.placeholder) { sayOnStrip(`${tool.name} is coming soon.`); return; }
           pressToolKey(tool.id);
         });
         return btn;
       }));
+      // SITE PLAN, LAST OF THE BUILD KEYS (jb, 9 Nov: "maybe SITE PLAN
+      // button in build to open that (put it at the end make it look like
+      // a site plan"). NOT A TOOL: it arms nothing and is not in the roster
+      // -- the roster's keys are the seventeen that set activeTool, and a
+      // key among them that opens a card instead would be a tool whose
+      // gesture is a pop-up. It wears the key's face (a drawing, no letter)
+      // and opens the lot card on SITE, which used to come up on its own.
+      if (group.id === 'build') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tool-key';
+        btn.dataset.sitePlanKey = '';
+        btn.title = window.DraftToolIcons?.title('SITE PLAN', '', 'siteplan') || 'SITE PLAN';
+        const letter = document.createElement('span');
+        letter.dataset.toolLetter = '';
+        const label = document.createElement('span');
+        label.dataset.toolName = '';
+        label.textContent = 'SITE PLAN';
+        btn.append(letter, toolIcon('siteplan'), label);
+        btn.addEventListener('click', () => openLotCard());
+        keys.append(btn);
+      }
       box.append(name, keys);
       // EACH GROUP ONTO ITS OWN TAB, and PREPENDED rather than appended: the
       // DRAFTING pane also carries SELECTION, OBJECT TYPE and ASSEMBLY, and
@@ -1289,6 +1298,9 @@
     // MOVE IS THE FOOT'S MOVE, pressed from the column or by M ("keep move
     // bottom too"): it acts on what is picked, so with nothing picked it says
     // to pick first rather than arming a tool that has nothing to carry.
+    // MIRROR, ROTATE and ARRAY likewise act on what is picked
+    // (18-draft-commands.js): with nothing picked they say to pick first.
+    if (draftCommandNeedsPick(id)) return;
     if (id === 'move') {
       if (!selection.length && !moveState.on) {
         sayOnStrip('MOVE: pick what to move first -- click it, or box it -- then press M or MOVE.');
@@ -1297,6 +1309,7 @@
       pressMove();
       return;
     }
+    if (id === 'assembly' && bustByKey()) return;
     setTool(id === activeTool ? RESTING_TOOL : id);
   }
   // SELECT GLOWS WHILE STRETCH IS UP -- the box is the rectangle select's.
@@ -1378,6 +1391,10 @@
     // page's own two lines, and without them a drafter can build overlapping
     // assemblies that disagree about what moves with what.
     const taken = new Set(members.map(m => `${m.type}:${m.id}`));
+    // THE GROUPS AS THEY WERE, for UNDO: the rewrite below mints new records
+    // for any group that lost a member, so the old array put back whole is
+    // the old grouping exactly -- the member items themselves never move.
+    const groupsBefore = groups().slice();
     drawing.groups = groups()
       .map(group => ({ ...group,
         members: (group.members || [])
@@ -1404,6 +1421,7 @@
     };
     drawing.groups.push(group);
     drawing.nextGroupId = n + 1;
+    undoStack.push(assemblyUndoStep(groupsBefore));
     // The new assembly is what is selected afterwards -- all of it, which is
     // also the drafter's confirmation that it took.
     setSelection(itemsOfGroup(group));
@@ -1419,10 +1437,34 @@
     const ids = new Set(going.map(group => group.id));
     // THE ITEMS SURVIVE; only the grouping goes. Ungroup is not delete, and
     // the members stay selected so the drafter can see what they just freed.
+    const groupsBefore = groups().slice();
     drawing.groups = groups().filter(group => !ids.has(group.id));
+    undoStack.push(assemblyUndoStep(groupsBefore));
     syncAssembly();
     markDirty();
     paint();
+  };
+  // ONE UNDO PUTS THE GROUPING BACK AS IT WAS, whether the press made an
+  // assembly or busted one (10 Nov: "Undo must restore the group"). Groups
+  // name their members by type and id, so the old array is the whole of it.
+  const assemblyUndoStep = groupsBefore => ({
+    kind: 'assembly',
+    undo: () => { drawing.groups = groupsBefore; syncAssembly(); },
+  });
+
+  // Y ON A PICKED ASSEMBLY BUSTS IT (10 Nov: "select a Y'd items group and
+  // then press the Y command and it will break apart"). The press is a bust
+  // only when everything picked already sits in an assembly and ASSEMBLY is
+  // not armed; a loose item among the picks means the drafter is building a
+  // group, and Y arms as it always did. UNDO puts the group back.
+  const bustByKey = () => {
+    if (activeTool === 'assembly' || !selection.length) return false;
+    if (!selection.every(entry => groupOf(entry))) return false;
+    const going = selectedGroups();
+    if (!going.length) return false;
+    ungroupSelected();
+    sayOnStrip(`${going.map(group => group.name).join(', ')} busted: the items are single again. UNDO puts it back; Y on loose items makes a new assembly.`);
+    return true;
   };
 
   // CTRL+G: what is picked becomes one FIXED assembly at once, the Y key's
@@ -1458,7 +1500,7 @@
     if (n) {
       createAssembly(true);
       const group = selectedGroups()[0];
-      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. ASSEMBLY BUST breaks it.`);
+      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. Y on it again busts it.`);
     } else {
       sayOnStrip('Nothing picked, so no assembly was made.');
     }

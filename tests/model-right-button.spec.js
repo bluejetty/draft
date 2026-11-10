@@ -130,48 +130,53 @@ test.describe('MODEL.html — the right mouse button', () => {
       'the page took the press and stopped the browser menu').toBe(true);
   });
 
-  test('it cancels a wall in hand, and the next press starts a new one',
+  // THE RIGHT CLICK IS ENTER NOW (jb, 9 Nov: "how AUTOCAD did it"): it
+  // FINISHES the run in hand on its last corner. It used to cancel the run
+  // (Movie, 27 Sep); Esc alone does that now.
+  test('it ends a wall run in hand on its last corner, and the next press starts a new one',
     async ({ page }) => {
       const f = await open(page);
       await page.locator('[data-tool-key="wall"]').click();
-      await leftAt(page, f, 0, 0);
+      await leftAt(page, f, -9, 0);
+      await leftAt(page, f, 9, 0);
       await expect(page.locator('#strip-message')).toContainText('second point');
 
       await rightAt(page, f, 5, 5);
       expect(await page.locator('#strip-message').textContent(),
-        'the run was put down').toContain('first point');
+        'the run was ended').toMatch(/run ended/i);
+      expect(await wallsNow(page), 'the wall drawn before it stands').toBe(HOUSE_WALLS + 1);
 
-      // THE PROOF IS THE NEXT WALL. A cancel that only changed the strip would
-      // leave the anchor live, and these two presses would build a wall from
-      // the ABANDONED start rather than from the first of them.
-      await leftAt(page, f, -9, 0);
-      await leftAt(page, f, 9, 0);
-      expect(await wallsNow(page), 'one new wall').toBe(HOUSE_WALLS + 1);
-      // AND IT RUNS BETWEEN THE TWO PRESSES, not from the abandoned anchor at
-      // the origin -- which is the difference between a cancel and a strip
-      // message about a cancel.
+      // THE PROOF IS THE NEXT WALL: a fresh run from the first of these two
+      // presses, not a third wall from the ended run's last corner.
+      await leftAt(page, f, -9, 4);
+      await leftAt(page, f, 9, 4);
+      expect(await wallsNow(page), 'one more wall').toBe(HOUSE_WALLS + 2);
       await page.locator('#save').click();
       await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
       const walls = await page.evaluate(async bucket => {
         const file = await window.SharedFileStore.loadSharedFile(bucket);
         return JSON.parse(await file.text()).walls;
       }, BUCKET);
-      const drawn = walls.find(w => !'nesw'.includes(String(w.id)));
-      expect(drawn, 'the new wall is in the file').toBeTruthy();
-      expect(Math.abs(Number(drawn.start.x)),
-        'it starts at the first of the two presses, not at the abandoned anchor')
-        .toBeCloseTo(9, 3);
+      const drawn = walls.filter(w => !'nesw'.includes(String(w.id)));
+      expect(drawn.map(w => [Math.round(w.start.x), Math.round(w.start.z), Math.round(w.end.x), Math.round(w.end.z)]))
+        .toEqual([[-9, 0, 9, 0], [-9, 4, 9, 4]]);
+      // AND ESC STILL ABANDONS A RUN, which is what makes the two different.
+      // The run in hand chains on from (9, 4), so Esc puts that down first.
+      await page.keyboard.press('Escape');
+      await leftAt(page, f, -9, 8);
+      await page.keyboard.press('Escape');
+      await leftAt(page, f, 9, 8);
+      await expect(page.locator('#strip-message')).toContainText('second point');
+      expect(await wallsNow(page), 'Esc put the anchor down; one press is no wall').toBe(HOUSE_WALLS + 2);
     });
 
-  test('the tool survives — the right button cancels the run, not the tool',
+  test('the tool survives — the right button ends the run, not the tool',
     async ({ page }) => {
       const f = await open(page);
       await page.locator('[data-tool-key="wall"]').click();
       await leftAt(page, f, 0, 0);
+      await leftAt(page, f, 5, 0);
       await rightAt(page, f, 5, 5);
-      // THE OLD PAGE'S RULE: _onRightClick puts down gestures and nothing
-      // else. A drafter who was drawing walls is still drawing walls, the
-      // same promise Escape makes.
       expect(await h.wallArmed(page), 'WALL is still armed').toBe(true);
     });
 

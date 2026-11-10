@@ -1,4 +1,4 @@
-// THE SEVENTEEN TOOLS, as data.
+// THE TOOLS, as data -- the old page's seventeen and what joined them since.
 //
 // MODEL.dc.html builds this list inline at :23890-23907 out of two factories,
 // `standardTool` (:22789) and `contextualTool` (:22770). That distinction is
@@ -45,6 +45,17 @@
     // destination.
     { id: 'move',         name: 'MOVE',         group: 'draw',  kind: 'contextual', command: 'move' },
     { id: 'stretch',      name: 'STRETCH',      group: 'draw',  kind: 'contextual', command: 'stretch' },
+    // THE CLASSIC EDITS (jb, 9 Nov: "these are vital: OFFSET, MIRROR,
+    // ROTATE, FILLET, ARRAY. Offset is the most-used command in 2D drafting
+    // and it is not on the palette"). Four take a letter from the four that
+    // were still free -- G is reserved -- and ARRAY, which replaced the
+    // MULTIPLE placeholder, is pressed from its key. ROTATE and FLIP in the
+    // foot stay as they were: they turn and mirror about the selection's own
+    // middle, these take a base point or a line of the drafter's choosing.
+    { id: 'offset',       name: 'OFFSET',       group: 'draw',  kind: 'contextual', command: 'offset' },
+    { id: 'mirror',       name: 'MIRROR',       group: 'draw',  kind: 'contextual', command: 'mirror' },
+    { id: 'rotate',       name: 'ROTATE',       group: 'draw',  kind: 'contextual', command: 'rotate' },
+    { id: 'fillet',       name: 'FILLET',       group: 'draw',  kind: 'contextual', command: 'fillet' },
     // SUPERNODE (Movie, 20 Oct) stood here on the old NODE / ARC slot and
     // its N, and is gone (26 Oct: "maybe we can get rid of that, it didn't
     // work that good").
@@ -67,11 +78,11 @@
     // ENTER or DOUBLE CLICK or press Y again to close the assembly as one new
     // unit". Y is the binding the old page already carried for `group`.
     { id: 'assembly',     name: 'ASSEMBLY',     group: 'draw',  kind: 'contextual', command: 'group' },
-    // MULTIPLE (Movie, 27 Oct: "i notice we don't have a MULTIPLE button yet.
-    // put a button in the DRAFTING menu we can work on it later") --
-    // ARCHICAD's Multiply. A PLACEHOLDER: the key is there and says it is
-    // coming; it arms nothing.
-    { id: 'multiple',     name: 'MULTIPLE',     group: 'draw',  kind: 'contextual', command: null, placeholder: true },
+    // ARRAY (jb, 9 Nov) stands where MULTIPLE's placeholder stood (Movie,
+    // 27 Oct: "put a button in the DRAFTING menu we can work on it later" --
+    // ARCHICAD's Multiply). Copies in a row or a grid; no letter, as
+    // ANNOTATION beside it has none.
+    { id: 'array',        name: 'ARRAY',        group: 'draw',  kind: 'contextual', command: null },
     { id: 'wall',         name: 'WALL',         group: 'build', kind: 'contextual', command: 'wall' },
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },

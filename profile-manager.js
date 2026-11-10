@@ -114,6 +114,11 @@ if (!window.DraftProfileManager) {
     trim: 'Q',
     move: 'M',
     stretch: 'H',
+    // The classic edits (9 Nov): the four letters that were still free.
+    offset: 'I',
+    mirror: 'J',
+    rotate: 'Z',
+    fillet: 'V',
     tsquare: 'T',
     compass: 'P',
     cut: 'C',
@@ -182,6 +187,10 @@ if (!window.DraftProfileManager) {
         fenestration: 'I',
         extend: 'E',
         redo: 'Ctrl+Y',
+        // V and I are spoken for above, so the two edits that hold them at
+        // home move to a shifted letter here.
+        fillet: 'Shift+F',
+        offset: 'Shift+O',
       }),
     }),
     revit: Object.freeze({
@@ -203,6 +212,7 @@ if (!window.DraftProfileManager) {
         compass: 'V',
         trim: 'M',
         redo: 'Ctrl+Y',
+        fillet: 'Shift+F',
       }),
     }),
     archicad: Object.freeze({
@@ -214,6 +224,7 @@ if (!window.DraftProfileManager) {
         shape: 'P',
         compass: 'V',
         fenestration: 'Shift+D',
+        fillet: 'Shift+F',
       }),
     }),
   });
