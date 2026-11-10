@@ -26,7 +26,7 @@
   // a node in reach, else a face, else where it was pressed. TOY keeps its
   // raw press, as it keeps its own law everywhere.
   // THE LOOP'S LAST CORNER, PRESSED AGAIN, is the second click of a double
-  // (the loop rule at seriesKeyPress), not a corner on top of a corner.
+  // (closeLoop in 14-promotion-tools.js), not a corner on top of a corner.
   const loopTailIs = (corners, pt) => {
     const tail = corners[corners.length - 1];
     return !!tail && Math.abs(tail.x - pt.x) < 1e-6 && Math.abs(tail.z - pt.z) < 1e-6;
