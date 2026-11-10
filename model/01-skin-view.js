@@ -51,9 +51,9 @@
   // reload -- and a reload is what a switcher must avoid, because this page
   // holds unsaved edits.
   let theme = pick('theme', window.DraftPalette.THEMES,
-    storedOr('theme', window.DraftPalette.THEMES, 'ruff'));
+    storedOr('theme', window.DraftPalette.THEMES, window.DraftPalette.homeTheme()));
   let mode = pick('mode', window.DraftPalette.MODES,
-    storedOr('mode', window.DraftPalette.MODES, 'night'));
+    storedOr('mode', window.DraftPalette.MODES, window.DraftPalette.homeMode(theme)));
   let skin = window.DraftPalette.apply(document, theme, mode);
   'use strict';
 

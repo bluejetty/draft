@@ -49,8 +49,8 @@
       return allowed.includes(stored[name]) ? stored[name] : fallback;
     };
     window.__layoutSkin = {
-      theme: pick('theme', P.THEMES, 'ruff'),
-      mode: pick('mode', P.MODES, 'night'),
+      theme: pick('theme', P.THEMES, P.homeTheme()),
+      mode: pick('mode', P.MODES, P.homeMode(pick('theme', P.THEMES, P.homeTheme()))),
     };
     P.apply(document, window.__layoutSkin.theme, window.__layoutSkin.mode);
   })();

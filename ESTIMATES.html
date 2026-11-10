@@ -24,7 +24,7 @@
         if (asked && allowed.includes(asked)) return asked;
         return allowed.includes(stored[name]) ? stored[name] : fallback;
       };
-      window.__estimatesSkin = { theme: pick('theme', P.THEMES, 'ruff'), mode: pick('mode', P.MODES, 'night') };
+      window.__estimatesSkin = { theme: pick('theme', P.THEMES, P.homeTheme()), mode: pick('mode', P.MODES, P.homeMode(pick('theme', P.THEMES, P.homeTheme()))) };
       P.apply(document, window.__estimatesSkin.theme, window.__estimatesSkin.mode);
     })();
   </script>
