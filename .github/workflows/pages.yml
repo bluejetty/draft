@@ -1,0 +1,72 @@
+# DEPLOY THE SITE WITH A BUILD STAMP (jb, 10 Nov: "i can't do anything this
+# keeps poping up" -- an old cached MODEL.html running today's scripts).
+#
+# GitHub Pages used to serve the main branch as-is, so a page and its scripts
+# were separate files with nothing tying them together. This workflow copies
+# the site, stamps the commit id into every dashboard and onto every script
+# and style address (tools/stamp-build.js), and publishes THAT copy. A new
+# page then asks for new addresses, which no cache has. The repo is never
+# edited; the stamp exists only in the deployed copy.
+#
+# IT ONLY TAKES EFFECT ONCE PAGES IS SET TO "GitHub Actions": repo Settings ->
+# Pages -> Build and deployment -> Source. Until then this workflow checks the
+# setting, says so in its summary and stops GREEN, and the site keeps coming
+# straight from main exactly as before. Nothing is half-switched.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Pages source. 'workflow' means Settings -> Pages is on GitHub
+      # Actions and this deploy will be accepted; 'legacy' means it still
+      # serves the branch, and a deploy would be refused with a red that
+      # names nothing useful. So ask first and skip politely.
+      - name: Read the Pages source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          kind=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq .build_type 2>/dev/null || echo unknown)
+          echo "build_type=$kind" >> "$GITHUB_OUTPUT"
+          if [ "$kind" != "workflow" ]; then
+            {
+              echo "## Pages still deploys from the branch (source: \`$kind\`)"
+              echo
+              echo "The stamped build was NOT published. Switch repo **Settings -> Pages -> Build and deployment -> Source** to **GitHub Actions** and re-run this workflow, or merge again."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Stamp the site with this commit
+        if: steps.source.outputs.build_type == 'workflow'
+        run: node tools/stamp-build.js "${GITHUB_SHA::12}" . _site
+
+      - uses: actions/configure-pages@v6
+        if: steps.source.outputs.build_type == 'workflow'
+      - uses: actions/upload-pages-artifact@v5
+        if: steps.source.outputs.build_type == 'workflow'
+        with:
+          path: _site
+      - uses: actions/deploy-pages@v5
+        if: steps.source.outputs.build_type == 'workflow'
+        id: deployment

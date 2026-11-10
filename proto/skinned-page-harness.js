@@ -270,9 +270,15 @@ for (const { page, regions } of SUBJECTS) {
   // COLOUR BEFORE ANYTHING PAINTS. palette.js has to be defined before the
   // script that applies it; if another module reached for a role first it
   // would get undefined, and palette.js is the one file in this chain that
-  // must lead.
-  check(`palette.js is the first script ${page} loads`,
-    () => [(code(page).match(/<script src="([^"]+)"/) || [])[1], './palette.js']);
+  // must lead. ONE FILE STANDS AHEAD OF IT SINCE 10 Nov: build-id.js, which
+  // paints nothing and reaches for no role -- it compares the page's build
+  // stamp with its own and reloads a mismatched page before any script can
+  // trip on it (jb's "H is not defined" off a cached MODEL.html). It has to
+  // run before everything, palette.js included, so palette.js is the first
+  // script AFTER it.
+  check(`palette.js is the first script ${page} loads after build-id.js`,
+    () => [(code(page).match(/<script src="([^"]+)"/g) || []).slice(0, 2).map(t => t.match(/src="([^"]+)"/)[1]).join(' then '),
+      './build-id.js then ./palette.js']);
 
   // THE SPECS DEFECT, AS A RULE. That page mapped a dark BACKGROUND to
   // --ink-primary because the pair it was converting read like ink and page.

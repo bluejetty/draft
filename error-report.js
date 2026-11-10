@@ -171,6 +171,13 @@
     const key = `${fault.kind}|${fault.message}|${fault.where}`;
     if (seen.has(key)) return;
     seen.add(key);
+    // A FAULT WHILE BOOTING ON THE LIVE SITE gets one fresh fetch before it
+    // gets a card. An old page paired with new scripts (jb, 10 Nov: "H is not
+    // defined" on every load) looks exactly like a crash, and the cure is a
+    // fresh copy of the page, not a report. build-id.js keeps the retry to
+    // one; a page that is already on its way out shows nothing.
+    const build = window.DraftBuild;
+    if (build && build.live && (build.reloading() || (build.booting() && build.retryFresh(`fault while booting: ${fault.message}`)))) return;
     note(`FAULT ${fault.kind}: ${fault.message}`);
     open({ fault });
   };
