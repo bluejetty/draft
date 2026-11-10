@@ -110,7 +110,7 @@ test('a copy address mails the report through the backup worker; the drawing goe
   await expect(card(page).locator('[data-er-status]')).toHaveText('Report sent, with a copy to kris@example.com. Thank you.');
   expect(sent, 'the desk and the copy, no drawing').toHaveLength(2);
   expect(sent.map(s => s.email)).toEqual([DESK, 'kris@example.com']);
-  expect(sent[0].app).toBe('bluejetty');
+  expect(sent[0].app).toBe('roughdrafter');
   expect(sent[0].filename).toMatch(/^rough-drafter-report-.*\.txt$/);
   expect(decoded(sent[0])).toContain('wall fell down');
   expect(decoded(sent[0])).toContain('COPY TO    kris@example.com');
