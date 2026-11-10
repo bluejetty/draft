@@ -1109,7 +1109,13 @@ if (!window.DraftLayoutPlan) {
     // Drawn last, like every other sheet's dimensions, over what they measure.
     const render = window.DraftRender2D;
     // `siteDims: false` is a page hiding them (MODEL's AUTO DIMS chip).
-    const rows = env.siteDims === false ? [] : siteDimStrings(saved, env.pif);
+    // AND NEVER FOR A HOLOGRAM (jb, 10 Nov: "how come there are 2 dims that
+    // show?"): a suite or hologram saved off this file carries its lot and
+    // footprint, and this pass laid the source's own rows over the file's
+    // -- at the default scale rather than the DIM SCALE, so a row in from
+    // them. A hologram draws no dimensions anywhere else (drawLevelMarks,
+    // drawPlan's dimensionEnv); the site rows are the file's to draw.
+    const rows = env.siteDims === false || env.hologram === true ? [] : siteDimStrings(saved, env.pif);
     if (rows.length && render && render.drawDimension2D) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE-DIMS';
       const fmt = window.DraftFormatters || {};
