@@ -88,12 +88,6 @@
       beams: [], columns: [], shapes: [], fixtures: [] };
     drawing = {
       ...parsed,
-      // NORMALISED, NOT PASSED THROUGH. `...parsed` would carry whatever the
-      // file said -- a board of "TOY", or of "banana" -- and the switch would
-      // then hold a value BOARDS does not contain. Round-tripping junk is the
-      // Write Tier's job for GEOMETRY it cannot understand; a scalar the page
-      // acts on gets normalised on the way in.
-      board: F.board(parsed.board),
       // The drafter's lines and notes on the elevations, by view name. ONLY
       // WHEN THE FILE HAS THEM: a drawing opened and saved untouched must come
       // back key for key, so the list is made on the first mark, not here.
@@ -265,12 +259,8 @@
     setSelection([]);
     drawStart = null;
 
-    // THE DRAWING'S BOARD BECOMES THE PAGE'S. A file that recorded one wins;
-    // one that never did leaves the remembered board alone, so opening an old
-    // drawing does not silently move a drafter off the board they were on.
-    // No markDirty: adopting what the file already says is not a change to it.
-    board = boardOfDrawing();
-    applyBoard();
+    // EVERY TOOL SURFACE READS THE OPENED DRAWING (syncToolSurfaces).
+    syncToolSurfaces();
     // A SUITE OPENS ON THE BONEYARD, where it is drawn (Movie, 20 Oct).
     if (drawing.suiteKind) boneyardActive = true;
     return true;
@@ -521,31 +511,6 @@
     return out;
   };
 
-  // READERS NORMALISE, WRITERS NEVER INVENT. The loader materialises `board`
-  // on `drawing` because the page ACTS on it -- a board of "banana" must not
-  // reach the lamp (see the normalise comment above) -- and `...drawing` then
-  // wrote it into every file this page saved.
-  //
-  // THAT IS THE 12" FOUNDATION AGAIN, pointing the other way. A drafter who
-  // opened a drawing and pressed SAVE had asked to draw nothing, and the file
-  // came back with keys the page that owns the format never writes. The Write
-  // Tier's acceptance line is "every key equal, deep" and it was red for
-  // exactly as long as this was true; three of its checks say the same fact.
-  //
-  // `board: null` is the ABSENCE spelled out -- it means "never chosen", which
-  // is what a missing key already means, and which now reads as TOY. A REAL
-  // choice is 'drafting': a drawing promoted by a number it was given reloads
-  // on the board that number put it on.
-  //
-  // `boardPromptSeen` WENT WITH THE CARD (Movie, 15 Oct). It recorded that a
-  // drafter had answered the Continue / Stay question once, and there is no
-  // question any more. Files written before that still carry the key; the
-  // loader drops it, which is what it already did with every other key the
-  // format does not name.
-  const storedChoice = () => ({
-    ...(drawing.board ? { board: drawing.board } : {}),
-  });
-
   // ── SLIVERS ARE TRIMMED OFF (Movie, 18 Oct) ───────────────────────────
   //
   // "if there is a peice of roof or wall or floor with less that 1/64"
@@ -623,13 +588,14 @@
     // stands, and a snapshot that tidied the sheet would be an edit.
     if (trim) trimSlivers();
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
-    // Destructured out of the spread rather than overwritten with `undefined`,
-    // so the key is genuinely absent from the OBJECT and not merely absent from
-    // its JSON -- the omission must not depend on this having one caller.
+    // `board` IS DROPPED ON THE WAY OUT. Files written while TOY MODE existed
+    // (before 9 Nov 2026) carry it; the page no longer reads it, and a key the
+    // page does not act on is not one it writes. Destructured out of the
+    // spread rather than overwritten with `undefined`, so the key is genuinely
+    // absent from the OBJECT and not merely absent from its JSON.
     const { board: _board, ...rest } = drawing;
     return {
       ...rest,
-      ...storedChoice(),
       walls: withRefused('walls', drawing.walls.map(wall => {
         // Restored ONLY while the wall still carries the type this page
         // substituted; a deliberate later change is the drafter's edit and is

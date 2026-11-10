@@ -82,14 +82,12 @@ test('PRINTSCREEN holds the far right corner, past the save stuff', async ({ pag
   // button's existence -- one that drifted back among the instruments would
   // pass every other check in this file.
   const order = await page.evaluate(() => {
-    // THE LAMP IS NOT A BUTTON, so the bar list has to take it in on its own
-    // terms: since 15 Oct the board is an output in the mode corner, and a
-    // seat check that still looked for `button[data-board]` would read -1 and
-    // report the corner missing.
-    const all = [...document.querySelectorAll('#strip button, #strip a, #strip [data-board-light]')];
+    // THE MODE CORNER'S LAST SEAT IS DAY: the board lamp that closed the
+    // corner went with TOY MODE on 9 Nov 2026.
+    const all = [...document.querySelectorAll('#strip button, #strip a')];
     return {
       units: all.indexOf(document.querySelector('#units-corner [data-units="imperial"]')),
-      toy: all.indexOf(document.querySelector('#mode-corner [data-board-light]')),
+      day: all.indexOf(document.querySelector('#mode-corner [data-skin-mode="day"]')),
       ruler: all.indexOf(document.getElementById('strip-ruler')),
       save: all.indexOf(document.getElementById('save')),
       print: all.indexOf(document.getElementById('printscreen')),
@@ -98,7 +96,7 @@ test('PRINTSCREEN holds the far right corner, past the save stuff', async ({ pag
   });
   // FOUND FIRST, ORDERED SECOND. `indexOf` answers -1 for an element that is
   // not in the bar -- because it moved out, or because the selector stopped
-  // matching it -- and -1 is less than every real seat, so `units < toy`
+  // matching it -- and -1 is less than every real seat, so `units < day`
   // passes loudest exactly when UNITS has fallen off the bar altogether.
   for (const [name, at] of Object.entries(order)) {
     expect(at, `${name} is not on the top bar at all`).toBeGreaterThanOrEqual(0);
@@ -109,8 +107,8 @@ test('PRINTSCREEN holds the far right corner, past the save stuff', async ({ pag
   // first, the instruments centred, the file row, and PRINTSCREEN closing
   // the bar -- the button that makes PAPER sits with the file controls, not
   // among the instruments that measure.
-  expect(order.units).toBeLessThan(order.toy);
-  expect(order.toy).toBeLessThan(order.ruler);
+  expect(order.units).toBeLessThan(order.day);
+  expect(order.day).toBeLessThan(order.ruler);
   expect(order.ruler).toBeLessThan(order.save);
   expect(order.save).toBeLessThan(order.print);
   expect(order.print, 'PRINTSCREEN is not the last control on the bar')

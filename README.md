@@ -15,7 +15,7 @@ See [ARCHITECTURE.md](RD-DOCUMENTS/ARCHITECTURE.md) for how the app is put toget
 | [`DEEP-CLEANUP-ITEMS.md`](RD-DOCUMENTS/DEEP-CLEANUP-ITEMS.md) | work deliberately left for a deep clean, with the traps already mapped |
 | [`RUNNING-THE-HARNESSES.md`](RD-DOCUMENTS/RUNNING-THE-HARNESSES.md) | the Node harnesses under `proto/` — how to run them, what CI does differently, and which scripts edit your tree |
 | [`DEFINITIONS.md`](RD-DOCUMENTS/DEFINITIONS.md) | **what our words mean here** — the terms we use in a particular way, and the ones that collide |
-| [`IMPORTANT-WORK-ORDERS/`](RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/) | what is being built now — TOY MODE's status, the turtle path, how the boneyard works |
+| [`IMPORTANT-WORK-ORDERS/`](RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/) | what is being built now — the turtle path, how the boneyard works (TOY MODE was retired 9 Nov 2026) |
 | [`ARCHITECTURE.md`](RD-DOCUMENTS/ARCHITECTURE.md) · [`BRANCHING.md`](RD-DOCUMENTS/BRANCHING.md) · [`REFACTOR-PLAN.md`](RD-DOCUMENTS/REFACTOR-PLAN.md) | how the app is put together, how work lands, and why `MODEL.dc.html` is the shape it is |
 | [`BOARDS.md`](RD-DOCUMENTS/BOARDS.md) and the `BOARD-*` files | the shared work list, and the boards written up in full |
 | [`HANDOFF-SKIPPER.md`](RD-DOCUMENTS/HANDOFF-SKIPPER.md) | who is who, the standing constraints, and the traps a session actually hit — read before the boards |

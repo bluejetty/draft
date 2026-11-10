@@ -40,7 +40,13 @@ test('a string of walls is one assembly too; a lone line is not', async ({ page 
   const { at } = await open(page);
   await page.keyboard.press('w');
   await draw(page, at, [[0, 0], [12, 0], [12, 10]]);
+  // ENTER TWICE, QUICKLY, ENDS THE RUN (seriesKeyPress): once is a corner at
+  // the cursor. The run has to be out of hand before L means LINE -- with a
+  // run in hand L is the LENGTH box (Movie, 20 Oct). TOY MODE used to hide
+  // this: its refusals swallowed the presses that followed.
   await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(100);
   await page.keyboard.press('l');
   await draw(page, at, [[0, 20], [10, 20]]);
   await page.keyboard.press('Enter');
@@ -78,7 +84,14 @@ test('ASSEMBLY BUST splits the string; ASSEMBLY (Y) puts any two of them back to
   await page.mouse.click(...at(6, 8));
   await page.waitForTimeout(700);
   await page.keyboard.press('Enter');
-  await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   expect((await groups(page)).map(g => g.members.length)).toEqual([2]);
+  // A second ENTER is ENTER at an empty prompt, which repeats the last tool.
+  // Repeating ASSEMBLY never busts the group just made (jb, 10 Nov): it puts
+  // the group down and arms a fresh ASSEMBLY for the next picks.
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  expect((await groups(page)).map(g => g.members.length), 'ENTER again kept the group').toEqual([2]);
+  expect(await page.evaluate(() => activeTool), 'ENTER again armed ASSEMBLY').toBe('assembly');
+  expect(await page.evaluate(() => selection.length), 'with nothing picked').toBe(0);
 });

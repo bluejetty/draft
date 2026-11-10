@@ -119,17 +119,13 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     // left to right, the units included, because the units are the pair the
     // other three were told to match.
     //
-    // AND THE LAST ONE IS NO LONGER A PAIR (Movie, 15 Oct: "the TOY should be
-    // a light not a button"). It keeps the stack's shape and its place at the
-    // end of the row -- which is what this check is about -- but its two rows
-    // are the board and what being on it MEANS, not two boards to choose
-    // between. This drawing names no board, so it is on TOY and the lamp says
-    // what TOY costs.
+    // THE FOURTH STACK, the TOY / DRAFTING pair that became a lamp on 15 Oct,
+    // left the corner with TOY MODE on 9 Nov 2026.
     expect(await page.locator('#units-corner, #mode-corner > .set')
       .evaluateAll(els => els.map(
         el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
-    'the three stacked pairs and the lamp, in the order he gave them')
-      .toEqual(['IMPERIAL METRIC', 'RUFF ROUGH', 'NIGHT DAY', 'TOY 1 FT · 90°']);
+    'the three stacked pairs, in the order he gave them')
+      .toEqual(['IMPERIAL METRIC', 'RUFF ROUGH', 'NIGHT DAY']);
 
     // The middle is the bone and nothing else (Movie, 16 Sep) -- DELETE,
     // COPY and PASTE live here too but are hidden until something is

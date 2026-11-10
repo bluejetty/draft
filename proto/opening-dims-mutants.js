@@ -20,7 +20,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/opening-dims.spec.js tests/model-html-fenestration.spec.js tests/typed-drag.spec.js';
 const MUTANTS = [
   { file: 'model/16-gestures-undo.js', name: 'a SELECT drag takes no typed length',
-    find: "        moveTyped = !offered && board !== 'toy' && !md.loose && !(md.lockBefore && md.lockBefore.length) && !master\n",
+    find: "        moveTyped = !offered && !md.loose && !(md.lockBefore && md.lockBefore.length) && !master\n",
     with: "        moveTyped = false && !md.loose && !master\n",
     test: 'a line dragged by its body, then a typed length' },
   { file: 'model/16-gestures-undo.js', name: 'an end node takes no typed length',

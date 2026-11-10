@@ -59,7 +59,6 @@ async function open(page, file) {
 const lengthBox = page => page.locator('[data-frozen-length]');
 const angleBox = page => page.locator('[data-frozen-angle]');
 const focusedId = page => page.evaluate(() => document.activeElement && document.activeElement.id);
-const boardOf = page => page.evaluate(() => document.body.getAttribute('data-board'));
 const scaleOf = page => page.evaluate(() => Number(
   /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
 const wallCount = page => page.evaluate(() => Number(
@@ -145,22 +144,6 @@ test('"14 6" typed straight in is 14\'-6"', async ({ page }) => {
   expect(drawn, 'the wall reached the file').toBeTruthy();
   expect(lengthOf(drawn)).toBeCloseTo(14.5, 6);
 });
-
-test('a length a whole foot cannot hold still turns the TOY light off when typed straight in',
-  async ({ page }) => {
-    // THE HOLE #746 CLOSED MUST STAY CLOSED. The typed number is what moves
-    // the board; a second way of typing it that skipped promoteForNumber
-    // would leave the lamp lit over a drawing TOY cannot hold.
-    await open(page, base({ board: 'toy' }));
-    await startARun(page);
-    const before = await wallCount(page);
-    await page.keyboard.type('8 6');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(150);
-    expect(await boardOf(page), 'promoted by the number itself').toBe('drafting');
-    await expect(page.locator('#strip-message')).toContainText('DRAFTING now');
-    expect(await wallCount(page), 'and the wall he typed was made').toBe(before + 1);
-  });
 
 test('with no run in hand the digits are the page\'s own keys: 0 refits the sheet and the box stays dead',
   async ({ page }) => {

@@ -4126,7 +4126,7 @@
       return same ? 'left' : 'right';
     };
     const walls = pieces.map(piece => commitWall(piece.a, piece.b, {
-      bone: false, levelId, view: 'plan', refLine: sideFor(piece.a, piece.b),
+      levelId, view: 'plan', refLine: sideFor(piece.a, piece.b),
       baseHeight: piece.base, topHeight,
     }));
     return { roof, walls };
@@ -4293,7 +4293,7 @@
       const trim = pt => (Math.abs(pt.z - frontZ) < 1e-6 && run.start.x === run.end.x
         ? { x: pt.x, z: pt.z - frontFaceFt } : pt);
       return commitWall(trim(run.start), trim(run.end), {
-        bone: false, levelId: FOUNDATION_LEVEL_ID, view: 'plan',
+        levelId: FOUNDATION_LEVEL_ID, view: 'plan',
         wallType: 'stud_2x4', refLine: 'center', baseHeight: 0, topHeight: fillTopFt,
       });
     });
@@ -4814,7 +4814,7 @@
           const left = { x: mid.x - dz / len * 0.3, z: mid.z + dx / len * 0.3 };
           const inBlock = blockRing && G2.pointInLoop ? G2.pointInLoop(left, blockRing) : true;
           const wall = commitWall(run.start, run.end, {
-            bone: false, levelId: overGarageLevelId, view: 'plan',
+            levelId: overGarageLevelId, view: 'plan',
             refLine: inBlock ? 'left' : 'right', baseHeight: base, topHeight: base,
           });
           if (wall) {
