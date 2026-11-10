@@ -199,9 +199,10 @@
     // sends every one of those drawings to metres. This is the same polarity
     // that hid seven metric display sites from a grep earlier today: a test
     // for one value is not a test for the other when a third case exists.
-    label: value => (drawing?.units !== 'metric'
-      ? window.DraftFormatters.formatArchitecturalInches(value * 12)
-      : window.DraftFormatters.formatMetres(value)),
+    // AND A DIMENSION MAY OVERRULE THE SWITCH for itself (jb, 10 Nov): its
+    // own `units` -- imperial, metric or both on one line -- through
+    // formatDimension, which keeps this polarity for the no-key case.
+    label: (value, dimension) => window.DraftFormatters.formatDimension(value, drawing?.units, dimension?.units),
     // Only `stroke` and `labelBack` ever paint here. This page has no
     // dimension tool and no selection, so drawDimension2D's `options` is
     // always `{}` and the preview and selected branches are unreachable --

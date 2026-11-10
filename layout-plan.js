@@ -309,6 +309,17 @@ if (!window.DraftLayoutPlan) {
       : ''),
   });
 
+  // THE FIGURE ON A SHEET'S DIMENSION: the drawing's own switch (a sheet off
+  // a metric drawing printed feet-and-inches while its window tags printed
+  // millimetres), and a dimension that chose its own units for itself --
+  // IMPERIAL, METRIC or both on one line (jb, 10 Nov). The site strings are
+  // computed rows with no `units` and follow the switch.
+  const dimLabel = saved => {
+    const fmt = window.DraftFormatters || {};
+    return (ft, dimension) => (fmt.formatDimension
+      ? fmt.formatDimension(ft, saved?.units, dimension?.units) : `${Math.round(ft)}'`);
+  };
+
   const DIMENSION_COLORS = Object.freeze({
     stroke: '#365e86',
     selected: '#5980a6',
@@ -445,9 +456,8 @@ if (!window.DraftLayoutPlan) {
     // carry no dimensions on any other sheet either.
     if (render.drawDimension2D && env.shell !== true && env.listing !== true
       && env.hologram !== true && env.siteFootprint !== true) {
-      const fmt = window.DraftFormatters || {};
       const dimensionEnv = {
-        label: ft => fmt.formatArchitecturalInches(ft * 12),
+        label: dimLabel(saved),
         colors: DIMENSION_COLORS,
         atLine: true,
         // Paper units: the sheet zoom over its print zoom (render-2d).
@@ -995,8 +1005,7 @@ if (!window.DraftLayoutPlan) {
       lineControlPoint: geo.lineControlPoint,
       inkScale: env.inkScale,
       dimensionEnv: {
-        label: ft => (fmt.formatArchitecturalInches
-          ? fmt.formatArchitecturalInches(ft * 12) : `${Math.round(ft)}'`),
+        label: dimLabel(saved),
         colors: DIMENSION_COLORS,
         atLine: true,
         inkScale: env.inkScale,
@@ -1112,10 +1121,8 @@ if (!window.DraftLayoutPlan) {
     const rows = env.siteDims === false ? [] : siteDimStrings(saved, env.pif);
     if (rows.length && render && render.drawDimension2D) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE-DIMS';
-      const fmt = window.DraftFormatters || {};
       const dimensionEnv = {
-        label: ft => (fmt.formatArchitecturalInches
-          ? fmt.formatArchitecturalInches(ft * 12) : `${Math.round(ft)}'`),
+        label: dimLabel(saved),
         colors: env.siteDimColors || DIMENSION_COLORS,
         // ON THE LINE, because the line is already where it belongs: the rows
         // stand 3/8" and 3/4" of paper off the lot, and the screen's default
@@ -1671,7 +1678,7 @@ if (!window.DraftLayoutPlan) {
       // shell draws none, and a NO-DRAFT shape is kept off by the composer.
       shapeEnv: unless(shapeEnv(saved)),
       dimensionEnv: hologram ? null : forConstruction({
-        label: ft => fmt.formatArchitecturalInches(ft * 12),
+        label: dimLabel(saved),
         colors: DIMENSION_COLORS,
         // THE LINE WHERE IT IS STORED, so the frame (sized to the records)
         // holds every row of a stack (render-2d drawDimension2D).

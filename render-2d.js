@@ -2966,7 +2966,10 @@ if (!window.DraftRender2D) {
       b = { x:b.x - nx * offset, y:b.y - ny * offset };
     }
     const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
-    const label = env.label(value);
+    // THE RECORD GOES WITH THE FIGURE (jb, 10 Nov): a dimension may read in
+    // its own units, and the label function is the page's -- it gets the
+    // record to read `units` off. Envs that take one argument are unchanged.
+    const label = env.label(value, dimension);
     const color = options.preview ? env.colors.preview : options.selected ? env.colors.selected : env.colors.stroke;
     const arrow = (point, angle) => {
       const size = 5 * k;

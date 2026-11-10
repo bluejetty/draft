@@ -231,6 +231,7 @@ if (!window.DraftDrawingFormat) {
   // AND A-DIMS-HAND (18 Oct): the strings a drafter draws by hand with the
   // DIMENSION tool, on their own layer so AUTO and HAND switch apart (Movie:
   // "add a layer for AUTO-dims and then a second for HAND-dims").
+  const DIMENSION_UNITS = Object.freeze(['imperial', 'metric', 'both']);
   const DIMENSION_LAYERS = Object.freeze([
     'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND',
   ]);
@@ -263,6 +264,10 @@ if (!window.DraftDrawingFormat) {
       // no standard, so it draws -- which is why the behaviour is identical
       // and only the saved bytes differ.
       const layer = oneOf(dimension?.layer, DIMENSION_LAYERS, null);
+      // THE UNITS THIS ONE READS IN (jb, 10 Nov): 'imperial', 'metric' or
+      // 'both' on one line. No key follows the drawing's switch. Written
+      // only when present, the same rule as `layer`.
+      const units = oneOf(dimension?.units, DIMENSION_UNITS, null);
       // A ROW THE DRAFTER SLID IN OR OUT (Movie, 6 Oct) says where it was
       // first put and how far it has come, so AUTO DIMS run again keeps the
       // move. Written only when present -- the same rule as `layer`.
@@ -300,6 +305,7 @@ if (!window.DraftDrawingFormat) {
       return {
         id, start, end, levelId: dimensionLevelId, view,
         ...(layer ? { layer } : {}),
+        ...(units ? { units } : {}),
         auto: dimension?.auto === true,
         ...(moved ? { moved } : {}),
         ...(startRef ? { startRef } : {}),
