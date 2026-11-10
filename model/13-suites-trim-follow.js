@@ -1239,13 +1239,9 @@
     sayOnStrip(`TRACK ${trackOn ? 'on — the cross lines square to a node, and a point near one lands on it' : 'off'}`);
     stripRefresh(); paint();
   });
-  // THE TWO LIGHTS ARE REMEMBERED PER BROWSER, in SKIN_KEY with the theme.
-  const rememberLight = (key, on) => {
-    try {
-      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
-      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [key]: on }));
-    } catch { /* a browser refusing storage still gets the light, for this tab */ }
-  };
+  // THE TWO LIGHTS ARE REMEMBERED PER BROWSER, in SKIN_KEY with the theme,
+  // the way SNAP and TRACK are (keepLight above).
+  const rememberLight = keepLight;
   const rememberTsquare = () => rememberLight('tsquare', tsquareOn);
   scaleChip.addEventListener('click', () => {
     footOn = !footOn;

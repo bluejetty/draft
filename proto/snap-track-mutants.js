@@ -23,7 +23,7 @@ const MUTANTS = [
     test: 'SNAP: a press near a wall end lands exactly on it, and the orange donut marks it first' },
   { file: 'model/10-tracking-garage.js',
     name: 'the press never asks SNAP or TRACK',
-    find: "    const caught = !fixed || board === 'toy' ? drawSnap(at) : {};\n",
+    find: "    const caught = !fixed ? drawSnap(at) : {};\n",
     with: "    const caught = {};\n",
     test: 'TRACK: a press near the line square to a node lands on it' },
   { file: 'model/07-walls-magnet.js',

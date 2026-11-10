@@ -285,8 +285,8 @@ const MUTATIONS = [
       'walls: (parsed.walls, levelIds, {')],
 
   ['the load block starts normalising notes, and the finding rots', LOAD_BLOCK_FILE,
-    c => c.replace('board: F.board(parsed.board),',
-      'board: F.board(parsed.board),\n      notes: F.notes(parsed.notes, levelIds),')],
+    c => c.replace('    drawing = {\n      ...parsed,',
+      '    drawing = {\n      ...parsed,\n      notes: F.notes(parsed.notes, levelIds),')],
 
   ['the load block is renamed, so there is nothing to read', LOAD_BLOCK_FILE,
     c => c.replace('    drawing = {', '    drawing =  {')],
