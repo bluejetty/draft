@@ -26,15 +26,16 @@
 // WHERE IT GOES. The same mail worker as SAVE BACKUP FILE TO EMAIL
 // (backup-email.js): a POST of { app, email, filename, dataUrl }, one to the
 // REPORT DESK (REPORT_TO below) and one to the drafter if they ask for a copy.
-// jb has no desk address yet (6 Nov: "not sure of the email i should use yet
-// i will have to leave it empty for now"), so with REPORT_TO empty and no
-// copy address, SEND becomes SAVE REPORT FILE and the report lands on this
-// computer for the drafter to email by hand. Nothing leaves the page unless
-// a button is pressed. At most SENDS_PER_HOUR reports a browser, no bones.
+// The desk is jb's roughdrafter.com@gmail.com (10 Nov: "can you change the
+// email to roughdrafter.com@gmail.com"). Should the desk ever be emptied
+// again, a report with no copy address cannot be mailed: SEND becomes SAVE
+// REPORT FILE and the report lands on this computer for the drafter to email
+// by hand. Nothing leaves the page unless a button is pressed. At most
+// SENDS_PER_HOUR reports a browser, no bones.
 (() => {
   'use strict';
-  // THE REPORT DESK -- the one setting to fill in when jb picks an address.
-  const REPORT_TO = '';
+  // THE REPORT DESK -- the one setting to change when the address changes.
+  const REPORT_TO = 'roughdrafter.com@gmail.com';
   const ENDPOINT = 'https://bluejetty-mail.bluejetty.workers.dev';
   const APP = 'bluejetty';
   const SENDS_PER_HOUR = 3;
@@ -303,8 +304,11 @@
         skipBtn.textContent = 'CLOSE';
         return;
       }
-      if (allowance() < to.length) {
-        say(`This browser has sent its ${SENDS_PER_HOUR} reports for the hour. Try again later, or clear the copy address.`, 'error');
+      // ONE REPORT spends one of the hour's allowance, however many addresses
+      // it goes to: the desk is always one of them, so counting addresses
+      // would leave a drafter who asks for a copy only one report an hour.
+      if (allowance() < 1) {
+        say(`This browser has sent its ${SENDS_PER_HOUR} reports for the hour. Try again later.`, 'error');
         return;
       }
       sendBtn.disabled = true; skipBtn.disabled = true;
@@ -316,8 +320,8 @@
           say(`Sending to ${address === REPORT_TO ? 'the Rough Drafter desk' : address}…`);
           await post(address, `${name}.txt`, reportUrl);
           if (fileUrl) await post(address, file.name, fileUrl);
-          noteSent();
         }
+        noteSent();
         say(`Report sent${copyTo && REPORT_TO ? `, with a copy to ${copyTo}` : copyTo ? ` to ${copyTo}` : ''}. Thank you.`, 'ok');
         skipBtn.disabled = false;
         skipBtn.textContent = 'CLOSE';
