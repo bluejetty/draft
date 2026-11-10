@@ -1031,8 +1031,15 @@ if (!window.DraftLayoutPlan) {
     // NOTHING BUT HIS OWN LINES IS STILL A SITE PLAN (Movie, 6 Nov): a lot
     // traced by hand, a drive, a tree -- the marks go on below, and the
     // sheet says it drew something.
+    // NOT ON MODEL (jb, 10 Nov: "how come the dimensions are still
+    // double"): the screen paints the level's own lines, notes, dimensions
+    // and shapes itself, so `levelMarks: false` keeps this pass for the
+    // sheet, where nothing else draws them. On the screen every hand
+    // dimension on the SITE stood twice -- once where MODEL put it and once
+    // here, in the sheet's ink with a white plate.
+    const marks = env.levelMarks !== false;
     if (!lot && !bodies.length && !roofs.length) {
-      return drawLevelMarks(ctx, toS, saved, SITE_LEVEL_ID, env);
+      return marks ? drawLevelMarks(ctx, toS, saved, SITE_LEVEL_ID, env) : false;
     }
     // ── THE FOOTPRINT IS THE ROOF PLAN (Movie, 14 Oct) ──────────────────
     //
@@ -1139,8 +1146,9 @@ if (!window.DraftLayoutPlan) {
       };
       rows.forEach(row => render.drawDimension2D(ctx, toS, row, {}, dimensionEnv));
     }
-    // AND WHAT THE DRAFTER DREW ON THE SITE LEVEL, over all of it.
-    drawLevelMarks(ctx, toS, saved, SITE_LEVEL_ID, env);
+    // AND WHAT THE DRAFTER DREW ON THE SITE LEVEL, over all of it -- on
+    // the sheet; MODEL paints its own (`levelMarks: false`).
+    if (marks) drawLevelMarks(ctx, toS, saved, SITE_LEVEL_ID, env);
     return true;
   }
 

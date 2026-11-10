@@ -1850,6 +1850,11 @@
         // and not at all while AUTO DIMS is off.
         pif: dimScalePif(SITE_LEVEL_ID),
         siteDims: !dimsHidden.auto,
+        // AND NONE OF THE LEVEL'S OWN MARKS (jb, 10 Nov): the lines, notes,
+        // dimensions and shapes drawn on the SITE are painted by this page's
+        // own passes, which pick, light and hide them; the sheet painter's
+        // copy stood every hand dimension twice.
+        levelMarks: false,
         // AND THE TOP PLATES THE ROOF RESTS ON (Movie, 14 Oct: "please show
         // the outline of the top plates of walls that the roof rests on that
         // are n the roof plan - show those lines also in the site plane").
