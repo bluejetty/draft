@@ -120,6 +120,12 @@
 <script src="./fen-labels.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
+<!-- THE SCHEDULES AND THE WALL SECTION (jb, 9 Nov): the door / window
+     rows the estimate shares, and PROJECT's section builder with the
+     sheet painter that reads it. -->
+<script src="./schedules.js"></script>
+<script src="./project-page.js"></script>
+<script src="./wall-section.js"></script>
 <script src="./north.js"></script>
 <!-- WHICH SIDE EACH ELEVATION STANDS ON, and what a turn does to it. Loaded
      for lot-sizes.js below, which asks it which way the lot faces: without it
@@ -1427,6 +1433,29 @@ const SCALE_FAMILIES = Object.freeze({
 const isSiteView = view => !!view && view.kind === 'plan' && Number(view.levelId) === SITE_LEVEL_ID;
 const scaleFamilyFor = view => (isSiteView(view) ? 'site' : 'architect');
 
+// ── THE SCHEDULES AND THE DETAILS (jb, 9 Nov) ───────────────────────────
+//
+// Two more kinds of viewport beside plan, elevation and section. A SCHEDULE
+// is a table in paper inches -- it has no scale, so its pif is 1 and its
+// frame is the table's own size whatever the sheet's ladder says. A DETAIL
+// is a window onto PROJECT's typical wall section in model feet: the whole
+// section, or the eave, the floor or the footing blown up (jb: "when i do
+// details i usually show where the exterior walls meet the floor, and where
+// it meets the roof and also the footing").
+const SCHEDULE_TABLES = ['door', 'window'];
+const SCHEDULE_PIF = 1;
+// The table on paper: its width, a head row, a body row, the air round it.
+const SCHEDULE_W_IN = 7.4;
+const SCHEDULE_HEAD_IN = 0.26;
+const SCHEDULE_ROW_IN = 0.22;
+const SCHEDULE_PAD_IN = 0.1;
+const isSchedule = view => !!view && view.kind === 'schedule';
+const isDetail = view => !!view && view.kind === 'detail';
+// A DETAIL'S LADDER: the whole section no bigger than 1/2" = 1'-0", a blown-up
+// detail no bigger than 1" = 1'-0", each stepping down until it fits.
+const DETAIL_SCALE_PREFS = [1, 3 / 4, 1 / 2, 3 / 8, 1 / 4, 3 / 16, 1 / 8];
+const detailTopPif = view => (view?.detail === 'wallsection' ? 1 / 2 : 1);
+
 // Composer spacing, in paper inches: air between viewports, and the caption
 // line each viewport wears under its frame.
 // What a view claims on paper is the rectangle it DRAWS plus everything
@@ -1472,6 +1501,60 @@ const ELEVATION_BURIED_CROP = 0.75;
 // the window: negative grows a side out, positive trims it in.
 // `pif` IS ONE SCALE FOR THE SHEET, OR ONE PER VIEW: an elevation sheet
 // pairs a long side and a short one, and each takes its own rung.
+// THE SCHEDULE ON PAPER: a ruled table -- head row, a row per line -- lettered
+// in paper units so it prints at one size at every zoom. The viewport's own
+// caption names it, so the table carries no title of its own.
+// `box` is the natural frame in px; `zoom` is px per paper inch.
+function paintScheduleTable(ctx, sheet, box, zoom, { color = '#1d1f20', inkScale = 1, thumb = false } = {}) {
+  if (!sheet) return;
+  const x0 = box.x + SCHEDULE_PAD_IN * zoom, y0 = box.y + SCHEDULE_PAD_IN * zoom;
+  const wIn = SCHEDULE_W_IN - 2 * SCHEDULE_PAD_IN;
+  const shares = sheet.columns.reduce((sum, col) => sum + col.share, 0);
+  const colX = [];
+  let x = x0;
+  sheet.columns.forEach(col => { colX.push(x); x += (col.share / shares) * wIn * zoom; });
+  const right = x0 + wIn * zoom;
+  const headH = SCHEDULE_HEAD_IN * zoom, rowH = SCHEDULE_ROW_IN * zoom;
+  const rows = sheet.rows.length ? sheet.rows : [[sheet.empty]];
+  const bodyTop = y0, bodyBot = bodyTop + headH + rows.length * rowH;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.textBaseline = 'middle';
+  // The rules: the outline and the head heavy, the rows light.
+  ctx.lineWidth = Math.max(0.4, 1.1 * inkScale);
+  ctx.strokeRect(x0, bodyTop, right - x0, bodyBot - bodyTop);
+  ctx.beginPath(); ctx.moveTo(x0, bodyTop + headH); ctx.lineTo(right, bodyTop + headH); ctx.stroke();
+  ctx.lineWidth = Math.max(0.3, 0.5 * inkScale);
+  ctx.beginPath();
+  for (let r = 1; r < rows.length; r += 1) {
+    ctx.moveTo(x0, bodyTop + headH + r * rowH); ctx.lineTo(right, bodyTop + headH + r * rowH);
+  }
+  if (sheet.rows.length) colX.slice(1).forEach(cx => { ctx.moveTo(cx, bodyTop); ctx.lineTo(cx, bodyBot); });
+  ctx.stroke();
+  if (thumb) { ctx.restore(); return; }
+  // The words: head bold, rows plain, each clipped to its column.
+  const pad = 0.05 * zoom;
+  const cell = (text, c, y, bold) => {
+    const cw = (c + 1 < colX.length ? colX[c + 1] : right) - colX[c];
+    ctx.save();
+    ctx.beginPath(); ctx.rect(colX[c], y - rowH / 2, cw, rowH); ctx.clip();
+    ctx.font = `${bold ? 700 : 600} ${7.5 * inkScale}px 'Barlow Condensed', sans-serif`;
+    ctx.textAlign = c <= 1 ? 'center' : 'left';
+    ctx.fillText(text, c <= 1 ? colX[c] + cw / 2 : colX[c] + pad, y);
+    ctx.restore();
+  };
+  sheet.columns.forEach((col, c) => cell(col.head, c, bodyTop + headH / 2, true));
+  if (!sheet.rows.length) {
+    ctx.font = `600 ${7.5 * inkScale}px 'Barlow Condensed', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(sheet.empty, (x0 + right) / 2, bodyTop + headH + rowH / 2);
+  } else {
+    rows.forEach((row, r) => row.forEach((text, c) => cell(text, c, bodyTop + headH + (r + 0.5) * rowH, false)));
+  }
+  ctx.restore();
+}
+
 function windowsFor(views, pifs, region) {
   const n = views.length;
   const pifAt = i => (Array.isArray(pifs) ? pifs[i] : pifs);
@@ -1771,6 +1854,8 @@ class Component extends PageLogic {
     this._cutEnv = null;
     this._cutExtentsCache = new Map();
     this._elevCutsCache = null;
+    this._schedulesCache = null;
+    this._wallSectionCache = undefined;
     const levelIds = new Set(this._levels.map(level => level.id));
     this._cuts = saved ? format.cuts(saved.cuts, levelIds) : [];
     const cutIds = new Set(this._cuts.map(cut => cut.id));
@@ -1942,6 +2027,57 @@ class Component extends PageLogic {
     return this._cutEnv;
   }
 
+  // THE DOOR AND WINDOW SCHEDULES OFF THE DRAWING, once per load: the same
+  // rows and marks ESTIMATES prints under 8-A and 8-B (schedules.js).
+  _schedules() {
+    if (this._schedulesCache) return this._schedulesCache;
+    const S = window.DraftSchedules;
+    const format = window.DraftDrawingFormat;
+    if (!S || !this._saved) return null;
+    const levelIds = new Set(this._levels.map(level => level.id));
+    this._schedulesCache = S.openingSchedules({
+      fenestrations: format.fenestrations(this._saved.fenestrations, levelIds),
+      levels: this._levels,
+      metric: this._saved.units === 'metric',
+    });
+    return this._schedulesCache;
+  }
+
+  _scheduleTable(table) {
+    const schedules = this._schedules();
+    return schedules ? window.DraftSchedules.scheduleTable(schedules, table) : null;
+  }
+
+  // What a schedule takes on paper: the title, the head, a row apiece, or
+  // one row saying there is nothing to list yet.
+  _scheduleSizeIn(table) {
+    const sheet = this._scheduleTable(table);
+    const rows = Math.max(1, sheet ? sheet.rows.length : 0);
+    return { wIn: SCHEDULE_W_IN,
+      hIn: SCHEDULE_HEAD_IN + rows * SCHEDULE_ROW_IN + 2 * SCHEDULE_PAD_IN };
+  }
+
+  // THE WALL SECTION OFF PROJECT'S NUMBERS, once per load (wall-section.js):
+  // null when the file has no floor to stand a wall on.
+  _wallSection() {
+    if (this._wallSectionCache !== undefined) return this._wallSectionCache;
+    const WS = window.DraftWallSection;
+    let built = null;
+    if (WS && this._saved) {
+      try { built = WS.buildWallSection(this._saved); } catch (error) {
+        console.warn('The wall section could not be built from this drawing:', error);
+        built = null;
+      }
+    }
+    this._wallSectionCache = built;
+    return built;
+  }
+
+  _detailWindow(view) {
+    const built = this._wallSection();
+    return built ? built.windows[view.detail] || null : null;
+  }
+
   // The four standard elevations, synthesized the way the Model Space's E
   // marks stand them: just outside the plan's walls, looking back at it.
   _standardElevationCuts() {
@@ -2027,6 +2163,16 @@ class Component extends PageLogic {
   // is centred on -- so the frame grows by that much paper all round.
   _viewFootprintFt(view) {
     const pad = 2 * this._viewAllowanceFt();
+    // A SCHEDULE IS PAPER: its feet are its inches, at SCHEDULE_PIF = 1.
+    if (isSchedule(view)) {
+      const size = this._scheduleSizeIn(view.table);
+      return { wFt: size.wIn, hFt: size.hIn, padIn: 0 };
+    }
+    // A DETAIL is its window on the section, in the section's own feet.
+    if (isDetail(view)) {
+      const win = this._detailWindow(view);
+      return win ? { wFt: win.maxX - win.minX, hFt: win.maxY - win.minY } : null;
+    }
     if (view.kind === 'plan') {
       const b = this._planBounds(view.levelId);
       const padIn = isSiteView(view) ? 2 * SITE_ROWS_ROOM_IN : 0;
@@ -2053,6 +2199,12 @@ class Component extends PageLogic {
   // and sized by the view's model extents at the viewport's own scale -- the
   // frame it would have UNCROPPED, which is where its drawing is laid out.
   _naturalRectIn(viewport) {
+    // A SCHEDULE'S FRAME IS THE TABLE, whatever pif the viewport carries:
+    // a table has no scale to change.
+    if (isSchedule(viewport)) {
+      const size = this._scheduleSizeIn(viewport.table);
+      return { xIn: viewport.xIn - size.wIn / 2, yIn: viewport.yIn - size.hIn / 2, wIn: size.wIn, hIn: size.hIn };
+    }
     const foot = this._viewFootprintFt(viewport);
     const wFt = foot ? foot.wFt : null;
     const hFt = foot ? foot.hFt : null;
@@ -2299,9 +2451,24 @@ class Component extends PageLogic {
     deal('FOUNDATION', [planSheet(1, 'foundation')]);
     if (!sectionViews.length) deal('SECTIONS');
     sectionViews.forEach(view => deal('SECTIONS', [view]));
+    // THE WALL SECTION AND ITS THREE DETAILS (jb, 9 Nov), on one sheet after
+    // the sections: the whole stack at 1/2" with the eave, the floor and the
+    // footing blown up beside it. Only when the drawing has a floor to stand
+    // a wall on -- the section is built off PROJECT's numbers, not drawn.
+    if (this._wallSection()) {
+      deal('WALL SECTION', (window.DraftWallSection?.DETAIL_IDS || [])
+        .map(detail => sized({ kind: 'detail', detail })));
+    }
     // The basement after the sections and before ELECTRIC (Movie, 1 Oct).
     const basement = planSheet(1, 'plan');
     if (basement) deal('BASEMENT PLAN', [basement]);
+    // THE SCHEDULES (jb, 9 Nov): the door schedule over the window schedule,
+    // each only when it has a row -- an empty table is not a schedule. The
+    // sheet is dealt by name either way, the way ROOF PLAN is.
+    const schedules = this._schedules();
+    deal('SCHEDULES', SCHEDULE_TABLES
+      .filter(table => schedules && (table === 'door' ? schedules.doors : schedules.windows).length)
+      .map(table => sized({ kind: 'schedule', table })));
     // ELECTRIC ONLY WHEN THERE IS ELECTRIC (Movie, 1 Oct): "sometimes i
     // don't include them". A house with no devices placed gets no sheet.
     // Read through the format's own reader, so a record it would refuse
@@ -2345,9 +2512,9 @@ class Component extends PageLogic {
       // elevation then giving up to ELEVATION_BURIED_CROP of it.
       const cutSheet = views.every(view => view.kind === 'elevation' || view.kind === 'section');
       const cropped = view => ({ ...view, hFt: view.hFt - (view.cropFt || 0) });
-      const pif = cutSheet
-        ? this._autoScaleFor(views.map(cropped), region)
-        : buildingPlan(views) && Number.isFinite(sharedPif) ? sharedPif : this._autoScaleFor(views, region);
+      const pif = views.every(isSchedule) ? SCHEDULE_PIF
+        : cutSheet ? this._autoScaleFor(views.map(cropped), region)
+          : buildingPlan(views) && Number.isFinite(sharedPif) ? sharedPif : this._autoScaleFor(views, region);
       // AN ELEVATION SHEET'S TWO VIEWS EACH TAKE THEIR OWN RUNG (Movie, 18
       // Oct): the long side E2 / E4 on the engineer's scale it needs, the
       // short side E1 / E3 still at 3/32". Only once the pair has walked off
@@ -2366,10 +2533,42 @@ class Component extends PageLogic {
           viewports.push({ ...base, kind: 'plan', levelId: view.levelId, view: view.view });
         } else if (view.kind === 'section') {
           viewports.push({ ...base, kind: 'section', cutId: view.cutId });
+        } else if (view.kind === 'schedule') {
+          viewports.push({ ...base, kind: 'schedule', table: view.table, pif: SCHEDULE_PIF });
+        } else if (view.kind === 'detail') {
+          viewports.push({ ...base, kind: 'detail', detail: view.detail });
         } else {
           viewports.push({ ...base, kind: 'elevation', elevId: view.elevId });
         }
       };
+      // THE WALL SECTION SHEET: the section stands in the left share of the
+      // region at the biggest rung up to 1/2" that fits its height; the
+      // details stack down the right share at the biggest rung up to 1" at
+      // which all three fit, each centred in its column.
+      if (views.every(isDetail)) {
+        const section = views.find(view => view.detail === 'wallsection');
+        const details = views.filter(view => view.detail !== 'wallsection');
+        const gap = COMPOSE_GAP_IN;
+        const left = { ...region, w: details.length ? region.w * 0.56 - gap / 2 : region.w };
+        const right = { ...region, x: region.x + region.w * 0.56 + gap / 2, w: region.w * 0.44 - gap / 2 };
+        if (section) {
+          const own = this._detailPif(section, left);
+          commit(section, left.x + left.w / 2, left.y + (left.h - COMPOSE_LABEL_IN) / 2, null, own);
+        }
+        if (details.length) {
+          const share = { ...right, h: (right.h - (details.length - 1) * gap) / details.length };
+          const own = Math.min(...details.map(view => this._detailPif(view, share)));
+          const tall = view => view.hFt * own;
+          const stackH = details.reduce((sum, view) => sum + tall(view) + COMPOSE_LABEL_IN, 0)
+            + gap * (details.length - 1);
+          let y = right.y + Math.max(0, (right.h - stackH) / 2);
+          details.forEach(view => {
+            commit(view, right.x + right.w / 2, y + tall(view) / 2, null, own);
+            y += tall(view) + COMPOSE_LABEL_IN + gap;
+          });
+        }
+        return;
+      }
       if (cutSheet) {
         windowsFor(views, pifs, region).forEach(({ view, xIn, yIn, crop, pif: own }) => commit(view, xIn, yIn, crop, own));
         return;
@@ -3144,6 +3343,41 @@ class Component extends PageLogic {
         });
         ctx.restore();
       }
+    } else if (isSchedule(viewport)) {
+      // THE TABLE, laid out on its natural frame and clipped to the window.
+      const full = this._naturalRectIn(viewport);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(px.x, px.y, px.w, px.h);
+      ctx.clip();
+      if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-ANNO-SCHD';
+      paintScheduleTable(ctx, this._scheduleTable(viewport.table),
+        { x: panX + full.xIn * zoom, y: panY + full.yIn * zoom }, zoom,
+        { inkScale: zoom / PRINT_PX_PER_IN, thumb: opts.thumb === true });
+      ctx.restore();
+    } else if (isDetail(viewport)) {
+      // THE SECTION, OR ONE OF ITS WINDOWS, at this viewport's scale.
+      const built = this._wallSection();
+      const win = this._detailWindow(viewport);
+      if (built && win) {
+        const full = this._naturalRectIn(viewport);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px.x, px.y, px.w, px.h);
+        ctx.clip();
+        if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SECT-DETL';
+        // Centred in the natural frame: the footprint is the window plus
+        // the set's allowance either side.
+        const wIn = (win.maxX - win.minX) * viewport.pif, hIn = (win.maxY - win.minY) * viewport.pif;
+        const box = { x: panX + (full.xIn + (full.wIn - wIn) / 2) * zoom,
+          y: panY + (full.yIn + (full.hIn - hIn) / 2) * zoom };
+        window.DraftWallSection.paintWallSection(ctx, built, win, box, {
+          pxPerFt: viewport.pif * zoom,
+          inkScale: zoom / PRINT_PX_PER_IN,
+          labels: opts.thumb !== true,
+        });
+        ctx.restore();
+      }
     } else {
       const cut = this._cutForViewport(viewport);
       const extents = this._paintExtents(viewport);
@@ -3179,7 +3413,8 @@ class Component extends PageLogic {
     if (opts.thumb || opts.export) return;
     if (opts.print) {
       // ON PAPER, only the caption: in ink, centred under the drawing.
-      const scale = { label: scaleLabelOf(viewport.pif) };
+      // A SCHEDULE HAS NO SCALE, so its caption is its name alone.
+      const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
       ctx.fillStyle = '#1d1f20';
       ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'center';
@@ -3207,7 +3442,7 @@ class Component extends PageLogic {
         ctx.strokeRect(hx - 4, hy - 4, 8, 8);
       });
     }
-    const scale = { label: scaleLabelOf(viewport.pif) };
+    const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
     ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
     ctx.textAlign = 'center';
@@ -3219,6 +3454,8 @@ class Component extends PageLogic {
   }
 
   _viewportTitle(viewport) {
+    if (isSchedule(viewport)) return viewport.table === 'door' ? 'DOOR SCHEDULE' : 'WINDOW SCHEDULE';
+    if (isDetail(viewport)) return window.DraftWallSection?.DETAIL_TITLES[viewport.detail] || 'DETAIL';
     if (viewport.kind === 'section') {
       const cut = this._cutForViewport(viewport);
       return cut ? `SECTION ${cut.name}` : 'SECTION';
@@ -3252,6 +3489,12 @@ class Component extends PageLogic {
   // guessing a destination for it would open the wrong drawing.
   _modelUrlForViewport(viewport) {
     if (!viewport) return null;
+    // A DETAIL IS EDITED ON PROJECT (jb, 9 Nov: "so the wall section is
+    // basically taken from the PROJECT information right"): that is where
+    // its every number lives. A schedule's rows are the Model's openings,
+    // so it opens the Model Space on the drawing's default level.
+    if (isDetail(viewport)) return './PROJECT.html';
+    if (isSchedule(viewport)) return './MODEL.html';
     if (viewport.kind === 'section' || viewport.kind === 'elevation') {
       const cut = this._cutForViewport(viewport);
       if (!cut) return null;
@@ -3340,10 +3583,13 @@ class Component extends PageLogic {
     const drafter = window.DraftDrafter.normaliseDrafter(
       window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter);
     const sheetViewports = this._sheetViewports(sheet);
-    const pifs = [...new Set(sheetViewports.map(viewport => viewport.pif))];
+    // A SCHEDULE HAS NO SCALE: a sheet of schedules alone reads NTS, and a
+    // schedule beside a drawing does not make the sheet AS NOTED.
+    const scaled = sheetViewports.filter(viewport => !isSchedule(viewport));
+    const pifs = [...new Set(scaled.map(viewport => viewport.pif))];
     const scale = pifs.length === 1
       ? (scaleLabelOf(pifs[0]) || 'AS NOTED')
-      : (pifs.length ? 'AS NOTED' : '');
+      : (pifs.length ? 'AS NOTED' : (sheetViewports.length ? 'NTS' : ''));
     return {
       projectName: project.name,
       projectNumber: project.projectNumber,
@@ -3375,10 +3621,22 @@ class Component extends PageLogic {
     if (!sheetViewports.length) return '';
     const kinds = [...new Set(sheetViewports.map(viewport => viewport.kind))];
     if (kinds.length > 1) {
-      return [['plan', 'PLANS'], ['section', 'SECTIONS'], ['elevation', 'ELEVATIONS']]
+      // A SHEET OF SCHEDULES AND DETAILS TOGETHER reads SCHEDULES · DETAILS;
+      // the wall section and its three details alone read WALL SECTION below.
+      return [['plan', 'PLANS'], ['section', 'SECTIONS'], ['elevation', 'ELEVATIONS'],
+        ['schedule', 'SCHEDULES'], ['detail', 'DETAILS']]
         .filter(([kind]) => kinds.includes(kind))
         .map(([, word]) => word)
         .join(' · ');
+    }
+    if (kinds[0] === 'schedule') {
+      const tables = [...new Set(sheetViewports.map(viewport => viewport.table))];
+      return tables.length === 1 ? this._viewportTitle(sheetViewports[0]) : 'SCHEDULES';
+    }
+    if (kinds[0] === 'detail') {
+      const details = [...new Set(sheetViewports.map(viewport => viewport.detail))];
+      return details.length === 1 && details[0] !== 'wallsection'
+        ? this._viewportTitle(sheetViewports[0]) : 'WALL SECTION';
     }
     if (kinds[0] === 'section') {
       const names = [...new Set(sheetViewports.map(viewport => this._cutForViewport(viewport)?.name).filter(Boolean))];
@@ -3756,15 +4014,25 @@ class Component extends PageLogic {
       ({ kind: 'section', cutId: cut.id, label: `SECTION ${cut.name}` }));
     const shelves = (this._shelfLevels || []).map(level =>
       ({ kind: 'plan', levelId: level.id, label: `${level.name} PLAN` }));
+    // THE SCHEDULES AND THE DETAILS (jb, 9 Nov), offered whether or not the
+    // drawing has an opening or a wall yet, like every other view here.
+    const schedules = siteOnly || !this._saved ? [] : SCHEDULE_TABLES.map(table =>
+      ({ kind: 'schedule', table, label: table === 'door' ? 'DOOR SCHEDULE' : 'WINDOW SCHEDULE' }));
+    const WS = window.DraftWallSection;
+    const details = siteOnly || !this._saved || !WS ? [] : WS.DETAIL_IDS.map(detail =>
+      ({ kind: 'detail', detail, label: WS.DETAIL_TITLES[detail] }));
     return [['PLANS', this._saved ? plans : []], ['FLOOR LAYOUTS', this._saved ? floors : []],
-      ['SHELVES', shelves], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections]]
+      ['SHELVES', shelves], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections],
+      ['SCHEDULES', schedules], ['DETAILS', details]]
       .filter(([, list]) => list.length);
   }
 
   _sameView(a, b) {
     if (!a || typeof a !== 'object' || !b || a.kind !== b.kind) return false;
     return a.kind === 'plan' ? a.levelId === b.levelId && (a.view || null) === (b.view || null)
-      : a.kind === 'elevation' ? a.elevId === b.elevId : a.cutId === b.cutId;
+      : a.kind === 'elevation' ? a.elevId === b.elevId
+        : a.kind === 'schedule' ? a.table === b.table
+          : a.kind === 'detail' ? a.detail === b.detail : a.cutId === b.cutId;
   }
 
   _paintAddMenu() {
@@ -3786,7 +4054,9 @@ class Component extends PageLogic {
         // `plan:3`, or `plan:1:foundation` where the level holds more than
         // one drawing and the pick names which.
         button.dataset.addPick = view.kind === 'plan' ? `plan:${view.levelId}${view.view ? `:${view.view}` : ''}`
-          : view.kind === 'elevation' ? `elevation:${view.elevId}` : `section:${view.cutId}`;
+          : view.kind === 'elevation' ? `elevation:${view.elevId}`
+            : view.kind === 'schedule' ? `schedule:${view.table}`
+              : view.kind === 'detail' ? `detail:${view.detail}` : `section:${view.cutId}`;
         button.className = this._sameView(this.state.addingViewport, view) ? 'on' : '';
         button.addEventListener('click', () =>
           this.setState({ addingViewport: view }, () => this._draw()));
@@ -3813,7 +4083,21 @@ class Component extends PageLogic {
   // the drafter's working scale (1/4" unless picked otherwise) is never
   // overridden by something bigger, and a view too long for it walks down
   // the sheet set's own ladder, engineer's scales included.
+  // A DETAIL'S RUNG: the biggest of its ladder, no bigger than its top,
+  // that fits the region handed it.
+  _detailPif(view, region = this._composeRegionIn()) {
+    const foot = this._viewFootprintFt(view);
+    const top = detailTopPif(view);
+    const rungs = DETAIL_SCALE_PREFS.filter(pif => pif <= top + 1e-9);
+    if (!foot) return rungs[0];
+    const fits = pif => foot.wFt * pif <= region.w && foot.hFt * pif + COMPOSE_LABEL_IN <= region.h;
+    return rungs.find(fits) ?? rungs[rungs.length - 1];
+  }
+
   _pickedPif(view) {
+    // A SCHEDULE HAS NO SCALE; a detail walks its own ladder.
+    if (isSchedule(view)) return SCHEDULE_PIF;
+    if (isDetail(view)) return this._detailPif(view);
     // A SHELF STARTS AT 1/4" = 1' (Movie, 26 Oct), or smaller if a big one
     // needs it.
     const working = view?.kind === 'plan' && view.levelId < 0 ? SHELF_PIF : SCALES[this.state.activeScale].pif;
@@ -4700,7 +4984,8 @@ class Component extends PageLogic {
     const viewports = [...this._sheetViewports(sheet)].sort((a, b) => (a.kind === 'plan' ? 0 : 1) - (b.kind === 'plan' ? 0 : 1));
     viewports.forEach(viewport => {
       const rec = W.recorder({ width: 1e6, height: 1e6,
-        layer: viewport.kind === 'plan' ? 'A-PLAN' : viewport.kind === 'section' ? 'A-SECT' : 'A-ELEV' });
+        layer: viewport.kind === 'plan' ? 'A-PLAN' : viewport.kind === 'section' ? 'A-SECT'
+          : isSchedule(viewport) ? 'A-ANNO-SCHD' : isDetail(viewport) ? 'A-SECT-DETL' : 'A-ELEV' });
       this._drawViewport(rec, viewport, view, { export: true });
       if (!rec.entities.length) return;
       // Full-size inches to a paper inch at this viewport's scale.
@@ -4724,7 +5009,7 @@ class Component extends PageLogic {
         ents = W.shiftEntities(ents, used[2] + GAP_IN - b[0], used[3] - b[3]);
         b = W.bounds(ents);
       }
-      const scale = { label: scaleLabelOf(viewport.pif) };
+      const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
       ents.push({ type: 'text', layer: 'A-ANNO-TITL', x: (b[0] + b[2]) / 2, y: b[1] - 0.3 * k,
         h: 0.125 * k * 0.7, rot: 0, align: 'center', baseline: 'top',
         text: `${this._viewportTitle(viewport)}${scale ? `  ${scale.label}` : ''}` });
@@ -5154,7 +5439,7 @@ class Component extends PageLogic {
     const title = viewport ? this._viewportTitle(viewport) : '';
     const url = this._modelUrlForViewport(viewport);
     document.querySelector('#lay-edit-description').textContent = url
-      ? `Open ${title} in the Model Space to edit it. The sheet is saved first, and the layout is here when you come back.`
+      ? `Open ${title} in ${isDetail(viewport) ? 'PROJECT, where its heights, foundation and roof are set,' : 'the Model Space'} to edit it. The sheet is saved first, and the layout is here when you come back.`
       : `${title || 'This viewport'} has no drawing to open — its cut is no longer in the file.`;
     // THE SCALE LIST, the viewport's own scale picked -- added to the list
     // when it was typed and is not one of the usual ones.

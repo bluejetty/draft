@@ -25,11 +25,11 @@ const MUTATIONS = [
     c => c.replace("      return thick(wall) >= EXTERIOR_MIN_IN;", "      return true;")],
   ['a wall on the outline is told by its ends alone, so a partition wall to wall is the shell\'s', 'estimates.js',
     c => c.replace("        return onOutline(wall.start, pts) && onOutline(wall.end, pts) && onOutline(mid, pts);", "        return onOutline(wall.start, pts) && onOutline(wall.end, pts);")],
-  ['an exterior door is counted with the interior ones', 'estimates.js',
+  ['an exterior door is counted with the interior ones', 'schedules.js',
     c => c.replace("      const kind = garage ? 'garage' : (o.doorType === 'ext' ? 'ext' : 'int');", "      const kind = garage ? 'garage' : 'int';")],
-  ['a garage door is counted as a door of its width', 'estimates.js',
+  ['a garage door is counted as a door of its width', 'schedules.js',
     c => c.replace("      const garage = o.garage === true || o.doorType === 'garage';", "      const garage = false;")],
-  ['two windows of one width are one size whatever their heights', 'estimates.js',
+  ['two windows of one width are one size whatever their heights', 'schedules.js',
     c => c.replace("      const key = `8-B:${w}x${h}`;", "      const key = `8-B:${w}`;")],
   ['a price is applied to the net area, not the area with waste', 'estimates.js',
     c => c.replace("        return { ...row, price, amount: price == null ? null : round2(row.qty * price) };", "        return { ...row, price, amount: price == null ? null : round2(row.net * price) };")],
@@ -148,6 +148,12 @@ same('and not as a 192" door', row('8-A', '8-A:ext:single:192').qty, undefined);
 same('exterior doors come first', by('8-A').rows[0].key, '8-A:ext:single:36');
 same('one 36 x 48 window', row('8-B', '8-B:36x48').qty, 1);
 same('its label', row('8-B', '8-B:36x48').label, 'WINDOW 36 x 48"');
+// THE SCHEDULE MARKS (jb, 9 Nov): the same mark the sheet prints. Windows
+// W1.. from the narrowest; doors D1.. exterior first; the overhead door G1.
+same('the window is W1', row('8-B', '8-B:36x48').mark, 'W1');
+same('the exterior door is D1', row('8-A', '8-A:ext:single:36').mark, 'D1');
+same('the two 32" doors are D2 and D3, pocket before single by name', `${row('8-A', '8-A:int:pocket:32').mark}/${row('8-A', '8-A:int:single:32').mark}`, 'D2/D3');
+same('the overhead door is G1, not D4', row('8-A', '8-A:garage:192x84').mark, 'G1');
 
 // ── A second house: the outline decides the shell ──────────────────────────
 // With a house outline, a 2x6 wall off it is not the shell's, and a 2x4 on

@@ -38,6 +38,7 @@
   <script src="./level-assembly.js"></script>
   <script src="./roof-types.js"></script>
   <script src="./fen-labels.js"></script>
+  <script src="./schedules.js"></script>
   <script src="./spec-master.js"></script>
   <script src="./estimates.js"></script>
   <link rel="stylesheet" href="vendor/fonts.css" />
@@ -76,6 +77,7 @@
     th { text-align:left; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-quiet); padding:3px 6px; border-bottom:1px solid var(--edge-panel); }
     td { padding:5px 6px; border-bottom:1px solid color-mix(in srgb, var(--edge-panel) 50%, transparent); vertical-align:top; }
     td.num, th.num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    td .mark { display:inline-block; min-width:2.2em; margin-right:8px; padding:0 5px; border:1px solid var(--edge-panel); border-radius:3px; font-weight:600; text-align:center; }
     td .detail { display:block; color:var(--ink-quiet); font-size:11px; margin-top:2px; }
     tr.unassigned td { color:var(--ink-warn); }
     td input.price { width:84px; padding:2px 5px; border:1px solid var(--edge-panel); background:var(--surface-page); color:var(--ink-primary); font:inherit; text-align:right; }
@@ -247,7 +249,10 @@
           tr.dataset.row = row.key;
           if (row.unassigned) tr.className = 'unassigned';
           const item = document.createElement('td');
-          item.innerHTML = `${row.label}${row.detail ? `<span class="detail">${row.detail}</span>` : ''}`;
+          // THE SCHEDULE MARK FIRST (jb, 9 Nov): W1, D1, G1 -- the same mark
+          // the DOOR / WINDOW SCHEDULE sheets print, so a line here can be
+          // found on the plan. Only the two counted-by-size sections carry one.
+          item.innerHTML = `${row.mark ? `<span class="mark" data-mark>${row.mark}</span>` : ''}${row.label}${row.detail ? `<span class="detail">${row.detail}</span>` : ''}`;
           const net = document.createElement('td'); net.className = 'num';
           net.textContent = row.unit === 'EA' ? '' : `${row.net.toLocaleString('en-US', { maximumFractionDigits: 1 })} ${row.unit}`;
           const waste = document.createElement('td'); waste.className = 'num';
