@@ -2368,7 +2368,33 @@
           : 'PICK ANYTHING TO SEE ITS PROPERTIES';
     props.replaceChildren(...(panel ? [panel.node] : []));
   };
-  // A DIMENSION'S FIGURES: what it measures, in the drawing's units.
+  // A DIMENSION'S FIGURES: what it measures, in the units it reads in.
+  //
+  // ── AND THE UNITS IT READS IN (jb, 10 Nov) ───────────────────────────
+  //
+  // "can we add a prop / obj - in dimensions so that the user can change the
+  // measurement to nothing checked - would be go with current drawing imp
+  // or metric selection. or they could select either IMPERIAL or METRIC or
+  // third option IMPERIAL / METRIC would display both on the same line".
+  // Three chips; the lit one pressed again goes dark, and nothing lit is the
+  // drawing's own switch. The record carries `units` only while a chip is
+  // lit (drawing-format writes nothing otherwise), so a drawing nobody
+  // touched saves exactly as it did. Same undo step as every other
+  // property ('props'), so UNDO takes the key off again.
+  const writeDimensionUnits = (list, units) => {
+    const edits = list.map(dim => ({ item: dim, before: { ...dim } }));
+    list.forEach(dim => { if (units) dim.units = units; else delete dim.units; });
+    undoStack.push({ kind: 'props', edits });
+    markDirty();
+    showSelectionProps();
+    renderObjProp();
+    paint();
+  };
+  const DIMENSION_UNIT_CHIPS = Object.freeze([
+    { id: 'imperial', label: 'IMPERIAL' },
+    { id: 'metric', label: 'METRIC' },
+    { id: 'both', label: 'IMPERIAL / METRIC' },
+  ]);
   const dimensionInfo = dims => {
     const F = window.DraftFormatters;
     const box = document.createElement('div');
@@ -2376,10 +2402,38 @@
       const row = document.createElement('div');
       row.dataset.propRow = 'measures';
       const ft = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
-      row.textContent = `MEASURES ${drawing?.units === 'metric' ? F.formatMetres(ft) : F.formatArchitecturalInches(ft * 12)}`
-        + (dim.text ? ` \u00b7 "${dim.text}"` : '') + (dim.auto ? ' \u00b7 AUTO' : ' \u00b7 HAND');
+      row.textContent = `MEASURES ${F.formatDimension(ft, drawing?.units, dim.units)}`
+        + (dim.auto ? ' \u00b7 AUTO' : ' \u00b7 HAND');
       box.append(row);
     });
+    const title = document.createElement('div');
+    title.className = 'props-title';
+    title.textContent = 'UNITS';
+    box.append(title);
+    const row = document.createElement('div');
+    row.className = 'chip-row';
+    // Several picked at once: a chip is lit only when every one agrees.
+    const now = dims.every(d => (d.units || null) === (dims[0].units || null)) ? (dims[0].units || null) : undefined;
+    DIMENSION_UNIT_CHIPS.forEach(choice => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sel-chip';
+      b.dataset.dimUnits = choice.id;
+      b.textContent = choice.label;
+      const lit = now === choice.id;
+      b.setAttribute('aria-pressed', String(lit));
+      b.classList.toggle('lit', lit);
+      b.title = lit ? 'Press again to follow the drawing\'s IMPERIAL / METRIC switch' : '';
+      b.addEventListener('click', () => writeDimensionUnits(dims, lit ? null : choice.id));
+      row.append(b);
+    });
+    box.append(row);
+    const hint = document.createElement('div');
+    hint.className = 'sel-help';
+    hint.dataset.propRow = 'units-hint';
+    hint.textContent = now === null ? `NOTHING LIT: FOLLOWS THE DRAWING (${drawing?.units === 'metric' ? 'METRIC' : 'IMPERIAL'})`
+      : now === 'both' ? 'BOTH FIGURES ON ONE LINE' : now === undefined ? 'THE PICKED DIMENSIONS DIFFER' : 'THIS DIMENSION ONLY';
+    box.append(hint);
     return { title: dims.length > 1 ? 'DIMENSIONS' : 'DIMENSION', node: box };
   };
   const setObjOpen = on => {

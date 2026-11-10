@@ -199,6 +199,23 @@ if (!window.DraftFormatters) {
     return units === 'metric' ? formatMetres(feet) : formatArchitecturalInches(feet * 12);
   }
 
+  // ── A DIMENSION'S OWN UNITS (jb, 10 Nov) ──────────────────────────────
+  //
+  // "nothing checked - would be go with current drawing imp or metric
+  // selection. or they could select either IMPERIAL or METRIC or third
+  // option IMPERIAL / METRIC would display both on the same line". A
+  // dimension record may carry `units`: 'imperial', 'metric' or 'both'. No
+  // key (the default, and every dimension drawn before today) follows the
+  // drawing's switch through formatLength. Both on one line is the imperial
+  // figure, a slash, the metres -- the order the chip is named in.
+  const DIMENSION_UNITS = Object.freeze(['imperial', 'metric', 'both']);
+  function formatDimension(feet, drawingUnits, dimensionUnits) {
+    const mode = DIMENSION_UNITS.includes(dimensionUnits) ? dimensionUnits
+      : (drawingUnits === 'metric' ? 'metric' : 'imperial');
+    if (mode === 'both') return `${formatArchitecturalInches(feet * 12)} / ${formatMetres(feet)}`;
+    return formatLength(feet, mode);
+  }
+
   // WHAT A TYPED LENGTH MEANS ON A METRIC DRAWING: a bare number is METRES,
   // because metres is what the box shows -- the door and window boxes show
   // millimetres and so read a bare number as millimetres (11-floor-openings-
@@ -229,6 +246,8 @@ if (!window.DraftFormatters) {
     formatInchesOnly,
     formatMetres,
     formatLength,
+    formatDimension,
+    DIMENSION_UNITS,
     parseArchitecturalLength,
     parseAssemblyInches,
     parseLength,
