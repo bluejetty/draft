@@ -79,14 +79,21 @@ const selCount = page => page.evaluate(() => {
   return m ? Number(m[1]) : 0;
 });
 
-// Two walls, by clicking one and shift-clicking another.
+// Two walls, by clicking one and shift-clicking another. When the first click
+// already brought both (they are in a FIXED assembly, which comes whole), the
+// shift-click is NOT made: a shift-click on what is in hand takes it OUT now
+// (jb, 10 Nov 2026, "hold SHIFT while clicking on items that will be un
+// grouped from the package"), and before that it was a no-op only because
+// the press had armed a drag.
 async function pickTwoWalls(page) {
   await page.mouse.click(...await at(page, 0, -W));
   await page.waitForTimeout(60);
-  await page.keyboard.down('Shift');
-  await page.mouse.click(...await at(page, W, 0));
-  await page.waitForTimeout(60);
-  await page.keyboard.up('Shift');
+  if (await selCount(page) < 2) {
+    await page.keyboard.down('Shift');
+    await page.mouse.click(...await at(page, W, 0));
+    await page.waitForTimeout(60);
+    await page.keyboard.up('Shift');
+  }
   expect(await selCount(page)).toBe(2);
 }
 
@@ -240,15 +247,16 @@ test('an item belongs to one assembly, and an emptied one goes',
     await assemble(page, { name: 'first', fixed: true });
     expect(await savedGroups(page)).toHaveLength(1);
 
-    // Both of those walls plus a third, built click by click -- a click takes
-    // the wall it hit and no more, so the set is assembled by shift-adding.
+    // Both of those walls plus a third: the click on w-n brings the FIXED
+    // 'first' whole (w-n and w-e), and a shift-click adds w-s. (A shift-click
+    // on w-e here would take 'first' back OUT -- Shift removes what is in
+    // hand, since 10 Nov 2026 -- so it is not made.)
     await page.keyboard.press('Escape');
     await page.waitForTimeout(60);
     await page.mouse.click(...await at(page, 0, -W));   // w-n, in the first
     await page.waitForTimeout(60);
+    expect(await selCount(page)).toBe(2);
     await page.keyboard.down('Shift');
-    await page.mouse.click(...await at(page, W, 0));    // w-e, in the first
-    await page.waitForTimeout(60);
     await page.mouse.click(...await at(page, 0, W));    // w-s, in nothing yet
     await page.waitForTimeout(60);
     await page.keyboard.up('Shift');
