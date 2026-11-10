@@ -474,8 +474,11 @@
   .chip:hover { border-color: var(--edge-panel); }
   .chip.lit { color: var(--accent); border-color: var(--accent); }
   /* THE TURTLE LAMP: black until the path on the NOTES pad comes home. */
-  .chip.turtle { color: var(--ink-primary, #1b1b1b); }
-  .chip.turtle.home { color:#18b24a; border-color:#18b24a; filter: drop-shadow(0 0 3px rgba(24,178,74,0.8)); }
+  .chip.turtle { color: var(--ink-primary); }
+  /* HOME is the pad's own green (model.css names --turtle-home beside
+     --length-live); on a page without the pad the chip never lights. */
+  .chip.turtle.home { color: var(--turtle-home, var(--accent)); border-color: var(--turtle-home, var(--accent));
+    filter: drop-shadow(0 0 3px var(--turtle-home-glow, transparent)); }
   /* SNAP HELD OFF BY CTRL (Movie, 26 Oct): dimmed while the key is down,
      its own on/off left as it was. */
   .chip.held-off { opacity: 0.35; }

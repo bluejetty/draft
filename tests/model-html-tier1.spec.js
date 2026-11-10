@@ -595,6 +595,10 @@ test.describe('MODEL.html tier 1', () => {
       // tab under the notebook tab"): it defines DraftCalc and stops; nothing
       // runs until a line is typed on the pad.
       './calc-engine.js',
+      // turtle-path.js (10 Nov): the TURTLE tab's arithmetic, a direction
+      // and a distance walked into points, proved in node and loaded here
+      // so the page has no second copy of the compass.
+      './turtle-path.js',
       // THE PAGE'S OWN SCRIPT, in seventeen parts (Stage 2). It was one inline
       // block of 38,000 lines; it is cut at its own section headings and loads
       // in order as classic scripts sharing one scope, so nothing here is a

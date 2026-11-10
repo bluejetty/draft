@@ -836,6 +836,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'CLEAR',   // the NOTES pad's, beside 'notes-tab' above
             'SAVE AS TXT',   // and its backup to a .txt (Movie, 18 Oct)
+            'OPEN TXT',      // and the backup read back (Movie, 10 Nov)
+            // THE FIVE PAGES (Movie, 10 Nov): one pad, one calculator and one
+            // turtle table per page. A page key flips; it draws nothing.
+            '1', '2', '3', '4', '5',
+            // THE TURTLE TAB (Movie, 10 Nov): a table of moves, DRAW AS
+            // LINES / LOT / HOUSE / AREA, drawn from the target or a pressed
+            // point, REGENERATE, NEW PATH, FROM NOTES, CLEAR, and + / x on
+            // each row. DRAW AT TARGET / POINT and REGENERATE put lines, a
+            // lot, an outline or a shape on the sheet -- the same records the
+            // LINE, OUTLINE and SHAPE tools make, so no absence row moves;
+            // tests/model-html-turtle.spec.js drives them.
+            'TURTLE', 'LINES', 'LOT', 'HOUSE', 'AREA',
+            'DRAW AT TARGET', 'DRAW AT POINT', 'REGENERATE', 'NEW PATH', 'FROM NOTES', 'CLEAR',
+            '+', '\u00D7',
             // AND ITS CALC TAB (Movie, 18 Oct: "can we add a construction
             // calculator tab under the notebook tab"): NOTES and CALC swap the
             // pad's page; the keys type on the calculator's line, = works it,
@@ -958,6 +972,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // only there since 26 Oct ("can the IMAGE Loading area ONLY show
             // images"): the list, BRING IN, CLOSE.
             'strip-hologram', 'hologram-ask-upload', 'hologram-ask-close',
+            // THE TURTLE LAMP (Movie, 10 Nov): the chip that stood where the
+            // never-built ERASING SHIELD's did. Green when the TURTLE table
+            // comes home; pressed, it opens the pad. It draws nothing.
+            'strip-turtle',
             // HOW FAR FORWARD THE ROOM OVER THE GARAGE COMES (Movie, 10 Oct):
             // the card beside the room's end line. It moves the line the
             // drafter already drags, in whole feet, and BUILD is the bone's
@@ -1133,6 +1151,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // page" and that only means something if every input is
             // accounted for.
             'lot-w', 'lot-d',
+            // THE TURTLE'S FIRST ROW (10 Nov), a direction and a distance, and
+            // the OPEN TXT picker that reads a saved notepad back.
+            'turtle-dir-0', 'turtle-dist-0', 'notes-open-file',
             // THE GABLE ROOF'S TWO QUESTIONS (Movie, 22 Oct: "ASK overhang
             // (and pitch)"): sizes for the roof the ROOF tool makes.
             'gable-eave', 'gable-pitch',
@@ -1231,7 +1252,14 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       expect(hologram.includes('.draft'), 'HOLOGRAM takes a drawing').toBe(true);
       expect(hologram.includes('.pdf') || hologram.includes('.png') || hologram.includes('image'),
         'and never a picture').toBe(false);
-      expect(await page.locator('input[type=file]').count()).toBe(3);
+      // AND A FOURTH (Movie, 10 Nov): OPEN TXT on the NOTES pad, which takes
+      // the .txt SAVE AS TXT wrote -- every page of every tab -- and never a
+      // drawing or a picture.
+      const notepad = await page.locator('#notes-open-file').getAttribute('accept');
+      expect(notepad.includes('.txt'), 'OPEN TXT takes a notepad').toBe(true);
+      expect(notepad.includes('.draft') || notepad.includes('.pdf') || notepad.includes('image'),
+        'and nothing else').toBe(false);
+      expect(await page.locator('input[type=file]').count()).toBe(4);
     });
 
   // T LATCHES THE T-SQUARE since 27 Oct (Movie: "get it working fairly

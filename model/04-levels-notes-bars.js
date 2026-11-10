@@ -759,10 +759,10 @@
       rowEl.className = 'turtle-row';
       rowEl.dataset.turtleRow = String(i);
       const dirIn = document.createElement('input');
-      dirIn.type = 'text'; dirIn.dataset.turtleDir = ''; dirIn.value = row.dir; dirIn.placeholder = i ? '' : 'N';
+      dirIn.type = 'text'; dirIn.id = `turtle-dir-${i}`; dirIn.dataset.turtleDir = ''; dirIn.value = row.dir; dirIn.placeholder = i ? '' : 'N';
       dirIn.spellcheck = false; dirIn.autocomplete = 'off'; dirIn.setAttribute('aria-label', `Move ${i + 1} direction`);
       const distIn = document.createElement('input');
-      distIn.type = 'text'; distIn.dataset.turtleDist = ''; distIn.value = row.dist; distIn.placeholder = i ? '' : '106.87';
+      distIn.type = 'text'; distIn.id = `turtle-dist-${i}`; distIn.dataset.turtleDist = ''; distIn.value = row.dist; distIn.placeholder = i ? '' : '106.87';
       distIn.spellcheck = false; distIn.autocomplete = 'off'; distIn.setAttribute('aria-label', `Move ${i + 1} distance`);
       const keys = document.createElement('span');
       keys.className = 'turtle-row-keys';

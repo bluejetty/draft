@@ -73,6 +73,8 @@
      part darker"). The shared sheet draws the glow; the page names its colour,
      the tracking rays' own orange, since shell-bars.css holds only roles. */
   :root { --length-live: #ffa21a; --length-live-glow: rgba(255, 162, 26, 0.75); }
+  /* THE TURTLE'S GREEN (10 Nov): the pad lamp, the strip chip and the rows when the path comes home. */
+  :root { --turtle-home: #18b24a; --turtle-home-glow: rgba(24, 178, 74, 0.8); }
   /* THE LENGTH HINT (Movie, 12 Oct): "once they place their first point ...
      bring up a popup near the LENGTH area with a arrow pointed to it". Under
      the box, pointing up at it, in the box's own orange; a note, not a
