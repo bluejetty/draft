@@ -493,6 +493,51 @@
     t.repointed.forEach(({ s, key }) => { s[key] = t.v; });
     t.list.splice(Math.min(t.index, t.list.length), 0, t.piece);
   });
+  // ── THE SAME FOR A LOOP'S EDGE: a shape, a floor (jb, 10 Nov 2026) ───
+  // One ring's edge i slid d along its left normal: each end goes to where
+  // the slid line meets its neighbour's line -- and where the neighbour
+  // runs IN LINE with the edge (the other half of a BREAK), the corner stays
+  // as the node and a new corner goes in beside it, so the edge between
+  // them is the JOG, square to both. `mk` makes a point of the ring's kind.
+  const slideLoopEdge = (pts, i, d, mk) => {
+    const n = pts.length, a = pts[i], b = pts[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    if (len < 1e-9 || n < 3) return pts.slice();
+    const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len }, nn = { x: -u.z, z: u.x };
+    const prev = pts[(i - 1 + n) % n], next = pts[(i + 2) % n];
+    const along = (p, q) => { const l = Math.hypot(q.x - p.x, q.z - p.z) || 1; return { x: (q.x - p.x) / l, z: (q.z - p.z) / l }; };
+    const inline = (p, q) => { const l = Math.hypot(q.x - p.x, q.z - p.z); return l > 1e-9 && Math.abs((u.x * (q.z - p.z) - u.z * (q.x - p.x)) / l) < INLINE_EPS; };
+    const meet = (p, w, q, v) => {
+      const cross = w.x * v.z - w.z * v.x;
+      if (Math.abs(cross) < 1e-9) return null;
+      const t = ((q.x - p.x) * v.z - (q.z - p.z) * v.x) / cross;
+      return { x: p.x + w.x * t, z: p.z + w.z * t };
+    };
+    const a2 = { x: a.x + nn.x * d, z: a.z + nn.z * d }, b2 = { x: b.x + nn.x * d, z: b.z + nn.z * d };
+    const out = [];
+    pts.forEach((p, k) => {
+      if (k === i) {
+        if (inline(prev, a)) { out.push(a); out.push(mk(a2)); }
+        else out.push(mk(meet(a2, u, prev, along(prev, a)) || a2));
+      } else if (k === (i + 1) % n) {
+        if (inline(b, next)) { out.push(mk(b2)); out.push(b); }
+        else out.push(mk(meet(b2, u, next, along(next, b)) || b2));
+      } else out.push(p);
+    });
+    return out;
+  };
+  // A corner dropped on its neighbour is let go (three must stay): the jog
+  // pushed back flush, or an edge slid onto the next corner.
+  const tidyLoop = pts => {
+    const out = pts.slice();
+    const same = (p, q) => Math.abs(p.x - q.x) < 0.05 && Math.abs(p.z - q.z) < 0.05;
+    for (let guard = 0; guard < 200 && out.length > 3; guard += 1) {
+      const k = out.findIndex((p, i) => same(p, out[(i + 1) % out.length]));
+      if (k < 0) break;
+      out.splice((k + 1) % out.length, 1);
+    }
+    return out;
+  };
   const undoJogs = step => (step.jog || []).forEach(j => {
     (j.farRings || []).forEach(({ pt, x, z }) => { pt.x = x; pt.z = z; });
     unJog(j);

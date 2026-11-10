@@ -199,3 +199,118 @@ test('wall: a typed length after the drag lands the jog exactly', async ({ page 
   await page.waitForTimeout(150);
   expect((await segs(page, 'wall')).length, 'one UNDO takes the typed move and the jog').toBe(5);
 });
+
+// ── A SHAPE'S EDGE, THE SAME WAY ──────────────────────────────────────────
+// jb's picture was a SHAPE with the garage front broken in two: a press on
+// a picked shape's edge, clear of its handles, slides the edge square to
+// itself, the neighbours stretch, and the in-line half gets a jog corner.
+const shapeFixture = () => ({
+  ...fixture('none'),
+  shapes: [{ id: 'sa', levelId: 3, points: [V(-W, -D), V(W, -D), V(W, D), V(-W, D)], layer: 'SHAPE' }],
+});
+const shapePts = page => page.evaluate(() => drawing.shapes[0].points.map(p => [p.x, p.z]));
+
+test('shape: the east half of a broken edge pulled out 1 ft gets a jog corner; UNDO puts it back', async ({ page }) => {
+  await open(page, shapeFixture());
+  const { at } = await h.planFrame(page);
+  await page.mouse.click(...at(0, 0)); // a shape is picked from inside
+  await page.waitForTimeout(120);
+  expect(await page.evaluate(() => selection.map(s => s.type))).toEqual(['shape']);
+  await page.locator('#model-break').click();
+  await page.mouse.click(...at(0, D));
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(120);
+  expect(await shapePts(page), 'BREAK put a corner on the south edge').toEqual([[-W, -D], [W, -D], [W, D], [0, D], [-W, D]]);
+  // CLEAR OF THE MIDPOINT HANDLE (which would grow a corner): 2 ft east of it.
+  const [gx, gy] = at(2, D);
+  await page.mouse.move(gx, gy);
+  await page.mouse.down();
+  await page.mouse.move(gx + 1, gy + 8);
+  await page.mouse.move(...at(2, D + 1), { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  expect(await shapePts(page), 'the east half out a foot, a jog at the break, the east edge stretched')
+    .toEqual([[-W, -D], [W, -D], [W, D + 1], [0, D + 1], [0, D], [-W, D]]);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  expect(await shapePts(page), 'UNDO').toEqual([[-W, -D], [W, -D], [W, D], [0, D], [-W, D]]);
+});
+
+test('shape: pushed in a foot then back out flush, no jog is left', async ({ page }) => {
+  await open(page, shapeFixture());
+  const { at } = await h.planFrame(page);
+  await page.mouse.click(...at(0, 0)); // a shape is picked from inside
+  await page.waitForTimeout(120);
+  await page.locator('#model-break').click();
+  await page.mouse.click(...at(0, D));
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(120);
+  const push = async (fromZ, toZ) => {
+    const [gx, gy] = at(2, fromZ);
+    await page.mouse.move(gx, gy);
+    await page.mouse.down();
+    await page.mouse.move(gx + 1, gy + 8);
+    await page.mouse.move(...at(2, toZ), { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+  };
+  await push(D, D - 1);
+  expect(await shapePts(page)).toEqual([[-W, -D], [W, -D], [W, D - 1], [0, D - 1], [0, D], [-W, D]]);
+  await push(D - 1, D);
+  expect(await shapePts(page), 'flush: the jog corner is gone').toEqual([[-W, -D], [W, -D], [W, D], [0, D], [-W, D]]);
+});
+
+// ── A ROOF'S EDGE UNDER MOVE ──────────────────────────────────────────────
+const EAVE = [[-8, -8], [68, -8], [68, 38], [48, 38], [48, 44], [12, 44], [12, 38], [-8, 38]];
+const WALLS = [[0, 0], [60, 0], [60, 30], [40, 30], [40, 36], [20, 36], [20, 30], [0, 30]];
+const roofFixture = () => ({
+  ...fixture('none'),
+  levels: [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0 },
+    { id: 3, name: 'MAIN FL', elev: 0 }, { id: 1, name: 'FOUNDATION', elev: -8 }],
+  activeLevelIdx: 1, planTurn: 0,
+  roofs: [{ id: 'roof-1', levelId: 7, follows: 'none', pitch: 4, overhang: 8,
+    points: EAVE.map(([x, z]) => ({ x, y: 0, z })), edges: EAVE.map(() => 'eave'),
+    edgeOverhang: EAVE.map(() => 8), footprint: WALLS.map(([x, z]) => ({ x, y: 0, z })) }],
+});
+const rounded = pts => pts.map(p => [Math.round(p.x * 100) / 100 + 0, Math.round(p.z * 100) / 100 + 0]);
+
+test('roof: the broken top eave, its east half pushed up 4 ft under MOVE, gets a jog; the wall line follows', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, file }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(file)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, file: roofFixture() });
+  await page.goto('/MODEL.html?level=7');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.keyboard.press('0');
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { tsquareOn = true; footOn = true; });
+  const { at } = await h.planFrame(page);
+  await page.mouse.click(...at(30, 15));
+  await page.waitForTimeout(120);
+  await expect(page.locator('#model-break')).toBeVisible();
+  await page.locator('#model-break').click();
+  await page.mouse.click(...at(30, -8));
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(120);
+  const roofNow = () => page.evaluate(() => ({ points: drawing.roofs[0].points, footprint: drawing.roofs[0].footprint,
+    edges: drawing.roofs[0].edges, over: drawing.roofs[0].edgeOverhang }));
+  let roof = await roofNow();
+  expect(rounded(roof.points)[1], 'BREAK put a node on the top eave').toEqual([30, -8]);
+  await page.locator('#model-move').click();
+  await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(...at(50, -8));
+  await page.mouse.down();
+  await page.mouse.move(...at(50, -12), { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  roof = await roofNow();
+  expect(rounded(roof.points)).toEqual([[-8, -8], [30, -8], [30, -12], [68, -12], [68, 38], [48, 38], [48, 44], [12, 44], [12, 38], [-8, 38]]);
+  expect(rounded(roof.footprint), 'the wall line under it jogs the same way').toEqual([[0, 0], [30, 0], [30, -4], [60, -4], [60, 30], [40, 30], [40, 36], [20, 36], [20, 30], [0, 30]]);
+  expect(roof.edges.length).toBe(10);
+  expect(roof.over.every(o => o === 8), 'every edge keeps its overhang').toBe(true);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  roof = await roofNow();
+  expect(rounded(roof.points), 'UNDO').toEqual([[-8, -8], [30, -8], [68, -8], [68, 38], [48, 38], [48, 44], [12, 44], [12, 38], [-8, 38]]);
+});
