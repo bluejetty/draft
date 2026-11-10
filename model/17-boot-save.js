@@ -99,6 +99,10 @@
       // A SUITE FILE'S KIND, normalised; dropped when it is not one.
       ...(parsed.suiteKind !== undefined && F.suiteKind(parsed.suiteKind)
         ? { suiteKind: F.suiteKind(parsed.suiteKind) } : { suiteKind: undefined }),
+      // WHAT THE SHELF WAS SAVED AS (drawing-format.js SHELF_KINDS), the
+      // same way: a suite's kind again, or 'hologram' for the generic one.
+      ...(parsed.shelfKind !== undefined && F.shelfKind?.(parsed.shelfKind)
+        ? { shelfKind: F.shelfKind(parsed.shelfKind) } : { shelfKind: undefined }),
       // A STANDALONE FILE'S KIND (a site plan and nothing else), the same
       // way: normalised, and absent when it is not one.
       ...(parsed.standalone !== undefined && F.standalone?.(parsed.standalone)
@@ -267,7 +271,7 @@
     // EVERY TOOL SURFACE READS THE OPENED DRAWING (syncToolSurfaces).
     syncToolSurfaces();
     // A SUITE OPENS ON THE BONEYARD, where it is drawn (Movie, 20 Oct).
-    if (drawing.suiteKind) boneyardActive = true;
+    if (drawing.suiteKind || drawing.shelfKind) boneyardActive = true;
     return true;
   };
 

@@ -2003,6 +2003,16 @@ if (!window.DraftDrawingFormat) {
   // kind. Null for every other drawing.
   const SUITE_KINDS = Object.freeze(['residential', 'commercial']);
   const suiteKind = raw => oneOf(raw, SUITE_KINDS, null);
+  // WHAT A SHELF IS SAVED AS (jb, 10 Nov 2026: "options for SHELF so far:
+  // Residential Suite / Commercial Suite / Hologram that's it right" -- "we
+  // might need more later, not sure"). The two suites "are designed to do a
+  // certain thing" and keep `suiteKind`; 'hologram' is the generic one: "they
+  // can create whatever they want and place it wherever they want", on any
+  // level of the drawing it is brought into, the SITE plan included, with
+  // none of a suite's floor rules. A fourth kind is one more word here.
+  const SHELF_KINDS = Object.freeze([...SUITE_KINDS, 'hologram']);
+  const shelfKind = raw => oneOf(raw, SHELF_KINDS, null);
+  const isGenericHologramFile = saved => shelfKind(saved?.shelfKind) === 'hologram' && !suiteKind(saved?.suiteKind);
 
   // A STANDALONE FILE IS ONE SHEET AND NOTHING ELSE (Movie, 6 Nov: "DRAW
   // STANDALONE SITE PLAN ... that plan will be only for the SITE PLAN layer
@@ -2677,6 +2687,9 @@ if (!window.DraftDrawingFormat) {
     buildType,
     SUITE_KINDS,
     suiteKind,
+    SHELF_KINDS,
+    shelfKind,
+    isGenericHologramFile,
     STANDALONE_KINDS,
     standalone,
     BUILD_TYPES,

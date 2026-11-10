@@ -885,8 +885,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // SAVE AS SUITE's question (Movie, 20 Oct: "SAVE whatever is in
             // there as a SUITE. (but a draft file)"): which kind, or not now.
             // A file written out, nothing in the drawing changed: no absence
-            // row moves.
-            'RESIDENTIAL SUITE', 'COMMERCIAL SUITE', 'CANCEL',
+            // row moves. HOLOGRAM (jb, 10 Nov 2026) is the generic third
+            // kind, the same file written out with a different word on it.
+            'RESIDENTIAL SUITE', 'COMMERCIAL SUITE', 'HOLOGRAM', 'CANCEL',
             // CLOSING A SHELF (Movie, 23 Oct): the X asks "save first or
             // close without save". Three answers about a shelf already
             // there; none makes anything, so no absence row moves.
