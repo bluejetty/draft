@@ -69,11 +69,13 @@ async function drag(page, at, from, to, dx = 0, dy = 0) {
   return magnet ? JSON.parse(magnet) : null;
 }
 
-test('T-SQUARE and 1 FT lit: a corner dragged 4 px off a wall node lands on it, and a free drag is held square on the foot', async ({ page }) => {
+test('T-SQUARE and 1 FT lit: a corner dragged 2 px off a wall node lands on it, and a free drag is held square on the foot', async ({ page }) => {
   const { at } = await open(page, { tsquare: true, footLight: true });
-  // THE CORNER (20,12) TO THE WALL'S NODE (16,12), the hand 4 px right and
-  // 3 px down of it: the square holds z, the node catches along the axis.
-  const lit = await drag(page, at, [20, 12], [16, 12], 4, 3);
+  // THE CORNER (20,12) TO THE WALL'S NODE (16,12), the hand 2 px left and
+  // 1 px down of it: the square holds z, the node catches along the axis.
+  // (Two, not four: the nearer of a node and a face corner wins, and the
+  // 2x4's face corners stand 1 3/4" either side of the node.)
+  const lit = await drag(page, at, [20, 12], [16, 12], -2, 1);
   expect(lit, 'the ring was on the node mid-drag').toMatchObject({ kind: 'node', at: [16, 12] });
   expect(ring(await shapePts(page))).toEqual([[20, 0], [30, 0], [30, 12], [16, 12]]);
   await expect(page.locator('#strip-message')).toContainText('The shape is');

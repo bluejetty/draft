@@ -987,9 +987,20 @@
           const wanted = tsquareLive() ? squareTo(from, raw) : raw;
           const fixed = tsquareLive() ? squaredAxis(from, raw) : null;
           const magnet = snapLive() ? (md.magnet ||= magnetExcluding([held])) : null;
-          const hit = fixed
-            ? axisMagnet(wanted, fixed, held, magnet)
-            : dragMagnetAt(wanted, held, magnet);
+          // THE NEARER OF A NODE AND A FACE CORNER WINS (Movie, 25 Oct: "i
+          // had a hard time getting the flooring area shape to locate
+          // exactly onto the inside corner"): strongerPoint's rule, asked
+          // before any node-first catch, so a wall's centre node two inches
+          // off never beats the inside corner the hand is on. Nothing in
+          // reach, the square's axis takes the faces it crosses and a free
+          // hand takes the nearest face, as a wall's node does.
+          const catchAt = p => (magnet ? strongerPoint(p, magnet.nodes, magnet.corners) : null);
+          const point = catchAt(wanted);
+          const hit = point
+            ? { pt: fixed === 'z' ? { x: point.v.x, y: 0, z: wanted.z } : fixed === 'x' ? { x: wanted.x, y: 0, z: point.v.z }
+              : { x: point.v.x, y: 0, z: point.v.z }, corner: point.v, node: !!point.node }
+            : fixed ? axisMagnet(wanted, fixed, held, magnet)
+              : (f => (f ? { pt: { x: f.pt.x, y: 0, z: f.pt.z }, seg: f.seg } : null))(magnet ? nearestFace(magnet.segs, wanted) : null);
           md.lit = hit;
           md.cursor = raw;
           cursorWorld = raw;
