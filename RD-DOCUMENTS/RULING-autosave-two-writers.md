@@ -340,6 +340,22 @@ at all — a slice converting only `MODEL.html` should not be merged.
 > the resume path is correct under every measurement outcome, so **rung 3 does
 > not wait on the iPad numbers.** The constant is tuned afterwards.
 
+> **AMENDED 10 NOV 2026 BY USE (jb).** "Release on hide" now means
+> `visibilitychange`-hidden as well as `pagehide`, in both `MODEL.html` and
+> `BONEYARD.html`, and a tab shown again **asks for the lease back at once**
+> (a few retries over ~4 s, banner down while it asks). Desktop Chrome
+> throttles a hidden tab's timers to one a minute, so the old rule left a
+> backgrounded tab's lease to expire, any other open tab took it on its next
+> beat, and coming back meant the banner, TAKE OVER, and the same banner on
+> the other tab -- with several tabs open it never stopped. The lease now
+> follows the tab being looked at; the resume path above is what makes the
+> return silent. A live lease is still seized only by the press.
+> Alongside it, the stale refusal on `MODEL.html` gained a press, SAVE THIS
+> ONE OVER TOP, which writes this window's copy with `ifRev` dropped for that
+> one write: the way back after an accidental save in the wrong window. It is
+> a press, not a merge, so §3.4 stands. Specs:
+> `tests/model-lease-follows-tab.spec.js`.
+
 Tests: second page opens read-only; the old page's autosave cannot land while
 the modern page holds the lease (mutation: drop the gate in `_markUnsaved` —
 fails, and this is the test that would have caught section 0 in the first

@@ -242,7 +242,13 @@ test.describe('MODEL.html tier 1', () => {
     // migration's whole claim is that this page is cheap, and a dependency
     // that arrives without anyone noticing is how that stops being true.
     expect(frameworks.scripts).toEqual([
-      // palette.js leads the list since 10 Nov 2026, and for the same reason
+      // build-id.js stands ahead of everything since 10 Nov 2026: it compares
+      // the page's build stamp with its own and reloads a mismatched page
+      // ONCE, before any script can trip on it (jb: "H is not defined" on
+      // every load, off a cached MODEL.html running new scripts). It paints
+      // nothing; on the desk both stamps say 'dev' and it is quiet.
+      './build-id.js',
+      // palette.js leads the rest since 10 Nov 2026, and for the same reason
       // shell-bars.js once did: POSITION. It stood among the foot modules,
       // and the skin was applied by the first page script -- after the
       // browser had already painted the shell off model.css's night

@@ -3,16 +3,16 @@
 // "on my old Archicad Program ... whenever it bugged out it would give me
 // message about sending the report to archicad. could we do something like
 // that when a user has a problem" -- "they wouldn't go to the user they would
-// come to me, maybe a copy could go to the user" -- and, on the desk address,
-// "not sure of the email i should use yet i will have to leave it empty for
-// now". So the card is asserted with the desk EMPTY, which is how it ships:
-// the report is saved here unless the drafter asks for a copy, and then it
-// goes through the backup-email worker, stood in for by a route so nothing
-// leaves the test.
+// come to me, maybe a copy could go to the user" -- and, on 10 Nov, the desk
+// address: "can you change the email to roughdrafter.com@gmail.com". So every
+// report goes to the DESK, plus a copy when the drafter asks for one, through
+// the backup-email worker, stood in for by a route so nothing leaves the
+// test. A send the worker refuses is saved on this computer instead.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
+const DESK = 'roughdrafter.com@gmail.com';
 const WORKER = 'https://bluejetty-mail.bluejetty.workers.dev/**';
 const drawing = () => ({
   version: 1, planTurn: 0,
@@ -50,7 +50,7 @@ const crash = (page, text) => page.evaluate(t => { setTimeout(() => { throw new 
 const reject = (page, text) => page.evaluate(t => { Promise.reject(new Error(t)); }, text);
 const decoded = piece => Buffer.from(piece.dataUrl.split(',')[1], 'base64').toString('utf8');
 
-test('an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; with no desk address the report is saved on this computer', async ({ page }) => {
+test('an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; the report goes to the desk', async ({ page }) => {
   await openModel(page);
   await standInWorker(page);
   await expect(card(page)).toHaveCount(0);
@@ -65,15 +65,18 @@ test('an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; with no desk add
   await crash(page, 'boom from the spec');
   await page.waitForTimeout(100);
   await expect(card(page)).toHaveCount(1);
-  // No desk address, no copy address: the button says what it will do.
+  // No copy address, but the desk is always there: the button says SEND and
+  // the report goes to the desk alone.
   await expect(card(page).locator('[data-er-copy]')).toHaveValue('');
-  await expect(card(page).locator('[data-er-send]')).toHaveText('SAVE REPORT FILE');
+  await expect(card(page).locator('[data-er-send]')).toHaveText('SEND');
+  expect(await page.evaluate(() => window.DraftErrorReport.REPORT_TO)).toBe(DESK);
   await card(page).locator('[data-er-said]').fill('I pressed S and it fell over');
-  const download = page.waitForEvent('download');
   await card(page).locator('[data-er-send]').click();
-  const file = await download;
-  expect(file.suggestedFilename()).toMatch(/^rough-drafter-report-\d{8}-\d{6}\.txt$/);
-  const text = require('fs').readFileSync(await file.path(), 'utf8');
+  await expect(card(page).locator('[data-er-status]')).toHaveText('Report sent. Thank you.');
+  expect(sent, 'one email to the desk, no copy, no drawing').toHaveLength(1);
+  expect(sent[0].email).toBe(DESK);
+  expect(sent[0].filename).toMatch(/^rough-drafter-report-\d{8}-\d{6}\.txt$/);
+  const text = decoded(sent[0]);
   expect(text).toContain('MESSAGE    Uncaught Error: boom from the spec');
   expect(text, 'the stack').toMatch(/at .*MODEL\.html|at <anonymous>|Error: boom/);
   expect(text).toContain('I pressed S and it fell over');
@@ -83,8 +86,7 @@ test('an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; with no desk add
   expect(text, 'APP STATE from the page').toContain('LEVEL      1 MAIN FL');
   expect(text).toContain('TOOL       select');
   expect(text).toMatch(/BROWSER\s+Mozilla/);
-  await expect(card(page).locator('[data-er-status]')).toHaveText('Report saved on this computer. Email it to the Rough Drafter desk when you can.');
-  expect(sent, 'nothing went to the worker').toHaveLength(0);
+  expect(text, 'no copy line without a copy address').not.toContain('COPY TO');
   // AND ONCE ANSWERED, THE SAME FAULT STAYS ANSWERED for the rest of the
   // page's life; a different fault still asks.
   await card(page).locator('[data-er-skip]').click();
@@ -105,9 +107,9 @@ test('a copy address mails the report through the backup worker; the drawing goe
   await copy.fill('kris@example.com');
   await expect(card(page).locator('[data-er-send]')).toHaveText('SEND');
   await card(page).locator('[data-er-send]').click();
-  await expect(card(page).locator('[data-er-status]')).toHaveText('Report sent to kris@example.com. Thank you.');
-  expect(sent, 'one email, no drawing').toHaveLength(1);
-  expect(sent[0].email).toBe('kris@example.com');
+  await expect(card(page).locator('[data-er-status]')).toHaveText('Report sent, with a copy to kris@example.com. Thank you.');
+  expect(sent, 'the desk and the copy, no drawing').toHaveLength(2);
+  expect(sent.map(s => s.email)).toEqual([DESK, 'kris@example.com']);
   expect(sent[0].app).toBe('roughdrafter');
   expect(sent[0].filename).toMatch(/^rough-drafter-report-.*\.txt$/);
   expect(decoded(sent[0])).toContain('wall fell down');
@@ -121,10 +123,11 @@ test('a copy address mails the report through the backup worker; the drawing goe
   await expect(copy, 'the address is remembered').toHaveValue('kris@example.com');
   await card(page).locator('[data-er-file]').check();
   await card(page).locator('[data-er-send]').click();
-  await expect(card(page).locator('[data-er-status]')).toHaveText('Report sent to kris@example.com. Thank you.');
-  expect(sent).toHaveLength(3);
-  expect(sent[2].filename).toMatch(/\.draft$/);
-  expect(JSON.parse(decoded(sent[2])).notepad, 'the drawing as it stands').toBe('REPORT ME');
+  await expect(card(page).locator('[data-er-status]')).toHaveText('Report sent, with a copy to kris@example.com. Thank you.');
+  expect(sent, 'report then drawing, to the desk and then the copy').toHaveLength(6);
+  expect(sent.slice(2).map(s => [s.email, s.filename.replace(/^.*\./, '')])).toEqual(
+    [[DESK, 'txt'], [DESK, 'draft'], ['kris@example.com', 'txt'], ['kris@example.com', 'draft']]);
+  expect(JSON.parse(decoded(sent[3])).notepad, 'the drawing as it stands').toBe('REPORT ME');
 });
 
 test('an unhandled promise rejection opens the card; NOT NOW closes it; REPORT A PROBLEM in the foot lane opens it by hand', async ({ page }) => {
@@ -161,12 +164,12 @@ test('an unhandled promise rejection opens the card; NOT NOW closes it; REPORT A
   await card(page).locator('[data-er-said]').fill('the stair went the wrong way');
   await card(page).locator('[data-er-send]').click();
   await expect(card(page).locator('[data-er-status]')).toContainText('Report sent');
-  expect(sent, 'the report and the drawing').toHaveLength(2);
+  expect(sent, 'the report and the drawing, to the desk and the copy').toHaveLength(4);
   expect(decoded(sent[0])).toContain('(none -- the drafter pressed REPORT A PROBLEM)');
   expect(decoded(sent[0])).toContain('PICKED     ROOF LOOKS WRONG');
   expect(decoded(sent[0])).toContain('the stair went the wrong way');
   expect(sent[1].filename).toMatch(/\.draft$/);
-  expect(sent.map(s => s.email)).toEqual(['kris@example.com', 'kris@example.com']);
+  expect(sent.map(s => s.email)).toEqual([DESK, DESK, 'kris@example.com', 'kris@example.com']);
 });
 
 test('three reports an hour a browser, and a worker that says no leaves SAVE REPORT FILE', async ({ page }) => {

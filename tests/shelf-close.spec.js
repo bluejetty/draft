@@ -99,7 +99,7 @@ test('SAVE AS SUITE FIRST writes the shelf as a suite and then closes it; the ki
   await expect(card(page)).toBeHidden();
   const kind = page.locator('#shelf-suite');
   await expect(kind).toBeVisible();
-  await expect(kind).toContainText('SAVE 2BD AS A SUITE');
+  await expect(kind).toContainText('SAVE 2BD AS');
   await kind.locator('[data-shelf-suite-cancel]').click();
   await expect(kind).toBeHidden();
   await expect(page.locator('.shelf-preview'), 'nothing closed').toHaveCount(2);

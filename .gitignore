@@ -13,3 +13,6 @@ playwright-report/
 # the chat, not in the history: one got swept in by a `git add -A` and was
 # half a megabyte of the repo for three commits.
 *-backup.zip
+
+# The stamped copy of the site the pages workflow publishes; built, never committed.
+_site/

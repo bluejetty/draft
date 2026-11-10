@@ -1959,10 +1959,40 @@
   // every one-floor suite a two-storey one with no room at the top.
   const suiteFloors = holo => floorsOf(holo.source?.levels).filter(l =>
     (holo.source?.walls || []).some(w => Number(w?.levelId) === Number(l.id)));
+  // ── THE GENERIC HOLOGRAM (jb, 10 Nov 2026: "how about instead of 'suite
+  // we call it a 'HOLOGRAM' ... they can create whatever they want and place
+  // it whereever they want 'generic version'") ──────────────────────────
+  //
+  // A shelf saved as a HOLOGRAM (drawing-format.js SHELF_KINDS) is none of
+  // a suite's business: its drawing stays filed on its shelf (a negative
+  // level id) and comes in on WHICHEVER LEVEL THE DRAFTER IS STANDING ON --
+  // the SITE plan, the ROOF, a floor -- through the same `levelMap` a suite
+  // moves floor to floor by. Its "floors" are every level of this drawing,
+  // lowest first, so FLOOR ▲▼ and COPY ▲▼ walk the whole ladder.
+  const isGenericHolo = holo => Boolean(window.DraftDrawingFormat.isGenericHologramFile?.(holo?.source));
+  const allLevelsOf = levels => (Array.isArray(levels) ? levels : []).filter(l => l && Number.isFinite(Number(l.id)))
+    .slice().sort((a, b) => (Number(a.elev) || 0) - (Number(b.elev) || 0));
+  // THE LEVELS ITS OWN FILE DRAWS ON: the shelves (and any level) carrying
+  // an item, lowest id first, so a one-shelf file is one level.
+  const genericOwnLevels = holo => {
+    const src = holo?.source || {};
+    const ids = new Set();
+    Object.keys(src).forEach(key => {
+      const list = src[key];
+      if (key === 'levels' || key === 'holograms' || !Array.isArray(list)) return;
+      list.forEach(item => { if (item && typeof item === 'object' && Number.isFinite(Number(item.levelId))) ids.add(Number(item.levelId)); });
+    });
+    return [...ids].sort((a, b) => a - b).map(id => ({ id, name: `LEVEL ${id}` }));
+  };
+  // WHAT A HOLOGRAM'S OWN LEVELS ARE, AND WHICH OF THIS DRAWING'S THEY MAY
+  // STAND ON: a suite's floors on the house's floors, a generic one's shelf
+  // on any level.
+  const ownLevelsOf = holo => (isGenericHolo(holo) ? genericOwnLevels(holo) : suiteFloors(holo));
+  const shellLevelsOf = holo => (isGenericHolo(holo) ? allLevelsOf(drawing?.levels) : floorsOf(drawing?.levels));
   // Which of the shell's floors the suite's lowest floor is on, by index.
   const suiteFloorAt = holo => {
-    const own = suiteFloors(holo);
-    const shell = floorsOf(drawing?.levels);
+    const own = ownLevelsOf(holo);
+    const shell = shellLevelsOf(holo);
     if (!own.length) return -1;
     const first = Number(own[0].id);
     const on = holo.levelMap && Object.prototype.hasOwnProperty.call(holo.levelMap, String(first))
@@ -1972,8 +2002,8 @@
   // The map that puts the suite's lowest floor on the shell's floor `at`;
   // null when a floor of it would land past the top (or under the bottom).
   const suiteMapFor = (holo, at) => {
-    const own = suiteFloors(holo);
-    const shell = floorsOf(drawing?.levels);
+    const own = ownLevelsOf(holo);
+    const shell = shellLevelsOf(holo);
     if (!own.length || at < 0 || at + own.length > shell.length) return null;
     const map = {};
     own.forEach((l, i) => { map[Number(l.id)] = Number(shell[at + i].id); });
@@ -1997,7 +2027,11 @@
     return list.length > 0 && list.every(w => Number(w?.levelId) < 0);
   };
   const suiteOnFloor = parsed => {
-    if (!window.DraftDrawingFormat.suiteKind(parsed?.suiteKind) && !onlyOnShelves(parsed)) return parsed;
+    const F = window.DraftDrawingFormat;
+    // A GENERIC HOLOGRAM STAYS ON ITS SHELF: bringInHologram maps the shelf
+    // to the level the drafter stands on instead.
+    if (F.isGenericHologramFile?.(parsed)) return parsed;
+    if (!F.suiteKind(parsed?.suiteKind) && !onlyOnShelves(parsed)) return parsed;
     const floor = floorsOf(parsed.levels)[0];
     const target = floor ? Number(floor.id) : 3;
     const out = { ...parsed, levels: floor ? parsed.levels
@@ -2035,14 +2069,14 @@
   };
   const suiteFloorName = holo => {
     const at = suiteFloorAt(holo);
-    const l = floorsOf(drawing?.levels)[at];
-    return l ? levelLabel(l.id, l.name) : 'no floor here';
+    const l = shellLevelsOf(holo)[at];
+    return l ? levelLabel(l.id, l.name) : (isGenericHolo(holo) ? 'no level here' : 'no floor here');
   };
   // FLOOR ▲▼: this one to the next floor up or down.
   const moveSuiteFloor = (holo, step) => {
     const at = suiteFloorAt(holo);
     const map = suiteMapFor(holo, (at < 0 ? 0 : at) + step);
-    if (!map) { sayOnStrip(`${hologramNoun(holo)} has no floor ${step > 0 ? 'above' : 'below'} to go to in this drawing.`); return; }
+    if (!map) { sayOnStrip(`${hologramNoun(holo)} has no ${isGenericHolo(holo) ? 'level' : 'floor'} ${step > 0 ? 'above' : 'below'} to go to in this drawing.`); return; }
     const before = { ...holo };
     if (sameMap(holo, map)) delete holo.levelMap; else holo.levelMap = map;
     undoStack.push({ kind: 'props', edits: [{ item: holo, before }] });
@@ -2054,7 +2088,7 @@
   const copySuiteFloor = (holo, step) => {
     const at = suiteFloorAt(holo);
     const map = suiteMapFor(holo, (at < 0 ? 0 : at) + step);
-    if (!map) { sayOnStrip(`There is no floor ${step > 0 ? 'above' : 'below'} ${hologramNoun(holo)} in this drawing to copy it to.`); return; }
+    if (!map) { sayOnStrip(`There is no ${isGenericHolo(holo) ? 'level' : 'floor'} ${step > 0 ? 'above' : 'below'} ${hologramNoun(holo)} in this drawing to copy it to.`); return; }
     const { demo, levelMap, ...rest } = holo;
     let id = newDrawingItemId('hologram');
     while (holograms().some(h => h.id === id)) id = newDrawingItemId('hologram');
@@ -2313,7 +2347,8 @@
       name.dataset.hologramName = '';
       // A SUITE FILE SAYS WHICH KIND IT IS, on its card (Movie, 20 Oct).
       const kind = window.DraftDrawingFormat.suiteKind(first.source?.suiteKind);
-      name.textContent = kind ? `${suiteLabel(kind)} · ${first.name || first.id}` : (first.name || first.id);
+      name.textContent = kind ? `${suiteLabel(kind)} · ${first.name || first.id}`
+        : isGenericHolo(first) ? `HOLOGRAM · ${first.name || first.id}` : (first.name || first.id);
       const count = document.createElement('span');
       count.dataset.hologramCopies = String(copies.length);
       count.textContent = copies.length === 1 ? '1 copy' : `${copies.length} copies`;
@@ -2422,7 +2457,7 @@
       // WHERE IT STANDS, on the line itself: its floor, and HIDDEN if so.
       const where = document.createElement('span');
       where.dataset.hologramWhere = '';
-      where.textContent = [holo.mode === 'suite' ? suiteFloorName(holo) : 'HOLOGRAM', holo.hidden ? 'HIDDEN' : '']
+      where.textContent = [holo.mode === 'suite' || isGenericHolo(holo) ? suiteFloorName(holo) : 'HOLOGRAM', holo.hidden ? 'HIDDEN' : '']
         .filter(Boolean).join(' \u00b7 ');
       // LIT BY A PASS OF THE POINTER (scrolling past it) and PICKED BY A
       // CLICK on the row, which is the same as picking it on the plan.
@@ -2499,16 +2534,20 @@
           traceMoving = { underlay: holo, from: null, before: null, hologram: true };
           sayOnStrip(traceMoveWord(traceMoving));
         }),
-        // FLOOR and COPY floor to floor, on a SUITE.
-        ...(suite ? (() => {
+        // FLOOR and COPY floor to floor, on a SUITE -- and LEVEL to LEVEL,
+        // the whole ladder, on a generic HOLOGRAM (isGenericHolo).
+        ...(suite || isGenericHolo(holo) ? (() => {
+          const generic = isGenericHolo(holo);
+          const word = generic ? 'LEVEL' : 'FLOOR';
+          const low = generic ? 'level' : 'floor';
           const floor = document.createElement('span');
           floor.dataset.hologramFloor = holo.id;
           floor.textContent = suiteFloorName(holo);
           return [floor,
-            button('FLOOR \u25b2', 'hologramFloorUp', 'Move it to the floor above, where it stands', () => { moveSuiteFloor(holo, 1); renderHologramList(); }),
-            button('FLOOR \u25bc', 'hologramFloorDown', 'Move it to the floor below, where it stands', () => { moveSuiteFloor(holo, -1); renderHologramList(); }),
-            button('COPY \u25b2', 'hologramCopyUp', 'Another of it on the floor above, lined up over this one', () => { copySuiteFloor(holo, 1); renderHologramList(); }),
-            button('COPY \u25bc', 'hologramCopyDown', 'Another of it on the floor below, lined up under this one', () => { copySuiteFloor(holo, -1); renderHologramList(); })];
+            button(`${word} \u25b2`, 'hologramFloorUp', `Move it to the ${low} above, where it stands`, () => { moveSuiteFloor(holo, 1); renderHologramList(); }),
+            button(`${word} \u25bc`, 'hologramFloorDown', `Move it to the ${low} below, where it stands`, () => { moveSuiteFloor(holo, -1); renderHologramList(); }),
+            button('COPY \u25b2', 'hologramCopyUp', `Another of it on the ${low} above, lined up over this one`, () => { copySuiteFloor(holo, 1); renderHologramList(); }),
+            button('COPY \u25bc', 'hologramCopyDown', `Another of it on the ${low} below, lined up under this one`, () => { copySuiteFloor(holo, -1); renderHologramList(); })];
         })() : []),
         button('\u27f2', 'hologramLeft', 'Turn a quarter to the left', () => { turnHologram(holo, -90); renderHologramList(); }),
         button('\u27f3', 'hologramRight', 'Turn a quarter to the right', () => { turnHologram(holo, 90); renderHologramList(); }),
@@ -2623,7 +2662,9 @@
     // would align into that floor, or 2nd floor --- same thing"). Its lowest
     // floor goes on this one; on the BONEYARD, or with no room above for all
     // its floors, it stands where its own file has it.
-    const here = boneyardActive ? -1 : floorsOf(drawing.levels).findIndex(l => Number(l.id) === Number(activeLevelId()));
+    // A GENERIC HOLOGRAM (isGenericHolo) lands on ANY level stood on, the
+    // SITE and the ROOF included; a suite on one of the house's floors.
+    const here = boneyardActive ? -1 : shellLevelsOf(holo).findIndex(l => Number(l.id) === Number(activeLevelId()));
     const map = here >= 0 ? suiteMapFor(holo, here) : null;
     if (map && !sameMap(holo, map)) holo.levelMap = map;
     const registeredAt = suiteRegistration(holo);

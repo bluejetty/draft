@@ -964,17 +964,20 @@ if (!window.DraftLayoutPlan) {
     const composition = window.DraftPlanComposition;
     const geo = window.DraftGeometry2D;
     if (!composition || !geo) return false;
-    if (env.shell === true || env.listing === true || env.hologram === true
-      || env.siteFootprint === true) return false;
+    if (env.shell === true || env.listing === true || env.siteFootprint === true) return false;
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : [])
       .filter(item => item?.levelId === levelId);
+    // A HOLOGRAM'S LINES ONLY (jb, 10 Nov: a shelf saved as a HOLOGRAM and
+    // brought in on the SITE plan): the same as its pass on a storey, which
+    // draws its lines and leaves its notes, dimensions and shapes off.
+    const hologram = env.hologram === true;
     const lines = of('lines');
-    const notes = of('notes').filter(note => note.view !== 'stair');
-    const dims = dimensions ? of('dimensions') : [];
+    const notes = hologram ? [] : of('notes').filter(note => note.view !== 'stair');
+    const dims = dimensions && !hologram ? of('dimensions') : [];
     // AND THE LEVEL'S SHAPES (jb, 6 Nov): a tree drawn on the SITE plan is
     // a shape, and it reached the screen and never the sheet exactly as
     // the lines did.
-    const shapes = of('shapes');
+    const shapes = hologram ? [] : of('shapes');
     if (!lines.length && !notes.length && !dims.length && !shapes.length) return false;
     const fmt = window.DraftFormatters || {};
     composition.drawPlan(ctx, toS, {

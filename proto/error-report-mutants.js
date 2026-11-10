@@ -5,8 +5,8 @@
 // sending the report to archicad. could we do something like that" -- "they
 // wouldn't go to the user they would come to me, maybe a copy could go to the
 // user" -- "alot of them probably won't fill it out i bet". Eight seams: a
-// fault that asks again and again, a rejection nobody hears, the button that
-// says SEND with nowhere to send, the drawing that goes unasked, the hour's
+// fault that asks again and again, a rejection nobody hears, the desk left
+// off the recipients, the drawing that goes unasked, the hour's
 // allowance forgotten, an empty REPORT A PROBLEM that mails anyway, a tool
 // change missing from the trail, and a refused send that is tried again by
 // the save.
@@ -25,21 +25,21 @@ const MUTANTS = [
   { file: 'error-report.js', name: 'the same fault asks again and again',
     find: "    if (seen.has(key)) return;\n",
     with: "",
-    test: 'an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; with no desk address the report is saved on this computer' },
+    test: 'an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; the report goes to the desk' },
   { file: 'error-report.js', name: 'a rejection nobody caught is not heard',
     find: "  window.addEventListener('unhandledrejection', onFault);\n",
     with: "",
     test: 'an unhandled promise rejection opens the card; NOT NOW closes it; REPORT A PROBLEM in the foot lane opens it by hand' },
-  { file: 'error-report.js', name: 'the button says SEND with nowhere to send',
-    find: "    const relabel = () => { sendBtn.textContent = recipients().length ? 'SEND' : 'SAVE REPORT FILE'; };\n",
-    with: "    const relabel = () => { sendBtn.textContent = 'SEND'; };\n",
-    test: 'an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; with no desk address the report is saved on this computer' },
+  { file: 'error-report.js', name: 'the desk is left off the recipients',
+    find: "    const recipients = () => [REPORT_TO, copy.value].map(s => String(s).trim()).filter(validAddress);\n",
+    with: "    const recipients = () => [copy.value].map(s => String(s).trim()).filter(validAddress);\n",
+    test: 'an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; the report goes to the desk' },
   { file: 'error-report.js', name: 'the drawing goes without being asked for',
     find: "      if (tick && tick.checked) {\n",
     with: "      if (tick) {\n",
     test: 'a copy address mails the report through the backup worker; the drawing goes only when ticked' },
   { file: 'error-report.js', name: 'the hour\'s allowance is forgotten',
-    find: "      if (allowance() < to.length) {\n",
+    find: "      if (allowance() < 1) {\n",
     with: "      if (false) {\n",
     test: 'three reports an hour a browser, and a worker that says no leaves SAVE REPORT FILE' },
   { file: 'error-report.js', name: 'an empty REPORT A PROBLEM mails anyway',
@@ -49,7 +49,7 @@ const MUTANTS = [
   { file: 'model/09-draw-move-stretch.js', name: 'a tool change is missing from the trail',
     find: "    if (window.DraftErrorReport) window.DraftErrorReport.note(`tool ${next}`);\n",
     with: "",
-    test: 'an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; with no desk address the report is saved on this computer' },
+    test: 'an uncaught error opens ROUGH-DRAFTER HIT A PROBLEM once; the report goes to the desk' },
   { file: 'error-report.js', name: 'a refused send is tried again by the save',
     find: "      if (keepHere) { keepHere(); return; }\n",
     with: "",

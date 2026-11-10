@@ -8,7 +8,7 @@ See [ARCHITECTURE.md](RD-DOCUMENTS/ARCHITECTURE.md) for how the app is put toget
 
 ## Where the documentation is
 
-**Everything written lives in [`RD-DOCUMENTS/`](RD-DOCUMENTS/).** The repository root is kept for the site itself — the pages, the modules, and the folders they need — because GitHub Pages serves it directly with no build step, so anything at root is live. This README is the one document that stays, since GitHub shows it as the front page.
+**Everything written lives in [`RD-DOCUMENTS/`](RD-DOCUMENTS/).** The repository root is kept for the site itself — the pages, the modules, and the folders they need — because GitHub Pages serves it with no build step, so anything at root is live. The one thing the deploy adds is a build stamp: `.github/workflows/pages.yml` copies the site, writes the commit id into every dashboard and onto every script and style address (`tools/stamp-build.js`), and publishes that copy, so a cached old page can never run new scripts. The repo itself is never stamped; on a desk and under the tests everything says `dev` and `build-id.js` is quiet. This README is the one document that stays, since GitHub shows it as the front page.
 
 | | |
 |---|---|
