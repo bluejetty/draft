@@ -159,17 +159,23 @@ test('a mouse press-drag-release places no wall; click, choose, click does', asy
   expect(Math.abs(d.walls[0].end.z + 1)).toBeLessThan(0.1);
 });
 
-test('ENTER places the point the cursor shows, as a click would', async ({ page }) => {
+// THE AUTOCAD WAY (jb, 9 Nov): ENTER is FINISH, not a point. The run in hand
+// ends where it stands, and the next click starts a fresh one.
+test('ENTER ends the run where it stands; the point the cursor shows is not placed', async ({ page }) => {
   await open(page, drawing());
   const { at } = await frame(page);
   await armWall(page);
   await press(page, at, [-3, 1.5]);
+  await press(page, at, [1, 1.5]);
   await page.mouse.move(...at(4, 1.5));
   await page.waitForTimeout(80);
   await page.keyboard.press('Enter');
+  await expect(page.locator('#strip-message')).toContainText('run ended');
   const d = await saved(page);
-  expect(d.walls).toHaveLength(1);
-  expect(Math.abs(d.walls[0].end.x - 4)).toBeLessThan(0.1);
+  expect(d.walls, 'the wall drawn before ENTER, and no wall to the cursor').toHaveLength(1);
+  expect(Math.abs(d.walls[0].end.x - 1)).toBeLessThan(0.1);
+  await press(page, at, [4, 1.5]);
+  expect((await saved(page)).walls, 'the next click is a first point, not a wall from the old run').toHaveLength(1);
 });
 
 // NOT ONCE AN OUTLINE IS TRACED (18 Oct): "only when nothing is around". A

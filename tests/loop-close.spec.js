@@ -1,12 +1,11 @@
 // A LOOP CLOSES THE WAY A RUN ENDS (Movie, 22 Oct): "for when a user is
 // completing a shape like FLOOR, ROOF or SHAPE once the user is ready to make
 // the LAST / at FIRST point location by DOUBLE clicking, or pressing ENTER or
-// SPACEBAR twice quickly" -- and, asked the same day, "dimensions and lines
-// too should work that way too". One click, ENTER or SPACE is a corner at the
-// cursor; a double-click, or the same key twice quickly with the cursor
-// still, closes the loop on its first corner. Below three corners nothing
-// closes and the strip says so. (DIMENSION keeps its own rule -- once ends;
-// tests/dim-once.spec.js.)
+// SPACEBAR" -- and, since 9 Nov, the AutoCAD way (jb: "lets do the enter
+// space and right and left clicks how AUTOCAD did it"). A click is a corner
+// at the cursor; ENTER, SPACE or the right button ONCE, or a double-click,
+// closes the loop on its first corner. Below three corners nothing closes and
+// the strip says so. (DIMENSION: once ends; tests/dim-once.spec.js.)
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -42,8 +41,6 @@ async function open(page, level = 5, f = house()) {
 const strip = page => page.locator('#strip-message');
 async function press(page, at, x, z) { await page.mouse.click(...at(x, z)); await page.waitForTimeout(80); }
 async function hover(page, at, x, z) { await page.mouse.move(...at(x, z)); await page.waitForTimeout(120); }
-// THE SAME KEY TWICE, QUICKLY: well inside the 450 ms the page allows.
-async function twice(page, key) { await page.keyboard.press(key); await page.keyboard.press(key); await page.waitForTimeout(80); }
 async function saved(page) {
   await page.locator('#save').click();
   await h.waitForSaved(page);
@@ -85,39 +82,37 @@ test('a double-click on a FLOOR is its last corner and closes it on the first; t
   expect(await rays(page), 'no trace in hand').toBeNull();
 });
 
-test('on a SHAPE, ENTER once is a corner at the cursor and ENTER twice quickly closes on the first', async ({ page }) => {
+// ENTER, SPACE AND THE RIGHT CLICK CLOSE THE LOOP (jb, 9 Nov: "how AUTOCAD
+// did it"). One press, on the corners placed so far; the cursor's spot is
+// not a corner. Twice-quickly (Movie, 22 Oct) is gone.
+test('on a SHAPE, ENTER once closes on the first corner; the cursor\'s spot is no corner', async ({ page }) => {
   const { at } = await open(page, 3);
   await arm(page, 'shape');
-  for (const [x, z] of [[2, 2], [12, 2], [12, 8]]) await press(page, at, x, z);
-  await hover(page, at, 2, 8);
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(600);
-  // ONE PRESS, ONE CORNER: four in hand now, nothing closed.
+  for (const [x, z] of [[2, 2], [12, 2], [12, 8], [2, 8]]) await press(page, at, x, z);
   await hover(page, at, 6, 5);
-  expect((await rays(page))?.nodes, 'the fourth corner joined the trace').toEqual([[2, 2], [12, 2], [12, 8], [2, 8]]);
-  expect((await saved(page)).shapes, 'nothing closed by one ENTER').toHaveLength(0);
-  // ANOTHER SLOW ENTER ON THE SAME CORNER is no corner on top of it.
-  await hover(page, at, 2, 8);
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(600);
-  await hover(page, at, 6, 5);
-  expect((await rays(page))?.nodes, 'still four').toEqual([[2, 2], [12, 2], [12, 8], [2, 8]]);
-  await hover(page, at, 2, 8);
-  await twice(page, 'Enter');
   await expect(strip(page)).toContainText('SHAPE closed');
   const d = await saved(page);
   expect(d.shapes).toHaveLength(1);
   expect(ring(d.shapes[0].points)).toEqual([[2, 2], [12, 2], [12, 8], [2, 8]]);
 });
 
-test('SPACE twice quickly closes the single slope ROOF outline on its first corner; its first press on the last corner is no corner', async ({ page }) => {
+test('SPACE once closes the single slope ROOF outline on its first corner; the right button does the same for a FLOOR', async ({ page }) => {
   const { at } = await open(page);
   await shedToThree(page, at);
   await press(page, at, -1, 10);
-  await twice(page, ' ');
+  await hover(page, at, 15, 4);
+  await page.keyboard.press(' ');
   await expect(strip(page)).toContainText('SINGLE SLOPE ROOF made');
   const roof = (await saved(page)).roofs[0];
   expect(ring(roof.points || roof.footprint)).toEqual([[-1, -2], [31, -2], [31, 10], [-1, 10]]);
+  await arm(page, 'floor');
+  for (const [x, z] of [[2, 12], [12, 12], [12, 18]]) await press(page, at, x, z);
+  await page.mouse.click(...at(7, 15), { button: 'right' });
+  await page.waitForTimeout(120);
+  const floors = (await saved(page)).floors;
+  expect(floors).toHaveLength(1);
+  expect(ring(floors[0].points)).toEqual([[2, 12], [12, 12], [12, 18]]);
 });
 
 test('a double-click ON THE FIRST CORNER closes on its first click, and its second starts no new loop', async ({ page }) => {
@@ -137,8 +132,9 @@ test('below three corners nothing closes: the strip says so and the corners stay
   const { at } = await open(page, 3);
   await arm(page, 'floor');
   await press(page, at, 2, 2);
-  await hover(page, at, 12, 2);
-  await twice(page, 'Enter');
+  await press(page, at, 12, 2);
+  await hover(page, at, 6, 5);
+  await page.keyboard.press('Enter');
   await expect(strip(page)).toContainText('FLOOR needs three corners');
   expect((await saved(page)).floors).toHaveLength(0);
   await hover(page, at, 6, 5);
@@ -151,12 +147,12 @@ test('below three corners nothing closes: the strip says so and the corners stay
   expect(ring(d.floors[0].points)).toEqual([[2, 2], [12, 2], [12, 8], [2, 8]]);
 });
 
-test('an OUTLINE closes by ENTER twice as a press on its first corner does', async ({ page }) => {
+test('an OUTLINE closes by ENTER as a press on its first corner does', async ({ page }) => {
   const { at } = await open(page, 3, bare());
   await h.selectTool(page, 'outline');
-  for (const [x, z] of [[0, 0], [30, 0], [30, 20]]) await press(page, at, x, z);
-  await hover(page, at, 0, 20);
-  await twice(page, 'Enter');
+  for (const [x, z] of [[0, 0], [30, 0], [30, 20], [0, 20]]) await press(page, at, x, z);
+  await hover(page, at, 15, 10);
+  await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
   const d = await saved(page);
   const [master] = d.boneyardOutlines || [];

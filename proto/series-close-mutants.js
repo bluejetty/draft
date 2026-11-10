@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// MUTATION GATE for the run's ending (Movie, 20 Oct): "1 click makes a NODE,
-// if DOUBLE click it closes.. also make the ENTER and SPACE act in the same
-// way". Each row breaks one line of MODEL.html, runs the one test that should
+// MUTATION GATE for the run's ending: a double-click ends it (Movie, 20
+// Oct) and so do ENTER, SPACE and the right click, once (jb, 9 Nov, "how
+// AUTOCAD did it"). Each row breaks one line, runs the one test that should
 // notice, and restores the file from HEAD.
 //
 //   node proto/series-close-mutants.js
@@ -22,25 +22,25 @@ const MUTANTS = [
     with: "    if (!drawsRun() || !drawStart) return;\n    e.preventDefault();\n",
     test: 'a double-click ends a WALL run with its point as the last corner' },
   { file: 'model/14-promotion-tools.js',
-    name: 'a second press is one more corner, never the end',
-    find: "    if (twice && drawsRun() && drawStart) { endDrawRun(); return true; }\n",
+    name: 'ENTER and SPACE leave the run in hand',
+    find: "    if (drawsRun() && drawStart) { endDrawRun(); return true; }\n",
     with: "",
-    test: 'ENTER or SPACE once is a corner at the cursor, twice ends the LINE run' },
+    test: 'ENTER, SPACE or the right button once ends the LINE run' },
   { file: 'model/14-promotion-tools.js',
-    name: 'ENTER and SPACE need a run already in hand',
-    find: "    if (run) { drawPress(cursorWorld); return true; }\n",
-    with: "    if (run && drawStart) { drawPress(cursorWorld); return true; }\n",
-    test: 'ENTER or SPACE once is a corner at the cursor, twice ends the LINE run' },
+    name: 'ENTER puts a corner at the cursor again, as it did before 9 Nov',
+    find: "    if (drawsRun() && drawStart) { endDrawRun(); return true; }\n",
+    with: "    if (drawsRun() && drawStart) { drawPress(cursorWorld); return true; }\n",
+    test: 'ENTER, SPACE or the right button once ends the LINE run' },
+  { file: 'model/16-gestures-undo.js',
+    name: 'the right button cancels the run instead of ending it',
+    find: "        if (finishOrRepeat()) { stripRefresh(); paint(); }\n",
+    with: "        if (cancelGestures()) { stripRefresh(); paint(); }\n",
+    test: 'ENTER, SPACE or the right button once ends the LINE run' },
   { file: 'model/14-promotion-tools.js',
-    name: 'two presses any time apart count as twice',
-    find: "    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;\n",
-    with: "    const twice = seriesKeyLast.key === key && still;\n",
-    test: 'a second press after a pause, or after the cursor moved on, is not an end' },
-  { file: 'model/14-promotion-tools.js',
-    name: 'a quick second press ends the run wherever the cursor went',
-    find: "    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;\n",
-    with: "    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS;\n",
-    test: 'a second press after a pause, or after the cursor moved on, is not an end' },
+    name: 'ENTER with nothing in hand starts a run at the cursor',
+    find: "    if (drawsRun() && drawStart) { endDrawRun(); return true; }\n",
+    with: "    if (drawsRun() && drawStart) { endDrawRun(); return true; }\n    if (drawsRun() && cursorWorld) { drawPress(cursorWorld); return true; }\n",
+    test: 'ENTER with nothing in hand puts no corner down' },
 ];
 
 const run = name => {

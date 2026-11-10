@@ -509,7 +509,7 @@
     }
     const here = shedPoint(s, at);
     // A PRESS ON THE LAST CORNER IS NO CORNER: the second click of a double
-    // lands where its first did (see the loop rule at seriesKeyPress).
+    // lands where its first did (see closeLoop in 14-promotion-tools.js).
     if (loopTailIs(s.corners, here)) return;
     s.corners.push(here);
     paint();
@@ -721,9 +721,9 @@
   roofPickCard?.querySelector('[data-roof-pick-cancel]')?.addEventListener('click', () => {
     roofPickCard.hidden = true;
   });
-  // ESCAPE STEPS OUT, the popup with it. ENTER and SPACE are the loop rule's
-  // (seriesKeyPress, below): once is a corner at the cursor, twice quickly
-  // closes the outline on its first corner, as a double-click does.
+  // ESCAPE STEPS OUT, the popup with it. ENTER, SPACE and the right click
+  // are FINISH (14-promotion-tools.js): they close the outline on its first
+  // corner, as a double-click does.
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && roofPickCard && !roofPickCard.hidden) { roofPickCard.hidden = true; return; }
     if (!shedRoof) return;

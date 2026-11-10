@@ -37,12 +37,11 @@ async function arm(page, id) {
   if (await key.getAttribute('aria-pressed') === 'true') return;
   await h.armFromRail(page, id);
 }
-// A RUN OF ONE LEG: two presses, then ENTER twice ends the run.
+// A RUN OF ONE LEG: two presses, then ENTER ends the run.
 async function run(page, at, id, x1, z1, x2, z2) {
   await arm(page, id);
   await press(page, at, x1, z1);
   await press(page, at, x2, z2);
-  await page.keyboard.press('Enter');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(120);
 }

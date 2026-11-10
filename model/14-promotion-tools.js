@@ -220,57 +220,48 @@
     return feet > 0 ? feet : undefined;
   };
 
-  // ENTER PLACES THE POINT THE CURSOR SHOWS (Movie, 17 Oct: "to place the
-  // walls the click choose direction and length and then click again or
-  // ENTER"). With nothing typed, Enter on a run in hand is the click it
-  // stands for; a typed LENGTH still takes its own Enter, in its own box.
-  // ONCE A NODE, TWICE THE END (Movie, 20 Oct): "when drawing a series of
-  // LINE, DIMENSION WALL, if the user esc, end the series of items being
-  // drawn (as it does now) also make the DOUBLE CLICK on mouse close it off
-  // in the same way. If the user presses one click on mouse it makes a NODE,
-  // if DOUBLE click it closes.. also make the ENTER and SPACE act in the
-  // same way where 1 click makes a NODE but a double click for ENTER or
-  // SPACE closes the series".
+  // ── ENTER, SPACE AND THE RIGHT CLICK MEAN FINISH (jb, 9 Nov) ────────────
   //
-  // For a WALL or LINE run: ENTER or SPACE once puts a corner where the
-  // cursor stands (and starts the run there when none is in hand); the same
-  // key again inside SERIES_TWICE_MS, WITH THE CURSOR WHERE IT WAS, ends the
-  // run, so the corner the first press put down is the run's last -- the
-  // same shape as the double-click below, whose first click is a corner and
-  // whose second lands on it. A quick second press after the cursor has
-  // moved on is the next corner, not the end: a drafter who presses, moves,
-  // presses is drawing, however fast.
-  // AND THE SAME RULE CLOSES A LOOP -- a FLOOR, a SHAPE, an OUTLINE or the
-  // single slope ROOF's outline (Movie, 22 Oct: "for when a user is
-  // completing a shape like FLOOR, ROOF or SHAPE once the user is ready to
-  // make the LAST / at FIRST point location by DOUBLE clicking, or pressing
-  // ENTER or SPACEBAR twice quickly"). Once is a corner at the cursor; the
-  // same key again, quickly, with the cursor where it was, closes the loop
-  // on its first corner, and a double-click closes it the same way: its first
-  // click is the last corner, its second lands on it (no corner: loopTailIs),
-  // and the dblclick that follows closes. Below three corners nothing closes
-  // -- two enclose no area -- and the strip says so.
-  // DIMENSION KEEPS ITS OWN RULE, refined (Movie, 23 Oct: "to end a string
-  // and go to the Line placement part, press SPACE BAR once (or ENTER key)
-  // or the RIGHT mouse button ... right click / space / enter to end the
-  // line placement and finish the dimension string"): ONCE ends -- the
-  // points, or the lines (dimOnceEnds); the right button says the same. Esc
-  // alone abandons the string. SPACE in a box is a space: typed lengths
-  // carry them ("4 6"), which the target guard keeps.
-  const SERIES_TWICE_MS = 450;
-  let seriesKeyLast = { key: null, at: 0, where: null };
+  // "yes lets do the enter space and right and left clicks how AUTOCAD did
+  // it." The left button places points and picks things; ENTER, SPACE and a
+  // right click that does not travel all say the same word, FINISH:
+  //
+  //   a WALL or LINE run in hand      -- the run ends on its last corner;
+  //   a FLOOR, SHAPE, OUTLINE or the
+  //   single slope ROOF's outline     -- the loop closes on its first corner
+  //                                      (under three corners the strip says
+  //                                      so and the corners stay);
+  //   a DIMENSION string              -- the points end, then the lines
+  //                                      (dimOnceEnds, as before);
+  //   an ASSEMBLY being gathered      -- it closes as one unit;
+  //   STRETCH past its base point     -- it goes where the cursor is;
+  //   OFFSET, MIRROR, ROTATE, FILLET
+  //   past their first press          -- the step is taken at the cursor;
+  //   ARRAY                           -- MAKE;
+  //   nothing in hand, SELECT up      -- the last tool is armed again
+  //                                      (AutoCAD's repeat at an empty
+  //                                      prompt).
+  //
+  // WHAT THIS RETIRES. Movie, 20 Oct, had ENTER and SPACE put a CORNER at
+  // the cursor, and twice quickly end the run or close the loop; Movie, 27
+  // Sep, had the right click CANCEL the gesture in hand. Both go: a point
+  // comes from the left button only, and Esc alone abandons a gesture. The
+  // double-click keeps ending a run and closing a loop, as it did.
+  //
+  // SPACE IN A BOX IS A SPACE. Typed lengths carry them ("4 6"), and the
+  // target guard on both handlers keeps every text field's keys its own.
+  // ENTER on a focused button presses that button, so BUTTON is guarded too.
   const endDrawRun = () => {
     drawStart = null;
-    seriesKeyLast = { key: null, at: 0, where: null };
-    sayOnStrip(`${activeTool.toUpperCase()} — run ended. Press, ENTER or SPACE to start another.`);
+    sayOnStrip(`${activeTool.toUpperCase()} — run ended. Press to start another.`);
   };
   // THE LOOP IN HAND: a corner or more on one of the loop tools.
   const loopInHand = () => traceCorners().length > 0;
   const dimInHand = () => activeTool === 'dimension' && dimPoints.length > 0;
-  // ONE PRESS ON THE LOOP TOOL ARMED, from the pointer or from a key at the
-  // cursor. A double-click ON THE FIRST CORNER closes on its first click, and
-  // every close puts the tool down (setTool(RESTING_TOOL) in each commit), so
-  // its second click is a resting press, not the start of a new loop.
+  // ONE PRESS ON THE LOOP TOOL ARMED, from the pointer. A double-click ON
+  // THE FIRST CORNER closes on its first click, and every close puts the
+  // tool down (setTool(RESTING_TOOL) in each commit), so its second click is
+  // a resting press, not the start of a new loop.
   const loopPress = at => {
     if (activeTool === 'roof') shedPress(at);
     else if (activeTool === 'outline') outlinePress(at);
@@ -281,7 +272,6 @@
   const closeLoop = () => {
     const corners = traceCorners();
     if (!corners.length) return false;
-    seriesKeyLast = { key: null, at: 0, where: null };
     if (corners.length < 3) {
       sayOnStrip(`A ${activeTool.toUpperCase()} needs three corners before it can close on the first.`);
       return true;
@@ -295,38 +285,35 @@
     else if (activeTool === 'roof') commitShedRoof();
     return true;
   };
-  const seriesKeyPress = (key, place) => {
-    const now = Date.now();
-    const still = seriesKeyLast.where && cursorWorld
-      && Math.hypot(cursorWorld.x - seriesKeyLast.where.x, cursorWorld.z - seriesKeyLast.where.z) < 0.01;
-    const twice = seriesKeyLast.key === key && now - seriesKeyLast.at < SERIES_TWICE_MS && still;
-    seriesKeyLast = { key, at: now, where: cursorWorld ? { x: cursorWorld.x, z: cursorWorld.z } : null };
-    if (twice && loopInHand()) return closeLoop();
-    if (twice && drawsRun() && drawStart) { endDrawRun(); return true; }
-    return place();
-  };
-  const enterPlaces = () => {
-    if (!cursorWorld) return false;
-    if (loopInHand()) { loopPress(cursorWorld); return true; }
-    // With or without a run in hand: a first press starts one at the cursor.
-    const run = drawsRun();
-    if (run) { drawPress(cursorWorld); return true; }
+  // THE LAST TOOL ARMED, for the repeat: every tool but SELECT, as it goes
+  // through the register.
+  let lastToolArmed = null;
+  toolListeners.push(next => { if (next !== RESTING_TOOL) lastToolArmed = next; });
+  // FINISH what is in hand; true when something was.
+  const finishInHand = () => {
+    if (loopInHand()) return closeLoop();
+    if (drawsRun() && drawStart) { endDrawRun(); return true; }
     if (dimInHand()) return dimOnceEnds();
+    if (activeTool === 'assembly') { closeAssemblyKey(); return true; }
+    if (stretchTypable()) { stretchPress(cursorWorld); return true; }
+    if (typeof draftCommandFinish === 'function' && draftCommandFinish()) return true;
     return false;
   };
+  // REPEAT the last tool at an empty prompt: SELECT up and nothing in hand.
+  // Through pressToolKey, so a tool that needs a pick says so instead.
+  const repeatLastTool = () => {
+    if (activeTool !== RESTING_TOOL || !lastToolArmed) return false;
+    if (!window.DraftToolRoster?.availableOn(lastToolArmed, board)) return false;
+    pressToolKey(lastToolArmed);
+    return true;
+  };
+  const finishOrRepeat = () => finishInHand() || repeatLastTool();
+  const keyIsTyping = t => t instanceof HTMLElement
+    && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName));
   window.addEventListener('keydown', e => {
-    if (e.key !== 'Enter' || e.repeat || modalUp()) return;
-    const t = e.target;
-    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
-    if (seriesKeyPress('Enter', enterPlaces)) { e.preventDefault(); stripRefresh(); paint(); }
-  });
-  window.addEventListener('keydown', e => {
-    if (e.key !== ' ' || e.repeat || !(drawsRun() || loopInHand() || dimInHand()) || modalUp()) return;
-    const t = e.target;
-    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName))) return;
-    if (!cursorWorld) return;
-    e.preventDefault();
-    if (seriesKeyPress(' ', enterPlaces)) { stripRefresh(); paint(); }
+    if ((e.key !== 'Enter' && e.key !== ' ') || e.repeat || modalUp() || keyIsTyping(e.target)) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (finishOrRepeat()) { e.preventDefault(); stripRefresh(); paint(); }
   });
   // A DOUBLE-CLICK ENDS THE RUN. Its first click is an ordinary press -- a
   // corner, committed by the run's own pointerup -- and its second lands on
@@ -604,7 +591,7 @@
       return;
     }
     if (activeTool === 'outline') {
-      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
+      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
       const feet = typedOutlineFeet();
       if (feet !== undefined) {
         // AND THE NUMBER MOVES THE BOARD, as a typed wall length does. This
@@ -629,13 +616,13 @@
     // 2 for sure" -- typed lengths and dragging corners, as WALL and LINE
     // have): that far from the last corner, the way the cursor points.
     if (loopTypable()) {
-      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
+      if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
       const feet = typedOutlineFeet();
       if (feet !== undefined) typedLoopCorner(feet);
       lengthBox.blur();
       return;
     }
-    if (String(lengthBox.value).trim() === '') { lengthBox.blur(); enterPlaces(); return; }
+    if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
     const parsed = readLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;

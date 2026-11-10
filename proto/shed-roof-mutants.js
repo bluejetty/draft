@@ -84,8 +84,8 @@ const MUTANTS = [
     with: "    const p = { x: run.from.x - dx / len * feet, z: run.from.z - dz / len * feet };",
     test: 'LENGTH box types' },
   // ENTER in the box never reaches this handler's reading of it now: the box
-  // stops the key, and ENTER on the roof is the loop rule's (seriesKeyPress,
-  // #851). Escape still passes this capture-phase guard first.
+  // stops the key, and ENTER on the roof is FINISH (finishInHand in
+  // 14-promotion-tools.js). Escape still passes this capture-phase guard first.
   { file: 'model/08-structure-roof.js', name: 'Escape in the box puts the roof down instead',
     find: "    if (event.target instanceof HTMLInputElement) return;\n",
     with: "",

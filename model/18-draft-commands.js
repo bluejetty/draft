@@ -654,12 +654,27 @@
   };
 
   // ── the press, the paint, the rows ──────────────────────────────────────
+  // A press on the sheet takes the keyboard back from the number box, so the
+  // ENTER or SPACE that follows finishes the step instead of typing in it.
+  const DRAFT_BOXES = [offsetDistBox, turnAngleBox, filletRadiusBox, ...Object.values(arrayBoxes)].filter(Boolean);
   function draftCommandPress(at) {
+    if (DRAFT_BOXES.includes(document.activeElement)) document.activeElement.blur();
     if (activeTool === 'offset') offsetPress(at);
     else if (activeTool === 'mirror') mirrorPress(at);
     else if (activeTool === 'rotate') turnPress(at);
     else if (activeTool === 'fillet') filletPress(at);
     else if (activeTool === 'array') sayOnStrip('ARRAY: type how many and the spacing in the boxes below, then press MAKE.');
+  }
+  // ENTER, SPACE OR THE RIGHT CLICK (14-promotion-tools.js, finishInHand):
+  // the step in hand is taken where the cursor stands; ARRAY makes.
+  function draftCommandFinish() {
+    if (activeTool === 'array') { arrayMake(); return true; }
+    if (!cursorWorld) return false;
+    if (activeTool === 'offset' && draftCmd.offset.pick) { offsetPress(cursorWorld); return true; }
+    if (activeTool === 'mirror' && draftCmd.mirror.a) { mirrorPress(cursorWorld); return true; }
+    if (activeTool === 'rotate' && draftCmd.turn.base) { turnPress(cursorWorld); return true; }
+    if (activeTool === 'fillet' && draftCmd.fillet.first) { filletPress(cursorWorld); return true; }
+    return false;
   }
   function paintDraftCommands() {
     if (!DRAFT_CMD_TOOLS.includes(activeTool)) return;

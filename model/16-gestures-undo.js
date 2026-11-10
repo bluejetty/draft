@@ -1895,11 +1895,12 @@
     // puts the gesture in hand down, as it did before the pan moved here.
     if (dragging.pan) {
       if (dragging.moved <= 4) {
-        // ON A DIMENSION THE RIGHT BUTTON ENDS, it does not cancel (Movie,
-        // 23 Oct: "for ESC where the string is abandoned and deleted don't
-        // use RIGHT mouse button, only use esc key").
-        if (dimInHand()) { dimOnceEnds(); stripRefresh(); paint(); }
-        else if (cancelGestures()) { stripRefresh(); paint(); }
+        // THE RIGHT CLICK IS ENTER (jb, 9 Nov, "how AUTOCAD did it"): it
+        // FINISHES what is in hand -- the run, the loop, the string, the
+        // step -- and at an empty prompt repeats the last tool. It used to
+        // cancel (Movie, 27 Sep); Esc alone does that now. See the ENTER
+        // rule in 14-promotion-tools.js.
+        if (finishOrRepeat()) { stripRefresh(); paint(); }
       }
       dragging = null;
       canvas.classList.remove('dragging');
