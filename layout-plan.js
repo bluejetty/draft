@@ -967,9 +967,9 @@ if (!window.DraftLayoutPlan) {
     if (env.shell === true || env.listing === true || env.siteFootprint === true) return false;
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : [])
       .filter(item => item?.levelId === levelId);
-    // A HOLOGRAM'S LINES ONLY (jb, 10 Nov: a shelf saved as a HOLOGRAM and
-    // brought in on the SITE plan): the same as its pass on a storey, which
-    // draws its lines and leaves its notes, dimensions and shapes off.
+    // A HOLOGRAM'S LINES AND SHAPES (jb, 10 Nov: a shelf saved as a HOLOGRAM
+    // and brought in on the SITE plan): the same as its pass on a storey,
+    // which draws those and leaves its notes and dimensions off.
     const hologram = env.hologram === true;
     const lines = of('lines');
     const notes = hologram ? [] : of('notes').filter(note => note.view !== 'stair');
@@ -977,7 +977,7 @@ if (!window.DraftLayoutPlan) {
     // AND THE LEVEL'S SHAPES (jb, 6 Nov): a tree drawn on the SITE plan is
     // a shape, and it reached the screen and never the sheet exactly as
     // the lines did.
-    const shapes = hologram ? [] : of('shapes');
+    const shapes = of('shapes');
     if (!lines.length && !notes.length && !dims.length && !shapes.length) return false;
     const fmt = window.DraftFormatters || {};
     composition.drawPlan(ctx, toS, {
@@ -1665,10 +1665,11 @@ if (!window.DraftLayoutPlan) {
       // SHAPES PRINT (jb, 6 Nov: "shapes like your tree don't print on
       // layout sheets yet ... yes i will need to see it"). The env was null
       // for want of a shared home for the area arithmetic; shapeEnv below is
-      // that home. A hologram's shapes stay off with its dimensions and
-      // notes, a shell draws none, and a NO-DRAFT shape is kept off by the
-      // composer.
-      shapeEnv: hologram ? null : unless(shapeEnv(saved)),
+      // that home. A hologram's shapes draw too (jb, 10 Nov: a DUPLEX
+      // shape traced on a shelf "isn't showing the AREA / SHAPE house
+      // outline in the hologram"); its dimensions and notes stay off, a
+      // shell draws none, and a NO-DRAFT shape is kept off by the composer.
+      shapeEnv: unless(shapeEnv(saved)),
       dimensionEnv: hologram ? null : forConstruction({
         label: ft => fmt.formatArchitecturalInches(ft * 12),
         colors: DIMENSION_COLORS,

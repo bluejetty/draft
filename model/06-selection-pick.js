@@ -1223,6 +1223,16 @@
     // ALL OF A KIND AT THE SPOT, top first: the stop-at-first rule still
     // holds, for a hover that only wants the top one.
     const takeAll = (type, items) => items.some(item => take({ type, item }));
+    // A HOLOGRAM FIRST (jb, 10 Nov 2026: "the HOLOGRAMS should be TOP LAYER
+    // default (picked first in sequence)"). It was asked last, as the thing
+    // under the drawing; now a press on one of its edges takes it before
+    // anything of this drawing's own at the same spot. Its edge has to be
+    // under the press (hologramPickAt's reach), so a press inside a shape
+    // of this drawing, away from the hologram's edges, still takes the shape.
+    if (filterAllows('hologram')) {
+      const holo = hologramPickAt(worldPt);
+      if ((holo) && take({ type: 'hologram', item: holo })) return out;
+    }
     // A ROOM TAG IS ON TOP OF WHAT IT NAMES: it is painted last, over the
     // floor and often over a fixture, so the pick agrees with the picture.
     // Movie, 1 Oct: "i wasn't able to select the ROOM TAG".
@@ -1303,12 +1313,6 @@
     }
     if (filterAllows('roof')) {
       if (takeAll('roof', roofsAt(worldPt))) return out;
-    }
-    // A HOLOGRAM LAST: it is under the drawing, so anything of this drawing's
-    // own at the press is what the press means.
-    if (filterAllows('hologram')) {
-      const holo = hologramPickAt(worldPt);
-      if ((holo) && take({ type: 'hologram', item: holo })) return out;
     }
     // A PHOTO LAST OF ALL (Movie, 23 Oct: "click on the bg photo"): it lies
     // under everything drawn, so it is picked only where nothing else is,

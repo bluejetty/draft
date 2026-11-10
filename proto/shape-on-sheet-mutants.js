@@ -14,7 +14,7 @@ const SPEC = 'tests/shape-on-sheet.spec.js';
 const MUTANTS = [
   { file: 'layout-plan.js',
     name: 'the plan composes with no shape painter, as it did',
-    find: "      shapeEnv: hologram ? null : unless(shapeEnv(saved)),\n",
+    find: "      shapeEnv: unless(shapeEnv(saved)),\n",
     with: "      shapeEnv: null,\n",
     test: 'a tree on the SITE level' },
   { file: 'layout-plan.js',

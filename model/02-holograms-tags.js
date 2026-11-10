@@ -79,8 +79,12 @@
     const pts = H().placed(holo, lot.points);
     return pts.map((a, i) => ({ start: a, end: pts[(i + 1) % pts.length], lotLine: true }));
   };
+  // EVERY EDGE IT DRAWS HERE (hologram.js edgesOn): walls, lines, outlines
+  // and shapes, so a hologram with no walls -- a shape and two lines on the
+  // SITE plan -- is grabbed where it is seen (jb, 10 Nov 2026).
   const hologramWallsHere = holo => (H() && !holo?.hidden
-    ? [...H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === activeLevelId()))
+    ? [...(H().edgesOn ? H().edgesOn(holo, activeLevelId())
+      : H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === activeLevelId())))
       .filter(w => w?.start && w?.end), ...hologramLotHere(holo)] : []);
   // AND ITS GREEN TARGET, a node of its own where the lot is out of square.
   const hologramGreenHere = holo => {
