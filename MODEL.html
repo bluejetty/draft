@@ -39,9 +39,47 @@
      below may still override it. Shared with PROJECT, Construction Layout,
      SPECS and the two pages not built yet; see the file's head. -->
 <link rel="stylesheet" href="./shell-bars.css" />
+<!-- COLOUR BEFORE ANYTHING PAINTS. palette.js and the skin pick stood at the
+     FOOT of this page until 10 Nov 2026, applied by model/01-skin-view.js
+     after a thousand lines of body and a hundred modules had loaded. The
+     browser does not wait for that: it paints the shell as soon as it has
+     enough body to paint, off model.css's fallbacks -- which are the NIGHT
+     skin -- with shell-bars reading no data-theme and so writing its RUFF
+     labels. On a desk the fallbacks are the first skin, so nothing showed;
+     off roughdrafter.com, where the door opens ROUGH/DAY, every visit
+     flashed the bone (Movie, 9 Nov 2026: "when i go into ROUGHDRAFTER.com
+     model area it flashes the RUFFDRAFTER site really quick").
+
+     Every other dashboard already did this in the head; this is the same
+     block LAYOUT carries, and the same answer: the stored `draft-skin` pick
+     and ?theme=/?mode= first, the door (DraftPalette.homeTheme) last.
+     model/01-skin-view.js resolves the same way again at boot and keeps the
+     switcher; this block only decides the first frame.
+     tests/first-frame-skin.spec.js watches the root from before any script
+     runs and fails the page if <body> ever starts to exist unskinned. -->
+<script src="./palette.js"></script>
+<script>
+  (() => {
+    const P = window.DraftPalette;
+    const params = new URLSearchParams(location.search);
+    const stored = (() => {
+      try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+      catch { return {}; }
+    })();
+    const pick = (name, allowed, fallback) => {
+      const asked = params.get(name);
+      if (asked && allowed.includes(asked)) return asked;
+      return allowed.includes(stored[name]) ? stored[name] : fallback;
+    };
+    const theme = pick('theme', P.THEMES, P.homeTheme());
+    P.apply(document, theme, pick('mode', P.MODES, P.homeMode(theme)));
+  })();
+</script>
 <!-- THE BARS THEMSELVES, loaded HERE rather than with the other modules at
      the foot, because the page MOUNTS them mid-body and a module that
-     arrives after its own mount call is not a module, it is a crash. -->
+     arrives after its own mount call is not a module, it is a crash. After
+     palette.js, because the chips named for the skin (DRAFTING / RUFF) read
+     <html data-theme> as they are written. -->
 <script src="./shell-bars.js"></script>
 <!-- THE REPORT CARD listens from the head so a crash while the page boots
      is caught too (error-report.js: ROUGH-DRAFTER HIT A PROBLEM / SEND). -->
@@ -1047,8 +1085,9 @@
      (cut-view.js:28-29), so it throws while loading if either comes after
      it -- and a page that throws in the head paints nothing at all. The
      tier-1 spec pins this exact list, in this exact order, for that reason.
-     Everything else here is a lazy accessor and would not care. -->
-<script src="./palette.js"></script>
+     Everything else here is a lazy accessor and would not care.
+     palette.js is not here: it moved to the head on 10 Nov 2026 (see the
+     block above shell-bars.js) so the first frame is already skinned. -->
 <script src="./layer-views.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./line-styles.js"></script>

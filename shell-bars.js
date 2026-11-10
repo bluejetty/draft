@@ -580,14 +580,30 @@ if (!window.DraftShellBars) {
      INSIDE the strip, not floating above it, because two fixed bars stacked
      a few pixels apart is the arrangement that put the build bar on SAVE. A
      flex child cannot leave its parent. -->`;
-  const BONE = `    <button id="bone" type="button" data-bone-press aria-controls="drivethru"
+  // THE PRESS IS BORN WEARING THE SKIN'S OWN ARTWORK. It used to be written
+  // with the red bone and paintBone swapped the blue house in at boot, so a
+  // ROUGH page showed a bone for the length of its own load (10 Nov 2026:
+  // "it flashes the RUFFDRAFTER site really quick"). Every page applies the
+  // skin in its head before this module runs, so <html data-theme> is in
+  // hand when the bar is written; paintBone is still what moves it later.
+  const BONE_ART = Object.freeze({
+    ruff: Object.freeze({ src: './assets/bone-red.png', lit: null,
+      label: 'BONE', balanceTop: '74%' }),
+    rough: Object.freeze({ src: './assets/house-blue-off.png',
+      lit: './assets/house-blue-on.png', label: 'HOUSE', balanceTop: '50%' }),
+  });
+  const BONE = () => {
+    const theme = document.documentElement.getAttribute('data-theme');
+    const art = BONE_ART[theme] || BONE_ART.ruff;
+    return `    <button id="bone" type="button" data-bone-press aria-controls="drivethru"
       aria-expanded="false"
       title="Gruff's drive-thru: pick a house type, then build it"><img
         data-bone-art
-        src="./assets/bone-red.png"
+        src="${art.src}"
         alt="" /><span id="bone-balance" data-bone-balance
-        aria-hidden="true"></span><span class="said">BONE</span></button>
+        aria-hidden="true"></span><span class="said">${art.label}</span></button>
 `;
+  };
   // THE TRIO, WITH OR WITHOUT THE BONE IN THE MIDDLE OF IT. Movie, 14 Oct:
   // "those arrow can be placed on the PROJECT and REAL ESTATE PLANS,
   // CONSTRUCTION PLANS but instead of going up and down levels, go up and
@@ -608,7 +624,7 @@ if (!window.DraftShellBars) {
   // by it and a shared default would be wrong on three of them.
   const trio = withBone => `    <div id="dt-trio" data-drivethru-trio>
     <button id="trio-up" type="button" data-trio-up hidden>&#9650;</button>
-${withBone ? BONE : ''}    <button id="trio-down" type="button" data-trio-down hidden>&#9660;</button>
+${withBone ? BONE() : ''}    <button id="trio-down" type="button" data-trio-down hidden>&#9660;</button>
     </div>
 `;
   // THE MIDDLE OF A BONE-LESS BAR is the trio alone -- not the verbs beside
@@ -626,7 +642,9 @@ ${trio(false)}  </div>`;
   <div id="dt-bar" data-drivethru-bar>
 ${trio(false)}    <div id="dt-verbs" data-foot-verbs></div>
   </div>`;
-  const BOTMIDDLE = `  <div class="grow"></div>
+  // A FUNCTION, NOT A STRING: the bone inside reads the skin when the bar
+  // is mounted, which is after the page's head applied it.
+  const BOTMIDDLE = () => `  <div class="grow"></div>
   <!-- THE MIDDLE PAIR (Movie, 15 Sep): "2 buttons, the DRIVE-THRU MENU, and
        the BONE". Exactly two, because the sign rises over this spot and
        covers whatever is here -- anything else standing between them would
@@ -1304,7 +1322,7 @@ ${trio(true)}
       const tools = (opts.tools || []).map(tool => BAR_TOOLS[tool] || '').join('');
       put(BOTHEAD + '\n'
         + '<div id="page-row" data-page-row>\n' + rowOf('page', opts.page) + '\n</div>\n'
-        + (opts.bone === false ? (opts.verbs ? BOTQUIET_VERBS : BOTQUIET) + '\n' : BOTMIDDLE + '\n')
+        + (opts.bone === false ? (opts.verbs ? BOTQUIET_VERBS : BOTQUIET) + '\n' : BOTMIDDLE() + '\n')
         + '  <div id="sheet-row" data-sheet-row>\n' + tools + rowOf('sheet', opts.page) + '\n  </div>\n'
         + BOTTAIL);
       // AFTER the markup, because the slot it fills arrives with it. `put`
@@ -1475,12 +1493,9 @@ ${trio(true)}
     // So the TABLE lives here, once, and every page that mounts the bone gets
     // the right picture without owning a copy. What a press DOES is still the
     // page's, and still four different things.
-    BONE_ART: Object.freeze({
-      ruff: Object.freeze({ src: './assets/bone-red.png', lit: null,
-        label: 'BONE', balanceTop: '74%' }),
-      rough: Object.freeze({ src: './assets/house-blue-off.png',
-        lit: './assets/house-blue-on.png', label: 'HOUSE', balanceTop: '50%' }),
-    }),
+    // The table itself is declared beside the bone's markup (BONE_ART, above),
+    // because the markup is written from it; this is the same object.
+    BONE_ART,
 
     // Paints every [data-bone-art] image for the theme in force. MODEL has
     // TWO -- the foot bone and the drive-thru sign's copy -- and they are two
