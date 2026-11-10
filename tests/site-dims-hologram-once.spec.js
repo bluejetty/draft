@@ -88,3 +88,34 @@ test('without a hologram the rows are drawn once, as before', async ({ page }) =
   expect(counts["75'-0\""], JSON.stringify(counts)).toBe(1);
   expect(counts["50'-0\""], JSON.stringify(counts)).toBe(1);
 });
+
+// AND THE DRAFTER'S OWN DIMENSIONS ON THE SITE ARE DRAWN ONCE TOO (jb, 10
+// Nov, after the suite fix: "how come the dimensions are still double"). His
+// standalone site plan had no lot record, only lines he drew and a hand
+// string along them -- and drawSitePlan, finding no lot, handed the level to
+// drawLevelMarks, the sheet's painter of a level's own marks, which laid
+// every hand dimension again over the one MODEL had painted. With a lot it
+// did the same after the rows. MODEL now asks for no level marks: it paints
+// its own.
+const handString = () => {
+  const d = base();
+  d.standalone = 'site';
+  d.outlines = [];
+  d.lines = [{ id: 'l1', levelId: SITE, start: { x: 0, y: 0, z: 0 }, end: { x: 60, y: 0, z: 0 } }];
+  d.dimensions = [{ id: 1, levelId: SITE, view: 'plan', auto: false, layer: 'A-DIMS-HAND',
+    start: { x: 0, y: 0, z: -8 }, end: { x: 60, y: 0, z: -8 } }];
+  return d;
+};
+test('a hand dimension on a standalone site plan is drawn once', async ({ page }) => {
+  await openOnSite(page, handString());
+  const counts = await figuresPainted(page);
+  expect(counts["60'-0\""], JSON.stringify(counts)).toBe(1);
+});
+test('a hand dimension beside the lot rows is drawn once', async ({ page }) => {
+  const d = base();
+  d.dimensions = handString().dimensions;
+  await openOnSite(page, d);
+  const counts = await figuresPainted(page);
+  expect(counts["60'-0\""], JSON.stringify(counts)).toBe(1);
+  expect(counts["75'-0\""], JSON.stringify(counts)).toBe(1);
+});
