@@ -233,7 +233,7 @@
   // Through pressToolKey, so a tool that needs a pick says so instead.
   const repeatLastTool = () => {
     if (activeTool !== RESTING_TOOL || !lastToolArmed) return false;
-    if (!window.DraftToolRoster?.availableOn(lastToolArmed, board)) return false;
+    if (!window.DraftToolRoster?.availableOn(lastToolArmed)) return false;
     pressToolKey(lastToolArmed);
     return true;
   };
