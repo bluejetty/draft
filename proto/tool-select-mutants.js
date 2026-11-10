@@ -67,8 +67,10 @@ const MUTANTS = [
     // toggle now compares by item identity across a group rather than by
     // index. The DEFECT is the same one -- shift adds and never takes away --
     // so only the removing arm is neutralised.
-    find: "          setSelection(at >= 0\n            ? selection.filter(entry => !whole.some(w => w.item === entry.item))\n            : selection.concat(whole.filter(w =>\n              !selection.some(entry => entry.item === w.item))));",
-    with: "          setSelection(at >= 0\n            ? selection\n            : selection.concat(whole.filter(w =>\n              !selection.some(entry => entry.item === w.item))));",
+    // RE-POINTED AGAIN (10 Nov 2026): the toggle moved into shiftToggle(),
+    // shared by the shift-click and the shift-press-on-what-is-in-hand.
+    find: "    setSelection(at >= 0\n      ? selection.filter(entry => !whole.some(w => w.item === entry.item))\n      : selection.concat(whole.filter(w => !selection.some(entry => entry.item === w.item))));",
+    with: "    setSelection(at >= 0\n      ? selection\n      : selection.concat(whole.filter(w => !selection.some(entry => entry.item === w.item))));",
     test: 'shift adds and shift removes',
   },
   {
