@@ -323,6 +323,181 @@
       md.loose = null;
     }
   };
+  // ── PUSH / PULL A BROKEN PIECE: THE JOG (jb, 10 Nov 2026) ─────────────
+  //
+  // "i just broke the front of the garage wall into 2 pieces, now i would
+  // like to grab the left side or right side and either move it in a foot
+  // or out a foot, and allow for creation of a new wall that joins them and
+  // is perpendicular to them, and share the same properties, as a lines, or
+  // wall or other".
+  //
+  // A wall or line slid square to itself (the T-SQUARE's rule in the drag)
+  // stretches the walls at its ends along their own lines -- and a neighbour
+  // that runs IN LINE with it, the other half of a BREAK, has no line to
+  // stretch along, so until now it tilted into a diagonal from the break
+  // node. Now that end lets go of the node onto a corner of its own and a
+  // JOG piece of the same kind and properties runs from the node to that
+  // corner, square to both. The far end stretches as it always did. Pushed
+  // back flush, the jog is nothing and goes away on the release; one UNDO
+  // takes the move and the jog together. A free drag (T-SQUARE off) and an
+  // ALT drag are untouched.
+  //
+  // THE BONE FOLLOWS. BREAK put the node on the outline ring, so the ring
+  // gains the jog corner next to it and the far end's ring point slides
+  // with the wall -- the footprint card is not asked: a jog is a shape the
+  // drafter drew, not a wall off its footprint.
+  const INLINE_EPS = 1e-3;
+  const segmentsOnCorner = v => [...walls(), ...lines()].filter(s => s.start === v || s.end === v);
+  const ringPointAt = (ring, p) => (ring.points || []).find(q =>
+    Math.abs(q.x - p.x) < 1e-6 && Math.abs(q.z - p.z) < 1e-6) || null;
+  // The ring gains a point ON the edge between `a` and `b`, at `a`'s spot,
+  // and hands it back -- insertOnEdge's rule (between, never appended),
+  // returning the point so a drag can carry it.
+  const ringGainsAt = (ring, a, b) => {
+    const same = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 1e-6;
+    const pts = ring.points || [];
+    for (let i = 0; i < pts.length; i += 1) {
+      const j = (i + 1) % pts.length;
+      if ((same(pts[i], a) && same(pts[j], b)) || (same(pts[i], b) && same(pts[j], a))) {
+        const pt = { x: a.x, y: 0, z: a.z };
+        pts.splice(i + 1, 0, pt);
+        return pt;
+      }
+    }
+    return null;
+  };
+  const jogRings = body => (drawing?.outlines || []).filter(o =>
+    Number(o.levelId) === Number(body.levelId) && o.site !== true && (o.points || []).length >= 3);
+  const jogInline = md => {
+    if (md.kind !== 'wall' || !md.body || md.loose || md.jog) return;
+    const body = md.body;
+    const isWall = walls().includes(body);
+    const list = isWall ? drawing.walls : (drawing.lines || []);
+    if (!list.includes(body)) return;
+    const ux = body.end.x - body.start.x, uz = body.end.z - body.start.z, len = Math.hypot(ux, uz);
+    if (len < 1e-6) return;
+    const inline = s => {
+      const sx = s.end.x - s.start.x, sz = s.end.z - s.start.z, l = Math.hypot(sx, sz);
+      return l > 1e-6 && Math.abs((ux * sz - uz * sx) / (len * l)) < INLINE_EPS;
+    };
+    const jogs = [];
+    md.before.forEach((b, i) => {
+      const v = b.vtx;
+      const others = segmentsOnCorner(v).filter(s => s !== body);
+      if (!others.length || !others.every(inline)) return;
+      const fresh = { x: v.x, y: v.y ?? 0, z: v.z,
+        _draftLevelId: v._draftLevelId, _draftViewId: v._draftViewId, _draftBody: v._draftBody,
+        srcId: v.srcId ?? null, offX: v.offX ?? 0, offZ: v.offZ ?? 0 };
+      vertexPool.push(fresh);
+      const key = body.start === v ? 'start' : 'end';
+      const far = body[key === 'start' ? 'end' : 'start'];
+      body[key] = fresh;
+      const piece = { ...body, id: newDrawingItemId(isWall ? 'wall' : 'line'), start: v, end: fresh };
+      const at = list.indexOf(body);
+      list.splice(at + 1, 0, piece);
+      md.before[i] = { vtx: fresh, x: b.x, z: b.z, offX: fresh.offX, offZ: fresh.offZ };
+      // THE RING, where the wall is on one: the jog corner goes in beside
+      // the node, on the wall's side of it.
+      const rings = isWall ? jogRings(body).map(ring => {
+        const pt = ringGainsAt(ring, v, far);
+        return pt ? { ring, pt } : null;
+      }).filter(Boolean) : [];
+      jogs.push({ body, key, shared: v, fresh, piece, list, rings, far, farWas: { x: far.x, z: far.z } });
+    });
+    if (jogs.length) md.jog = jogs;
+  };
+  // LIVE: the ring's jog corner rides the fresh corner.
+  const jogRingsFollow = md => (md.jog || []).forEach(j =>
+    j.rings.forEach(({ pt }) => { pt.x = j.fresh.x; pt.z = j.fresh.z; }));
+  // A jog taken out again: the end back on the node, the piece gone, the
+  // corner retired, the ring's point gone.
+  const unJog = j => {
+    j.body[j.key] = j.shared;
+    const at = j.list.indexOf(j.piece);
+    if (at >= 0) j.list.splice(at, 1);
+    const k = vertexPool.indexOf(j.fresh);
+    if (k >= 0) vertexPool.splice(k, 1);
+    j.rings.forEach(({ ring, pt }) => {
+      const i = (ring.points || []).indexOf(pt);
+      if (i >= 0) ring.points.splice(i, 1);
+    });
+  };
+  // ON THE RELEASE: a jog pushed back flush goes; the ones that stay carry
+  // the far end's ring point with the wall and go on the move step, so one
+  // UNDO takes it all back. Returns the record for the step, or null.
+  const settleJogs = md => {
+    if (!md.jog) return null;
+    const kept = [];
+    md.jog.forEach(j => {
+      if (Math.hypot(j.fresh.x - j.shared.x, j.fresh.z - j.shared.z) < 1e-6) {
+        unJog(j);
+        const i = md.before.findIndex(b => b.vtx === j.fresh);
+        if (i >= 0) md.before[i] = { vtx: j.shared, x: j.shared.x, z: j.shared.z, offX: j.shared.offX, offZ: j.shared.offZ };
+        return;
+      }
+      // A BAY (both ends jogged): the far end is the other jog's fresh
+      // corner and its ring point is that jog's own; the node's stays.
+      const farIsJog = md.jog.some(o => o.fresh === j.far);
+      j.farRings = farIsJog ? [] : j.rings.map(({ ring }) => {
+        const pt = ringPointAt(ring, j.farWas);
+        return pt ? { pt, x: pt.x, z: pt.z } : null;
+      }).filter(Boolean);
+      j.farRings.forEach(({ pt }) => { pt.x = j.far.x; pt.z = j.far.z; });
+      kept.push(j);
+    });
+    md.jog = kept.length ? kept : null;
+    return md.jog;
+  };
+  // A JOG PUSHED BACK FLUSH IN A LATER DRAG is a piece of no length between
+  // the node and the corner: it goes, the corner folds onto the node, and
+  // the ring's doubled point goes with it. Recorded on the step for UNDO.
+  const tidyZeroPieces = md => {
+    if (md.kind !== 'wall' || !md.body) return null;
+    const tidied = [];
+    md.before.forEach(b => {
+      const v = b.vtx;
+      segmentsOnCorner(v).filter(s => s !== md.body).forEach(o => {
+        if (Math.hypot(o.end.x - o.start.x, o.end.z - o.start.z) >= 1e-6) return;
+        const u = o.start === v ? o.end : o.start;
+        if (u === v) return;
+        const list = walls().includes(o) ? drawing.walls : drawing.lines;
+        const index = list.indexOf(o);
+        list.splice(index, 1);
+        const repointed = [];
+        segmentsOnCorner(v).forEach(s => ['start', 'end'].forEach(key => {
+          if (s[key] === v) { s[key] = u; repointed.push({ s, key }); }
+        }));
+        const k = vertexPool.indexOf(v);
+        if (k >= 0) vertexPool.splice(k, 1);
+        // THE RING: the jog corner's point (where the corner stood when the
+        // drag began) goes, and the far end's point slides with the wall.
+        const rings = [], farRings = [];
+        const far = md.body.start === u ? md.body.end : md.body.start;
+        const farWas = md.before.find(x => x.vtx === far);
+        if (list === drawing.walls) jogRings(o).forEach(ring => {
+          const pts = ring.points || [];
+          const i = pts.findIndex(p => Math.abs(p.x - b.x) < 1e-6 && Math.abs(p.z - b.z) < 1e-6);
+          if (i >= 0) rings.push({ ring, pt: pts[i], index: i }), pts.splice(i, 1);
+          const fp = farWas && far !== v ? ringPointAt(ring, farWas) : null;
+          if (fp) farRings.push({ pt: fp, x: fp.x, z: fp.z }), fp.x = far.x, fp.z = far.z;
+        });
+        tidied.push({ piece: o, list, index, v, u, repointed, rings, farRings });
+      });
+    });
+    return tidied.length ? tidied : null;
+  };
+  const undoTidy = step => (step.tidy || []).slice().reverse().forEach(t => {
+    t.farRings.forEach(({ pt, x, z }) => { pt.x = x; pt.z = z; });
+    t.rings.forEach(({ ring, pt, index }) => ring.points.splice(index, 0, pt));
+    if (!vertexPool.includes(t.v)) vertexPool.push(t.v);
+    t.repointed.forEach(({ s, key }) => { s[key] = t.v; });
+    t.list.splice(Math.min(t.index, t.list.length), 0, t.piece);
+  });
+  const undoJogs = step => (step.jog || []).forEach(j => {
+    (j.farRings || []).forEach(({ pt, x, z }) => { pt.x = x; pt.z = z; });
+    unJog(j);
+  });
+
   // ALT-DRAG LETS A CORNER GO (Movie, 22 Oct: "sometimes there is a corner
   // where a node is connected, sometimes i'd like to disconnect them and
   // extend one of the corner lines/walls"). A corner is one pooled point

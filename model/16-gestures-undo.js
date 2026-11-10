@@ -1326,7 +1326,7 @@
           // ALT HELD: the wall goes on its own, its corners let go. (SHIFT
           // until 27 Oct; Shift holds the drag square now, as ARCHICAD's does,
           // and Alt is the corner's own key -- Alt-drag detaches a corner.)
-          setWallLoose(md, e.altKey);
+          if (!md.jog) setWallLoose(md, e.altKey);
           // THE T-SQUARE HOLDS A MOVED WALL SQUARE (Movie, 18 Oct: "i like how
           // the walls move, but when the T is on they should stay moving 90
           // degrees it is free moving right now but the T is on"). The wall
@@ -1339,6 +1339,9 @@
               const nx = -uz / len, nz = ux / len, across = dx * nx + dz * nz;
               dx = nx * across; dz = nz * across;
             }
+            // AND A NEIGHBOUR IN LINE WITH IT GETS A JOG, not a tilt (jb,
+            // 10 Nov 2026: push / pull one half of a BREAK). See jogInline.
+            if (!md.loose) jogInline(md);
           }
           // THE FACES SEEK, after the ends' own corner snap and before the
           // foot: a face that catches beats the foot, the corner drag's own
@@ -1385,6 +1388,7 @@
         followAnchors(md.follow);
         md.before.forEach(b => relinkVertex(b.vtx));
         (md.follow || []).forEach(f => relinkVertex(f.vtx));
+        jogRingsFollow(md);
         paint();
       }
       return;
@@ -1668,8 +1672,14 @@
           paint();
           return;
         }
+        // A JOG PUSHED BACK FLUSH GOES NOW, before the step is cut, so the
+        // step's `before` names the node again and not a retired corner.
+        const jogs = settleJogs(md);
+        const tidy = tidyZeroPieces(md);
         const moveStep = { kind: 'move',
           before: [...md.before, ...(md.lockBefore || []), ...(md.follow || []), ...(md.faceBefore || [])],
+          // THE JOG RIDES THE MOVE'S STEP: one UNDO takes both.
+          ...(jogs ? { jog: jogs } : {}), ...(tidy ? { tidy } : {}),
           // A WALL LET GO WITH SHIFT takes its old corners back on UNDO.
           ...(md.loose ? { loose: { wall: md.body, shared: md.loose.shared.map(b => b.vtx), fresh: md.loose.fresh.map(f => f.vtx) } } : {}) };
         // AN END DRAGGED SETTLES ITS WALLS' OPENINGS (settleOpeningsPut): the
@@ -1723,7 +1733,7 @@
         // measure -- so stringing before it is answered would string a
         // drawing that does not exist yet. settleFootprint folds this same
         // step when it lands.
-        const offered = offerFootprintChoice(md, moveStep);
+        const offered = !md.jog && !tidy && offerFootprintChoice(md, moveStep);
         if (!offered) foldRedim(moveStep);
         // A TYPED LENGTH MAY FINISH IT, as it does a MOVE (moveTyped): a line
         // or wall dragged by its body, an assembly, or an end NODE (Movie,
@@ -2404,6 +2414,10 @@
       (step.wells || []).forEach(w => { w.hole.points = w.points; });
     } else if (step.kind === 'move') {
       undoRedim(step);
+      // THE JOG GOES FIRST: the end back on its node, the piece and the
+      // corner gone, the ring as it was. Then the points go back.
+      undoTidy(step);
+      undoJogs(step);
       if (step.loose) {
         const { wall, shared, fresh } = step.loose;
         fresh.forEach((v, i) => {
