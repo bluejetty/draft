@@ -69,7 +69,9 @@ const markPixels = page => page.evaluate(() => {
 });
 
 const drawLot = async page => {
-  await expect(page.locator('#lot-pick')).toBeVisible({ timeout: 6000 });
+  // THE SITE PLAN KEY OPENS THE CARD (jb, 9 Nov); it no longer comes up on
+  // arriving at SITE.
+  await h.openLotCard(page);
   await page.locator('[data-lot-tiles] button').nth(2).click();
   await page.locator('[data-lot-pick-draw]').click();
   await page.waitForTimeout(600);

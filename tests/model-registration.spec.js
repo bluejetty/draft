@@ -123,7 +123,6 @@ async function openWith(page, drawing) {
 
 test('a hologram\'s lot is listed with its box; USE copies it in exactly where it lies, turns its line off, and one UNDO takes it back', async ({ page }) => {
   await openWith(page, withPhase1());
-  await page.locator('#lot-pick [data-lot-pick-skip]').click().catch(() => {});
   await expect(box(page)).toBeVisible();
   const row = box(page).locator('[data-reg-site="hologram-1"]');
   await expect(row).toBeChecked();

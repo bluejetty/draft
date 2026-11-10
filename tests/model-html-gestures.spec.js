@@ -413,6 +413,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         const inBar = el => el.closest('#select-bar') !== null;
         const outside = el => !inPanel(el) && !inRail(el) && !inTools(el) && !inBar(el);
         const toolKind = el => (el.dataset.toolKey !== undefined ? 'tool-key'
+          // SITE PLAN, last of the BUILD keys (jb, 9 Nov): a key that opens
+          // the lot card and arms nothing, so it is not a tool-key and is
+          // named rather than let through as a bare button.
+          : el.dataset.sitePlanKey !== undefined ? 'site-plan-key'
           : el.dataset.selMode !== undefined ? 'sel-mode'
             : el.dataset.selFilter !== undefined ? 'sel-filter'
               : el.dataset.assemblyStart !== undefined ? 'assembly-start'
@@ -1197,7 +1201,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // the slot with the tabs, so it leaves `buttons` above and
             // arrives here. One control, one list, still counted once.
             'props-fold',
-            'sel-filter', 'sel-mode', 'tool-key',
+            'sel-filter', 'sel-mode',
+            // THE SITE PLAN KEY (jb, 9 Nov), see toolKind: the lot card's
+            // one door on a drawing with no lot.
+            'site-plan-key',
+            'tool-key',
             // BATH A and BATH B, one control kind (see toolKind).
             'washroom'].sort(),
           barKinds: ['bar-key'],

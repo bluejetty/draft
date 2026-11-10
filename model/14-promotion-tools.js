@@ -1066,6 +1066,28 @@
         });
         return btn;
       }));
+      // SITE PLAN, LAST OF THE BUILD KEYS (jb, 9 Nov: "maybe SITE PLAN
+      // button in build to open that (put it at the end make it look like
+      // a site plan"). NOT A TOOL: it arms nothing and is not in the roster
+      // -- the roster's keys are the seventeen that set activeTool, and a
+      // key among them that opens a card instead would be a tool whose
+      // gesture is a pop-up. It wears the key's face (a drawing, no letter)
+      // and opens the lot card on SITE, which used to come up on its own.
+      if (group.id === 'build') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tool-key';
+        btn.dataset.sitePlanKey = '';
+        btn.title = window.DraftToolIcons?.title('SITE PLAN', '', 'siteplan') || 'SITE PLAN';
+        const letter = document.createElement('span');
+        letter.dataset.toolLetter = '';
+        const label = document.createElement('span');
+        label.dataset.toolName = '';
+        label.textContent = 'SITE PLAN';
+        btn.append(letter, toolIcon('siteplan'), label);
+        btn.addEventListener('click', () => openLotCard());
+        keys.append(btn);
+      }
       box.append(name, keys);
       // EACH GROUP ONTO ITS OWN TAB, and PREPENDED rather than appended: the
       // DRAFTING pane also carries SELECTION, OBJECT TYPE and ASSEMBLY, and

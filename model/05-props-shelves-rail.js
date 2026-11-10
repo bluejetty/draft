@@ -1263,6 +1263,10 @@
   // answers it. A `const` arrow down there would be in its temporal dead
   // zone from up here, which is a crash rather than a missing repaint.
   let paintLotPick = () => {};
+  // The SITE PLAN key's press (10-tracking-garage.js): opens the lot card.
+  let openLotCard = () => {};
+  // And puts it down, on the way to any other level.
+  let dropLotCard = () => {};
   // The REGISTRATION box's numbers, on every paint (10-tracking-garage.js).
   let paintRegistration = () => {};
   // ALIGN onto the green registration mark (10-tracking-garage.js); a hologram
@@ -1291,11 +1295,10 @@
     syncUrl();
     buildChrome();
     refreshToolPropsOnLevel();
-    // ARRIVING AT SITE IS THE QUESTION (Movie, 13 Oct). The flag is cleared
-    // on the way to anywhere else so that coming BACK to a site with no lot
-    // asks again -- a drafter who pressed NOT NOW and walked away has
-    // arrived at the question a second time, which is not nagging.
-    if (Number(id) !== SITE_LEVEL_ID) lotAsked = false;
+    // ARRIVING AT SITE IS NOT A QUESTION ANY MORE (jb, 9 Nov): the lot
+    // card opens from the SITE PLAN key, and a card left open is put down
+    // on the way to anywhere else, so it cannot be waiting when he is back.
+    if (Number(id) !== SITE_LEVEL_ID) dropLotCard();
     // AND ARRIVING AT SITE FRAMES THE SITE (Movie, 14 Oct: "when the user
     // brings it up zoom to show the full site"). Only on the way IN, and only
     // on this level: re-fitting on every level change would throw away the

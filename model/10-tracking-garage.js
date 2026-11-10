@@ -2042,12 +2042,18 @@
     return d >= range.lo && d <= range.hi ? d : null;
   };
   // ── THE CARD BESIDE THE LINE ───────────────────────────────────────────
-  // ── HOW BIG IS THE LOT? (Movie, 13 Oct) ──────────────────────────────
+  // ── HOW BIG IS THE LOT? (Movie, 13 Oct; jb, 9 Nov) ───────────────────
   //
-  // "when they go to the SITE layout in MODEL" the question comes up: pick a
-  // tier, or type a width and depth, and AUTOSITE lays a rectangle that size.
-  // The table itself is lot-sizes.js, so LAYOUT's copy of this question reads
-  // the same six sizes and the same sentence about odd shapes.
+  // Pick a tier, or type a width and depth, and AUTOSITE lays a rectangle
+  // that size. The table itself is lot-sizes.js.
+  //
+  // OPENED ONLY WHEN ASKED FOR (jb, 9 Nov 2026: "can i only have this site
+  // plan menu pop up when they ask for it, maybe SITE PLAN button in build
+  // to open that" -- "that popup popuped up in bad placed too many times").
+  // It used to rise on its own on arriving at SITE with no lot, and again
+  // after a build; neither happens now. The SITE PLAN key at the end of the
+  // BUILD keys (openLotCard, below) and a double-click on a lot already
+  // drawn are the two doors, and both are the drafter's own press.
   //
   // THE LOT IS AN OUTLINE carrying `site: true`. That is the whole reason
   // Movie's "they can click on points to break them" needs no code: outlines
@@ -2068,18 +2074,16 @@
   // button" -- so the pointer stops pointing. It is not a lock: OK still
   // works, and now draws the size he picked rather than the best fit.
   let lotTouched = false;
-  // ASKED ONCE PER VISIT, NOT ONCE PER PAINT. NOT NOW has to mean not now,
-  // and the card is repainted on every repaint of the page; without this a
-  // dismissed card would come straight back. Cleared on leaving SITE, so
-  // coming back asks again -- which is right, because coming back to a site
-  // with no lot on it is the drafter arriving at the question a second time.
-  let lotAsked = false;
-  // ASKED AGAIN, over a lot already drawn (Movie, 18 Oct: "i accidentally put
-  // the site the wrong direction, how about if a user double clicks on the
-  // site property line or the site layout view window in the LEVELS LAYERS
-  // tab, bring up the initial SITE PLAN loading information popup so they can
-  // reload or change the info"). The card opens on the size the lot has, and
-  // what it draws then REPLACES the lot rather than adding a second one.
+  // IS THE CARD UP? Set by the SITE PLAN key and by the double-click on a
+  // lot already drawn (Movie, 18 Oct: "i accidentally put the site the wrong
+  // direction, how about if a user double clicks on the site property line
+  // or the site layout view window in the LEVELS LAYERS tab, bring up the
+  // initial SITE PLAN loading information popup so they can reload or change
+  // the info"). Over a lot the card opens on the size the lot has, and what
+  // it draws then REPLACES the lot rather than adding a second one. Every
+  // answer on the card puts the flag down, and so does leaving SITE: the
+  // card is repainted on every repaint of the page, and a flag left up
+  // would be the pop-up coming back on its own, which is what jb ended.
   let lotReopen = false;
 
   const lotMetric = () => drawing?.units === 'metric';
@@ -2143,7 +2147,7 @@
 
   paintLotPick = () => {
     if (!lotCard) return;
-    const show = lotOnSite() && ((!lotExists() && !lotAsked) || lotReopen);
+    const show = lotOnSite() && lotReopen;
     lotCard.hidden = !show;
     if (!show) return;
     const metric = lotMetric();
@@ -2337,7 +2341,6 @@
     // re-derive a tier from four points that may no longer be a rectangle.
     drawing.lot = { widthFt: chosen.widthFt, depthFt: chosen.depthFt,
       tier: chosen.custom ? null : chosen.id };
-    lotAsked = true;
     paintLotPick();
     sayOnStrip(`AUTOSITE ${chosen.sizeLabel} ${chosen.unitLabel} drawn \u2014 `
       + 'drag its corners to suit your lot.');
@@ -2604,7 +2607,6 @@
     });
     lotCard.querySelector('[data-lot-pick-skip]').addEventListener('click', () => {
       lotTouched = true;
-      lotAsked = true;
       lotReopen = false;
       paintLotPick();
     });
@@ -2617,7 +2619,7 @@
     // quietly drop a building out of the dimension strings.
     lotCard.querySelector('[data-lot-pick-hand]').addEventListener('click', () => {
       lotTouched = true;
-      lotAsked = true;
+      lotReopen = false;
       paintLotPick();
       setTool('outline');
       sayOnStrip('Draw the lot line \u2014 click each corner, and close the loop on the first.');
@@ -2629,7 +2631,7 @@
     // between him and the file dialog is a menu he did not ask for.
     lotCard.querySelector('[data-lot-pick-upload]').addEventListener('click', () => {
       lotTouched = true;
-      lotAsked = true;
+      lotReopen = false;
       paintLotPick();
       const picker = document.querySelector('[data-trace-file]');
       if (picker) picker.click();
@@ -2648,7 +2650,7 @@
     // refresh instead of bringing in a new one.
     lotCard.querySelector('[data-lot-pick-import]').addEventListener('click', () => {
       lotTouched = true;
-      lotAsked = true;
+      lotReopen = false;
       paintLotPick();
       const bringIn = document.querySelector('[data-hologram-ask-upload]');
       if (bringIn) bringIn.click();
@@ -2680,6 +2682,26 @@
     lotReopen = true;
     paintLotPick();
     sayOnStrip('THE LOT — change its size and press OK or DRAW AUTOSITE; NOT NOW leaves it as it is.');
+  };
+  // THE SITE PLAN KEY'S PRESS (jb, 9 Nov): the one way to the card on a
+  // drawing with no lot. From any level: the card's own answers assume the
+  // drafter is standing on the lot (DRAW IT MYSELF arms OUTLINE on the level
+  // he is on), so the press goes to SITE first, and goToLevel's repaint
+  // then paints the card there. Over a lot already drawn it is the
+  // double-click's reopen, with the lot's own size typed in.
+  dropLotCard = () => { lotReopen = false; };
+  openLotCard = () => {
+    if (!lotCard || !drawing) return;
+    if (lotExists()) {
+      if (!lotOnSite()) goToLevel(SITE_LEVEL_ID);
+      reopenLot();
+      return;
+    }
+    lotSizeId = null;
+    lotTouched = false;
+    lotReopen = true;
+    if (!lotOnSite()) goToLevel(SITE_LEVEL_ID);
+    paintLotPick();
   };
   canvas.addEventListener('dblclick', e => {
     if (!lotOnSite() || activeTool !== RESTING_TOOL || !lotExists()) return;

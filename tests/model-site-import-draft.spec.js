@@ -47,7 +47,9 @@ async function openOnSite(page) {
   }, { bucket: BUCKET, drawing: blank() });
   await page.goto(`/MODEL.html?level=${SITE}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await expect(page.locator('#lot-pick')).toBeVisible();
+  // THE CARD DOES NOT COME UP ON ITS OWN ANY MORE (jb, 9 Nov): the SITE
+  // PLAN key opens it.
+  await h.openLotCard(page);
   await page.waitForTimeout(300);
 }
 
