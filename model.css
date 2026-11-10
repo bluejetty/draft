@@ -1107,6 +1107,39 @@
     cursor:pointer; background:#fff; color: var(--pad-ink); border:1px solid var(--pad-gum); border-radius:3px; }
   .calc-keys button:hover { border-color: var(--pad-ink); }
   .calc-keys .op { background: var(--pad-gum); }
+  /* THE TURTLE (Movie, 10 Nov), the pad's third tab: the table of moves,
+     the lamp that goes green when the path comes home, and the keys. */
+  .turtle { flex:1; min-height:0; display:flex; flex-direction:column; gap:4px; padding:6px;
+    color: var(--pad-ink); font-family: var(--font-ui); }
+  .turtle[hidden] { display:none; }
+  .turtle-head { display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700; letter-spacing:0.08em; }
+  .turtle-lamp { display:inline-flex; color:#1b1b1b; }
+  .turtle-status { flex:1; }
+  .turtle-name { opacity:0.7; font-weight:600; }
+  .turtle[data-closed] .turtle-lamp { color:#18b24a; filter: drop-shadow(0 0 3px rgba(24,178,74,0.9)); }
+  .turtle[data-closed] .turtle-status { color:#128a38; }
+  .turtle-cols { display:grid; grid-template-columns: 1fr 1fr 40px; gap:4px; font-size:9px; font-weight:700;
+    letter-spacing:0.12em; opacity:0.7; padding:0 2px; }
+  .turtle-rows { flex:1; min-height:60px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+  .turtle-row { display:grid; grid-template-columns: 1fr 1fr 40px; gap:4px; align-items:center; }
+  .turtle-row input { width:100%; box-sizing:border-box; font-family: var(--font-ui); font-size:12px;
+    padding:3px 4px; border:1px solid var(--pad-gum); border-radius:2px; background: rgba(255,255,255,0.55); color: var(--pad-ink); }
+  .turtle-row input[data-bad] { border-color:#b4281e; color:#8a1c1c; }
+  .turtle-row[data-off] input { border-style:dashed; }
+  .turtle[data-closed] .turtle-row input:not([data-bad]) { color:#128a38; border-color:#18b24a;
+    box-shadow: 0 0 4px rgba(24,178,74,0.55); }
+  .turtle-row .turtle-row-keys { display:flex; gap:2px; }
+  .turtle-row .turtle-row-keys button { font-family: var(--font-ui); font-size:11px; font-weight:700; line-height:1;
+    width:18px; height:20px; padding:0; border:1px solid var(--pad-gum); border-radius:2px;
+    background: rgba(255,255,255,0.45); color: var(--pad-ink); cursor:pointer; }
+  .turtle-row .turtle-row-keys button:hover { border-color: var(--pad-ink); }
+  .turtle-keys { display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; }
+  .turtle-keys button { font-family: var(--font-ui); font-size:10px; font-weight:700; letter-spacing:0.04em; padding:6px 0;
+    border:1px solid var(--pad-gum); border-radius:2px; background: rgba(255,255,255,0.45); color: var(--pad-ink); cursor:pointer; }
+  .turtle-keys button:hover { border-color: var(--pad-ink); }
+  .turtle-keys button[disabled] { opacity:0.4; cursor:default; }
+  .turtle-keys button[data-armed] { border-color: var(--pad-ink); background: var(--pad-gum); }
+  .turtle-hint { font-size:9px; line-height:12px; opacity:0.65; }
   .calc-keys .unit { font-size:10px; letter-spacing:0.06em; }
   .calc-keys .wide { font-size:9px; letter-spacing:0.06em; }
   .calc-keys .eq { background: var(--pad-ink); color: var(--pad); }

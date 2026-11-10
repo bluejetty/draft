@@ -117,7 +117,7 @@ test('the strip drops read-outs before controls as it narrows', async ({ page })
 
   // At iPad width the decorative instruments have stood down...
   expect(await visible('[data-mode-frenchcurve]')).toBe(false);
-  expect(await visible('[data-mode-shield]')).toBe(false);
+  expect(await visible('[data-turtle-lamp-chip]')).toBe(false);
   expect(await visible('[data-mode-brush]')).toBe(false);
   // ...while every control is still there. That is the whole rule: a narrow
   // screen costs you a decoration, never a button.

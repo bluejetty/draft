@@ -174,6 +174,7 @@
       fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };
     adoptNotes();
+    turtleOnDrawingChanged();
     trimSlivers({ walls: true });
     dropLotRoofs();
     // THE HALF INCH OFF A CROSSING WALL, on every drawing opened (Movie, 23

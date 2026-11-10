@@ -448,7 +448,7 @@
   /* 1300 SINCE 17 OCT, when SNAP and TRACK came in and PRINTSCREEN went off
      the 1280 sheet again. 1366, Movie's laptop, keeps every chip. */
   @media (max-width: 1300px) {
-    #strip-center .chip.dormant { display:none; }
+    #strip-center .chip.dormant, #strip-center .chip.turtle { display:none; }
   }
   /* THE LABEL OUTLASTS THE WIDTH IT COSTS. Dropping the word LENGTH saved
      ~48px and spent the thing the box was for: an unlabelled field next to
@@ -473,6 +473,9 @@
     color: var(--ink-secondary); cursor:pointer; }
   .chip:hover { border-color: var(--edge-panel); }
   .chip.lit { color: var(--accent); border-color: var(--accent); }
+  /* THE TURTLE LAMP: black until the path on the NOTES pad comes home. */
+  .chip.turtle { color: var(--ink-primary, #1b1b1b); }
+  .chip.turtle.home { color:#18b24a; border-color:#18b24a; filter: drop-shadow(0 0 3px rgba(24,178,74,0.8)); }
   /* SNAP HELD OFF BY CTRL (Movie, 26 Oct): dimmed while the key is down,
      its own on/off left as it was. */
   .chip.held-off { opacity: 0.35; }

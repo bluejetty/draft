@@ -51,7 +51,7 @@ test('three side chips flank each side of the working instruments', async ({ pag
   await openModel(page);
 
   const leftChips = ['[data-mode-compass]', '[data-mode-triangle]', '[data-mode-brush]'];
-  const rightChips = ['[data-mode-scale]', '[data-mode-shield]', '[data-mode-frenchcurve]'];
+  const rightChips = ['[data-mode-scale]', '[data-turtle-lamp-chip]', '[data-mode-frenchcurve]'];
 
   const rulerBox = await page.locator('[data-mode-ruler]').boundingBox();
   for (const selector of leftChips) {
@@ -74,7 +74,6 @@ test('every side chip lights its own colour under the cursor', async ({ page }) 
     ['[data-mode-triangle]', 'rgb(63, 159, 159)'],
     ['[data-mode-brush]', 'rgb(138, 99, 184)'],
     ['[data-mode-scale]', 'rgb(106, 154, 74)'],
-    ['[data-mode-shield]', 'rgb(192, 80, 80)'],
     ['[data-mode-frenchcurve]', 'rgb(74, 127, 192)'],
   ];
   for (const [selector, color] of glows) {

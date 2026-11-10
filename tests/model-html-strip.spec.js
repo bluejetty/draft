@@ -175,8 +175,9 @@ test.describe('MODEL.html instrument strip', () => {
       // anything. That is the whole value of asserting both as exhaustive
       // sets: an instrument cannot be quietly demoted, and one that is built
       // cannot be quietly left looking dead.
-      for (const sel of ['[data-mode-compass]', '[data-mode-triangle]',
-        '[data-mode-shield]']) {
+      // THE ERASING SHIELD'S CHIP went to the TURTLE lamp on 10 Nov (Movie:
+      // "ditch one that isn't connected"), so two stand down here now.
+      for (const sel of ['[data-mode-compass]', '[data-mode-triangle]']) {
         const chip = page.locator(sel);
         await expect(chip).toHaveClass(/dormant/);
         await expect(chip).toHaveAttribute('title', /not built/);
@@ -199,7 +200,7 @@ test.describe('MODEL.html instrument strip', () => {
     await openModel(page);
 
     for (const sel of ['[data-mode-compass]', '[data-mode-triangle]',
-      '[data-mode-brush]', '[data-mode-shield]']) {
+      '[data-mode-brush]', '[data-turtle-lamp-chip]']) {
       await expect(page.locator(sel)).toBeVisible();
     }
     const room = await page.evaluate(() => ({

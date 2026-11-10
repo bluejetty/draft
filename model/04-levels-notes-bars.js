@@ -263,6 +263,7 @@
     padTabs.forEach(b => b.setAttribute('aria-selected', String(b.dataset.padTab === which)));
     notesText.hidden = which !== 'notes';
     calcBox.hidden = which !== 'calc';
+    document.querySelector('[data-turtle]').hidden = which !== 'turtle';
     notesCount.hidden = which !== 'notes';
     document.querySelectorAll('[data-notes-save-txt], [data-notes-clear]').forEach(b => { b.hidden = which !== 'notes'; });
     if (which === 'calc') calcLine.focus();
@@ -345,6 +346,416 @@
   });
   syncUnits();
   drawTape();
+
+  // ── THE TURTLE, THE PAD'S THIRD TAB (Movie, 10 Nov: "was thinking of
+  // adding a column / TURTLE ... i'd like a 2 column s, each row will be a
+  // new MOVE for the line ... i can enter all the directions and
+  // measurements in that TURTLE columns and then i can either press (draw on
+  // registration point the GOLD target) or select location to start as 2nd
+  // option"). ────────────────────────────────────────────────────────────
+  //
+  // ONE ROW IS ONE MOVE: a direction and a distance. turtle-path.js reads
+  // both and walks them into points; this is the table, the two DRAW keys,
+  // and the link between a table and the lines it drew.
+  //
+  // THE TABLE STAYS WITH ITS LINES. A DRAW writes the lines as one assembly
+  // (TURTLE n) and files the table on the drawing (`turtles`, by the lines'
+  // ids), so picking any of those lines brings its table back up and
+  // REGENERATE redraws them from new numbers -- IN PLACE, the same line
+  // records and ids, from the same start, so a dimension hung on a corner
+  // rides with it (Movie: "select the TURTLE CREATED item ... press
+  // REGENERATE and it will go to the new numbers, same start point, all the
+  // dimensions should still link properly"). A row added or taken out adds
+  // or drops a line at that place; the lines before it keep their corners.
+  //
+  // THE LAMP GOES GREEN when the last move comes home within an inch
+  // (Movie: "once the guy returns perfectly the position where he started
+  // all the TURTLE numbers glow green so he knows it lines up and will be a
+  // completed shape"), and the turtle chip on the instrument strip with it.
+  //
+  // A table with no lines yet (typed before any DRAW) is kept per browser,
+  // so a reload does not lose a lot half typed.
+  const turtleBox = document.querySelector('[data-turtle]');
+  const turtleRowsBox = document.querySelector('[data-turtle-rows]');
+  const turtleStatus = document.querySelector('[data-turtle-status]');
+  const turtleNameOut = document.querySelector('[data-turtle-name]');
+  const TURTLE_KEY = 'draft.turtle';
+  const TURTLE_ROWS_MAX = 200;
+  const turtleRowsOf = raw => (Array.isArray(raw) ? raw : []).slice(0, TURTLE_ROWS_MAX)
+    .map(r => ({ dir: String(r?.dir ?? '').slice(0, 24), dist: String(r?.dist ?? '').slice(0, 40) }));
+  const turtleScratch = () => {
+    try { return turtleRowsOf(JSON.parse(localStorage.getItem(TURTLE_KEY) || '[]')); } catch { return []; }
+  };
+  // What the tab shows: the rows, and the record on the drawing they belong
+  // to (null while the path has not been drawn).
+  let turtleCur = { rows: turtleScratch(), record: null };
+  let turtlePickArmed = false;
+  const turtleRecords = () => (Array.isArray(drawing?.turtles) ? drawing.turtles : []);
+  const turtleKeep = () => {
+    if (turtleCur.record) { if (drawing) markDirty(); return; }
+    try { localStorage.setItem(TURTLE_KEY, JSON.stringify(turtleCur.rows)); } catch { /* this tab only */ }
+  };
+  // THE LIVE LINES of a record, in the table's order; a line deleted on the
+  // sheet is simply not there.
+  const turtleLiveLines = rec => (rec?.lineIds || [])
+    .map(id => (drawing?.lines || []).find(l => String(l.id) === String(id))).filter(Boolean);
+  const turtleWalk = (start = null) => window.DraftTurtlePath.walk(turtleCur.rows,
+    start || { x: 0, z: 0 }, { calc: window.DraftCalc, metric: drawing?.units === 'metric' });
+  const turtleGapText = ft => (drawing?.units === 'metric'
+    ? `${(ft / window.DraftCalc.FT_PER_M).toFixed(2)} m` : window.DraftCalc.feetInches(ft, 16));
+  // The lamp on the strip (shell-bars.js), lit with the pad's own.
+  const turtleSyncChip = closed => {
+    const chip = document.querySelector('[data-turtle-lamp-chip]');
+    if (chip) chip.classList.toggle('home', closed);
+  };
+  // REFRESH: the status, the lamp, each row's bad marks and its "edited on
+  // the plan" mark -- without rebuilding the inputs, so typing keeps focus.
+  const turtleRefresh = () => {
+    const rec = turtleCur.record;
+    const live = rec ? turtleLiveLines(rec) : [];
+    const start = live[0] ? { x: live[0].start.x, z: live[0].start.z } : (rec?.start || null);
+    const w = turtleWalk(start);
+    const badAt = new Map(w.bad.map(b => [b.row, b]));
+    const legAt = new Map(w.legs.map(l => [l.row, l]));
+    const offFt = 0.01;
+    turtleRowsBox.querySelectorAll('[data-turtle-row]').forEach(rowEl => {
+      const i = Number(rowEl.dataset.turtleRow);
+      const bad = badAt.get(i);
+      const dirIn = rowEl.querySelector('[data-turtle-dir]'), distIn = rowEl.querySelector('[data-turtle-dist]');
+      if (bad?.dir) dirIn.setAttribute('data-bad', ''); else dirIn.removeAttribute('data-bad');
+      if (bad?.dist) distIn.setAttribute('data-bad', ''); else distIn.removeAttribute('data-bad');
+      // THE PLAN DISAGREES with this row: its line was dragged, or is gone.
+      const leg = legAt.get(i);
+      const k = w.legs.indexOf(leg);
+      const line = leg ? live[k] : null;
+      const off = leg && rec && (!line
+        || Math.hypot(line.start.x - leg.from.x, line.start.z - leg.from.z) > offFt
+        || Math.hypot(line.end.x - leg.to.x, line.end.z - leg.to.z) > offFt);
+      if (off) rowEl.setAttribute('data-off', ''); else rowEl.removeAttribute('data-off');
+      rowEl.title = off ? (line ? 'This line was moved on the plan; REGENERATE puts it back to the numbers' : 'This line is gone from the plan; REGENERATE draws it again') : '';
+    });
+    if (w.closed) turtleBox.setAttribute('data-closed', ''); else turtleBox.removeAttribute('data-closed');
+    turtleSyncChip(w.closed);
+    const n = w.legs.length;
+    turtleStatus.textContent = !n ? 'NO MOVES YET'
+      : w.closed ? `CLOSED · ${n} MOVE${n === 1 ? '' : 'S'}`
+        : `OPEN · ${n} MOVE${n === 1 ? '' : 'S'} · GAP ${turtleGapText(w.gapFt)}`;
+    turtleNameOut.textContent = rec ? (groups().find(g => g.id === rec.groupId)?.name || 'TURTLE') : 'NEW PATH';
+    const regen = turtleBox.querySelector('[data-turtle-do="regen"]');
+    if (regen) regen.disabled = !rec;
+    return w;
+  };
+  // RENDER: the rows as inputs, plus one blank row to type the next move in.
+  const turtleRender = ({ focusRow = -1, focusCol = 'dir' } = {}) => {
+    turtleRowsBox.textContent = '';
+    const shown = [...turtleCur.rows, { dir: '', dist: '' }];
+    shown.forEach((row, i) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'turtle-row';
+      rowEl.dataset.turtleRow = String(i);
+      const dirIn = document.createElement('input');
+      dirIn.type = 'text'; dirIn.dataset.turtleDir = ''; dirIn.value = row.dir; dirIn.placeholder = i ? '' : 'N';
+      dirIn.spellcheck = false; dirIn.autocomplete = 'off'; dirIn.setAttribute('aria-label', `Move ${i + 1} direction`);
+      const distIn = document.createElement('input');
+      distIn.type = 'text'; distIn.dataset.turtleDist = ''; distIn.value = row.dist; distIn.placeholder = i ? '' : '106.87';
+      distIn.spellcheck = false; distIn.autocomplete = 'off'; distIn.setAttribute('aria-label', `Move ${i + 1} distance`);
+      const keys = document.createElement('span');
+      keys.className = 'turtle-row-keys';
+      const plus = document.createElement('button');
+      plus.type = 'button'; plus.textContent = '+'; plus.dataset.turtleInsert = String(i); plus.title = 'Put a new move in after this one';
+      const cut = document.createElement('button');
+      cut.type = 'button'; cut.textContent = '×'; cut.dataset.turtleRemove = String(i); cut.title = 'Take this move out';
+      const trailing = i === turtleCur.rows.length;
+      if (trailing) { plus.hidden = true; cut.hidden = true; }
+      keys.append(plus, cut);
+      rowEl.append(dirIn, distIn, keys);
+      turtleRowsBox.append(rowEl);
+    });
+    turtleRefresh();
+    if (focusRow >= 0) {
+      const el = turtleRowsBox.querySelector(`[data-turtle-row="${focusRow}"] [data-turtle-${focusCol}]`);
+      if (el) { el.focus(); el.select(); }
+    }
+  };
+  // THE TRAILING BLANK ROW becomes a real row the moment something is
+  // typed in it, and a new blank one appears under it.
+  const turtleRowTyped = (i, col, value) => {
+    const rows = turtleCur.rows;
+    if (i === rows.length) {
+      if (!value.trim()) return;
+      if (rows.length >= TURTLE_ROWS_MAX) return;
+      rows.push({ dir: '', dist: '' });
+      rows[i][col] = value;
+      turtleKeep();
+      turtleRender({ focusRow: i, focusCol: col });
+      const el = turtleRowsBox.querySelector(`[data-turtle-row="${i}"] [data-turtle-${col}]`);
+      if (el) { el.focus(); el.setSelectionRange(value.length, value.length); }
+      return;
+    }
+    if (!rows[i]) return;
+    rows[i][col] = value;
+    turtleKeep();
+    turtleRefresh();
+  };
+  turtleRowsBox.addEventListener('input', e => {
+    const rowEl = e.target.closest('[data-turtle-row]');
+    if (!rowEl) return;
+    const col = 'turtleDir' in e.target.dataset ? 'dir' : 'turtleDist' in e.target.dataset ? 'dist' : null;
+    if (!col) return;
+    turtleRowTyped(Number(rowEl.dataset.turtleRow), col, e.target.value);
+  });
+  // THE PAGE'S KEYS STAY OFF THE TABLE (a D typed here is a D); ENTER and
+  // TAB walk the cells like a sheet: direction, distance, next row.
+  turtleRowsBox.addEventListener('keydown', e => {
+    e.stopPropagation();
+    const rowEl = e.target.closest('[data-turtle-row]');
+    if (!rowEl) return;
+    const i = Number(rowEl.dataset.turtleRow);
+    const isDir = 'turtleDir' in e.target.dataset;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const next = isDir ? turtleRowsBox.querySelector(`[data-turtle-row="${i}"] [data-turtle-dist]`)
+        : turtleRowsBox.querySelector(`[data-turtle-row="${i + 1}"] [data-turtle-dir]`);
+      if (next) { next.focus(); next.select(); }
+    } else if (e.key === 'Escape') { e.target.blur(); }
+  });
+  turtleRowsBox.addEventListener('click', e => {
+    const insert = e.target.closest('[data-turtle-insert]');
+    const remove = e.target.closest('[data-turtle-remove]');
+    if (insert) {
+      const i = Number(insert.dataset.turtleInsert);
+      if (turtleCur.rows.length >= TURTLE_ROWS_MAX) return;
+      turtleCur.rows.splice(i + 1, 0, { dir: '', dist: '' });
+      turtleKeep();
+      turtleRender({ focusRow: i + 1 });
+    } else if (remove) {
+      const i = Number(remove.dataset.turtleRemove);
+      turtleCur.rows.splice(i, 1);
+      turtleKeep();
+      turtleRender({ focusRow: Math.min(i, turtleCur.rows.length) });
+    }
+  });
+
+  // ── DRAWING THE PATH ────────────────────────────────────────────────────
+  const turtleGroupOf = rec => groups().find(g => g.id === rec?.groupId) || null;
+  const turtleLineRecord = (leg, levelId, view) => ({
+    id: newDrawingItemId('line'),
+    start: poolVertex({ x: leg.from.x, z: leg.from.z }, levelId, view),
+    end: poolVertex({ x: leg.to.x, z: leg.to.z }, levelId, view),
+    levelId,
+    view,
+    layer: 'draft',
+    ...lineStyleDefaults(),
+  });
+  const turtleSelect = made => setSelection(made.map(item => ({ type: 'line', item })));
+  // The path's assembly: two or more lines are one TURTLE n, as a drawn
+  // string of lines is one LINES n (sealDrawnChain); one line stands alone.
+  const turtleGroupLines = (rec, made) => {
+    drawing.groups = drawing.groups || [];
+    let group = turtleGroupOf(rec);
+    if (made.length < 2) {
+      if (group) drawing.groups.splice(drawing.groups.indexOf(group), 1);
+      rec.groupId = null;
+      return null;
+    }
+    if (!group) {
+      const n = Number(drawing.nextGroupId) > 0 ? Number(drawing.nextGroupId) : groups().length + 1;
+      group = { id: `group-${n}`, name: `TURTLE ${n}`, fixed: true, stretchBehavior: 'rigid', members: [], wallSettings: null };
+      drawing.groups.push(group);
+      drawing.nextGroupId = n + 1;
+      rec.groupId = group.id;
+    }
+    group.members = made.map(line => ({ type: 'line', id: line.id }));
+    return group;
+  };
+  const turtleSnapshot = rec => ({
+    lines: drawing.lines.slice(),
+    ends: drawing.lines.map(l => [l, l.start, l.end]),
+    groups: (drawing.groups || []).slice(),
+    members: new Map((drawing.groups || []).map(g => [g, g.members])),
+    nextGroupId: drawing.nextGroupId,
+    turtles: (drawing.turtles || []).slice(),
+    hadTurtles: 'turtles' in drawing,
+    rec: rec ? { groupId: rec.groupId, lineIds: (rec.lineIds || []).slice(), start: rec.start ? { ...rec.start } : null, levelId: rec.levelId, view: rec.view } : null,
+    pool: vertexPool.slice(),
+  });
+  const turtleRestore = (snap, rec) => {
+    drawing.lines.splice(0, drawing.lines.length, ...snap.lines);
+    snap.ends.forEach(([l, s, e]) => { l.start = s; l.end = e; });
+    drawing.groups = snap.groups;
+    snap.members.forEach((members, g) => { g.members = members; });
+    drawing.nextGroupId = snap.nextGroupId;
+    if (snap.hadTurtles) drawing.turtles = snap.turtles; else delete drawing.turtles;
+    if (rec && snap.rec) Object.assign(rec, snap.rec);
+    vertexPool.splice(0, vertexPool.length, ...snap.pool);
+    setSelection([]);
+    if (turtleCur.record && !(drawing.turtles || []).includes(turtleCur.record)) turtleCur = { rows: turtleCur.rows, record: null };
+    turtleRender();
+  };
+  // DRAW: new lines from `start`, as a new record (or, for a record whose
+  // lines are all gone from the sheet, that record again at its old start).
+  const turtleDraw = (start, record = null) => {
+    if (!drawing) return false;
+    const w = turtleWalk(start);
+    if (!w.legs.length) { sayOnStrip('TURTLE: type a direction and a distance on at least one row first.'); return false; }
+    const { levelId, viewId } = onActiveLevel();
+    const homeView = record?.view || wallHomeView(viewId);
+    const level = record ? record.levelId : levelId;
+    drawing.lines = drawing.lines || [];
+    const snap = turtleSnapshot(record);
+    const made = w.legs.map(leg => turtleLineRecord(leg, level, homeView));
+    made.forEach(line => drawing.lines.push(line));
+    const rec = record || { id: `turtle-${Date.now().toString(36)}`, rows: turtleCur.rows };
+    rec.levelId = level; rec.view = homeView;
+    rec.start = { x: w.points[0].x, z: w.points[0].z };
+    rec.lineIds = made.map(line => line.id);
+    turtleGroupLines(rec, made);
+    if (!record) drawing.turtles = [...turtleRecords(), rec];
+    try { localStorage.removeItem(TURTLE_KEY); } catch { /* fine */ }
+    turtleCur = { rows: rec.rows, record: rec };
+    undoStack.push({ kind: 'node', undo: () => turtleRestore(snap, record) });
+    markDirty();
+    turtleSelect(made);
+    paint();
+    turtleRender();
+    sayOnStrip(`TURTLE: ${made.length} line${made.length === 1 ? '' : 's'} drawn${w.closed ? ', and the path closes' : `, open by ${turtleGapText(w.gapFt)}`}.`);
+    return true;
+  };
+  // REGENERATE: the same lines, moved to the new numbers from the same
+  // start -- the first line's start as it stands, so a path MOVED on the
+  // sheet regenerates where it was moved to. Extra rows add lines after
+  // the last; rows taken out drop lines from the end of what is live, by
+  // position, so the rows before an insert keep their corners.
+  const turtleRegenerate = () => {
+    const rec = turtleCur.record;
+    if (!drawing || !rec) { sayOnStrip('TURTLE: pick a turtle path on the sheet first, or DRAW one.'); return false; }
+    const live = turtleLiveLines(rec);
+    if (!live.length) return turtleDraw(rec.start || gridDatum() || { x: 0, z: 0 }, rec);
+    const start = { x: live[0].start.x, z: live[0].start.z };
+    const w = turtleWalk(start);
+    if (!w.legs.length) { sayOnStrip('TURTLE: no moves read; the lines were left as they are.'); return false; }
+    const snap = turtleSnapshot(rec);
+    const levelId = live[0].levelId, homeView = live[0].view || 'plan';
+    const stale = new Set();
+    const kept = [];
+    w.legs.forEach((leg, i) => {
+      let line = live[i];
+      if (line) {
+        stale.add(line.start); stale.add(line.end);
+        line.start = poolVertex({ x: leg.from.x, z: leg.from.z }, levelId, homeView);
+        line.end = poolVertex({ x: leg.to.x, z: leg.to.z }, levelId, homeView);
+      } else {
+        line = turtleLineRecord(leg, levelId, homeView);
+        const after = kept[kept.length - 1];
+        const at = after ? drawing.lines.indexOf(after) + 1 : drawing.lines.length;
+        drawing.lines.splice(at, 0, line);
+      }
+      kept.push(line);
+    });
+    live.slice(w.legs.length).forEach(line => {
+      stale.add(line.start); stale.add(line.end);
+      const at = drawing.lines.indexOf(line);
+      if (at >= 0) drawing.lines.splice(at, 1);
+    });
+    retirePoolCorners([...stale]);
+    rec.lineIds = kept.map(line => line.id);
+    rec.start = start;
+    turtleGroupLines(rec, kept);
+    undoStack.push({ kind: 'node', undo: () => turtleRestore(snap, rec) });
+    markDirty();
+    turtleSelect(kept);
+    paint();
+    turtleRender();
+    sayOnStrip(`TURTLE: ${kept.length} line${kept.length === 1 ? '' : 's'} regenerated${w.closed ? ', and the path closes' : `, open by ${turtleGapText(w.gapFt)}`}.`);
+    return true;
+  };
+  // THE PRESSED START (model/16 hands the press here while armed): the
+  // nearest corner on the level within the grab reach, else the press.
+  const turtlePickAt = at => {
+    turtlePickArmed = false;
+    turtleBox.querySelector('[data-turtle-do="point"]')?.removeAttribute('data-armed');
+    const reach = SELECT_GRAB_PX / view.scale;
+    let best = null, bestD = reach;
+    const take = p => { if (!p) return; const d = Math.hypot(p.x - at.x, p.z - at.z); if (d < bestD) { bestD = d; best = { x: p.x, z: p.z }; } };
+    take(gridDatum());
+    [...walls(), ...lines()].forEach(seg => { take(seg.start); take(seg.end); });
+    [...outlines(), ...floors(), ...shapes()].forEach(loop => (loop.points || []).forEach(take));
+    turtleDraw(best || { x: at.x, z: at.z });
+  };
+  const turtleArmPick = () => {
+    turtlePickArmed = true;
+    turtleBox.querySelector('[data-turtle-do="point"]')?.setAttribute('data-armed', '');
+    sayOnStrip('TURTLE: press the start point on the sheet (Esc to put it down).');
+  };
+  const turtleDisarmPick = () => {
+    if (!turtlePickArmed) return;
+    turtlePickArmed = false;
+    turtleBox.querySelector('[data-turtle-do="point"]')?.removeAttribute('data-armed');
+  };
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') turtleDisarmPick(); }, true);
+  // THE SELECTION BRINGS ITS TABLE UP: any line of a turtle path picked
+  // shows that path's rows (model/18 hooks this on the selection watchers,
+  // which are declared after this file runs).
+  const turtleFollowSelection = () => {
+    if (!drawing || !selection.length) return;
+    const ids = new Set(selection.filter(e => e.type === 'line').map(e => String(e.item?.id)));
+    const rec = turtleRecords().find(r => (r.lineIds || []).some(id => ids.has(String(id))));
+    if (!rec || rec === turtleCur.record) return;
+    rec.rows = turtleRowsOf(rec.rows);
+    turtleCur = { rows: rec.rows, record: rec };
+    turtleRender();
+  };
+  // A fresh table, the pad's own, for the next path.
+  const turtleNewPath = () => {
+    turtleDisarmPick();
+    turtleCur = { rows: [], record: null };
+    turtleKeep();
+    turtleRender({ focusRow: 0 });
+  };
+  // AND ANOTHER DRAWING OPENED drops a record that is not in it.
+  const turtleOnDrawingChanged = () => {
+    if (turtleCur.record && !turtleRecords().includes(turtleCur.record)) turtleCur = { rows: turtleScratch(), record: null };
+    turtleRender();
+  };
+  turtleBox.querySelectorAll('[data-turtle-do]').forEach(b => b.addEventListener('click', () => {
+    const what = b.dataset.turtleDo;
+    if (what === 'target') {
+      turtleDisarmPick();
+      const at = gridDatum();
+      if (!at) { sayOnStrip('TURTLE: this drawing has no registration target yet; use DRAW AT POINT.'); return; }
+      if (turtleCur.record && turtleLiveLines(turtleCur.record).length) {
+        // A drawn path drawn again is a SECOND path from the same numbers.
+        turtleCur = { rows: turtleRowsOf(turtleCur.rows), record: null };
+      }
+      turtleDraw(at);
+    } else if (what === 'point') {
+      if (turtlePickArmed) { turtleDisarmPick(); return; }
+      if (turtleCur.record && turtleLiveLines(turtleCur.record).length) turtleCur = { rows: turtleRowsOf(turtleCur.rows), record: null };
+      turtleArmPick();
+    } else if (what === 'regen') { turtleDisarmPick(); turtleRegenerate(); }
+    else if (what === 'new') turtleNewPath();
+    else if (what === 'notes') {
+      const rows = window.DraftTurtlePath.rowsFromText(notesText.value);
+      if (!rows.length) { sayOnStrip('TURTLE: no moves found on the NOTES pad -- it reads lines like W 86.86 or N 30 E 50.'); return; }
+      turtleCur.rows.splice(0, turtleCur.rows.length, ...rows.slice(0, TURTLE_ROWS_MAX));
+      turtleKeep();
+      turtleRender();
+      sayOnStrip(`TURTLE: ${rows.length} move${rows.length === 1 ? '' : 's'} read off the NOTES pad.`);
+    } else if (what === 'clear') {
+      if (turtleCur.rows.length && !window.confirm('Clear every move on the TURTLE table?')) return;
+      turtleCur.rows.splice(0, turtleCur.rows.length);
+      turtleKeep();
+      turtleRender({ focusRow: 0 });
+    }
+  }));
+  // THE STRIP LAMP PRESSED opens the pad on TURTLE (the chip is built by
+  // shell-bars.js, so the press is heard on the document).
+  document.addEventListener('click', e => {
+    if (!e.target.closest?.('[data-turtle-lamp-chip]')) return;
+    if (paneShowing() !== 'notes' || !railOpen('right')) setPane('notes');
+    showPad('turtle');
+  });
+  turtleRender();
 
   // ── AND THE SAME TWO FACTS ON THE LEFT ──────────────────────────────────
   //

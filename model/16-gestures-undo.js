@@ -666,6 +666,9 @@
     // placing. It writes nothing to the drawing -- two presses and a number
     // on the strip -- so taking the press costs him no geometry.
     if (rulerOn) { rulerPress(at); return; }
+    // THE TURTLE'S START POINT (DRAW AT POINT on the NOTES pad, 10 Nov):
+    // armed, the next press is where the path starts, and nothing else.
+    if (turtlePickArmed) { turtlePickAt(at); return; }
     // AND THE BRUSH TAKES IT NEXT, for the ruler's own reason turned round:
     // it is an instrument whose entire gesture is a press on something that
     // is already drawn, so letting select or pan see the press first would
