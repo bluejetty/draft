@@ -251,25 +251,28 @@
     });
   };
   // A small box where the note goes; Enter keeps it, Escape drops it.
-  const askNoteText = (clientX, clientY, done) => {
-    const box = document.createElement('input');
-    box.type = 'text';
+  // With `lines`, SHIFT+ENTER starts a new line (a plan heading runs to two
+  // or three) and ENTER alone still places it.
+  const askNoteText = (clientX, clientY, done, { lines = false } = {}) => {
+    const box = document.createElement(lines ? 'textarea' : 'input');
+    if (!lines) box.type = 'text';
+    else { box.rows = 2; box.style.resize = 'both'; }
     box.dataset.elevNote = '';
-    box.placeholder = 'NOTE — Enter to place';
+    box.placeholder = lines ? 'NOTE — Enter to place, Shift+Enter for a new line' : 'NOTE — Enter to place';
     Object.assign(box.style, { position: 'fixed', left: `${clientX}px`, top: `${clientY - 14}px`,
       zIndex: 50, font: "600 14px 'Barlow Condensed', system-ui, sans-serif",
-      padding: '2px 6px', minWidth: '180px' });
+      padding: '2px 6px', minWidth: lines ? '260px' : '180px' });
     let settled = false;
     const settle = keep => {
       if (settled) return;
       settled = true;
-      const text = keep ? box.value.trim().toUpperCase() : '';
+      const text = keep ? box.value.split('\n').map(line => line.trim()).join('\n').trim().toUpperCase() : '';
       box.remove();
       done(text);
     };
     box.addEventListener('keydown', ev => {
       ev.stopPropagation();
-      if (ev.key === 'Enter') { ev.preventDefault(); settle(true); }
+      if (ev.key === 'Enter' && !(lines && ev.shiftKey)) { ev.preventDefault(); settle(true); }
       if (ev.key === 'Escape') { ev.preventDefault(); settle(false); }
     });
     box.addEventListener('blur', () => settle(true));
@@ -298,6 +301,84 @@
       if (next === 'annotation') sayOnStrip('NOTE — tap where the text goes, or press on the thing and drag to the text for a pointer. POINTER in the panel: tap the thing, then the text.');
     }
   });
+
+  // ── NOTES ON THE PLAN ──────────────────────────────────────────────────
+  //
+  // jb, 10 Nov: "when i am drawing the site plan i want to make a annotation
+  // with the plan info (i put it in the rm tag) i tried the ANNOTATION and it
+  // didn't draw and arrow or make a text box" -- "it act like just a grab and
+  // move the screen function". The tool above worked on an elevation alone;
+  // on a plan the press fell through to the pan. The plan's notes
+  // (drawing.notes: anchor, text point, body) already move, select, delete
+  // and print on LAYOUT's sheets, so this is the gesture that makes one:
+  //
+  //   TAP            a text box where the tap was, no leader.
+  //   POINTER on     tap the thing, then tap where the text goes.
+  //   PRESS AND DRAG from the thing to where the text goes -- a leader
+  //                  either way, ending as POINTER END says.
+  //
+  // Then the words: a box that takes several lines (Shift+Enter, for a plan
+  // heading like his), Enter places it, Escape drops it. The first tap of a
+  // pointer catches a node within reach, so a leader lands on the lot's
+  // corner rather than a foot off it. ROOF and SITE hold everything, and a
+  // note there is stored as 'plan' -- the format drops a note with no view.
+  let planNotePress = null;   // { at, x, y } -- a note press not yet lifted
+  let planPointerTip = null;  // world point -- POINTER's first tap, waiting for the text
+  const planNoteInHand = () => activeTool === 'annotation' && !!planPointerTip;
+  const noteNodeOrHere = at => {
+    const node = typeof snapNodeAt === 'function' ? snapNodeAt(at) : null;
+    return node ? { x: node.x, z: node.z } : { x: at.x, z: at.z };
+  };
+  const notePress = (at, e) => {
+    // The press is claimed: a canvas press moves focus by default, AFTER the
+    // handler, and that default would blur the text box the lift opens.
+    e.preventDefault();
+    planNotePress = { at: { x: at.x, z: at.z }, x: e.clientX, y: e.clientY };
+  };
+  const addPlanNote = (anchor, text, body, end) => {
+    const { levelId } = onActiveLevel();
+    drawing.notes = drawing.notes || [];
+    const id = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0) + 1;
+    return selectPlaced('note', addItem(drawing.notes, {
+      id, anchor: { x: anchor.x, y: 0, z: anchor.z }, text: { x: text.x, y: 0, z: text.z },
+      levelId, view: activeViewId() || 'plan', body, end,
+      fill: false, fillOpacity: 0.85, outline: false, bullnose: 0, layer: 'A-ANNO-NOTE',
+    }));
+  };
+  const planNoteLift = e => {
+    const press = planNotePress;
+    planNotePress = null;
+    const rect = canvas.getBoundingClientRect();
+    const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8;
+    const lift = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+    if (notePointer && !moved && !planPointerTip) {
+      planPointerTip = noteNodeOrHere(press.at);
+      sayOnStrip('POINTER — now tap where the text goes.');
+      paint();
+      return;
+    }
+    const pointed = planPointerTip;
+    planPointerTip = null;
+    const text = pointed ? press.at : (moved ? lift : press.at);
+    const anchor = pointed || (moved ? noteNodeOrHere(press.at) : press.at);
+    const leader = !!pointed || moved;
+    // A leader of no length is a note with none: the format drops the other.
+    const end = leader && Math.hypot(text.x - anchor.x, text.z - anchor.z) >= 0.01 ? noteEnd : 'none';
+    askNoteText(e.clientX, e.clientY, body => {
+      paint();
+      if (!body) return;
+      addPlanNote(end === 'none' ? text : anchor, text, body, end);
+      sayOnStrip('NOTE placed — tap for another, or press S for SELECT.');
+    }, { lines: true });
+  };
+  const paintPlanNotePreview = () => {
+    if (!planNoteInHand() || !cursorWorld) return;
+    const R = window.DraftRender2D;
+    if (!R) return;
+    R.drawNoteScreen2D(ctx, toS(planPointerTip), toS(cursorWorld), { body: '…', end: noteEnd },
+      { preview: true, pxPerFt: view.scale }, { color: skin['draw-note'], fillColor: skin['surface-page'] });
+  };
+  toolListeners.push(() => { planNotePress = null; planPointerTip = null; });
 
   // ── TRIM AND EXTEND, THE AUTOCAD WAY ────────────────────────────────────
   //
@@ -928,7 +1009,9 @@
     // from the base point.
     || (activeTool === 'stretch' && !!stretchState.a)
     // A STAIR FROM ITS FIRST STEP, at its real length.
-    || (activeTool === 'stair' && !!stairHand.at);
+    || (activeTool === 'stair' && !!stairHand.at)
+    // A POINTER's leader, from the thing tapped to wherever the text will go.
+    || planNoteInHand();
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the

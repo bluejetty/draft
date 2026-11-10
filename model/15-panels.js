@@ -3214,7 +3214,10 @@
     endRow.className = 'chip-row';
     endRow.append(chip('STRAIGHT', noteEnd === 'line', { noteEnd: 'line' }, () => {
       noteEnd = 'line'; showNoteProps();
-    }, 'A plain end on the pointer line. Arrow types come later.'));
+    }, 'A plain end on the pointer line.'),
+    chip('ARROW', noteEnd === 'arrow', { noteEnd: 'arrow' }, () => {
+      noteEnd = 'arrow'; showNoteProps();
+    }, 'An arrowhead where the pointer line meets the thing.'));
     box.append(titled('POINTER'), pointerRow, titled('POINTER END'), endRow);
     P.set('ANNOTATION', box);
     notePanelUp = true;

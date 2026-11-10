@@ -189,6 +189,8 @@
     elevLineStart = null;
     elevNotePress = null;
     elevPointerTip = null;
+    planNotePress = null;
+    planPointerTip = null;
     outlineCorners = [];
     floorCorners = [];
     shapeCorners = [];
@@ -547,6 +549,10 @@
     // preventDefault, or the press's own focus change lands after the handler
     // and takes the NAME box's focus straight back off it.
     if (activeTool === 'roomtag') { e.preventDefault(); placeRoomTag(at); return; }
+    // ANNOTATION on a plan (jb, 10 Nov): tap, POINTER tap-tap, or press and
+    // drag; the lift decides which (planNoteLift). Before drawsRun and the
+    // pan, which is where this press went until now.
+    if (activeTool === 'annotation') { notePress(at, e); return; }
     // STAIR, BY HAND (Movie, 25 Oct): the first step, then the way it runs
     // (stairHandPress). AUTO STAIR stays in its properties panel.
     if (activeTool === 'stair') { stairHandPress(at); return; }
@@ -1905,6 +1911,7 @@
   });
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointerup', e => { if (elevNotePress) elevNoteLift(e); });
+  canvas.addEventListener('pointerup', e => { if (planNotePress) planNoteLift(e); });
   canvas.addEventListener('pointercancel', endDrag);
 
   // ── ZOOM BACK AND ON (Movie, 27 Oct, the ARCHICAD keys he ticked) ────
