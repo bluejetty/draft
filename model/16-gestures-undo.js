@@ -735,6 +735,24 @@
       paint();
       return;
     }
+    // ── A SHAPE'S OR FLOOR'S EDGE PUSHED OR PULLED (jb, 10 Nov 2026) ────
+    // "grab the left side or right side and either move it in a foot or
+    // out a foot, and allow for creation of a new wall that joins them and
+    // is perpendicular to them". A press on a picked shape's or floor's
+    // EDGE, clear of its handles, slides that edge square to itself: the
+    // edges either side stretch along their own lines, and one that runs
+    // in line with it (the other half of a BREAK) gets a JOG corner
+    // instead of a tilt. slideLoopEdge has the rule.
+    const edgeHeld = shapedTag && loopKind !== 'roomtag' ? roomEdgeAt(shapedTag, at) : null;
+    if (edgeHeld != null) {
+      moveDrag = {
+        kind: 'roomedge', loopKind, tag: shapedTag, before: { ...shapedTag, points: shapedTag.points.slice() },
+        points: shapedTag.points.slice(), index: edgeHeld,
+        grab: at, sx: e.clientX, sy: e.clientY, active: false, moved: false,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     const tagGrab = roomTagAt(at);
     if (tagGrab && selection.some(entry => entry.item === tagGrab)) {
       moveDrag = {
@@ -1064,6 +1082,24 @@
           paint();
           return;
         }
+        if (md.kind === 'roomedge') {
+          // SQUARE TO ITSELF, by the foot with the light lit, from the ring
+          // as it stood -- never slid again from the last event.
+          const pts = md.before.points, i = md.index, n = pts.length;
+          const a = pts[i], b = pts[(i + 1) % n];
+          const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+          const nn = { x: -(b.z - a.z) / len, z: (b.x - a.x) / len };
+          let dist = (raw.x - md.grab.x) * nn.x + (raw.z - md.grab.z) * nn.z;
+          if (footOn) dist = quantiseFeet(dist);
+          const mk = md.loopKind === 'floor' ? p => ({ x: p.x, y: 0, z: p.z }) : p => ({ x: p.x, z: p.z });
+          md.points = slideLoopEdge(pts, i, dist, mk);
+          md.tag.points = md.points;
+          md.moved = Math.abs(dist) > 1e-9;
+          md.dist = dist;
+          cursorWorld = raw;
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // A NEW POINT EACH EVENT, never the old one edited: the undo step
           // holds the point the tag started at, and it must stay that point.
@@ -1326,7 +1362,7 @@
           // ALT HELD: the wall goes on its own, its corners let go. (SHIFT
           // until 27 Oct; Shift holds the drag square now, as ARCHICAD's does,
           // and Alt is the corner's own key -- Alt-drag detaches a corner.)
-          setWallLoose(md, e.altKey);
+          if (!md.jog) setWallLoose(md, e.altKey);
           // THE T-SQUARE HOLDS A MOVED WALL SQUARE (Movie, 18 Oct: "i like how
           // the walls move, but when the T is on they should stay moving 90
           // degrees it is free moving right now but the T is on"). The wall
@@ -1339,6 +1375,9 @@
               const nx = -uz / len, nz = ux / len, across = dx * nx + dz * nz;
               dx = nx * across; dz = nz * across;
             }
+            // AND A NEIGHBOUR IN LINE WITH IT GETS A JOG, not a tilt (jb,
+            // 10 Nov 2026: push / pull one half of a BREAK). See jogInline.
+            if (!md.loose) jogInline(md);
           }
           // THE FACES SEEK, after the ends' own corner snap and before the
           // foot: a face that catches beats the foot, the corner drag's own
@@ -1385,6 +1424,7 @@
         followAnchors(md.follow);
         md.before.forEach(b => relinkVertex(b.vtx));
         (md.follow || []).forEach(f => relinkVertex(f.vtx));
+        jogRingsFollow(md);
         paint();
       }
       return;
@@ -1586,6 +1626,30 @@
           paint();
           return;
         }
+        if (md.kind === 'roomedge') {
+          const tag = md.tag;
+          if (md.moved) {
+            const pts = tidyLoop(md.points);
+            if (window.DraftGeometry2D.selfIntersects(pts)) {
+              tag.points = md.before.points;
+              sayOnStrip('That push would make the shape cross itself, so it goes back.');
+            } else {
+              tag.points = pts;
+              undoStack.push({ kind: 'props', edits: [{ item: tag, before: md.before }] });
+              markDirty();
+              const jogged = pts.length > md.before.points.length;
+              sayOnStrip(`Edge ${md.dist > 0 ? 'pushed' : 'pulled'} ${feetLabel(Math.abs(md.dist))}${jogged ? ', a jog made at the break' : ''} — `
+                + `${md.loopKind === 'floor' ? 'the floor' : 'the shape'} is ${roomTagEnv().areaLabel(window.DraftDrawingFormat.loopAreaSqFt(pts))}. UNDO puts it back.`);
+            }
+          } else {
+            tag.points = md.before.points;
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          showSelectionProps();
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // The 'props' step puts the record back IN PLACE, the point with it.
           if (md.tag.at.x !== md.from.x || md.tag.at.z !== md.from.z) {
@@ -1668,8 +1732,14 @@
           paint();
           return;
         }
+        // A JOG PUSHED BACK FLUSH GOES NOW, before the step is cut, so the
+        // step's `before` names the node again and not a retired corner.
+        const jogs = settleJogs(md);
+        const tidy = tidyZeroPieces(md);
         const moveStep = { kind: 'move',
           before: [...md.before, ...(md.lockBefore || []), ...(md.follow || []), ...(md.faceBefore || [])],
+          // THE JOG RIDES THE MOVE'S STEP: one UNDO takes both.
+          ...(jogs ? { jog: jogs } : {}), ...(tidy ? { tidy } : {}),
           // A WALL LET GO WITH SHIFT takes its old corners back on UNDO.
           ...(md.loose ? { loose: { wall: md.body, shared: md.loose.shared.map(b => b.vtx), fresh: md.loose.fresh.map(f => f.vtx) } } : {}) };
         // AN END DRAGGED SETTLES ITS WALLS' OPENINGS (settleOpeningsPut): the
@@ -1723,7 +1793,7 @@
         // measure -- so stringing before it is answered would string a
         // drawing that does not exist yet. settleFootprint folds this same
         // step when it lands.
-        const offered = offerFootprintChoice(md, moveStep);
+        const offered = !md.jog && !tidy && offerFootprintChoice(md, moveStep);
         if (!offered) foldRedim(moveStep);
         // A TYPED LENGTH MAY FINISH IT, as it does a MOVE (moveTyped): a line
         // or wall dragged by its body, an assembly, or an end NODE (Movie,
@@ -2404,6 +2474,10 @@
       (step.wells || []).forEach(w => { w.hole.points = w.points; });
     } else if (step.kind === 'move') {
       undoRedim(step);
+      // THE JOG GOES FIRST: the end back on its node, the piece and the
+      // corner gone, the ring as it was. Then the points go back.
+      undoTidy(step);
+      undoJogs(step);
       if (step.loose) {
         const { wall, shared, fresh } = step.loose;
         fresh.forEach((v, i) => {

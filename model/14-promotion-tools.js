@@ -332,11 +332,18 @@
     const len = Math.hypot(m.dx, m.dz);
     if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
     const dx = m.dx / len * feet, dz = m.dz / len * feet;
-    undoOnce();
+    // A DRAG THAT MADE A JOG keeps it: its step is not taken back, only the
+    // strings it laid, and the same step is folded again where the typed
+    // distance lands -- UNDO still takes the move and the jog in one.
+    const jogged = m.step?.kind === 'move' && m.step.jog && undoStack[undoStack.length - 1] === m.step;
+    if (!jogged) undoOnce(); else { undoRedim(m.step); delete m.step.items; delete m.step.restored; }
     m.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
     m.before.forEach(b => relinkVertex(b.vtx));
-    const step = { kind: 'move', before: m.before };
-    undoStack.push(step);
+    const step = jogged ? m.step : { kind: 'move', before: m.before };
+    if (jogged) {
+      jogRingsFollow({ jog: step.jog });
+      step.jog.forEach(j => (j.farRings || []).forEach(({ pt }) => { pt.x = j.far.x; pt.z = j.far.z; }));
+    } else undoStack.push(step);
     foldRedim(step);
     m.step = step; m.dx = dx; m.dz = dz;
     lengthBox.blur();

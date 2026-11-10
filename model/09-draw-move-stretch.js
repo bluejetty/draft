@@ -1038,6 +1038,40 @@
     out[(i + 1) % n] = { ...b, x: nb.x, z: nb.z };
     return out;
   };
+  // THE JOG CORNERS, for an edge whose neighbour runs in line with it: a
+  // copy of the corner goes in beside it, every parallel array gaining the
+  // moved edge's own entry (its kind, overhang and heel -- jb: "share the
+  // same properties"), so the edge of no length between them is the jog
+  // once the slide carries the copy across. Returns the edge's index now.
+  const roofJogInline = (roof, i) => {
+    const inline = (p, q, u) => { const l = Math.hypot(q.x - p.x, q.z - p.z); return l > 1e-9 && Math.abs((u.x * (q.z - p.z) - u.z * (q.x - p.x)) / l) < 1e-3; };
+    const gain = (at, pt, from) => {
+      roof.points.splice(at, 0, { ...roof.points[pt] });
+      roof.edges.splice(at, 0, roof.edges[from]);
+      roof.edgeOverhang.splice(at, 0, roof.edgeOverhang[from]);
+      if (Array.isArray(roof.edgeHeelIn)) roof.edgeHeelIn.splice(at, 0, roof.edgeHeelIn[from]);
+      if (roof.footprint) roof.footprint.splice(at, 0, { ...roof.footprint[pt] });
+    };
+    let n = roof.points.length;
+    const a = roof.points[i], c = roof.points[(i + 1) % n];
+    const len = Math.hypot(c.x - a.x, c.z - a.z);
+    if (len < 1e-9 || n < 3) return i;
+    const u = { x: (c.x - a.x) / len, z: (c.z - a.z) / len };
+    let edge = i;
+    if (inline(roof.points[(i - 1 + n) % n], a, u)) {
+      // prev, a, [a'], c: the moved edge is a' -> c, index i + 1; the jog
+      // a -> a' takes the moved edge's entries.
+      gain(i + 1, i, i);
+      edge = i + 1;
+      n += 1;
+    }
+    const j = (edge + 1) % n;
+    if (inline(roof.points[j], roof.points[(j + 1) % n], u)) {
+      // a', [c'], c, next: the jog c' -> c at index j takes the moved edge's.
+      gain(j, j, edge);
+    }
+    return edge;
+  };
   // THE TIDY: round the points in `near` (indices), take away one that sits
   // on its neighbour, doubles back, or runs straight on between two edges of
   // one kind -- the same index from every parallel array.
@@ -1870,6 +1904,7 @@
       roof.points = b.points.map(p => ({ ...p }));
       if (b.footprint) roof.footprint = b.footprint.map(p => ({ ...p }));
       roof.edges = b.edges.slice(); roof.edgeOverhang = b.edgeOverhang.slice();
+      if (Array.isArray(b.edgeHeelIn)) roof.edgeHeelIn = b.edgeHeelIn.slice();
       if (d.kind === 'roof') {
         const by = p => ({ ...p, x: p.x + dx, z: p.z + dz });
         roof.points = roof.points.map(by);
@@ -1903,7 +1938,12 @@
         roof.points[d.node] = { ...roof.points[d.node], x: to.x, z: to.z };
         if (roof.footprint) roof.footprint[d.node] = { ...roof.footprint[d.node], x: roof.footprint[d.node].x + sx, z: roof.footprint[d.node].z + sz };
       } else {
-        const i = d.edge, n = roof.points.length, a = roof.points[i], c = roof.points[(i + 1) % n];
+        // A NEIGHBOUR IN LINE WITH THE EDGE (the other half of a BREAK) gets
+        // a JOG, not a tilt (jb, 10 Nov 2026): roofJogInline puts a corner
+        // of no length beside the node, and the slide below carries it
+        // straight across, square to both. Flush again, the tidy drops it.
+        const i = roofJogInline(roof, d.edge), n = roof.points.length, a = roof.points[i], c = roof.points[(i + 1) % n];
+        d.edgeNow = i;
         const len = Math.hypot(c.x - a.x, c.z - a.z) || 1;
         const nn = { x: -(c.z - a.z) / len, z: (c.x - a.x) / len };
         let dist = dx * nn.x + dz * nn.z;
@@ -2018,7 +2058,7 @@
     if (d.kind !== 'roof') {
       const roof = d.targets[0], n = roof.points.length;
       const near = d.kind === 'nodes' ? moveState.node.list.slice()
-        : d.kind === 'node' ? [d.node] : [d.edge, (d.edge + 1) % n];
+        : d.kind === 'node' ? [d.node] : [d.edgeNow ?? d.edge, ((d.edgeNow ?? d.edge) + 1) % n];
       tidyRoof(roof, near);
     }
     undoStack.push({ kind: 'props', edits: d.targets.map((item, k) => ({ item, before: d.befores[k] })) });

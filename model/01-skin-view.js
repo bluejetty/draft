@@ -735,6 +735,23 @@
     });
     return mid >= 0 ? { kind: 'mid', index: mid } : null;
   };
+  // THE EDGE UNDER THE HAND on a picked shape or floor, by index -- the
+  // nearest within the pick reach -- for the edge push (jb, 10 Nov 2026).
+  const roomEdgeAt = (tag, worldPt) => {
+    const pts = roomShapeOf(tag);
+    if (!pts) return null;
+    const p = toS(worldPt);
+    let best = null;
+    pts.forEach((q, i) => {
+      const a = toS(q), b = toS(pts[(i + 1) % pts.length]);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+      const d = Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+      if (d <= ROOM_EDGE_PICK_PX && (!best || d < best.d)) best = { i, d };
+    });
+    return best ? best.i : null;
+  };
   const roomEdgeNear = (tag, worldPt) => {
     const pts = roomShapeOf(tag);
     if (!pts) return false;
