@@ -112,109 +112,25 @@
 
   const byId = new Map(TOOLS.map(tool => [tool.id, tool]));
 
-  // ── WHICH TOOLS A BOARD OFFERS ────────────────────────────────────────────
-  // ONE PLACE DECIDES, and it is here rather than in the page, because this is
-  // the file that owns the list. §6 of the TOY bones order is "no other
-  // tools", and the answer has to be one answer: the keypad, the register and
-  // the board switch all ask this function, so a key cannot look available
-  // while the register refuses it -- a disagreement a drafter reads as the
-  // page being broken.
-  //
-  // THE RULING IT IMPLEMENTS is Skipper's, in
-  // RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/SPEC-toy-mode-constraints.md: "A wall
-  // can be manipulated ONLY through a grip tab. There is no drafting tool in
-  // TOY MODE."
-  //
-  // WALL IS THE ONE EXCEPTION, AND IT IS NOW RULED RATHER THAN INFERRED.
-  // Movie, 13 Sep, relayed: the spec's sentence is the older document, and the
-  // OUTLINE GETS DRAWN IN TOY -- drawing the outline is not a drafting tool,
-  // it is how a TOY house begins. So §6 reads: no drafting tools EXCEPT the
-  // one gesture that makes the outline. §1's squaring and foot-landing is that
-  // gesture's rule, and would have been dead code under any other reading.
-  //
-  // WHY THE KEY IS 'wall' AND NOT 'outline'. The gesture that makes the
-  // outline on this page today IS draw-wall -- there is no separate outline
-  // tool in the roster, and §1 was built on the wall gesture. The ruling is
-  // about the GESTURE, not the key, so if the outline ever becomes a tool of
-  // its own this list names that one instead and WALL goes down with the rest.
-  // Recorded here because a future reader would otherwise see a wall exception
-  // where the rule is an outline exception.
-  //
   // SELECT IS NOT A DRAFTING TOOL, it is the resting state -- the page falls
-  // back to it whenever it puts a tool down. A board that did not offer it
-  // would leave the page with no legal state to rest in -- the fallback would
-  // land on a refused tool -- so tests/model-tool-boards.spec.js asserts
-  // RESTING is available on EVERY board rather than trusting the list below.
-  const BOARDS = Object.freeze(['toy', 'drafting']);
+  // back to it whenever it puts a tool down, so it must always be on offer.
   const RESTING = 'select';
-  // AND OUTLINE JOINS TOY, which is the ruling this file already carried in
-  // prose: "no drafting tools EXCEPT the one gesture that makes the outline".
-  // Until now that gesture had no tool of its own and the exception had to be
-  // spelled 'wall'.
-  //
-  // WALL STAYS, and the note above predicted it would go. It does not go here
-  // and the reason is a measurement I have not made: §1's squaring and
-  // foot-landing rule is built on the WALL gesture, so taking wall off this
-  // board moves TOY's drawing onto a path that rule does not cover. That is
-  // its own rung with its own checks, not a line to change on the way past.
-  // Adding outline takes nothing away from anybody; swapping them would.
-  // CUT JOINS IT (Movie, 5 Oct, "could be on TOY i think"): cutting a
-  // section draws nothing into the house, it only adds a way to look at it.
-  // AND TRIM (Movie, 5 Oct, "this is good for now"): it only moves a wall's
-  // end on to another wall, so it cannot break §1's foot and right angle.
-  // ── AND THEN THE RULING CHANGED: TOY TAKES NO TOOL AWAY ─────────────────
-  //
-  // Movie, 15 Oct: *"lets always start the users in TOY MODE, but we should
-  // allow more features (they all go dim i notices) but maybe the features
-  // will be slightly limited (to ft and 90 degrees)"*, and *"maybe don't even
-  // offer them to change to DRAFTING MODE, but if they enter a ANGLE or
-  // length other than 1ft, it will automatically place them in DRAFTING MODE.
-  // so it ill be basically a LIGHT -- not a button"*, and *"so if its in TOY
-  // MODE the user will know its 90s / and 1ft"*. Asked which tools that
-  // leaves on TOY, he answered: all of them.
-  //
-  // SO TOY IS NO LONGER A SHORTER LIST, IT IS A CONSTRAINT. The foot and the
-  // right angle are what TOY is; the tools are what the page is. A drafter in
-  // TOY reaches for DIMENSION and gets DIMENSION, and the first number he
-  // types that a foot cannot hold moves the drawing to DRAFTING by itself.
-  // That is the whole of the difference now, and it is why the board stopped
-  // being a button: there is nothing left to choose.
-  //
-  // THE OLD LIST IS KEPT, UNUSED BY availableOn, because it is the record of
-  // what TOY used to refuse and the gate and the spec both name it. Deleting
-  // it would leave the three paragraphs above arguing with nothing.
-  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut', 'trim']);
+  // EVERY TOOL, ALWAYS. An unknown id is still refused -- it would arm
+  // nothing and read as "select is on", a broken state that looks like a
+  // working one. The TOY board, which used to offer a shorter list and then
+  // (15 Oct) the same list under a whole-foot rule, came out of the program on
+  // 9 Nov 2026; the keypad, the register and the panels still ask HERE, so
+  // the day one place wants to take a tool away this is the one that learns.
+  const availableOn = id => byId.has(id);
+  const availableIn = () => TOOLS.filter(tool => availableOn(tool.id));
 
-  // EVERY TOOL, ON EVERY BOARD. An unknown id is still refused -- it would
-  // arm nothing and read as "select is on", a broken state that looks like a
-  // working one -- and an unknown BOARD now needs no special case, because
-  // there is no board that takes anything away.
-  // `_board` IS STILL IN THE SIGNATURE, and still unread on purpose: every
-  // call site passes a board, and the day a board takes something away again
-  // this is the one place that has to learn it.
-  const availableOn = (id, _board) => byId.has(id);
-  const availableIn = board => TOOLS.filter(tool => availableOn(tool.id, board));
-
-  // THE OTHER TWO SURFACES §6 NAMES. Its sentence is "the seventeen-key
-  // column, the selection filters, the assembly verbs -- none of them operate
-  // in TOY", and the first of those three was all I built. These are the other
-  // two, and they answer from here for the reason the tools do: one place, so
-  // a panel cannot look live while the board refuses it.
-  //
-  // ALL-OR-NOTHING, UNLIKE TOOLS. A board offers SOME tools -- TOY keeps the
-  // gesture that makes the outline -- but a panel is one capability and it is
-  // either on the board or it is not. Modelling panels as a list of individual
-  // controls would invite a half-lit SELECTION panel, which is the shape of
-  // thing this section exists to forbid.
+  // THE OTHER TWO SURFACES: the selection filters and the assembly verbs.
+  // They answer from here for the reason the tools do: one place, so a panel
+  // cannot look live while the register refuses it. All-or-nothing, unlike
+  // tools: a panel is one capability, and a half-lit SELECTION panel is the
+  // shape of thing this exists to forbid.
   const PANELS = Object.freeze(['selection', 'assembly']);
-  // AND THEY ARE ON IN TOY NOW, for the reason the tools are (above). "they
-  // all go dim i notices" was about exactly this -- a drafter in TOY looking
-  // at a page where half the chrome is greyed and nothing says what would
-  // turn it on. Under the ruling of 15 Oct nothing turns it on, because
-  // nothing turns it off: TOY is the foot and the right angle, and a panel is
-  // neither. A number typed into one of these that a foot cannot hold goes
-  // through the same promotion as a number typed anywhere else.
-  const panelOn = (panel, _board) => PANELS.includes(panel);
+  const panelOn = panel => PANELS.includes(panel);
 
 
   // REMAPS COME FROM SETTINGS, and they come through the same two functions the
@@ -243,7 +159,6 @@
   window.DraftToolRoster = Object.freeze({
     GROUPS,
     TOOLS,
-    BOARDS,
     RESTING,
     availableOn,
     availableIn,

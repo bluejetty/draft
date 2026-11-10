@@ -10,6 +10,42 @@ something myself, it says so and says why.
 
 ---
 
+## 0. TOY MODE is gone — 9 Nov 2026
+
+Read this before anything below that says TOY, board, lamp, bone or promotion.
+
+jb: *"i would like to completely remove TOY MODE from our project it causes
+more problems, we can have those features like TSQUARE and 1FT engaged so that
+it will be kindof like toy mode, but he can turn it off easy."* And on the
+half-started game split: *"we don't need it in our program at all."*
+
+So on 9 Nov 2026 (branch `claude/project-thread-ag9sk3`):
+
+- There is **no board**. `board` is not read from or written to a drawing
+  file (an old file that still says `board: 'toy'` loads fine and saves
+  without the word). No lamp in the mode corner, no promotion on a typed
+  number, no bone card (BREAK HERE / MOVE THIS WALL), no bones at all.
+- **T-SQUARE and the 1 FT light start ON** in a fresh browser. One press on
+  either chip turns it off, and the page remembers the choice per browser in
+  `draft-skin` (`tsquare`, `footLight`, beside `snapLight` / `trackLight`).
+  A typed length is honoured whatever the lights say.
+- Deleted: `game/`, `toy-constraints.js`, `toy-context.js`, the toy specs
+  and `proto/toy-*` gates, and the three TOY work orders in
+  `RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/` (a short retired note stands in
+  their place: `TOY-MODE-RETIRED.md`).
+- The Playwright suite drafts with **both lights off** (`tests/helpers.js`
+  seeds `draft-skin` right after it clears storage), so fixtures that draw
+  off-foot or off-square keep meaning what they meant. A spec that needs the
+  lights on seeds them itself: see `tests/lights-on-by-default.spec.js`.
+- Queue items **3.1 and 3.2 below are moot**: a 6" grain was a TOY rule.
+  Section 2's "#746 TOY is a light" and the TOY sentences in 3.7 describe
+  history, not the page.
+
+Never reintroduce a second board or mode. If a "toy-like" feel is wanted, it
+is the two lights, nothing more.
+
+---
+
 ## 1. Where the work is, and how it is done
 
 **The app is `bluejetty/draft` — Rough Drafter**, a browser-based residential

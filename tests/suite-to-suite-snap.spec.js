@@ -36,7 +36,7 @@ const plan = (h2 = {}) => ({
 async function open(page, drawing) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
-    try { localStorage.removeItem('draft-skin'); } catch { /* fine */ }
+    try { localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight: false })); } catch { /* fine */ }
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: drawing });

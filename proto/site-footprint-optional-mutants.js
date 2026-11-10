@@ -26,7 +26,7 @@ const MUTANTS = [
     test: 'hides the building' },
   { file: 'model/06-selection-pick.js',
     name: 'a press inside the grey box on SITE reaches the ground storey\'s outline',
-    find: "      if (takeAll('outline', [...outlinesAt(worldPt), ...(body ? [body] : [])])) return out;",
+    find: "      if (takeAll('outline', [...outlinesAt(worldPt), ...siteBodiesAt(worldPt)])) return out;",
     with: "      if (takeAll('outline', outlinesAt(worldPt))) return out;",
     test: 'DELETE takes it and its roof' },
   { file: 'model/08-structure-roof.js',
@@ -36,8 +36,8 @@ const MUTANTS = [
     test: 'DELETE takes it and its roof' },
   { file: 'model/06-selection-pick.js',
     name: 'a roof hidden with the footprint is out of a press\'s reach',
-    find: "    ? (drawing?.siteFootprint === false ? []",
-    with: "    ? (drawing?.siteFootprint === 'never' ? []",
+    find: "  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? siteParts().roofs : roofs());",
+    with: "  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());",
     test: 'hides the building' },
 ];
 

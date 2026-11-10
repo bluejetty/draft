@@ -557,27 +557,6 @@ test('DRAFTING: CONNECT AT CORNER asks, and Enter moves the garage wall over 1 f
     .toEqual([true, true, false]);
 });
 
-test('TOY: the garage wall is moved over 1 ft without asking', async ({ page }) => {
-  // NO PRESS ONTO TOY: it is where every drawing starts since 15 Oct, and the
-  // switch that used to put it there is a lamp.
-  //
-  // SO THIS ONE OPENS ON A FILE THAT NAMES NO BOARD. Every other check in
-  // here is about the DRAFTING board and `empty()` says so; a drawing that
-  // says nothing is on TOY, which is the board this check is about. Written
-  // as "no press, so it must be TOY" the first time, which read the file's
-  // own `board: 'drafting'` straight past -- and got asked the corner
-  // question it is here to prove TOY does not ask.
-  const { board, ...noBoard } = empty();
-  await open(page, noBoard);
-  await drawType(page, 'bungalow', 'bungalow-garage');
-  await trace(page, HOUSE);
-  await run(page, SIDE_RUN);
-  await expect(page.locator('#corner-join')).toBeHidden();
-  const d = await build(page);
-  const g = garageOf(d);
-  expect([has(g, 9, 14), has(g, 9, 8)]).toEqual([true, true]);
-});
-
 // LINED UP IS ALREADY FASTENED (Movie, 6 Oct): "if the wall connects at the
 // corner and LINES UP - there is no req. for it to move over". Here the
 // garage's front wall carries on in line with the house's front wall

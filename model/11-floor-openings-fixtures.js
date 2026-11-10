@@ -38,7 +38,6 @@
   const loopPoint = (at, corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : []) => {
     const ref = refPoint(at);
     if (ref) return { x: ref.x, z: ref.z };
-    if (board === 'toy') return { x: at.x, z: at.z };
     const last = corners[corners.length - 1];
     if (last && !drawStart) {
       drawStart = { x: last.x, y: 0, z: last.z };
@@ -854,26 +853,23 @@
   // it RESTARTS, because a drafter who has changed wall has plainly changed
   // their mind, and an error there would make them press twice to do what one
   // press says.
-  // CASEWORK ON TOY'S 6" GRAIN (Movie, 16 Oct: "in the TOY mode we should be
-  // able to add CABINETS right? ... for the CABINETS we allow those to shift
-  // extra to 6" scale so we could have 1ft, 18" 24" 30" 36" 42" 48" etc").
-  // Each press lands on the half foot measured from the NEARER corner of the
-  // wall the cabinet backs onto, so a run can always sit flush in a corner
-  // whatever the wall's length -- a TOY wall is whole feet long and either
-  // corner gives the same answer; an imported wall of odd length is measured
-  // from the corner the cabinet is at. Both presses on the grain means the
-  // width is on it too. TOY only, and casework only (a closet is its own
-  // table); and no light goes out, since nothing was typed.
-  const toyCaseworkAlong = (kind, placement) => {
-    const Q = window.DraftToyConstraints;
-    if (board !== 'toy' || !kind.casework || !Q) return placement.along;
+  // CASEWORK LANDS ON THE HALF FOOT while the 1 FT light is lit, measured
+  // from the NEARER corner of the wall the cabinet backs onto, so a run can
+  // always sit flush in a corner whatever the wall's length. Movie, 16 Oct:
+  // "for the CABINETS we allow those to shift extra to 6" scale so we could
+  // have 1ft, 18" 24" 30" 36" 42" 48"". Both presses on the grain means the
+  // width is on it too. Casework only (a closet is its own table), and the
+  // light off places the press where the hand put it.
+  const caseworkAlong = (kind, placement) => {
+    if (!footOn || !kind.casework) return placement.along;
     const len = placement.frame.len;
     const datum = placement.along <= len / 2 ? 0 : len;
-    return Math.max(0, Math.min(len, Q.onGrain(placement.along, Q.HALF_FOOT_FT, datum)));
+    const onGrain = datum + Math.round((placement.along - datum) / 0.5) * 0.5;
+    return Math.max(0, Math.min(len, onGrain));
   };
   const fixtureRunPress = (kind, placement) => {
     const start = fixtureRunStart;
-    const along = toyCaseworkAlong(kind, placement);
+    const along = caseworkAlong(kind, placement);
     if (!start || start.wallId !== placement.wall.id || start.side !== placement.side) {
       fixtureRunStart = { wallId: placement.wall.id, along, side: placement.side };
       sayOnStrip(start
@@ -991,7 +987,7 @@
     const mark = undoStack.length;
     const byKey = {};
     const made = room.walls.map(w => {
-      const wall = commitWall(w.start, w.end, { bone: false, refLine: w.refLine || 'center', wallType: w.wallType });
+      const wall = commitWall(w.start, w.end, { refLine: w.refLine || 'center', wallType: w.wallType });
       byKey[w.key] = wall;
       return wall;
     });
@@ -1147,7 +1143,7 @@
     // mitres, and the pieces re-hosted from the stand-ins to the real walls.
     const mark = undoStack.length;
     const builtWalls = (kitchen.own || []).map(w => ({
-      stand: w, wall: commitWall(w.start, w.end, { bone: false, refLine: w.refLine || 'center', wallType: w.wallType }),
+      stand: w, wall: commitWall(w.start, w.end, { refLine: w.refLine || 'center', wallType: w.wallType }),
     }));
     undoStack.length = mark;
     const hostOf = wall => (builtWalls.find(b => b.stand === wall) || { wall }).wall;
@@ -1270,7 +1266,7 @@
   const SIDE_SNAP_FT = 1 / 12;
   const sideSnap = (fixture, target, half, md = {}) => {
     md.joint = null;
-    if (!snapLive() || board === 'toy') return target;
+    if (!snapLive()) return target;
     let best = target, bestD = SIDE_SNAP_FT + 1e-9;
     window.DraftFixtureGeometry.runMates(fixtures(), fixture).filter(o => o.kind !== 'island').forEach(o => {
       const o0 = Number(o.offset) - Number(o.width) / 2, o1 = Number(o.offset) + Number(o.width) / 2;
@@ -1298,7 +1294,7 @@
     const K = window.DraftFixtureKinds;
     if (md.free) {
       let dx = raw.x - md.grabWorld.x, dz = raw.z - md.grabWorld.z;
-      if (tsquareLive() && board !== 'toy') { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
+      if (tsquareLive()) { if (Math.abs(dx) >= Math.abs(dz)) dz = 0; else dx = 0; }
       // A PIECE LEAVES ITS RUN when it moves on its own; an island takes its
       // pieces. A new line object each time, so the undo's before keeps the old.
       const own = md.fixture.kind === 'island' || !md.riders.length ? null : `free:${md.fixture.id}`;
@@ -1317,7 +1313,7 @@
     if (fixture.kind === 'island') {
       // ANYWHERE: along the wall and off it, held square by the T-SQUARE as
       // the MOVE verb is -- the larger travel wins.
-      if (tsquareLive() && board !== 'toy') { if (Math.abs(dAlong) >= Math.abs(dAcross)) dAcross = 0; else dAlong = 0; }
+      if (tsquareLive()) { if (Math.abs(dAlong) >= Math.abs(dAcross)) dAcross = 0; else dAlong = 0; }
       const offset = Math.min(Math.max(md.was.offset + dAlong, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
       const side = fixture.side === -1 ? -1 : 1;
       const standoff = Math.max(0, md.was.standoff + side * dAcross);
@@ -1419,7 +1415,7 @@
     let dAlong = (raw.x - d.at.x) * frame.ux + (raw.z - d.at.z) * frame.uz;
     // THE SIDES CATCH: the nearest of any piece's sides to a neighbour's
     // side outside the set, within an inch.
-    if (snapLive() && board !== 'toy') {
+    if (snapLive()) {
       let best = null, bestD = SIDE_SNAP_FT + 1e-9;
       pieces.forEach((p, i) => {
         const half = (Number(p.width) || 0) / 2;
@@ -1916,7 +1912,7 @@
     BH.houseWallRuns(points).forEach(run => {
       if (sharedWith && G.edgeOnLoop(run.start, run.end, sharedWith)) return;
       wallsByEdge[run.edge] = commitWall(run.start, run.end,
-        { bone: false, refLine: refFor(run), ...on });
+        { refLine: refFor(run), ...on });
     });
     const walls = wallsByEdge.filter(Boolean);
 

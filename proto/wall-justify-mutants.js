@@ -43,30 +43,13 @@ const MUTANTS = [
     with: "  const REF_LINES = [['left', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['right', 'RIGHT SIDE']];",
     test: 'the selection panel speaks the same words' },
 
-  { file: 'model/08-structure-roof.js', spec: 'tests/model-wall-justify.spec.js',
-    name: 'A HARD LINE DOES NOT JUSTIFY: a wall along the face stands inside the exterior wall',
-    find: '      const justified = toyJustifyAlongHardLine(from, to);',
-    with: '      const justified = null;',
-    test: 'along an inside face the wall takes the room side' },
-
-  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-wall-justify.spec.js',
-    name: 'JUSTIFIED THE WRONG WAY: into the exterior wall, over the hole',
-    find: "    return line.away * nAlongAxis > 0 ? 'left' : 'right';",
-    with: "    return line.away * nAlongAxis > 0 ? 'right' : 'left';",
-    test: 'along an opening edge the wall goes away from the hole' },
-
-  { file: 'model/15-panels.js', spec: 'tests/model-wall-justify.spec.js',
+      { file: 'model/15-panels.js', spec: 'tests/model-wall-justify.spec.js',
     name: 'the WALL tool raises no panel: the choice has no control',
     find: "    if (tool === 'wall') { showWallProps(); return; }",
     with: '',
     test: 'arming the WALL tool raises its panel' },
 
-  { file: 'model/09-draw-move-stretch.js', spec: 'tests/model-wall-justify.spec.js',
-    name: 'an opening edge is justified toward the hole (the away sign read from the wrong end)',
-    find: "        const band = (axis, c) => ({ axis, c, kind: 'opening', away: Math.sign(c - mid[axis]) || 1,",
-    with: "        const band = (axis, c) => ({ axis, c, kind: 'opening', away: Math.sign(mid[axis] - c) || 1,",
-    test: 'along an opening edge the wall goes away from the hole' },
-];
+  ];
 
 const run = (spec, grep) => {
   try {

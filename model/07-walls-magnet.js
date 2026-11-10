@@ -617,17 +617,13 @@
     paint();
   };
 
-  // THE TOY BOARD IS NOT ASKED. Nothing on that board has a foundation to
-  // cantilever off, and a modal in the middle of a child's drag is the one
-  // thing the board is built not to do -- it takes the whole-building answer,
-  // which is what a bone push means there, and says so on the strip.
   const offerFootprintChoice = (md, step) => {
     const found = footprintBreak(md);
     if (!found) return false;
     // `pulled` is what the HAND did and never changes; `outFt` is where the
     // answer put it, and the ladder may move that.
     footprintPending = { ...found, md, step, pulled: found.outFt };
-    if (board === 'toy' || !footprintCard) {
+    if (!footprintCard) {
       settleFootprint('all');
       return true;
     }
@@ -703,6 +699,23 @@
     if (type === 'line') return lines().includes(item) ? item : null;
     return null;
   };
+  // A CORNER INSIDE AN ASSEMBLY (10 Nov: "the nodes within the assembly can
+  // be edited but the items all stay together"). A fixed assembly is picked
+  // whole, so selectedSegment -- ONE wall or line -- never answered for it and
+  // its corners took no grab: the lot moved as one piece and nothing else.
+  // With everything picked sitting in a fixed assembly, the nearest end of
+  // any picked wall or line is the handle, and the corners that share the
+  // spot ride with it (assemblyRiders), so the assembly stays joined and
+  // whole. No BREAK inside a Y: to free one corner, bust the assembly.
+  const assemblyCornerAt = worldPt => {
+    if (selection.length < 2 || !selection.every(entry => groupOf(entry)?.fixed === true)) return null;
+    const ends = selection.flatMap(({ type, item }) => {
+      if ((type !== 'wall' && type !== 'line') || !filterAllows(type)) return [];
+      return [item?.start, item?.end].filter(Boolean);
+    });
+    if (!ends.length) return null;
+    return window.DraftGeometry2D.nearestVertex(ends, worldPt, CORNER_GRAB_PX / view.scale);
+  };
   const cornerAt = worldPt => {
     // THE MASTER'S OWN CORNERS, on the boneyard, and this is §4's missing
     // gesture. Same rule as a wall's: SELECTION FIRST, then the grab -- so a
@@ -738,7 +751,7 @@
     // anything but a TOY wall. The gesture was already general; the pick was
     // the only thing that was not.
     const selectedSeg = selectedSegment();
-    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
+    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return assemblyCornerAt(worldPt);
     // THE TYPE FILTER GOVERNS THIS GRAB TOO, for segmentBodyAt's reason:
     // "WALL is engaged: nothing else responds", and a press that takes hold
     // of a point is responding.
@@ -1035,7 +1048,7 @@
     return best;
   };
   // The magnets a point being drawn answers to; null when SNAP is off.
-  const drawMagnet = () => (snapLive() && board !== 'toy'
+  const drawMagnet = () => (snapLive()
     ? { nodes: nodeEnds({ faces: false }), corners: actLikeNodes(), segs: magnetSegs() } : null);
   // A DRAGGED NODE answers to every wall but its own: the walls it is an end
   // of move with it, so their faces are not where they were. Worked out once
@@ -1223,12 +1236,11 @@
   // THE TRAVEL'S COMPONENT ALONG THE WALL'S RUN ROUNDED TO THE FOOT, the
   // across component kept: what a caught face leaves to the light.
   const footAlongRun = (body, dx, dz) => {
-    const Q = window.DraftToyConstraints;
-    if (!Q || !body?.start || !body?.end) return { dx, dz };
+    if (!body?.start || !body?.end) return { dx, dz };
     const ux0 = body.end.x - body.start.x, uz0 = body.end.z - body.start.z, len = Math.hypot(ux0, uz0);
     if (len < 1e-6) return { dx, dz };
     const ux = ux0 / len, uz = uz0 / len, nx = -uz, nz = ux;
-    const along = Q.quantiseFeet(dx * ux + dz * uz), across = dx * nx + dz * nz;
+    const along = quantiseFeet(dx * ux + dz * uz), across = dx * nx + dz * nz;
     return { dx: ux * along + nx * across, dz: uz * along + nz * across };
   };
   const wallFaceSeek = (md, dx, dz) => {
@@ -1589,10 +1601,8 @@
     if (snapLive()) {
       const node = snapNodeAt(at);
       if (node) return { pt: { x: node.x, y: 0, z: node.z }, node };
-      if (board !== 'toy') {
-        const face = nearestFace(magnetSegs(), at);
-        if (face) return { pt: { x: face.pt.x, y: 0, z: face.pt.z }, face: face.seg };
-      }
+      const face = nearestFace(magnetSegs(), at);
+      if (face) return { pt: { x: face.pt.x, y: 0, z: face.pt.z }, face: face.seg };
       if (!drawStart && levelIsEmpty()) {
         const b = gridDatum();
         if (b && Math.hypot(b.x - at.x, b.z - at.z) <= BULLSEYE_PULL_FT) return { pt: { x: b.x, y: 0, z: b.z }, bullseye: true };
@@ -1682,7 +1692,7 @@
   // ring -- a few pixels across -- sat over the node while the press landed
   // beside it, 7/16" off in his outline. Null when nothing is in reach.
   const handPoint = (hand, magnet = null) => {
-    if (!hand || board === 'toy') return null;
+    if (!hand) return null;
     const node = cornerSnap(hand, []);
     const point = node ? { v: node, node: true }
       : (magnet && strongerPoint(hand, magnet.nodes || [], magnet.corners));
@@ -1992,7 +2002,7 @@
   const suiteStandIn = levelId => (drawing?.suiteKind && Number(levelId) < 0
     ? SUITE_STAND_IN_FT[drawing.suiteKind] ?? null : null);
   const commitWall = (startPt, endPt,
-    { bone = true, refLine, levelId: onLevel, view: onView, wallType,
+    { refLine, levelId: onLevel, view: onView, wallType,
       baseHeight, topHeight, body } = {}) => {
     const active = onActiveLevel();
     const levelId = onLevel ?? active.levelId;
@@ -2025,108 +2035,10 @@
     if (body) wall.body = body;
     drawing.walls.push(wall);
     // AN END PUT ON A FIXTURE'S HALF-INCH CORNER: its face goes there.
-    if (board !== 'toy') { faceOntoGap(wall, wall.start); faceOntoGap(wall, wall.end); }
+    faceOntoGap(wall, wall.start); faceOntoGap(wall, wall.end);
     undoStack.push({ kind: 'add', wall });
-    if (bone) extendToyBone(startPt, endPt, levelId);
     markDirty();
     return wall;
-  };
-
-  // ── §2: THE GESTURE MAKES THE BONE, NOT ONLY THE WALLS ───────────────────
-  //
-  // Movie, 13 Sep: "yes the toy house will have the bones and those will be
-  // what TOY can manipulate". Before this, commitWall pushed to drawing.walls
-  // and touched nothing else, and the only place this page made a level
-  // outline was adding a level (:2919) -- so a hand-drawn TOY house had no
-  // bone, and §2's "the outline becomes a bone" had nothing to become one.
-  //
-  // TOY ONLY. Writing the outline on every board would change what every
-  // DRAFTING drawing contains, which is a much larger claim than this order
-  // makes and is what the DRAFTING half of acceptance 2b guards.
-  //
-  // masterId NULL, which is the format's "purely local outline"
-  // (drawing-format.js:893). A hand-drawn house came from no master, so this
-  // record IS the bone rather than a copy of one -- and that is exactly the
-  // shape §2 says not to invent a second store for.
-  //
-  // THE ID IS A STRING HERE AND THAT IS CORRECT, in deliberate contrast to a
-  // column's. drawing-format.js reads an outline id with String() (:921) and a
-  // column's with Number() (:512). Same page, same allocator, opposite
-  // requirements -- so newDrawingItemId is right for this one and wrong for
-  // that one, and neither is a house style.
-  // A SECOND RUN AWAY FROM THE HOUSE IS A SECOND BONE. Ruled 13 Sep, against
-  // the alternative of one bone per level: a detached garage is a separate
-  // footprint by definition, so one level can carry two bones and each is
-  // grabbed on its own. The first version of this joined every run on a level
-  // into one outline, which drew a polygon running from the house across the
-  // yard to the garage -- a shape nobody drew, and one §4's break-the-bone
-  // would have had to pretend was a loop.
-  //
-  // WHICH BONE A RUN BELONGS TO IS DECIDED BY ITS FIRST POINT: a run that
-  // starts where a bone ended continues it, and a run that starts anywhere
-  // else opens a new one. That is the same fact the chain already uses -- the
-  // next wall starts where the last ended -- rather than a second rule.
-  let pendingBone = null;
-  const sameSpot = (a, b) => !!a && !!b && Math.hypot(a.x - b.x, a.z - b.z) < 1e-6;
-  const endsAt = (bone, at) => sameSpot(bone?.points?.[bone.points.length - 1], at);
-  const toyBoneFor = (levelId, from) => (drawing.outlines || [])
-    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId
-      && endsAt(o, from)) || null;
-
-  const extendToyBone = (from, to, levelId) => {
-    if (board !== 'toy') return;
-    const same = sameSpot;
-    const pt = p => ({ x: p.x, y: 0, z: p.z });
-    let bone = toyBoneFor(levelId, from);
-    if (!bone && pendingBone
-        && Number(pendingBone.levelId) === Number(levelId)
-        && endsAt(pendingBone, from)) {
-      bone = pendingBone;
-    }
-    if (!bone) {
-      // NOT PUSHED YET. The format refuses an outline under three points
-      // (:918), so a one- or two-point record written into the file is a
-      // record the reader throws away -- the silent, one-reload-later loss
-      // this page has now been bitten by twice. It is held here until it is
-      // a shape the reader will keep.
-      // ONE PENDING BONE AT A TIME, and it is never overwritten: drawPress
-      // refuses a disconnected run while one is unfinished, so reaching here
-      // with a pending bone that does not end at `from` is not a state the
-      // gesture can produce.
-      // NO ID YET. The counter is PERSISTED, so taking a number here spends it
-      // on a record that may never exist: a one-wall run is not a bone (the
-      // format refuses an outline under three points), and every abandoned run
-      // would leave a permanent gap between the counter and the file's
-      // contents. model-html-draw-delete.spec.js:169 reads the counter after
-      // one drawn wall and is the check that says so -- 9 where 8 was the
-      // wall's own successor.
-      //
-      // The id is taken at the push below, where the bone becomes a thing the
-      // reader will keep. Nothing reads pendingBone.id before then.
-      pendingBone = { id: null, masterId: null,
-        levelId, points: [pt(from)], overriddenSrcIds: [] };
-      bone = pendingBone;
-    }
-    // NO DEDUPE HERE, AND THE GATE IS WHY. This read
-    //   `if (!same(last, to)) bone.points.push(pt(to))`
-    // to stop a shared corner being stored twice -- and the mutant that
-    // removes the guard survived every check, including one asserting the
-    // exact corner list. It survived because the guard CANNOT FIRE: `to`
-    // equals the bone's last point only if a wall ends where it starts, and
-    // drawPress refuses that before commitWall is reached, treating the second
-    // press as a correction. The shared corner is already one point because a
-    // chained wall's start IS the previous end.
-    //
-    // So the line was unreachable, and a guard nothing can exercise is a
-    // claim about a case that does not exist. Removed rather than left
-    // sitting under a permanent survivor.
-    bone.points.push(pt(to));
-    if (bone === pendingBone && bone.points.length >= 3) {
-      drawing.outlines = drawing.outlines || [];
-      bone.id = newDrawingItemId('outline');   // spent only now that it lands
-      drawing.outlines.push(bone);
-      pendingBone = null;
-    }
   };
 
   // ── THE ORDERED GARAGE BUILDS ITSELF ─────────────────────────────────────
@@ -2234,7 +2146,7 @@
     // where a garage's framed walls live whatever set the drafter is on.
     const walls = corners.map((corner, index) =>
       commitWall(corner, corners[(index + 1) % corners.length],
-        { bone: false, levelId, view: 'plan', body: 'garage' }));
+        { levelId, view: 'plan', body: 'garage' }));
     // ── AND A WAY INTO IT ────────────────────────────────────────────────
     //
     // Movie, 20 Sep: "also the detached garage doesn't have a roof or windows
@@ -2394,7 +2306,7 @@
       drawing.outlines.push(upperOutline);
       upperWalls = corners.map((corner, index) =>
         commitWall(corner, corners[(index + 1) % corners.length],
-          { bone: false, levelId: upperId, view: 'plan', body: 'garage' }));
+          { levelId: upperId, view: 'plan', body: 'garage' }));
       // AND ITS WINDOWS. Movie, 14 Oct, twice: "still FENSTRATIONS look like
       // not properly loading on the Detached Garage 2 storey grade beam".
       // The storey went up on 13 Oct with four walls and nothing in them, so

@@ -83,8 +83,10 @@ test('on DRAFTING a typed 45 lays the chamfer, says its legs, and the typed edge
   expect(Math.abs(loop[4][0] - loop[0][0])).toBeLessThan(1e-9);
 });
 
-test('TOY still turns square: a press aimed near the diagonal lands on the axis', async ({ page }) => {
-  await open(page, 'toy');
+test('the T-SQUARE lit still turns square: a press aimed near the diagonal lands on the axis', async ({ page }) => {
+  await open(page);
+  await page.locator('[data-mode-tsquare]').click();
+  await expect(page.locator('[data-mode-tsquare]')).toHaveClass(/lit/);
   const { at } = await h.planFrame(page);
   await h.selectTool(page, 'outline');
   for (const pt of [[0, 0], [10, 9], [10, 10], [0, 10]]) {

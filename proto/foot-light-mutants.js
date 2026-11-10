@@ -24,63 +24,52 @@ const SPEC = 'tests/model-foot-light.spec.js';
 
 const MUTANTS = [
   { file: 'model/09-draw-move-stretch.js',
-    name: 'THE SWITCH SWITCHES NOTHING when drawing: the board is the only reason',
-    find: "  const onTheFoot_if = () => board === 'toy' || footOn;",
-    with: "  const onTheFoot_if = () => board === 'toy';",
+    name: 'THE SWITCH SWITCHES NOTHING when drawing',
+    find: "  const onTheFoot_if = () => footOn;",
+    with: "  const onTheFoot_if = () => false;",
     test: 'the same DRAFTING run lands on the whole foot' },
 
   { file: 'model/16-gestures-undo.js',
     name: 'the light governs drawing only -- the drag half of "one light, both" is gone',
-    find: '            const Q = window.DraftToyConstraints;\n            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }',
-    with: '            /* mutant */',
+    find: '            dx = quantiseFeet(dx); dz = quantiseFeet(dz);\n          }\n          md.before.forEach(',
+    with: '            /* mutant */\n          }\n          md.before.forEach(',
     test: 'a DRAFTING drag moves a whole number of feet' },
 
-  { file: 'model/09-draw-move-stretch.js',
-    name: 'THE LEAK: the switch reaches TOY, so the light can unround the TOY board',
-    find: "  const onTheFoot_if = () => board === 'toy' || footOn;",
-    with: '  const onTheFoot_if = () => footOn;',
-    test: 'the light cannot unround TOY' },
-
   { file: 'model/01-skin-view.js',
-    name: 'TOY ARMS THE LIGHT: opening a TOY drawing lights a DRAFTING instrument',
-    find: '  let footOn = stored.footLight === true;',
-    with: "  let footOn = stored.footLight === true || board === 'toy';",
-    test: 'the light cannot unround TOY' },
-
-  { file: 'model/01-skin-view.js',
-    name: 'ON BY DEFAULT: a drafter who never touched it finds his plan on the grid',
-    find: '  let footOn = stored.footLight === true;',
-    with: '  let footOn = stored.footLight !== false;',
-    test: 'a DRAFTING run commits the odd length the hand gave it' },
+    name: 'OFF BY DEFAULT: a fresh browser draws free, and the toy-like feel is gone',
+    find: '  let footOn = stored.footLight !== false;',
+    with: '  let footOn = stored.footLight === true;',
+    spec: 'tests/lights-on-by-default.spec.js',
+    test: 'a fresh browser lights the T-SQUARE and the 1 FT' },
 
   { file: 'model/13-suites-trim-follow.js',
     name: 'the light is never stored, so it dies with the tab',
-    find: "      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, footLight: footOn }));",
+    find: "      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [key]: on }));",
     with: '      void keep;',
     test: 'the light survives a reload' },
 
   { file: 'model/13-suites-trim-follow.js',
     name: 'THE LIGHT SQUARES TOO: DRAFTING quietly loses the off-axis wall',
-    find: "  const squaring = () => tsquareLive() || board === 'toy';",
-    with: "  const squaring = () => tsquareLive() || board === 'toy' || footOn;",
+    find: "  const squaring = () => tsquareLive();",
+    with: "  const squaring = () => tsquareLive() || footOn;",
     test: 'the light rounds distance and squares nothing' },
 
   { file: 'model/16-gestures-undo.js',
     name: 'the drag rounds ONE axis, so a two-axis drag lands off the foot',
-    find: '            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }',
-    with: '            if (Q) { dx = Q.quantiseFeet(dx); }',
+    find: '            dx = quantiseFeet(dx); dz = quantiseFeet(dz);\n          }\n          md.before.forEach(',
+    with: '            dx = quantiseFeet(dx);\n          }\n          md.before.forEach(',
     test: 'a DRAFTING drag moves a whole number of feet' },
 
   { file: 'model/17-boot-save.js',
     name: 'the light reaches the FILE: a page setting becomes drawing data',
-    find: '  const storedChoice = () => ({',
-    with: '  const storedChoice = () => ({\n    footLight: footOn,',
+    find: '    const { board: _board, ...rest } = drawing;\n    return {\n      ...rest,',
+    with: '    const { board: _board, ...rest } = drawing;\n    return {\n      ...rest,\n      footLight: footOn,',
     test: 'a page setting, not drawing data' },
 ];
 
-const run = grep => {
+const run = (grep, spec = SPEC) => {
   try {
-    execSync(`npx playwright test ${SPEC}`
+    execSync(`npx playwright test ${spec}`
       + (grep ? ` -g ${JSON.stringify(grep)}` : '') + ' --reporter=line',
       { cwd: ROOT, stdio: 'pipe' });
     return 'passed';
@@ -106,9 +95,9 @@ for (const m of MUTANTS) {
   if (hits > 1) { console.log(`  AMBIGUOUS (${hits} matches): ${m.name}`); ambiguous += 1; continue; }
   ran += 1;
   fs.writeFileSync(path, before.replace(m.find, m.with));
-  let result = run(m.test);
+  let result = run(m.test, m.spec);
   let note = '';
-  if (result === 'passed' && run(null) === 'failed') {
+  if (result === 'passed' && run(null, m.spec) === 'failed') {
     result = 'failed'; note = '  (caught by another check -- re-aim `test`)';
   }
   execSync(`git checkout -- ${m.file}`, { cwd: ROOT });

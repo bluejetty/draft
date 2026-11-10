@@ -13,7 +13,7 @@ const SPEC = 'tests/openings-stay-put.spec.js';
 const MUTANTS = [
   { file: 'model/16-gestures-undo.js',
     name: 'the openings ride the start, as before',
-    find: "          if (board !== 'toy') keepOpeningsPut(md, grabbed);\n",
+    find: "          keepOpeningsPut(md, grabbed);\n",
     with: "",
     test: 'the start dragged in 4 ft' },
   { file: 'model/10-tracking-garage.js',

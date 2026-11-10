@@ -20,7 +20,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/opening-dims.spec.js tests/model-html-fenestration.spec.js tests/typed-drag.spec.js';
 const MUTANTS = [
   { file: 'model/16-gestures-undo.js', name: 'a SELECT drag takes no typed length',
-    find: "        moveTyped = !offered && board !== 'toy' && !md.loose && !(md.lockBefore && md.lockBefore.length) && !master\n",
+    find: "        moveTyped = !offered && !md.loose && !(md.lockBefore && md.lockBefore.length) && !master\n",
     with: "        moveTyped = false && !md.loose && !master\n",
     test: 'a line dragged by its body, then a typed length' },
   { file: 'model/16-gestures-undo.js', name: 'an end node takes no typed length',
@@ -40,8 +40,8 @@ const MUTANTS = [
     with: "",
     test: "a dimension put on the door's dot is linked to it, and follows the door when it is slid" },
   { file: 'model/15-panels.js', name: 'a dimension on the dot stays where the door was',
-    find: "    const refPoint = ref => (ref.openingId != null\n",
-    with: "    const refPoint = ref => (false\n",
+    find: "    if (ref.openingId != null) return openingCentre(maps.fen.get(String(ref.openingId)));\n",
+    with: "    if (ref.openingId != null) return null;\n",
     test: "a dimension put on the door's dot is linked to it, and follows the door when it is slid" },
   { file: 'drawing-format.js', name: 'the file forgets which opening a dimension is on',
     find: "        if (String(r.openingId ?? '').trim()) return { openingId: String(r.openingId).trim(), x: Number(r.x), z: Number(r.z) };\n",

@@ -158,6 +158,9 @@ test('casework lands on its own layer', async ({ page }) => {
   // A RUN IS TWO PRESSES along one face of one wall, and the pair sets the
   // width — so this is also the proof that the second press is measured
   // against the first rather than placing a second cabinet.
+  // THE 1 FT LIGHT ON, which the suite leaves off: casework takes its 6"
+  // grain from the light (TOY MODE, which used to own the grain, is gone).
+  await page.evaluate(() => { footOn = true; });
   await armKind(page, 'cabinet');
   await pressWorld(page, alongWall(wall, 0.30, 0.6));
   expect(await fixturesOf(page)).toHaveLength(0);   // one press places nothing

@@ -66,6 +66,10 @@ async function seed(page, { board } = {}) {
 }
 
 async function openModel(page, search = '') {
+  // THE LIGHTS OFF, as tests/helpers.js leaves them: T-SQUARE and 1 FT are on
+  // in a fresh browser since TOY MODE left (9 Nov 2026), and this spec draws
+  // off-square on purpose.
+  await page.evaluate(() => localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight: false })));
   await page.goto(`/MODEL.html${search}`);
   await expect(readout(page)).toContainText('walls', { timeout: 6000 });
 }
@@ -596,40 +600,21 @@ test.describe('MODEL.html instrument strip', () => {
       .toHaveAttribute('data-mode', 'night');
   });
 
-  test('the board lamp says which board, and what being on it means',
+  test('there is no board any more: no lamp, no switch, no board on the body',
     async ({ page }) => {
-      // WHAT THIS CHECK USED TO BE: the board SWITCH, pressed onto DRAFTING,
-      // reloaded, and held to a title that described what TOY enforces. Movie
-      // ruled on 15 Oct -- "it ill be basically a LIGHT -- not a button" --
-      // so the press is gone and the honesty check moves onto the lamp: it
-      // must describe what the board really does, which is the one claim this
-      // test has ever made.
+      // WHAT THIS CHECK USED TO BE: the board SWITCH, then (15 Oct) the board
+      // LAMP, held to a title that described what TOY enforced. Movie took
+      // TOY MODE out of the program on 9 Nov 2026 -- "it causes more
+      // problems" -- so the mode corner is the three stacked pairs and
+      // nothing claims a constraint the page does not have. The whole-foot,
+      // square feel lives on the strip's own two chips now, which
+      // tests/lights-on-by-default.spec.js pins.
       await seed(page);
       await openModel(page);
-
-      // TOY by default, which is Movie's stated default and now his rule:
-      // "lets always start the users in TOY MODE".
-      await expect(page.locator('body')).toHaveAttribute('data-board', 'toy');
-      const lamp = page.locator('#mode-corner [data-board-light]');
-      await expect(lamp).toBeVisible();
-      await expect(lamp.locator('[data-board-lamp]')).toHaveText('TOY');
-      await expect(lamp, 'the light is on').toHaveAttribute('data-lit', '');
-
-      // AND THERE IS NOTHING TO PRESS. A switch left behind the lamp would
-      // make this the old page wearing a new face.
-      expect(await page.locator('#mode-corner button[data-board]').count()).toBe(0);
-
-      // THE HONESTY CHECK, and the reason this test exists at all. It read
-      //   await expect(toy).toHaveAttribute('title', /nothing is constrained/);
-      // for exactly as long as that was true, then /square and whole-foot/
-      // once §1–§5 made the board really square and round the wall. The claim
-      // is unchanged -- what the board says it does, it must do -- and only
-      // the truth it checks has moved: a lamp that goes back to promising
-      // nothing is red, and so is one that keeps promising the foot after
-      // someone unwires it.
-      await expect(lamp).toHaveAttribute('title', /whole foot/);
-      await expect(lamp.locator('[data-board-lamp-note]'),
-        'and it says so on the face, not only in a hover')
-        .toHaveText(/1 FT.*90/);
+      expect(await page.locator('#mode-corner [data-board-light], #mode-corner button[data-board]').count()).toBe(0);
+      await expect(page.locator('body')).not.toHaveAttribute('data-board', /./);
+      expect(await page.locator('#mode-corner > .set').evaluateAll(els => els.map(
+        el => (el.textContent || '').trim().replace(/\s+/g, ' '))))
+        .toEqual(['RUFF ROUGH', 'NIGHT DAY']);
     });
 });

@@ -107,8 +107,8 @@ const MUTANTS = [
     // gesture (Movie, 5 Oct); the brush is spent there.
     // The commit also carries the hard line's justification since 16 Oct;
     // the brush is the part this mutant drops.
-    find: "        { ...brushOptions('wall'), ...(justified ? { refLine: justified } : {}) }) };",
-    with: "        { ...(justified ? { refLine: justified } : {}) }) };",
+    find: "      return { type: 'wall', item: commitWall(from, to, brushOptions('wall')) };",
+    with: "      return { type: 'wall', item: commitWall(from, to, {}) };",
     test: 'arming WALL puts the brush-s press down and keeps what it holds' },
 
   { file: 'model/09-draw-move-stretch.js',
