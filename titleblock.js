@@ -65,14 +65,87 @@ if (!window.DraftTitleblock) {
   // ledger: a 2" strip and a 2.25" band are what a D-size titleblock is
   // drawn at in practice, and the corner radius grows with the sheet. The
   // same judgement, not arithmetic.
+  //
+  // THE FULL RACK (9 Nov, from the draftsman's review: "only 11x17, letter,
+  // ARCH D and ANSI D. No ARCH A/B/C, no A1/A3 for metric work" -- jb:
+  // "put it all... 11x17 landscape as default size"). ARCH A/B/C, ANSI C
+  // (8.5x11 IS ANSI A and 11x17 IS ANSI B, so those two just gain the name)
+  // and the two metric sheets A3 and A1. The set numbers carry on from 04 in
+  // the order they joined, and each set borrows the widths of the imperial
+  // sheet nearest its size: ARCH A is a letter, ARCH B and A3 are ledgers,
+  // the two C sheets sit between a ledger and a D, A1 is a D.
+  //
+  // THE PAPERS THEMSELVES LIVE HERE TOO, so LAYOUT's picker and the
+  // COMPANY STANDARDS preview read one table rather than each keeping a
+  // copy of 17-by-11. `w` and `h` are portrait inches; `mm` is the sheet
+  // as a metric drafter names it and is what the readout prints for the A
+  // sheets. drawing-format.js keeps its own list of the KEYS, because it is
+  // a reader that runs without this file; the titleblock harness checks the
+  // two lists agree.
+  const paper = (key, name, w, h, extra) => [key, Object.freeze({ key, name, w, h, ...extra })];
+  const PAPERS = Object.freeze(Object.fromEntries([
+    paper('11x17', 'Ledger · ANSI B', 11, 17, { label: '11 × 17  (Ledger · ANSI B)' }),
+    paper('8.5x11', 'Letter · ANSI A', 8.5, 11, { label: '8.5 × 11  (Letter · ANSI A)' }),
+    paper('9x12', 'ARCH A', 9, 12, { label: '9 × 12  (ARCH A)' }),
+    paper('12x18', 'ARCH B', 12, 18, { label: '12 × 18  (ARCH B)' }),
+    paper('17x22', 'ANSI C', 17, 22, { label: '17 × 22  (ANSI C)' }),
+    paper('18x24', 'ARCH C', 18, 24, { label: '18 × 24  (ARCH C)' }),
+    paper('22x34', 'ANSI D', 22, 34, { label: '22 × 34  (ANSI D)' }),
+    paper('24x36', 'ARCH D', 24, 36, { label: '24 × 36  (ARCH D)' }),
+    paper('A3', 'A3', 297 / 25.4, 420 / 25.4, { label: 'A3  (297 × 420 mm)', mm: [297, 420] }),
+    paper('A1', 'A1', 594 / 25.4, 841 / 25.4, { label: 'A1  (594 × 841 mm)', mm: [594, 841] }),
+  ]));
+  const PAPER_KEYS = Object.freeze(Object.keys(PAPERS));
+  // THE SHEET THE WAY UP IT IS USED: width and height in inches after the
+  // turn, plus the words the desk readout prints above it. The readout used
+  // to print `17" × 11"` for a landscape ledger -- width by height, which is
+  // true and reads as a bug (the review: "the 11x17 tile is also labelled
+  // 17" x 11" on the sheet"). It now names the paper as the tile does and
+  // says which way up it is.
+  const paperOnSheet = (key, orientation) => {
+    const p = PAPERS[key] || PAPERS['11x17'];
+    const landscape = orientation !== 'portrait';
+    const size = p.mm ? `${p.mm[0]} × ${p.mm[1]} mm` : `${p.w}" × ${p.h}"`;
+    return Object.freeze({
+      key: p.key, name: p.name,
+      pw: landscape ? p.h : p.w, ph: landscape ? p.w : p.h,
+      readout: `${size}  (${p.name.toUpperCase()} · ${landscape ? 'LANDSCAPE' : 'PORTRAIT'})`,
+      // THE PANEL'S SHORT FORM: the size and the way up, no sheet name.
+      short: `${size} ${landscape ? 'LANDSCAPE' : 'PORTRAIT'}`,
+    });
+  };
+
   const frame = (id, paper, orientation, shape, extra) => Object.freeze({
     id, label: id, paper, orientation, shape, ...extra,
   });
   const STRIP = Object.freeze({ wide: 1.15, letter: 0.95, portrait: 1.3, portraitLetter: 1.05,
-    d: 2, portraitD: 2.2 });
-  const BAND = Object.freeze({ wide: 1.5, letter: 1.2, d: 2.25 });
+    c: 1.6, portraitC: 1.75, d: 2, portraitD: 2.2 });
+  const BAND = Object.freeze({ wide: 1.5, letter: 1.2, c: 1.85, d: 2.25 });
   const ROUND_IN = 0.35;
+  const ROUND_C_IN = 0.42;
   const ROUND_D_IN = 0.5;
+  // THE WIDTHS A SHEET'S SET IS CUT AT, by the sheet nearest it in size.
+  const WIDTHS = Object.freeze({
+    letter: { strip: STRIP.letter, portrait: STRIP.portraitLetter, band: BAND.letter, round: ROUND_IN },
+    ledger: { strip: STRIP.wide, portrait: STRIP.portrait, band: BAND.wide, round: ROUND_IN },
+    c: { strip: STRIP.c, portrait: STRIP.portraitC, band: BAND.c, round: ROUND_C_IN },
+    d: { strip: STRIP.d, portrait: STRIP.portraitD, band: BAND.d, round: ROUND_D_IN },
+  });
+  // ONE SET OF SIX, the three shapes each way up, at a sheet's widths.
+  const setFor = (n, paperKey, widths) => [
+    frame(`LSQUARE${n}`, paperKey, 'landscape', 'square',
+      { placement: 'right', stripWIn: widths.strip, cornerRadiusIn: 0, arrowDivider: true }),
+    frame(`LBAND${n}`, paperKey, 'landscape', 'band',
+      { placement: 'bottom', bandHIn: widths.band }),
+    frame(`LROUND${n}`, paperKey, 'landscape', 'round',
+      { placement: 'right', stripWIn: widths.strip, cornerRadiusIn: widths.round, arrowDivider: false }),
+    frame(`PSQUARE${n}`, paperKey, 'portrait', 'square',
+      { placement: 'right', stripWIn: widths.portrait, cornerRadiusIn: 0, arrowDivider: true }),
+    frame(`PBAND${n}`, paperKey, 'portrait', 'band',
+      { placement: 'bottom', bandHIn: widths.band }),
+    frame(`PROUND${n}`, paperKey, 'portrait', 'round',
+      { placement: 'right', stripWIn: widths.portrait, cornerRadiusIn: widths.round, arrowDivider: false }),
+  ];
   const FRAMES = Object.freeze([
     // ── 11x17 LANDSCAPE, the three he listed. LSQUARE01 is the shape ROUGH
     //    DRAFTER has always worn, so a drawing that never chose opens on it;
@@ -108,20 +181,15 @@ if (!window.DraftTitleblock) {
       { placement: 'right', stripWIn: STRIP.portraitLetter, cornerRadiusIn: ROUND_IN, arrowDivider: false }),
     // ── THE D SHEETS (17 Oct): 03 is 24x36, 04 is 22x34, the same three
     //    shapes each way up, at the D block's widths.
-    ...[['03', '24x36'], ['04', '22x34']].flatMap(([n, paper]) => [
-      frame(`LSQUARE${n}`, paper, 'landscape', 'square',
-        { placement: 'right', stripWIn: STRIP.d, cornerRadiusIn: 0, arrowDivider: true }),
-      frame(`LBAND${n}`, paper, 'landscape', 'band',
-        { placement: 'bottom', bandHIn: BAND.d }),
-      frame(`LROUND${n}`, paper, 'landscape', 'round',
-        { placement: 'right', stripWIn: STRIP.d, cornerRadiusIn: ROUND_D_IN, arrowDivider: false }),
-      frame(`PSQUARE${n}`, paper, 'portrait', 'square',
-        { placement: 'right', stripWIn: STRIP.portraitD, cornerRadiusIn: 0, arrowDivider: true }),
-      frame(`PBAND${n}`, paper, 'portrait', 'band',
-        { placement: 'bottom', bandHIn: BAND.d }),
-      frame(`PROUND${n}`, paper, 'portrait', 'round',
-        { placement: 'right', stripWIn: STRIP.portraitD, cornerRadiusIn: ROUND_D_IN, arrowDivider: false }),
-    ]),
+    ...setFor('03', '24x36', WIDTHS.d),
+    ...setFor('04', '22x34', WIDTHS.d),
+    // ── THE REST OF THE RACK (9 Nov), numbered in the order they joined.
+    ...setFor('05', '9x12', WIDTHS.letter),
+    ...setFor('06', '12x18', WIDTHS.ledger),
+    ...setFor('07', '17x22', WIDTHS.c),
+    ...setFor('08', '18x24', WIDTHS.c),
+    ...setFor('09', 'A3', WIDTHS.ledger),
+    ...setFor('10', 'A1', WIDTHS.d),
   ]);
 
   // THE THREE THAT FIT THE SHEET IN FRONT OF HIM. An unknown paper or
@@ -344,7 +412,7 @@ if (!window.DraftTitleblock) {
   // 0.78/0.92 on that page would be a second copy of the arithmetic, and a
   // second copy is how the preview comes to show a cell the sheet does not
   // have. drawRight reads these same two numbers.
-  const MARK_CELL = Object.freeze({ top: 0.78, bottom: 0.92 });
+  const MARK_CELL = Object.freeze({ top: 0.8, bottom: 0.92 });
 
   // Cell widths of the bottom band as fractions of the strip: identity,
   // project, drafter, date + scale, sheet number.
@@ -405,10 +473,15 @@ if (!window.DraftTitleblock) {
     ctx.lineTo(x, y + h);
     ctx.stroke();
 
-    // Section bottoms as fractions of the strip height.
+    // Section bottoms as fractions of the strip height. THE RECORD ROWS
+    // GREW FROM FOUR TO SIX on 9 Nov (PROJECT NO. above, CHECKED BY below:
+    // the review's "no project number, no drawn/checked"), and the extra
+    // two rows are paid for by the title and address sections, each a
+    // little shorter, and the mark cell starting 2% lower -- six rows at the
+    // same 4% each the four had, so no row's lettering got smaller.
     const arrowB = y + h * 0.12;
-    const titleB = y + h * 0.44;
-    const wordsB = y + h * 0.62;
+    const titleB = y + h * 0.42;
+    const wordsB = y + h * 0.56;
     const rowsB = y + h * MARK_CELL.top;
     const markB = y + h * MARK_CELL.bottom;
     const divider = yy => {
@@ -477,12 +550,17 @@ if (!window.DraftTitleblock) {
     rot(info.owner, x + w * 0.82, titleB, wordsB, w * 0.14, 400, plain, INK);
     divider(wordsB);
 
-    // The record rows, horizontal: REVISION / DATE / SCALE / DRAFT BY.
+    // The record rows, horizontal: PROJECT NO. / REVISION / DATE / SCALE /
+    // DRAFT BY / CHECKED BY. A project with no number and a sheet nobody
+    // has checked print their rows empty under the label, the way a
+    // printed form does: the cell is there to be filled in by hand.
     const rows = [
+      ['PROJECT NO.', info.projectNumber],
       ['REVISION', info.revision || '—'],
       ['DATE', info.date],
       ['SCALE', info.scale],
       ['DRAFT BY', info.drafterName],
+      ['CHECKED BY', info.checkedBy],
     ];
     const rowH = (rowsB - wordsB) / rows.length;
     rows.forEach(([labelText, value], i) => {
@@ -638,14 +716,15 @@ if (!window.DraftTitleblock) {
     ctx.textBaseline = 'middle';
     ctx.fillText(style.company, textX, y + h / 2);
 
-    // Project cell
-    label(cells[1], 'PROJECT');
+    // Project cell: the number leads when the project has one.
+    label(cells[1], info.projectNumber ? `PROJECT NO. ${info.projectNumber}` : 'PROJECT');
     lines(cells[1], [info.projectName, info.owner, info.address], h * 0.14);
     if (typeof info.onProjectName === 'function') info.onProjectName({ x: cells[1].x, y, w: cells[1].w, h });
 
-    // Drafter cell
+    // Drafter cell, with the checker under the drafter when there is one.
     label(cells[2], 'DRAWN BY');
-    lines(cells[2], [info.drafterName, info.drafterPhone], h * 0.14);
+    lines(cells[2], [info.drafterName, info.drafterPhone,
+      info.checkedBy ? `CHECKED BY ${info.checkedBy}` : ''], h * 0.14);
 
     // Date + scale cell
     label(cells[3], 'DATE · SCALE');
@@ -671,6 +750,9 @@ if (!window.DraftTitleblock) {
   };
 
   window.DraftTitleblock = Object.freeze({
+    PAPERS,
+    PAPER_KEYS,
+    paperOnSheet,
     FRAMES,
     MARKS,
     framesFor,

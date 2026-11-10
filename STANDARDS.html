@@ -963,8 +963,7 @@
         // this dialog is about. One render, two views: a second render at a
         // second scale would be a second chance to disagree with the sheet.
         const zoom = style.placement === 'right' ? 90 : 34;
-        const PW = frame.paper === '11x17' ? 17 : 11;
-        const PH = frame.paper === '11x17' ? 11 : 8.5;
+        const { pw: PW, ph: PH } = T.paperOnSheet(frame.paper, frame.orientation);
         const sheet = document.createElement('canvas');
         sheet.width = Math.round(PW * zoom);
         sheet.height = Math.round(PH * zoom);

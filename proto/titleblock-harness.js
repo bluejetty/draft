@@ -174,9 +174,9 @@ function runChecks() {
     T.FRAMES.every(f => f.placement && !f.logoSrc && !f.company)
       && T.MARKS.every(m => m.logoSrc && m.company && !m.placement),
     'the old list carried both, so the rounded frame could only ever be BLUEJETTY');
-  check('three shapes for each of the eight sheets this shop prints',
-    T.FRAMES.length === 24
-      && new Set(T.FRAMES.map(f => `${f.paper}/${f.orientation}`)).size === 8
+  check('three shapes for each of the twenty sheets this shop prints',
+    T.FRAMES.length === 60
+      && new Set(T.FRAMES.map(f => `${f.paper}/${f.orientation}`)).size === 20
       && new Set(T.FRAMES.map(f => f.shape)).size === 3);
   check('the sets he named are the landscape 11x17 ones',
     T.framesFor('11x17', 'landscape').map(f => f.id).join(',') === 'LSQUARE01,LBAND01,LROUND01',
@@ -185,7 +185,49 @@ function runChecks() {
     T.FRAMES.every(f => f.id.startsWith(f.orientation === 'landscape' ? 'L' : 'P')),
     '"use L for landscape orientation and P for portrait"');
   check('01 is the ledger set, 02 the letter one, 03 ARCH D and 04 ANSI D',
-    T.FRAMES.every(f => f.id.endsWith({ '11x17': '01', '8.5x11': '02', '24x36': '03', '22x34': '04' }[f.paper])));
+    T.FRAMES.every(f => f.id.endsWith({ '11x17': '01', '8.5x11': '02', '24x36': '03', '22x34': '04',
+      '9x12': '05', '12x18': '06', '17x22': '07', '18x24': '08', A3: '09', A1: '10' }[f.paper])));
+  // ── THE FULL RACK (9 Nov) ────────────────────────────────────────────
+  check('every paper on the rack has its own set of six, and no set is for a paper off it',
+    T.PAPER_KEYS.every(key => T.framesFor(key, 'landscape').length === 3
+      && T.framesFor(key, 'portrait').length === 3
+      && T.framesFor(key, 'portrait').every(f => f.paper === key))
+      && T.FRAMES.every(f => T.PAPERS[f.paper])
+      && T.FRAMES.length === T.PAPER_KEYS.length * 6,
+    `${T.FRAMES.length} frames for ${T.PAPER_KEYS.length} papers`);
+  check('11x17 is first on the rack, so it is what a new drawing opens on',
+    T.PAPER_KEYS[0] === '11x17' && T.FRAMES[0].paper === '11x17',
+    'jb, 9 Nov: "11x17 landscape as default size"');
+  check('ARCH A/B/C, ANSI C and the metric A3 and A1 are on it',
+    ['9x12', '12x18', '18x24', '17x22', 'A3', 'A1'].every(key => T.PAPERS[key]),
+    'the review: "No ARCH A/B/C, no A1/A3 for metric work"');
+  check('the metric sheets are their ISO millimetres, in inches',
+    Math.abs(T.PAPERS.A3.w * 25.4 - 297) < 1e-9 && Math.abs(T.PAPERS.A3.h * 25.4 - 420) < 1e-9
+      && Math.abs(T.PAPERS.A1.w * 25.4 - 594) < 1e-9 && Math.abs(T.PAPERS.A1.h * 25.4 - 841) < 1e-9);
+  check('each set is cut at the widths of the sheet nearest it in size',
+    T.frameById('LSQUARE05').stripWIn === T.frameById('LSQUARE02').stripWIn
+      && T.frameById('LSQUARE06').stripWIn === T.frameById('LSQUARE01').stripWIn
+      && T.frameById('LSQUARE09').stripWIn === T.frameById('LSQUARE01').stripWIn
+      && T.frameById('LSQUARE10').stripWIn === T.frameById('LSQUARE03').stripWIn
+      && T.frameById('LSQUARE07').stripWIn > T.frameById('LSQUARE01').stripWIn
+      && T.frameById('LSQUARE07').stripWIn < T.frameById('LSQUARE03').stripWIn
+      && T.frameById('LSQUARE08').stripWIn === T.frameById('LSQUARE07').stripWIn,
+    'ARCH A is a letter, ARCH B and A3 ledgers, the C sheets between ledger and D, A1 a D');
+  check('the desk readout names the paper and the way up, never width by height',
+    T.paperOnSheet('11x17', 'landscape').readout === '11" × 17"  (LEDGER · ANSI B · LANDSCAPE)'
+      && T.paperOnSheet('11x17', 'landscape').pw === 17
+      && T.paperOnSheet('A3', 'portrait').readout === '297 × 420 mm  (A3 · PORTRAIT)'
+      && T.paperOnSheet('22x34', 'landscape').short === '22" × 34" LANDSCAPE',
+    'the review: "the 11x17 tile is also labelled 17\" x 11\" on the sheet, which looks like a bug"');
+  check('a paper nobody has heard of reads as the ledger',
+    T.paperOnSheet('B0', 'landscape').key === '11x17');
+  // THE FILE FORMAT'S KEY LIST IS A COPY, because drawing-format.js runs
+  // without this file. Read as text so a key added to one and not the
+  // other fails here rather than on a drafter's reload.
+  const formatKeys = (readSubject('drawing-format.js').match(/LAYOUT_PAPER_KEYS = \[([^\]]*)\]/) || [])[1];
+  check('drawing-format.js accepts exactly the keys on the rack',
+    formatKeys && formatKeys.split(',').map(k => k.trim().replace(/'/g, '')).join() === T.PAPER_KEYS.join(),
+    `format: ${formatKeys}`);
   check('a D block is wider than a ledger one, because the sheet is',
     T.frameById('LSQUARE03').stripWIn > T.frameById('LSQUARE01').stripWIn
       && T.frameById('LBAND04').bandHIn > T.frameById('LBAND01').bandHIn
@@ -339,7 +381,7 @@ function runChecks() {
       && T.normaliseCompanyLogos([{ id: 'L2', label: 'X', dataUrl: PNG, seq: 'two' }])[0].seq === 0);
 
   check('the mark cell is published, and it is the cell drawRight uses',
-    T.MARK_CELL.top === 0.78 && T.MARK_CELL.bottom === 0.92 && Object.isFrozen(T.MARK_CELL),
+    T.MARK_CELL.top === 0.8 && T.MARK_CELL.bottom === 0.92 && Object.isFrozen(T.MARK_CELL),
     'the crop preview enlarges this band out of a real strip; two copies would show a cell the sheet has not got');
 
   // ── WHICH PAINTER ────────────────────────────────────────────────────
@@ -365,7 +407,23 @@ function runChecks() {
     '1/4" = 1\'-0"', 'M. QUEST', '705-555-0134', 'A-2'].filter(text => !has(bandPaint, text));
   check('and so does the band', bandMissing.length === 0, `missing ${bandMissing.join(', ')}`);
   check('the strip labels its record rows',
-    ['REVISION', 'DATE', 'SCALE', 'DRAFT BY', 'SHEET'].every(text => has(stripPaint, text)));
+    ['PROJECT NO.', 'REVISION', 'DATE', 'SCALE', 'DRAFT BY', 'CHECKED BY', 'SHEET'].every(text => has(stripPaint, text)));
+  // ── PROJECT NO. AND CHECKED BY (9 Nov) ───────────────────────────────
+  const numbered = { ...INFO, projectNumber: '2026-014', checkedBy: 'J. BLUE' };
+  const numberedStrip = paintWith(T, right, numbered);
+  const numberedBand = paintWith(T, band, numbered, LOGO, BAND);
+  check('the strip prints the project number and the checker in their rows',
+    has(numberedStrip, '2026-014') && has(numberedStrip, 'J. BLUE')
+      && ink(numberedStrip, '2026-014').y < ink(numberedStrip, 'REVISION').y
+      && ink(numberedStrip, 'J. BLUE').y > ink(numberedStrip, 'M. QUEST').y,
+    'PROJECT NO. is the first record row and CHECKED BY the last');
+  check('the band leads its project cell with the number and puts the checker under the drafter',
+    has(numberedBand, 'PROJECT NO. 2026-014') && has(numberedBand, 'CHECKED BY J. BLUE')
+      && ink(numberedBand, 'CHECKED BY J. BLUE').y > ink(numberedBand, 'M. QUEST').y);
+  check('a project without a number or a checker prints the labels over empty cells',
+    has(stripPaint, 'PROJECT NO.') && has(stripPaint, 'CHECKED BY') && has(bandPaint, 'PROJECT')
+      && !bandPaint.words.some(w => /CHECKED BY/.test(w.text)),
+    'a printed form leaves the cell to be filled in by hand');
   check('the strip labels the address and the owner',
     has(stripPaint, 'BUILDING ADDRESS') && has(stripPaint, 'BUILDING OWNER'));
   check('the band labels its cells',
@@ -426,8 +484,8 @@ function runChecks() {
     && Math.abs(s.pts[0].y - s.pts[1].y) < 0.01 && Math.abs(s.pts[1].x - s.pts[0].x - BOX.w) < 0.01;
   const dividers = stripPaint.strokes.filter(s => fullWidth(s) && s.w === 0.75);
   check('the record rules are drawn finer than the section dividers',
-    stripPaint.strokes.filter(s => fullWidth(s) && s.w === 0.5).length === 3,
-    'three rules between four record rows');
+    stripPaint.strokes.filter(s => fullWidth(s) && s.w === 0.5).length === 5,
+    'five rules between six record rows');
   check('the strip is divided into its six sections',
     dividers.length === 5, `${dividers.length} full-width dividers`);
   check('the dividers are in order down the strip and none lands on another',
@@ -483,8 +541,8 @@ function runChecks() {
     tallPaint.images[0].h > paintWith(T, { ...right, logoOnly: false }, INFO, tallLogo).images[0].h,
     'it fills ~75% of the cell against ~42%, which is only visible once the height is what binds');
   check('a tall mark is held to its cell rather than running through the dividers',
-    tallPaint.images[0].h <= (BOX.h * 0.92 - BOX.h * 0.78) * 0.75 + 0.01,
-    `drew ${tallPaint.images[0].h}px into a ${(BOX.h * 0.14).toFixed(1)}px cell`);
+    tallPaint.images[0].h <= (BOX.h * 0.92 - BOX.h * 0.8) * 0.75 + 0.01,
+    `drew ${tallPaint.images[0].h}px into a ${(BOX.h * 0.12).toFixed(1)}px cell`);
   check('and it keeps its aspect ratio while being held',
     Math.abs(tallPaint.images[0].w / tallPaint.images[0].h - 100 / 900) < 1e-6);
   check('a mark that has not loaded yet is simply not drawn',
@@ -734,7 +792,7 @@ const MUTATIONS = [
     c => c.replace('    ctx.moveTo(x, y);\n    ctx.lineTo(x, y + h);\n    ctx.stroke();\n', '')],
 
   ['the sections are laid out bottom up', 'titleblock.js',
-    c => c.replace('const titleB = y + h * 0.44;', 'const titleB = y + h * 0.80;')],
+    c => c.replace('const titleB = y + h * 0.42;', 'const titleB = y + h * 0.80;')],
 
   ['the logoOnly company gets its name printed twice', 'titleblock.js',
     c => c.replace('    if (!style.logoOnly) {\n      const companyPx', '    if (true) {\n      const companyPx')],

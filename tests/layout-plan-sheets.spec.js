@@ -145,14 +145,18 @@ test('every plan sheet\'s window takes the largest area inside the border, the c
   expect(main.pif).toBe(1 / 4);
 });
 
-test('the site plan sheet flies the north arrow by convention; the next sheet waits for the toggle', async ({ page }) => {
+test('the site plan sheet flies the north arrow by convention even with the toggle off', async ({ page }) => {
   await openLayout(page, drawing());
   const layout = await savedLayout(page);
   const site = layout.viewports.find(v => v.kind === 'plan' && Number(v.levelId) === 8);
-  await expect(page.locator('[data-layout-north]')).toContainText('Off');
-  await goSheet(page, site.sheet);
-  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25), 'the arrow on the site plan').toBeGreaterThan(20);
+  // ON FROM THE START (9 Nov): every sheet flies it until the toggle lowers it.
+  await expect(page.locator('[data-layout-north]')).toContainText('On');
   await goSheet(page, site.sheet + 1);
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25), 'flown on the elevations too').toBeGreaterThan(20);
+  await page.locator('[data-layout-north]').click();
+  await expect(page.locator('[data-layout-north]')).toContainText('Off');
+  await expect.poll(async () => (await savedLayout(page)).northArrow, 'the toggle is written').toBe(false);
   expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25), 'bare on the elevations').toBe(0);
-  expect((await savedLayout(page)).northArrow, 'the toggle itself is untouched').toBeFalsy();
+  await goSheet(page, site.sheet);
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25), 'the site plan flies it regardless').toBeGreaterThan(20);
 });

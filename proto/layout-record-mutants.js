@@ -62,7 +62,7 @@ const MUTANTS = [
 
   { file: 'drawing-format.js',
     name: 'THE NORTH ARROW COMES DOWN on every drawing that had it raised',
-    find: '      northArrow: raw?.northArrow === true,',
+    find: '      northArrow: raw?.northArrow !== false,',
     with: '      northArrow: false,' },
 
   { file: 'drawing-format.js',
