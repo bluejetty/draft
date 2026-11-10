@@ -661,11 +661,13 @@ mkrid/mkevt intact); retiring BLUEJETTY after the logo test.
 6. **The REPORT DESK address** (6 Nov). The problem-report card
    (`error-report.js`: ROUGH-DRAFTER HIT A PROBLEM on an uncaught error, and
    REPORT A PROBLEM in the foot lane) mails reports through the backup-email
-   worker to `REPORT_TO` at the top of that file. He has no address yet
-   (*"not sure of the email i should use yet i will have to leave it empty
-   for now"*), so it ships EMPTY: with no desk and no copy address the button
-   says SAVE REPORT FILE and the report lands on the drafter's computer. Fill
-   in `REPORT_TO` the day he picks one; nothing else changes.
+   worker to `REPORT_TO` at the top of that file. It shipped EMPTY (*"not
+   sure of the email i should use yet"*); on 10 Nov he picked
+   **roughdrafter.com@gmail.com** and `REPORT_TO` holds it, so every report
+   goes to the desk, plus a copy to the drafter if they type an address.
+   With the desk empty and no copy address the button says SAVE REPORT FILE
+   and the report lands on the drafter's computer instead. To change the
+   desk, change `REPORT_TO`; nothing else changes.
 
 ---
 
