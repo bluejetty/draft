@@ -401,7 +401,12 @@ test.describe('rung 4a — the release waits for the write', () => {
   // drafter who switched apps to read their mail must not return to a page that
   // handed its lease away. This is the case that notices if the two handlers
   // are ever merged into one.
-  test('a hidden-but-not-unloading tab keeps its lease', async ({ page }) => {
+  // REVERSED 10 Nov 2026 (jb): the lease follows the tab being looked at. A
+  // hidden tab saves what it can and then hands the lease back, so another
+  // open tab can edit without a TAKE OVER press. The write still lands first:
+  // the release is chained on it, as 4a says.
+  // tests/model-lease-follows-tab.spec.js has the reclaim on the way back.
+  test('a hidden-but-not-unloading tab saves, then hands its lease back', async ({ page }) => {
     await editedPage(page);
     const mine = await myHolderId(page);
 
@@ -409,8 +414,10 @@ test.describe('rung 4a — the release waits for the write', () => {
     await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
     await page.waitForTimeout(SETTLE);
 
-    expect((await leaseNow(page))?.holderId,
-      'visibilitychange must not release the lease').toBe(mine);
-    await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1');
+    expect((await leaseNow(page))?.holderId ?? null,
+      'visibilitychange releases the lease once the hide-save has landed').not.toBe(mine);
+    await expect(page.locator('body')).toHaveAttribute('data-lease-held', '0');
+    await expect(page.locator('[data-lease-banner]'),
+      'parked, not refused: no banner while nobody else is editing').toBeHidden();
   });
 });

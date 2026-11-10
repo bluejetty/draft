@@ -1689,6 +1689,7 @@
     align-items:center; justify-content:center; padding:24px; text-align:center;
     pointer-events:none; }
   #notice.show { display:flex; }
+  #notice .promote-row { margin-top:10px; }
   #notice div { max-width:34em; pointer-events:auto; }
   #notice h1 { font-family: var(--font-ui); font-size:19px; font-weight:600;
     letter-spacing:0.02em; margin:0 0 8px; color: var(--accent); }

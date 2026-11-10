@@ -1720,24 +1720,41 @@
         // THE LEASE, for editing. Refused means MODEL holds it in another tab.
         // NOT CLAIMED FOR THE GROW: the page is only passing through on the
         // way back to MODEL, which claims it again on arrival.
+        // THE LEASE FOLLOWS THE TAB BEING LOOKED AT (jb, 10 Nov), here as in
+        // MODEL.html: a hidden BONEYARD hands it back and takes it again when
+        // it is looked at, so a BONEYARD tab left open behind MODEL no longer
+        // holds the drawing shut while Chrome throttles its heartbeat.
         if (S && S.claimLease && !growing) {
-          try {
-            const holderId = S.leaseHolderId();
-            const got = await S.claimLease(BUCKET, LEASE_SCOPE, holderId);
-            if (got && got.ok) {
-              lease = { scope: LEASE_SCOPE, holderId, generation: got.generation };
-              const beat = setInterval(async () => {
-                if (!lease) { clearInterval(beat); return; }
-                try {
-                  const again = await S.renewLease(BUCKET, LEASE_SCOPE, holderId);
-                  if (!again || !again.ok || again.generation !== lease.generation) { lease = null; say(leaseWords()); }
-                } catch { /* the next beat tries again */ }
-              }, S.LEASE_HEARTBEAT_MS || 3750);
-              window.addEventListener('pagehide', () => {
-                if (lease) S.releaseLease(BUCKET, LEASE_SCOPE, holderId).catch(() => {});
-              });
-            }
-          } catch { lease = null; }
+          const holderId = S.leaseHolderId();
+          const paintEditable = () => { document.body.dataset.boneyardEditable = lease ? '1' : '0'; };
+          const claim = async () => {
+            try {
+              const got = await S.claimLease(BUCKET, LEASE_SCOPE, holderId);
+              lease = (got && got.ok) ? { scope: LEASE_SCOPE, holderId, generation: got.generation } : null;
+            } catch { lease = null; }
+            paintEditable();
+            return !!lease;
+          };
+          await claim();
+          setInterval(async () => {
+            if (document.visibilityState === 'hidden') return;
+            if (!lease) { await claim(); return; }
+            try {
+              const again = await S.renewLease(BUCKET, LEASE_SCOPE, holderId);
+              if (!again || !again.ok || again.generation !== lease.generation) { lease = null; paintEditable(); say(leaseWords()); }
+            } catch { /* the next beat tries again */ }
+          }, S.LEASE_HEARTBEAT_MS || 3750);
+          const release = () => {
+            if (!lease) return;
+            lease = null;
+            paintEditable();
+            S.releaseLease(BUCKET, LEASE_SCOPE, holderId).catch(() => {});
+          };
+          window.addEventListener('pagehide', release);
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') release();
+            else claim();
+          });
         }
         document.body.dataset.boneyardEditable = lease ? '1' : '0';
       }
