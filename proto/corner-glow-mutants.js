@@ -51,8 +51,10 @@ const MUTANTS = [
     // the body of the same record), so a line sits between the pick and the
     // geometry. Two lines are enough to be unique: segmentBodyAt's copy is
     // followed by pointToSegment, this one by nearestVertex.
-    find: "    const selectedSeg = selectedSegment();\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    // THE TYPE FILTER GOVERNS THIS GRAB TOO,",
-    with: "    const selectedSeg = selectedSegment() || walls()[0];\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    // THE TYPE FILTER GOVERNS THIS GRAB TOO,",
+    // RE-AIMED A THIRD TIME (10 Nov): a held assembly's corners drag now, so
+    // the no-segment branch asks assemblyCornerAt instead of returning null.
+    find: "    const selectedSeg = selectedSegment();\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return assemblyCornerAt(worldPt);\n    // THE TYPE FILTER GOVERNS THIS GRAB TOO,",
+    with: "    const selectedSeg = selectedSegment() || walls()[0];\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return assemblyCornerAt(worldPt);\n    // THE TYPE FILTER GOVERNS THIS GRAB TOO,",
     test: 'UNSELECTED wall gets no ring' },
 ];
 
