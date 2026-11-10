@@ -28,15 +28,12 @@ const MUTANTS = [
     with: '    const show = lotOnSite() && (!lotExists() || lotReopen);',
     test: 'arriving at SITE with no lot asks nothing' },
 
-  { file: 'model/10-tracking-garage.js',
-    name: 'NOT NOW does not put the flag down, so the next repaint brings the card back',
-    find: "    lotCard.querySelector('[data-lot-pick-skip]').addEventListener('click', () => {\n"
-      + '      lotTouched = true;\n'
-      + '      lotReopen = false;\n',
-    with: "    lotCard.querySelector('[data-lot-pick-skip]').addEventListener('click', () => {\n"
-      + '      lotTouched = true;\n'
-      + '      lotCard.hidden = true; return;\n',
-    test: 'pressing it from another level goes to SITE and opens the card' },
+  // REMOVED, NOT SOFTENED: "NOT NOW hides the card but leaves the flag up".
+  // The card repaints on a level change and at boot, not on every frame,
+  // and every level change away from SITE drops the flag first (the mutant
+  // below), so there is no press a drafter can make that brings the card
+  // back from a flag NOT NOW left up. The face-snap gate already holds NOT
+  // NOW to putting the flag down (proto/face-snap-lot-mutants.js).
 
   { file: 'model/10-tracking-garage.js',
     name: 'leaving SITE leaves the flag up, so coming back finds the card waiting',

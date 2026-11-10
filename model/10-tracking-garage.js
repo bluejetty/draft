@@ -2082,8 +2082,8 @@
   // the info"). Over a lot the card opens on the size the lot has, and what
   // it draws then REPLACES the lot rather than adding a second one. Every
   // answer on the card puts the flag down, and so does leaving SITE: the
-  // card is repainted on every repaint of the page, and a flag left up
-  // would be the pop-up coming back on its own, which is what jb ended.
+  // card is repainted on every level change and at boot, and a flag left
+  // up would be the pop-up coming back on its own, which is what jb ended.
   let lotReopen = false;
 
   const lotMetric = () => drawing?.units === 'metric';
