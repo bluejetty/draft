@@ -210,11 +210,13 @@
   };
 
   const asDataUrl = (text, type) => `data:${type};base64,${btoa(unescape(encodeURIComponent(text)))}`;
+  const unreachable = () => `the mail server did not answer ${location.host || 'this page'} -- it may be down, or not yet set up for this site`;
   const post = async (to, filename, dataUrl) => {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ app: APP, email: to, filename, dataUrl }),
-    });
+    const body = JSON.stringify({ app: APP, email: to, filename, dataUrl });
+    let res;
+    try {
+      res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    } catch { throw new Error(unreachable()); }
     if (!res.ok) throw new Error(`the mail server replied ${res.status}`);
   };
   const download = (filename, text, type) => {
