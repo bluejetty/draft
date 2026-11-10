@@ -614,6 +614,50 @@
     return true;
   };
 
+  // ── ITS OUTLINES (jb, 10 Nov 2026: a building outline drawn on a shelf,
+  // saved, brought in on the SITE plan) ──────────────────────────────────
+  //
+  // The sheet painter (layout-plan.js drawPlan) draws walls, floors, lines
+  // and the rest of a level, but never an OUTLINE record as such: on a
+  // storey the walls stand where it was traced, and on the SITE the ground
+  // floor's outlines are shaded as the footprint. A hologram of a shelf
+  // that holds only an outline would draw nothing anywhere. So each outline
+  // the hologram carries on the level is drawn here, dashed the way the
+  // screen draws a traced outline, in black for the colour pass to tint
+  // (and a suite's in the drawing's own ink). The lot line is not: it is
+  // REGISTRATION's (siteLots), shown or not by its box.
+  const paintOutlines = (ink, place, existing, levelId) => {
+    const G = window.DraftGeometry2D;
+    const loops = (existing.outlines || []).filter(o => o && o.site !== true
+      && Number(o.levelId) === Number(levelId) && Array.isArray(o.points) && o.points.length > 1);
+    if (!loops.length) return false;
+    ink.save();
+    ink.strokeStyle = '#1d1f20';
+    ink.lineWidth = 2;
+    ink.lineCap = 'butt';
+    ink.setLineDash([9, 5]);
+    loops.forEach(outline => {
+      const count = G?.outlineSegmentCount ? G.outlineSegmentCount(outline)
+        : (outline.open === true ? outline.points.length - 1 : outline.points.length);
+      ink.beginPath();
+      for (let i = 0; i < count; i++) {
+        const seg = G?.outlineSegment ? G.outlineSegment(outline, i)
+          : { start: outline.points[i], end: outline.points[(i + 1) % outline.points.length], bulge: 0 };
+        const a = place(seg.start), b = place(seg.end);
+        if (!i) ink.moveTo(a.x, a.y);
+        if (seg.bulge && G?.lineControlPoint) {
+          const c = place(G.lineControlPoint(seg));
+          ink.quadraticCurveTo(c.x, c.y, b.x, b.y);
+        } else {
+          ink.lineTo(b.x, b.y);
+        }
+      }
+      ink.stroke();
+    });
+    ink.restore();
+    return true;
+  };
+
   // ── PAINTING: BLUE, ON ANY GROUND ─────────────────────────────────────────
   //
   // LIGHT BLUE, the colour MODEL.dc.html's BACKGROUND ghost already used, so
@@ -669,6 +713,8 @@
     const pts = [];
     (existing.walls || []).filter(wall => wall && Number(wall.levelId) === Number(levelId))
       .forEach(wall => { if (wall.start && wall.end) pts.push(wall.start, wall.end); });
+    (existing.outlines || []).filter(o => o && Number(o.levelId) === Number(levelId) && Array.isArray(o.points))
+      .forEach(o => o.points.forEach(pt => { if (Number.isFinite(pt?.x) && Number.isFinite(pt?.z)) pts.push(pt); }));
     if (!pts.length) return null;
     const devs = pts.map(toDev);
     const o = toDev({ x: 0, z: 0 }), e = toDev({ x: 1, z: 0 });
@@ -754,8 +800,11 @@
         const gone = info.hidden.get(holo.id);
         const layersOff = layersOffFor(holo, env.saved);
         const paperColor = night ? '#ffffff' : (env.paperColor || '#ffffff');
-        const draw = target => withoutWords(target, layersOff, () => LP.drawPlan(target, place, existing, levelId,
-          { view, hologram: true, paperColor, layersOff }));
+        const draw = target => {
+          const plan = withoutWords(target, layersOff, () => LP.drawPlan(target, place, existing, levelId,
+            { view, hologram: true, paperColor, layersOff }));
+          return paintOutlines(target, place, existing, levelId) || plan;
+        };
         // OFF THE SCREEN, NOT DRAWN; ON IT, DRAWN ONCE AND LAID ON AFTER.
         const box = suiteBox(existing, levelId, pt => dev(place(pt)));
         if (env.pictures && box && (box.x1 < 0 || box.y1 < 0 || box.x0 > w || box.y0 > h)) return;
@@ -885,6 +934,7 @@
             const layersOff = layersOffFor(holo, saved);
             drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, lotLess(holo, saved, split.existing, levelId), levelId,
               { view, hologram: true, paperColor: env.paperColor || '#ffffff', layersOff })) || drew;
+            drew = paintOutlines(ink, place, split.existing, levelId) || drew;
           }
           if (show.demo) drew = paintDemo(ink, place, holo, split, levelId, view || 'plan') || drew;
         } catch (error) {
@@ -919,11 +969,16 @@
   // the drawing -- every level, or one.
   const framePoints = (saved, levelId = null) => {
     const F = window.DraftDrawingFormat;
-    return drawn(saved).flatMap(holo => (Array.isArray(levelsMoved(holo).walls) ? levelsMoved(holo).walls : [])
-      .filter(wall => levelId == null || wall?.levelId === levelId)
-      .flatMap(wall => [wall?.start, wall?.end])
-      .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z))
-      .map(pt => F.hologramPoint(holo, pt)));
+    return drawn(saved).flatMap(holo => {
+      const moved = levelsMoved(holo);
+      const on = item => levelId == null || item?.levelId === levelId;
+      return [
+        ...(Array.isArray(moved.walls) ? moved.walls : []).filter(on).flatMap(wall => [wall?.start, wall?.end]),
+        ...(Array.isArray(moved.outlines) ? moved.outlines : []).filter(o => on(o) && o?.site !== true)
+          .flatMap(o => (Array.isArray(o.points) ? o.points : [])),
+      ].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z))
+        .map(pt => F.hologramPoint(holo, pt));
+    });
   };
 
   // ── ELEVATIONS AND SECTIONS (hologram PR 5) ──────────────────────────────

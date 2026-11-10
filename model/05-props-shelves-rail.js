@@ -854,6 +854,15 @@
   // A FLOOR PLAN IS WHERE A SUITE CAN BE DROPPED (Movie: "the DRAG won't
   // work unless they are in a FLOOR PLAN type main area"): one of the
   // house's floors, on its plan or floor view, not a shelf, a cut or a site.
+  // WHAT A SHELF FILE IS COUNTED BY, to say it is empty: the drawn things
+  // -- outlines and shapes among them, which a site-plan HOLOGRAM is mostly.
+  const SHELF_FILE_COUNTED = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors', 'outlines', 'shapes', 'notes', 'roofs'];
+  // ANY PLAN LEVEL, for the generic HOLOGRAM: not a shelf, not a cut.
+  const onPlanMain = () => {
+    if (!drawing || boneyardActive || Number(activeLevelId()) < 0) return false;
+    const v = activeViewId();
+    return v == null || !!H()?.VIEWS?.has(v);
+  };
   const onFloorPlanMain = () => {
     if (!drawing) return false;
     // ONE OF THE HOUSE'S FLOORS: a shelf's level is negative, the site's and
@@ -871,14 +880,21 @@
   const dragShelfSuite = (shelfId, event) => {
     const shelf = shelves().find(sh => Number(sh.id) === shelfId);
     const name = shelf?.name || `SHELF ${shelfId}`;
-    if (!onFloorPlanMain()) {
-      sayOnStrip(`${name} drops onto a FLOOR PLAN: stand on one of the house's floors and drag the square again.`);
+    // THE KIND THE SHELF WAS LAST SAVED AS; a shelf never saved is a
+    // RESIDENTIAL SUITE, as it always was. A HOLOGRAM drops on any plan
+    // level, the SITE included (jb, 10 Nov: "place it wherever they want").
+    const kind = shelf?.shelfKind || shelf?.suiteKind || 'residential';
+    const generic = kind === 'hologram';
+    if (generic ? !onPlanMain() : !onFloorPlanMain()) {
+      sayOnStrip(generic
+        ? `${name} drops onto a plan: stand on a level and drag the square again.`
+        : `${name} drops onto a FLOOR PLAN: stand on one of the house's floors and drag the square again.`);
       return;
     }
-    const file = shelfSuiteFile(shelfId, shelf?.suiteKind || 'residential');
-    const count = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors']
+    const file = shelfSuiteFile(shelfId, kind);
+    const count = SHELF_FILE_COUNTED
       .reduce((n, key) => n + (Array.isArray(file[key]) ? file[key].length : 0), 0);
-    if (!count) { sayOnStrip(`${name} is empty -- draw the suite on it first.`); return; }
+    if (!count) { sayOnStrip(`${name} is empty -- draw ${generic ? 'something' : 'the suite'} on it first.`); return; }
     const made = bringInHologram(suiteOnFloor(file), name);
     if (!made) return;
     const { holo } = made;
@@ -1206,12 +1222,43 @@
     out.holograms = [];
     out.boneyardOutlines = [];
     out.levelLocks = [];
+    // THE SHELF'S OUTLINES COME TOO (jb, 10 Nov 2026: "i tried to draw the
+    // 'building outline' on a shelf saved it as a residential suite and then
+    // want to bring it in as a hologram, but doesn't seem to show"). An
+    // OUTLINE drawn on a shelf is a master in boneyardOutlines, keyed by
+    // shelf, with its copies filed on the drawing's real levels -- so the
+    // level filter above kept none of it and the file went out with no
+    // outline at all. Each of this shelf's masters goes in as a plain
+    // outline filed ON THE SHELF, like its walls, so bringing the file in
+    // moves it with them; one the shelf already holds as a plain outline
+    // (a suite file opened and saved again) is not written twice.
+    const have = new Set((out.outlines || []).map(o => String(o?.masterId ?? '')));
+    const masters = (Array.isArray(full.boneyardOutlines) ? full.boneyardOutlines : [])
+      .filter(m => m && Number(m.shelfId) === Number(shelfId) && !have.has(String(m.id))
+        && Array.isArray(m.points) && m.points.length > 1);
+    if (masters.length) {
+      out.outlines = [...(out.outlines || []), ...masters.map(m => ({
+        id: newDrawingItemId('outline'), masterId: m.id, levelId: owner,
+        garage: m.garage === true, open: m.open === true, detached: m.detached === true,
+        foundation: m.foundation || null,
+        points: m.points.map(pt => ({ x: pt.x, y: 0, z: pt.z, bulge: pt.bulge || 0 })),
+        overriddenSrcIds: [],
+      }))];
+    }
     const shelf = shelves().find(sh => Number(sh.id) === Number(shelfId));
     out.boneyardShelves = [{ id: Number(shelfId), name: shelf?.name || `SHELF ${shelfId}` }];
     out.activeBoneyardShelfId = Number(shelfId);
-    out.suiteKind = kind;
+    // WHAT IT WAS SAVED AS (drawing-format.js SHELF_KINDS): a suite's kind
+    // stays on `suiteKind`, which is what every suite reader asks; the
+    // generic HOLOGRAM carries no suiteKind at all, so none of the suite's
+    // floor rules reach it.
+    const F = window.DraftDrawingFormat;
+    out.shelfKind = F.shelfKind?.(kind) || 'residential';
+    out.suiteKind = F.suiteKind(kind) || undefined;
+    if (out.suiteKind === undefined) delete out.suiteKind;
     return out;
   };
+  const shelfKindLabel = kind => (window.DraftDrawingFormat.suiteKind(kind) ? suiteLabel(kind) : 'HOLOGRAM');
   const shelfSuiteAsk = document.getElementById('shelf-suite');
   // WHICH SHELF THE QUESTION IS ABOUT, and what follows the file being
   // written: the shelf the drafter stands on, with nothing after, from the
@@ -1237,7 +1284,7 @@
     if (handle === 'cancelled') return;
     shelfSuiteAsk.hidden = true;
     const file = shelfSuiteFile(shelfId, kind);
-    const count = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors']
+    const count = SHELF_FILE_COUNTED
       .reduce((n, key) => n + (Array.isArray(file[key]) ? file[key].length : 0), 0);
     if (!count) {
       // AN EMPTY SHELF HAS NOTHING TO SAVE: closing it is what was asked.
@@ -1247,7 +1294,10 @@
       return;
     }
     await downloadDrawing(JSON.stringify(file), name, handle);
-    sayOnStrip(`${name} saved as a ${suiteLabel(kind)} -- BRING IN .DRAFT puts it in a plan; saved again, REFRESH updates every copy.`);
+    if (shelf) shelf.shelfKind = file.shelfKind;
+    sayOnStrip(file.suiteKind
+      ? `${name} saved as a ${suiteLabel(kind)} -- BRING IN .DRAFT puts it in a plan; saved again, REFRESH updates every copy.`
+      : `${name} saved as a HOLOGRAM -- BRING IN .DRAFT puts it on whichever level you are standing on, the SITE plan too; saved again, REFRESH updates every copy.`);
     shelfSuitePending = null;
     if (typeof pending.after === 'function') pending.after();
   };
