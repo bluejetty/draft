@@ -793,8 +793,12 @@
     // (Movie, 10 Oct: a group "moves as one piece, notes included"). Walls
     // keep their own corner and body drags, so a selection with a wall in it
     // is not armed here.
+    // A CORNER OF A PICKED ASSEMBLY BEATS THE PIECE DRAG: a lot of lines
+    // held whole offers its corners now (assemblyCornerAt), and the press on
+    // one is a corner drag, not the lot sliding.
     const movable = selection.length > 1
-      && selection.every(entry => MOVE_TOGETHER.has(entry.type));
+      && selection.every(entry => MOVE_TOGETHER.has(entry.type))
+      && !cornerAt(at);
     if (movable) {
       const grabbed = noteAt(at) || lineAt(at);
       if (grabbed && selection.some(entry => entry.item === grabbed)) {
@@ -1008,8 +1012,10 @@
         body,
         grab: at,
         before,
-        // A ONE-ANCHOR ASSEMBLY ON A CORNER IN HAND rides it (anchorFollowers).
-        follow: anchorFollowers(before, corner ? null : body),
+        // A ONE-ANCHOR ASSEMBLY ON A CORNER IN HAND rides it (anchorFollowers),
+        // AND SO DO THE CORNERS SHARING ITS SPOT inside a picked assembly.
+        follow: anchorFollowers(before, corner ? null : body)
+          .concat(corner ? assemblyRiders(corner, before[0]) : []),
         sx: e.clientX, sy: e.clientY, active: false,
       };
       // ALT ONLY (Movie, 26 Oct): CTRL held is snapping off now.
@@ -2591,8 +2597,9 @@
       // word back rather than restoring a copy of the roof -- a copy would
       // detach the record every other reader already holds by reference.
       step.roof.edges[step.index] = step.was;
-    } else if (step.kind === 'node') {
-      // A BREAK's node: the step carries its own way back.
+    } else if (step.kind === 'node' || step.kind === 'assembly') {
+      // A BREAK's node, or an assembly made or busted: the step carries its
+      // own way back.
       step.undo();
     } else if (step.kind === 'add-item') {
       // Structure placement. The list is captured in the step, so this works

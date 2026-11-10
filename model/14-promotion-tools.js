@@ -1482,6 +1482,7 @@
       pressMove();
       return;
     }
+    if (id === 'assembly' && bustByKey()) return;
     setTool(id === activeTool ? RESTING_TOOL : id);
   }
   // SELECT GLOWS WHILE STRETCH IS UP -- the box is the rectangle select's.
@@ -1563,6 +1564,10 @@
     // page's own two lines, and without them a drafter can build overlapping
     // assemblies that disagree about what moves with what.
     const taken = new Set(members.map(m => `${m.type}:${m.id}`));
+    // THE GROUPS AS THEY WERE, for UNDO: the rewrite below mints new records
+    // for any group that lost a member, so the old array put back whole is
+    // the old grouping exactly -- the member items themselves never move.
+    const groupsBefore = groups().slice();
     drawing.groups = groups()
       .map(group => ({ ...group,
         members: (group.members || [])
@@ -1589,6 +1594,7 @@
     };
     drawing.groups.push(group);
     drawing.nextGroupId = n + 1;
+    undoStack.push(assemblyUndoStep(groupsBefore));
     // The new assembly is what is selected afterwards -- all of it, which is
     // also the drafter's confirmation that it took.
     setSelection(itemsOfGroup(group));
@@ -1604,10 +1610,34 @@
     const ids = new Set(going.map(group => group.id));
     // THE ITEMS SURVIVE; only the grouping goes. Ungroup is not delete, and
     // the members stay selected so the drafter can see what they just freed.
+    const groupsBefore = groups().slice();
     drawing.groups = groups().filter(group => !ids.has(group.id));
+    undoStack.push(assemblyUndoStep(groupsBefore));
     syncAssembly();
     markDirty();
     paint();
+  };
+  // ONE UNDO PUTS THE GROUPING BACK AS IT WAS, whether the press made an
+  // assembly or busted one (10 Nov: "Undo must restore the group"). Groups
+  // name their members by type and id, so the old array is the whole of it.
+  const assemblyUndoStep = groupsBefore => ({
+    kind: 'assembly',
+    undo: () => { drawing.groups = groupsBefore; syncAssembly(); },
+  });
+
+  // Y ON A PICKED ASSEMBLY BUSTS IT (10 Nov: "select a Y'd items group and
+  // then press the Y command and it will break apart"). The press is a bust
+  // only when everything picked already sits in an assembly and ASSEMBLY is
+  // not armed; a loose item among the picks means the drafter is building a
+  // group, and Y arms as it always did. UNDO puts the group back.
+  const bustByKey = () => {
+    if (activeTool === 'assembly' || !selection.length) return false;
+    if (!selection.every(entry => groupOf(entry))) return false;
+    const going = selectedGroups();
+    if (!going.length) return false;
+    ungroupSelected();
+    sayOnStrip(`${going.map(group => group.name).join(', ')} busted: the items are single again. UNDO puts it back; Y on loose items makes a new assembly.`);
+    return true;
   };
 
   // CTRL+G: what is picked becomes one FIXED assembly at once, the Y key's
@@ -1643,7 +1673,7 @@
     if (n) {
       createAssembly(true);
       const group = selectedGroups()[0];
-      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. ASSEMBLY BUST breaks it.`);
+      sayOnStrip(`${group?.name || 'ASSEMBLY'} made: ${n} item${n === 1 ? '' : 's'} move, copy and rotate as one. Y on it again busts it.`);
     } else {
       sayOnStrip('Nothing picked, so no assembly was made.');
     }

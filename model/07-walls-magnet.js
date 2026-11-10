@@ -703,6 +703,23 @@
     if (type === 'line') return lines().includes(item) ? item : null;
     return null;
   };
+  // A CORNER INSIDE AN ASSEMBLY (10 Nov: "the nodes within the assembly can
+  // be edited but the items all stay together"). A fixed assembly is picked
+  // whole, so selectedSegment -- ONE wall or line -- never answered for it and
+  // its corners took no grab: the lot moved as one piece and nothing else.
+  // With everything picked sitting in a fixed assembly, the nearest end of
+  // any picked wall or line is the handle, and the corners that share the
+  // spot ride with it (assemblyRiders), so the assembly stays joined and
+  // whole. No BREAK inside a Y: to free one corner, bust the assembly.
+  const assemblyCornerAt = worldPt => {
+    if (selection.length < 2 || !selection.every(entry => groupOf(entry)?.fixed === true)) return null;
+    const ends = selection.flatMap(({ type, item }) => {
+      if ((type !== 'wall' && type !== 'line') || !filterAllows(type)) return [];
+      return [item?.start, item?.end].filter(Boolean);
+    });
+    if (!ends.length) return null;
+    return window.DraftGeometry2D.nearestVertex(ends, worldPt, CORNER_GRAB_PX / view.scale);
+  };
   const cornerAt = worldPt => {
     // THE MASTER'S OWN CORNERS, on the boneyard, and this is §4's missing
     // gesture. Same rule as a wall's: SELECTION FIRST, then the grab -- so a
@@ -738,7 +755,7 @@
     // anything but a TOY wall. The gesture was already general; the pick was
     // the only thing that was not.
     const selectedSeg = selectedSegment();
-    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
+    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return assemblyCornerAt(worldPt);
     // THE TYPE FILTER GOVERNS THIS GRAB TOO, for segmentBodyAt's reason:
     // "WALL is engaged: nothing else responds", and a press that takes hold
     // of a point is responding.
