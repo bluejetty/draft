@@ -83,9 +83,15 @@ test('ASSEMBLY BUST splits the string; ASSEMBLY (Y) puts any two of them back to
   await page.waitForTimeout(700);
   await page.mouse.click(...at(6, 8));
   await page.waitForTimeout(700);
-  // One ENTER closes the assembly. A second would be ENTER at an empty prompt,
-  // which repeats the last tool (#947): Y on the picked new group busts it (#948).
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   expect((await groups(page)).map(g => g.members.length)).toEqual([2]);
+  // A second ENTER is ENTER at an empty prompt, which repeats the last tool.
+  // Repeating ASSEMBLY never busts the group just made (jb, 10 Nov): it puts
+  // the group down and arms a fresh ASSEMBLY for the next picks.
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  expect((await groups(page)).map(g => g.members.length), 'ENTER again kept the group').toEqual([2]);
+  expect(await page.evaluate(() => activeTool), 'ENTER again armed ASSEMBLY').toBe('assembly');
+  expect(await page.evaluate(() => selection.length), 'with nothing picked').toBe(0);
 });

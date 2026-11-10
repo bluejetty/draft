@@ -231,9 +231,16 @@
   };
   // REPEAT the last tool at an empty prompt: SELECT up and nothing in hand.
   // Through pressToolKey, so a tool that needs a pick says so instead.
+  // A REPEAT NEVER BUSTS (jb, 10 Nov: "do that so it won't bust the group"):
+  // ENTER right after ENTER closed an assembly would arm Y on the picked new
+  // group, which is the Y key's bust. The repeat puts the group down and arms
+  // a fresh ASSEMBLY for the next picks instead.
   const repeatLastTool = () => {
     if (activeTool !== RESTING_TOOL || !lastToolArmed) return false;
     if (!window.DraftToolRoster?.availableOn(lastToolArmed)) return false;
+    if (lastToolArmed === 'assembly' && selection.length && selection.every(entry => groupOf(entry))) {
+      setSelection([]);
+    }
     pressToolKey(lastToolArmed);
     return true;
   };
