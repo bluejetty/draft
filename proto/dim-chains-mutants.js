@@ -57,7 +57,7 @@ const MUTANTS = [
     with: "",
     test: 'COPIED and PASTED' },
   { file: 'model/08-structure-roof.js', name: 'the pasted dimension lands on the original',
-    find: "        const out = { x: -dz / len * 2, z: dx / len * 2 };\n",
+    find: "        const out = nudge ? { x: -dz / len * 2, z: dx / len * 2 } : { x: 0, z: 0 };\n",
     with: "        const out = { x: 0, z: 0 };\n",
     test: 'COPIED and PASTED' },
   { file: 'model/15-panels.js',

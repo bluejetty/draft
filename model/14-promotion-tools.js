@@ -1061,7 +1061,7 @@
         // therefore a no-op, which is right: it is the resting state.
         btn.addEventListener('click', () => {
           // A PLACEHOLDER KEY says it is coming and arms nothing.
-          if (tool.placeholder) { sayOnStrip(`${tool.name} is coming soon — copies in a row or a grid.`); return; }
+          if (tool.placeholder) { sayOnStrip(`${tool.name} is coming soon.`); return; }
           pressToolKey(tool.id);
         });
         return btn;
@@ -1474,6 +1474,9 @@
     // MOVE IS THE FOOT'S MOVE, pressed from the column or by M ("keep move
     // bottom too"): it acts on what is picked, so with nothing picked it says
     // to pick first rather than arming a tool that has nothing to carry.
+    // MIRROR, ROTATE and ARRAY likewise act on what is picked
+    // (18-draft-commands.js): with nothing picked they say to pick first.
+    if (draftCommandNeedsPick(id)) return;
     if (id === 'move') {
       if (!selection.length && !moveState.on) {
         sayOnStrip('MOVE: pick what to move first -- click it, or box it -- then press M or MOVE.');

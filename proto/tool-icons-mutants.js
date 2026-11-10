@@ -34,10 +34,10 @@ const MUTANTS = [
     with: "      : head;\n",
     test: 'the tooltip names the tool first, then its key and what it does' },
   { file: 'model/14-promotion-tools.js',
-    name: 'MULTIPLE arms itself like a tool',
-    find: "          if (tool.placeholder) { sayOnStrip(`${tool.name} is coming soon — copies in a row or a grid.`); return; }\n",
+    name: 'ARRAY arms itself with nothing picked',
+    find: "    if (draftCommandNeedsPick(id)) return;\n",
     with: "",
-    test: 'MULTIPLE is a key in DRAW / EDIT that says it is coming and arms nothing' },
+    test: 'ARRAY stands where MULTIPLE did and asks for a pick before it arms' },
 ];
 
 const run = name => {
