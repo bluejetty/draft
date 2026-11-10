@@ -853,9 +853,23 @@
   // it RESTARTS, because a drafter who has changed wall has plainly changed
   // their mind, and an error there would make them press twice to do what one
   // press says.
+  // CASEWORK LANDS ON THE HALF FOOT while the 1 FT light is lit, measured
+  // from the NEARER corner of the wall the cabinet backs onto, so a run can
+  // always sit flush in a corner whatever the wall's length. Movie, 16 Oct:
+  // "for the CABINETS we allow those to shift extra to 6" scale so we could
+  // have 1ft, 18" 24" 30" 36" 42" 48"". Both presses on the grain means the
+  // width is on it too. Casework only (a closet is its own table), and the
+  // light off places the press where the hand put it.
+  const caseworkAlong = (kind, placement) => {
+    if (!footOn || !kind.casework) return placement.along;
+    const len = placement.frame.len;
+    const datum = placement.along <= len / 2 ? 0 : len;
+    const onGrain = datum + Math.round((placement.along - datum) / 0.5) * 0.5;
+    return Math.max(0, Math.min(len, onGrain));
+  };
   const fixtureRunPress = (kind, placement) => {
     const start = fixtureRunStart;
-    const along = placement.along;
+    const along = caseworkAlong(kind, placement);
     if (!start || start.wallId !== placement.wall.id || start.side !== placement.side) {
       fixtureRunStart = { wallId: placement.wall.id, along, side: placement.side };
       sayOnStrip(start

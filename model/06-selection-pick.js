@@ -349,7 +349,7 @@
     // on it can mean. ALL LEVELS reaches them through their walls' levels
     // only where a record is filed that way, so it keeps the three it had.
     if (all) return out;
-    if (filterAllows('outline')) [...outlines(), ...siteBodies()].forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
+    if (filterAllows('outline')) [...outlines(), ...siteParts().bodies].forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
     if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
     if (filterAllows('roof')) pickRoofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
     if (filterAllows('beam')) beams().forEach(item => out.push({ type: 'beam', item, parts: seg(item), open: true }));

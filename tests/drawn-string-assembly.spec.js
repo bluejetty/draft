@@ -40,7 +40,13 @@ test('a string of walls is one assembly too; a lone line is not', async ({ page 
   const { at } = await open(page);
   await page.keyboard.press('w');
   await draw(page, at, [[0, 0], [12, 0], [12, 10]]);
+  // ENTER TWICE, QUICKLY, ENDS THE RUN (seriesKeyPress): once is a corner at
+  // the cursor. The run has to be out of hand before L means LINE -- with a
+  // run in hand L is the LENGTH box (Movie, 20 Oct). TOY MODE used to hide
+  // this: its refusals swallowed the presses that followed.
   await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(100);
   await page.keyboard.press('l');
   await draw(page, at, [[0, 20], [10, 20]]);
   await page.keyboard.press('Enter');

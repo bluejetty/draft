@@ -42,6 +42,10 @@ async function open(page, saved = HOUSE()) {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, saved });
+  // THE LIGHTS OFF, as tests/helpers.js leaves them: T-SQUARE and 1 FT are on
+  // in a fresh browser since TOY MODE left (9 Nov 2026), and this spec draws
+  // off-square on purpose.
+  await page.evaluate(() => localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight: false })));
   await page.goto(`/MODEL.html?mode=night&level=${MAIN_FL}`);
   await expect(page.locator('#readout')).toContainText('scale', { timeout: 10000 });
 }

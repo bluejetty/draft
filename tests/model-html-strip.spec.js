@@ -66,6 +66,10 @@ async function seed(page, { board } = {}) {
 }
 
 async function openModel(page, search = '') {
+  // THE LIGHTS OFF, as tests/helpers.js leaves them: T-SQUARE and 1 FT are on
+  // in a fresh browser since TOY MODE left (9 Nov 2026), and this spec draws
+  // off-square on purpose.
+  await page.evaluate(() => localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight: false })));
   await page.goto(`/MODEL.html${search}`);
   await expect(readout(page)).toContainText('walls', { timeout: 6000 });
 }
