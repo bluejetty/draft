@@ -242,7 +242,16 @@ test.describe('MODEL.html tier 1', () => {
     // migration's whole claim is that this page is cheap, and a dependency
     // that arrives without anyone noticing is how that stops being true.
     expect(frameworks.scripts).toEqual([
-      // shell-bars.js leads the list, and its POSITION is the load-bearing
+      // palette.js leads the list since 10 Nov 2026, and for the same reason
+      // shell-bars.js once did: POSITION. It stood among the foot modules,
+      // and the skin was applied by the first page script -- after the
+      // browser had already painted the shell off model.css's night
+      // fallbacks. Off roughdrafter.com, which opens ROUGH/DAY, that was a
+      // flash of the bone on every visit. The head block right after it
+      // applies the first skin before <body> exists
+      // (tests/first-frame-skin.spec.js).
+      './palette.js',
+      // shell-bars.js follows, and its POSITION is the load-bearing
       // part rather than its presence. The bars are written where the calling
       // <script> stands, mid-parse, so the module has to be in hand before
       // the body reaches its first mount. Every other entry here can sit at
@@ -292,7 +301,7 @@ test.describe('MODEL.html tier 1', () => {
       // pays the parse and nothing else, and tests/model-portrait-guard.spec.js
       // holds it to that: a tall desktop window must never see it.
       './orientation-guard.js',
-      './palette.js', './layer-views.js', './geometry-2d.js',
+      './layer-views.js', './geometry-2d.js',
       // A LINE'S WEIGHTS, COLOURS AND DASHES (Movie, 19 Oct), one table
       // the painter, the panel, the format and the DXF all read.
       './line-styles.js',
