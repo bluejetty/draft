@@ -36,7 +36,7 @@
   // THE REPORT DESK -- the one setting to fill in when jb picks an address.
   const REPORT_TO = '';
   const ENDPOINT = 'https://bluejetty-mail.bluejetty.workers.dev';
-  const APP = 'bluejetty';
+  const APP = 'roughdrafter';
   const SENDS_PER_HOUR = 3;
   const ACTIONS_KEPT = 40;
   const QUICK_PICKS = ['ROOF LOOKS WRONG', 'WALLS LOOK WRONG', 'WON\'T PRINT RIGHT', 'SOMETHING DISAPPEARED',

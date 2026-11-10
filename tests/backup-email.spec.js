@@ -64,7 +64,7 @@ test('SAVE AS offers SAVE BACKUP FILE TO EMAIL; SEND mails the saved file and co
   await expect(popup(page).locator('[data-bk-status]')).toHaveText('BACKUP FILE sent to kris@example.com.');
   expect(sent).toHaveLength(1);
   expect(sent[0].email).toBe('kris@example.com');
-  expect(sent[0].app).toBe('bluejetty');
+  expect(sent[0].app).toBe('roughdrafter');
   expect(sent[0].filename).toMatch(/\.draft$/);
   const body = Buffer.from(sent[0].dataUrl.split(',')[1], 'base64').toString('utf8');
   expect(JSON.parse(body).notepad, 'the very file that was saved').toBe('BACKUP ME');
