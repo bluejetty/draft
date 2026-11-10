@@ -79,9 +79,9 @@
     .groups { display:flex; flex-direction:column; gap:14px; margin-top:22px; }
     .group { border:1px solid var(--edge-panel); background:var(--surface-panel); }
     .group-title { padding:9px 12px; border-bottom:1px solid var(--edge-panel); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--accent-mark); }
-    .group-head { display:grid; grid-template-columns:120px minmax(0,1fr) 170px 74px 74px 22px; gap:10px; padding:6px 12px; background:var(--surface-chip); color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
-    .group-head span:nth-child(4), .group-head span:nth-child(5) { text-align:center; }
-    .layer-row { display:grid; grid-template-columns:120px minmax(0,1fr) 170px 74px 74px 22px; align-items:center; gap:10px; min-height:47px; padding:8px 12px; border-bottom:1px solid var(--edge-panel); }
+    .group-head { display:grid; grid-template-columns:120px minmax(0,1fr) 150px 100px 92px 74px 74px 22px; gap:10px; padding:6px 12px; background:var(--surface-chip); color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .group-head span:nth-child(6), .group-head span:nth-child(7) { text-align:center; }
+    .layer-row { display:grid; grid-template-columns:120px minmax(0,1fr) 150px 100px 92px 74px 74px 22px; align-items:center; gap:10px; min-height:47px; padding:8px 12px; border-bottom:1px solid var(--edge-panel); }
     .layer-row:last-child { border-bottom:0; }
     .default-name { color:var(--ink-secondary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:.04em; }
     .layer-use { color:var(--ink-secondary); font-size:11px; line-height:1.3; }
@@ -124,7 +124,7 @@
     #status.warning { color:var(--ink-warn); }
     @media (max-width:720px) {
       .group-head { display:none; }
-      .layer-row { grid-template-columns:1fr 74px 74px 22px; }
+      .layer-row { grid-template-columns:1fr 1fr 1fr 74px 74px 22px; }
       .default-name, .layer-use { display:none; }
       main { margin-top:24px; }
       #status { width:100%; margin-left:0; order:3; }
@@ -472,11 +472,23 @@
         showStatus(message);
       };
 
+      // ── THE PEN TABLE (jb, 9 Nov) ──────────────────────────────────────
+      // "walls heavy, dims light, hidden dashed", and have it print that
+      // way. Two selects per layer: the weight it prints with and its
+      // linetype, each DEFAULT until the office says otherwise -- DEFAULT is
+      // the painter's own ink, which is what every sheet printed before the
+      // table existed. LAYOUT, PDF and DXF read these through pen-table.js.
+      const PEN_OPTIONS = { weight: standardsApi.PEN_WEIGHTS, linetype: standardsApi.PEN_LINETYPES };
+      const penCell = (field, layer, current) => `
+        <select class="layer-name-input" data-layer-pen="${field}" data-layer-id="${layer.id}" aria-label="${field === 'weight' ? 'Pen weight' : 'Linetype'} for ${layer.name}" title="${field === 'weight' ? 'The line weight this layer prints and exports with' : 'The linetype this layer prints and exports with'}">
+          ${PEN_OPTIONS[field].map(opt => `<option value="${opt.id}" ${current[field] === opt.id ? 'selected' : ''}>${opt.name}</option>`).join('')}
+        </select>`;
+
       const render = () => {
         document.querySelector('#groups').innerHTML = groups.map(group => `
           <section class="group">
             <div class="group-title">${group.group}</div>
-            <div class="group-head"><span>Default</span><span>Used for</span><span>Layer name</span><span>Visible</span><span>Print</span><span></span></div>
+            <div class="group-head"><span>Default</span><span>Used for</span><span>Layer name</span><span>Pen weight</span><span>Linetype</span><span>Visible</span><span>Print</span><span></span></div>
             ${group.layers.map(layer => {
               const current = layerStandards[layer.id];
               // THE TABLE SAYS WHICH LAYERS GET THE TICK, not this renderer.
@@ -494,6 +506,8 @@
                   <span class="default-name">${layer.name}</span>
                   <span class="layer-use">${layer.use}</span>
                   <input class="layer-name-input" type="text" data-layer-name="${layer.id}" value="${current.name}" aria-label="Standard name for ${layer.name}" title="The layer name used in exports and layer lists">
+                  ${penCell('weight', layer, current)}
+                  ${penCell('linetype', layer, current)}
                   ${visibleCell}
                   <span class="layer-print"><input type="checkbox" data-layer-print="${layer.id}" ${current.printable ? 'checked' : ''} aria-label="Print ${layer.name}"> Printed</span>
                   <button class="reset-layer" type="button" data-layer-reset="${layer.id}" aria-label="Reset ${layer.name} to its default" title="Reset this layer to its default">×</button>
@@ -508,6 +522,17 @@
             const name = input.value.trim() ? input.value.trim().toUpperCase() : defaults[layerId].name;
             layerStandards = { ...layerStandards, [layerId]: { ...layerStandards[layerId], name } };
             saveActive(`${name} saved to the company standard.`);
+            render();
+          });
+        });
+        document.querySelectorAll('[data-layer-pen]').forEach(select => {
+          select.addEventListener('change', () => {
+            const field = select.dataset.layerPen;
+            const layerId = select.dataset.layerId;
+            const value = field === 'weight' ? standardsApi.penWeightId(select.value) : standardsApi.penLinetypeId(select.value);
+            layerStandards = { ...layerStandards, [layerId]: { ...layerStandards[layerId], [field]: value } };
+            const chosen = PEN_OPTIONS[field].find(opt => opt.id === value);
+            saveActive(`${layerStandards[layerId].name} prints ${field === 'weight' ? 'at' : 'as'} ${chosen ? chosen.name : value.toUpperCase()}.`);
             render();
           });
         });

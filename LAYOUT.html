@@ -72,6 +72,7 @@
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./line-styles.js"></script>
+<script src="./pen-table.js"></script>
 <script src="./layer-views.js"></script>
 <!-- THE PLAN IS COMPOSED ONCE AND THIS PAGE IS ONE OF THE CALLERS. It carries
      the draw order and the level/view filtering the Model Space uses, so a
@@ -4722,6 +4723,20 @@ class Component extends PageLogic {
     return placed;
   }
 
+  // THE PEN TABLE, AS DXF LAYERS (jb, 9 Nov): every layer the company
+  // standard names, with the linetype and lineweight its pen gives it, so
+  // walls set BOLD on STANDARDS open in AutoCAD as a bold layer. The DXF
+  // keeps the layer IDS (A-WALL-EXT), which is what the composer stamps on
+  // each entity; the standard's display name is for the sheet.
+  _dxfPenLayers() {
+    const pens = window.DraftPenTable;
+    const api = window.DraftLayerStandards;
+    if (!pens || !api) return [];
+    const table = api.normaliseLayerStandards(
+      window.DraftProfileManager?.getActive('standards')?.content?.model?.layerStandards);
+    return Object.entries(table).map(([id, standard]) => ({ name: id, ...pens.dxfLayerFor(standard) }));
+  }
+
   // THE SET, ONE ZIP: a DXF per sheet with something on it, numbered and
   // named for the sheet, in a ZIP named for the project.
   _saveDxfSheets() {
@@ -4734,7 +4749,7 @@ class Component extends PageLogic {
       const entities = this._sheetDxfEntities(sheet);
       if (!entities.length) continue;
       const title = safe(this._sheetTitle(sheet)) || `SHEET ${sheet}`;
-      files.push({ name: `${String(sheet).padStart(2, '0')} ${title}.dxf`, text: W.write({ entities }) });
+      files.push({ name: `${String(sheet).padStart(2, '0')} ${title}.dxf`, text: W.write({ entities, layers: this._dxfPenLayers() }) });
     }
     if (!files.length) {
       if (status) status.textContent = 'NO DRAWINGS ON THE SHEETS TO SAVE AS DXF';
