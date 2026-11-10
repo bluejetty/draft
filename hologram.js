@@ -1225,7 +1225,35 @@
     };
   };
 
+  // ── EVERY EDGE A HOLOGRAM DRAWS ON A LEVEL, PLACED (jb, 10 Nov 2026: a
+  // DUPLEX hologram of a shape and two lines on the SITE plan "wasn't able
+  // to grab and move those lines") ────────────────────────────────────────
+  //
+  // The page picked a hologram by its walls alone, so a hologram with no
+  // walls -- an outline, a shape, a line traced on a shelf -- could be seen
+  // and never grabbed. Its walls, lines, outlines (not the lot, which is
+  // REGISTRATION's) and shapes on `levelId`, each as segments where it
+  // stands on this drawing, for the pick, the box and the corners.
+  const edgesOn = (holo, levelId) => {
+    const F = window.DraftDrawingFormat;
+    const src = levelsMoved(holo);
+    const on = item => item && Number(item.levelId) === Number(levelId);
+    const place = pt => F.hologramPoint(holo, pt);
+    const seg = (a, b) => (Number.isFinite(a?.x) && Number.isFinite(b?.x) ? [{ start: place(a), end: place(b) }] : []);
+    const loop = (points, open) => {
+      const pts = (Array.isArray(points) ? points : []).filter(p => Number.isFinite(p?.x) && Number.isFinite(p?.z));
+      return pts.flatMap((a, i) => (open && i === pts.length - 1 ? [] : seg(a, pts[(i + 1) % pts.length])));
+    };
+    return [
+      ...(parts(holo).existing.walls || []).filter(on).flatMap(w => seg(w.start, w.end)),
+      ...(src.lines || []).filter(on).flatMap(l => seg(l.start, l.end)),
+      ...(src.outlines || []).filter(o => on(o) && o.site !== true).flatMap(o => loop(o.points, o.open === true)),
+      ...(src.shapes || []).filter(on).flatMap(sh => loop(sh.points, false)),
+    ];
+  };
+
   window.DraftHologram = Object.freeze({
+    edgesOn,
     BLUE, PALE, ALPHA, VIEWS, COLOURS, colourOf, colourIndex, nextColour, fileOf,
     planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
     placed, paintCut, cutOptions, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,

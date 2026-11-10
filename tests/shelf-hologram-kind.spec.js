@@ -68,8 +68,10 @@ async function bringIn(page, file, name = 'SHELF 1.draft') {
   await page.locator('[data-mode-hologram]').click();
   await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) });
+  // IT ARRIVES IN HAND; Esc leaves it where the file had it.
+  await expect.poll(() => page.evaluate(() => !!traceMoving)).toBe(true);
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(150);
+  await expect.poll(() => page.evaluate(() => !!traceMoving)).toBe(false);
 }
 // Ink along the outline's top edge on the plan canvas (it is a dashed
 // stroke, not a fill), as the share of pixels that are not the paper's.
@@ -145,4 +147,58 @@ test('the same outline saved as a RESIDENTIAL SUITE stands on a floor, as suites
   const d = await saved(page);
   expect(d.holograms[0].source.outlines.map(o => o.levelId), 'moved onto MAIN FL').toEqual([3]);
   expect(d.holograms[0].levelMap).toBeUndefined();
+});
+
+// A HOLOGRAM OF A SHAPE AND TWO LINES ON THE SITE (jb, 10 Nov 2026, after
+// #956: "it isn't showing the AREA / SHAPE house outline in the hologram,
+// just the house/garage seperation lines" -- "i wasn't able to grab and
+// move those lines" -- "the HOLOGRAMS should be TOP LAYER default (picked
+// first in sequence)").
+const DUPLEX = { version: 1, levels: LEVELS, activeLevelIdx: 0, shelfKind: 'hologram', ...EMPTY,
+  boneyardShelves: [{ id: 1, name: 'DUPLEX' }], activeBoneyardShelfId: 1,
+  shapes: [{ id: 'hs', levelId: -1, view: 'plan', points: [P(70, 60), P(90, 60), P(90, 80), P(70, 80)], hatch: 'grey' }],
+  lines: [{ id: 'l1', start: P(80, 60), end: P(80, 80), levelId: -1, view: 'plan' }] };
+const rgbAt = (page, x, z) => page.evaluate(([x, z]) => {
+  const c = document.getElementById('plan');
+  const [cx, cz, s] = c.dataset.view.trim().split(/\s+/).map(Number);
+  const dpr = c.width / c.clientWidth;
+  const px = Math.round((c.clientWidth / 2 + (x - cx) * s) * dpr), py = Math.round((c.clientHeight / 2 + (z - cz) * s) * dpr);
+  return [...c.getContext('2d').getImageData(px, py, 1, 1).data].slice(0, 3);
+}, [x, z]);
+
+test('a HOLOGRAM of a shape and lines draws its shape on the SITE, and is picked first and moved by any of its edges', async ({ page }) => {
+  // The site's own shape lies over the right half of where the hologram
+  // will stand (a hologram is painted under the drawing).
+  const plan = { ...sitePlan(), outlines: [LOT], boneyardOutlines: [], lines: [],
+    shapes: [{ id: 'big', levelId: 8, view: 'plan', points: [P(85, 50), P(100, 50), P(100, 100), P(85, 100)], hatch: 'lightgrey' }] };
+  await open(page, plan, '/MODEL.html?level=8&left=1');
+  const before = await rgbAt(page, 75, 65);
+  await bringIn(page, DUPLEX);
+  await page.screenshot({ path: 'test-results/shelf-hologram-shape-on-site.png' });
+  const after = await rgbAt(page, 75, 65);
+  expect(after, 'the hologram\'s shape is filled where it stands').not.toEqual(before);
+  // A PRESS ON ITS LINE PICKS THE HOLOGRAM, not the site's shape under it.
+  await page.keyboard.press('s');
+  const F = await h.planFrame(page);
+  const [lx, ly] = F.at(80, 70);
+  await page.mouse.click(lx, ly);
+  expect(await page.evaluate(() => selection.map(e => e.type))).toEqual(['hologram']);
+  // AND ON ITS SHAPE'S EDGE, inside the site's own shape, the same: the
+  // hologram is the top layer of the pick.
+  await page.keyboard.press('Escape');
+  const [ex, ey] = F.at(90, 70);
+  await page.mouse.click(ex, ey);
+  expect(await page.evaluate(() => selection.map(e => e.type))).toEqual(['hologram']);
+  // MOVE, dragged by that edge, moves it.
+  const was = await page.evaluate(() => [drawing.holograms[0].x, drawing.holograms[0].z]);
+  await page.keyboard.press('m');
+  await expect(page.locator('#strip-message')).toContainText('MOVE');
+  await page.mouse.move(ex, ey);
+  await page.mouse.down();
+  await page.mouse.move(ex + 40, ey + 30, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const now = await page.evaluate(() => [drawing.holograms[0].x, drawing.holograms[0].z]);
+  expect(now[0], 'moved right').toBeGreaterThan(was[0] + 1);
+  expect(now[1], 'and down').toBeGreaterThan(was[1] + 1);
 });
