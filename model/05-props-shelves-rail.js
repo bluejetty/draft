@@ -857,12 +857,9 @@
   // WHAT A SHELF FILE IS COUNTED BY, to say it is empty: the drawn things
   // -- outlines and shapes among them, which a site-plan HOLOGRAM is mostly.
   const SHELF_FILE_COUNTED = ['walls', 'lines', 'fenestrations', 'fixtures', 'floors', 'outlines', 'shapes', 'notes', 'roofs'];
-  // ANY PLAN LEVEL, for the generic HOLOGRAM: not a shelf, not a cut.
-  const onPlanMain = () => {
-    if (!drawing || boneyardActive || Number(activeLevelId()) < 0) return false;
-    const v = activeViewId();
-    return v == null || !!H()?.VIEWS?.has(v);
-  };
+  // ANY PLAN LEVEL, for the generic HOLOGRAM: not a shelf, not a cut --
+  // the floor guard below less its "one of the house's floors" line.
+  const onPlanMain = () => !!drawing && !boneyardActive && Number(activeLevelId()) >= 0 && onPlanView();
   const onFloorPlanMain = () => {
     if (!drawing) return false;
     // ONE OF THE HOUSE'S FLOORS: a shelf's level is negative, the site's and
@@ -871,6 +868,9 @@
     // AND ITS PLAN OR FLOOR VIEW: an elevation or a section reports its own
     // id here (activeViewId), which is no plan view, and ELECTRIC and STAIR
     // are layer views of the floor, not the floor plan.
+    return onPlanView();
+  };
+  const onPlanView = () => {
     const v = activeViewId();
     return v == null || !!H()?.VIEWS?.has(v);
   };
