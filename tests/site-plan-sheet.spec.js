@@ -28,6 +28,9 @@ async function houseAndLot(page) {
   await page.goto('/MODEL.html?level=8');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(400);
+  // THE SITE PLAN KEY OPENS THE CARD (jb, 9 Nov): it no longer rises on
+  // arriving at SITE.
+  await h.openLotCard(page);
   // THE FIRST SIZE THE BUILDING FITS ON. The narrow tiers are faded and
   // disabled since 14 Oct, so `.first()` would wait on a button that never
   // enables.

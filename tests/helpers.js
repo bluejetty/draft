@@ -558,6 +558,16 @@ async function openModelRail(page) {
   await expect(rail).not.toHaveAttribute('data-collapsed', '');
 }
 
+// THE LOT CARD, OPENED THE WAY A DRAFTER OPENS IT (jb, 9 Nov 2026): the SITE
+// PLAN key at the end of the BUILD keys. It used to rise on its own on
+// arriving at SITE; now nothing raises it but this key (or a double-click on
+// a lot already drawn). Pressed through the DOM rather than the pointer, so
+// a spec need not first open the left rail on the BUILD tab.
+async function openLotCard(page) {
+  await page.locator('[data-site-plan-key]').evaluate(key => key.click());
+  await expect(page.locator('#lot-pick')).toBeVisible();
+}
+
 async function pickModelLevel(page, id) {
   await openModelRail(page);
   await page.locator(`[data-level-row="${id}"]`).click();
@@ -762,6 +772,7 @@ module.exports = {
   openRails,
   openModelRail,
   pickModelLevel,
+  openLotCard,
   pickModelLayer,
   modelLevelId,
   modelViewId,

@@ -52,6 +52,12 @@ if (!window.DraftToolIcons) {
       + '<path d="M6 12h12" stroke-dasharray="3 1.8" />',
     stair: '<path d="M3 21h5v-5h4v-5h4V6h5" /><path d="M3 21V16" stroke-width="1" />',
     fixture: '<rect x="7" y="3" width="10" height="5" rx="1" /><ellipse cx="12" cy="14.5" rx="5" ry="6.5" />',
+    // SITE PLAN (jb, 9 Nov: "make it look like a site plan"): the lot line
+    // dot-dashed the way the plan draws it, the house footprint inside with
+    // its gable, and a north arrow in the corner.
+    siteplan: '<path d="M3 4h18v16H3z" stroke-dasharray="3 1.4 0.8 1.4" />'
+      + '<path d="M7 17v-6l4-3 4 3v6z" /><path d="M7 11h8" stroke-width="1" />'
+      + '<path d="M18 11V6.5" stroke-width="1.2" /><path d="M16.6 8.2L18 6.3l1.4 1.9" stroke-width="1.2" />',
   });
 
   // THE REST OF THE TOOLTIP: "WALL — press W to draw a wall."
@@ -83,6 +89,7 @@ if (!window.DraftToolIcons) {
     beam: 'place a beam',
     stair: 'place a stair',
     fixture: 'place a fixture',
+    siteplan: 'size the lot, draw it, or bring a site plan in',
     outline: 'trace the house outline',
   });
 

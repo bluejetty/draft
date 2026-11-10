@@ -52,7 +52,7 @@ const MUTANTS = [
     name: 'the card stays up under the file dialog',
     find: "    lotCard.querySelector('[data-lot-pick-import]').addEventListener('click', () => {\n"
       + '      lotTouched = true;\n'
-      + '      lotAsked = true;\n'
+      + '      lotReopen = false;\n'
       + '      paintLotPick();',
     with: "    lotCard.querySelector('[data-lot-pick-import]').addEventListener('click', () => {\n"
       + '      lotTouched = true;',
