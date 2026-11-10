@@ -180,6 +180,10 @@
     // Oct: "update all the stuff"): a piece or run that ran into a wall
     // stands its half inch off it (settleFixtureGaps).
     settleFixtureGaps();
+    // HAND DIMENSIONS TAKE HOLD OF THE CORNERS THEY STAND OFF (Movie, 9 Nov),
+    // on every drawing opened -- the ones drawn before a dimension could
+    // hold a line's or a lot's corner follow and delete with it from now on.
+    if (typeof relinkDimLinks === 'function') relinkDimLinks();
     // Recorded against the RAW file: the normaliser is the only thing that knows
     // a substitution happened, and it does not say so — the two types differ and
     // nothing else marks it.

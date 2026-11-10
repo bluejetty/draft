@@ -1298,6 +1298,17 @@
     reframed.forEach(r => undoStack.push(...r.steps));
     const framedSaid = stairFramingSaid(reframed);
     if (framedSaid) sayOnStrip(`${framedSaid.trim()} UNDO puts it back.`);
+    // AND THE HAND DIMENSIONS THAT MEASURED TO WHAT WENT (Movie, 9 Nov: "if
+    // the item being dimensioned in deleted the dimensions should also
+    // disappear" -- "delete rather than set free, keep it clean"): every one
+    // with an end held on an item this press took, or on what went with it
+    // (a wall's openings, a footprint's roof, a beam's posts), in the same
+    // UNDO. See sweepDimsOfTheGone.
+    const sweptDims = typeof sweepDimsOfTheGone === 'function' ? sweepDimsOfTheGone() : [];
+    if (sweptDims.length) {
+      undoStack.push({ kind: 'remove-items', removed: sweptDims });
+      sayOnStrip(`${sweptDims.length === 1 ? 'Its dimension went' : `${sweptDims.length} dimensions went`} with it. UNDO puts them back.`);
+    }
     // ONE DELETE, ONE UNDO: a row of beam is several pieces, and a click
     // takes them all, so the press that took them puts them back together.
     if (undoStack.length - mark > 1) undoStack.push({ kind: 'batch', steps: undoStack.splice(mark) });

@@ -2740,40 +2740,191 @@
   // dimension's end with it ALONG the dimension's own run -- a HORIZ string
   // takes the corner's x and keeps its row, so a string never tilts. An UNDO
   // of the move puts the corner back and the end follows back.
+  //
+  // AND NOT ONLY A WALL'S (Movie, 9 Nov: "i'd also like the dimension to
+  // move when the node they are connected to moves ... if that item is
+  // MOVED the dimension should move and re-number to the new measurement").
+  // Every node the snap offers is a corner a dimension can hold: a line's
+  // ends, a lot's, floor's, roof's or shape's corners, a beam's ends and a
+  // column's point, as well as a wall's corners and an opening's dot. The
+  // ref says which kind, which item and which corner: `{ wallId, end }` and
+  // `{ openingId }` as before, and `{ kind, id, end }` for the rest, where
+  // `end` is 'start' or 'end' for a run, 'point' for a column, and the
+  // corner's index for a loop.
+  //
+  // THE WHOLE ITEM MOVED TAKES THE WHOLE DIMENSION: when both ends ride and
+  // both corners went the same way, the string goes with them and keeps its
+  // standoff, which is what MOVE of a lot or a wall means. One corner moved
+  // on its own slides its end along the run, as before.
   const DIM_LINK_FT = 1;
-  const dimLinkAt = p => {
+  // THE LISTS A REF CAN NAME, by kind, over the whole drawing: a dimension
+  // follows its corner wherever the level switch is.
+  const DIM_LINK_LISTS = { line: 'lines', outline: 'outlines', floor: 'floors', roof: 'roofs',
+    shape: 'shapes', beam: 'beams', column: 'columns' };
+  // THE CORNERS ON THE LEVEL a point can take hold of, each with the ref
+  // that names it -- only the level's own, as the snap offers them.
+  const dimLinkTargets = () => {
+    const out = [];
+    const run = (kind, item) => ['start', 'end'].forEach(end => {
+      const v = item[end];
+      if (v) out.push({ v, ref: kind === 'wall' ? { wallId: String(item.id), end, x: v.x, z: v.z }
+        : { kind, id: String(item.id), end, x: v.x, z: v.z } });
+    });
+    walls().forEach(w => run('wall', w));
+    lines().forEach(l => { if (String(l.id || '')) run('line', l); });
+    beams().forEach(b => run('beam', b));
+    columns().forEach(c => { if (c.point) out.push({ v: c.point, ref: { kind: 'column', id: String(c.id), end: 'point', x: c.point.x, z: c.point.z } }); });
+    const loop = (kind, item) => (item.points || []).forEach((p, i) => {
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.z) && String(item.id || '')) {
+        out.push({ v: p, ref: { kind, id: String(item.id), end: i, x: p.x, z: p.z } });
+      }
+    });
+    floors().forEach(f => loop('floor', f));
+    roofs().forEach(r => loop('roof', r));
+    outlines().forEach(o => loop('outline', o));
+    shapes().forEach(s => loop('shape', s));
+    return out;
+  };
+  const dimLinkAt = (p, within = DIM_LINK_FT) => {
     let best = null;
-    walls().forEach(w => ['start', 'end'].forEach(end => {
-      const v = w[end];
+    dimLinkTargets().forEach(({ v, ref }) => {
       const d = Math.hypot(v.x - p.x, v.z - p.z);
-      if (d <= DIM_LINK_FT && (!best || d < best.d)) best = { d, ref: { wallId: String(w.id), end, x: v.x, z: v.z } };
-    }));
+      if (d <= within && (!best || d < best.d)) best = { d, ref };
+    });
     return best ? { ref: best.ref } : {};
   };
+  // WHERE A REF'S CORNER STANDS NOW, or null when the item it named is gone.
+  const dimRefPoint = (ref, maps) => {
+    if (!ref) return null;
+    if (ref.openingId != null) return openingCentre(maps.fen.get(String(ref.openingId)));
+    if (ref.wallId != null) return maps.walls.get(String(ref.wallId))?.[ref.end] || null;
+    const key = DIM_LINK_LISTS[ref.kind];
+    if (!key) return null;
+    const item = (drawing[key] || []).find(it => String(it.id) === String(ref.id));
+    if (!item) return null;
+    if (ref.end === 'point') return item.point || null;
+    if (Number.isInteger(ref.end)) return (item.points || [])[ref.end] || null;
+    return item[ref.end] || null;
+  };
+  const dimRefMaps = () => ({
+    walls: new Map((drawing.walls || []).map(w => [String(w.id), w])),
+    fen: new Map((drawing.fenestrations || []).map(f => [String(f.id), f])),
+  });
   var followDimLinks = () => {
     const list = drawing?.dimensions;
     if (!Array.isArray(list) || !list.some(d => d.startRef || d.endRef)) return;
-    const byId = new Map((drawing.walls || []).map(w => [String(w.id), w]));
-    const fenById = new Map((drawing.fenestrations || []).map(f => [String(f.id), f]));
+    const maps = dimRefMaps();
     // An end on an opening's dot reads the dot where the opening now is --
     // every paint, so it follows the door while the door is being slid.
-    const refPoint = ref => (ref.openingId != null
-      ? openingCentre(fenById.get(String(ref.openingId)))
-      : byId.get(String(ref.wallId))?.[ref.end]);
     list.forEach(dim => {
       const len = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
       if (!(len > 1e-9)) return;
       const u = { x: (dim.end.x - dim.start.x) / len, z: (dim.end.z - dim.start.z) / len };
-      [['startRef', 'start'], ['endRef', 'end']].forEach(([key, at]) => {
+      const ends = [['startRef', 'start'], ['endRef', 'end']].map(([key, at]) => {
         const ref = dim[key];
-        const v = ref && refPoint(ref);
-        if (!v) return;
-        const along = (v.x - ref.x) * u.x + (v.z - ref.z) * u.z;
-        if (Math.abs(v.x - ref.x) < 1e-9 && Math.abs(v.z - ref.z) < 1e-9) return;
-        dim[at] = { ...dim[at], x: dim[at].x + u.x * along, z: dim[at].z + u.z * along };
-        ref.x = v.x; ref.z = v.z;
+        const v = ref && dimRefPoint(ref, maps);
+        if (!v) return null;
+        const dx = v.x - ref.x, dz = v.z - ref.z;
+        if (Math.abs(dx) < 1e-9 && Math.abs(dz) < 1e-9) return null;
+        return { ref, at, dx, dz };
+      }).filter(Boolean);
+      if (!ends.length) return;
+      const same = ends.length === 2 && dim.startRef && dim.endRef
+        && Math.abs(ends[0].dx - ends[1].dx) < 1e-6 && Math.abs(ends[0].dz - ends[1].dz) < 1e-6;
+      ends.forEach(({ ref, at, dx, dz }) => {
+        const along = dx * u.x + dz * u.z;
+        dim[at] = same
+          ? { ...dim[at], x: dim[at].x + dx, z: dim[at].z + dz }
+          : { ...dim[at], x: dim[at].x + u.x * along, z: dim[at].z + u.z * along };
+        ref.x += dx; ref.z += dz;
       });
     });
+  };
+  // THE DIMENSIONS THAT MEASURED TO WHAT IS GONE (Movie, 9 Nov: "if the item
+  // being dimensioned in deleted the dimensions should also disappear" --
+  // "delete rather than set free, keep it clean"). After a DELETE, every hand
+  // dimension with an end on an item the drawing no longer holds comes off
+  // with it, in the same UNDO. Auto strings are the level's own and re-lay.
+  var sweepDimsOfTheGone = () => {
+    const list = drawing?.dimensions;
+    if (!Array.isArray(list)) return [];
+    const maps = dimRefMaps();
+    const removed = [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const dim = list[i];
+      if (dim.auto === true) continue;
+      const gone = [dim.startRef, dim.endRef].some(ref => ref && !dimRefPoint(ref, maps));
+      if (!gone) continue;
+      removed.push({ list, index: i, item: list[i] });
+      list.splice(i, 1);
+    }
+    return removed;
+  };
+  // DIMENSIONS DRAWN BEFORE THEY COULD HOLD ON (the files already saved): a
+  // hand dimension's end standing square off a corner takes hold of it when
+  // the file opens, so the lot he dimensioned last week follows too. A hand
+  // string stands off what it measures, so its end is not ON the corner: the
+  // corner is square across from the end (within a sixteenth along the run)
+  // on the side the string measures -- drawDimension2D stands the line off
+  // to the LEFT of start -> end, and dimString turns each piece to put that
+  // side away from the points, so what it measures is on the RIGHT. The
+  // nearest such corner across is the one. Only where the end has no ref and
+  // the corner is on the dimension's own level.
+  var relinkDimLinks = () => {
+    const list = drawing?.dimensions;
+    if (!Array.isArray(list)) return 0;
+    let linked = 0;
+    const within = 1 / 192;   // a sixteenth of an inch along the run
+    const byLevel = new Map();
+    list.forEach(dim => {
+      if (dim.auto === true || (dim.startRef && dim.endRef)) return;
+      const key = `${dim.levelId}|${dim.view || 'plan'}`;
+      if (!byLevel.has(key)) byLevel.set(key, []);
+      byLevel.get(key).push(dim);
+    });
+    if (!byLevel.size) return 0;
+    const same = item => Number(item.levelId);
+    const near = (p, dim, targets) => {
+      const len = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+      if (!(len > 1e-9)) return null;
+      const u = { x: (dim.end.x - dim.start.x) / len, z: (dim.end.z - dim.start.z) / len };
+      const right = { x: u.z, z: -u.x };
+      let best = null;
+      targets.forEach(({ v, ref }) => {
+        const along = (v.x - p.x) * u.x + (v.z - p.z) * u.z;
+        const across = (v.x - p.x) * right.x + (v.z - p.z) * right.z;
+        if (Math.abs(along) > within || across < -within) return;
+        if (!best || across < best.across) best = { across, ref };
+      });
+      return best ? best.ref : null;
+    };
+    byLevel.forEach((dims, key) => {
+      const levelId = Number(key.split('|')[0]);
+      const targets = [];
+      const run = (kind, item) => ['start', 'end'].forEach(end => {
+        const v = item[end];
+        if (v) targets.push({ v, ref: kind === 'wall' ? { wallId: String(item.id), end, x: v.x, z: v.z }
+          : { kind, id: String(item.id), end, x: v.x, z: v.z } });
+      });
+      const loop = (kind, item) => (item.points || []).forEach((p, i) => {
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.z)) targets.push({ v: p, ref: { kind, id: String(item.id), end: i, x: p.x, z: p.z } });
+      });
+      (drawing.walls || []).filter(w => same(w) === levelId).forEach(w => run('wall', w));
+      (drawing.lines || []).filter(l => same(l) === levelId && String(l.id || '')).forEach(l => run('line', l));
+      (drawing.beams || []).filter(b => same(b) === levelId).forEach(b => run('beam', b));
+      (drawing.columns || []).filter(c => same(c) === levelId && c.point).forEach(c =>
+        targets.push({ v: c.point, ref: { kind: 'column', id: String(c.id), end: 'point', x: c.point.x, z: c.point.z } }));
+      [['floor', 'floors'], ['roof', 'roofs'], ['outline', 'outlines'], ['shape', 'shapes']].forEach(([kind, lk]) =>
+        (drawing[lk] || []).filter(it => same(it) === levelId && String(it.id || '')).forEach(it => loop(kind, it)));
+      dims.forEach(dim => {
+        [['startRef', 'start'], ['endRef', 'end']].forEach(([rk, at]) => {
+          if (dim[rk] || !dim[at]) return;
+          const ref = near(dim[at], dim, targets);
+          if (ref) { dim[rk] = { ...ref }; linked += 1; }
+        });
+      });
+    });
+    return linked;
   };
   const dimDirection = points => {
     if (dimMode === 'h') return { x: 1, z: 0 };
