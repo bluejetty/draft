@@ -277,11 +277,24 @@ if (!window.DraftDrawingFormat) {
       // OR THE DOOR OR WINDOW whose middle dot it was put on (Movie, 20 Oct:
       // "if i move that can the dimension move with it"): the opening's id and
       // where its dot stood.
+      //
+      // OR ANY OTHER CORNER THE SNAP OFFERS (Movie, 9 Nov: "the dimension to
+      // move when the node they are connected to moves"): `{ kind, id, end }`
+      // names a line's, beam's, lot's, floor's, roof's or shape's corner, or
+      // a column's point -- `end` is 'start' or 'end' for a run, 'point' for
+      // a column, and the corner's index for a loop.
+      const REF_KINDS = ['line', 'outline', 'floor', 'roof', 'shape', 'beam', 'column'];
       const ref = r => {
         if (!r || !Number.isFinite(Number(r.x)) || !Number.isFinite(Number(r.z))) return null;
         if (String(r.openingId ?? '').trim()) return { openingId: String(r.openingId).trim(), x: Number(r.x), z: Number(r.z) };
-        return String(r.wallId || '').trim() && (r.end === 'start' || r.end === 'end')
-          ? { wallId: String(r.wallId).trim(), end: r.end, x: Number(r.x), z: Number(r.z) } : null;
+        if (String(r.wallId || '').trim() && (r.end === 'start' || r.end === 'end')) {
+          return { wallId: String(r.wallId).trim(), end: r.end, x: Number(r.x), z: Number(r.z) };
+        }
+        if (!REF_KINDS.includes(r.kind) || !String(r.id ?? '').trim()) return null;
+        const end = r.end === 'start' || r.end === 'end' || r.end === 'point' ? r.end
+          : (Number.isInteger(Number(r.end)) && Number(r.end) >= 0 ? Number(r.end) : null);
+        if (end == null) return null;
+        return { kind: r.kind, id: String(r.id).trim(), end, x: Number(r.x), z: Number(r.z) };
       };
       const startRef = ref(dimension?.startRef), endRef = ref(dimension?.endRef);
       return {
