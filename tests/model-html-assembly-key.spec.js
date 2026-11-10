@@ -114,3 +114,40 @@ test('Escape puts it down with nothing made', async ({ page }) => {
   await expect(key(page)).toHaveAttribute('aria-pressed', 'false');
   expect((await saved(page)).groups).toHaveLength(1);
 });
+
+// Y ON A PICKED ASSEMBLY BUSTS IT (10 Nov: "select a Y'd items group and
+// then press the Y command and it will break apart"), and UNDO puts it back.
+test('Y with an assembly picked and nothing loose busts it; UNDO puts it back', async ({ page }) => {
+  const { at } = await open(page);
+  await page.keyboard.press('s');
+  await click(page, at, 13, 0);
+  await page.keyboard.press('y');
+  await expect(key(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#strip-message')).toContainText('WC 1 busted');
+  expect((await saved(page)).groups).toHaveLength(0);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(100);
+  const d = await saved(page);
+  expect(d.groups).toHaveLength(1);
+  expect(ids(d.groups[0])).toEqual(['wc1', 'wc2']);
+});
+
+test('Y with a loose wall among the picks arms ASSEMBLY as before, and UNDO takes the new unit away', async ({ page }) => {
+  const { at } = await open(page);
+  await page.keyboard.press('s');
+  await click(page, at, 13, 0);
+  await page.keyboard.down('Shift');
+  await click(page, at, 3, 0);
+  await page.keyboard.up('Shift');
+  await page.keyboard.press('y');
+  await expect(key(page)).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Enter');
+  let d = await saved(page);
+  expect(d.groups).toHaveLength(1);
+  expect(ids(d.groups[0])).toEqual(['a', 'wc1', 'wc2']);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(100);
+  d = await saved(page);
+  expect(d.groups).toHaveLength(1);
+  expect(ids(d.groups[0])).toEqual(['wc1', 'wc2']);
+});
