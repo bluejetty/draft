@@ -20,8 +20,10 @@ const MUTANTS = [
     find: '  data-pane-tab="notes" hidden><span class="rail-tab-text">NOTES / CALC</span></button>',
     with: '  data-pane-tab="notes" hidden><span class="rail-tab-text">NOTES</span></button>',
     test: 'the tab reads NOTES / CALC' },
-  { file: 'model/04-levels-notes-bars.js', name: "CALC leaves the NOTES page showing", spec: 'tests/model-html-calc.spec.js',
-    find: "    notesText.hidden = which !== 'notes';\n",
+  // RE-ANCHORED 11 NOV (PR #993): the NOTES page now STAYS showing under
+  // CALC, so what the tab swap owes the spec is the CLEAR button going away.
+  { file: 'model/04-levels-notes-bars.js', name: "CALC leaves the NOTES CLEAR button showing", spec: 'tests/model-html-calc.spec.js',
+    find: "    document.querySelector('[data-notes-clear]').hidden = which !== 'notes';\n",
     with: "",
     test: "CALC is a tab beside NOTES on the pad; it swaps the page for the calculator and back" },
   { file: 'model/04-levels-notes-bars.js', name: "ENTER puts nothing on the tape", spec: 'tests/model-html-calc.spec.js',
