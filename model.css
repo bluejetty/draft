@@ -1384,6 +1384,11 @@
     border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
   .shelf-tab-side:hover { color: var(--accent); border-color: var(--accent); }
   .shelf-tab-side[hidden] { display:none; }
+  /* + ADD SHELF SQUEEZED BETWEEN OPEN SHELF AND THE TAB (jb, 10 Nov): a
+     narrower one, and the row slides left by half of it so the tab stays
+     centred on the bone. */
+  .shelf-tab-side[data-add] { width:72px; }
+  #shelf-tab-row:has(#shelf-add:not([hidden])) { transform: translateX(-39px); }
   .seat-label { padding:3px 4px 4px; border-top:1px solid var(--edge-panel);
     font-family: var(--font-ui); font-size:8px; font-weight:600;
     letter-spacing:0.04em; text-transform:uppercase; color: var(--ink-quiet);

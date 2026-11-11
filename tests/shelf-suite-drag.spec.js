@@ -66,8 +66,21 @@ test('OPEN SUITE and SAVE AS SUITE stand either side of the SHELVES tab, its siz
   await expect(page.locator('[data-shelf="1"]')).toHaveAttribute('data-active', '');
   await expect(openB).toBeVisible();
   await expect(saveB).toBeVisible();
-  await expect(openB).toHaveText('OPEN SUITE');
-  await expect(saveB).toHaveText('SAVE AS SUITE');
+  await expect(openB).toHaveText('OPEN SHELF');
+  await expect(saveB).toHaveText('SAVE SHELF');
+  // + ADD SHELF SQUEEZED IN between OPEN SHELF and the tab (jb, 10 Nov),
+  // the LEVELS pane's + SHELF press: a new shelf, stood on.
+  const addB = page.locator('#shelf-add');
+  await expect(addB).toHaveText('+ ADD SHELF');
+  const [ab, tb0] = await Promise.all([addB.boundingBox(), tab.boundingBox()]);
+  expect(ab.x, 'right of OPEN SHELF').toBeGreaterThanOrEqual((await openB.boundingBox()).x);
+  expect(ab.x + ab.width, 'left of the tab').toBeLessThanOrEqual(tb0.x);
+  const before = await page.locator('[data-shelf]').count();
+  await addB.click();
+  await expect(page.locator('[data-shelf]')).toHaveCount(before + 1);
+  await expect(page.locator('[data-shelf]').last(), 'the new shelf, stood on').toHaveAttribute('data-active', '');
+  await square(page, 0).click();
+  await expect(page.locator('[data-shelf="1"]')).toHaveAttribute('data-active', '');
   const [o, t, s, bone] = await Promise.all([openB.boundingBox(), tab.boundingBox(), saveB.boundingBox(), page.locator('#bone').boundingBox()]);
   expect(o.x + o.width, 'OPEN SUITE left of the tab').toBeLessThanOrEqual(t.x);
   expect(s.x, 'SAVE AS SUITE right of it').toBeGreaterThanOrEqual(t.x + t.width);

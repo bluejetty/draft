@@ -683,6 +683,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // OPEN SUITE and SAVE AS SUITE beside the tab (23 Oct): a file
             // picker and the kind question, nothing on the house.
             'shelf-open-suite', 'shelf-save-suite',
+            // + ADD SHELF between OPEN SHELF and the tab (jb, 10 Nov): the
+            // LEVELS pane's + SHELF press again, so no absence row moves.
+            'shelf-add',
             // UNDO ON SCREEN (audit C4) is the Ctrl+Z row's own verb with a
             // button on it: the parity table already has Undo **present**,
             // and a second way to press it makes nothing new.
@@ -891,7 +894,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // CLOSING A SHELF (Movie, 23 Oct): the X asks "save first or
             // close without save". Three answers about a shelf already
             // there; none makes anything, so no absence row moves.
-            'SAVE AS SUITE FIRST', 'CLOSE WITHOUT SAVING', 'CANCEL',
+            'SAVE SHELF FIRST', 'CLOSE WITHOUT SAVING', 'CANCEL',
             // TOO BIG (Movie, 20 Oct: "a popup warning good idea"): the
             // brush's refusal said where he is looking, and its one answer.
             // It changes nothing in the drawing, so no absence row moves.

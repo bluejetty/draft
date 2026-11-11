@@ -2205,7 +2205,7 @@
     held = was;
     buildChrome();
     paint();
-    sayOnStrip(`${hologramNoun(holo)} is on the shelf ${shelf?.name || ''} to change. SAVE AS SUITE writes it back out; REFRESH on its card updates every copy.`);
+    sayOnStrip(`${hologramNoun(holo)} is on the shelf ${shelf?.name || ''} to change. SAVE SHELF writes it back out; REFRESH on its card updates every copy.`);
   };
   // THE PICKER IS MADE AT THE PRESS AND NEVER PUT IN THE PAGE: the page's
   // own controls stay the ones the gesture census counts.
@@ -2449,7 +2449,7 @@
       edit.type = 'button';
       edit.textContent = 'EDIT ON SHELF';
       edit.dataset.hologramEditShelf = first.id;
-      edit.title = 'Put a copy of its drawing on a new BONEYARD shelf to change; SAVE AS SUITE, then REFRESH';
+      edit.title = 'Put a copy of its drawing on a new BONEYARD shelf to change; SAVE SHELF, then REFRESH';
       edit.addEventListener('click', () => { closeHologramCards(); editOnShelf(first); });
       // ALIGN, THE FILE'S OWN (Movie, 28 Oct: "will need to be in each
       // hologram card actually"): every copy of this file slid so its site
