@@ -774,12 +774,12 @@
   </div>
 </div>
 
-<!-- DOUBLE-CLICK A VIEWPORT, GO AND EDIT IT (Movie, 12 Oct): "it POPUP asks:
-     EDIT IN MODEL SPACE - Y / N". Y and N are the two words he asked for, so
-     they are the two buttons -- Y first, because the double-click that opened
-     this box already said which drawing, and the drafter who did it meant to
-     go. The × and the scrim are both N: a confirm that can only be answered
-     forwards is one people learn to dread. -->
+<!-- THE EDIT IN MODEL SPACE / CHANGE SCALE? CARD (Movie, 12 Oct: "it POPUP
+     asks: EDIT IN MODEL SPACE - Y / N"). Y and N are the two words he asked
+     for, so they are the two buttons. Since 11 Nov (jb) the double-click no
+     longer asks -- it goes -- and this card opens from the right-click
+     menu's CHANGE SCALE, or for a viewport with no drawing to open, where
+     its words say why. The × and the scrim are both N. -->
 <div id="lay-edit-scrim" hidden>
   <div id="lay-edit" role="dialog" aria-modal="true" aria-label="Edit in Model Space">
     <div class="lay-head">
@@ -1705,26 +1705,31 @@ class Component extends PageLogic {
       const card = document.querySelector('[data-layers-card]');
       if (card && !card.hidden && !card.contains(e.target) && e.button !== 2) this._closeLayersCard();
     }, true);
-    // DOUBLE-CLICK A VIEWPORT TO GO AND EDIT IT (Movie, 12 Oct).
+    // DOUBLE-CLICK A VIEWPORT TO GO AND EDIT IT (Movie, 12 Oct), and since
+    // 11 Nov it GOES WITHOUT ASKING (jb: "when the user double clicks on the
+    // viewport they just go straight to model space instead of asking about
+    // scale.. now that we have this method" -- the right-click menu, whose
+    // CHANGE SCALE item is where the scale card lives now).
     //
     // `dblclick` ALONGSIDE THE POINTER DOOR, not inside it. The two presses
     // of a double-click each arrive as their own `pointerdown` first, so
     // _onMouseDown has already selected the viewport and armed a drag by the
-    // time this fires -- which is wanted, not a conflict: the drawing the
-    // question is about is the one now selected and outlined. Counting the
-    // presses by hand instead would mean a timer, a distance test and a
-    // guess at the platform's interval, all of which the browser already
-    // knows. `_draggingViewport` is cleared here because the second press
-    // armed a drag that no pointerup will land -- the dialog takes the
-    // focus -- and a live drag record would move the viewport on the next
-    // stray pointermove.
+    // time this fires -- which is wanted, not a conflict: the drawing that
+    // opens is the one now selected and outlined. Counting the presses by
+    // hand instead would mean a timer, a distance test and a guess at the
+    // platform's interval, all of which the browser already knows.
+    // `_draggingViewport` is cleared here because the second press armed a
+    // drag that no pointerup will land -- the page is leaving, or the
+    // nowhere-to-go card takes the focus -- and a live drag record would
+    // move the viewport on the next stray pointermove.
     //
     // A MOUSE DOUBLE-CLICK, NOT A DOUBLE-TAP. Chromium turns two taps at one
     // spot into a synthesized `dblclick`, and on a sheet the two taps that
     // produce it are the ordinary ones: place a viewport, then tap it again
     // to select it. That put the EDIT IN MODEL SPACE question in front of a
     // drafter who had asked for nothing -- and, because the scrim covers the
-    // status strip, swallowed his next tap on DELETE. It was caught as a red
+    // status strip, swallowed his next tap on DELETE. Now that the
+    // double-click leaves the page outright, two taps would be worse still. It was caught as a red
     // shard rather than from an iPad, and only on the CI machine, because
     // whether the two taps fall inside the platform's double-click interval
     // is a race: locally they did not, on the runner they did.
@@ -1752,7 +1757,7 @@ class Component extends PageLogic {
       this._panningViewport = null;
       this._croppingViewport = null;
       e.preventDefault();
-      this._openEditInModel(hit.id);
+      this._goToModel(hit.id);
     });
     // THE RESIZE ARROW over a grip, so a drafter can see where the window
     // takes a drag before pressing. Only while no gesture is under way.
@@ -3518,12 +3523,31 @@ class Component extends PageLogic {
     return `./MODEL.html?${params}`;
   }
 
+  // THE CARD: Y / N and CHANGE SCALE?. Opened by the menu's CHANGE SCALE
+  // (and by _goToModel for a viewport with nowhere to go, so the card can
+  // say why). It no longer stands between a drafter and the Model Space.
   _openEditInModel(id) {
     const viewport = this.state.viewports.find(item => item.id === id);
     if (!viewport) return;
     // The drawing is selected as well as asked about, so the frame the
     // question names is the one outlined on the sheet behind the dialog.
     this.setState({ editInModel: id, selectedViewportId: id }, () => this._draw());
+  }
+
+  // STRAIGHT TO THE MODEL SPACE (jb, 11 Nov): the double-click, the menu's
+  // EDIT IN MODEL SPACE and the strip's EDIT IN MODEL all come here, and
+  // none of them asks. The sheet is written before the page turns, exactly
+  // as Y did. A viewport with no drawing behind it (an elevation whose cut
+  // is gone) still gets the card, because the card is what says so.
+  _goToModel(id) {
+    const viewport = this.state.viewports.find(item => item.id === id);
+    if (!viewport) return;
+    const url = this._modelUrlForViewport(viewport);
+    if (!url) { this._openEditInModel(id); return; }
+    this.setState({ editInModel: null, selectedViewportId: id }, () => {
+      this._persistLayout();
+      window.location.href = url;
+    });
   }
 
   // THE ASKED-ABOUT VIEWPORT AT A NEW SCALE: it keeps its centre, the change
@@ -3551,12 +3575,11 @@ class Component extends PageLogic {
     const viewport = this.state.viewports.find(item => item.id === this.state.editInModel);
     const url = this._modelUrlForViewport(viewport);
     if (!url) { this._closeEditInModel(); return; }
-    // THE SHEET IS WRITTEN BEFORE THE PAGE TURNS. _persistLayout is what puts
-    // the viewports in the drawing, and the double-click has just moved the
-    // selection -- leaving without it would drop whatever the drafter did on
-    // this sheet since the last write.
-    this._persistLayout();
-    window.location.href = url;
+    // THE SHEET IS WRITTEN BEFORE THE PAGE TURNS (inside _goToModel):
+    // _persistLayout is what puts the viewports in the drawing, and leaving
+    // without it would drop whatever the drafter did on this sheet since
+    // the last write.
+    this._goToModel(viewport.id);
   }
 
   // WHAT A PLAN SHEET IS CALLED, in one place because there are two readers:
@@ -3984,7 +4007,7 @@ class Component extends PageLogic {
       { rule: true },
       { key: 'edit-in-model', label: 'EDIT IN MODEL SPACE', on: Boolean(url),
         title: url ? 'Open this drawing in the Model Space to edit it' : 'This viewport has no drawing to open',
-        run: () => this._openEditInModel(id) },
+        run: () => this._goToModel(id) },
       { key: 'change-scale', label: 'CHANGE SCALE', on: !isSchedule(viewport),
         title: 'Pick or type a scale for this viewport', run: () => this._openChangeScale(id) },
       { key: 'fit-window', label: 'FIT WINDOW', on: Boolean(viewport.crop),
@@ -4059,9 +4082,9 @@ class Component extends PageLogic {
     menu.textContent = '';
   }
 
-  // CHANGE SCALE is the double-click card's second question, opened with
-  // the list in hand: the same card, so a scale picked here and one picked
-  // there are one thing.
+  // CHANGE SCALE opens the card with the scale list in hand. The card was
+  // the double-click's question until 11 Nov; the double-click now goes
+  // straight to the Model Space, and this item is the card's door.
   _openChangeScale(id) {
     this._openEditInModel(id);
     document.querySelector('[data-edit-scale-list]')?.focus({ preventScroll: true });
@@ -5714,9 +5737,11 @@ class Component extends PageLogic {
     on('[data-paste-viewport]', 'click', () => this._pasteViewport());
     on('[data-north-button]', 'click', () => this._openNorth());
     on('[data-fit-window]', 'click', () => this._fitSelectedWindow());
-    // The strip's press and the mouse's double-click open the one dialog.
+    // The strip's press goes where the mouse's double-click goes: straight
+    // to the Model Space. It is the finger's route, since a double-tap is
+    // refused (see the dblclick listener).
     on('[data-edit-in-model]', 'click', () => {
-      if (this.state.selectedViewportId != null) this._openEditInModel(this.state.selectedViewportId);
+      if (this.state.selectedViewportId != null) this._goToModel(this.state.selectedViewportId);
     });
   }
 

@@ -3,6 +3,13 @@
 // MODEL SPACE - Y / N - and if they say Y it will take them to that drawing in
 // MODEL SPACE, or if N will just go back to LAYOUT AREA and do nothing".
 //
+// AND THEN NO QUESTION (jb, 11 Nov): "when the user double clicks on the
+// viewport they just go straight to model space instead of asking about
+// scale.. now that we have this method" -- the right-click menu. So the
+// double-click GOES, the menu's EDIT IN MODEL SPACE and the strip's EDIT IN
+// MODEL go the same way, and the Y / N + CHANGE SCALE? card is opened by the
+// menu's CHANGE SCALE. The card's own specs below open it that way.
+//
 // WHAT MAKES Y CHEAP, and what these specs really pin: the Model Space is
 // already addressable. MODEL.html reads `?level=` through `activeLevelId()`
 // and `?view=` through `activeViewId()`, and a cut through `cutForViewId()` as
@@ -143,22 +150,44 @@ async function doubleClickViewport(page) {
   await page.mouse.dblclick(p.x, p.y);
 }
 
-test('a double-click on a viewport asks EDIT IN MODEL SPACE, naming the drawing', async ({ page }) => {
+// THE CARD'S DOOR, now that the double-click is not: right-click the
+// viewport, CHANGE SCALE.
+async function openCardFor(page) {
+  const p = await sheetPoint(page, PLAN_VIEWPORT.xIn, PLAN_VIEWPORT.yIn);
+  await page.mouse.click(p.x, p.y, { button: 'right' });
+  await page.locator('[data-context-item="change-scale"]').click();
+}
+
+test('a double-click on a viewport goes straight to that plan in the Model Space', async ({ page }) => {
+  await stubModelSpace(page);
   await openLayout(page, houseDrawing(PLAN_VIEWPORT));
 
-  // Bare paper is not a viewport: the question only arrives over a frame.
+  // Bare paper is not a viewport: nothing happens over it.
   const corner = await sheetPoint(page, 0.4, 0.4);
   await page.mouse.dblclick(corner.x, corner.y);
   expect(await asking(page)).toBe(false);
+  expect(stillOnLayout(page)).toBe(true);
 
   await doubleClickViewport(page);
+  // NO QUESTION (jb, 11 Nov). THE ADDRESS, NOT JUST THE DEPARTURE: MAIN FL
+  // is level 1 in this fixture, and that id is what MODEL.html's
+  // activeLevelId() reads.
+  const url = await atModelSpace(page);
+  expect(url.pathname.endsWith('/MODEL.html')).toBe(true);
+  expect(url.searchParams.get('level')).toBe('1');
+});
+
+test('CHANGE SCALE on the right-click menu opens the card, naming the drawing', async ({ page }) => {
+  await openLayout(page, houseDrawing(PLAN_VIEWPORT));
+
+  await openCardFor(page);
   expect(await asking(page)).toBe(true);
   await expect(page.locator('#lay-edit-title')).toHaveText(/edit in model space/i);
   // Y AND N, his two words, and both reachable.
   await expect(page.locator('[data-edit-model-yes]')).toHaveText('Y');
   await expect(page.locator('[data-edit-model-no]')).toHaveText('N');
   await expect(page.locator('[data-edit-model-yes]')).toBeEnabled();
-  // THE QUESTION NAMES WHICH DRAWING. A sheet carries several viewports, and
+  // THE CARD NAMES WHICH DRAWING. A sheet carries several viewports, and
   // "edit in model space" over all of them says nothing about which.
   await expect(page.locator('#lay-edit-description')).toContainText('MAIN FL');
 });
@@ -167,7 +196,7 @@ test('N goes back to the layout and does nothing', async ({ page }) => {
   await stubModelSpace(page);
   await openLayout(page, houseDrawing(PLAN_VIEWPORT));
 
-  await doubleClickViewport(page);
+  await openCardFor(page);
   expect(await asking(page)).toBe(true);
   await page.locator('[data-edit-model-no]').click();
 
@@ -183,10 +212,10 @@ test('Escape and the scrim are both N; Delete cannot land while it is asking', a
   await stubModelSpace(page);
   await openLayout(page, houseDrawing(PLAN_VIEWPORT));
 
-  // DELETE IS THE ONE THAT WOULD BITE. The double-click selects the viewport,
-  // so without the guard Delete would destroy the drawing the dialog is
-  // still naming.
-  await doubleClickViewport(page);
+  // DELETE IS THE ONE THAT WOULD BITE. Opening the card selects the
+  // viewport, so without the guard Delete would destroy the drawing the
+  // dialog is still naming.
+  await openCardFor(page);
   await page.keyboard.press('Delete');
   expect(await asking(page)).toBe(true);
   expect(await hasSelection(page)).toBe(true);
@@ -198,7 +227,7 @@ test('Escape and the scrim are both N; Delete cannot land while it is asking', a
   expect(await hasSelection(page)).toBe(true);
 
   // The scrim itself dismisses; a press inside the card does not.
-  await doubleClickViewport(page);
+  await openCardFor(page);
   expect(await asking(page)).toBe(true);
   await page.locator('#lay-edit-title').click();
   expect(await asking(page)).toBe(true);
@@ -208,11 +237,11 @@ test('Escape and the scrim are both N; Delete cannot land while it is asking', a
   expect(stillOnLayout(page)).toBe(true);
 });
 
-test('Y opens that plan at its own level in the Model Space', async ({ page }) => {
+test('Y on the card opens that plan at its own level in the Model Space', async ({ page }) => {
   await stubModelSpace(page);
   await openLayout(page, houseDrawing(PLAN_VIEWPORT));
 
-  await doubleClickViewport(page);
+  await openCardFor(page);
   await page.locator('[data-edit-model-yes]').click();
 
   // THE ADDRESS, NOT JUST THE DEPARTURE. MAIN FL is level 1 in this fixture,
@@ -233,10 +262,8 @@ test('a section viewport addresses its cut, and carries no level with it', async
       }],
     }));
 
+  // The double-click goes straight there, section or plan.
   await doubleClickViewport(page);
-  expect(await asking(page)).toBe(true);
-  await expect(page.locator('#lay-edit-description')).toContainText('SECTION A');
-  await page.locator('[data-edit-model-yes]').click();
 
   const url = await atModelSpace(page);
   expect(url.searchParams.get('view')).toBe('cut:7');
@@ -262,7 +289,10 @@ test('a section viewport addresses its cut, and carries no level with it', async
 // time, and `_standardElevationCuts()` returns none at all for a house whose
 // footprint is under a foot. So a saved sheet can hold an E1 viewport on a
 // drawing that currently has no E1, which is the state below.
-test('an elevation with no cut behind it says so instead of offering a wrong Y', async ({ page }) => {
+//
+// THE DOUBLE-CLICK CANNOT GO, so it opens the card -- the card is what says
+// why -- with Y dead.
+test('an elevation with no cut behind it says so instead of opening a wrong drawing', async ({ page }) => {
   await stubModelSpace(page);
   const drawing = houseDrawing(
     { id: 1, kind: 'elevation', elevId: 'E1', pif: 1 / 48, xIn: PW / 2, yIn: PH / 2, sheet: 1 });
@@ -277,6 +307,7 @@ test('an elevation with no cut behind it says so instead of offering a wrong Y',
   await openLayout(page, drawing);
 
   await doubleClickViewport(page);
+  expect(stillOnLayout(page)).toBe(true);
   expect(await asking(page)).toBe(true);
   await expect(page.locator('#lay-edit-description')).toContainText('no longer in the file');
   await expect(page.locator('[data-edit-model-yes]')).toBeDisabled();
@@ -292,7 +323,8 @@ test('an elevation with no cut behind it says so instead of offering a wrong Y',
 // select it. The question then appeared unasked AND its scrim covered the
 // status strip, swallowing the next tap -- which is how this was found, as
 // `touch-layout.spec.js`'s DELETE test timing out on the CI runner while
-// passing here.
+// passing here. Now that the double-click LEAVES THE PAGE, two taps would
+// throw a drafter out of the sheet they were arranging.
 //
 // WHETHER TWO TAPS BECOME A dblclick IS THE RACE ITSELF, so a spec that taps
 // twice and checks cannot pin the guard: the taps fell outside the interval
@@ -308,7 +340,7 @@ test('an elevation with no cut behind it says so instead of offering a wrong Y',
 // a clock. The touch one is what Chromium hands a double-tap; the mouse one
 // (`sourceCapabilities` null, as a real mouse's is here) is the control that
 // stops this passing for the wrong reason -- a guard that refused everything
-// would also "not ask".
+// would also "stay".
 //
 // The real double-tap is still driven, because a synthetic event cannot prove
 // a finger reaches the strip, and that is the half that actually broke.
@@ -333,10 +365,13 @@ test.describe('on a touchscreen', () => {
     const p = await sheetPoint(page, PLAN_VIEWPORT.xIn, PLAN_VIEWPORT.yIn);
 
     await dblclickFrom(page, p, true);
-    expect(await asking(page), 'a finger does not ask').toBe(false);
+    await page.waitForTimeout(300);
+    expect(stillOnLayout(page), 'a finger stays on the sheet').toBe(true);
+    expect(await asking(page), 'and is not asked either').toBe(false);
 
     await dblclickFrom(page, p, false);
-    expect(await asking(page), 'and a mouse still does').toBe(true);
+    const url = await atModelSpace(page);
+    expect(url.searchParams.get('level'), 'and a mouse still goes').toBe('1');
   });
 
   test('two taps on a viewport select it, and the strip stays reachable', async ({ page }) => {
@@ -347,6 +382,7 @@ test.describe('on a touchscreen', () => {
     await page.touchscreen.tap(p.x, p.y);
     await page.touchscreen.tap(p.x, p.y);
     expect(await hasSelection(page), 'the second tap selected it').toBe(true);
+    expect(stillOnLayout(page), 'and went nowhere').toBe(true);
     expect(await asking(page), 'and asked nothing').toBe(false);
 
     // THE HALF THAT ACTUALLY BROKE: a scrim over DELETE is what turned an
@@ -364,7 +400,7 @@ test.describe('on a touchscreen', () => {
       { message: 'and the sheet is written without it' }).toBe(0);
   });
 
-  test('the strip is the finger’s way in, and it opens the same question', async ({ page }) => {
+  test('the strip is the finger’s way in, and it goes straight there too', async ({ page }) => {
     await stubModelSpace(page);
     await openLayout(page, houseDrawing(PLAN_VIEWPORT));
     const edit = page.locator('[data-edit-in-model]');
@@ -375,10 +411,8 @@ test.describe('on a touchscreen', () => {
     await expect(edit).toBeVisible();
     await edit.tap();
 
-    expect(await asking(page)).toBe(true);
-    await expect(page.locator('#lay-edit-description')).toContainText('MAIN FL');
-    // And Y still goes to the right drawing, by the strip as by the mouse.
-    await page.locator('[data-edit-model-yes]').tap();
+    // No question by the strip either: the right drawing, by the strip as
+    // by the mouse.
     const url = await atModelSpace(page);
     expect(url.searchParams.get('level')).toBe('1');
   });
@@ -390,7 +424,7 @@ test.describe('on a touchscreen', () => {
 // other than the ones available in the scroll box".
 test('CHANGE SCALE? under it: a list of the usual scales with this one picked, and a box for any other', async ({ page }) => {
   await openLayout(page, houseDrawing(PLAN_VIEWPORT));
-  await doubleClickViewport(page);
+  await openCardFor(page);
   await expect(page.locator('#lay-edit-scale label')).toHaveText('CHANGE SCALE?:');
   const list = page.locator('[data-edit-scale-list]');
   // The seed's 1/48 is 1" = 48', not one of the usual: it joins the list.

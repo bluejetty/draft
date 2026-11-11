@@ -135,17 +135,31 @@ test('bare paper offers PASTE and ADD VIEWPORT', async ({ page }) => {
   await expect(page.locator('[data-layout-add-viewport]')).toContainText('CLICK THE SHEET');
 });
 
-test('EDIT IN MODEL SPACE and CHANGE SCALE open the double-click card', async ({ page }) => {
+test('CHANGE SCALE opens the scale card with the list in hand', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  await rightClickViewport(page, 1);
-  await item(page, 'edit-in-model').click();
-  await expect(page.locator('#lay-edit-scrim')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.locator('#lay-edit-scrim')).toBeHidden();
   await rightClickViewport(page, 1);
   await item(page, 'change-scale').click();
   await expect(page.locator('#lay-edit-scrim')).toBeVisible();
   await expect(page.locator('[data-edit-scale-list]')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#lay-edit-scrim')).toBeHidden();
+});
+
+// EDIT IN MODEL SPACE GOES, IT DOES NOT ASK (jb, 11 Nov: "they just go
+// straight to model space instead of asking about scale"). MODEL.html is
+// stubbed so the browser's own URL is the evidence.
+test('EDIT IN MODEL SPACE goes straight to the viewport\'s drawing', async ({ page }) => {
+  await page.route('**/MODEL.html*', route => route.fulfill({
+    status: 200, contentType: 'text/html',
+    body: '<!doctype html><title>stub</title><body data-model-stub="1">',
+  }));
+  await openLayout(page, houseDrawing());
+  await rightClickViewport(page, 1);
+  await item(page, 'edit-in-model').click();
+  await page.waitForFunction(() => document.body?.dataset.modelStub === '1', null, { timeout: 5000 });
+  const url = new URL(page.url());
+  expect(url.pathname.endsWith('/MODEL.html')).toBe(true);
+  expect(url.searchParams.get('level')).toBe('1');
 });
 
 test('COPY then PASTE, DELETE, and TO FRONT / TO BACK through the menu', async ({ page }) => {
