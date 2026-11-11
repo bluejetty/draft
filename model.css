@@ -1116,6 +1116,37 @@
     background: repeating-linear-gradient(to bottom, transparent 0 17px,
       var(--pad-rule) 17px 18px) local, var(--pad); }
   .np-text::placeholder { color: var(--pad-ink); opacity:0.45; }
+  /* NOTES BESIDE CALC / TURTLE (jb, 11 Nov): the pane becomes a grid when
+     either is showing. Narrow (`stack`): head, CALC or TURTLE, the NOTES
+     strip, the pad, the foot, the two halves sharing the height. Wide
+     (`side`, the pad pulled past --notes-split-w by its left grip): the
+     pad on the left, CALC or TURTLE on the right, the foot under both. */
+  :root { --notes-split-w: 380px; }
+  .np-split-label { background: var(--pad-gum); color: var(--pad-ink); font-family: var(--font-ui);
+    font-size:9px; font-weight:700; letter-spacing:0.12em; padding:2px 6px; }
+  .np-split-label[hidden] { display:none; }
+  #notes-panel[data-split] { display:grid; grid-template-columns: minmax(0, 1fr); }
+  /* Stacked, the top takes what CALC or TURTLE needs, up to six tenths of
+     the pane (then it scrolls); the pad has the rest, never under 80px. */
+  #notes-panel[data-split="stack"] { container-type:size;
+    grid-template-rows: auto minmax(0, max-content) auto minmax(80px, 1fr) auto; }
+  #notes-panel[data-split="stack"] .np-head { grid-row:1; }
+  #notes-panel[data-split="stack"] .calc, #notes-panel[data-split="stack"] .turtle { grid-row:2; }
+  #notes-panel[data-split="stack"] .np-split-label { grid-row:3; }
+  #notes-panel[data-split="stack"] .np-text { grid-row:4; }
+  #notes-panel[data-split="stack"] .np-foot { grid-row:5; }
+  /* The top half scrolls when CALC or TURTLE wants more than half; the
+     keys and the paste spot keep their size, only the rows and tape give. */
+  #notes-panel[data-split="stack"] .calc, #notes-panel[data-split="stack"] .turtle { overflow-y:auto; max-height:60cqh; }
+  #notes-panel[data-split="stack"] .turtle > :not(.turtle-rows),
+  #notes-panel[data-split="stack"] .calc > :not(.calc-tape) { flex-shrink:0; }
+  #notes-panel[data-split="side"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  #notes-panel[data-split="side"] .np-head { grid-column:1 / -1; grid-row:1; }
+  #notes-panel[data-split="side"] .np-split-label { grid-column:1; grid-row:2; }
+  #notes-panel[data-split="side"] .np-text { grid-column:1; grid-row:3; border-right:1px solid var(--pad-gum); }
+  #notes-panel[data-split="side"] .calc, #notes-panel[data-split="side"] .turtle { grid-column:2; grid-row:2 / 4; }
+  #notes-panel[data-split="side"] .np-foot { grid-column:1 / -1; grid-row:4; }
   /* The grab spots: a tab of the gum colour on the left edge and on the top
      and bottom, each with a strip of reach wider than it looks. */
   .np-grip { position:absolute; z-index:2; touch-action:none; }
@@ -1165,6 +1196,12 @@
   .turtle-name { opacity:0.7; font-weight:600; }
   .turtle[data-closed] .turtle-lamp { color:#18b24a; filter: drop-shadow(0 0 3px rgba(24,178,74,0.9)); }
   .turtle[data-closed] .turtle-status { color:#128a38; }
+  .turtle-paste { width:100%; box-sizing:border-box; resize:none; font-family: var(--font-ui); font-size:11px;
+    line-height:14px; padding:3px 6px; color: var(--pad-ink); background: var(--pad);
+    border:1px dashed var(--pad-ink); border-radius:2px; opacity:0.85; }
+  .turtle-paste:focus { opacity:1; outline:none; border-style:solid; }
+  .turtle-paste::placeholder { color: var(--pad-ink); opacity:0.5; }
+  .turtle-paste[data-bad] { border-color:#b4281e; color:#8a1c1c; }
   .turtle-cols { display:grid; grid-template-columns: 1fr 1fr 40px; gap:4px; font-size:9px; font-weight:700;
     letter-spacing:0.12em; opacity:0.7; padding:0 2px; }
   .turtle-rows { flex:1; min-height:60px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }

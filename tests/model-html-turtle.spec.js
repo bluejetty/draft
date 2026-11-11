@@ -67,7 +67,7 @@ test('TURTLE is the third tab on the pad: a direction and a distance per row, a 
   await open(page);
   await openTurtle(page);
   await expect(page.locator('[data-pad-tab="turtle"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('[data-notes-text]')).toBeHidden();
+  await expect(page.locator('[data-notes-text]')).toBeVisible();   // the pad stays on under the turtle (jb, 11 Nov)
   await expect(page.locator('[data-calc]')).toBeHidden();
   await expect(status(page)).toHaveText('NO MOVES YET');
   await expect(page.locator('[data-turtle-row]')).toHaveCount(1);
