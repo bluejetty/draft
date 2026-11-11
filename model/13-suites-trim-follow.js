@@ -1202,7 +1202,7 @@
     // every failure today.
     const routine = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
-      : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point · ENTER, SPACE, the right button or a double-click ends the run · ESC abandons it' : 'first point'}`
+      : (typeof lineArcStrip === 'function' && lineArcStrip()) || (drawsRun() ? `${activeTool} — ${drawStart ? 'second point · ENTER, SPACE, the right button or a double-click ends the run · ESC abandons it' : 'first point'}`
         + (angleLockDeg() != null ? ` · ANGLE LOCKED ${angleLockDeg()}°` : '')
         : (activeTool === 'outline'
           ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));

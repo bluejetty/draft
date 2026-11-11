@@ -218,11 +218,18 @@ check('a bulged segment is measured to the ARC, not the chord',
 check('and the same segment without bulge answers the chord distance',
   G => [G.pointToSegment(pt(5, 10), { start: pt(0, 0), end: pt(10, 0) }).d, 10]);
 
-// The arc branch samples rather than solving, so its t is always on the 24-step
-// grid. Pinned because "it got close enough" would survive the sampling being
-// replaced by something with different endpoints or a different step count.
-check('the arc branch returns a t on the 24-step sampling grid',
-  G => [Number.isInteger(G.pointToSegment(pt(1, 5), { start: pt(0, 0), end: pt(10, 0), bulge: 2 }).t * 24), true]);
+// THE ARC IS SOLVED, NOT SAMPLED (11 Nov 2026, arcs in the LINE run): a
+// bulged segment is the circle through its ends and its middle, and t runs
+// by angle. The point over the middle is exactly halfway; a point off the
+// end of the sweep measures to the nearer end, not to the rest of the circle.
+check('a point over the arc\'s middle answers t=0.5',
+  G => [G.pointToSegment(pt(5, 10), { start: pt(0, 0), end: pt(10, 0), bulge: 2 }).t, 0.5]);
+check('a point past the sweep measures to the nearer end, not round the circle',
+  G => [JSON.stringify(G.pointToSegment(pt(12, 0), { start: pt(0, 0), end: pt(10, 0), bulge: 2 })), '{"d":2,"t":1}']);
+// A bulge past half the chord is the long way round -- the middle is still
+// a sagitta off the chord, on the far side of the centre.
+check('a bulge past half the chord runs the long way round and keeps its middle',
+  G => [sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 0), bulge: 16 }, 0.5)), '5,0,8']);
 
 // THE SAMPLER MUST INCLUDE BOTH ENDS. A loop starting at i=1 still answers
 // sensibly everywhere except right at the segment's start, where it snaps 1/24
@@ -245,13 +252,18 @@ check('t=0 is the start and t=1 is the end',
 check('the arc at t=0.5 sits at half the bulge, not the whole of it',
   G => [sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 0), bulge: 2 }, 0.5)), '5,0,1']);
 
-// AND ONE OFF-CENTRE, which the t=0.5 check above cannot replace. At the
-// midpoint of a symmetric segment the curve's x is EQUAL to the control point's
-// x, so an implementation that just returned the control point passes that
-// check on x. At t=0.25 they differ (2.5 against 5) and the difference is
-// visible. Found by a mutation surviving, not by reading.
-check('an off-centre sample is on the quadratic, not at the control point',
-  G => [sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 0), bulge: 2 }, 0.25)), '2.5,0,0.75']);
+// AND ONE OFF-CENTRE, which the t=0.5 check above cannot replace: at t=0.25
+// the point is on the circle through the ends and the middle -- radius 13
+// about (5, -12) for this segment -- a quarter of the sweep along, and not
+// on the chord. Found by a mutation surviving, not by reading.
+check('an off-centre sample is on the circle, a quarter of the sweep along',
+  G => {
+    const p = G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 0), bulge: 2 }, 0.25);
+    const arc = G.lineArc({ start: pt(0, 0), end: pt(10, 0), bulge: 2 });
+    const a0 = Math.atan2(0 - arc.cz, 0 - arc.cx), ap = Math.atan2(p.z - arc.cz, p.x - arc.cx);
+    return [`${Math.hypot(p.x - 5, p.z + 12).toFixed(3)} ${Math.abs(ap - a0).toFixed(4)} ${(Math.abs(arc.sweep) / 4).toFixed(4)}`,
+      `13.000 ${(Math.abs(arc.sweep) / 4).toFixed(4)} ${(Math.abs(arc.sweep) / 4).toFixed(4)}`];
+  });
 
 // SURPRISING BUT REAL, and pinned as-is rather than fixed: y does NOT
 // interpolate. Both branches average the two endpoint ys and hand back the same
@@ -349,15 +361,19 @@ const MUTATIONS = [
   ['the arc branch is never taken, so arcs measure as chords',
     s => s.replace('  function pointToSegment(worldPt, seg) {\n    if (!seg.bulge) {',
       '  function pointToSegment(worldPt, seg) {\n    if (true) {')],
-  ['the arc is sampled at a different resolution',
-    s => s.replace('const STEPS = 24;', 'const STEPS = 25;')],
-  ['the arc sampler starts past the beginning of the segment',
-    s => s.replace('for (let i = 0; i <= STEPS; i++) {', 'for (let i = 1; i <= STEPS; i++) {')],
+  ['the arc\'s radius forgets the sagitta',
+    s => s.replace('const r = (L * L / 4 + s * s) / (2 * Math.abs(s));', 'const r = (L * L / 4) / (2 * Math.abs(s));')],
+  ['a point past the sweep measures round the circle',
+    s => s.replace('if (along <= sweep + 1e-9) {', 'if (true) {')],
+  ['every arc is the short way round',
+    s => s.replace('const sweep = -side * 2 * Math.atan2(L / 2, r - Math.abs(s));', 'const sweep = -side * 2 * Math.atan2(L / 2, Math.abs(r - Math.abs(s)));')],
+  ['the arc\'s middle is a whole bulge off the chord',
+    s => s.replace('const s = (seg.bulge || 0) / 2;', 'const s = (seg.bulge || 0);')],
   ['pointOnLineSeg interpolates y instead of averaging it',
     s => s.replace('        y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,\n        z: seg.start.z + (seg.end.z - seg.start.z) * t,',
       '        y: (seg.start.y || 0) + ((seg.end.y || 0) - (seg.start.y || 0)) * t,\n        z: seg.start.z + (seg.end.z - seg.start.z) * t,')],
-  ['the quadratic uses the control point as the apex rather than a control',
-    s => s.replace('x: it * it * seg.start.x + 2 * it * t * c.x + t * t * seg.end.x,', 'x: c.x,')],
+  ['the arc\'s t runs the wrong way round the circle',
+    s => s.replace('const ang = a0 + arc.sweep * t;', 'const ang = a0 - arc.sweep * t;')],
   ['open outlines are counted as closed',
     s => s.replace('return outline.open === true ? outline.points.length - 1 : outline.points.length;',
       'return outline.points.length;')],

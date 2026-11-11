@@ -799,6 +799,16 @@ ${trio(true)}
     <input id="fillet-radius" type="text" data-fillet-radius inputmode="decimal" placeholder="RADIUS" aria-label="Fillet radius, blank for a square corner">
     <span data-bar-hint data-fillet-say>press the first line, then the second</span>
   </span>
+  <!-- THE LINE RUN'S BEND (jb, 11 Nov): STRAIGHT / ARC / 3-POINT ARC /
+       CIRCLE while LINE is up, and CLOSE for the run in hand. The same
+       choices the right click offers; 19-line-arcs.js reads them. -->
+  <span id="line-bar" data-line-bar hidden>
+    <button type="button" data-line-mode="straight" aria-pressed="true" title="Plain lines, as before">STRAIGHT</button>
+    <button type="button" data-line-mode="arc" aria-pressed="false" title="The next press ends an arc that leaves the last piece smoothly">ARC</button>
+    <button type="button" data-line-mode="arc3" aria-pressed="false" title="Press the arc's end, then the point it passes through">3-POINT ARC</button>
+    <button type="button" data-line-mode="circle" aria-pressed="false" title="Press the centre, then the radius -- or type it">CIRCLE</button>
+    <button type="button" data-line-close disabled title="Back to where the run began, and the run is done">CLOSE</button>
+  </span>
   <span id="array-bar" data-array-bar hidden>
     <span data-bar-hint>ACROSS</span>
     <input id="array-cols" type="text" data-array-cols inputmode="numeric" placeholder="N" aria-label="Copies across" title="How many across, the original counted">

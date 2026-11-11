@@ -3262,23 +3262,120 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     };
   }
 
-  // A point on a segment at parameter t, straight or arced. The arc is the
-  // quadratic through start and end with lineControlPoint as its control.
+  // ─── A BULGED SEGMENT IS A CIRCULAR ARC (jb, 11 Nov: "so i could includ
+  // and ARC in a series of lines") ───────────────────────────────────────
+  //
+  // THE SAME NUMBER, A TRUER CURVE. `bulge` has always put the segment's
+  // middle at mid + leftNormal × bulge/2 (the quadratic's control point stood
+  // twice that out, and a quadratic passes halfway to its control). That
+  // middle is kept to the inch, and the curve through it is now the circle
+  // through start, middle and end rather than a parabola. For the bends
+  // drawn before today -- FILLET's rounded corners, a DXF's arcs cut into
+  // pieces of 45° or less -- the two are the same to a hair; for a half
+  // circle, which a parabola cannot be, this is the difference between a
+  // circle and a bullet. So ONE field describes every bend, old and new, and
+  // every reader below agrees on it.
+  //
+  // lineArc(seg) -> null for a straight segment, else the circle: centre
+  // {x, z}, radius r, the arc's middle `mid`, the signed sweep in x/z
+  // (negative when the bend is to the LEFT of travel -- the side a bulge > 0
+  // names, which is a clockwise turn with z up), and the unit tangents at
+  // each end, in the direction of travel.
+  const ARC_MIN_SAGITTA_FT = 1e-6;
+  function lineArc(seg) {
+    const s = (seg.bulge || 0) / 2;
+    if (Math.abs(s) < ARC_MIN_SAGITTA_FT) return null;
+    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+    const L = Math.hypot(dx, dz);
+    if (L < 1e-9) return null;
+    const nx = -dz / L, nz = dx / L;
+    const mx = (seg.start.x + seg.end.x) / 2, mz = (seg.start.z + seg.end.z) / 2;
+    const r = (L * L / 4 + s * s) / (2 * Math.abs(s));
+    const side = s > 0 ? 1 : -1;
+    const cx = mx + nx * (s - side * r), cz = mz + nz * (s - side * r);
+    // The sweep: twice the half-angle the chord subtends; past a half
+    // circle (|s| > L/2) the arc is the long way round.
+    const sweep = -side * 2 * Math.atan2(L / 2, r - Math.abs(s));
+    const tangent = (px, pz) => {
+      const vx = px - cx, vz = pz - cz, vl = Math.hypot(vx, vz) || 1;
+      return side > 0 ? { x: vz / vl, z: -vx / vl } : { x: -vz / vl, z: vx / vl };
+    };
+    return {
+      cx, cz, r, sweep, side,
+      mid: { x: mx + nx * s, y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2, z: mz + nz * s },
+      tangentStart: tangent(seg.start.x, seg.start.z),
+      tangentEnd: tangent(seg.end.x, seg.end.z),
+      length: r * Math.abs(sweep),
+    };
+  }
+  // THE BULGE THAT LEAVES `start` ALONG UNIT TANGENT `u` AND ARRIVES AT
+  // `end`: the tangent-continuous arc a run draws after a straight piece
+  // (AutoCAD's PLINE Arc). Pointing straight along the tangent is a straight
+  // piece, so 0.
+  function bulgeForTangent(start, end, u) {
+    const cx = end.x - start.x, cz = end.z - start.z;
+    const L = Math.hypot(cx, cz);
+    if (L < 1e-9 || !u) return 0;
+    const ul = Math.hypot(u.x, u.z) || 1;
+    const ux = u.x / ul, uz = u.z / ul;
+    const dot = Math.max(-1, Math.min(1, (ux * cx + uz * cz) / L));
+    const phi = Math.acos(dot);
+    if (phi < 1e-6) return 0;
+    // The arc bends to the side the tangent leans to.
+    const nDotU = (-cz * ux + cx * uz) / L;
+    if (Math.abs(nDotU) < 1e-9) return 0;
+    // Past 170° the chord-to-sagitta ratio runs away; the arc is held there.
+    const half = Math.min(phi, Math.PI * 170 / 180) / 2;
+    const s = (L / 2) * Math.tan(half);
+    return 2 * s * (nDotU > 0 ? 1 : -1);
+  }
+  // THE BULGE OF THE ARC FROM `start` TO `end` THROUGH `p` (a 3-point arc):
+  // the circle through the three, bending to p's side. Three in a line is a
+  // straight piece, so 0.
+  function bulgeThrough(start, end, p) {
+    const ax = start.x, az = start.z, bx = end.x, bz = end.z, px = p.x, pz = p.z;
+    const d = 2 * (ax * (bz - pz) + bx * (pz - az) + px * (az - bz));
+    const cx0 = bx - ax, cz0 = bz - az, L = Math.hypot(cx0, cz0);
+    if (L < 1e-9 || Math.abs(d) < 1e-9) return 0;
+    const a2 = ax * ax + az * az, b2 = bx * bx + bz * bz, p2 = px * px + pz * pz;
+    const ux = (a2 * (bz - pz) + b2 * (pz - az) + p2 * (az - bz)) / d;
+    const uz = (a2 * (px - bx) + b2 * (ax - px) + p2 * (bx - ax)) / d;
+    const r = Math.hypot(ux - ax, uz - az);
+    const nx = -cz0 / L, nz = cx0 / L;
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    const side = (nx * (px - mx) + nz * (pz - mz)) > 0 ? 1 : -1;
+    const dc = nx * (ux - mx) + nz * (uz - mz);
+    return 2 * (dc + side * r);
+  }
+  // THE ARC IN SCREEN TERMS, for a canvas: centre, radius, the start and end
+  // angles and which way round, worked out from the projected start, end,
+  // middle and centre so a flipped or scaled view cannot turn it inside out.
+  function screenArc(seg, toS) {
+    const arc = lineArc(seg);
+    if (!arc) return null;
+    const a = toS(seg.start), b = toS(seg.end), m = toS(arc.mid), c = toS({ x: arc.cx, y: 0, z: arc.cz });
+    const r = Math.hypot(a.x - c.x, a.y - c.y);
+    const a0 = Math.atan2(a.y - c.y, a.x - c.x), a1 = Math.atan2(b.y - c.y, b.x - c.x);
+    const am = Math.atan2(m.y - c.y, m.x - c.x);
+    const TAU = Math.PI * 2;
+    const cw = ((a1 - a0) % TAU + TAU) % TAU, midCw = ((am - a0) % TAU + TAU) % TAU;
+    const anticlockwise = !(midCw <= cw + 1e-9);
+    return { x: c.x, y: c.y, r, a0, a1, anticlockwise };
+  }
+  // A point on a segment at parameter t, straight or arced -- along the arc
+  // by angle, so t = 0.5 is the arc's middle.
   function pointOnLineSeg(seg, t) {
-    const it = 1 - t;
-    if (!seg.bulge) {
+    const arc = seg.bulge ? lineArc(seg) : null;
+    if (!arc) {
       return {
         x: seg.start.x + (seg.end.x - seg.start.x) * t,
         y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,
         z: seg.start.z + (seg.end.z - seg.start.z) * t,
       };
     }
-    const c = lineControlPoint(seg);
-    return {
-      x: it * it * seg.start.x + 2 * it * t * c.x + t * t * seg.end.x,
-      y: c.y,
-      z: it * it * seg.start.z + 2 * it * t * c.z + t * t * seg.end.z,
-    };
+    const a0 = Math.atan2(seg.start.z - arc.cz, seg.start.x - arc.cx);
+    const ang = a0 + arc.sweep * t;
+    return { x: arc.cx + arc.r * Math.cos(ang), y: arc.mid.y, z: arc.cz + arc.r * Math.sin(ang) };
   }
 
   // How far worldPt lies from a segment, straight or arced, and where along it
@@ -3362,15 +3459,26 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
       const t = Math.max(0, Math.min(1, ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2));
       return { d: Math.hypot(worldPt.x - ax - t * dx, worldPt.z - az - t * dz), t };
     }
-    let bestD = Infinity, bestT = 0;
-    const STEPS = 24;
-    for (let i = 0; i <= STEPS; i++) {
-      const t = i / STEPS;
-      const p = pointOnLineSeg(seg, t);
-      const d = Math.hypot(worldPt.x - p.x, worldPt.z - p.z);
-      if (d < bestD) { bestD = d; bestT = t; }
+    const arc = lineArc(seg);
+    if (!arc) return pointToSegment(worldPt, { ...seg, bulge: 0 });
+    // EXACT, NOT SAMPLED: inside the arc's sweep the distance is how far the
+    // point stands off the circle; past either end it is the nearer end.
+    // Twenty-four samples used to stand here, and on a long arc they left
+    // gaps a close zoom could click through.
+    const TAU = Math.PI * 2;
+    const a0 = Math.atan2(seg.start.z - arc.cz, seg.start.x - arc.cx);
+    const ap = Math.atan2(worldPt.z - arc.cz, worldPt.x - arc.cx);
+    let along = ((ap - a0) % TAU + TAU) % TAU;
+    if (arc.sweep < 0) along = along > 0 ? TAU - along : 0;
+    const sweep = Math.abs(arc.sweep);
+    if (along <= sweep + 1e-9) {
+      // t to a picometre, so a click on the end reads 1 and the middle 0.5.
+      const t = Math.max(0, Math.min(1, Math.round(along / sweep * 1e12) / 1e12));
+      return { d: Math.abs(Math.hypot(worldPt.x - arc.cx, worldPt.z - arc.cz) - arc.r), t };
     }
-    return { d: bestD, t: bestT };
+    const dS = Math.hypot(worldPt.x - seg.start.x, worldPt.z - seg.start.z);
+    const dE = Math.hypot(worldPt.x - seg.end.x, worldPt.z - seg.end.z);
+    return dS <= dE ? { d: dS, t: 0 } : { d: dE, t: 1 };
   }
 
   // ─── AN OPENING ON ITS HOST WALL ─────────────────────────────────────────
@@ -4128,6 +4236,10 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     outlineSegment,
     outlineSegmentCount,
     lineControlPoint,
+    lineArc,
+    screenArc,
+    bulgeForTangent,
+    bulgeThrough,
     pointOnLineSeg,
     pointToSegment,
     edgeOnLoop,

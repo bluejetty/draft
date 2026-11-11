@@ -175,6 +175,7 @@
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
       || stretchState.a || stairHand.at || draftCommandsBusy());
     draftCommandsCancel();
+    if (typeof lineArcCancel === 'function') lineArcCancel();
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
     if (dimPlacing) dimKeep();
@@ -610,6 +611,9 @@
       // wall would end at the moment the finger arrived rather than where it
       // left. The lift below closes every touch run.
       if (wallPress.touch && drawStart) { paint(); return; }
+      // AN ARC'S THROUGH POINT OR A CIRCLE'S PRESS (19-line-arcs.js) is the
+      // LINE run's own business before drawPress sees it.
+      if (typeof lineArcPress === 'function' && lineArcPress(at)) { wallPress = null; return; }
       drawPress(at);
       return;
     }
@@ -1878,7 +1882,11 @@
         // step -- and at an empty prompt repeats the last tool. It used to
         // cancel (Movie, 27 Sep); Esc alone does that now. See the ENTER
         // rule in 14-promotion-tools.js.
-        if (finishOrRepeat()) { stripRefresh(); paint(); }
+        // ON THE LINE TOOL THE RIGHT CLICK IS A MENU (jb, 11 Nov): STRAIGHT,
+        // ARC, 3-POINT ARC, CIRCLE, and CLOSE / FINISH / CANCEL for the run
+        // in hand (19-line-arcs.js). Everywhere else it is still ENTER.
+        if (typeof lineRunMenu === 'function' && e && lineRunMenu(e.clientX, e.clientY)) { /* open */ }
+        else if (finishOrRepeat()) { stripRefresh(); paint(); }
       }
       dragging = null;
       canvas.classList.remove('dragging');
@@ -2015,7 +2023,9 @@
     const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;
     if (press.opened && !travelled) return;
     const rect = canvas.getBoundingClientRect();
-    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+    const lifted = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+    if (typeof lineArcPress === 'function' && lineArcPress(lifted)) return;
+    drawPress(lifted);
   });
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointerup', e => { if (elevNotePress) elevNoteLift(e); });

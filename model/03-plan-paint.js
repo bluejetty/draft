@@ -2366,6 +2366,8 @@
             // A LINE HAS NO THICKNESS TO SHOW, so it is the dash alone.
             if (activeTool === 'wall') R.drawWallSeg2D(ctx, toS, ghost, true, null, 'both', wallEnv());
             const a = toS(run.from), b = toS(run.to);
+            // AN ARC OR A CIRCLE IN HAND draws its own ghost (19-line-arcs.js).
+            if (typeof paintLineArcGhost === 'function' && paintLineArcGhost(run)) { /* drawn */ } else {
             ctx.save();
             // THE WALL'S OWN EDGE INK, not the accent. wallEnv's note settles
             // the tone: *"A preview wall is the same wall a moment earlier, so
@@ -2380,6 +2382,7 @@
             ctx.lineTo(b.x, b.y);
             ctx.stroke();
             ctx.restore();
+            }
           }
           const p = toS(drawStart);
           ctx.save();
@@ -2667,6 +2670,7 @@
     // LAST, because it stands OVER every verb above while one of the
     // classic edits is up (18-draft-commands.js, loaded after the boot).
     if (typeof syncDraftCommandBars === 'function') syncDraftCommandBars();
+    if (typeof syncLineBar === 'function') syncLineBar();
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;

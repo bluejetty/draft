@@ -526,7 +526,13 @@ if (!window.DraftPlanComposition) {
       onLayer(ctx, seg.layer || 'draft');
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
-      if (seg.bulge && env.lineControlPoint) {
+      // A BENT LINE IS A CIRCULAR ARC (jb, 11 Nov), through the same
+      // tracer the model screen uses, so the sheet and the DXF (which
+      // records ctx.arc as an ARC entity) carry the circle the drafter drew.
+      const R = typeof window !== 'undefined' ? window.DraftRender2D : null;
+      if (seg.bulge && R && R.traceSegTo2D) {
+        R.traceSegTo2D(ctx, toS, seg, { controlPoint: env.lineControlPoint }, b);
+      } else if (seg.bulge && env.lineControlPoint) {
         const c = toS(env.lineControlPoint(seg));
         ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
       } else {

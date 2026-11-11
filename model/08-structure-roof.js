@@ -194,6 +194,9 @@
       levelId,
       view: lineView,
       layer: 'draft',
+      // AN ARC PIECE (jb, 11 Nov): the run's ARC / 3-POINT ARC mode says how
+      // much this piece bends (19-line-arcs.js); straight is 0.
+      bulge: typeof lineRunBulge === 'function' ? lineRunBulge(from, to) : 0,
       // THE LAST STYLE CHOSEN STICKS (Movie, 19 Oct): the next line drawn
       // takes the weight, colour and style the panel last set.
       ...lineStyleDefaults(),

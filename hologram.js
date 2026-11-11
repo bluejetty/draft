@@ -645,7 +645,10 @@
           : { start: outline.points[i], end: outline.points[(i + 1) % outline.points.length], bulge: 0 };
         const a = place(seg.start), b = place(seg.end);
         if (!i) ink.moveTo(a.x, a.y);
-        if (seg.bulge && G?.lineControlPoint) {
+        const arc = seg.bulge && G?.screenArc ? G.screenArc(seg, place) : null;
+        if (arc) {
+          ink.arc(arc.x, arc.y, arc.r, arc.a0, arc.a1, arc.anticlockwise);
+        } else if (seg.bulge && G?.lineControlPoint) {
           const c = place(G.lineControlPoint(seg));
           ink.quadraticCurveTo(c.x, c.y, b.x, b.y);
         } else {
