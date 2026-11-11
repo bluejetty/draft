@@ -2985,6 +2985,29 @@ if (!window.DraftRender2D) {
   // The label arrives already formatted: env.label decides feet-and-inches or
   // metres, because which units a drawing reads in is the page's business,
   // not the painter's.
+  // THE POINTS A DIMENSION'S SNAPS STAND ON (jb, 10 Nov: "place a 'midpoint
+  // snap' on the dimension line so i can dimension something and then find
+  // the centerline ... DEFAULT (2 PIECES) can change to 3, 4, 5, or whatever
+  // number and it will split the line into that many peices and place the
+  // 'midpoint' snaps at those locations (like a divde type of measurement
+  // function)"). `divide` pieces, so divide - 1 points, in model feet on the
+  // MEASURED span -- start to end, the centreline of the thing dimensioned
+  // -- not on the drawn line that stands 19px off it. No key is two pieces:
+  // the one midpoint. One piece is none. The painter and the snap read the
+  // same list, so what the ticks mark is what the hand catches.
+  function dimensionDividePoints2D(dimension) {
+    if (!dimension || !dimension.start || !dimension.end) return [];
+    const n = Number.isInteger(Number(dimension.divide)) && Number(dimension.divide) >= 1
+      ? Number(dimension.divide) : 2;
+    const out = [];
+    for (let i = 1; i < n; i += 1) {
+      const t = i / n;
+      out.push({ x: dimension.start.x + (dimension.end.x - dimension.start.x) * t, y: 0,
+        z: dimension.start.z + (dimension.end.z - dimension.start.z) * t });
+    }
+    return out;
+  }
+
   function drawDimension2D(ctx, toS, dimension, options = {}, env) {
     let a = toS(dimension.start);
     let b = toS(dimension.end);
@@ -3066,6 +3089,31 @@ if (!window.DraftRender2D) {
     const angle = Math.atan2(db.y - da.y, db.x - da.x);
     arrow(da, angle);
     arrow(db, angle + Math.PI);
+    // THE DIVIDE'S MARKS, where the page asks for them (`env.divideTicks`,
+    // Model Space only; a sheet, a print, a PDF and a DXF carry none): a
+    // short tick across the dimension line at each division, and a small
+    // hollow ring on the measured span where the snap itself stands. The
+    // middle tick of a two-piece dimension sits under the figure's plate and
+    // is hidden by it; the ring on the span still shows where the catch is.
+    if (env && env.divideTicks === true) {
+      const marks = dimensionDividePoints2D(dimension);
+      if (marks.length) {
+        const tick = 4 * k, ring = 2.5 * k;
+        ctx.lineWidth = 1 * k;
+        marks.forEach(m => {
+          const s = toS(m);
+          const on = atLine ? s : { x: s.x + nx * offset, y: s.y + ny * offset };
+          ctx.beginPath();
+          ctx.moveTo(on.x - nx * tick, on.y - ny * tick);
+          ctx.lineTo(on.x + nx * tick, on.y + ny * tick);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, ring, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+        ctx.lineWidth = (options.selected ? 2 : 1) * k;
+      }
+    }
     // Aligned text: the label runs along the dimension line, normalized so it
     // reads from the bottom or the right edge of the sheet, never the left --
     // the same rule the beam tags follow, so it is the helper's job now.
@@ -4009,6 +4057,7 @@ if (!window.DraftRender2D) {
     drawFloor2D,
     drawBoneyardMark2D,
     drawDimension2D,
+    dimensionDividePoints2D,
     drawOutlines2D,
     strokeSegPath2D,
     labelAlongLine2D,

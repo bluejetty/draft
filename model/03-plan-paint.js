@@ -203,6 +203,9 @@
     // own `units` -- imperial, metric or both on one line -- through
     // formatDimension, which keeps this polarity for the no-key case.
     label: (value, dimension) => window.DraftFormatters.formatDimension(value, drawing?.units, dimension?.units),
+    // THE DIVIDE'S TICKS AND RINGS SHOW HERE ONLY (jb, 10 Nov): the snap
+    // points along a dimension are a drafting aid, not ink for the sheet.
+    divideTicks: true,
     // Only `stroke` and `labelBack` ever paint here. This page has no
     // dimension tool and no selection, so drawDimension2D's `options` is
     // always `{}` and the preview and selected branches are unreachable --

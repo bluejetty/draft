@@ -1956,6 +1956,41 @@ suite('drawDimension2D', 'preview and selected wear their own colours', R => {
   expect('and selected draws a halo behind it', colourOf({ selected: true }).includes('#fd8'), true);
 });
 
+// ── dimensionDividePoints2D ── (jb, 10 Nov: "place a 'midpoint snap' on
+// the dimension line ... DEFAULT (2 PIECES) can change to 3, 4, 5, or
+// whatever number")
+suite('dimensionDividePoints2D', 'no key is the one midpoint, on the measured span', R => {
+  const pts = R.dimensionDividePoints2D({ start: { x: 0, z: -3 }, end: { x: 10, z: -3 } });
+  expect('one point', pts.length, 1);
+  expect('at the middle', JSON.stringify([pts[0].x, pts[0].z]), '[5,-3]');
+});
+
+suite('dimensionDividePoints2D', 'N pieces are N-1 equal divisions, 1 is none, junk reads as two', R => {
+  const dim = divide => ({ start: { x: 0, z: 0 }, end: { x: 8, z: 4 }, divide });
+  const flat = list => JSON.stringify(list.map(p => [p.x, p.z]));
+  expect('four pieces', flat(R.dimensionDividePoints2D(dim(4))), '[[2,1],[4,2],[6,3]]');
+  expect('one piece', R.dimensionDividePoints2D(dim(1)).length, 0);
+  expect('a string number', flat(R.dimensionDividePoints2D(dim('3'))), '[[2.6666666666666665,1.3333333333333333],[5.333333333333333,2.6666666666666665]]');
+  expect('zero reads as two', flat(R.dimensionDividePoints2D(dim(0))), '[[4,2]]');
+  expect('a fraction reads as two', flat(R.dimensionDividePoints2D(dim(2.5))), '[[4,2]]');
+  expect('no record is no points', R.dimensionDividePoints2D(null).length, 0);
+});
+
+suite('drawDimension2D', 'the divide marks show only where the page asks for them', R => {
+  const arcsFor = (env, divide) => {
+    const ctx = recordingCtx();
+    R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, ...(divide ? { divide } : {}) }, {}, env);
+    return calls(ctx, 'arc');
+  };
+  expect('a sheet draws no ring', arcsFor(dimEnv).length, 0);
+  const model = { ...dimEnv, divideTicks: true };
+  const rings = arcsFor(model);
+  expect('MODEL draws one ring for the midpoint', rings.length, 1);
+  expect('on the measured span, not the stood-off line', JSON.stringify([rings[0][0], rings[0][1]]), '[450,300]');
+  expect('four pieces draw three rings', arcsFor(model, 4).length, 3);
+  expect('one piece draws none', arcsFor(model, 1).length, 0);
+});
+
 suite('drawDimension2D', 'the label never reads from the left of the sheet', R => {
   // Two dimensions drawn back to back: the text must not flip upside down.
   const angleFor = end => {
@@ -4175,7 +4210,15 @@ function coverage() {
   const dropColumnEnvColour = src => src.replace(
     /ctx\.strokeStyle = env\.columnColor;/g, "ctx.strokeStyle = '#1d1f20';");
 
+  // THE DIVIDE MARKS, wrong in each of the two ways they can be: drawn on
+  // every page (a sheet carries them to print), and never drawn at all.
+  const ticksEverywhere = src => src.replace(
+    'if (env && env.divideTicks === true) {', 'if (env) {');
+  const ticksNowhere = src => src.replace(
+    'if (env && env.divideTicks === true) {', 'if (false) {');
   const BRANCH_MUTATIONS = [
+    ['drawDimension2D draws the divide marks on every page', ticksEverywhere],
+    ['drawDimension2D never draws the divide marks', ticksNowhere],
     ['drawDimension2D never shrinks a figure too big for its run', neverShrinkTheFigure],
     ['drawDimension2D shrinks every figure, room or not', alwaysShrinkTheFigure],
     // The step outboard, wrong in each of the two ways it can be wrong: not

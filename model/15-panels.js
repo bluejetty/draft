@@ -2393,6 +2393,23 @@
     renderObjProp();
     paint();
   };
+  // THE DIVIDE (jb, 10 Nov): how many equal pieces the dimension's snaps cut
+  // it into. Two is the default and carries no key (drawing-format); one is
+  // no snap along it at all. The record is what the snap and the painter
+  // read (render-2d dimensionDividePoints2D), so the change shows at once.
+  const DIMENSION_DIVIDE_MAX = 100;
+  const dimensionDivideOf = dim => (Number.isInteger(Number(dim?.divide)) && Number(dim.divide) >= 1 ? Number(dim.divide) : 2);
+  const writeDimensionDivide = (list, n) => {
+    const pieces = Math.min(DIMENSION_DIVIDE_MAX, Math.max(1, Math.round(Number(n))));
+    if (!Number.isFinite(pieces)) return;
+    const edits = list.map(dim => ({ item: dim, before: { ...dim } }));
+    list.forEach(dim => { if (pieces === 2) delete dim.divide; else dim.divide = pieces; });
+    undoStack.push({ kind: 'props', edits });
+    markDirty();
+    showSelectionProps();
+    renderObjProp();
+    paint();
+  };
   const DIMENSION_UNIT_CHIPS = Object.freeze([
     { id: 'imperial', label: 'IMPERIAL' },
     { id: 'metric', label: 'METRIC' },
@@ -2437,6 +2454,44 @@
     hint.textContent = now === null ? `NOTHING LIT: FOLLOWS THE DRAWING (${drawing?.units === 'metric' ? 'METRIC' : 'IMPERIAL'})`
       : now === 'both' ? 'BOTH FIGURES ON ONE LINE' : now === undefined ? 'THE PICKED DIMENSIONS DIFFER' : 'THIS DIMENSION ONLY';
     box.append(hint);
+    // DIVIDE: [-] N [+] with the number typed or stepped.
+    const dTitle = document.createElement('div');
+    dTitle.className = 'props-title';
+    dTitle.textContent = 'DIVIDE';
+    box.append(dTitle);
+    const dRow = document.createElement('div');
+    dRow.className = 'chip-row';
+    dRow.dataset.propRow = 'divide';
+    const pieces = dims.every(d => dimensionDivideOf(d) === dimensionDivideOf(dims[0])) ? dimensionDivideOf(dims[0]) : null;
+    const step = by => writeDimensionDivide(dims, (pieces ?? 2) + by);
+    const less = document.createElement('button');
+    less.type = 'button'; less.className = 'sel-chip'; less.dataset.dimDivideStep = '-1'; less.textContent = '−';
+    less.disabled = (pieces ?? 2) <= 1;
+    less.addEventListener('click', () => step(-1));
+    const field = document.createElement('input');
+    field.type = 'number'; field.className = 'roof-field'; field.dataset.dimDivide = ''; field.style.width = '4.5em';
+    field.min = '1'; field.max = String(DIMENSION_DIVIDE_MAX); field.step = '1';
+    field.value = pieces == null ? '' : String(pieces);
+    field.placeholder = pieces == null ? 'DIFFER' : '';
+    field.title = 'PIECES: the snaps stand at the equal divisions (2 = one midpoint snap, 1 = none)';
+    field.addEventListener('change', () => {
+      const raw = Number(field.value);
+      if (!Number.isInteger(raw) || raw < 1 || raw > DIMENSION_DIVIDE_MAX) { field.value = pieces == null ? '' : String(pieces); return; }
+      writeDimensionDivide(dims, raw);
+    });
+    const more = document.createElement('button');
+    more.type = 'button'; more.className = 'sel-chip'; more.dataset.dimDivideStep = '1'; more.textContent = '+';
+    more.disabled = (pieces ?? 2) >= DIMENSION_DIVIDE_MAX;
+    more.addEventListener('click', () => step(1));
+    dRow.append(less, field, more);
+    box.append(dRow);
+    const dHint = document.createElement('div');
+    dHint.className = 'sel-help';
+    dHint.dataset.propRow = 'divide-hint';
+    dHint.textContent = pieces == null ? 'THE PICKED DIMENSIONS DIFFER'
+      : pieces === 1 ? 'NO SNAP ALONG THIS DIMENSION'
+        : pieces === 2 ? 'ONE MIDPOINT SNAP: THE CENTRELINE' : `${pieces} EQUAL PIECES: ${pieces - 1} SNAPS ALONG IT`;
+    box.append(dHint);
     return { title: dims.length > 1 ? 'DIMENSIONS' : 'DIMENSION', node: box };
   };
   const setObjOpen = on => {
