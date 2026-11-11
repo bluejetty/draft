@@ -54,11 +54,12 @@ test('the north arrow is the button, and HOUSE ROTATE is its own chip at the foo
   const rotate = await page.locator('#strip-rotate').boundingBox();
   // SINCE 11 NOV the two are apart (Movie, with a mockup): the arrow's hand
   // at the top right, left of the rail, and HOUSE ROTATE down at the bottom
-  // right beside REGISTRATION's corner, over ZOOM TO FILL.
+  // LEFT (the right corner until later that day: "move the page rotate, full
+  // screen, and registration area over to the left side"), over ZOOM TO FILL.
   expect(rotate.y, 'rotate stands below the arrow, at the foot').toBeGreaterThan(hit.y + hit.height + 200);
-  expect(rotate.x + rotate.width, 'in the right margin').toBeGreaterThan(hit.x + hit.width);
+  expect(rotate.x, 'in the left margin').toBeLessThan(hit.x);
   const canvas = await page.locator('#plan').boundingBox();
-  expect(rotate.x + rotate.width, 'and stays on the plan').toBeLessThanOrEqual(canvas.x + canvas.width);
+  expect(rotate.x, 'and stays on the plan').toBeGreaterThanOrEqual(canvas.x);
   expect(hit.width, 'the smaller box').toBeLessThanOrEqual(34);
   // WHILE A TOOL IS ARMED A PRESS THERE IS A CORNER, not the popup.
   const h = require('./helpers');

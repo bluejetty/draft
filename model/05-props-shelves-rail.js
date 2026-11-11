@@ -1814,10 +1814,15 @@
   // paint is owed. (Before that it was on the sheet, and a seat without a
   // repaint left the pair split -- which three selection specs' canvas
   // hashes caught.)
+  // AND THE LEFT RAIL TOO (11 Nov): the HOUSE turn / ZOOM TO FILL pair and
+  // REGISTRATION stand right of it when it is open, in the corner when it
+  // is shut, and a shut rail is a resize to nothing.
   {
-    const rail = document.getElementById('view-rail');
-    if (rail && typeof ResizeObserver === 'function') {
-      new ResizeObserver(() => { seatNorthDock(); }).observe(rail);
+    if (typeof ResizeObserver === 'function') {
+      ['view-rail', 'left-rail'].forEach(id => {
+        const rail = document.getElementById(id);
+        if (rail) new ResizeObserver(() => { seatNorthDock(); }).observe(rail);
+      });
     }
   }
 

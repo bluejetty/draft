@@ -52,14 +52,26 @@ test('the arrow stands at the top right, left of the open rail and level with it
   expect(Math.abs(at.north.top - at.rail.top), 'with its top on the rail\'s top').toBeLessThanOrEqual(6);
 });
 
-test('HOUSE turn stands over ZOOM TO FILL at the bottom right, clear of the pan hint', async ({ page }) => {
+// AND TO THE BOTTOM LEFT later that day (Movie, with a mockup: "move the page
+// rotate, full screen, and registration area over to the left side").
+test('HOUSE turn stands over ZOOM TO FILL at the bottom left, clear of the foot lane', async ({ page }) => {
   await houseOnScreen(page);
   const at = await boxes(page);
   expect(Math.abs(at.turn.cx - at.fill.cx), 'one column').toBeLessThanOrEqual(1);
   expect(at.turn.bottom, 'the turn above the fill').toBeLessThanOrEqual(at.fill.top);
   expect(at.fill.top - at.turn.bottom, 'and touching').toBeLessThanOrEqual(6);
   expect(at.fill.bottom, 'the pair stands over the pan hint').toBeLessThanOrEqual(at.hint.top);
-  expect(at.fill.right, 'in the sheet\'s right margin').toBeGreaterThan(page.viewportSize().width - 60);
+  // Right of the open left rail (the page opens with left=1), as the arrow
+  // stands left of the open right rail.
+  const railRight = await page.evaluate(() => document.getElementById('left-rail').getBoundingClientRect().right);
+  expect(at.fill.left, 'just right of the open left rail').toBeGreaterThanOrEqual(railRight);
+  expect(at.fill.left - railRight, 'and close beside it').toBeLessThanOrEqual(12);
+  // The rail shut, the pair takes the corner.
+  await page.evaluate(() => document.getElementById('left-tab').click());
+  await expect(page.locator('#left-rail')).toBeHidden();
+  const shut = await boxes(page);
+  expect(shut.fill.left, 'in the sheet\'s left margin').toBeLessThan(60);
+  expect(shut.fill.left, 'and off the side tabs\' column').toBeGreaterThanOrEqual(12);
 });
 
 test('and they are a matched set, not one big and one small', async ({ page }) => {
