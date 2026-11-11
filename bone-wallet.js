@@ -25,11 +25,15 @@ if (!window.DraftBoneWallet) {
   // jb's ruling, while the plain SAVE to this browser stays free) and the
   // BACKUP FILE email that follows it is 1 more (backup-email.js, spent only
   // once the mail has gone).
-  // A PRINT PACKAGE FROM LAYOUT IS 5 (board #168; jb, 11 Nov 2026: "make it
-  // 3 bones to print a PDF", then "lets make a PDF 5 bones") -- the browser's print window is where both
-  // the printer and Save as PDF live, so the press is what is priced; taken
-  // once the sheets are drawn and that window opens, refused at fewer.
-  const COSTS = Object.freeze({ buildHouse: 1, saveToComputer: 1, emailBackup: 1, printPackage: 5 });
+  // LAYOUT'S TWO PRINT PRESSES (board #168; jb, 11 Nov 2026: "make it 3
+  // bones to print a PDF", "lets make a PDF 5 bones", then "make paper print
+  // cost 2 bone"): PRINT, the browser's print window, is 2; SAVE PDF, the
+  // file this page writes itself (pdf-writer.js), is 5. Each is taken once
+  // the sheets are drawn and the window opens or the file is down, refused
+  // at fewer.
+  const COSTS = Object.freeze({
+    buildHouse: 1, saveToComputer: 1, emailBackup: 1, printPackage: 2, savePdf: 5,
+  });
   const STORAGE_KEY = 'draft-bone-wallet';
 
   // A stored wallet the code can trust: numbers coerced, a missing or
