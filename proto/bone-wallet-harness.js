@@ -22,14 +22,14 @@ const MUTATE = require('./harness-args.js').mutationMode();
 // checks under "THE TWO THAT TOUCH STORAGE" are what those four asked for.
 const MUTATIONS = [
   ['the drip throws away the part-hour, so a reload every 59 minutes drips nothing',
-    'bone-wallet.js', c => c.replace('lastDripAt = balance >= DRIP_CAP ? now : lastDripAt + whole * DRIP_MS;',
+    'bone-wallet.js', c => c.replace('lastDripAt = balance >= cap ? now : lastDripAt + whole * DRIP_MS;',
       'lastDripAt = now;')],
   ['a fractional balance rounds up', 'bone-wallet.js',
     c => c.replace('balance: Math.max(0, Math.floor(balance)),', 'balance: Math.max(0, Math.round(balance)),')],
   ['a clock set back freezes the faucet', 'bone-wallet.js',
     c => c.replace('lastDripAt: Math.min(lastDripAt, now),', 'lastDripAt,')],
   ['the drip runs past the cap', 'bone-wallet.js',
-    c => c.replace('const grant = Math.min(whole, DRIP_CAP - balance);', 'const grant = whole;')],
+    c => c.replace('const grant = Math.min(whole, cap - balance);', 'const grant = whole;')],
   ['a stored wallet forgets when it was made', 'bone-wallet.js',
     c => c.replace('createdAt: Number.isFinite(createdAt) ? createdAt : now,', 'createdAt: now,')],
   ['spending zero bones succeeds', 'bone-wallet.js',
@@ -39,7 +39,11 @@ const MUTATIONS = [
     c => c.replace('if (state.balance < count) { store(state); return false; }',
       'if (state.balance <= count) { store(state); return false; }')],
   ['a full wallet still counts down to a drip it will never get', 'bone-wallet.js',
-    c => c.replace('nextDripMs: state.balance >= DRIP_CAP ? null :', 'nextDripMs:')],
+    c => c.replace('nextDripMs: state.balance >= cap ? null :', 'nextDripMs:')],
+  ['the 25BONES line on the pad is ignored', 'bone-wallet.js',
+    c => c.replace("first.trim().toUpperCase() === BONES_CODE ? BIG_CAP : DRIP_CAP", 'DRIP_CAP')],
+  ['any line of the pad turns the 25 cap on, not just the first', 'bone-wallet.js',
+    c => c.replace("split('\\n')[0]", "split('\\n').find(l => l.trim().toUpperCase() === BONES_CODE) || ''")],
 ];
 
 if (MUTATE) {
@@ -123,6 +127,22 @@ check('a full wallet has no drip coming', W.read(T + HOUR / 2).nextDripMs, null)
 wallet({ balance: 1, lastDripAt: T, createdAt: T });
 check('a wallet below the cap counts down the rest of the hour',
   W.read(T + HOUR / 4).nextDripMs, HOUR * 3 / 4);
+
+// ── THE 25-BONE LINE (jb, 11 Nov 2026) ────────────────────────────────────
+// 25BONES as the FIRST line of the NOTES pad lifts the ceiling to 25 at the
+// same drip; anywhere else on the pad it is just a note.
+const NOTES = 'draft.notepad';
+check('no pad: the ceiling is 10', W.cap(), W.DRIP_CAP);
+wallet(null); store.set(NOTES, '25bones \nw 86.86');
+check('25BONES first (any case, trailing space): the ceiling is 25', W.cap(), W.BIG_CAP);
+wallet({ balance: 0, lastDripAt: T, createdAt: T }); store.set(NOTES, '25BONES');
+check('a hundred hours with the code fills to 25', W.read(T + 100 * HOUR).balance, 25);
+check('and read says which ceiling is in force', W.read(T + 100 * HOUR).cap, 25);
+wallet({ balance: 10, lastDripAt: T, createdAt: T }); store.set(NOTES, 'w 86.86\n25BONES');
+check('25BONES on the second line counts for nothing', W.read(T + 100 * HOUR).balance, 10);
+wallet({ balance: 25, lastDripAt: T, createdAt: T });
+check('the line taken off keeps bones already above 10', W.read(T + HOUR).balance, 25);
+check('with no drip coming until a spend brings it under 10', W.read(T + HOUR).nextDripMs, null);
 
 console.log(failed ? `\n  ${failed} of ${ran} checks FAILED\n` : `\n  ${ran} checks passed\n`);
 process.exit(failed ? 1 : 0);

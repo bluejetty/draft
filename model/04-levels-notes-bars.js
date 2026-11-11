@@ -362,6 +362,7 @@
     }
     showNotesPage();
     notesOntoDrawing(notesPages);
+    bonesCapWatch();
   };
   notesPages = notesStored();
   showNotesPage();
@@ -384,10 +385,27 @@
     new ResizeObserver(seatNotesTab).observe(document.getElementById('right-tab'));
     new ResizeObserver(seatNotesTab).observe(notesTab);
   }
+  // THE 25-BONE LINE (jb, 11 Nov 2026): 25BONES typed as the first line of
+  // page 1 lifts the wallet's ceiling to 25 (bone-wallet.js reads the pad's
+  // own key); the bone foot repaints and the strip says so the moment the
+  // line lands or goes.
+  let bonesCapShown = window.DraftBoneWallet ? window.DraftBoneWallet.cap() : null;
+  const bonesCapWatch = () => {
+    const W = window.DraftBoneWallet;
+    if (!W) return;
+    const cap = W.cap();
+    if (cap === bonesCapShown) return;
+    bonesCapShown = cap;
+    window.dispatchEvent(new Event('draft-bones-changed'));
+    sayOnStrip(cap === W.BIG_CAP
+      ? `${W.BONES_CODE} on the pad: the wallet fills to ${cap} bones.`
+      : `${W.BONES_CODE} off the pad: the wallet fills to ${cap} bones again.`);
+  };
   notesText.addEventListener('input', () => {
     notesPages[notesPage] = notesText.value;
     syncNotesCount();
     notesChanged();
+    bonesCapWatch();
   });
   // THE PAGE KEYS 1 TO 5 (Movie's mockup, 10 Nov): under SAVE AS TXT and
   // CLEAR at the foot of the pad; the one showing is lit, a page with
@@ -2173,7 +2191,7 @@
     boneFoot.toggleAttribute('data-broke', broke);
     boneFoot.title = broke
       ? `Out of bones \u2014 the next free bone lands in ${waitLabel(nextDripMs)}. `
-        + `One drips in every hour, up to ${W.DRIP_CAP}.`
+        + `One drips in every hour, up to ${W.cap()}.`
       : nextDripMs != null
         ? `${balance} bone${balance === 1 ? '' : 's'} \u00b7 next free bone in `
           + `${waitLabel(nextDripMs)}. Each BUILD or SAVE AS costs 1.`
@@ -2187,8 +2205,8 @@
     if (!window.DraftBoneWallet) return;
     const now = readWallet();
     if (now.balance === walletShown.balance
-      && now.nextDripMs === walletShown.nextDripMs) return;
-    walletShown = { balance: now.balance, nextDripMs: now.nextDripMs };
+      && now.nextDripMs === walletShown.nextDripMs && now.cap === walletShown.cap) return;
+    walletShown = { balance: now.balance, nextDripMs: now.nextDripMs, cap: now.cap };
     paintWallet();
   };
   refreshWallet();

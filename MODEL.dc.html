@@ -22729,7 +22729,7 @@ class Component extends DCLogic {
         return chars <= 1 ? 15 : chars <= 3 ? 11 : chars <= 5 ? 8 : 7;
       })(),
       boneWalletTitle: this.state.boneWallet.balance < 1
-        ? `Out of bones — the next free bone lands in ${this._boneWaitLabel(this.state.boneWallet.nextDripMs)}. One drips in every hour, up to ${window.DraftBoneWallet.DRIP_CAP}.`
+        ? `Out of bones — the next free bone lands in ${this._boneWaitLabel(this.state.boneWallet.nextDripMs)}. One drips in every hour, up to ${window.DraftBoneWallet.cap()}.`
         : this.state.boneWallet.nextDripMs != null
           ? `${this.state.boneWallet.balance} bone${this.state.boneWallet.balance === 1 ? '' : 's'} · next free bone in ${this._boneWaitLabel(this.state.boneWallet.nextDripMs)}. Each BUILD costs 1.`
           : `${this.state.boneWallet.balance} bones — the free wallet is full. Each BUILD costs 1.`,
