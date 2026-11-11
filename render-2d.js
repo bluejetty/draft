@@ -1479,6 +1479,37 @@ if (!window.DraftRender2D) {
     if (area) lines.push(area);
     return lines;
   }
+  // The leader's two ends, in screen px: `to` is the nearest point of the
+  // loop's edge to the tag, `from` is where the line leaves the text's box
+  // (a 3 px margin round the name and its lines). Null while the tag's point
+  // is inside its own loop, or when the tag has no loop.
+  function roomTagLeader(tag, toS, box) {
+    const pts = Array.isArray(tag.points) ? tag.points : [];
+    if (pts.length < 3 || !tag.at || pointInLoop(tag.at, pts)) return null;
+    let best = null;
+    pts.forEach((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz;
+      const t = len2 ? Math.max(0, Math.min(1, ((tag.at.x - a.x) * dx + (tag.at.z - a.z) * dz) / len2)) : 0;
+      const q = { x: a.x + dx * t, z: a.z + dz * t };
+      const d = Math.hypot(tag.at.x - q.x, tag.at.z - q.z);
+      if (!best || d < best.d) best = { d, q };
+    });
+    const to = toS({ x: best.q.x, y: 0, z: best.q.z });
+    const pad = 3;
+    const left = box.x - box.w / 2 - pad, right = box.x + box.w / 2 + pad;
+    const top = box.y - pad, bottom = box.y + box.h + pad;
+    const cx = box.x, cy = (top + bottom) / 2;
+    const vx = to.x - cx, vy = to.y - cy;
+    if (Math.abs(vx) < 1e-6 && Math.abs(vy) < 1e-6) return null;
+    // Where the ray from the box's centre to the loop leaves the box.
+    let k = Infinity;
+    if (vx > 0) k = Math.min(k, (right - cx) / vx); else if (vx < 0) k = Math.min(k, (left - cx) / vx);
+    if (vy > 0) k = Math.min(k, (bottom - cy) / vy); else if (vy < 0) k = Math.min(k, (top - cy) / vy);
+    if (!(k < 1)) return null; // the loop's edge is under the text already
+    return { from: { x: cx + vx * k, y: cy + vy * k }, to };
+  }
   function roomTagAreaLabel(tag, env) {
     if (!Array.isArray(tag.points) || tag.points.length < 3 || tag.areaShown === false) return '';
     const sqFt = loopArea(tag.points);
@@ -1510,6 +1541,26 @@ if (!window.DraftRender2D) {
       ctx.fillText(line, s.x, subY);
       subY += 11;
     });
+    // ── THE NAME OUTSIDE ITS AREA GETS A LEADER (jb, 10 Nov 2026) ──────────
+    // "allow the 'room tag' to be in a position on the outside of the 'area
+    // measurement'": a tag dragged clear of its shape stays a label of that
+    // shape, so a hairline runs from the near edge of the text to the
+    // nearest point of the loop's edge. Inside the loop there is nothing to
+    // say, and the tag reads as it always did.
+    const leader = roomTagLeader(tag, toS, { x: s.x, y: (area ? s.y - 14 : s.y - 8), w: hit.w, h: (area ? 14 : 8) + (lines.length ? 1 + 11 * lines.length : 8) });
+    if (leader) {
+      ctx.strokeStyle = env.color;
+      ctx.lineWidth = 0.75;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(leader.from.x, leader.from.y);
+      ctx.lineTo(leader.to.x, leader.to.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(leader.to.x, leader.to.y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = env.color;
+      ctx.fill();
+    }
     // SCREEN ONLY. A compliance nag belongs to the drafter, not to the sheet
     // that goes to site -- so it is suppressed when printing, exactly as it
     // was on the page this came from.
@@ -3996,6 +4047,7 @@ if (!window.DraftRender2D) {
     wetRoomLoops,
     drawRoomShape2D,
     roomTagLines,
+    roomTagLeader,
     squareSideOf,
     drawRoomTag2D,
     drawUnderlays2D,

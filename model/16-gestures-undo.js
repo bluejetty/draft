@@ -762,9 +762,6 @@
       moveDrag = {
         kind: 'roomtag', tag: tagGrab, before: { ...tagGrab },
         grab: at, from: { ...tagGrab.at },
-        // THE SHAPE COMES WITH THE NAME, but a corner that is a wall's node
-        // stays with the wall: the name is not a handle on the house.
-        points: roomShapeOf(tagGrab) ? tagGrab.points.map(pt => ({ pt, free: !wallsOnCorner(pt).length })) : null,
         sx: e.clientX, sy: e.clientY, active: false,
       };
       canvas.setPointerCapture(e.pointerId);
@@ -1109,22 +1106,13 @@
           // holds the point the tag started at, and it must stay that point.
           const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
           md.tag.at = { x: md.from.x + dx, z: md.from.z + dz };
-          // INSIDE ITS OWN FLOOR THE NAME MOVES ALONE (Movie, 23 Oct: "allow
-          // the ROOM TAG to be moved around within the 'flooring' area without
-          // changing the flooring"): the shape stays exactly as it was. Only a
-          // shape no wall holds a corner of is carried, and only once the name
-          // leaves it -- a tag square being taken to its room.
-          const inside = !md.points || (() => {
-            const ring = md.points.map(({ pt }) => pt), p = md.tag.at;
-            let hit = false;
-            for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
-              const a = ring[i], b = ring[j];
-              if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
-            }
-            return hit;
-          })();
-          const carry = !!md.points && !inside && md.points.every(({ free }) => free);
-          if (md.points) md.tag.points = md.points.map(({ pt }) => (carry ? { x: pt.x + dx, z: pt.z + dz } : pt));
+          // THE NAME MOVES ALONE, inside its shape (Movie, 23 Oct: "allow the
+          // ROOM TAG to be moved around within the 'flooring' area without
+          // changing the flooring") and OUTSIDE it too (jb, 10 Nov 2026:
+          // "allow the 'room tag' to be in a position on the outside of the
+          // 'area measurement'"). The shape never follows the name; a tag
+          // set down outside its loop draws a leader back to it, and the
+          // MOVE verb is what takes name and shape together.
           paint();
           return;
         }
