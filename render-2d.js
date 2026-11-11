@@ -3376,7 +3376,7 @@ if (!window.DraftRender2D) {
       .map(([x, y]) => ({ x: text.x + x * cos - y * sin, y: text.y + x * sin + y * cos }));
     const xs = quad.map(p => p.x), ys = quad.map(p => p.y);
     const left = Math.min(...xs), top = Math.min(...ys);
-    return { world, dxf, left, top, right: Math.max(...xs), bottom: Math.max(...ys),
+    return { ...(world ? { world: true } : {}), dxf, left, top, right: Math.max(...xs), bottom: Math.max(...ys),
       width: Math.max(...xs) - left, height: Math.max(...ys) - top,
       boxW: width, boxH: height, lines, fontPx, lineH, padX, padY, align, x0, y0, angle, quad };
   }
@@ -3424,11 +3424,13 @@ if (!window.DraftRender2D) {
       ctx.arc(anchor.x, anchor.y, Math.max(2, head / 3), 0, Math.PI * 2);
       ctx.fill();
     }
-    // THE BLOCK, turned about its text point.
-    ctx.translate(text.x, text.y);
-    ctx.rotate(box.angle);
+    // THE BLOCK, turned about its text point. An unturned block is drawn
+    // in screen px straight off, so the box a page hit-tests by is the box
+    // the painter draws, to the pixel.
+    let x0 = box.x0, y0 = box.y0;
+    if (box.angle) { ctx.translate(text.x, text.y); ctx.rotate(box.angle); } else { x0 += text.x; y0 += text.y; }
     ctx.lineWidth = 1 * (env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1);
-    const { x0, y0, boxW, boxH, lineH, padX, padY, lines } = box;
+    const { boxW, boxH, lineH, padX, padY, lines } = box;
     if (note.fill || note.outline) {
       const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
       ctx.beginPath();
