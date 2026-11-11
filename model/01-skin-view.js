@@ -321,11 +321,6 @@
   // list index 3 also happens to be id 3 -- they stop agreeing the moment a
   // level is inserted. See RD-DOCUMENTS/SPEC-model-html-tiers.md.
   const MAIN_FLOOR_LEVEL_ID = 3;
-  // THE FILE'S OWN WORD for "site plan only" (drawing-format.js
-  // STANDALONE_KINDS), and the level it has: declared here because
-  // activeLevelId() is the first reader, before model/04 and model/05 load.
-  const siteOnlyFile = () => drawing?.standalone === 'site'
-    && (drawing?.levels || []).some(level => Number(level.id) === 8);
   const levelIds = () => (drawing?.levels || []).map(level => Number(level.id));
   // ── THE BONEYARD'S OWN STATE ──────────────────────────────────────────────
   // A SHELF IS A LEVEL WITH A NEGATIVE ID. That is the whole of the port, and
@@ -401,17 +396,6 @@
     // with -- reads this one function, which is why the card needs no second
     // filter anywhere. DC answers the same question the same way at :9089.
     if (boneyardActive) return boneyardLevelId();
-    // A SITE-PLAN-ONLY FILE HAS ONE LEVEL (jb, 11 Nov: "on the SITE PLAN
-    // only plans can we make the default position when they come in the
-    // SITE PLAN - (think right now its main floor)"). The file says
-    // `standalone: 'site'` (PR #938), the LEVELS panel and the rail offer
-    // SITE PLAN and nothing else, so a page standing on MAIN FL under a
-    // panel that lists only SITE PLAN is the page disagreeing with itself.
-    // The ask in the URL is overruled too, not just the fallback: a stale
-    // `?level=3` is what OPEN carries over from the house file the drafter
-    // was on, and that is exactly the door he came in by. settleSiteOnlyUrl
-    // (model/04) puts the URL right so the two still say the same thing.
-    if (siteOnlyFile()) return SITE_LEVEL_ID;
     const asked = Number(params.get('level'));
     if (Number.isFinite(asked) && levelIds().includes(asked)) return asked;
     if (params.get('level') !== null && drawing) {

@@ -1709,13 +1709,15 @@
   // floor)" and "in the SITE PLAN only can we block the PROJECT / WIREFRAME
   // / EXT. FINISH AREAS (won't be needed)".
   //
-  // THE LEVEL IS activeLevelId()'s RULE (model/01: a `standalone: 'site'`
-  // file answers SITE PLAN whatever `?level=` asks). This settles the URL
-  // to match, so a reload, a bookmark or LAYOUT's hand-over reads the same
-  // level the page is showing, and a stale `?view=` from the house file the
-  // drafter was on does not warn about a view SITE never had. Through the
-  // same replaceState as goToLevel -- a change of viewpoint, not a
-  // navigation.
+  // ONE RULE, AND IT IS THE URL'S: activeLevelId() (model/01) reads
+  // `?level=`, so the level is put right by settling the URL, not by a
+  // second reader overruling it. adoptFile (model/17) runs this on every
+  // door a drawing comes in by -- boot, OPEN, NEW, a jump -- before the
+  // first fit, and syncBuildBar runs it again on every re-sync so a stale
+  // `?level=3` from the house file he was on never stands. The `?view=` goes
+  // with it: SITE has no layer views, and a house view left in the URL
+  // would warn about a view the level never had. Through the same
+  // replaceState as goToLevel -- a change of viewpoint, not a navigation.
   const siteOnly = () => drawing?.standalone === 'site';
   const settleSiteOnlyUrl = () => {
     if (!siteOnly() || params.get('level') === String(SITE_LEVEL_ID)) return;

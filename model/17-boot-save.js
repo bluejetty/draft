@@ -272,6 +272,12 @@
     syncToolSurfaces();
     // A SUITE OPENS ON THE BONEYARD, where it is drawn (Movie, 20 Oct).
     if (drawing.suiteKind || drawing.shelfKind) boneyardActive = true;
+    // AND A SITE-PLAN-ONLY FILE OPENS ON SITE PLAN (jb, 11 Nov), whatever
+    // `?level=` the house file he came from left in the URL. Here, before
+    // the fit and the first paint that every door runs next, so the frame
+    // is the site's and not MAIN FL's empty sheet (settleSiteOnlyUrl,
+    // model/04).
+    settleSiteOnlyUrl();
     return true;
   };
 

@@ -76,6 +76,8 @@ async function dismissLotCard(page) {
   const later = page.locator('#lot-pick [data-lot-pick-skip]');
   if (await later.isVisible().catch(() => false)) await later.click();
 }
+const doorState = page => page.locator('#page-row [data-page]').evaluateAll(chips => Object.fromEntries(
+  chips.map(chip => [chip.dataset.page, chip.hasAttribute('data-site-locked')])));
 const levelRows = page => page.locator('#levels-panel [data-level-row]')
   .evaluateAll(rows => rows.map(row => row.dataset.levelRow));
 const panelHasText = (page, re) => page.locator('#levels-panel').locator(`text=${re}`).count();
@@ -201,8 +203,6 @@ test('a standalone file opens on SITE PLAN whatever level the URL asks for, and 
 // the PROJECT / WIREFRAME / EXT. FINISH AREAS (won't be needed)"): greyed as
 // a page that does not exist is greyed, and a press goes nowhere. The sheet
 // row stays open -- a site plan prints -- and a house file keeps every door.
-const doorState = page => page.locator('#page-row [data-page]').evaluateAll(chips => Object.fromEntries(
-  chips.map(chip => [chip.dataset.page, chip.hasAttribute('data-site-locked')])));
 test('a standalone file greys PROJECT, WIREFRAME and EXT. FINISH and refuses the press; a house file keeps them', async ({ page }) => {
   await openModel(page, standaloneWithLot());
   await dismissLotCard(page);
@@ -228,6 +228,11 @@ test('ordering a house off the board gives the levels back', async ({ page }) =>
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
   expect(await page.evaluate(() => drawing.standalone ?? null), 'the mark is gone').toBeNull();
+  // AND THE DOORS COME BACK ON THE SAME PAGE: the house is about to need
+  // PROJECT, WIREFRAME and EXT. FINISH as much as it needs the levels.
+  const doors = await doorState(page);
+  expect(doors.project || doors.boneyard || doors['ext-finish'], 'every door open again').toBe(false);
+  await expect(page.locator('#page-row [data-page="project"]')).not.toHaveAttribute('aria-disabled', 'true');
   await h.openModelRail(page);
   expect((await levelRows(page)).length, 'every level is listed again').toBeGreaterThan(1);
   expect(await panelHasText(page, /Elevations/)).toBeGreaterThan(0);
