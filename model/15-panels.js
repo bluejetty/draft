@@ -1023,7 +1023,7 @@
     const note = document.createElement('div');
     note.className = 'props-title';
     note.dataset.propNote = '';
-    note.textContent = 'SIZE IN FEET, WIDTH X HEIGHT: 12X10, 12-6X10. DRAG THE TAG TO MOVE IT.';
+    note.textContent = 'SIZE IN FEET, WIDTH X HEIGHT: 12X10, 12-6X10. DRAG THE TAG TO MOVE IT, INSIDE OR OUTSIDE ITS AREA; MOVE TAKES THE AREA WITH IT.';
     box.append(note);
     // ── THE ROOM'S SHAPE (Movie, 23 Oct) ─────────────────────────────────
     // Its measured AREA, the switch that shows it under the name, and the
