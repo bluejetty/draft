@@ -609,6 +609,54 @@
     font: 600 12px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; padding:7px 12px; cursor:pointer; }
   [data-logo-note] { font-size:11px; color: var(--ink-quiet); }
   [data-logo-note].bad { color:#b04050; }
+  /* THE RIGHT-CLICK MENU ON A VIEWPORT (jb, 10 Nov: "can we add more
+     'commands' onto the right click on viewport menu?"). Until now a right
+     click on the sheet got the browser's own menu -- Save image as, Copy
+     image, Inspect -- which has nothing to do with drafting. This is the
+     app's: the strip's viewport buttons, the double-click card's two
+     questions, draw order, and SHOW LAYERS. Fixed, at the pointer, over
+     everything but a dialog's scrim. */
+  #lay-context { position:fixed; z-index:40; min-width:180px; padding:4px; box-sizing:border-box;
+    background: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:4px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
+  #lay-context[hidden] { display:none; }
+  #lay-context button { display:block; width:100%; text-align:left; border:1px solid transparent;
+    background:none; color: var(--ink-primary); cursor:pointer; padding:5px 10px;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600; font-size:12px;
+    letter-spacing:0.04em; text-transform:uppercase; border-radius:3px; }
+  #lay-context button:hover, #lay-context button:focus-visible { border-color: var(--accent-mark); color: var(--accent-mark); outline:none; }
+  #lay-context button:disabled { opacity:0.35; cursor:default; }
+  #lay-context button:disabled:hover { border-color:transparent; color: var(--ink-primary); }
+  #lay-context .lay-context-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }
+  #lay-context .lay-context-head { padding:3px 10px 1px; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-quiet); }
+  /* SHOW LAYERS: the card a viewport's layers are switched on and off from.
+     The same chips as the HOLOGRAM card's five groups, plus the sheet's own
+     dimensions, notes and structure, and ADVANCED for every layer by name.
+     A chip LIT is a group that is OFF -- the card is a list of what has
+     been switched off, and nothing lit means the whole drawing. */
+  #lay-layers { position:fixed; z-index:41; width:250px; max-height:calc(100vh - 24px); overflow:auto;
+    box-sizing:border-box; padding:8px; background: var(--surface-panel);
+    border:1px solid var(--edge-panel); border-radius:4px; box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
+  #lay-layers[hidden] { display:none; }
+  #lay-layers .lay-layers-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  #lay-layers .lay-layers-title { font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-primary);
+    overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  #lay-layers .lay-layers-close { border:none; background:none; color: var(--ink-quiet); cursor:pointer;
+    font-size:16px; line-height:1; padding:0 2px; }
+  #lay-layers .lay-layers-close:hover { color: var(--accent-mark); }
+  #lay-layers .lay-layers-note { font-family:'Barlow Condensed', system-ui, sans-serif; font-size:10px;
+    letter-spacing:0.04em; text-transform:uppercase; color: var(--ink-quiet); margin:4px 0 6px; }
+  #lay-layers .lay-pick { margin-bottom:3px; }
+  #lay-layers .lay-pick.off { border-color: var(--accent); background-color: var(--accent);
+    background-image:none; color: var(--accent-ink); }
+  #lay-layers .lay-layers-advanced { display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-top:4px; }
+  #lay-layers .lay-layers-advanced .lay-pick { margin:0; font-size:10px; padding:4px 6px; }
+  #lay-layers .lay-layers-group { grid-column:1 / -1; margin-top:4px; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-secondary); }
+  #lay-layers .lay-layers-foot { display:flex; gap:4px; margin-top:6px; }
+  #lay-layers .lay-layers-foot .lay-pick { margin:0; text-align:center; }
   #lay-rename { position:fixed; z-index:40; height:24px; padding:0 6px; box-sizing:border-box;
     font: 600 12px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; text-transform:uppercase;
     color: var(--ink-primary); background: var(--surface-panel);
@@ -759,6 +807,11 @@
     </div>
   </div>
 </div>
+
+<!-- THE RIGHT-CLICK MENU (jb, 10 Nov) and the SHOW LAYERS card it opens.
+     Both are filled when they open; empty and hidden until then. -->
+<div id="lay-context" data-context-menu role="menu" hidden></div>
+<div id="lay-layers" data-layers-card role="dialog" aria-label="Show layers" hidden></div>
 
 <!-- THE PRINT PACKAGE (Movie, 9 Oct): "we should do the PRINT function for
      LAYOUT for PDF and actual printing too" -- "allow the user to select which
@@ -1638,6 +1691,20 @@ class Component extends PageLogic {
       if (this._claimPointer(e)) this._onMouseDown(e);
     });
     this._canvas.addEventListener('pointercancel', this._pcl = (e) => this._abandonPointer(e));
+    // THE RIGHT-CLICK MENU (jb, 10 Nov: "can we add more 'commands' onto the
+    // right click on viewport menu?"). The browser's menu is taken over on
+    // the sheet; over a viewport the app's commands come up and the viewport
+    // is selected, over bare paper PASTE and ADD VIEWPORT.
+    this._canvas.addEventListener('contextmenu', this._ctx_menu = (e) => this._onContextMenu(e));
+    // THE MENU CLOSES ON A PRESS ANYWHERE ELSE, and on a wheel over the
+    // sheet, since the menu is pinned to a spot on the screen that the
+    // sheet has just moved out from under.
+    window.addEventListener('pointerdown', this._ctx_close = (e) => {
+      const menu = document.querySelector('[data-context-menu]');
+      if (menu && !menu.hidden && !menu.contains(e.target)) this._closeContextMenu();
+      const card = document.querySelector('[data-layers-card]');
+      if (card && !card.hidden && !card.contains(e.target) && e.button !== 2) this._closeLayersCard();
+    }, true);
     // DOUBLE-CLICK A VIEWPORT TO GO AND EDIT IT (Movie, 12 Oct).
     //
     // `dblclick` ALONGSIDE THE POINTER DOOR, not inside it. The two presses
@@ -2907,6 +2974,7 @@ class Component extends PageLogic {
     window.removeEventListener('pointermove', this._wmmv);
     window.removeEventListener('pointerup', this._mup);
     window.removeEventListener('keydown', this._kdn);
+    window.removeEventListener('pointerdown', this._ctx_close, true);
   }
 
   _resize() {
@@ -2984,6 +3052,9 @@ class Component extends PageLogic {
     document.body.dataset.layoutTitleHit = JSON.stringify(this._titleHitIn || null);
     document.body.dataset.layoutProjectHit = JSON.stringify(this._projectHitIn || null);
     document.body.dataset.layoutLogoHit = JSON.stringify(this._logoHitIn || null);
+    // THE LAYERS CARD FOLLOWS THE SHEET: an UNDO that puts a layer back, or
+    // takes the viewport away, is seen on the card at once.
+    if (this._layersCard) this._paintLayersCard();
   }
 
   // ONE SHEET, ONTO ANY CANVAS. The desk's canvas at the page's zoom, or a
@@ -3257,6 +3328,11 @@ class Component extends PageLogic {
           // THIS VIEWPORT'S SCALE, for what is laid out in paper inches --
           // the site's dimension rows, 3/8" apart on every sheet.
           pif: viewport.pif,
+          // THIS VIEWPORT'S LAYERS SWITCHED OFF (jb, 10 Nov: SHOW LAYERS on
+          // the right-click menu): the composer skips what is on the set,
+          // on screen, in print, in the PDF and in the DXF alike. Null is
+          // the whole drawing, which is every viewport saved before this.
+          layersOff: this._viewportLayersOff(viewport),
         });
         ctx.restore();
       }
@@ -3358,6 +3434,21 @@ class Component extends PageLogic {
         ctx.fillRect(hx - 4, hy - 4, 8, 8);
         ctx.strokeRect(hx - 4, hy - 4, 8, 8);
       });
+    }
+    // THE LAMP: a viewport with layers switched off wears a small blue mark
+    // inside its top-left corner on screen -- so a wall that is not there
+    // is seen to be switched off, not lost. Desk furniture: never printed,
+    // exported or on a thumbnail.
+    const offCount = (viewport.layersOff || []).length;
+    if (offCount && !opts.print && !opts.export && !opts.thumb) {
+      ctx.fillStyle = '#5980a6';
+      ctx.beginPath();
+      ctx.arc(px.x + 9, px.y + 9, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = `600 10px 'Barlow Condensed', sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${offCount} LAYER${offCount === 1 ? '' : 'S'} OFF`, px.x + 16, px.y + 9);
     }
     const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
@@ -3821,6 +3912,11 @@ class Component extends PageLogic {
       this._closeEditInModel();
       return;
     }
+    // THE MENU AND THE LAYERS CARD GO FIRST, and the selection they are
+    // about stays: a drafter who changes their mind about a command should
+    // find the viewport they right-clicked still outlined.
+    if (e.key === 'Escape' && this._contextMenuOpen()) { this._closeContextMenu(); return; }
+    if (e.key === 'Escape' && this._layersCardOpen()) { this._closeLayersCard(); return; }
     if (e.key === 'Escape') {
       if (this.state.addingViewport || this.state.selectedViewportId != null) {
         this.setState({ addingViewport: false, addMenuOpen: false, selectedViewportId: null }, () => this._draw());
@@ -3835,6 +3931,311 @@ class Component extends PageLogic {
       e.preventDefault();
       this._deleteSelectedViewport();
     }
+  }
+
+  // ── THE RIGHT-CLICK MENU (jb, 10 Nov) ────────────────────────────────
+  //
+  // "can we add more 'commands' onto the right click on viewport menu?"
+  // -- and the menu he right-clicked into was the browser's own (Save image
+  // as, Copy image, Inspect), because this page had never taken the event.
+  // Now the sheet does. Over a viewport the viewport is selected and its
+  // commands come up: everything the status strip offers it (EDIT IN MODEL
+  // SPACE, FIT WINDOW, COPY, DELETE), the double-click card's second
+  // question (CHANGE SCALE), draw order (TO FRONT / TO BACK) and SHOW
+  // LAYERS, his own idea: "sometimes i'd like to turn off a 'layer' ...
+  // able to turn them off or on for that specific viewport". Over bare
+  // paper: PASTE, while a copy is held, and ADD VIEWPORT.
+  //
+  // ONE SET OF ACTIONS, whichever control reaches them: every item here
+  // calls the method the strip's button or the key already calls, so the
+  // menu cannot learn something the button does not.
+  _onContextMenu(e) {
+    e.preventDefault();
+    if (this.state.editInModel != null || this.state.profileDialog) return;
+    this._closeLayersCard();
+    // A right press that landed while a gesture was armed must not leave
+    // the record live: the pointerup that follows is the menu's, not the
+    // sheet's.
+    this._draggingViewport = null;
+    this._panningViewport = null;
+    this._croppingViewport = null;
+    const ptIn = this._sheetPointIn(e);
+    const hit = this.state.addingViewport ? null : this._viewportAt(ptIn);
+    if (hit) {
+      this.setState({ selectedViewportId: hit.id, addingViewport: false, addMenuOpen: false }, () => this._draw());
+    } else if (this.state.addingViewport) {
+      // A RIGHT CLICK WHILE PLACING cancels the placing, as Esc does.
+      this.setState({ addingViewport: false, addMenuOpen: false }, () => this._draw());
+      return;
+    }
+    this._openContextMenu(hit ? this._viewportMenuItems(hit) : this._paperMenuItems(), e.clientX, e.clientY);
+  }
+
+  _viewportMenuItems(viewport) {
+    const id = viewport.id;
+    const list = this._sheetViewports();
+    const at = list.indexOf(viewport);
+    const plan = viewport.kind === 'plan';
+    const url = this._modelUrlForViewport(viewport);
+    return [
+      { key: 'show-layers', label: 'SHOW LAYERS', on: plan,
+        title: plan ? 'Switch this viewport\'s layers on and off' : 'Only a plan viewport has layers to switch',
+        run: (x, y) => this._openLayersCard(id, x, y) },
+      { rule: true },
+      { key: 'edit-in-model', label: 'EDIT IN MODEL SPACE', on: Boolean(url),
+        title: url ? 'Open this drawing in the Model Space to edit it' : 'This viewport has no drawing to open',
+        run: () => this._openEditInModel(id) },
+      { key: 'change-scale', label: 'CHANGE SCALE', on: !isSchedule(viewport),
+        title: 'Pick or type a scale for this viewport', run: () => this._openChangeScale(id) },
+      { key: 'fit-window', label: 'FIT WINDOW', on: Boolean(viewport.crop),
+        title: viewport.crop ? 'Put the window back to fit its drawing' : 'The window already fits its drawing',
+        run: () => this._fitSelectedWindow() },
+      { rule: true },
+      { key: 'copy', label: 'COPY', on: true, title: 'Copy this viewport (Ctrl+C)', run: () => this._copySelectedViewport() },
+      { key: 'paste', label: 'PASTE', on: Boolean(this._viewportClipboard),
+        title: 'Paste the copied viewport onto this sheet (Ctrl+V)', run: () => this._pasteViewport() },
+      { key: 'delete', label: 'DELETE', on: true, title: 'Take this viewport off the sheet (Delete)', run: () => this._deleteSelectedViewport() },
+      { rule: true },
+      { key: 'to-front', label: 'TO FRONT', on: at >= 0 && at < list.length - 1,
+        title: 'Draw this viewport over the others on the sheet', run: () => this._orderViewport(id, 'front') },
+      { key: 'to-back', label: 'TO BACK', on: at > 0,
+        title: 'Draw this viewport under the others on the sheet', run: () => this._orderViewport(id, 'back') },
+    ];
+  }
+
+  _paperMenuItems() {
+    return [
+      { key: 'paste', label: 'PASTE', on: Boolean(this._viewportClipboard),
+        title: this._viewportClipboard ? 'Paste the copied viewport onto this sheet (Ctrl+V)' : 'Nothing copied yet',
+        run: () => this._pasteViewport() },
+      { key: 'add-viewport', label: 'ADD VIEWPORT', on: true, title: 'Pick a drawing, then click the sheet where it goes',
+        run: () => this.setState({ addingViewport: true, addMenuOpen: true }, () => this._draw()) },
+    ];
+  }
+
+  _contextMenuOpen() {
+    const menu = document.querySelector('[data-context-menu]');
+    return Boolean(menu && !menu.hidden);
+  }
+
+  _openContextMenu(items, clientX, clientY) {
+    const menu = document.querySelector('[data-context-menu]');
+    if (!menu) return;
+    menu.textContent = '';
+    items.forEach(item => {
+      if (item.rule) {
+        const rule = document.createElement('div');
+        rule.className = 'lay-context-rule';
+        menu.append(rule);
+        return;
+      }
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'menuitem');
+      button.dataset.contextItem = item.key;
+      button.textContent = item.label;
+      button.title = item.title || '';
+      button.disabled = !item.on;
+      button.addEventListener('click', () => {
+        const r = button.getBoundingClientRect();
+        this._closeContextMenu();
+        item.run(r.left, r.top);
+      });
+      menu.append(button);
+    });
+    menu.hidden = false;
+    // ON SCREEN WHOLE: nudged back from the right and bottom edges.
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    const left = Math.max(4, Math.min(clientX, window.innerWidth - w - 4));
+    const top = Math.max(4, Math.min(clientY, window.innerHeight - h - 4));
+    Object.assign(menu.style, { left: `${left}px`, top: `${top}px` });
+    menu.querySelector('button:not(:disabled)')?.focus({ preventScroll: true });
+  }
+
+  _closeContextMenu() {
+    const menu = document.querySelector('[data-context-menu]');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    menu.textContent = '';
+  }
+
+  // CHANGE SCALE is the double-click card's second question, opened with
+  // the list in hand: the same card, so a scale picked here and one picked
+  // there are one thing.
+  _openChangeScale(id) {
+    this._openEditInModel(id);
+    document.querySelector('[data-edit-scale-list]')?.focus({ preventScroll: true });
+  }
+
+  // DRAW ORDER (TO FRONT / TO BACK): viewports paint in the order they are
+  // kept, so the last on the sheet is on top and is the one a press finds
+  // (_viewportAt walks the list backwards). Moving one to the end or the
+  // start of the list, among every sheet's viewports, is the whole of it;
+  // the other sheets' order is untouched, and one UNDO puts it back.
+  _orderViewport(id, where) {
+    const all = this.state.viewports;
+    const viewport = all.find(v => v.id === id);
+    if (!viewport) return;
+    const rest = all.filter(v => v.id !== id);
+    const viewports = where === 'front' ? [...rest, viewport] : [viewport, ...rest];
+    this.setState({ viewports, auto: false }, () => { this._persistLayout(); this._draw(); });
+  }
+
+  // ── SHOW LAYERS (jb, 10 Nov) ────────────────────────────────────────────
+  //
+  // "in the viewport sometimes i'd like to turn off a 'layer' -- could a
+  // right click show a 'show layers menu' and then open the layers and able
+  // to turn them off or on for that specific viewport".
+  //
+  // THE LIST IS THE VIEWPORT'S, saved on it as `layersOff` -- the ids of the
+  // layers it does not draw -- which is the one thing the plan composer
+  // already reads for a HOLOGRAM (plan-composition.js `env.layersOff`), so
+  // print, PDF and DXF follow it without a line of their own. Absent means
+  // the whole drawing, which is every viewport saved before this existed.
+  // The STANDARDS table's Visible tick still wins: a layer hidden there is
+  // hidden on every sheet, and this card cannot bring it back.
+  //
+  // THE GROUPS are the HOLOGRAM card's five (hologram.js LAYER_GROUPS), so a
+  // drafter who has used one has used the other, and then the three a sheet
+  // viewport draws that a hologram never did: its dimension strings, its
+  // notes and lines, and its structure. ADVANCED is every layer the
+  // STANDARDS table names, one chip each.
+  static get VIEWPORT_LAYER_GROUPS() {
+    return [
+      { id: 'walls', label: 'WALLS', layers: ['A-WALL-EXT', 'A-WALL-INT', 'A-WALL-PATT'] },
+      { id: 'openings', label: 'DOORS & WINDOWS', layers: ['A-DOOR', 'A-GLAZ'] },
+      { id: 'fixtures', label: 'FIXTURES / CABINETS', layers: ['A-FIXT', 'E-POWER'] },
+      { id: 'flooring', label: 'FLOORING / AREAS', layers: ['A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'SHAPE'] },
+      { id: 'text', label: 'TEXT & ROOM NAMES', layers: ['ROOM-IDS-AREA', 'A-DIMS-WIN', 'A-DIMS-DOOR'] },
+      { id: 'dims', label: 'DIMENSIONS', layers: ['A-DIMS', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT',
+        'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND', 'A-DIMS-EQUIP'] },
+      { id: 'notes', label: 'NOTES & LINES', layers: ['A-ANNO-NOTE', 'draft'] },
+      { id: 'structure', label: 'STRUCTURE / ROOF', layers: ['S-BEAM', 'S-SLAB', 'S-FDN', 'S-COL-FOOTING',
+        'S-FOOTING', 'A-STR', 'A-STR-DECK', 'A-ROOF'] },
+    ];
+  }
+
+  _viewportLayersOff(viewport) {
+    const off = Array.isArray(viewport?.layersOff) ? viewport.layersOff.filter(Boolean) : [];
+    return off.length ? new Set(off) : null;
+  }
+
+  _setViewportLayersOff(id, ids) {
+    const clean = [...new Set(ids.map(v => String(v ?? '').trim()).filter(Boolean))];
+    this.setState({
+      viewports: this.state.viewports.map(viewport => {
+        if (viewport.id !== id) return viewport;
+        const { layersOff: _old, ...rest } = viewport;
+        return clean.length ? { ...rest, layersOff: clean } : rest;
+      }),
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); });
+  }
+
+  // A group is OFF when every layer in it is; a press on an OFF group puts
+  // them all back, on any other takes them all off.
+  _toggleViewportLayers(id, layers) {
+    const viewport = this.state.viewports.find(v => v.id === id);
+    if (!viewport) return;
+    const off = new Set(viewport.layersOff || []);
+    const allOff = layers.every(layer => off.has(layer));
+    layers.forEach(layer => { if (allOff) off.delete(layer); else off.add(layer); });
+    this._setViewportLayersOff(id, [...off]);
+  }
+
+  _layersCardOpen() {
+    const card = document.querySelector('[data-layers-card]');
+    return Boolean(card && !card.hidden);
+  }
+
+  _openLayersCard(id, clientX, clientY) {
+    const viewport = this.state.viewports.find(v => v.id === id);
+    if (!viewport || viewport.kind !== 'plan') return;
+    this._layersCard = { id, advanced: false, left: clientX, top: clientY };
+    this._paintLayersCard();
+  }
+
+  _closeLayersCard() {
+    const card = document.querySelector('[data-layers-card]');
+    this._layersCard = null;
+    if (!card || card.hidden) return;
+    card.hidden = true;
+    card.textContent = '';
+  }
+
+  _paintLayersCard() {
+    const card = document.querySelector('[data-layers-card]');
+    const open = this._layersCard;
+    if (!card) return;
+    const viewport = open ? this.state.viewports.find(v => v.id === open.id) : null;
+    if (!viewport) { this._closeLayersCard(); return; }
+    const off = new Set(viewport.layersOff || []);
+    card.textContent = '';
+    const el = (tag, className, text) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    };
+    const chip = (label, isOff, title, onPress, extra = '') => {
+      const button = el('button', `lay-pick${isOff ? ' off' : ''}${extra}`, label);
+      button.type = 'button';
+      button.title = title;
+      button.setAttribute('aria-pressed', isOff ? 'true' : 'false');
+      button.addEventListener('click', onPress);
+      return button;
+    };
+    const head = el('div', 'lay-layers-head');
+    head.append(el('div', 'lay-layers-title', `SHOW LAYERS · ${this._viewportTitle(viewport)}`));
+    const close = el('button', 'lay-layers-close', '×');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', () => this._closeLayersCard());
+    head.append(close);
+    card.append(head);
+    card.append(el('div', 'lay-layers-note', 'LIT IS OFF · THIS VIEWPORT ONLY'));
+    Component.VIEWPORT_LAYER_GROUPS.forEach(group => {
+      const isOff = group.layers.every(layer => off.has(layer));
+      const some = !isOff && group.layers.some(layer => off.has(layer));
+      const button = chip(`${group.label}${some ? ' (PART)' : ''}`, isOff,
+        isOff ? `Draw ${group.label} again` : `Switch ${group.label} off in this viewport`,
+        () => this._toggleViewportLayers(viewport.id, group.layers));
+      button.dataset.layerGroup = group.id;
+      card.append(button);
+    });
+    const foot = el('div', 'lay-layers-foot');
+    const advanced = chip('ADVANCED', open.advanced, 'Every layer by name',
+      () => { open.advanced = !open.advanced; this._paintLayersCard(); });
+    advanced.dataset.layersAdvanced = '1';
+    advanced.classList.toggle('on', open.advanced);
+    advanced.classList.remove('off');
+    foot.append(advanced);
+    const reset = chip('RESET', false, 'Every layer back on', () => this._setViewportLayersOff(viewport.id, []));
+    reset.dataset.layersReset = '1';
+    reset.disabled = !off.size;
+    foot.append(reset);
+    card.append(foot);
+    if (open.advanced) {
+      const grid = el('div', 'lay-layers-advanced');
+      const groups = window.DraftLayerStandards?.DEFAULT_LAYER_STANDARDS || [];
+      groups.forEach(group => {
+        const layers = (group.layers || []).filter(layer => layer.id !== 'no-draft');
+        if (!layers.length) return;
+        grid.append(el('div', 'lay-layers-group', group.group));
+        layers.forEach(layer => {
+          const button = chip(layer.name || layer.id, off.has(layer.id), layer.use || layer.id,
+            () => this._toggleViewportLayers(viewport.id, [layer.id]));
+          button.dataset.layerId = layer.id;
+          grid.append(button);
+        });
+      });
+      card.append(grid);
+    }
+    card.hidden = false;
+    const w = card.offsetWidth, h = card.offsetHeight;
+    const left = Math.max(4, Math.min(open.left, window.innerWidth - w - 4));
+    const top = Math.max(4, Math.min(open.top, window.innerHeight - h - 4));
+    Object.assign(card.style, { left: `${left}px`, top: `${top}px` });
   }
 
   // FIT WINDOW: the crop comes off and the frame fits its drawing again. The

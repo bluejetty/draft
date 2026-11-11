@@ -477,7 +477,11 @@ if (!window.DraftLayoutPlan) {
         // Paper units: the sheet zoom over its print zoom (render-2d).
         inkScale: env.inkScale,
       };
-      of('dimensions').filter(dimension => dimension?.levelId === levelId).forEach(dimension => {
+      // AND A VIEWPORT'S OWN LAYERS OFF (jb, 10 Nov: SHOW LAYERS on the
+      // sheet's right-click menu), by the same id the composer asks.
+      const off = id => Boolean(env.layersOff && env.layersOff.has(id));
+      of('dimensions').filter(dimension => dimension?.levelId === levelId
+        && !off(dimension.layer || 'A-DIMS')).forEach(dimension => {
         if (ctx && 'dxfLayer' in ctx) ctx.dxfLayer = dimension.layer || 'A-DIMS';
         render.drawDimension2D(ctx, toS, dimension, {}, dimensionEnv);
       });
@@ -1023,6 +1027,9 @@ if (!window.DraftLayoutPlan) {
       lines,
       notes,
       dimensions: dims,
+      // A VIEWPORT'S LAYERS SWITCHED OFF (jb, 10 Nov: SHOW LAYERS on the
+      // sheet's right-click menu) reach the SITE and ROOF marks too.
+      layersOff: env.layersOff || null,
       lineControlPoint: geo.lineControlPoint,
       inkScale: env.inkScale,
       dimensionEnv: {
@@ -1153,7 +1160,8 @@ if (!window.DraftLayoutPlan) {
     // them. A hologram draws no dimensions anywhere else (drawLevelMarks,
     // drawPlan's dimensionEnv); the site rows are the file's to draw.
     const rows = env.siteDims === false || env.hologram === true ? [] : siteDimStrings(saved, env.pif);
-    if (rows.length && render && render.drawDimension2D) {
+    if (rows.length && render && render.drawDimension2D
+      && !(env.layersOff && (env.layersOff.has('A-DIMS') || env.layersOff.has('A-DIMS-EXT')))) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE-DIMS';
       const dimensionEnv = {
         label: dimLabel(saved),
