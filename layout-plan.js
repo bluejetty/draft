@@ -192,8 +192,11 @@ if (!window.DraftLayoutPlan) {
     // AND ITS SHAPES, which print now (jb, 6 Nov): a tree past the house
     // on the SITE level is drawn, so the frame takes it in. A NO-DRAFT
     // shape is sized for too; the frame can be roomier, never tighter.
+    // A SHAPE'S OR FLOOR'S ARC BOWS PAST ITS CORNERS (jb, 11 Nov), so the
+    // frame takes the flattened ring in.
+    const flat = points => (window.DraftGeometry2D?.flattenLoop ? window.DraftGeometry2D.flattenLoop(points) : points);
     ['floors', 'roofs', 'outlines', 'shapes'].forEach(key => onLevel(key)
-      .forEach(item => (Array.isArray(item.points) ? item.points : []).forEach(eat)));
+      .forEach(item => flat(Array.isArray(item.points) ? item.points : []).forEach(eat)));
     // AND ITS ROOM TAGS (jb, 11 Nov: "the room tag still doesn't show on
     // the layout view"): a tag set down outside its area, past the lot's
     // corner, fell outside the frame and the window clipped it. The tag's
@@ -300,6 +303,9 @@ if (!window.DraftLayoutPlan) {
   const SHAPE_COLOR = '#2f6b5b';
   const shapeAreaSqFt = points => {
     if (!Array.isArray(points) || points.length < 3) return 0;
+    // A SHAPE WITH ARCS (jb, 11 Nov) counts its bows, as the Model Space does.
+    const G = window.DraftGeometry2D;
+    if (G?.loopHasArcs?.(points)) return G.loopAreaSqFt(points);
     let doubled = 0;
     for (let i = 0; i < points.length; i += 1) {
       const a = points[i], b = points[(i + 1) % points.length];

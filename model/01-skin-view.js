@@ -737,25 +737,37 @@
     const near = (q, r) => { const s2 = toS(q); return Math.hypot(s2.x - p.x, s2.y - p.y) <= r; };
     const corner = pts.findIndex(q => near(q, ROOM_HANDLE_PX + 2));
     if (corner >= 0) return { kind: 'corner', index: corner };
-    const mid = pts.findIndex((q, i) => {
-      const r = pts[(i + 1) % pts.length];
-      return near({ x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 }, ROOM_HANDLE_PX);
-    });
+    // AN ARC'S MIDPOINT HANDLE SITS ON THE ARC (jb, 11 Nov), not its chord.
+    const mid = pts.findIndex((q, i) => near(loopEdgeMid(pts, i), ROOM_HANDLE_PX));
     return mid >= 0 ? { kind: 'mid', index: mid } : null;
+  };
+  // THE MIDDLE OF A LOOP'S EDGE, along the arc when the edge is one.
+  const loopEdgeMid = (pts, i) => {
+    const G = window.DraftGeometry2D;
+    const q = pts[i], r = pts[(i + 1) % pts.length];
+    if (q.bulge && G?.pointOnLineSeg) { const m = G.pointOnLineSeg(G.loopSegment(pts, i), 0.5); return { x: m.x, z: m.z }; }
+    return { x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 };
+  };
+  // HOW FAR THE HAND IS FROM A LOOP'S EDGE, in px, along the arc when the
+  // edge is one.
+  const loopEdgePx = (pts, i, worldPt) => {
+    const G = window.DraftGeometry2D;
+    const seg = G.loopSegment(pts, i);
+    if (seg.bulge) return G.pointToSegment(worldPt, seg).d * view.scale;
+    const p = toS(worldPt), a = toS(seg.start), b = toS(seg.end);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   };
   // THE EDGE UNDER THE HAND on a picked shape or floor, by index -- the
   // nearest within the pick reach -- for the edge push (jb, 10 Nov 2026).
   const roomEdgeAt = (tag, worldPt) => {
     const pts = roomShapeOf(tag);
     if (!pts) return null;
-    const p = toS(worldPt);
     let best = null;
     pts.forEach((q, i) => {
-      const a = toS(q), b = toS(pts[(i + 1) % pts.length]);
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const len2 = dx * dx + dy * dy;
-      const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
-      const d = Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+      const d = loopEdgePx(pts, i, worldPt);
       if (d <= ROOM_EDGE_PICK_PX && (!best || d < best.d)) best = { i, d };
     });
     return best ? best.i : null;
@@ -763,14 +775,7 @@
   const roomEdgeNear = (tag, worldPt) => {
     const pts = roomShapeOf(tag);
     if (!pts) return false;
-    const p = toS(worldPt);
-    return pts.some((q, i) => {
-      const a = toS(q), b = toS(pts[(i + 1) % pts.length]);
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const len2 = dx * dx + dy * dy;
-      const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
-      return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) <= ROOM_EDGE_PICK_PX;
-    });
+    return pts.some((q, i) => loopEdgePx(pts, i, worldPt) <= ROOM_EDGE_PICK_PX);
   };
   const roomTagAt = worldPt => {
     if (!roomTagsShown()) return null;

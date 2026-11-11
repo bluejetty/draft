@@ -1183,10 +1183,14 @@
     showSelectionProps();
     paint();
   };
-  const shapeAreaSqFt = shape => Math.abs(shape.points.reduce((sum, p, i) => {
-    const q = shape.points[(i + 1) % shape.points.length];
-    return sum + (p.x * q.z - q.x * p.z) / 2;
-  }, 0));
+  // THE BOWS COUNTED (jb, 11 Nov: arcs on a shape), by the one loop area
+  // every painter reads (geometry-2d.js loopAreaSqFt).
+  const shapeAreaSqFt = shape => (window.DraftGeometry2D?.loopAreaSqFt
+    ? window.DraftGeometry2D.loopAreaSqFt(shape.points)
+    : Math.abs(shape.points.reduce((sum, p, i) => {
+      const q = shape.points[(i + 1) % shape.points.length];
+      return sum + (p.x * q.z - q.x * p.z) / 2;
+    }, 0)));
   // Whether the area is written on the sheet: SHOW AREA ticked, or a
   // flooring area that was never told otherwise (the label it has carried
   // since the flooring work, kept so no drawing changes under this).
@@ -1220,6 +1224,21 @@
     const sqft = shapes.reduce((sum, shape) => sum + shapeAreaSqFt(shape), 0);
     area.textContent = `${one ? '' : 'TOTAL '}AREA ${Math.round(sqft).toLocaleString('en-US')} SQ FT`;
     box.append(area);
+    // MAKE LINES (jb, 11 Nov: "option to turn a closed shape into lines"):
+    // one line per edge, one assembly, the shape gone (shapeToLines).
+    if (one && typeof shapeToLines === 'function') {
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      const lines = document.createElement('button');
+      lines.type = 'button';
+      lines.className = 'sel-chip';
+      lines.dataset.makeLines = '';
+      lines.textContent = 'MAKE LINES';
+      lines.title = 'Replace this shape with one line per edge, grouped as one assembly (UNDO puts the shape back)';
+      lines.addEventListener('click', () => { shapeToLines(one); });
+      row.append(lines);
+      box.append(row);
+    }
     // THE LABEL: a room's name, or a site area's. One shape at a time, since
     // two shapes with one name is two rooms called the same thing.
     if (one) {
@@ -1376,6 +1395,25 @@
       rad.className = 'props-title';
       rad.textContent = same ? `RADIUS ${feetLabel(radii[0])}` : `RADIUS ${feetLabel(Math.min(...radii))} TO ${feetLabel(Math.max(...radii))}`;
       box.append(rad);
+    }
+    // MAKE SHAPE (jb, 11 Nov): lines that chain into one closed ring become
+    // one AREA / SHAPE with the same outline, arcs and all (19-line-arcs.js
+    // linesToShape). Greyed, with the reason, when they make no ring.
+    if (typeof linesRingLoop === 'function' && lines.length >= 2) {
+      const ring = linesRingLoop(lines);
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      const make = document.createElement('button');
+      make.type = 'button';
+      make.className = 'sel-chip';
+      make.dataset.makeShape = '';
+      make.textContent = 'MAKE SHAPE';
+      make.disabled = !ring.points;
+      make.title = ring.points ? 'Replace these lines with one filled AREA / SHAPE of the same outline (UNDO puts the lines back)'
+        : `These lines make no closed ring: ${ring.why}`;
+      make.addEventListener('click', () => { linesToShape(lines); });
+      row.append(make);
+      box.append(row);
     }
     if (LS) {
       const same = key => (lines.every(l => (l[key] ?? null) === (lines[0][key] ?? null)) ? (lines[0][key] ?? null) : undefined);

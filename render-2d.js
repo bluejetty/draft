@@ -946,6 +946,13 @@ if (!window.DraftRender2D) {
     const { preview = false } = options;
     const screenPoints = points.map(toS);
     const hatch = preview ? null : shapeHatchOf(shape.hatch);
+    // AN EDGE MAY BE AN ARC (jb, 11 Nov): a corner's `bulge` bends the edge
+    // leaving it, traced with the same arc a bent line draws. The hatch
+    // screens and the label sit on the flattened ring, so a bow past the
+    // corners is screened and the name of a circle is at its centre.
+    const G = typeof window !== 'undefined' ? window.DraftGeometry2D : null;
+    const arced = !!(G && G.loopHasArcs && G.loopHasArcs(points));
+    const flatPoints = arced ? G.flattenLoop(points).map(toS) : screenPoints;
     // THE PATH IS TRACED TWICE when a hatch is drawn: a hatch begins paths
     // of its own, and save/restore does not bring the shape's back, so the
     // outline stroked after a dot screen would ring every dot and leave the
@@ -954,7 +961,15 @@ if (!window.DraftRender2D) {
     const trace = () => {
       ctx.beginPath();
       ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
-      screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+      if (arced) {
+        const count = points.length >= 3 ? points.length : points.length - 1;
+        for (let index = 0; index < count; index += 1) {
+          const seg = G.loopSegment(points, index);
+          traceSegTo2D(ctx, toS, seg, env, screenPoints[(index + 1) % points.length]);
+        }
+      } else {
+        screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+      }
       if (points.length >= 3) ctx.closePath();
     };
     ctx.save();
@@ -973,8 +988,8 @@ if (!window.DraftRender2D) {
         ctx.fillStyle = hatch.fill;
         ctx.fill();
       }
-      if (hatch && hatch.dots) { dotScreen(ctx, screenPoints); trace(); }
-      if (hatch && hatch.finish) { finishScreen(ctx, toS, screenPoints, hatch.finish); trace(); }
+      if (hatch && hatch.dots) { dotScreen(ctx, flatPoints); trace(); }
+      if (hatch && hatch.finish) { finishScreen(ctx, toS, flatPoints, hatch.finish); trace(); }
     }
     ctx.strokeStyle = preview ? atAlpha(env.shapeColor, 0.72) : env.shapeColor;
     ctx.lineWidth = 1.5;
@@ -995,15 +1010,16 @@ if (!window.DraftRender2D) {
       const type = shape.flooring && (env.flooringTypes || []).find(entry => entry.id === shape.flooring.type);
       const areaOn = shape.showArea === true || (!!shape.flooring && shape.showArea !== false);
       const name = String(shape.label || '').trim();
-      const detail = [type?.label, areaOn && env.areaLabel ? env.areaLabel(env.outlineAreaSqFt(points)) : null]
+      const area = arced && G.loopAreaSqFt ? G.loopAreaSqFt(points) : env.outlineAreaSqFt(points);
+      const detail = [type?.label, areaOn && env.areaLabel ? env.areaLabel(area) : null]
         .filter(Boolean).join(' · ');
       const lines = [
         ...(name ? [{ text: name, font: "700 12px 'Barlow Condensed', system-ui, sans-serif", high: 16 }] : []),
         ...(detail ? [{ text: detail, font: "600 11px 'Barlow Condensed', system-ui, sans-serif", high: 15 }] : []),
       ];
       if (lines.length) {
-        const cx = screenPoints.reduce((sum, pt) => sum + pt.x, 0) / screenPoints.length;
-        const cy = screenPoints.reduce((sum, pt) => sum + pt.y, 0) / screenPoints.length;
+        const cx = flatPoints.reduce((sum, pt) => sum + pt.x, 0) / flatPoints.length;
+        const cy = flatPoints.reduce((sum, pt) => sum + pt.y, 0) / flatPoints.length;
         const total = lines.reduce((sum, line) => sum + line.high, 0);
         let y = cy - total / 2;
         ctx.textAlign = 'center';
@@ -2944,7 +2960,17 @@ if (!window.DraftRender2D) {
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
-    screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+    // A FLOOR'S EDGE MAY BE AN ARC TOO (jb, 11 Nov: "should FLOOR get the
+    // arcs too? yes"), by the same corner `bulge` a shape's takes.
+    const G = typeof window !== 'undefined' ? window.DraftGeometry2D : null;
+    if (G && G.loopHasArcs && G.loopHasArcs(points)) {
+      const count = points.length >= 3 ? points.length : points.length - 1;
+      for (let index = 0; index < count; index += 1) {
+        traceSegTo2D(ctx, toS, G.loopSegment(points, index), env, screenPoints[(index + 1) % points.length]);
+      }
+    } else {
+      screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+    }
 
     if (referenceColor) {
       if (points.length >= 3) {

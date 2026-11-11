@@ -105,10 +105,13 @@
     paint();
   };
 
-  const commitShape = () => {
-    const loop = shapeCorners.slice();
+  // THE LOOP MAY BE HANDED IN (19-line-arcs.js: a CIRCLE, or corners whose
+  // closing edge was just bent); its corners may carry a `bulge`, the arc
+  // leaving each, and the crossing test reads the arcs flattened.
+  const commitShape = (given = null) => {
+    const loop = (given || shapeCorners).slice();
     if (loop.length < 3) return null;
-    if (window.DraftGeometry2D.selfIntersects(loop)) {
+    if (window.DraftGeometry2D.selfIntersects(window.DraftGeometry2D.flattenLoop(loop))) {
       sayOnStrip('That shape crosses itself, so it encloses no area.');
       return null;
     }
@@ -163,8 +166,8 @@
     };
   };
 
-  const commitFloor = () => {
-    const loop = floorCorners.slice();
+  const commitFloor = (given = null) => {
+    const loop = (given || floorCorners).slice();
     if (loop.length < 3) return null;
     // A CROSSED LOOP ENCLOSES NO AREA -- the same refusal the outline makes
     // on this page, through the same module. The pending corners are KEPT on a
@@ -176,7 +179,7 @@
     // fights itself. The outline tool here already refuses one, and a page
     // where the same gesture is legal for a guide and illegal for structure
     // would be teaching two rules for one motion.
-    if (window.DraftGeometry2D.selfIntersects(loop)) {
+    if (window.DraftGeometry2D.selfIntersects(window.DraftGeometry2D.flattenLoop(loop))) {
       sayOnStrip('That floor crosses itself, so it encloses no area.');
       return null;
     }

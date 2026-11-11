@@ -2572,7 +2572,9 @@
           // to band to. A finger leaves none behind, so on a tablet the trace
           // is the placed corners alone -- which is the truth rather than a
           // degraded version of it.
-          const trace = cursorWorld
+          // BENT, when an ARC is in hand (19-line-arcs.js loopArcTrace).
+          const bent = typeof loopArcTrace === 'function' ? loopArcTrace(floorCorners, cursorWorld) : null;
+          const trace = bent ? bent.points : cursorWorld
             ? floorCorners.concat([loopPoint(cursorWorld)])
             : floorCorners;
           R.drawFloor2D(ctx, toS, { points: trace }, { preview: true }, floorEnv());
@@ -2603,10 +2605,16 @@
           }
           ctx.restore();
         }
+        // A CIRCLE'S CENTRE DOWN on SHAPE or FLOOR (19-line-arcs.js).
+        if (typeof paintLoopArcGhost === 'function') paintLoopArcGhost();
         // THE SHAPE IN HAND: the corners placed, a band to the cursor, and
         // the close ring once three corners make closing legal.
         if (activeTool === 'shape' && shapeCorners.length) {
-          const trace = cursorWorld
+          // BENT, when an ARC is in hand (19-line-arcs.js loopArcTrace): the
+          // edges drawn with their arcs and the band to the hand bent the
+          // way the next press would bend it.
+          const bent = typeof loopArcTrace === 'function' ? loopArcTrace(shapeCorners, cursorWorld) : null;
+          const trace = bent ? bent.points : cursorWorld
             ? shapeCorners.concat([loopPoint(cursorWorld)])
             : shapeCorners;
           ctx.save();
@@ -2615,10 +2623,15 @@
           ctx.lineWidth = 1.5;
           ctx.setLineDash([6, 4]);
           ctx.beginPath();
+          const G = window.DraftGeometry2D;
           trace.forEach((pt, i) => {
             const p = toS(pt);
-            if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+            if (i === 0) { ctx.moveTo(p.x, p.y); return; }
+            const from = trace[i - 1];
+            if (from.bulge) window.DraftRender2D.traceSegTo2D(ctx, toS, { start: from, end: pt, bulge: from.bulge }, { controlPoint: G.lineControlPoint }, p);
+            else ctx.lineTo(p.x, p.y);
           });
+          if (bent && bent.closed) ctx.closePath();
           ctx.stroke();
           ctx.setLineDash([]);
           shapeCorners.forEach(corner => {

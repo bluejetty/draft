@@ -925,10 +925,20 @@ if (!window.DraftDrawingFormat) {
     }), env.drops).filter(Boolean);
   };
 
+  // A LOOP'S CORNER MAY BEND THE EDGE LEAVING IT (jb, 11 Nov 2026: arcs and
+  // circles on the AREA / SHAPE command): the outline's `bulge`, kept when
+  // it is a number and dropped otherwise, so a corner with none is the
+  // straight corner every shape and floor had before.
+  const loopPoint = raw => {
+    const parsed = point(raw);
+    if (!parsed) return null;
+    const bulge = Number(raw?.bulge);
+    return Number.isFinite(bulge) && bulge !== 0 ? { ...parsed, bulge } : parsed;
+  };
   const floors = (rawFloors, levelIds, env = {}) => ((raw =>
     collectRefusals(raw, raw.map(floor => {
       const floorLevelId = levelId(floor?.levelId, levelIds);
-      const points = (Array.isArray(floor?.points) ? floor.points : []).map(point).filter(Boolean);
+      const points = (Array.isArray(floor?.points) ? floor.points : []).map(loopPoint).filter(Boolean);
       if (floorLevelId == null || points.length < 3) return null;
       return {
         id: String(floor?.id || '').trim(),
@@ -960,7 +970,7 @@ if (!window.DraftDrawingFormat) {
     (Array.isArray(rawShapes) ? rawShapes : [])
     .map(shape => {
       const shapeLevelId = levelId(shape?.levelId, levelIds);
-      const points = (Array.isArray(shape?.points) ? shape.points : []).map(point).filter(Boolean);
+      const points = (Array.isArray(shape?.points) ? shape.points : []).map(loopPoint).filter(Boolean);
       if (shapeLevelId == null || points.length < 3) return null;
       const shapeFlooring = flooring(shape?.flooring);
       return {

@@ -3378,6 +3378,98 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return { x: arc.cx + arc.r * Math.cos(ang), y: arc.mid.y, z: arc.cz + arc.r * Math.sin(ang) };
   }
 
+  // ─── A CLOSED LOOP WITH ARCS (jb, 11 Nov 2026: "the AREA command doesn't
+  // have CIRCLE, maybe these commands should be added to it") ──────────────
+  //
+  // A SHAPE's or FLOOR's corner may carry the outline's `bulge` -- the edge
+  // LEAVING that corner bends, to the convention lineArc reads -- so the one
+  // field that bends a line, an outline edge and a DXF arc bends a loop's
+  // edge too. These helpers are what every reader of such a loop asks:
+  // its edges as segments, a plain polygon standing in for it (for the
+  // inside test, the box pick, the crossing test and the frame), its area
+  // with the bowed parts counted, and an arc cut in two for the midpoint
+  // handle.
+  const loopSegmentCount = points => (Array.isArray(points) ? points.length : 0);
+  function loopSegment(points, index) {
+    const start = points[index], end = points[(index + 1) % points.length];
+    return { start, end, bulge: Number(start?.bulge) || 0 };
+  }
+  const loopHasArcs = points => Array.isArray(points) && points.some(pt => Math.abs(Number(pt?.bulge) || 0) >= 2 * ARC_MIN_SAGITTA_FT);
+  // THE POLYGON THAT STANDS IN FOR THE LOOP: every corner, and along each
+  // arc enough points that no sample is more than ~5° apart, never fewer
+  // than four. A loop with no arcs comes back as its own corners (the
+  // same objects), so a caller keeping identity keeps it.
+  const ARC_FLATTEN_STEP = Math.PI / 36;
+  function flattenLoop(points) {
+    if (!loopHasArcs(points)) return points;
+    const out = [];
+    for (let i = 0; i < points.length; i += 1) {
+      const seg = loopSegment(points, i);
+      out.push(seg.start);
+      const arc = seg.bulge ? lineArc(seg) : null;
+      if (!arc) continue;
+      const n = Math.max(4, Math.ceil(Math.abs(arc.sweep) / ARC_FLATTEN_STEP));
+      for (let k = 1; k < n; k += 1) {
+        const p = pointOnLineSeg(seg, k / n);
+        out.push({ x: p.x, z: p.z });
+      }
+    }
+    return out;
+  }
+  // THE AREA, BOWS COUNTED: the corners' shoelace, plus each arc's circular
+  // segment. The loop's inside is on the LEFT of travel when the shoelace
+  // sum is positive, so an arc whose middle turns RIGHT of its chord bows
+  // outward and adds, and one turning left bows in and takes away; a loop
+  // run the other way flips both signs together. A circle of four quarter
+  // arcs reads pi r squared to the rounding.
+  function loopAreaSqFt(points) {
+    if (!Array.isArray(points) || points.length < 3) return 0;
+    let doubled = 0;
+    for (let i = 0; i < points.length; i += 1) {
+      const a = points[i], b = points[(i + 1) % points.length];
+      doubled += a.x * b.z - b.x * a.z;
+    }
+    let bows = 0;
+    for (let i = 0; i < points.length; i += 1) {
+      const seg = loopSegment(points, i);
+      const arc = seg.bulge ? lineArc(seg) : null;
+      if (!arc) continue;
+      const theta = Math.abs(arc.sweep);
+      const segment = (arc.r * arc.r / 2) * (theta - Math.sin(theta));
+      const turn = (seg.end.x - seg.start.x) * (arc.mid.z - seg.start.z) - (seg.end.z - seg.start.z) * (arc.mid.x - seg.start.x);
+      bows -= Math.sign(turn) * segment;
+    }
+    return Math.abs(doubled / 2 + bows);
+  }
+  // THE BULGE OF A PIECE OF AN ARC: the same circle, `fraction` of the
+  // sweep, bending the same way. 1 gives the arc's own bulge back.
+  function bulgeOfArcPart(seg, fraction) {
+    const arc = seg.bulge ? lineArc(seg) : null;
+    if (!arc) return 0;
+    const half = Math.abs(arc.sweep) * fraction / 2;
+    return 2 * arc.r * (1 - Math.cos(half)) * Math.sign(seg.bulge);
+  }
+  // AN ARC CUT AT ITS MIDDLE: the middle point, and the bulge each half
+  // takes. A straight edge gives its chord's midpoint and no bulge.
+  function splitSegAtMid(seg) {
+    const mid = pointOnLineSeg(seg, 0.5);
+    return { mid: { x: mid.x, z: mid.z }, bulge: bulgeOfArcPart(seg, 0.5) };
+  }
+  // A CIRCLE AS A LOOP: four quarter arcs from the east point round, so
+  // every loop rule that wants three corners is met and the quadrant
+  // points are corners a hand can take. East, south, west, north: a
+  // positive bulge bends to the LEFT of travel, which on that way round
+  // is outward.
+  function circleLoop(centre, r) {
+    const bulge = 2 * r * (1 - Math.cos(Math.PI / 4));
+    return [
+      { x: centre.x + r, z: centre.z, bulge },
+      { x: centre.x, z: centre.z - r, bulge },
+      { x: centre.x - r, z: centre.z, bulge },
+      { x: centre.x, z: centre.z + r, bulge },
+    ];
+  }
+
   // How far worldPt lies from a segment, straight or arced, and where along it
   // -> { d, t }. This is what answers "did the drafter click that wall": the
   // caller compares d against its own pixel threshold, converted to world
@@ -4241,6 +4333,14 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     bulgeForTangent,
     bulgeThrough,
     pointOnLineSeg,
+    loopSegment,
+    loopSegmentCount,
+    loopHasArcs,
+    flattenLoop,
+    loopAreaSqFt,
+    bulgeOfArcPart,
+    splitSegAtMid,
+    circleLoop,
     pointToSegment,
     edgeOnLoop,
     loopSegments,

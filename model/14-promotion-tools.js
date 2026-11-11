@@ -549,12 +549,21 @@
     // A FLOOR'S OR A SHAPE'S NEXT CORNER, TYPED (Movie, 25 Oct: "do the other
     // 2 for sure" -- typed lengths and dragging corners, as WALL and LINE
     // have): that far from the last corner, the way the cursor points.
+    // A SHAPE'S OR FLOOR'S ARC END OR CIRCLE RADIUS, TYPED (19-line-arcs.js).
+    if (typeof loopArcTyped === 'function' && String(lengthBox.value).trim() !== ''
+      && (loopTypable() || loopArcTypable())) {
+      const feet = typedOutlineFeet();
+      if (feet !== undefined && loopArcTyped(feet)) { lengthBox.blur(); return; }
+    }
     if (loopTypable()) {
       if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
       const feet = typedOutlineFeet();
       if (feet !== undefined) typedLoopCorner(feet);
       lengthBox.blur();
       return;
+    }
+    if (typeof loopArcTypable === 'function' && loopArcTypable() && String(lengthBox.value).trim() === '') {
+      lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return;
     }
     if (String(lengthBox.value).trim() === '') { lengthBox.blur(); finishOrRepeat(); stripRefresh(); paint(); return; }
     const parsed = readLength(lengthBox.value);
