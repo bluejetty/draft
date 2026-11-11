@@ -1182,6 +1182,22 @@ suite('roomTagLines', 'the size the caller gives, then the shape-s own area', R 
   expect('two corners are no shape', R.roomTagLines({ name: 'DEN', at: { x: 0, z: 0 }, points: square.slice(0, 2) }, tagEnv()).join('|'), '');
 });
 
+// THE LEADER (jb, 10 Nov 2026): a tag set down outside its own loop runs a
+// line from its text's near edge to the nearest point of the loop's edge;
+// inside the loop, or with no loop, there is none to draw.
+suite('roomTagLeader', 'from the text-s edge to the nearest point of the loop, only when the tag is outside', R => {
+  const square = [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 3 }, { x: 0, z: 3 }];
+  const toS = p => ({ x: p.x * 10, y: p.z * 10 });
+  const box = { x: 80, y: 10, w: 20, h: 10 };
+  expect('a bare tag has no leader', R.roomTagLeader({ name: 'DEN', at: { x: 8, z: 1.5 } }, toS, box), null);
+  expect('inside its loop, none', R.roomTagLeader({ name: 'DEN', at: { x: 1.5, z: 1.5 }, points: square }, toS, { x: 15, y: 10, w: 20, h: 10 }), null);
+  const out = R.roomTagLeader({ name: 'DEN', at: { x: 8, z: 1.5 }, points: square }, toS, box);
+  expect('outside, the leader lands on the nearest edge point', out && `${out.to.x},${out.to.y}`, '30,15');
+  expect('and leaves the text at its near side', out && `${Math.round(out.from.x)}`, '67');
+  const diag = R.roomTagLeader({ name: 'DEN', at: { x: 6, z: -3 }, points: square }, toS, { x: 60, y: -35, w: 20, h: 10 });
+  expect('off a corner, the corner is the nearest point', diag && `${diag.to.x},${diag.to.y}`, '30,0');
+});
+
 suite('drawRoomTag2D', 'a shaped tag-s area is a line under the name', R => {
   const ctx = recordingCtx();
   R.drawRoomTag2D(ctx, toS, { name: 'DEN', at: { x: 0, z: 0 }, points: [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 5 }, { x: 0, z: 5 }] }, {}, tagEnv());
@@ -4263,6 +4279,10 @@ function coverage() {
       "if (finish === 'tile') {\n          for (let u", "if (true) {\n          for (let u")],
     ['roomTagLines the area line ignores its switch', src => src.replace(
       'tag.points.length < 3 || tag.areaShown === false) return', 'tag.points.length < 3) return')],
+    ['roomTagLeader a tag inside its loop gets a leader too', src => src.replace(
+      'if (pts.length < 3 || !tag.at || pointInLoop(tag.at, pts)) return null;', 'if (pts.length < 3 || !tag.at) return null;')],
+    ['roomTagLeader the line starts at the text-s centre', src => src.replace(
+      'return { from: { x: cx + vx * k, y: cy + vy * k }, to };', 'return { from: { x: cx, y: cy }, to };')],
     ['drawRoomShape2D the edge is stroked on the joints', src => src.replace(
       '      ctx.restore();\n      trace();\n      ctx.strokeStyle = atAlpha(colour, 0.8);', '      ctx.restore();\n      ctx.strokeStyle = atAlpha(colour, 0.8);')],
     // THE DOTTED LINE UNDER A HIGHER ROOF (Movie, 16 Oct), wrong both ways:
