@@ -297,7 +297,7 @@
     const R = window.DraftRender2D;
     if (!R || !roomTagsShown()) return;
     const env = roomTagEnv();
-    roomTags().forEach(tag => R.drawRoomTag2D(ctx, toS, tag, {}, env));
+    roomTags().forEach(tag => R.drawRoomTag2D(ctx, toS, tag, { pxPerFt: view.scale }, env));
   };
   // THE ROOM SHAPES AND THEIR FLOORING, under the walls so their fill stops
   // the finish at the face -- the slot the WC tile has.
