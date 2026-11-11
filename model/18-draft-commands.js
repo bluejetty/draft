@@ -31,7 +31,7 @@
     mirror: { a: null },                    // the first point of the mirror line
     // ROTATE: the centre, then the arm as it is now (refFrom is the centre
     // pressed again, the AutoCAD habit; ref the arm's bearing once taken).
-    turn: { base: null, refFrom: null, ref: null },
+    turn: { base: null, refFrom: null, ref: null, radius: null },
     fillet: { first: null },                // { seg, t } the first line pressed
   };
   const DRAFT_CMD_TOOLS = Object.freeze(['offset', 'mirror', 'rotate', 'fillet', 'array']);
@@ -68,7 +68,7 @@
     const had = draftCommandsBusy();
     draftCmd.offset.pick = null;
     draftCmd.mirror.a = null;
-    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null;
+    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null; draftCmd.turn.radius = null;
     draftCmd.fillet.first = null;
     if (had) draftCmdPrompt(activeTool);
     return had;
@@ -526,7 +526,9 @@
         if (onCentre(p, st.refFrom)) { turnSays('press further from the centre for the arm\'s end.'); return; }
         st.ref = bearingDeg(st.refFrom, p);
       }
-      turnSays('now press where the arm goes -- or type degrees and ENTER.');
+      st.radius = Math.hypot(p.x - st.base.x, p.z - st.base.z);
+      turnCircleCache = { key: null, list: [] };
+      turnSays('now press where the arm goes -- the circle\'s crossings are nodes -- or type degrees and ENTER.');
       paint();
       return;
     }
@@ -534,6 +536,39 @@
     // and the press after is the new direction.
     if (onCentre(p, st.base)) { turnSays('that is the centre -- nothing turns. Press where the arm goes.'); return; }
     turnBy(((turnAngleAt(p) - st.ref) % 360 + 360) % 360);
+  };
+  // THE ARM'S CIRCLE (jb, 11 Nov: "display a temporary circle at the
+  // radius from the centre they click for the 2nd click ... if the circle
+  // crosses any lines walls etc, it will create a NODE at the intersection
+  // for snapping"): once the arm is taken, a dashed circle of its length
+  // about the centre, and every place it crosses a wall (centreline or
+  // face), line, shape, outline, floor or site roof edge is a node for the
+  // third press -- nodeEnds (model/07) asks turnCircleNodes, so the ring,
+  // the rays and the catch are the ones every node has. The arm's end lands
+  // on the crossing exactly, at its own length.
+  let turnCircleCache = { key: null, list: [] };
+  const turnCircleNodes = () => {
+    const st = draftCmd.turn;
+    if (activeTool !== 'rotate' || !st.base || st.ref == null || !(st.radius > 0)) return [];
+    const key = `${modelEpoch}|${activeLevelId()}|${st.base.x},${st.base.z},${st.radius}`;
+    if (turnCircleCache.key === key) return turnCircleCache.list;
+    const c = st.base, r = st.radius, out = [];
+    const add = (x, z) => { if (!out.some(o => Math.abs(o.x - x) < 1e-6 && Math.abs(o.z - z) < 1e-6)) out.push({ x, y: 0, z }); };
+    const segs = [...magnetSegs(), ...walls().filter(w => w?.start && w?.end).map(w => ({ a: w.start, b: w.end }))];
+    segs.forEach(({ a, b }) => {
+      const dx = b.x - a.x, dz = b.z - a.z, fx = a.x - c.x, fz = a.z - c.z;
+      const A = dx * dx + dz * dz, B = 2 * (fx * dx + fz * dz), C = fx * fx + fz * fz - r * r;
+      if (A < 1e-12) return;
+      const disc = B * B - 4 * A * C;
+      if (disc < 0) return;
+      const q = Math.sqrt(disc);
+      [(-B - q) / (2 * A), (-B + q) / (2 * A)].forEach(t => {
+        if (t < -1e-9 || t > 1 + 1e-9) return;
+        add(a.x + dx * t, a.z + dz * t);
+      });
+    });
+    turnCircleCache = { key, list: out };
+    return out;
   };
   const turnBy = degrees => {
     const base = draftCmd.turn.base;
@@ -543,7 +578,7 @@
     const done = transformSelection(turnAbout(base, degrees), {
       holo: h => { h.angleDeg = ((((Number(h.angleDeg) || 0) + degrees) % 360) + 360) % 360; },
     });
-    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null;
+    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null; draftCmd.turn.radius = null;
     if (turnAngleBox) turnAngleBox.placeholder = 'DEG';
     if (!done) { sayOnStrip('Nothing in the selection can be turned on its own -- doors, windows and fixtures turn with their walls.'); return; }
     setTool(RESTING_TOOL);
@@ -565,6 +600,21 @@
     }
     if (st.refFrom) strokeGuide(st.base, null);
     strokeGuide(armFrom, hand, !st.refFrom);
+    if (st.ref != null && st.radius > 0) {
+      const s = toS(st.base);
+      ctx.save();
+      ctx.strokeStyle = skin['draw-selected-cross'];
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.arc(s.x, s.y, st.radius * view.scale, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = skin['draw-selected-cross'];
+      turnCircleNodes().forEach(n => {
+        const q = toS(n);
+        ctx.beginPath(); ctx.arc(q.x, q.y, 3, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.restore();
+    }
     const typed = draftDegrees(turnAngleBox);
     const deg = typed != null ? typed : turnShown(hand);
     if (turnAngleBox && typed == null) turnAngleBox.placeholder = deg != null ? `${Math.round(deg * 10) / 10}°` : 'DEG';
@@ -782,7 +832,7 @@
   toolListeners.push(next => {
     draftCmd.offset.pick = null;
     draftCmd.mirror.a = null;
-    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null;
+    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null; draftCmd.turn.radius = null;
     draftCmd.fillet.first = null;
     if (turnAngleBox) { turnAngleBox.value = ''; turnAngleBox.placeholder = 'DEG'; }
     if (next === 'offset' && offsetDistBox && !offsetDistBox.value.trim()) offsetDistBox.value = '1';

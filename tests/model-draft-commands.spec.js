@@ -236,6 +236,28 @@ test('ROTATE\'s picks glow on a node and square off the centre with the T-SQUARE
   expect(await page.evaluate(() => Math.round(draftCmd.turn.ref))).toBe(180);
 });
 
+test('ROTATE\'s arm circle makes nodes where it crosses lines and shapes, and the third press lands on one', async ({ page }) => {
+  const { at } = await open(page);
+  await pick(page, at, -6, 0);
+  await page.keyboard.press('z');
+  await click(page, at, -2, 0);
+  await click(page, at, -10, 0);
+  expect(await strip(page)).toContain('crossings are nodes');
+  // Radius 8 about (-2, 0): it crosses lb (x = 2) at z = -sqrt(48) and the
+  // square shape's west edge (x = 4) at z = sqrt(28) and its top edge at
+  // x = -2 + sqrt(48).
+  const nodes = await page.evaluate(() => turnCircleNodes().map(n => [Math.round(n.x * 1000) / 1000, Math.round(n.z * 1000) / 1000]));
+  expect(nodes).toEqual(expect.arrayContaining([[2, -6.928], [4, 5.292], [4.928, 4]]));
+  // The hand near the crossing on lb lights it as a node.
+  await page.mouse.move(...at(2.05, -6.85));
+  await page.waitForTimeout(120);
+  expect(JSON.parse(await page.locator('#plan').getAttribute('data-snap-node'))).toEqual([2, -6.9282]);
+  await click(page, at, 2.05, -6.85);
+  // The line's far end lands on the crossing exactly, at its own length.
+  expect(await seg(page, 'la')).toEqual([2, -6.928, -2, 0]);
+  expect(await page.evaluate(() => turnCircleNodes().length)).toBe(0);
+});
+
 test('ARRAY makes a row or a grid of copies at the typed spacing, and one UNDO takes them all back', async ({ page }) => {
   const { at } = await open(page);
   await pick(page, at, -6, 0);

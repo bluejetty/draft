@@ -1477,6 +1477,11 @@
     dimensionDivideNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND ROTATE'S ARM CIRCLE CROSSINGS (jb, 11 Nov; model/18 turnCircleNodes),
+    // while the third press is waited for.
+    (typeof turnCircleNodes === 'function' ? turnCircleNodes() : []).forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     return out;
   };
   const dimensionDivideNodes = () => {
