@@ -792,7 +792,7 @@ ${trio(true)}
   <span id="turn-bar" data-turn-bar hidden>
     <span data-bar-hint>ROTATE</span>
     <input id="turn-angle" type="text" data-turn-angle inputmode="decimal" placeholder="DEG" aria-label="Turn by degrees, clockwise">
-    <span data-bar-hint data-turn-say>press the base point</span>
+    <span data-bar-hint data-turn-say>press the centre of rotation</span>
   </span>
   <span id="fillet-bar" data-fillet-bar hidden>
     <span data-bar-hint>FILLET</span>

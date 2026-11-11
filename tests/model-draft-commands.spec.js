@@ -174,13 +174,13 @@ test('MIRROR copies what is picked across a line of two presses, or mirrors it i
   expect(await lineCount(page), 'one UNDO takes the copy back').toBe(2);
 });
 
-test('ROTATE turns what is picked about a pressed base point, by a typed angle or a second press', async ({ page }) => {
+test('ROTATE turns what is picked about a pressed centre, by a typed angle or by the arm as it is and where it goes', async ({ page }) => {
   const { at } = await open(page);
   await pick(page, at, -6, 0);
   await page.keyboard.press('z');
   expect(await tool(page)).toBe('rotate');
   await click(page, at, -2, 0);
-  expect(await strip(page)).toContain('press a point for the angle');
+  expect(await strip(page)).toContain('press a point on the arm');
   await page.locator('#turn-angle').fill('90');
   await page.keyboard.press('Enter');
   // A quarter turn clockwise about the line's own end: it now runs up.
@@ -188,12 +188,52 @@ test('ROTATE turns what is picked about a pressed base point, by a typed angle o
   expect(await tool(page)).toBe('select');
   await page.keyboard.press('Control+z');
   expect(await seg(page, 'la')).toEqual([-10, 0, -2, 0]);
-  // By a second press: straight down from the base is 90 clockwise too.
+  // THREE PRESSES (jb, 11 Nov, ArchiCAD's way): the centre, the arm as it
+  // is (the line's far end, due west), then where it goes (due north).
+  // West to north is a quarter turn clockwise on the screen.
   await pick(page, at, -6, 0);
   await page.keyboard.press('z');
   await click(page, at, -2, 0);
-  await click(page, at, -2, 6);
+  await click(page, at, -10, 0);
+  expect(await strip(page)).toContain('press where the arm goes');
+  // The DEG box shows the turn the hand is showing before the press.
+  await page.mouse.move(...at(-2, -6));
+  await page.waitForTimeout(120);
+  expect(await page.locator('#turn-angle').getAttribute('placeholder')).toBe('90°');
+  await click(page, at, -2, -6);
   expect(await seg(page, 'la')).toEqual([-2, -8, -2, 0]);
+  expect(await strip(page)).toContain('Turned');
+});
+
+test('ROTATE reads the centre pressed again as the arm\'s start, the AutoCAD reference habit', async ({ page }) => {
+  const { at } = await open(page);
+  await pick(page, at, -6, 0);
+  await page.keyboard.press('z');
+  await click(page, at, -2, 0);
+  await click(page, at, -2, 0);
+  expect(await strip(page)).toContain('arm starts at the centre');
+  await click(page, at, -10, 0);
+  expect(await strip(page)).toContain('press where the arm goes');
+  await click(page, at, -2, 6);
+  // West to south is a quarter turn anticlockwise: the line now runs down.
+  expect(await seg(page, 'la')).toEqual([-2, 8, -2, 0]);
+});
+
+test('ROTATE\'s picks glow on a node and square off the centre with the T-SQUARE', async ({ page }) => {
+  const { at } = await open(page);
+  await pick(page, at, -6, 0);
+  await page.keyboard.press('z');
+  // The hand over the wall's end lights the node ring before any press.
+  await page.mouse.move(...at(0.05, 10.05));
+  await page.waitForTimeout(120);
+  expect(JSON.parse(await page.locator('#plan').getAttribute('data-snap-node'))).toEqual([0, 10]);
+  await click(page, at, 0.05, 10.05);
+  const base = await page.evaluate(() => [draftCmd.turn.base.x, draftCmd.turn.base.z]);
+  expect(base).toEqual([0, 10]);
+  // The arm pressed a little off due west squares to it under the T-SQUARE.
+  await page.evaluate(() => lightInstrument('tsquare'));
+  await click(page, at, -6, 10.4);
+  expect(await page.evaluate(() => Math.round(draftCmd.turn.ref))).toBe(180);
 });
 
 test('ARRAY makes a row or a grid of copies at the typed spacing, and one UNDO takes them all back', async ({ page }) => {

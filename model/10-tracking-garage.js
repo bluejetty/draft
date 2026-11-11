@@ -1030,7 +1030,10 @@
       // AND THE SINGLE SLOPE ROOF'S OUTLINE (Movie, 21 Oct), so its first
       // corner glows under the hand as the house outline's does.
       || shedTracing();
-    if (!cursorWorld || !(drawsRun() || tracesLoop)) { markMagnet(null); return; }
+    // AND MIRROR'S AND ROTATE'S PICKS (model/18, draftPickFrom): the same
+    // ring and rays, squared from the first point, so the hand sees the catch.
+    const draftPick = typeof draftPickFrom === 'function' ? draftPickFrom() : null;
+    if (!cursorWorld || !(drawsRun() || tracesLoop || draftPick)) { markMagnet(null); return; }
     // A RUN HELD SQUARE asks the squared magnet, as drawPoint does; the
     // locked bearing and the protractor take no magnet at all.
     // A LOOP'S LAST CORNER IS ITS RUN'S START (Movie, 27 Oct): the outline,
@@ -1038,11 +1041,11 @@
     // without it the ring lit where the hand was and the press landed on the
     // square.
     const runFrom = drawStart
-      || (activeTool === 'outline' ? outlineTail() : loopCornersInHand()?.at(-1)) || null;
-    const runs = (drawsRun() || tracesLoop) && runFrom;
+      || (draftPick ? draftPick.from : activeTool === 'outline' ? outlineTail() : loopCornersInHand()?.at(-1)) || null;
+    const runs = (drawsRun() || tracesLoop || draftPick) && runFrom;
     const steered = runs && (lockedPoint(runFrom, cursorWorld) || protractorPoint(runFrom, cursorWorld));
     const fixed = runs && !steered ? squaredAxis(runFrom, cursorWorld) : null;
-    const magnet = (drawsRun() || tracesLoop) && !steered ? drawMagnet() : null;
+    const magnet = (drawsRun() || tracesLoop || draftPick) && !steered ? drawMagnet() : null;
     if (fixed) {
       const lit = (magnet && handPoint(cursorWorld, magnet)) || axisMagnet(squareTo(runFrom, cursorWorld), fixed, [], magnet);
       paintMagnets(cursorWorld, magnet, lit);

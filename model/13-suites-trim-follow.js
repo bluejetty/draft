@@ -1020,7 +1020,10 @@
     // A STAIR FROM ITS FIRST STEP, at its real length.
     || (activeTool === 'stair' && !!stairHand.at)
     // A POINTER's leader, from the thing tapped to wherever the text will go.
-    || planNoteInHand();
+    || planNoteInHand()
+    // OFFSET, MIRROR, ROTATE, FILLET from their first press (model/18): the
+    // ghost and the guide follow the hand.
+    || (typeof draftCommandsBusy === 'function' && draftCommandsBusy());
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
