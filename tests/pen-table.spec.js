@@ -205,6 +205,9 @@ test('the DXF a sheet saves carries the pens in its LAYER table', async ({ page 
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
   await setPens(page, PENS);
+  // SAVE DXF costs bones (tests/layout-print-bone-cost.spec.js); fund the seed wallet.
+  await page.evaluate(() => localStorage.setItem('draft-bone-wallet',
+    JSON.stringify({ balance: 20, lastDripAt: Date.now(), createdAt: Date.now() })));
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-layout-dxf]').click()]);
   const file = info.outputPath('sheets.zip');
   await download.saveAs(file);

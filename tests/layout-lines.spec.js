@@ -90,6 +90,9 @@ test('a red XTRA-BOLD dot-dash line prints red on the sheet, and a plain line pr
 
 test('SAVE DXF names the dot dash CENTER and carries the red on the line; the plain line stays CONTINUOUS on its layer\'s colour', async ({ page }, info) => {
   await openLayout(page, drawing([L('plain', [2, 2], [22, 2]), L('hot', [2, 8], [22, 8], { weight: 6, style: 'dotdash', color: '#ff0000' })]));
+  // SAVE DXF costs bones (tests/layout-print-bone-cost.spec.js); fund the seed wallet.
+  await page.evaluate(() => localStorage.setItem('draft-bone-wallet',
+    JSON.stringify({ balance: 20, lastDripAt: Date.now(), createdAt: Date.now() })));
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-layout-dxf]').click()]);
   const file = info.outputPath('sheets.zip');
   await download.saveAs(file);

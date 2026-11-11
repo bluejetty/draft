@@ -99,6 +99,9 @@ const reader = (() => {
 test('SAVE DXF hands over one ZIP: a full-size DXF a drawn sheet, on CAD layers, no titleblock', async ({ page }, info) => {
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
+  // SAVE DXF costs bones (tests/layout-print-bone-cost.spec.js); fund the seed wallet.
+  await page.evaluate(() => localStorage.setItem('draft-bone-wallet',
+    JSON.stringify({ balance: 20, lastDripAt: Date.now(), createdAt: Date.now() })));
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-layout-dxf]').click()]);
   expect(download.suggestedFilename()).toBe('NEW HOME DXF.zip');
   const file = info.outputPath('sheets.zip');
