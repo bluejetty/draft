@@ -1178,6 +1178,13 @@ const PRINT_PX_PER_IN = 72;
 // box was a flat 4px and moved for the same reason.
 const VIEWPORT_TITLE_IN = 0.14;
 const VIEWPORT_TITLE_GAP_IN = 4 / PRINT_PX_PER_IN;
+// The move band along a viewport's border, in screen pixels either side of
+// the line; inside it the drag MOVES the window, inside the body it PANS the
+// drawing (jb, 10 Nov). A finger gets a wider band than a mouse.
+const EDGE_BAND_PX = 7;
+const EDGE_BAND_TOUCH_PX = 16;
+const GRIP_CURSORS = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+  nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
 
 // Architectural scales: label, paperInchesPerFoot
 const SCALES = [
@@ -1674,6 +1681,7 @@ class Component extends PageLogic {
       const hit = this._viewportAt(pt);
       if (!hit) return;
       this._draggingViewport = null;
+      this._panningViewport = null;
       this._croppingViewport = null;
       e.preventDefault();
       this._openEditInModel(hit.id);
@@ -1682,10 +1690,7 @@ class Component extends PageLogic {
     // takes a drag before pressing. Only while no gesture is under way.
     this._canvas.addEventListener('pointermove', this._hov = (e) => {
       if (this._activePointerId != null) return;
-      const grip = this._cropHandleAt(this._sheetPointIn(e));
-      const CURSORS = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
-        nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
-      this._canvas.style.cursor = grip ? CURSORS[grip.handle] : '';
+      this._canvas.style.cursor = this._cursorAt(this._sheetPointIn(e), e);
     });
     window.addEventListener('pointermove',      this._wmmv = (e) => { if (this._ownsPointer(e)) this._onMouseMove(e); });
     window.addEventListener('pointerup',        this._mup  = (e) => {
@@ -2140,6 +2145,36 @@ class Component extends PageLogic {
     const reach = 8 / (this.state.zoom || 1);
     return this._cropHandlesIn(viewport).find(h =>
       Math.abs(h.xIn - ptIn.xIn) <= reach && Math.abs(h.yIn - ptIn.yIn) <= reach) || null;
+  }
+
+  // THE EDGE BAND (jb, 10 Nov): "when you grab the outside line it allows
+  // you to move the viewport ... if you put the hand on the inside where not
+  // touching the edge ... the user can move the image within the viewport,
+  // and the viewport stays in the same position". So a press has three
+  // answers on a viewport: a GRIP crops, the BAND along the border MOVES the
+  // window, and the BODY PANS the drawing inside it. The band is a few
+  // screen pixels either side of the line, whatever the zoom, and wider for
+  // a finger, which cannot see a cursor and lands less exactly than a mouse.
+  // A schedule is a table with nothing behind it to pan, so its body moves.
+  _viewportEdgeAt(viewport, ptIn, e) {
+    if (isSchedule(viewport)) return true;
+    const px = e && e.pointerType === 'touch' ? EDGE_BAND_TOUCH_PX : EDGE_BAND_PX;
+    const band = px / (this.state.zoom || 1);
+    const r = this._viewportRectIn(viewport);
+    const nearX = Math.abs(ptIn.xIn - r.xIn) <= band || Math.abs(ptIn.xIn - (r.xIn + r.wIn)) <= band;
+    const nearY = Math.abs(ptIn.yIn - r.yIn) <= band || Math.abs(ptIn.yIn - (r.yIn + r.hIn)) <= band;
+    return nearX || nearY;
+  }
+
+  // What the pointer would do if it pressed here: the resize arrow over a
+  // grip, the four-way arrow over the band, the open hand over the body.
+  _cursorAt(ptIn, e) {
+    if (this.state.addingViewport) return '';
+    const grip = this._cropHandleAt(ptIn);
+    if (grip) return GRIP_CURSORS[grip.handle];
+    const hit = this._viewportAt(ptIn);
+    if (!hit) return '';
+    return this._viewportEdgeAt(hit, ptIn, e) ? 'move' : 'grab';
   }
 
   // The sheet as this page owns it — the ONLY key this page may write, and
@@ -3599,6 +3634,7 @@ class Component extends PageLogic {
     this._releasePointer(e);
     this._panning = false;
     this._draggingViewport = null;
+    this._panningViewport = null;
     this._croppingViewport = null;
     this._draw();
   }
@@ -3643,7 +3679,22 @@ class Component extends PageLogic {
       return;
     }
     if (hit) {
-      this._draggingViewport = { id: hit.id, dxIn: hit.xIn - ptIn.xIn, dyIn: hit.yIn - ptIn.yIn };
+      if (this._viewportEdgeAt(hit, ptIn, e)) {
+        this._draggingViewport = { id: hit.id, dxIn: hit.xIn - ptIn.xIn, dyIn: hit.yIn - ptIn.yIn };
+      } else {
+        // PAN THE DRAWING, NOT THE WINDOW. The drawing is laid out on the
+        // natural frame and clipped to the window (_viewportRectIn), so the
+        // frame's centre moves with the hand and the crop moves the same
+        // distance the other way: the window on the sheet does not stir.
+        // Nothing new is saved -- xIn, yIn and crop are the fields the file,
+        // the print, the PDF and the DXF already read -- and FIT WINDOW
+        // still puts the drawing back centred.
+        this._panningViewport = {
+          id: hit.id, from: ptIn, xIn: hit.xIn, yIn: hit.yIn,
+          crop: { l: 0, t: 0, r: 0, b: 0, ...(hit.crop || {}) },
+        };
+        this._canvas.style.cursor = 'grabbing';
+      }
       this.setState({ selectedViewportId: hit.id }, () => this._draw());
       e.preventDefault();
     } else if (t && ptIn.xIn >= t.xIn && ptIn.xIn <= t.xIn + t.wIn && ptIn.yIn >= t.yIn && ptIn.yIn <= t.yIn + t.hIn) {
@@ -3679,6 +3730,17 @@ class Component extends PageLogic {
       this._draw();
       return;
     }
+    if (this._panningViewport) {
+      const ptIn = this._sheetPointIn(e);
+      const pan = this._panningViewport;
+      const dx = ptIn.xIn - pan.from.xIn, dy = ptIn.yIn - pan.from.yIn;
+      const crop = { l: pan.crop.l - dx, r: pan.crop.r + dx, t: pan.crop.t - dy, b: pan.crop.b + dy };
+      this.state.viewports = this.state.viewports.map(viewport =>
+        (viewport.id === pan.id ? { ...viewport, xIn: pan.xIn + dx, yIn: pan.yIn + dy, crop } : viewport));
+      pan.moved = true;
+      this._draw();
+      return;
+    }
     if (this._draggingViewport) {
       const ptIn = this._sheetPointIn(e);
       const drag = this._draggingViewport;
@@ -3696,6 +3758,13 @@ class Component extends PageLogic {
     if (this._croppingViewport) {
       const moved = this._croppingViewport.moved;
       this._croppingViewport = null;
+      if (moved) this.setState({ viewports: this.state.viewports, auto: false }, () => this._persistLayout());
+      return;
+    }
+    if (this._panningViewport) {
+      const moved = this._panningViewport.moved;
+      this._panningViewport = null;
+      this._canvas.style.cursor = 'grab';
       if (moved) this.setState({ viewports: this.state.viewports, auto: false }, () => this._persistLayout());
       return;
     }

@@ -184,8 +184,15 @@ test('the engaged scale writes its pif onto the new viewport', async ({ page }) 
 test('dragging a viewport moves it in paper inches and persists the spot', async ({ page }) => {
   await openLayout(page, houseDrawing());
   await placeViewport(page, 8, 5);
-  const from = await sheetToClient(page, 8, 5);
-  const to = await sheetToClient(page, 11, 6.5);
+  // FROM THE BORDER, away from a grip: since the pan went in the body of a
+  // viewport pans its drawing (layout-viewport-pan.spec.js); the frame line
+  // is what moves the window.
+  const r = await page.evaluate(() => {
+    const app = globalThis.eval('page');
+    return app._viewportRectIn(app.state.viewports.at(-1));
+  });
+  const from = await sheetToClient(page, r.xIn, r.yIn + r.hIn / 4);
+  const to = await sheetToClient(page, r.xIn + 3, r.yIn + r.hIn / 4 + 1.5);
   await withLayoutSave(page, async () => {
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
@@ -195,6 +202,7 @@ test('dragging a viewport moves it in paper inches and persists the spot', async
   const saved = await savedDrawing(page);
   expect(saved.layout.viewports.at(-1).xIn).toBeCloseTo(11, 1);
   expect(saved.layout.viewports.at(-1).yIn).toBeCloseTo(6.5, 1);
+  expect(saved.layout.viewports.at(-1).crop, 'a move is not a pan').toBeUndefined();
 });
 
 test('Escape stands placement down; Delete removes the selected viewport', async ({ page }) => {
