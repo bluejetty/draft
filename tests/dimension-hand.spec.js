@@ -201,17 +201,18 @@ async function painted(page) {
   });
 }
 
-test('AUTO DIMS and HAND DIMS beside the north arrow show or hide each kind; the drawing keeps both; a reload remembers', async ({ page }) => {
+test('AUTO DIMS and HAND DIMS on the foot lane show or hide each kind; the drawing keeps both; a reload remembers', async ({ page }) => {
   await open(page, BOTH());
   const chip = kind => page.locator(`[data-dims-show="${kind}"]`);
   await expect(chip('auto')).toHaveText('AUTO DIMS');
   await expect(chip('hand')).toHaveText('HAND DIMS');
   await expect(chip('auto')).toHaveAttribute('aria-pressed', 'true');
-  // Left of the arrow, on its line.
-  const [box, north] = await Promise.all([page.locator('[data-dims-show]').first().boundingBox(),
-    page.locator('#north-hit').boundingBox()]);
-  expect(box.x + box.width).toBeLessThanOrEqual(north.x);
-  expect(Math.abs((box.y + box.height / 2) - (north.y + north.height / 2))).toBeLessThan(north.height);
+  // ON THE FOOT LANE, LEFT OF THE CLOCK (11 Nov; they stood beside the north
+  // arrow before Movie's rearrange took them down to the bottom right).
+  const [box, clock, foot] = await Promise.all([page.locator('[data-dims-show]').first().boundingBox(),
+    page.locator('#clock').boundingBox(), page.locator('#house-strip').boundingBox()]);
+  expect(box.x + box.width, 'left of the clock').toBeLessThanOrEqual(clock.x);
+  expect(box.y, 'on the foot bar').toBeGreaterThanOrEqual(foot.y);
   expect(await painted(page)).toEqual([31, 32]);
   await chip('hand').click();
   await expect(chip('hand')).toHaveAttribute('aria-pressed', 'false');

@@ -29,39 +29,48 @@ async function houseOnScreen(page) {
   await expect(page.locator('#strip-rotate')).toBeVisible();
 }
 
+// AND APART AGAIN, 11 Nov (Movie, with a mockup): "move the north arrow
+// changer to the left of the LAYERS/LVLS tab so the level tab can go to the
+// top ... put the FULL SIZE, and page rotation down beside registration (but
+// make them smaller so two are same height as the registration box (and make
+// the NORTH ARROW box that smaller size too)". The arrow's hand stands alone
+// at the top right, left of the rail; HOUSE turn and ZOOM TO FILL stack at
+// the bottom right, a matched pair of the arrow's size.
 const boxes = page => page.evaluate(() => {
-  const mid = el => { const r = el.getBoundingClientRect(); return { cx: r.x + r.width / 2, w: r.width, h: r.height }; };
-  const seats = [...document.querySelectorAll('[data-seat]')].slice(0, 2)
-    .map(s => { const r = s.getBoundingClientRect(); return r.x + r.width / 2; })
-    .sort((a, b) => a - b);
-  return { seats, north: mid(document.getElementById('north-hit')),
-    turn: mid(document.getElementById('strip-rotate')), fill: mid(document.getElementById('strip-fill')) };
+  const box = el => { const r = el.getBoundingClientRect(); return { cx: r.x + r.width / 2, cy: r.y + r.height / 2, left: r.x, right: r.right, top: r.y, bottom: r.bottom, w: r.width, h: r.height }; };
+  return { rail: box(document.getElementById('right-rail')), north: box(document.getElementById('north-hit')),
+    turn: box(document.getElementById('strip-rotate')), fill: box(document.getElementById('strip-fill')),
+    hint: box(document.getElementById('hint')) };
 });
 
-test('the arrow sits over the first column, ZOOM TO FILL over the second, and the turn button between', async ({ page }) => {
+test('the arrow stands at the top right, left of the open rail and level with its top', async ({ page }) => {
   await houseOnScreen(page);
   const at = await boxes(page);
-  expect(at.seats.length, 'the rail never came up to line up with').toBe(2);
-  // MEASURED AGAINST THE SEATS THEMSELVES, not against a pixel typed here:
-  // the rail was widened 15px earlier the same day, and a check written to
-  // the old number would have gone red for the right reason and the wrong
-  // one at once.
-  expect(Math.abs(at.north.cx - at.seats[0]),
-    'the north arrow is not over the first column').toBeLessThanOrEqual(2);
-  expect(Math.abs(at.fill.cx - at.seats[1]),
-    'ZOOM TO FILL is not over the second column').toBeLessThanOrEqual(2);
-  expect(Math.abs(at.turn.cx - (at.seats[0] + at.seats[1]) / 2),
-    'HOUSE ROTATE is not halfway between').toBeLessThanOrEqual(2);
+  expect(at.rail.w, 'the rail never came up to line up with').toBeGreaterThan(0);
+  expect(at.north.right, 'the arrow is left of the rail').toBeLessThanOrEqual(at.rail.left);
+  expect(at.rail.left - at.north.right, 'and close beside it').toBeLessThanOrEqual(12);
+  expect(Math.abs(at.north.top - at.rail.top), 'with its top on the rail\'s top').toBeLessThanOrEqual(6);
+});
+
+test('HOUSE turn stands over ZOOM TO FILL at the bottom right, clear of the pan hint', async ({ page }) => {
+  await houseOnScreen(page);
+  const at = await boxes(page);
+  expect(Math.abs(at.turn.cx - at.fill.cx), 'one column').toBeLessThanOrEqual(1);
+  expect(at.turn.bottom, 'the turn above the fill').toBeLessThanOrEqual(at.fill.top);
+  expect(at.fill.top - at.turn.bottom, 'and touching').toBeLessThanOrEqual(6);
+  expect(at.fill.bottom, 'the pair stands over the pan hint').toBeLessThanOrEqual(at.hint.top);
+  expect(at.fill.right, 'in the sheet\'s right margin').toBeGreaterThan(page.viewportSize().width - 60);
 });
 
 test('and they are a matched set, not one big and one small', async ({ page }) => {
   await houseOnScreen(page);
   const at = await boxes(page);
   // THE ARROW WAS 77px TALL BESIDE A 36px BUTTON. "the same size" -- and
-  // since 23 Oct the same box, so the same to the pixel.
+  // since 23 Oct the same box; since 11 Nov the smaller 32px one.
   expect(Math.abs(at.north.h - at.turn.h),
     `arrow ${at.north.h}px, button ${at.turn.h}px`).toBeLessThanOrEqual(1);
   expect(Math.abs(at.fill.h - at.turn.h)).toBeLessThanOrEqual(1);
+  expect(at.north.h, 'the smaller box').toBeLessThanOrEqual(34);
 });
 
 test('the turn button is white, and lights the HOUSE mark gold under the hand',

@@ -57,9 +57,15 @@
   #dim-pop[hidden] { display:none; }
   /* AUTO DIMS / HAND DIMS ON THE SHEET: two chips beside the north arrow
      that show or hide each kind (Movie, 18 Oct). */
-  #dims-show { position:absolute; display:flex; gap:4px; pointer-events:auto; }
+  /* AND SINCE 11 NOV THEY STAND ON THE FOOT LANE, bottom right, left of the
+     clock (Movie, with a mockup: "move the dims stuff down to the bottom
+     right"). The lane is 24px, so the chips are cut to fit it; the right
+     edge is seated off the clock by seatDimsShow. */
+  #dims-show { position:fixed; bottom:0; height:var(--browser-lane, 24px); z-index:7;
+    display:flex; align-items:center; gap:4px; pointer-events:auto; }
   #dims-show[hidden] { display:none; }
-  #dims-show .sel-chip { flex:none; white-space:nowrap; padding:5px 7px; }
+  #dims-show .sel-chip { flex:none; white-space:nowrap; padding:3px 6px; font-size:9px; line-height:1.2; }
+  #dims-show select { font-size:9px; padding:2px 3px; }
   #dims-show .sel-chip[hidden] { display:none; }
   /* AUTO DIMS ROWS: four rows a side, ticked on or off. */
   #auto-rows { position:fixed; z-index:40; display:flex; flex-direction:column; gap:4px; padding:8px;
@@ -93,7 +99,9 @@
   #length-hint-off input { margin:0; width:12px; height:12px; cursor:pointer; accent-color: var(--length-live); }
   #length-hint::before { content:''; position:absolute; left:50%; top:-8px; margin-left:-7px;
     border:7px solid transparent; border-top:0; border-bottom:8px solid var(--length-live); }
-  #north-dock { position:fixed; z-index:6; pointer-events:none; }
+  /* OVER THE FOOT BAR (z 6) since the DIMS chips stand on its lane, and over
+     REGISTRATION (z 7), which the turn and fill pair stands beside. */
+  #north-dock { position:fixed; z-index:8; pointer-events:none; }
   #north-dock > button { pointer-events:auto; position:absolute; }
   /* NO BOX ON THE ARROW (Movie, 14 Oct: "the NOrth arrow doesn't need a box").
      The hand is still here and still takes the press; what went is the panel
@@ -104,10 +112,17 @@
      arrow's hand, HOUSE turn and ZOOM TO FILL wear one 40px box; the arrow
      is painted on the little canvas inside its own, by the same painter
      that drew it bare on the sheet from 14 Oct to today. */
-  #north-dock .dock-chip { display:flex; align-items:center; justify-content:center; width:40px; height:40px;
+  /* SMALLER SINCE 11 NOV (Movie, with a mockup): "make them smaller so two
+     are same height as the registration box ... and make the NORTH ARROW box
+     that smaller size too". --dock-chip is the side; the turn and fill pair
+     stack beside REGISTRATION and read their side off its height
+     (seatNorthDock), the arrow's hand keeps the base size. */
+  #north-dock { --dock-chip: 32px; }
+  #north-dock .dock-chip { display:flex; align-items:center; justify-content:center; width:var(--dock-chip); height:var(--dock-chip);
     padding:0; border:1px solid var(--edge-panel); border-radius:6px; cursor:pointer; color:#ffffff;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
-  #north-hit canvas { display:block; width:38px; height:38px; }
+  #north-hit canvas { display:block; width:calc(var(--dock-chip) - 2px); height:calc(var(--dock-chip) - 2px); }
+  #north-dock .dock-chip svg { width:70%; height:70%; }
   /* GREEN UNDER THE HAND, the site mark's own (14 Oct); the needles glow
      the same green, painted. */
   #north-hit:hover, #north-hit:focus-visible { border-color: var(--draw-site-datum, #6a9a57); }
@@ -129,6 +144,15 @@
      corner is actually being dragged -- equal specificity, later rule. */
   #plan.over-corner, #plan.over-wall { cursor:move; }
 
+  /* STATUS READOUT ON THE RIGHT (Movie, 11 Nov, with a mockup: "move
+     STATUS REPORT over to the right side"): the row stands left of the pan
+     hint on the hint's own line, and the open panel hangs from the same
+     corner. --hint-w is the hint's measured width (seatHintRow). */
+  #lower-left { left:auto; right: calc(12px + var(--hint-w, 182px) + 14px); }
+  #readout { left:auto; right: calc(12px + var(--hint-w, 182px) + 14px); }
+  /* THE FILE NOTICES (lease, changed elsewhere, saved where) stood in the
+     band the rail now fills, so they stand OVER the rail and its tab. */
+  #upper-right { z-index:46; }
   #hint { position:fixed; right:12px; bottom:var(--readout-bottom); z-index:5; color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
@@ -162,7 +186,15 @@
        shell-bars.css: only the sidebars read these two, and the bars
        they measure from are now somebody else's to name. */
     --bottom-band: calc(var(--house-h) + 72px);
-    --rail-top: calc(var(--strip-h) + 80px); }
+    --rail-top: calc(var(--strip-h) + 80px);
+    /* THE RIGHT RAIL STARTS AT THE TOP (Movie, 11 Nov: "so the level tab can
+       go to the top"): the 80px band above it held the north arrow, HOUSE
+       turn, ZOOM TO FILL and the DIMS chips, and all four moved out. 20px
+       under the strip, which is where the SELECT bar on the left starts. */
+    --right-rail-top: calc(var(--strip-h) + 20px); }
+  #right-rail { top: var(--right-rail-top);
+    max-height: calc(100vh - var(--right-rail-top) - var(--bottom-band)); }
+  #right-tab { top: var(--right-rail-top); }
   /* PRINTSCREEN borrows the settings corner's own button rules rather than
      inventing a third button shape on the same bar. */
   #printscreen {
@@ -1004,7 +1036,7 @@
      NOTES / CALC, and its pane -- the session's versions, newest at the top,
      the one on the sheet marked. Seated under the notes tab by the same
      hand that seats that tab under LEVELS / LAYERS. */
-  #history-tab { right:0; top: calc(var(--rail-top) + 64vh + 16px);
+  #history-tab { right:0; top: calc(var(--right-rail-top) + 64vh + 16px);
     writing-mode:vertical-lr; max-height:32vh; white-space:nowrap;
     border-radius:4px 0 0 4px; }
   #history-panel { display:flex; flex-direction:column; height:100%; min-height:0;
@@ -1040,7 +1072,7 @@
      window and NOTES / CALC runs to about 125px, so the label broke into
      two columns. The same 32vh cap #right-tab has; the tab's height is its
      text's, so the cap only stops it on a short window. */
-  #notes-tab { right:0; top: calc(var(--rail-top) + 32vh + 8px);
+  #notes-tab { right:0; top: calc(var(--right-rail-top) + 32vh + 8px);
     border:1px solid var(--pad-gum); border-right:none;
     border-radius:4px 0 0 4px; writing-mode:vertical-lr; max-height:32vh;
     white-space:nowrap;

@@ -15,15 +15,22 @@ const MUTANTS = [
     name: 'the arrow loses its box',
     find: '  <button type="button" id="north-hit" class="dock-chip" data-north-button data-north-hit\n',
     with: '  <button type="button" id="north-hit" style="background:transparent;border:0" data-north-button data-north-hit\n',
-    test: 'the three chips stand in a row' },
+    test: 'the three chips are one size' },
   { file: 'model/03-plan-paint.js',
-    // A FIXED PITCH, not one read off the rail: the row no longer follows
-    // the columns. (DOCK_CHIP + 4 is a pixel under the rail's own 45 and
-    // inside the spec's tolerance; this one is a chip's width off.)
-    name: 'the row keeps a fixed pitch instead of the rail\'s',
-    find: "    const pitch = Math.max(DOCK_CHIP + 4, cols ? (cols[1] - cols[0]) / 2 : 45);\n",
-    with: "    const pitch = DOCK_CHIP + 14;\n",
-    test: 'the three chips stand in a row' },
+    // THE HAND DRIFTS OFF THE RAIL (11 Nov): seated a fixed way in from the
+    // edge rather than 8px left of the rail, so it no longer stands beside
+    // the LEVELS / LAYERS pane.
+    name: 'the hand is not seated beside the rail',
+    find: "      const left = (edge ? edge.left : window.innerWidth - 28) - 8 - base - box.left;\n",
+    with: "      const left = (edge ? edge.left : window.innerWidth - 28) - 80 - base - box.left;\n",
+    test: 'the three chips are one size' },
+  { file: 'model/03-plan-paint.js',
+    // THE PAIR KEEPS THE OLD 40px when REGISTRATION is away, so the three
+    // are no longer a matched set at the smaller size.
+    name: 'the turn and fill pair is not the arrow\'s size',
+    find: "    const side = regBox ? Math.max(24, Math.min(40, (regBox.height - DOCK_GAP) / 2)) : base;\n",
+    with: "    const side = regBox ? Math.max(24, Math.min(40, (regBox.height - DOCK_GAP) / 2)) : 40;\n",
+    test: 'the three chips are one size' },
   { file: 'model/13-suites-trim-follow.js',
     name: 'the press fills nothing',
     find: "      if (zoomToFill()) { paint(); return; }\n",
@@ -58,7 +65,7 @@ const MUTANTS = [
     name: 'the needles are not painted on the face',
     find: "    window.DraftNorth.drawPair(fx, side / 2, side / 2 + NORTH_R * 0.4, NORTH_R, n, {\n",
     with: "    if (false) window.DraftNorth.drawPair(fx, side / 2, side / 2 + NORTH_R * 0.4, NORTH_R, n, {\n",
-    test: 'the three chips stand in a row' },
+    test: 'the three chips are one size' },
 ];
 
 const run = name => {

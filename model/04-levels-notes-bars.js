@@ -127,6 +127,10 @@
     rail.style.width = on && notesSize.w ? `${notesSize.w}px` : '';
     rail.style.top = on && notesSize.top != null ? `${notesSize.top}px` : '';
     rail.style.bottom = on && notesSize.bottom != null ? `${notesSize.bottom}px` : '';
+    // THE GRIPS SAY THE HEIGHT, not the stylesheet's cap: with the rail
+    // starting at the top (11 Nov) the cap is the pad's natural height, so a
+    // pulled-out pad was clipped back to it.
+    rail.style.maxHeight = on && (notesSize.top != null || notesSize.bottom != null) ? 'none' : '';
   }
   document.querySelectorAll('[data-notes-grip]').forEach(grip => {
     grip.addEventListener('pointerdown', e => {

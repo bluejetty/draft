@@ -42,17 +42,20 @@ async function airAbove(page, topWorldY, spanPx) {
   return (topWorldY - (bar.y + bar.height)) / spanPx;
 }
 
-test('the three chips stand in a row of one size: north over the first column, ZOOM TO FILL over the second, HOUSE turn between', async ({ page }) => {
+test('the three chips are one size: the arrow at the top right by the rail, HOUSE turn over ZOOM TO FILL at the bottom right', async ({ page }) => {
   await open(page);
-  const seats = await page.locator('[data-seat]').evaluateAll(els => els.slice(0, 2)
-    .map(s => { const r = s.getBoundingClientRect(); return r.x + r.width / 2; }).sort((a, b) => a - b));
-  expect(seats, 'the rail never came up to line up with').toHaveLength(2);
+  // SINCE 11 NOV (Movie, with a mockup): the arrow's hand went left of the
+  // rail so the rail could go to the top, and the turn and fill pair went
+  // down beside REGISTRATION, all three at the smaller 32px box.
+  const rail = await page.locator('#right-rail').boundingBox();
+  expect(rail, 'the rail never came up to line up with').toBeTruthy();
   const north = await mid(page.locator('#north-hit')), turn = await mid(page.locator('#strip-rotate')), fill = await mid(page.locator('#strip-fill'));
-  expect(Math.abs(north.cx - seats[0]), 'the arrow over the first column').toBeLessThanOrEqual(2);
-  expect(Math.abs(fill.cx - seats[1]), 'ZOOM TO FILL over the second').toBeLessThanOrEqual(2);
-  expect(Math.abs(turn.cx - (north.cx + fill.cx) / 2), 'HOUSE turn halfway').toBeLessThanOrEqual(2);
-  expect([north.w, north.h, turn.w, turn.h, fill.w, fill.h].every(v => Math.abs(v - 40) < 1), 'all 40px square').toBe(true);
-  expect(Math.abs(north.cy - fill.cy), 'on one line').toBeLessThan(1);
+  expect(rail.x - (north.cx + north.w / 2), 'the arrow just left of the rail').toBeGreaterThanOrEqual(0);
+  expect(rail.x - (north.cx + north.w / 2), 'and close beside it').toBeLessThanOrEqual(12);
+  expect(Math.abs(turn.cx - fill.cx), 'the turn and the fill in one column').toBeLessThanOrEqual(1);
+  expect(turn.cy, 'the turn over the fill').toBeLessThan(fill.cy);
+  expect(fill.cy, 'at the foot of the sheet').toBeGreaterThan(page.viewportSize().height / 2);
+  expect([north.w, north.h, turn.w, turn.h, fill.w, fill.h].every(v => Math.abs(v - 32) < 1), 'all 32px square').toBe(true);
   // THE ARROW WEARS THE SAME BOX AS ITS NEIGHBOURS (23 Oct; it went bare on
   // 14 Oct), and is drawn inside it.
   const [hitBg, turnBg] = await Promise.all([page.locator('#north-hit').evaluate(el => getComputedStyle(el).backgroundColor),
