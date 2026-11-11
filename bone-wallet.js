@@ -16,9 +16,8 @@ if (!window.DraftBoneWallet) {
   const SEED_BONES = 3;                 // new-browser grant
   const DRIP_MS = 60 * 60 * 1000;       // one bone per hour
   const DRIP_CAP = 10;                  // free wallet ceiling
-  // The spend registry — the growth point: elevation re-deals (#253) and
-  // LAYOUT printing (#168, 3 bones) register here later. Phase 1 wires
-  // ONLY the BUILD HOUSE press.
+  // The spend registry — the growth point: elevation re-deals (#253)
+  // register here later.
   // A BACKUP FILE BY EMAIL was 3 (Movie, 30 Oct: "charge them 3 bones per
   // email backup ... to slow them down a bit"). jb, 11 Nov 2026: "make a
   // save 1 bone and make the email save an additional bone" -- SAVE AS to
@@ -26,7 +25,11 @@ if (!window.DraftBoneWallet) {
   // jb's ruling, while the plain SAVE to this browser stays free) and the
   // BACKUP FILE email that follows it is 1 more (backup-email.js, spent only
   // once the mail has gone).
-  const COSTS = Object.freeze({ buildHouse: 1, saveToComputer: 1, emailBackup: 1 });
+  // A PRINT PACKAGE FROM LAYOUT IS 5 (board #168; jb, 11 Nov 2026: "make it
+  // 3 bones to print a PDF", then "lets make a PDF 5 bones") -- the browser's print window is where both
+  // the printer and Save as PDF live, so the press is what is priced; taken
+  // once the sheets are drawn and that window opens, refused at fewer.
+  const COSTS = Object.freeze({ buildHouse: 1, saveToComputer: 1, emailBackup: 1, printPackage: 5 });
   const STORAGE_KEY = 'draft-bone-wallet';
 
   // A stored wallet the code can trust: numbers coerced, a missing or

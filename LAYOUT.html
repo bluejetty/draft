@@ -848,6 +848,10 @@
       <button type="button" data-print-all>ALL</button>
       <button type="button" data-print-none>NONE</button>
     </div>
+    <!-- THE PRICE (jb, 11 Nov 2026: "make it 3 bones to print a PDF"):
+         painted from the bone wallet on open; at fewer than the price the
+         line goes red and PRINT is greyed, like SAVE AS at 0. -->
+    <div class="lay-new-hint" id="lay-print-toll" data-print-toll></div>
     <button type="button" id="lay-print-go" data-print-go>PRINT</button>
     <div id="lay-print-message" data-print-message hidden></div>
   </div>
@@ -5482,8 +5486,23 @@ class Component extends PageLogic {
       list.appendChild(row);
     }
     const picked = this._printPick.size;
+    // A PACKAGE COSTS BONES (jb, 11 Nov 2026), named here and refused at
+    // fewer -- the same rule as SAVE AS. The wallet is re-read on every
+    // paint so a bone that dripped in while the card was open counts.
+    const W = window.DraftBoneWallet;
+    const toll = this._printToll();
+    const held = W ? W.read().balance : Infinity;
+    const short = held < toll;
+    const tollLine = document.querySelector('[data-print-toll]');
+    if (tollLine) {
+      tollLine.textContent = !toll ? ''
+        : short
+          ? `A print package costs ${W.bonesWord(toll)} and you have ${held}. A free bone drips in every hour.`
+          : `Costs ${W.bonesWord(toll)} (you have ${held}).`;
+      tollLine.style.color = short ? 'var(--ink-warn)' : '';
+    }
     const go = document.querySelector('[data-print-go]');
-    go.disabled = !picked || this._printBusy;
+    go.disabled = !picked || this._printBusy || short;
     go.textContent = this._printBusy ? 'PREPARING\u2026'
       : `PRINT ${picked} SHEET${picked === 1 ? '' : 'S'}`;
     const message = document.querySelector('[data-print-message]');
@@ -5507,9 +5526,19 @@ class Component extends PageLogic {
     return { canvas, pw, ph };
   }
 
+  _printToll() {
+    return Number(window.DraftBoneWallet?.COSTS?.printPackage) || 0;
+  }
+
   async _printPackage() {
     const sheets = [...this._printPick].sort((a, b) => a - b);
     if (!sheets.length || this._printBusy) return;
+    // REFUSED AT FEWER BONES THAN THE PRICE -- the card already says so and
+    // greys PRINT; this is the same answer for a press that got through
+    // (Enter on a focused button, a stale paint).
+    const W = window.DraftBoneWallet;
+    const toll = this._printToll();
+    if (W && toll && W.read().balance < toll) { this._paintPrintDialog(); return; }
     this._printBusy = true;
     const urls = [];
     let size = null;
@@ -5534,6 +5563,20 @@ class Component extends PageLogic {
       document.querySelector('[data-print-message]').classList.add('lay-bad');
       return;
     }
+    // THE TOLL IS TAKEN HERE, once every sheet is drawn and nothing can
+    // fail on this page any more: a sheet that would not draw costs nothing
+    // (the catch above), and a wallet another tab emptied while the sheets
+    // drew refuses now rather than printing on credit. What the browser's
+    // own window does next -- a printer, Save as PDF, or its Cancel -- no
+    // script can see, so the package is paid for when it is handed over.
+    if (W && toll && !W.spend(toll)) {
+      urls.forEach(url => URL.revokeObjectURL(url));
+      this._printBusy = false;
+      this._printMessage = '';
+      this._paintPrintDialog();
+      return;
+    }
+    if (W && toll) window.dispatchEvent(new CustomEvent('draft-bones-changed'));
     this._printBusy = false;
     this._printMessage = '';
     document.querySelector('#lay-print-scrim').hidden = true;
@@ -5734,6 +5777,9 @@ class Component extends PageLogic {
 // initial state, and only then does the page mount -- so componentDidMount
 // finds a canvas to size and a panel already showing what the state says.
 const page = new Component();
+// FOR THE CHECKS: a spec stubs a sheet painter on it to prove a failed print
+// spends nothing (tests/layout-print-bone-cost.spec.js).
+window.__layoutPage = page;
 page._wirePanel();
 page._paintPanel();
 page.componentDidMount();
@@ -5800,6 +5846,8 @@ page.componentDidMount();
   // aria-label RATHER THAN THE `.said` SPAN: shell-bars' paintBoneArt
   // rewrites that span's text on every theme paint, so a name written into
   // it would not survive one. A label on the button outranks it anyway.
+  const W_bones = () => window.DraftBoneWallet
+    ? window.DraftBoneWallet.bonesWord(window.DraftBoneWallet.COSTS.printPackage) : 'nothing';
   const bone = document.getElementById('bone');
   if (bone) {
     bone.title = 'PRINT — pick the sheets for this package, then your printer or Save as PDF';
@@ -5808,6 +5856,15 @@ page.componentDidMount();
     bone.removeAttribute('aria-expanded');
     bone.addEventListener('click', () => page._openPrintDialog());
   }
+  // AND THE NUMBER ON IT (jb, 11 Nov 2026: "the number isn't showing in the
+  // HOUSE blue button in the construction page layout"): the same wallet
+  // MODEL's press shows, painted by the bar, with this page's price in the
+  // title. The bar's painter owns the title from here on, so the PRINT words
+  // above ride inside it.
+  S.wireBoneWallet({
+    costs: 'PRINT \u2014 pick the sheets for this package, then your printer or '
+      + `Save as PDF. A package costs ${W_bones()}.`,
+  });
 
   // ── NEW: SAVE CURRENT OR DISCARD, THEN A BLANK FILE, BACK ON THIS PAGE ──
   //
