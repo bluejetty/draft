@@ -70,10 +70,10 @@ const saved = async page => {
   await h.waitForSaved(page);
   return h.savedDrawing(page);
 };
-// NOT NOW on the lot card, where SITE asks it: the question is right, and it
-// is not what these checks are about.
+// NOT NOW on the lot card, which the tile's press raises (model-site-key
+// .spec.js): the question is right, and it is not what these checks are about.
 async function dismissLotCard(page) {
-  const later = page.locator('#lot-pick [data-lot-pick-ok]');
+  const later = page.locator('#lot-pick [data-lot-pick-skip]');
   if (await later.isVisible().catch(() => false)) await later.click();
 }
 const levelRows = page => page.locator('#levels-panel [data-level-row]')
