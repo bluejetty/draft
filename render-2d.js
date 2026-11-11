@@ -3324,7 +3324,20 @@ if (!window.DraftRender2D) {
   ]);
   const NOTE_NODES = Object.freeze(['auto', 'tl', 't', 'tr', 'l', 'c', 'r', 'bl', 'b', 'br']);
   const NOTE_ENDS = Object.freeze(['arrow', 'line', 'dot', 'none']);
-  const noteFontOf = id => NOTE_FONTS.find(f => f.id === String(id)) || NOTE_FONTS[0];
+  // THE TABLES, handed out through functions: the harness mutates top-level
+  // painters by name, and a function is what it can empty.
+  function noteFonts() {
+    return NOTE_FONTS;
+  }
+  function noteNodes() {
+    return NOTE_NODES;
+  }
+  function noteEnds() {
+    return NOTE_ENDS;
+  }
+  function noteFontOf(id) {
+    return NOTE_FONTS.find(f => f.id === String(id)) || NOTE_FONTS[0];
+  }
   const noteFontCss = (note, px) => { const f = noteFontOf(note?.font); return `${f.weight} ${px}px ${f.family}`; };
   const NOTE_PAD_X = 6, NOTE_LINE_H = 14, NOTE_SCREEN_PX = 12;
   // DXF height is the capital's height; the font's em is about 1.4 of that.
@@ -3955,7 +3968,7 @@ if (!window.DraftRender2D) {
     counterSpans2D,
     drawNoteScreen2D,
     noteBoxScreen2D,
-    NOTE_FONTS, NOTE_NODES, NOTE_ENDS, noteFontOf,
+    noteFonts, noteNodes, noteEnds, noteFontOf,
     drawStairNotes2D,
     drawCutMarks2D,
     drawCutPreview2D,

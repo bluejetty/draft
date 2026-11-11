@@ -3444,9 +3444,9 @@
       });
     box.append(title('TEXT SIZE ON THE PLAN'), sizeRow, sizeField);
     // FONT.
-    if (R?.NOTE_FONTS) {
+    if (R?.noteFonts) {
       const fontNow = read('font') === undefined && notes ? undefined : (read('font') || 'hand');
-      box.append(title('FONT'), row(...R.NOTE_FONTS.map(f =>
+      box.append(title('FONT'), row(...R.noteFonts().map(f =>
         chip({ noteFont: f.id }, f.name, fontNow === f.id, () => write({ font: f.id === 'hand' ? null : f.id })))));
     }
     // NODE: which point of the block the leader meets. AUTO is the near

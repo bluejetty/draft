@@ -43,6 +43,9 @@ function load(mutate) {
   let src = fs.readFileSync(SRC, 'utf8');
   if (mutate) src = mutate(src);
   const window = {};
+  // line-styles.js first: a note's leader reads its weights and dashes
+  // through window.DraftLineStyles, as a LINE does (jb, 10 Nov).
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'line-styles.js'), 'utf8'))(window);
   new Function('window', src)(window);
   if (!window.DraftRender2D) throw new Error('render-2d.js defined no DraftRender2D');
   return window.DraftRender2D;
@@ -1382,7 +1385,7 @@ suite('shapeDashOf', 'absent and DASHED are the 7,4 the shape has always worn', 
   expect('absent', R.shapeDashOf(undefined).join(','), '7,4');
   expect('dashed', R.shapeDashOf('dashed').join(','), '7,4');
   expect('a style this window cannot name falls back to the same dash, not to solid',
-    R.shapeDashOf('dotted').join(','), '7,4');
+    R.shapeDashOf('wavy').join(','), '7,4');
 });
 
 suite('drawShape2D', 'BLACK fills the box in black and skips the wash', R => {
@@ -1584,6 +1587,82 @@ suite('drawNoteScreen2D', 'a preview is drawn faint and dashed', R => {
   R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, NOTE, { preview: true }, noteEnv);
   expect('faint', sets(ctx, 'globalAlpha')[0], 0.6);
   expect('and the leader is dashed', JSON.stringify(calls(ctx, 'setLineDash')[0][0]), '[5,4]');
+});
+
+// THE NOTE'S LOOK (jb, 10 Nov, the NOTE properties panel): the tables the
+// panel reads, and what each field does to the box and the paint.
+suite('noteFonts', 'four faces, HAND first, each with a family and a weight', R => {
+  expect('four', R.noteFonts().length, 4);
+  expect('HAND is the first and the fallback', R.noteFonts()[0].id, 'hand');
+  expect('every face has a family', R.noteFonts().every(f => typeof f.family === 'string' && f.family.length > 0), true);
+  expect('and a weight', R.noteFonts().every(f => Number.isFinite(f.weight)), true);
+  expect('the ids the format keeps', R.noteFonts().map(f => f.id).join(','), 'hand,plain,serif,mono');
+});
+suite('noteFontOf', 'a known id finds its face; an unknown one is HAND', R => {
+  expect('mono', R.noteFontOf('mono').id, 'mono');
+  expect('unknown falls back to HAND', R.noteFontOf('comic').id, 'hand');
+  expect('and so does none', R.noteFontOf(undefined).id, 'hand');
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, font: 'mono' }, {}, noteEnv);
+  expect('the painter letters in that face', sets(ctx, 'font').some(f => /Courier/.test(f)), true);
+});
+suite('noteNodes', 'AUTO and the nine points of the block', R => {
+  expect('ten', R.noteNodes().length, 10);
+  expect('AUTO first', R.noteNodes()[0], 'auto');
+  expect('the nine', R.noteNodes().slice(1).join(','), 'tl,t,tr,l,c,r,bl,b,br');
+  const at = { x: 0, y: 0 }, t = { x: 100, y: 100 };
+  const box = node => R.noteBoxScreen2D(recordingCtx(), at, t, { ...NOTE, node });
+  expect('TOP LEFT hangs the block from the text point', JSON.stringify([box('tl').left, box('tl').top]), '[100,100]');
+  expect('CENTER puts the point in the middle', JSON.stringify([box('c').left + box('c').width / 2, box('c').top + box('c').height / 2]), '[100,100]');
+  expect('BOTTOM RIGHT ends the block at the point', JSON.stringify([box('br').right, box('br').bottom]), '[100,100]');
+  expect('TOP centres it above', JSON.stringify([box('t').left + box('t').width / 2, box('t').top]), '[100,100]');
+  expect('an unknown node is AUTO: the near side', box('sideways').left, 100);
+  const drawn = recordingCtx();
+  R.drawNoteScreen2D(drawn, at, t, { ...NOTE, node: 'br', outline: true }, {}, noteEnv);
+  const [x, y, w, h] = calls(drawn, 'roundRect')[0];
+  expect('the painter draws the box where the node put it', JSON.stringify([x + w, y + h]), '[100,100]');
+});
+suite('noteEnds', 'arrow, line, dot, none -- and each paints as named', R => {
+  expect('four', R.noteEnds().join(','), 'arrow,line,dot,none');
+  const paint = end => {
+    const ctx = recordingCtx();
+    R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, end }, {}, noteEnv);
+    return ctx;
+  };
+  expect('DOT is a filled circle on the anchor', count(paint('dot'), 'arc'), 1);
+  expect('and no arrowhead', count(paint('dot'), 'closePath'), 0);
+  expect('ARROW is a head and no circle', count(paint('arrow'), 'arc'), 0);
+  expect('STRAIGHT is the line alone', count(paint('line'), 'arc') + count(paint('line'), 'closePath'), 0);
+});
+suite('noteBoxScreen2D', 'JUSTIFY, CAPS, ROTATE and a sized block with padding', R => {
+  const at = { x: 0, y: 0 }, t = { x: 100, y: 100 };
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, at, t, { ...NOTE, body: 'a\nbb', align: 'center', caps: true, node: 'tl' }, {}, noteEnv);
+  expect('CAPS letters the words in capitals', calls(ctx, 'fillText').map(c => c[0]).join('|'), 'A|BB');
+  const box = R.noteBoxScreen2D(recordingCtx(), at, t, { ...NOTE, body: 'a\nbb', node: 'tl' });
+  expect('centred lines land on the block-s middle', calls(ctx, 'fillText')[0][1], 100 + box.width / 2);
+  const right = recordingCtx();
+  R.drawNoteScreen2D(right, at, t, { ...NOTE, body: 'a', align: 'right', node: 'tl' }, {}, noteEnv);
+  expect('right-set lines end at the padding', calls(right, 'fillText')[0][1], 100 + box.width - 6);
+  const plain = recordingCtx();
+  R.drawNoteScreen2D(plain, at, t, { ...NOTE, body: 'a' }, {}, noteEnv);
+  expect('without the switch the words are as stored', calls(plain, 'fillText')[0][0], 'a');
+  const turned = R.noteBoxScreen2D(recordingCtx(), at, t, { ...NOTE, body: 'WIDE WORDS', node: 'tl', rot: Math.PI / 2 });
+  const flat = R.noteBoxScreen2D(recordingCtx(), at, t, { ...NOTE, body: 'WIDE WORDS', node: 'tl' });
+  expect('a quarter turn stands the block up', Math.round(turned.height), Math.round(flat.width));
+  expect('above the point', Math.round(turned.bottom), 100);
+  const drawnTurned = recordingCtx();
+  R.drawNoteScreen2D(drawnTurned, at, t, { ...NOTE, node: 'tl', rot: Math.PI / 2 }, {}, noteEnv);
+  expect('a turned block is painted through a rotate', count(drawnTurned, 'rotate'), 1);
+  expect('an unturned one is not', count(plain, 'rotate'), 0);
+  const sized = R.noteBoxScreen2D(recordingCtx(), at, t, { ...NOTE, body: 'A', node: 'tl', heightFt: 1 }, 10);
+  expect('a sized note is padded round its letters', sized.height > 10 * 1.4 * 1.2, true);
+  const dxf = R.noteBoxScreen2D(recordingCtx(), at, t, { ...NOTE, body: 'A', heightFt: 1, baseline: 'top' }, 10);
+  expect('a DXF note keeps its bare block', Math.round(dxf.height * 100) / 100, Math.round(10 * 1.4 * 1.2 * 100) / 100);
+  const inked = recordingCtx();
+  R.drawNoteScreen2D(inked, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, weight: 5, style: 'dashed' }, {}, noteEnv);
+  expect('a leader with a weight strokes at it', sets(inked, 'lineWidth')[0] > 1, true);
+  expect('and a style dashes it', calls(inked, 'setLineDash')[0][0].length > 0, true);
 });
 
 suite('drawNoteScreen2D', 'the bullnose cannot exceed half the box', R => {
