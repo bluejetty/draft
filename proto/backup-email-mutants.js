@@ -11,7 +11,7 @@ const SPEC = 'tests/backup-email.spec.js';
 const MUTANTS = [
   { file: 'model/17-boot-save.js',
     name: 'SAVE AS no longer offers the BACKUP FILE',
-    find: '      if ((await save({ download: typed, handle })) && lastLocalSave && window.DraftBackupEmail) {',
+    find: '      if ((await save({ download: typed, handle })) && lastLocalSave) {',
     with: '      if ((await save({ download: typed, handle })) && false) {',
     test: 'SAVE AS offers' },
   { file: 'LAYOUT.html',
