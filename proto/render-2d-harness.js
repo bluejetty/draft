@@ -4398,7 +4398,7 @@ function coverage() {
     ['drawRoof2D wash left on the old brown while the outline moves', unDeriveRoofWash],
     ['drawShape2D preview back on the hardcoded night green', unDeriveShapePreview],
     ['drawShape2D the outline strokes the dots instead of the shape', src => {
-      const out = src.replace("      if (hatch && hatch.dots) { dotScreen(ctx, screenPoints); trace(); }\n", "      if (hatch && hatch.dots) { dotScreen(ctx, screenPoints); }\n");
+      const out = src.replace("      if (hatch && hatch.dots) { dotScreen(ctx, flatPoints); trace(); }\n", "      if (hatch && hatch.dots) { dotScreen(ctx, flatPoints); }\n");
       if (out === src) throw new Error('the dot pass moved');
       return out;
     }],

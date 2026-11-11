@@ -579,6 +579,10 @@
     });
     ['floors', 'shapes', 'outlines'].forEach(key => (drawing[key] || []).forEach(item => {
       if (!Array.isArray(item?.points) || item.points.length < 4) return;
+      // A LOOP WITH ARCS KEEPS EVERY CORNER (jb, 11 Nov): a circle's four
+      // quadrant points carry their bends, and a tidy that saw them as
+      // corners to fold would straighten it.
+      if (G.loopHasArcs?.(item.points)) return;
       const clean = G.cleanRoofRing({ points: item.points });
       if (!clean) return;
       item.points = clean.points;

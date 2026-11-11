@@ -97,7 +97,7 @@ test('on a SHAPE, ENTER once closes on the first corner; the cursor\'s spot is n
   expect(ring(d.shapes[0].points)).toEqual([[2, 2], [12, 2], [12, 8], [2, 8]]);
 });
 
-test('SPACE once closes the single slope ROOF outline on its first corner; the right button does the same for a FLOOR', async ({ page }) => {
+test('SPACE once closes the single slope ROOF outline on its first corner; the right button opens the menu on a FLOOR and its FINISH closes it', async ({ page }) => {
   const { at } = await open(page);
   await shedToThree(page, at);
   await press(page, at, -1, 10);
@@ -108,7 +108,14 @@ test('SPACE once closes the single slope ROOF outline on its first corner; the r
   expect(ring(roof.points || roof.footprint)).toEqual([[-1, -2], [31, -2], [31, 10], [-1, 10]]);
   await arm(page, 'floor');
   for (const [x, z] of [[2, 12], [12, 12], [12, 18]]) await press(page, at, x, z);
+  // THE RIGHT CLICK ON A FLOOR IS THE ARC MENU SINCE 11 Nov (jb: arcs and
+  // circles on the AREA / SHAPE and FLOOR commands, as on LINE since #986);
+  // FINISH stands in it, one press further, and closes the loop as ENTER.
   await page.mouse.click(...at(7, 15), { button: 'right' });
+  await page.waitForTimeout(120);
+  await expect(page.locator('[data-line-menu]')).toBeVisible();
+  expect(await page.evaluate(() => (drawing.floors || []).length), 'the right click alone closed nothing').toBe(0);
+  await page.locator('[data-line-menu-item="finish"]').click();
   await page.waitForTimeout(120);
   const floors = (await saved(page)).floors;
   expect(floors).toHaveLength(1);

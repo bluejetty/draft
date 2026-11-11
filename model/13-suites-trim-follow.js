@@ -1006,6 +1006,7 @@
     || (activeTool === 'cut' && !!cutStart)
     || (activeTool === 'floor' && floorCorners.length > 0)
     || (activeTool === 'shape' && shapeCorners.length > 0)
+    || (typeof loopArcTypable === 'function' && loopArcTypable())
     || (activeTool === 'roof' && !!shedRoof)
     || (activeTool === 'outline' && outlineCorners.length > 0)
     // The house's rays light under the cursor before the garage's first corner.
@@ -1173,7 +1174,8 @@
     // and the floor's and shape's -- whatever is being drawn whose length
     // changes as the hand moves.
     const cornerEdge = (activeTool === 'floor' && floorCorners.length > 0)
-      || (activeTool === 'shape' && shapeCorners.length > 0);
+      || (activeTool === 'shape' && shapeCorners.length > 0)
+      || (typeof loopArcTypable === 'function' && loopArcTypable());
     const live = !!cursorWorld && (typable || cornerEdge);
     syncLengthHint(live);
     lengthBox.classList.toggle('live', live);

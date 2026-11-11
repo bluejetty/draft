@@ -188,8 +188,11 @@
     return inside;
   };
 
+  // A LOOP WITH ARCS (jb, 11 Nov: circles on the AREA / SHAPE command) is
+  // tested by its flattened ring, so a press inside a circle's bow is inside.
+  const loopRing = pts => (window.DraftGeometry2D?.flattenLoop ? window.DraftGeometry2D.flattenLoop(pts) : pts);
   // EVERY FLOOR THE POINT IS IN, the one painted last (on top) first.
-  const floorsAt = worldPt => floors().filter(floor => pointInRing(floor.points || [], worldPt)).reverse();
+  const floorsAt = worldPt => floors().filter(floor => pointInRing(loopRing(floor.points || []), worldPt)).reverse();
   const floorAt = worldPt => floorsAt(worldPt)[0] || null;
   // A PHOTO'S FOOTPRINT, in feet: centred at x, z, widthFt by heightFt (a
   // turned one has its sides swapped already, by turnPhoto). Not a DXF,
@@ -341,7 +344,10 @@
     const scope = (key, onScreen) => (all ? (drawing?.[key] || []) : onScreen());
     const out = [];
     const seg = item => [[item.start, item.end]];
-    const ring = item => [(item.points || []).filter(Boolean)];
+    // A LOOP WITH ARCS (jb, 11 Nov) is boxed by its flattened ring, so a
+    // circle's bow is caught where it is drawn and not only at its corners.
+    const flat = pts => (window.DraftGeometry2D?.flattenLoop ? window.DraftGeometry2D.flattenLoop(pts) : pts);
+    const ring = item => [flat((item.points || []).filter(Boolean))];
     if (filterAllows('wall')) scope('walls', walls).forEach(item => out.push({ type: 'wall', item, parts: seg(item), open: true }));
     if (filterAllows('line')) scope('lines', lines).forEach(item => out.push({ type: 'line', item, parts: seg(item), open: true }));
     if (filterAllows('floor')) scope('floors', floors).forEach(item => out.push({ type: 'floor', item, parts: ring(item) }));
@@ -1304,7 +1310,7 @@
     // otherwise be unreachable, every click inside it taking the floor.
     if (filterAllows('shape')) {
       const inside = shapes().slice().reverse()
-        .filter(sh => (sh.points || []).length >= 3 && pointInRing(sh.points, worldPt));
+        .filter(sh => (sh.points || []).length >= 3 && pointInRing(loopRing(sh.points), worldPt));
       if (takeAll('shape', inside)) return out;
     }
     if (filterAllows('outline')) {
@@ -1448,10 +1454,15 @@
       // to grow a corner -- the room shape's, without the wall-node fill.
       if ((type === 'shape' || type === 'floor') && selection.length === 1 && roomShapeOf(item)) {
         const screen = item.points.map(toS);
+        const G = window.DraftGeometry2D;
+        const pts = item.points;
         ctx.save();
         ctx.lineWidth = 2;
         ctx.beginPath();
-        screen.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        // THE OUTLINE FOLLOWS THE ARCS (jb, 11 Nov) and the midpoint rings
+        // sit on them, where the handle is taken.
+        ctx.moveTo(screen[0].x, screen[0].y);
+        pts.forEach((pt, i) => window.DraftRender2D.traceSegTo2D(ctx, toS, G.loopSegment(pts, i), { controlPoint: G.lineControlPoint }, screen[(i + 1) % screen.length]));
         ctx.closePath();
         ctx.stroke();
         const h = ROOM_HANDLE_PX;
@@ -1461,10 +1472,10 @@
           ctx.strokeRect(p.x - h / 2, p.y - h / 2, h, h);
         });
         ctx.lineWidth = 1.5;
-        screen.forEach((p, i) => {
-          const q = screen[(i + 1) % screen.length];
+        pts.forEach((p, i) => {
+          const m = toS(loopEdgeMid(pts, i));
           ctx.beginPath();
-          ctx.arc((p.x + q.x) / 2, (p.y + q.y) / 2, h / 2 - 0.5, 0, Math.PI * 2);
+          ctx.arc(m.x, m.y, h / 2 - 0.5, 0, Math.PI * 2);
           ctx.stroke();
         });
         ctx.restore();
@@ -1601,10 +1612,18 @@
       const pts = (item.points || []).filter(Boolean);
       if (pts.length < 2) return;
       ctx.beginPath();
-      pts.forEach((pt, i) => {
-        const p = toS(pt);
-        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
-      });
+      const G = window.DraftGeometry2D;
+      if ((type === 'shape' || type === 'floor') && G?.loopHasArcs?.(pts)) {
+        // THE HALO FOLLOWS THE ARCS (jb, 11 Nov), as a bent line's does.
+        const first = toS(pts[0]);
+        ctx.moveTo(first.x, first.y);
+        pts.forEach((pt, i) => window.DraftRender2D.traceSegTo2D(ctx, toS, G.loopSegment(pts, i), { controlPoint: G.lineControlPoint }));
+      } else {
+        pts.forEach((pt, i) => {
+          const p = toS(pt);
+          if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+      }
       ctx.closePath();
       ctx.stroke();
       // THE PICKED EDGE, in the handle colour over the halo, so the panel's

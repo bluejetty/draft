@@ -49,7 +49,7 @@ const MUTANTS = [
     test: 'a press on a linked corner asks' },
   { file: 'model/16-gestures-undo.js',
     name: 'an edge\'s midpoint grows no corner',
-    find: "        points.splice(index + 1, 0, { x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 });\n        index += 1;\n",
+    find: "          points.splice(index + 1, 0, { x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 });\n",
     with: "",
     test: 'an edge\'s midpoint pressed grows a corner' },
   { file: 'model/16-gestures-undo.js',

@@ -559,6 +559,9 @@
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { if (shedRoof) { loopPress(at); return; } roofPress(at); return; }
     if (activeTool === 'dormer') { dormerPress(at); return; }
+    // AN ARC OR A CIRCLE ON A SHAPE OR FLOOR (19-line-arcs.js) takes the
+    // press first when its mode is up; STRAIGHT leaves it to loopPress.
+    if (typeof loopArcPress === 'function' && loopArcPress(at)) return;
     if (activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape') { loopPress(at); return; }
     if (activeTool === 'fenestration') {
       // THE BRUSH'S LOAD GOES ONTO AN OPENING PRESSED, not beside it (Movie,
@@ -731,7 +734,16 @@
       let index = handle.index;
       if (handle.kind === 'mid') {
         const q = pts[index], r = pts[(index + 1) % pts.length];
-        points.splice(index + 1, 0, { x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 });
+        if (q.bulge) {
+          // AN ARC CUT AT ITS MIDDLE (jb, 11 Nov): two arcs of the same
+          // circle, the corner grown on the arc, the corner before it
+          // keeping its bend over the first half only.
+          const cut = window.DraftGeometry2D.splitSegAtMid({ start: q, end: r, bulge: q.bulge });
+          points[index] = { ...q, bulge: cut.bulge };
+          points.splice(index + 1, 0, { x: cut.mid.x, z: cut.mid.z, bulge: cut.bulge });
+        } else {
+          points.splice(index + 1, 0, { x: (q.x + r.x) / 2, z: (q.z + r.z) / 2 });
+        }
         index += 1;
         shapedTag.points = points;
       }
@@ -2025,6 +2037,7 @@
     const rect = canvas.getBoundingClientRect();
     const lifted = toWorld(e.clientX - rect.left, e.clientY - rect.top);
     if (typeof lineArcPress === 'function' && lineArcPress(lifted)) return;
+    if (typeof loopArcPress === 'function' && loopArcPress(lifted)) return;
     drawPress(lifted);
   });
   canvas.addEventListener('pointerup', endDrag);
