@@ -987,9 +987,12 @@
     }
     // A FLOORING CORNER IN HAND shows what has it, as a wall's node does:
     // the magnets near the hand and the ring on the one it will land on.
-    if (moveDrag?.kind === 'roomcorner' && moveDrag.active) {
+    // AND AN EDGE BEING PUSHED (jb, 11 Nov 2026): the magnets near the hand,
+    // the ring on what the edge's line has caught, the edge itself lit.
+    if ((moveDrag?.kind === 'roomcorner' || moveDrag?.kind === 'roomedge') && moveDrag.active) {
       canvas.removeAttribute('data-snap-node');
       paintMagnets(moveDrag.cursor, moveDrag.magnet, moveDrag.lit);
+      if (moveDrag.lit?.own) paintFaceLit(moveDrag.lit.own);
       if (moveDrag.lit) paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
       markMagnet(moveDrag.lit);
       return;
