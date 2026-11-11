@@ -1039,7 +1039,7 @@
            version to manipulate as they need" -- one AutoCAD file a sheet,
            full size, on the drawing's CAD layers, no titleblock; all of
            them in one ZIP. -->
-      <button type="button" data-layout-dxf id="lay-dxf" title="Every sheet as its own AutoCAD DXF, full size, in one ZIP">Save DXF (AutoCAD)</button>
+      <button type="button" data-layout-dxf id="lay-dxf" title="Every sheet as its own AutoCAD DXF, full size, in one ZIP. Costs 15 bones.">Save DXF (AutoCAD)</button>
       <div id="lay-viewport-note" hidden></div>
       <!-- THE PROFILE PAIR, down here with the page's own verbs rather than
            in the corner Movie cleared. They open a DIALOG that writes a
@@ -5460,9 +5460,29 @@ class Component extends PageLogic {
       if (status) status.textContent = 'NO DRAWINGS ON THE SHEETS TO SAVE AS DXF';
       return;
     }
+    // A DXF COSTS BONES (jb, 11 Nov 2026: "lets make it 5 bones to convert
+    // to DXF", then "lets make it 15"), refused at fewer like SAVE AS at 0. This press has no card,
+    // so the status line is where the price and the refusal are said. The
+    // toll is taken once the ZIP is built and nothing can fail any more,
+    // just before it is handed to the browser; the "nothing to save" answer
+    // above is free.
+    const wallet = window.DraftBoneWallet;
+    const toll = Number(wallet?.COSTS?.saveDxf) || 0;
+    if (wallet && toll) {
+      const held = wallet.read().balance;
+      if (held < toll) {
+        if (status) {
+          status.textContent = `SAVE DXF COSTS ${wallet.bonesWord(toll).toUpperCase()} AND YOU HAVE ${held} \u2014 A FREE BONE DRIPS IN EVERY HOUR`;
+          status.classList.add('lay-bad');
+        }
+        return;
+      }
+    }
     // Named as the titleblock names the project, its blank included.
     const project = safe(this._titleblockInfo(1).projectName) || 'NEW HOME';
     const blob = new Blob([W.zip(files)], { type: 'application/zip' });
+    if (wallet && toll && !wallet.spend(toll)) return;
+    if (wallet && toll) window.dispatchEvent(new CustomEvent('draft-bones-changed'));
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -5472,7 +5492,11 @@ class Component extends PageLogic {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 0);
-    if (status) status.textContent = `SAVED ${files.length} SHEET${files.length === 1 ? '' : 'S'} AS DXF`;
+    if (status) {
+      status.classList.remove('lay-bad');
+      status.textContent = `SAVED ${files.length} SHEET${files.length === 1 ? '' : 'S'} AS DXF`
+        + (wallet && toll ? ` \u2014 ${wallet.bonesWord(toll).toUpperCase()} SPENT` : '');
+    }
   }
 
   _openPrintDialog() {
@@ -5961,8 +5985,8 @@ page.componentDidMount();
   // it would not survive one. A label on the button outranks it anyway.
   const W_bones = () => {
     const W = window.DraftBoneWallet;
-    return W ? `PRINT ${W.bonesWord(W.COSTS.printPackage)}, SAVE PDF ${W.bonesWord(W.COSTS.savePdf)}`
-      : 'nothing';
+    return W ? `PRINT ${W.bonesWord(W.COSTS.printPackage)}, SAVE PDF ${W.bonesWord(W.COSTS.savePdf)}, `
+      + `SAVE DXF ${W.bonesWord(W.COSTS.saveDxf)}` : 'nothing';
   };
   const bone = document.getElementById('bone');
   if (bone) {

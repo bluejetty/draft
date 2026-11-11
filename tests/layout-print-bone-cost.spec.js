@@ -84,7 +84,7 @@ test('the HOUSE press on LAYOUT shows the bone count, and the title names the pr
   await bones(page, 9);
   await expect(page.locator('#bone-balance')).toHaveText('9');
   await expect(page.locator('#bone')).toHaveAttribute('title', /9 bones/);
-  await expect(page.locator('#bone')).toHaveAttribute('title', /PRINT 2 bones, SAVE PDF 5 bones/);
+  await expect(page.locator('#bone')).toHaveAttribute('title', /PRINT 2 bones, SAVE PDF 5 bones, SAVE DXF 15 bones/);
   await expect(page.locator('#bone')).not.toHaveAttribute('data-broke', '');
   // An empty wallet shows the countdown and greys the press, as on MODEL.
   await bones(page, 0);
@@ -226,4 +226,24 @@ test('a sheet that will not draw costs nothing', async ({ page }) => {
   await pdf(page).click();
   await expect(page.locator('[data-print-message]')).toContainText('Could not write the PDF: no paper.');
   expect(await balance(page), 'a failed PDF spends nothing').toBe(7);
+});
+
+// SAVE DXF (AUTOCAD) IS 15 (jb, 11 Nov 2026: "lets make it 5 bones to
+// convert to DXF" -- "no wait, lets make it 15"). The press has no card, so
+// the status line names the refusal; the toll is taken as the ZIP goes to
+// the downloads folder.
+test('SAVE DXF takes 15 bones with the ZIP, and is refused on the status line at fewer', async ({ page }) => {
+  await openLayout(page, boneDrawing());
+  await bones(page, 4);
+  await page.locator('[data-layout-dxf]').click();
+  await expect(page.locator('[data-layout-status]')).toHaveText('SAVE DXF COSTS 15 BONES AND YOU HAVE 4 — A FREE BONE DRIPS IN EVERY HOUR');
+  await expect(page.locator('[data-layout-status]')).toHaveClass(/lay-bad/);
+  expect(await balance(page), 'nothing spent').toBe(4);
+  await bones(page, 17);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-layout-dxf]').click()]);
+  expect(download.suggestedFilename()).toMatch(/DXF\.zip$/);
+  await expect(page.locator('[data-layout-status]')).toHaveText(/SAVED \d+ SHEETS AS DXF — 15 BONES SPENT/);
+  await expect(page.locator('[data-layout-status]')).not.toHaveClass(/lay-bad/);
+  expect(await balance(page), 'fifteen bones for the DXF').toBe(2);
+  await expect(page.locator('#bone-balance')).toHaveText('2');
 });

@@ -31,8 +31,12 @@ if (!window.DraftBoneWallet) {
   // file this page writes itself (pdf-writer.js), is 5. Each is taken once
   // the sheets are drawn and the window opens or the file is down, refused
   // at fewer.
+  // SAVE DXF (AUTOCAD) is 15 (jb, 11 Nov 2026: "lets make it 5 bones to
+  // convert to DXF" -- "no wait, lets make it 15"), taken as the ZIP goes
+  // to the downloads folder. Above DRIP_CAP, so the free drip alone never
+  // reaches it: a DXF waits on a bought wallet (the server ledger, #52).
   const COSTS = Object.freeze({
-    buildHouse: 1, saveToComputer: 1, emailBackup: 1, printPackage: 2, savePdf: 5,
+    buildHouse: 1, saveToComputer: 1, emailBackup: 1, printPackage: 2, savePdf: 5, saveDxf: 15,
   });
   const STORAGE_KEY = 'draft-bone-wallet';
 
