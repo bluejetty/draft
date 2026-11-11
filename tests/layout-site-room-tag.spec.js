@@ -90,4 +90,30 @@ test('the SITE PLAN sheet prints the level\'s room tag, its area in the drawing\
   // 40 x 30 ft = 1200 sq ft = 111.5 m² on a metric drawing, not "1,200 SQ FT".
   expect(room.lines, 'the area line in metres').toEqual(['111.5 m²']);
   expect(room.leader, 'and the leader back to the shape, the name being outside it').toBe(true);
+  // THE FRAME TAKES THE TAG IN (jb, 11 Nov: "the room tag still doesn't
+  // show on the layout view"): the name past the lot's corner fell
+  // outside the frame and the window clipped it. 70 ft east + room for it.
+  const sized = await page.evaluate(saved => window.DraftLayoutPlan.planBounds(saved, 8), siteWithTag());
+  expect(sized.maxX, 'the tag point with room for its name').toBeGreaterThanOrEqual(71);
+  expect(sized.maxZ).toBeGreaterThanOrEqual(51);
+});
+
+test('a tag lettered in feet is taller on the sheet than the screen tag', async ({ page }) => {
+  const d = siteWithTag();
+  d.roomTags[0].heightFt = 4;
+  d.roomTags[0].end = 'arrow';
+  await openLayout(page, d);
+  await page.waitForFunction(() => Number(document.body.dataset.layoutSaveSeq || 0) > 0
+    && document.body.dataset.layoutSaveDirty !== '1');
+  const metrics = await page.evaluate(() => {
+    const R = window.DraftRender2D;
+    const canvas = document.querySelector('[data-layout-canvas]');
+    const ctx = canvas.getContext('2d');
+    const tag = { name: 'ROOM', at: { x: 0, y: 0, z: 0 }, heightFt: 4 };
+    const env = { color: '#000', areaFor: () => '' };
+    return { screen: R.roomTagMetrics(ctx, { x: 0, y: 0 }, { ...tag, heightFt: 0 }, env, 2).namePx,
+      sized: R.roomTagMetrics(ctx, { x: 0, y: 0 }, tag, env, 2).namePx };
+  });
+  expect(metrics.screen).toBe(13);
+  expect(metrics.sized).toBeCloseTo(4 * 2 * 1.4, 6);
 });

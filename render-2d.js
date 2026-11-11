@@ -1521,46 +1521,132 @@ if (!window.DraftRender2D) {
     return sum + (p.x * q.z - q.x * p.z) / 2;
   }, 0));
 
-  function drawRoomTag2D(ctx, toS, tag, options, env) {
-    const s = toS(tag.at);
+  // ── A ROOM TAG'S LOOK (jb, 11 Nov 2026) ────────────────────────────────
+  // "add all the 'obj/prop' stuff appropriate for the room tag that is
+  // already used in annotation": the tag carries the note's look fields --
+  // heightFt (TEXT SIZE: lettered that many feet tall, so it zooms with the
+  // drawing; absent = 13px at any zoom), font, rot (radians CCW), outline
+  // (BORDER), fill (MASK), and for its leader `end` ('dot' as always, 'arrow',
+  // 'line', or 'none' = NO POINTER) with the LINE's weight and style. The
+  // name stays centred on its point and the AREA line under it, so there is
+  // no node or justification to set.
+  const TAG_NAME_PX = 13, TAG_SUB_PX = 10, TAG_NAME_H = 14, TAG_SUB_H = 11;
+  const tagFontCss = (tag, px, sub) => {
+    const f = noteFontOf(tag?.font);
+    const weight = f.id === 'hand' ? (sub ? 500 : 600) : f.weight;
+    return `${weight} ${px}px ${f.family}`;
+  };
+  // THE METRICS, shared by the painter and the editor's pick box so the box
+  // always covers what is drawn: font sizes, the line step, the block's
+  // corners about the point before any turn, and the turned quad on screen.
+  function roomTagMetrics(ctx, s, tag, env, pxPerFt) {
     const label = String(tag.name || '') + (env.suffixFor ? env.suffixFor(tag) : '');
     const lines = roomTagLines(tag, env);
-    const area = lines.length > 0;
+    const world = Number(tag.heightFt) > 0 && Number(pxPerFt) > 0;
+    const namePx = world ? Number(tag.heightFt) * pxPerFt * NOTE_EM_PER_CAP : TAG_NAME_PX;
+    const k = namePx / TAG_NAME_PX;
+    const subPx = TAG_SUB_PX * k, nameH = TAG_NAME_H * k, subH = TAG_SUB_H * k;
     ctx.save();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = env.color;
-    ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
-    ctx.textBaseline = area ? 'bottom' : 'middle';
-    const y = area ? s.y - 1 : s.y;
-    ctx.fillText(label, s.x, y);
-    const hit = { tag, x: s.x, y, w: ctx.measureText(label).width };
-    let subY = s.y + 1;
-    lines.forEach(line => {
-      ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
-      ctx.textBaseline = 'top';
-      ctx.fillText(line, s.x, subY);
-      subY += 11;
-    });
+    ctx.font = tagFontCss(tag, namePx, false);
+    let w = ctx.measureText(label).width;
+    ctx.font = tagFontCss(tag, subPx, true);
+    lines.forEach(line => { w = Math.max(w, ctx.measureText(String(line)).width); });
+    ctx.restore();
+    const area = lines.length > 0;
+    const top = area ? -nameH : -nameH / 2;
+    const bottom = area ? 1 + subH * lines.length : nameH / 2;
+    const angle = -(Number(tag.rot) || 0);
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const pad = 3 * k;
+    const quad = [[-w / 2 - pad, top - pad], [w / 2 + pad, top - pad], [w / 2 + pad, bottom + pad], [-w / 2 - pad, bottom + pad]]
+      .map(([x, y]) => ({ x: s.x + x * cos - y * sin, y: s.y + x * sin + y * cos }));
+    const xs = quad.map(p => p.x), ys = quad.map(p => p.y);
+    return { label, lines, area, world, namePx, subPx, nameH, subH, w, top, bottom, angle, pad, quad,
+      left: Math.min(...xs), right: Math.max(...xs), topY: Math.min(...ys), bottomY: Math.max(...ys) };
+  }
+  // The box on screen a tag covers (a turned tag's bounding box), for a page
+  // to hit-test by.
+  function roomTagBox2D(ctx, toS, tag, env, pxPerFt) {
+    const m = roomTagMetrics(ctx, toS(tag.at), tag, env, pxPerFt);
+    return { left: m.left, right: m.right, top: m.topY, bottom: m.bottomY };
+  }
+
+  function drawRoomTag2D(ctx, toS, tag, options, env) {
+    const s = toS(tag.at);
+    const m = roomTagMetrics(ctx, s, tag, env, options && options.pxPerFt);
+    const { label, lines, area } = m;
+    ctx.save();
+    const k = env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1;
     // ── THE NAME OUTSIDE ITS AREA GETS A LEADER (jb, 10 Nov 2026) ──────────
     // "allow the 'room tag' to be in a position on the outside of the 'area
     // measurement'": a tag dragged clear of its shape stays a label of that
-    // shape, so a hairline runs from the near edge of the text to the
-    // nearest point of the loop's edge. Inside the loop there is nothing to
-    // say, and the tag reads as it always did.
-    const leader = roomTagLeader(tag, toS, { x: s.x, y: (area ? s.y - 14 : s.y - 8), w: hit.w, h: (area ? 14 : 8) + (lines.length ? 1 + 11 * lines.length : 8) });
+    // shape, so a line runs from the near edge of the text to the nearest
+    // point of the loop's edge. Inside the loop there is nothing to say.
+    // NO POINTER (end 'none') leaves it off; the end is a dot as it always
+    // was, or an arrowhead, or nothing (STRAIGHT).
+    const end = tag.end || 'dot';
+    const leader = end === 'none' ? null
+      : roomTagLeader(tag, toS, { x: (m.left + m.right) / 2, y: m.topY, w: m.right - m.left, h: m.bottomY - m.topY });
     if (leader) {
+      const ink = noteLeaderInk(tag, env);
       ctx.strokeStyle = env.color;
-      ctx.lineWidth = 0.75;
-      ctx.setLineDash([]);
+      ctx.fillStyle = env.color;
+      ctx.lineWidth = (tag.weight != null || tag.style != null) ? ink.lineWidth : 0.75 * k;
+      ctx.setLineDash(ink.dash);
       ctx.beginPath();
       ctx.moveTo(leader.from.x, leader.from.y);
       ctx.lineTo(leader.to.x, leader.to.y);
       ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(leader.to.x, leader.to.y, 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = env.color;
-      ctx.fill();
+      ctx.setLineDash([]);
+      if (end === 'dot') {
+        ctx.beginPath();
+        ctx.arc(leader.to.x, leader.to.y, 1.5 * k, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (end === 'arrow') {
+        const head = Math.max(6, m.namePx * 0.6) * k;
+        const a = Math.atan2(leader.to.y - leader.from.y, leader.to.x - leader.from.x);
+        ctx.beginPath();
+        ctx.moveTo(leader.to.x, leader.to.y);
+        ctx.lineTo(leader.to.x - head * Math.cos(a - 0.3), leader.to.y - head * Math.sin(a - 0.3));
+        ctx.lineTo(leader.to.x - head * Math.cos(a + 0.3), leader.to.y - head * Math.sin(a + 0.3));
+        ctx.closePath();
+        ctx.fill();
+      }
     }
+    // THE BLOCK, turned about its point.
+    ctx.translate(s.x, s.y);
+    if (m.angle) ctx.rotate(m.angle);
+    if (tag.fill || tag.outline) {
+      const bx = -m.w / 2 - m.pad, by = m.top - m.pad, bw = m.w + 2 * m.pad, bh = m.bottom - m.top + 2 * m.pad;
+      ctx.beginPath();
+      ctx.rect(bx, by, bw, bh);
+      if (tag.fill && env.fillColor) {
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = env.fillColor;
+        ctx.fill();
+        ctx.restore();
+      }
+      if (tag.outline) {
+        ctx.strokeStyle = env.color;
+        ctx.lineWidth = 1 * k;
+        ctx.setLineDash([]);
+        ctx.stroke();
+      }
+    }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = env.color;
+    ctx.font = tagFontCss(tag, m.namePx, false);
+    ctx.textBaseline = area ? 'bottom' : 'middle';
+    const y = area ? -1 : 0;
+    if (m.namePx >= 2) ctx.fillText(label, 0, y);
+    let subY = 1;
+    lines.forEach(line => {
+      ctx.font = tagFontCss(tag, m.subPx, true);
+      ctx.textBaseline = 'top';
+      if (m.subPx >= 2) ctx.fillText(line, 0, subY);
+      subY += m.subH;
+    });
     // SCREEN ONLY. A compliance nag belongs to the drafter, not to the sheet
     // that goes to site -- so it is suppressed when printing, exactly as it
     // was on the page this came from.
@@ -1568,11 +1654,13 @@ if (!window.DraftRender2D) {
       ctx.font = '600 9px "Barlow Condensed", system-ui, sans-serif';
       ctx.textBaseline = 'top';
       ctx.fillStyle = 'rgba(176,64,80,0.85)';
-      ctx.fillText('UNDER MIN', s.x, area ? subY : s.y + 8);
+      ctx.fillText('UNDER MIN', 0, area ? subY : 8);
       ctx.fillStyle = env.color;
     }
     ctx.restore();
-    return hit;
+    // The box it painted, for an editor to keep: the name's baseline point
+    // and width as before, and the turned block's bounds.
+    return { tag, x: s.x, y: s.y + y, w: m.w, left: m.left, right: m.right, top: m.topY, bottom: m.bottomY };
   }
 
   // ── THE BATH FIXTURES, TRACED FROM MOVIE'S OWN DRAWINGS ──────────────────
@@ -4048,6 +4136,8 @@ if (!window.DraftRender2D) {
     drawRoomShape2D,
     roomTagLines,
     roomTagLeader,
+    roomTagMetrics,
+    roomTagBox2D,
     squareSideOf,
     drawRoomTag2D,
     drawUnderlays2D,

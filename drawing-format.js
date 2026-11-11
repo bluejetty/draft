@@ -1558,6 +1558,22 @@ if (!window.DraftDrawingFormat) {
       const shaped = points.length >= 3;
       const areaShown = tag?.areaShown !== false;
       const tagFlooring = oneOf(tag?.flooring?.type, FLOORING_TYPES, null);
+      // ITS LOOK (jb, 11 Nov 2026, the ROOM TAG panel's note options): the
+      // leader's end ('dot' when absent, as it always drew; 'none' is NO
+      // POINTER) and LINE weight / style, the lettering height in feet,
+      // font, turn, and a BORDER / MASK round the name. Each is written
+      // only when the tag carries it, so a tag saved before today reads
+      // exactly as it did.
+      const tagRot = number(tag?.rot, 0);
+      const look = {
+        ...(['dot', 'arrow', 'line', 'none'].includes(tag?.end) ? { end: tag.end } : {}),
+        ...lineStyleFields({ weight: tag?.weight, style: tag?.style }),
+        ...(number(tag?.heightFt, 0) > 0 ? { heightFt: number(tag.heightFt, 0) } : {}),
+        ...(['hand', 'plain', 'serif', 'mono'].includes(tag?.font) ? { font: tag.font } : {}),
+        ...(Number.isFinite(tagRot) && tagRot !== 0 ? { rot: tagRot } : {}),
+        ...(tag?.outline === true ? { outline: true } : {}),
+        ...(tag?.fill === true ? { fill: true } : {}),
+      };
       return {
         id,
         at,
@@ -1568,6 +1584,7 @@ if (!window.DraftDrawingFormat) {
         ...(shaped ? { points } : {}),
         ...(shaped && !areaShown ? { areaShown: false } : {}),
         ...(shaped && tagFlooring ? { flooring: { type: tagFlooring } } : {}),
+        ...look,
         areaSqFt: shaped ? (areaShown ? loopAreaSqFt(points) : 0) : (area > 0 ? area : 0),
         underMin: tag?.underMin === true,
         // ── THE TWO FACTS BEHIND THE UNDER MIN VERDICT ──────────────────

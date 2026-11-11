@@ -1207,6 +1207,52 @@ suite('drawRoomTag2D', 'a shaped tag-s area is a line under the name', R => {
   expect('name, then area', calls(ctx, 'fillText').map(a => a[0]).join('|'), 'DEN|20 SQ FT');
 });
 
+// THE TAG'S LOOK (jb, 11 Nov 2026): the note's properties on a room tag.
+suite('roomTagMetrics', 'a sized tag is lettered in feet and a turned one reports its turned box', R => {
+  const ctx = recordingCtx();
+  const toS10 = p => ({ x: p.x * 10, y: p.z * 10 });
+  const screen = R.roomTagMetrics(ctx, toS10({ x: 0, z: 0 }), { name: 'DEN', at: { x: 0, z: 0 } }, tagEnv(), 10);
+  expect('no height: the 13px screen tag', screen.namePx, 13);
+  const sized = R.roomTagMetrics(ctx, toS10({ x: 0, z: 0 }), { name: 'DEN', at: { x: 0, z: 0 }, heightFt: 2 }, tagEnv(), 10);
+  expect('2 ft tall at 10 px a foot is a 28px em', Math.round(sized.namePx), 28);
+  expect('the area line scales with it', sized.subPx > 13, true);
+  const flat = R.roomTagMetrics(ctx, { x: 0, y: 0 }, { name: 'DEN', at: { x: 0, z: 0 } }, tagEnv(), 10);
+  const turned = R.roomTagMetrics(ctx, { x: 0, y: 0 }, { name: 'DEN', at: { x: 0, z: 0 }, rot: Math.PI / 2 }, tagEnv(), 10);
+  expect('turned a quarter, the box stands on end', Math.round(turned.right - turned.left), Math.round(flat.bottomY - flat.topY));
+  expect('and is as tall as the flat one was wide', Math.round(turned.bottomY - turned.topY), Math.round(flat.right - flat.left));
+});
+
+suite('roomTagBox2D', 'the box a page hit-tests by is the box the painter reports', R => {
+  const ctx = recordingCtx();
+  const tag = { name: 'KITCHEN', at: { x: 1, z: 2 }, points: [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 5 }, { x: 0, z: 5 }] };
+  const box = R.roomTagBox2D(ctx, toS, tag, tagEnv(), 10);
+  const hit = R.drawRoomTag2D(recordingCtx(), toS, tag, { pxPerFt: 10 }, tagEnv());
+  expect('same left', box.left, hit.left);
+  expect('same bottom', box.bottom, hit.bottom);
+  expect('the box holds the point', box.top <= toS(tag.at).y && box.bottom >= toS(tag.at).y, true);
+});
+
+suite('drawRoomTag2D', 'NO POINTER leaves the leader off; ARROW puts a head where the dot was', R => {
+  const square = [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 3 }, { x: 0, z: 3 }];
+  const out = over => ({ name: 'DEN', at: { x: 8, z: 1.5 }, points: square, ...over });
+  const dot = recordingCtx();
+  R.drawRoomTag2D(dot, toS, out(), {}, tagEnv());
+  expect('a dot by default', calls(dot, 'arc').length, 1);
+  const none = recordingCtx();
+  R.drawRoomTag2D(none, toS, out({ end: 'none' }), {}, tagEnv());
+  expect('NO POINTER: no line', calls(none, 'stroke').length, 0);
+  expect('and no dot', calls(none, 'arc').length, 0);
+  const arrow = recordingCtx();
+  R.drawRoomTag2D(arrow, toS, out({ end: 'arrow' }), {}, tagEnv());
+  expect('ARROW: a head, no dot', `${calls(arrow, 'closePath').length}/${calls(arrow, 'arc').length}`, '1/0');
+  const dashed = recordingCtx();
+  R.drawRoomTag2D(dashed, toS, out({ style: 'dashed', weight: 5 }), {}, tagEnv());
+  expect('the leader takes the LINE style', calls(dashed, 'setLineDash').some(a => a[0] && a[0].length > 0), true);
+  const boxed = recordingCtx();
+  R.drawRoomTag2D(boxed, toS, out({ outline: true, fill: true }), {}, tagEnv({ fillColor: '#ffffff' }));
+  expect('BORDER + MASK: a rect, filled and stroked', `${calls(boxed, 'rect').length}/${calls(boxed, 'fill').length}`, '1/2');
+});
+
 // THE ROOM-S SHAPE AND ITS FLOORING (Movie, 23 Oct). A 6 x 9 room at 10 px
 // a foot: the loop, and inside it the finish the tag lays.
 const ROOM_6x9 = [{ x: 2, z: 2 }, { x: 8, z: 2 }, { x: 8, z: 11 }, { x: 2, z: 11 }];

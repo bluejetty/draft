@@ -636,15 +636,23 @@
   // the size as typed, and the AREA a shaped tag measures (Movie, 23 Oct).
   const roomTagEnv = () => ({
     color: skin['draw-note'],
+    fillColor: skin['surface-page'],
     areaFor: tag => tag.size || '',
     areaLabel: sqFt => (metric()
       ? `${(Math.round(sqFt * 0.09290304 * 10) / 10).toLocaleString('en-US')} m\u00b2`
       : `${Math.round(sqFt).toLocaleString('en-US')} SQ FT`),
   });
   const roomTagBox = tag => {
-    const s = toS(tag.at);
     const R = window.DraftRender2D;
-    const lines = R?.roomTagLines ? R.roomTagLines(tag, roomTagEnv()) : (tag.size ? [tag.size] : []);
+    // THE PAINTER'S OWN METRICS (jb, 11 Nov: a tag may be sized in feet,
+    // turned, or in another font), so the box is the block it draws.
+    if (R?.roomTagBox2D) {
+      const b = R.roomTagBox2D(ctx, toS, tag, roomTagEnv(), view.scale);
+      const pad = 1;
+      return { left: b.left - pad, right: b.right + pad, top: b.top - pad, bottom: b.bottom + pad };
+    }
+    const s = toS(tag.at);
+    const lines = tag.size ? [tag.size] : [];
     ctx.save();
     ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
     let w = ctx.measureText(String(tag.name || '')).width;

@@ -194,6 +194,16 @@ if (!window.DraftLayoutPlan) {
     // shape is sized for too; the frame can be roomier, never tighter.
     ['floors', 'roofs', 'outlines', 'shapes'].forEach(key => onLevel(key)
       .forEach(item => (Array.isArray(item.points) ? item.points : []).forEach(eat)));
+    // AND ITS ROOM TAGS (jb, 11 Nov: "the room tag still doesn't show on
+    // the layout view"): a tag set down outside its area, past the lot's
+    // corner, fell outside the frame and the window clipped it. The tag's
+    // point with room for its name, and its shape.
+    const TAG_ROOM_FT = 1.5;
+    onLevel('roomTags').forEach(tag => {
+      if (tag.at) [-1, 1].forEach(sx => [-1, 1].forEach(sz =>
+        eat({ x: num(tag.at.x) + sx * TAG_ROOM_FT, z: num(tag.at.z) + sz * TAG_ROOM_FT })));
+      (Array.isArray(tag.points) ? tag.points : []).forEach(eat);
+    });
     // AND THE GHOST OF THE STOREY UNDERNEATH (Movie, 12 Oct: "adjust the
     // scale so the larger plan with the extra lightweight lines fits on the
     // upper floors (which are smaller without the background lines)"). The

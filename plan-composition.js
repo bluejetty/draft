@@ -383,9 +383,13 @@ if (!window.DraftPlanComposition) {
     // shows is the caller's `areaFor`. Gated by ROOM-IDS-AREA like any layer,
     // which also keeps them to the walls plan on a sheet that names a view.
     if (env.roomTagEnv) {
+      // A tag lettered at its real size (TEXT SIZE, jb 11 Nov) needs the
+      // sheet's feet, as a sized note does.
+      const o = toS({ x: 0, z: 0 }), one = toS({ x: 1, z: 0 });
+      const pxPerFt = Math.hypot(one.x - o.x, one.y - o.y);
       pick(env.roomTags, { views: false })
         .filter(tag => shows(tag.layer || 'ROOM-IDS-AREA') && !off(tag.layer || 'ROOM-IDS-AREA'))
-        .forEach(tag => { onLayer(ctx, tag.layer || 'ROOM-IDS-AREA'); render.drawRoomTag2D(ctx, toS, tag, {}, env.roomTagEnv); });
+        .forEach(tag => { onLayer(ctx, tag.layer || 'ROOM-IDS-AREA'); render.drawRoomTag2D(ctx, toS, tag, { pxPerFt }, env.roomTagEnv); });
     }
   };
 
