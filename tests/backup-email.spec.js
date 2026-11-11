@@ -86,6 +86,7 @@ test('no BACKUP FILE email without a bone, and a failed send costs nothing', asy
   await bones(page, 1);
   await page.locator('#file-save-as').click();
   await page.locator('[data-save-as-go]').click();
+  await expect(popup(page)).toContainText('(you have 0)');
   await popup(page).locator('[data-bk-to]').fill('kris@example.com');
   await popup(page).locator('[data-bk-send]').click();
   await expect(popup(page).locator('[data-bk-status]')).toContainText('costs 1 bone and you have 0');

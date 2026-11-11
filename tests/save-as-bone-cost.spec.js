@@ -51,9 +51,10 @@ test('MODEL: SAVE AS names its price, takes 1 bone once the file is written, and
   await expect(toll(page)).toHaveText('Costs 1 bone (you have 5).');
   await page.locator('[data-save-as-go]').click();
   await expect(card(page)).toBeHidden();
+  // The email offer comes up only once the file is written and paid for.
+  await expect(page.locator('[data-backup-email]')).toContainText('It costs 1 bone more (you have 4)');
   expect(await page.evaluate(() => window.__saved), 'the file went to the disk').toBe(1);
   expect(await balance(page), 'one bone for the SAVE AS').toBe(4);
-  await expect(page.locator('[data-backup-email]')).toContainText('It costs 1 bone more (you have 4)');
   await expect(page.locator('#bone-balance')).toHaveText('4');
 });
 
