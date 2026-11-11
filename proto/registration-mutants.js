@@ -89,8 +89,8 @@ const MUTANTS = [
     test: 'a hologram card' },
   { file: 'model.css',
     name: 'the box goes under the side panel',
-    find: "  #registration { position:fixed; right:12px; bottom:calc(var(--readout-bottom) + 20px);\n    z-index:7;",
-    with: "  #registration { position:fixed; right:12px; bottom:calc(var(--readout-bottom) + 20px);\n    z-index:4;",
+    find: "  #registration { position:fixed; left:12px; bottom:calc(var(--readout-bottom) + 20px);\n    z-index:7;",
+    with: "  #registration { position:fixed; left:12px; bottom:calc(var(--readout-bottom) + 20px);\n    z-index:4;",
     test: 'the box sits ON TOP' },
   // "can the corners of the site plan (and the lower right corner with the
   // green target) all have snap nodes on the hologram site plan" (28 Oct).

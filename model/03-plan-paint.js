@@ -1471,9 +1471,13 @@
   // THE ARROW'S HAND stands alone at the top right, left of the rail when it
   // is open and left of the LEVELS / LAYERS tab when it is shut, on the
   // SELECT bar's line. HOUSE TURN and ZOOM TO FILL stack at the bottom
-  // right, left of REGISTRATION when it shows (on SITE) and in its corner
-  // when it does not, each half the box's height so the pair matches it.
+  // LEFT (Movie, 11 Nov, with a mockup: "move the page rotate, full screen,
+  // and registration area over to the left side"; they stood at the bottom
+  // right until then), in the corner over the foot lane, with REGISTRATION
+  // to their right when it shows (on SITE); each half the box's height so
+  // the pair matches it.
   const DOCK_GAP = 4;
+  const DOCK_LEFT = 12;
   const seatNorthDock = () => {
     seatSelectBar();
     if (!northDock) return;
@@ -1501,13 +1505,21 @@
       const top = (edge ? edge.top : 64) + 4 - box.top;
       Object.assign(hit.style, { left: `${left}px`, top: `${top}px`, width: `${base}px`, height: `${base}px` });
     }
-    // THE PAIR: beside REGISTRATION, as tall as it together.
+    // THE PAIR: in the bottom-left corner, as tall together as REGISTRATION,
+    // which is seated 8px to their right.
     const reg = document.getElementById('registration');
     const regBox = reg && !reg.hidden ? reg.getBoundingClientRect() : null;
     const side = regBox ? Math.max(24, Math.min(40, (regBox.height - DOCK_GAP) / 2)) : base;
-    const right = regBox ? window.innerWidth - regBox.left + 8 : 12;
     const bottom = regBox ? window.innerHeight - regBox.bottom : readoutBottomPx() + 20;
-    const left = window.innerWidth - right - side - box.left;
+    // RIGHT OF THE OPEN LEFT RAIL, as the arrow's hand stands left of the
+    // open right rail: the rail's panel runs down into the corner at
+    // 1366x768 and must keep its height (model-html-left-tabs measures
+    // the fit), so the pair and the box step aside rather than the rail.
+    const leftRail = document.getElementById('left-rail');
+    const railBox = leftRail && !leftRail.hidden ? leftRail.getBoundingClientRect() : null;
+    const dockLeft = railBox && railBox.width > 0 ? railBox.right + 8 : DOCK_LEFT;
+    if (reg) reg.style.left = `${dockLeft + side + 8}px`;
+    const left = dockLeft - box.left;
     const top0 = window.innerHeight - bottom - side * 2 - DOCK_GAP - box.top;
     [['strip-rotate', top0], ['strip-fill', top0 + side + DOCK_GAP]].forEach(([id, top]) => {
       const chip = document.getElementById(id);
