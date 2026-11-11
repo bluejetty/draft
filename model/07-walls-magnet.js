@@ -1409,6 +1409,22 @@
     siteSnapNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND A DIMENSION'S DIVIDE POINTS (jb, 10 Nov: "place a 'midpoint snap'
+    // on the dimension line so i can dimension something and then find the
+    // centerline"): the midpoint of every dimension shown on this level, or
+    // its DIVIDE's equal divisions, as nodes for every tool. On the measured
+    // span, so a LINE or WALL drawn to one runs down the centre of what was
+    // dimensioned; and in the TRACK pool, so a cross line stands up off it.
+    dimensionDivideNodes().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
+    return out;
+  };
+  const dimensionDivideNodes = () => {
+    const R = window.DraftRender2D;
+    if (!R?.dimensionDividePoints2D) return [];
+    const out = [];
+    shownDimensions().forEach(d => R.dimensionDividePoints2D(d).forEach(p => out.push(p)));
     return out;
   };
   // ON THE SITE. There the house is shown by its roof, whose corners live

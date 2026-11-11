@@ -232,6 +232,13 @@ if (!window.DraftDrawingFormat) {
   // DIMENSION tool, on their own layer so AUTO and HAND switch apart (Movie:
   // "add a layer for AUTO-dims and then a second for HAND-dims").
   const DIMENSION_UNITS = Object.freeze(['imperial', 'metric', 'both']);
+  // A DIMENSION'S DIVIDE: a whole number of pieces from 1 (no snap along it)
+  // to 100; anything else is no key, which reads as two.
+  const DIMENSION_DIVIDE_MAX = 100;
+  const dimensionDivide = v => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1 && n <= DIMENSION_DIVIDE_MAX ? n : null;
+  };
   const DIMENSION_LAYERS = Object.freeze([
     'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND',
   ]);
@@ -268,6 +275,12 @@ if (!window.DraftDrawingFormat) {
       // 'both' on one line. No key follows the drawing's switch. Written
       // only when present, the same rule as `layer`.
       const units = oneOf(dimension?.units, DIMENSION_UNITS, null);
+      // HOW MANY PIECES ITS SNAPS CUT IT INTO (jb, 10 Nov: "place a
+      // 'midpoint snap' on the dimension line ... DEFAULT (2 PIECES) can
+      // change to 3, 4, 5, or whatever number ... like a divide type of
+      // measurement function"). No key is two pieces, one snap at the
+      // middle; written only when present, the same rule as `layer`.
+      const divide = dimensionDivide(dimension?.divide);
       // A ROW THE DRAFTER SLID IN OR OUT (Movie, 6 Oct) says where it was
       // first put and how far it has come, so AUTO DIMS run again keeps the
       // move. Written only when present -- the same rule as `layer`.
@@ -306,6 +319,7 @@ if (!window.DraftDrawingFormat) {
         id, start, end, levelId: dimensionLevelId, view,
         ...(layer ? { layer } : {}),
         ...(units ? { units } : {}),
+        ...(divide ? { divide } : {}),
         auto: dimension?.auto === true,
         ...(moved ? { moved } : {}),
         ...(startRef ? { startRef } : {}),
