@@ -724,6 +724,10 @@
   #page-row [aria-current="page"],
   #sheet-row [aria-current="page"] { color: var(--accent);
     border-color: var(--accent); cursor:default; }
+  /* A DOOR LOCKED ON A SITE-PLAN-ONLY FILE (MODEL's syncSiteOnlyDoors):
+     PROJECT, WIREFRAME and EXT. FINISH are about a house the file has not
+     got, so the chip wears the no-page look and the press is refused. */
+  #page-row a[data-site-locked], #page-row a[data-site-locked]:hover,
   #page-row button:disabled, #page-row button:disabled:hover,
   #sheet-row button:disabled, #sheet-row button:disabled:hover {
     color: var(--ink-quiet); opacity:0.35; cursor:not-allowed;
