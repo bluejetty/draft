@@ -4385,8 +4385,23 @@ class Component extends PageLogic {
   // keeps it, ESC lets it go; an empty name hands the sheet back to the one
   // worked out from what is on it. One name, so the list, the thumbnail and
   // the titleblock all read it.
+  // A BOX STILL OPEN WHEN ANOTHER NAME IS PRESSED goes the way ENTER sends
+  // it: its words kept, itself gone. It is never pulled out with remove()
+  // while it has the focus: Chrome blurs it on the way out, the blur handler
+  // removes it too, and the first remove() throws "the node to be removed is
+  // no longer a child of this node" -- the crash card jb saw on the first
+  // press on the titleblock (10 Nov 2026). The box's own close() guards
+  // against running twice, so a blur that follows finds nothing to do.
+  _closeRenameBox() {
+    const open = document.getElementById('lay-rename');
+    if (!open) return;
+    if (open.closeRename) open.closeRename(true);
+    else if (document.activeElement === open) open.blur();
+    if (open.isConnected) open.remove();
+  }
+
   _openRename(n, rect) {
-    document.getElementById('lay-rename')?.remove();
+    this._closeRenameBox();
     const input = document.createElement('input');
     input.id = 'lay-rename';
     input.dataset.sheetRename = String(n);
@@ -4402,6 +4417,7 @@ class Component extends PageLogic {
       input.remove();
       if (keep) this._renameSheet(n, title);
     };
+    input.closeRename = close;
     input.addEventListener('keydown', e => {
       e.stopPropagation();
       if (e.key === 'Enter') { e.preventDefault(); close(true); }
@@ -4418,7 +4434,7 @@ class Component extends PageLogic {
   // information area too"). One name: the drawing's projectInfo.name, which
   // the PROJECT page's NAME box and every sheet's titleblock both read.
   _openProjectRename(rect) {
-    document.getElementById('lay-rename')?.remove();
+    this._closeRenameBox();
     const input = document.createElement('input');
     input.id = 'lay-rename';
     input.dataset.projectRename = '';
@@ -4435,6 +4451,7 @@ class Component extends PageLogic {
       input.remove();
       if (keep) this._renameProject(name);
     };
+    input.closeRename = close;
     input.addEventListener('keydown', e => {
       e.stopPropagation();
       if (e.key === 'Enter') { e.preventDefault(); close(true); }
