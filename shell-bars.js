@@ -1548,7 +1548,7 @@ ${trio(true)}
         const costs = opts.costs ? ` ${opts.costs}` : '';
         press.title = broke
           ? `Out of bones \u2014 the next free bone lands in ${waitLabel(nextDripMs)}. `
-            + `One drips in every hour, up to ${W.DRIP_CAP}.${costs}`
+            + `One drips in every hour, up to ${W.cap()}.${costs}`
           : nextDripMs != null
             ? `${W.bonesWord(balance)} \u00b7 next free bone in ${waitLabel(nextDripMs)}.${costs}`
             : `${balance} bones \u2014 the free wallet is full.${costs}`;

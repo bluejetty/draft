@@ -16,6 +16,23 @@ if (!window.DraftBoneWallet) {
   const SEED_BONES = 3;                 // new-browser grant
   const DRIP_MS = 60 * 60 * 1000;       // one bone per hour
   const DRIP_CAP = 10;                  // free wallet ceiling
+  // THE 25-BONE CEILING (jb, 11 Nov 2026: "go into the notepad and type
+  // 25BONES on the first line, as long as it's typed in there first line
+  // they get 25 BONES max"): the same hourly drip, a ceiling of 25 for as
+  // long as the first line of the NOTES pad (page 1, kept in localStorage
+  // under the pad's own key by model/04, and in the .draft) reads 25BONES.
+  // Take the line off and the ceiling is 10 again -- bones already above
+  // it are kept (at or above the cap the clock parks; nothing is taken),
+  // the drip just waits until a spend brings the wallet under 10.
+  const BIG_CAP = 25;
+  const BONES_CODE = '25BONES';
+  const NOTES_KEY = 'draft.notepad';
+  const capNow = () => {
+    try {
+      const first = String(localStorage.getItem(NOTES_KEY) || '').split('\n')[0];
+      return first.trim().toUpperCase() === BONES_CODE ? BIG_CAP : DRIP_CAP;
+    } catch { return DRIP_CAP; }
+  };
   // The spend registry — the growth point: elevation re-deals (#253)
   // register here later.
   // A BACKUP FILE BY EMAIL was 3 (Movie, 30 Oct: "charge them 3 bones per
@@ -55,15 +72,15 @@ if (!window.DraftBoneWallet) {
   // starts a fresh hour toward the next bone and nothing banks above the
   // ceiling. BELOW the cap, whole hours grant and the fraction carries in
   // lastDripAt — no fractional loss, no double grants across reloads.
-  const applyDrip = (state, now) => {
+  const applyDrip = (state, now, cap = capNow()) => {
     let { balance, lastDripAt, createdAt } = state;
     if (lastDripAt > now) lastDripAt = now;
-    if (balance >= DRIP_CAP) return { balance, lastDripAt: now, createdAt };
+    if (balance >= cap) return { balance, lastDripAt: now, createdAt };
     const whole = Math.floor((now - lastDripAt) / DRIP_MS);
     if (whole <= 0) return { balance, lastDripAt, createdAt };
-    const grant = Math.min(whole, DRIP_CAP - balance);
+    const grant = Math.min(whole, cap - balance);
     balance += grant;
-    lastDripAt = balance >= DRIP_CAP ? now : lastDripAt + whole * DRIP_MS;
+    lastDripAt = balance >= cap ? now : lastDripAt + whole * DRIP_MS;
     return { balance, lastDripAt, createdAt };
   };
 
@@ -79,27 +96,29 @@ if (!window.DraftBoneWallet) {
 
   // The wallet after the drip, persisted when anything changed (a first
   // run seeds and writes). nextDripMs is the wait for the next free bone —
-  // null at the cap, where no bone is coming.
-  const read = (now = Date.now()) => {
+  // null at the cap, where no bone is coming. cap is the ceiling in force
+  // (10, or 25 with the code on the NOTES pad).
+  const read = (now = Date.now(), cap = capNow()) => {
     const raw = loadRaw();
     const before = normalise(raw, now);
-    const state = applyDrip(before, now);
+    const state = applyDrip(before, now, cap);
     if (!raw || state.balance !== before.balance || state.lastDripAt !== before.lastDripAt) {
       store(state);
     }
     return {
       ...state,
-      nextDripMs: state.balance >= DRIP_CAP ? null : Math.max(0, state.lastDripAt + DRIP_MS - now),
+      cap,
+      nextDripMs: state.balance >= cap ? null : Math.max(0, state.lastDripAt + DRIP_MS - now),
     };
   };
 
   // Spend n bones: true and decremented when the wallet covers it, false
   // untouched otherwise — never negative. Storage is re-read here so two
   // open tabs can't both spend the same last bone off a stale copy.
-  const spend = (n, now = Date.now()) => {
+  const spend = (n, now = Date.now(), cap = capNow()) => {
     const count = Number(n);
     if (!Number.isFinite(count) || count <= 0) return false;
-    const state = applyDrip(normalise(loadRaw(), now), now);
+    const state = applyDrip(normalise(loadRaw(), now), now, cap);
     if (state.balance < count) { store(state); return false; }
     store({ ...state, balance: state.balance - count });
     return true;
@@ -112,6 +131,9 @@ if (!window.DraftBoneWallet) {
     SEED_BONES,
     DRIP_MS,
     DRIP_CAP,
+    BIG_CAP,
+    BONES_CODE,
+    cap: capNow,
     COSTS,
     STORAGE_KEY,
     normalise,
