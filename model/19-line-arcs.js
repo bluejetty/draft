@@ -662,7 +662,12 @@
   }
   function syncLineBar() {
     if (!lineBar) return;
-    const up = !modalUp() && arcToolUp();
+    // ON SHAPE AND FLOOR THE ROW STANDS ONLY ONCE A LOOP IS IN HAND or a
+    // bend is chosen (the right-click menu reaches the modes at any time),
+    // so the foot's verbs -- UNDO, DELETE, MOVE -- stay where a drafter
+    // who has just closed a shape goes looking for them.
+    const loopRow = loopArcToolUp() && (loopArcCorners().length > 0 || !!lineArcState.centre || !lineArcModeIs('straight'));
+    const up = !modalUp() && (lineToolUp() || loopRow);
     lineBar.hidden = !up;
     if (!up) return;
     // THE ROW STANDS OVER THE VERBS, as OFFSET's and ARRAY's do (Movie, 18

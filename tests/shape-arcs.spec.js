@@ -50,8 +50,10 @@ test('SHAPE takes ARC and STRAIGHT from the foot row; the closed shape keeps the
   const { at } = await open(page);
   await page.keyboard.press('a');
   await expect(page.locator('[data-tool-key="shape"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-line-bar]'), 'the LINE row stands for SHAPE too').toBeVisible();
+  // The row waits for a corner in hand, so the foot's verbs stay until then.
+  await expect(page.locator('[data-line-bar]')).toBeHidden();
   await click(page, at, -10, 0);
+  await expect(page.locator('[data-line-bar]'), 'the LINE row stands for SHAPE too').toBeVisible();
   await click(page, at, 0, 0);
   // ARC: the next corner ends an arc tangent to the edge before it -- a
   // quarter circle to (10, 10) about (0, 10).
@@ -83,7 +85,13 @@ test('SHAPE takes ARC and STRAIGHT from the foot row; the closed shape keeps the
 test('CIRCLE on SHAPE: the centre then the radius makes a four-arc shape of pi r squared; MAKE LINES and MAKE SHAPE go round trip with UNDO', async ({ page }) => {
   const { at } = await open(page);
   await page.keyboard.press('a');
-  await page.locator('[data-line-mode="circle"]').click();
+  // No corner in hand yet, so the chips are down: the right-click menu
+  // reaches CIRCLE.
+  await page.mouse.click(...at(-14, 10), { button: 'right' });
+  await page.waitForTimeout(100);
+  await page.locator('[data-line-menu-item="circle"]').click();
+  await page.waitForTimeout(80);
+  await expect(page.locator('[data-line-bar]')).toBeVisible();
   expect(await strip(page)).toContain('press the centre');
   await click(page, at, 0, 0);
   expect(await strip(page)).toContain('radius');
@@ -185,7 +193,8 @@ test('the right click on SHAPE opens the menu; CLOSE with ARC bends the closing 
   expect(made[0].map(p => p.slice(0, 2))).toEqual([[-10, -10], [10, -10], [10, 10]]);
   expect(made[0][2][2], 'the last corner bends the closing edge').not.toBe(0);
   expect(await page.evaluate(() => activeTool), 'the tool stays up').toBe('shape');
-  // 3-POINT ARC on a fresh shape: end, then through.
+  // 3-POINT ARC on a fresh shape: end, then through. The mode was kept
+  // (ARC) so the chips still stand with nothing in hand.
   await page.locator('[data-line-mode="arc3"]').click();
   await click(page, at, -18, 6);
   await click(page, at, -10, 6);
