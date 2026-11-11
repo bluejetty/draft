@@ -80,6 +80,22 @@ const MUTANTS = [
     with: "    siteplan_: '<path d=\"M3 4h18v16H3z\" stroke-dasharray=\"3 1.4 0.8 1.4\" />'",
     test: 'the SITE PLAN key is the last of the BUILD keys and wears a drawing, not a letter' },
 
+  { file: 'model/04-levels-notes-bars.js',
+    name: 'the DRAW STANDALONE SITE PLAN tile no longer asks',
+    find: "    if (want === 'site') openLotCard();\n",
+    with: '',
+    test: 'DRAW STANDALONE SITE PLAN on the drive-thru board opens the card on SITE' },
+
+  { file: 'model/10-tracking-garage.js',
+    name: 'the LEVELS seat double-click door is back',
+    find: "  const roomCard = document.getElementById('room-pick');",
+    with: "  document.addEventListener('dblclick', e => {\n"
+      + '    if (!e.target?.closest?.(`[data-seat="${SITE_LEVEL_ID}:all"]`)) return;\n'
+      + '    setTimeout(() => { if (lotOnSite()) reopenLot(); }, 0);\n'
+      + '  });\n'
+      + "  const roomCard = document.getElementById('room-pick');",
+    test: 'the SITE PLAN seat in LEVELS / LAYERS asks nothing, pressed once or twice, on a site plan drawn with lines' },
+
   { file: 'model/03-plan-paint.js',
     name: 'the build marches him to SITE again',
     find: "    if (!boneRevealOn() || !autoElevationCuts().some(cut => String(cut.id) === 'E1')) return;",
