@@ -94,7 +94,7 @@ test('a double-click on the property line opens the card on the lot\'s own size;
   expect(got.lot.widthFt).toBe(60);
 });
 
-test('a double-click on the SITE PLAN seat in LEVELS / LAYERS opens nothing (jb, 10 Nov)', async ({ page }) => {
+test('a double-click on the SITE PLAN seat in LEVELS / LAYERS opens nothing (jb, 10 Nov); the key does, and NOT NOW leaves the lot as it was', async ({ page }) => {
   // Movie's 18 Oct second door, shut by jb: "this menu just popped up when
   // i click the SITE PLAN on levels i think. it should only popup when the
   // SITE PLAN button in the BUILD menu is pressed". Two presses on a level
@@ -105,6 +105,10 @@ test('a double-click on the SITE PLAN seat in LEVELS / LAYERS opens nothing (jb,
   await expect(card(page)).toBeHidden();
   await page.locator(`[data-seat="${SITE}:all"]`).dblclick();
   await page.waitForTimeout(400);
+  await expect(card(page)).toBeHidden();
+  // The BUILD key is the door, and NOT NOW shuts it with the lot untouched.
+  await h.openLotCard(page);
+  await card(page).locator('[data-lot-pick-skip]').click();
   await expect(card(page)).toBeHidden();
   const got = await lotOf(page);
   expect([got.count, Math.round(got.w), Math.round(got.d)]).toEqual([1, 60, 150]);
