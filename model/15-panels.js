@@ -2213,6 +2213,9 @@
     // A BEAM IS A ROW: AUTO BEAM lays one in pieces post to post, and a
     // click takes the whole row, so the panel answers for all of it.
     beam: items => (items.length ? { title: 'BEAM', node: beamPropsNode(items) } : null),
+    // A NOTE'S LOOK (jb, 10 Nov): pointer, its line and end, text size and
+    // font, node, justification, turn, box.
+    note: items => (items.length ? { title: 'NOTE', node: notePropsNode(items) } : null),
   };
 
   let selectionPanelUp = false;
@@ -3229,51 +3232,280 @@
     ctx.restore();
   };
 
-  // ── THE ANNOTATION PANEL ─────────────────────────────────────────────────
-  // POINTER on or off, and what the leader ends in. One end for now --
-  // STRAIGHT -- with the row there so the arrow types land beside it.
-  let notePanelUp = false;
-  const showNoteProps = () => {
-    const P = window.ModelProps;
-    if (!P) return;
+  // ── THE ANNOTATION PANEL, AND A NOTE'S PROPERTIES ─────────────────────
+  //
+  // jb, 10 Nov: "i need to add some properties that can be changed for the
+  // annotation. have to be able to turn on and off the pointer... and adjust
+  // the line use and option to add an arrow on the end. and also need text
+  // size and type ... and then a position of the 'node' centered left or
+  // right right top bottom left etc and then also justification of text
+  // left center right". One builder serves two panels: the ANNOTATION tool's
+  // (what the NEXT note is born with -- the defaults, remembered per browser
+  // beside the lights) and the picked note's (OBJ / PROP and the left
+  // PROPERTIES box), which writes every picked note in one undo and makes
+  // the pick the next note's default too, as a LINE's weight does.
+  //
+  // The fields ride on the note record (drawing-format.js, `look`):
+  //   end       'arrow' | 'line' | 'dot' | 'none'   -- 'none' is POINTER off
+  //   weight    1..6, style 'solid' | 'dashed' | ... -- the leader's ink
+  //   heightFt  lettering height on the plan; none is the 12px screen note
+  //   font      'hand' | 'plain' | 'serif' | 'mono'
+  //   node      which point of the block the leader meets; 'auto' is the
+  //             near side's middle, as every note before today
+  //   align     'left' | 'center' | 'right'  -- the lines in the block
+  //   rot       radians counter-clockwise about the text point
+  //   outline / fill / caps   BORDER, MASK and CAPS
+  const NOTE_DEFAULT_KEY = 'noteStyle';
+  const NOTE_LOOK_KEYS = ['end', 'weight', 'style', 'heightFt', 'font', 'node', 'align', 'rot', 'outline', 'fill', 'caps'];
+  let noteDefaults = (() => {
+    const raw = stored[NOTE_DEFAULT_KEY] || {};
+    const out = { caps: true };
+    NOTE_LOOK_KEYS.forEach(key => { if (raw[key] != null) out[key] = raw[key]; });
+    delete out.end;   // the tool's own POINTER END chips hold the end (noteEnd)
+    return out;
+  })();
+  // What a new note is born with: the look alone, never an end or a point.
+  // CAPS always rides on a new note (true or false): the painter capitalises
+  // by it, and a note without the switch is one from before it existed.
+  const noteStyleDefaults = () => {
+    const out = {};
+    Object.entries(noteDefaults).forEach(([key, value]) => {
+      if (key === 'end' || value == null) return;
+      out[key] = value;
+    });
+    out.caps = noteDefaults.caps !== false;
+    return out;
+  };
+  const keepNoteDefaults = () => {
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, [NOTE_DEFAULT_KEY]: noteDefaults }));
+    } catch { /* a browser refusing storage still keeps it for this tab */ }
+  };
+  const setNoteDefaults = patch => {
+    Object.entries(patch).forEach(([key, value]) => {
+      if (value == null) delete noteDefaults[key]; else noteDefaults[key] = value;
+    });
+    keepNoteDefaults();
+  };
+  // A patch's null DELETES the key, so an undo puts the record back to one
+  // that never had it -- the 'props' step restores by keys, not values.
+  const writeNoteProps = (list, patch) => {
+    const edits = list.map(note => ({ item: note, before: { ...note, anchor: { ...note.anchor }, text: { ...note.text } } }));
+    list.forEach(note => {
+      Object.entries(patch).forEach(([key, value]) => {
+        if (value == null) delete note[key]; else note[key] = value;
+      });
+    });
+    undoStack.push({ kind: 'props', edits });
+    const look = {};
+    Object.keys(patch).forEach(key => { if (NOTE_LOOK_KEYS.includes(key) && key !== 'end') look[key] = patch[key]; });
+    if (Object.keys(look).length) setNoteDefaults(look);
+    markDirty();
+    showSelectionProps();
+    renderObjProp();
+    paint();
+  };
+  // POINTER ON for a note that never had one: the anchor sits on the text
+  // point, and the format drops a leader of no length, so it is set a few
+  // feet off to the near side -- a handle the drafter drags to the thing.
+  // The end a note had before NO POINTER, so POINTER brings the same one back.
+  const notePointerWas = new WeakMap();
+  const notePointerOn = (list, end) => {
+    list.forEach(note => {
+      const edit = { item: note, before: { ...note, anchor: { ...note.anchor }, text: { ...note.text } } };
+      if (Math.hypot(note.text.x - note.anchor.x, note.text.z - note.anchor.z) < 0.01) {
+        const off = Math.max(2, (Number(note.heightFt) || 0) * 4, 6 / Math.max(1, view.scale));
+        note.anchor = { x: note.text.x - off, y: 0, z: note.text.z + off };
+      }
+      note.end = notePointerWas.get(note) || end;
+      undoStack.push({ kind: 'props', edits: [edit] });
+    });
+    markDirty();
+    showSelectionProps();
+    renderObjProp();
+    paint();
+  };
+  const NOTE_SIZE_CHIPS = Object.freeze({
+    imperial: [[0.25, '3"'], [0.5, '6"'], [1, "1'"], [2, "2'"], [5, "5'"]],
+    metric: [[0.1 / 0.3048, '100 MM'], [0.15 / 0.3048, '150 MM'], [0.3 / 0.3048, '300 MM'], [0.6 / 0.3048, '600 MM'], [1.5 / 0.3048, '1.5 M']],
+  });
+  const NOTE_NODE_CHIPS = Object.freeze([
+    ['tl', 'TOP LEFT'], ['t', 'TOP'], ['tr', 'TOP RIGHT'],
+    ['l', 'LEFT'], ['c', 'CENTER'], ['r', 'RIGHT'],
+    ['bl', 'BOT LEFT'], ['b', 'BOTTOM'], ['br', 'BOT RIGHT'],
+  ]);
+  // THE BUILDER. `read(key)` is the value every picked note agrees on
+  // (undefined when they differ); `write(patch)` lands it. `notes` is the
+  // picked list, or null for the tool's defaults panel.
+  const noteLookNode = (read, write, notes) => {
+    const R = window.DraftRender2D, LS = window.DraftLineStyles, F = window.DraftFormatters;
     const box = document.createElement('div');
-    const chip = (label, on, data, click, title = '') => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'sel-chip';
-      b.textContent = label;
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-      Object.entries(data).forEach(([k, v]) => { b.dataset[k] = v; });
-      if (title) b.title = title;
-      b.addEventListener('click', click);
-      return b;
-    };
-    const titled = text => {
+    const title = text => {
       const t = document.createElement('div');
       t.className = 'props-title';
       t.textContent = text;
       return t;
     };
-    const pointerRow = document.createElement('div');
-    pointerRow.className = 'chip-row';
-    pointerRow.append(
-      chip('NO POINTER', !notePointer, { notePointer: 'off' }, () => {
-        notePointer = false; elevPointerTip = null; showNoteProps(); paint();
+    const chip = (data, text, pressed, onClick, tip = '') => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sel-chip';
+      Object.entries(data).forEach(([k, v]) => { b.dataset[k] = v; });
+      b.textContent = text;
+      b.setAttribute('aria-pressed', String(pressed === true));
+      if (tip) b.title = tip;
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    const row = (...kids) => {
+      const r = document.createElement('div');
+      r.className = 'chip-row';
+      r.append(...kids);
+      return r;
+    };
+    const field = (data, value, placeholder, commit) => {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'prop-field';
+      Object.entries(data).forEach(([k, v]) => { input.dataset[k] = v; });
+      input.placeholder = placeholder;
+      input.value = value;
+      // Enter commits and blurs, and the blur's change must not commit the
+      // same value again (two undo steps for one typing).
+      let last = value;
+      const once = () => { if (input.value === last) return; last = input.value; commit(input); };
+      input.addEventListener('change', once);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); once(); input.blur(); } });
+      return input;
+    };
+    const one = notes && notes.length === 1 ? notes[0] : null;
+    // EDIT TEXT: the same box the tool opened, with the words already in it.
+    if (one) {
+      // The same box a double-click on the note opens (model/16).
+      const edit = chip({ noteRetype: '' }, 'EDIT TEXT', false, () => editNoteText(one),
+        'Retype the note. Enter keeps it, Shift+Enter for a new line, Esc leaves it as it was.');
+      box.append(title('TEXT'), row(edit));
+    }
+    // POINTER: on the tool, whether the next tap is the thing or the text;
+    // on a picked note, whether it has a leader at all.
+    const end = read('end');
+    const pointerOn = notes ? (end === undefined ? undefined : end !== 'none') : notePointer;
+    box.append(title('POINTER'), row(
+      chip({ notePointer: 'off' }, 'NO POINTER', pointerOn === false, () => {
+        if (notes) {
+          if (pointerOn === false) return;
+          notes.forEach(n => { if (n.end !== 'none') notePointerWas.set(n, n.end); });
+          writeNoteProps(notes, { end: 'none' });
+          return;
+        }
+        notePointer = false; elevPointerTip = null; planPointerTip = null; showNoteProps(); paint();
       }),
-      chip('POINTER', notePointer, { notePointer: 'on' }, () => {
+      chip({ notePointer: 'on' }, 'POINTER', pointerOn === true, () => {
+        if (notes) { if (pointerOn !== true) notePointerOn(notes, noteEnd === 'none' ? 'arrow' : noteEnd); return; }
         notePointer = true; showNoteProps();
         sayOnStrip('POINTER — tap the thing to point at, then where the text goes.');
-      }));
-    const endRow = document.createElement('div');
-    endRow.className = 'chip-row';
-    endRow.append(chip('STRAIGHT', noteEnd === 'line', { noteEnd: 'line' }, () => {
-      noteEnd = 'line'; showNoteProps();
-    }, 'A plain end on the pointer line.'),
-    chip('ARROW', noteEnd === 'arrow', { noteEnd: 'arrow' }, () => {
-      noteEnd = 'arrow'; showNoteProps();
-    }, 'An arrowhead where the pointer line meets the thing.'));
-    box.append(titled('POINTER'), pointerRow, titled('POINTER END'), endRow);
-    P.set('ANNOTATION', box);
+      })));
+    // POINTER END: what the leader ends in.
+    const endNow = notes ? end : noteEnd;
+    box.append(title('POINTER END'), row(
+      ...[['line', 'STRAIGHT', 'A plain end on the pointer line.'],
+        ['arrow', 'ARROW', 'An arrowhead where the pointer line meets the thing.'],
+        ['dot', 'DOT', 'A filled dot where the pointer line meets the thing.']].map(([id, label, tip]) =>
+        chip({ noteEnd: id }, label, endNow === id, () => {
+          if (notes) { writeNoteProps(notes, { end: id }); noteEnd = id; keepNoteDefaults(); return; }
+          noteEnd = id; showNoteProps();
+        }, tip))));
+    // POINTER LINE: the leader's style and weight, from the LINE's own table.
+    if (LS) {
+      const styleNow = read('style') === undefined && notes ? undefined : (read('style') || 'solid');
+      box.append(title('POINTER LINE'), row(...LS.STYLES.map(st =>
+        chip({ noteStyle: st.id }, st.name, styleNow === st.id, () => write({ style: st.id === 'solid' ? null : st.id })))));
+      const weightNow = read('weight') === undefined && notes ? undefined : (read('weight') || LS.DEFAULT_WEIGHT);
+      box.append(row(...LS.WEIGHTS.map(w =>
+        chip({ noteWeight: w.id }, w.name, weightNow === w.id, () => write({ weight: w.id === LS.DEFAULT_WEIGHT ? null : w.id })))));
+    }
+    // TEXT SIZE: lettering height on the plan, or SCREEN -- 12px at any zoom.
+    const metric = drawing?.units === 'metric';
+    const sizeNow = read('heightFt');
+    const sizeRow = row(chip({ noteSize: 'screen' }, 'SCREEN', sizeNow === null || (sizeNow === undefined && !notes), () => write({ heightFt: null }),
+      'The same size at every zoom, and on every sheet.'));
+    NOTE_SIZE_CHIPS[metric ? 'metric' : 'imperial'].forEach(([ft, label]) => {
+      sizeRow.append(chip({ noteSize: label }, label, sizeNow !== undefined && sizeNow !== null && Math.abs(sizeNow - ft) < 1e-6,
+        () => write({ heightFt: ft })));
+    });
+    const sizeField = field({ noteSizeField: '' }, sizeNow > 0 ? F.formatLength(sizeNow, drawing?.units) : '',
+      metric ? 'HEIGHT, 0.3 for metres' : 'HEIGHT, 6" or 1\'-6"', input => {
+        const typed = input.value.trim();
+        if (!typed) { write({ heightFt: null }); return; }
+        const parsed = F.parseLength(typed, drawing?.units);
+        if (!parsed.ok || !(parsed.inches > 0)) { sayOnStrip(parsed.error || 'Type a height, like 6" or 1\'-6".'); return; }
+        write({ heightFt: parsed.inches / 12 });
+      });
+    box.append(title('TEXT SIZE ON THE PLAN'), sizeRow, sizeField);
+    // FONT.
+    if (R?.noteFonts) {
+      const fontNow = read('font') === undefined && notes ? undefined : (read('font') || 'hand');
+      box.append(title('FONT'), row(...R.noteFonts().map(f =>
+        chip({ noteFont: f.id }, f.name, fontNow === f.id, () => write({ font: f.id === 'hand' ? null : f.id })))));
+    }
+    // NODE: which point of the block the leader meets. AUTO is the near
+    // side's middle, as every note before today.
+    const nodeNow = read('node') === undefined && notes ? undefined : (read('node') || 'auto');
+    const grid = document.createElement('div');
+    grid.className = 'chip-row';
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    NOTE_NODE_CHIPS.forEach(([id, label]) => {
+      const b = chip({ noteNode: id }, label, nodeNow === id, () => write({ node: id }));
+      b.style.textAlign = 'center';
+      grid.append(b);
+    });
+    box.append(title('NODE'), row(chip({ noteNode: 'auto' }, 'AUTO (NEAR SIDE)', nodeNow === 'auto', () => write({ node: null }))), grid);
+    // JUSTIFY: the lines inside the block.
+    const alignNow = read('align') === undefined && notes ? undefined : (read('align') || 'left');
+    box.append(title('JUSTIFY'), row(...[['left', 'LEFT'], ['center', 'CENTER'], ['right', 'RIGHT']].map(([id, label]) =>
+      chip({ noteAlign: id }, label, alignNow === id, () => write({ align: id === 'left' ? null : id })))));
+    // ROTATE: degrees counter-clockwise, chips for the two a drafter uses.
+    const rotNow = read('rot') === undefined && notes ? undefined : (read('rot') || 0);
+    const deg = rotNow === undefined ? '' : String(Math.round((rotNow * 180 / Math.PI) * 10) / 10);
+    const rotRow = row(...[[0, '0°'], [90, '90°']].map(([d, label]) =>
+      chip({ noteRot: d }, label, rotNow !== undefined && Math.abs(rotNow - d * Math.PI / 180) < 1e-6,
+        () => write({ rot: d ? d * Math.PI / 180 : null }))));
+    rotRow.append(field({ noteRotField: '' }, deg, 'DEGREES', input => {
+      const d = Number(input.value.trim());
+      if (!Number.isFinite(d)) { sayOnStrip('Type degrees, like 45 or -30.'); return; }
+      write({ rot: d ? ((d % 360) * Math.PI / 180) : null });
+    }));
+    box.append(title('ROTATE'), rotRow);
+    // BOX: a border round the block, a mask behind it, and CAPS.
+    const outlineNow = read('outline') === true ? true : read('outline') === undefined && notes ? undefined : false;
+    const fillNow = read('fill') === true ? true : read('fill') === undefined && notes ? undefined : false;
+    const capsNow = notes ? read('caps') === undefined ? undefined : read('caps') === true : noteDefaults.caps !== false;
+    box.append(title('BOX'), row(
+      chip({ noteOutline: '' }, 'BORDER', outlineNow === true, () => write({ outline: outlineNow === true ? false : true }),
+        'A line round the text block.'),
+      chip({ noteFill: '' }, 'MASK', fillNow === true, () => write({ fill: fillNow === true ? false : true }),
+        'A paper-coloured wash behind the text, so it reads over lines and hatch.'),
+      chip({ noteCaps: '' }, 'CAPS', capsNow === true, () => write({ caps: capsNow === true ? false : true }),
+        'Letter the note in capitals.')));
+    return box;
+  };
+  const notePropsNode = notes => {
+    const same = key => (notes.every(n => {
+      const a = n[key] ?? null, b = notes[0][key] ?? null;
+      return a === b;
+    }) ? (notes[0][key] ?? null) : undefined);
+    return noteLookNode(same, patch => writeNoteProps(notes, patch), notes);
+  };
+  // THE TOOL'S PANEL: the defaults for the next note.
+  let notePanelUp = false;
+  const showNoteProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const node = noteLookNode(key => (key in noteDefaults ? noteDefaults[key] : null),
+      patch => { setNoteDefaults(patch); showNoteProps(); }, null);
+    P.set('ANNOTATION', node);
     notePanelUp = true;
   };
 

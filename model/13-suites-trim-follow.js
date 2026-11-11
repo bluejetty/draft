@@ -253,11 +253,14 @@
   // A small box where the note goes; Enter keeps it, Escape drops it.
   // With `lines`, SHIFT+ENTER starts a new line (a plan heading runs to two
   // or three) and ENTER alone still places it.
-  const askNoteText = (clientX, clientY, done, { lines = false } = {}) => {
+  // `initial` is the words already there (EDIT TEXT on a placed note);
+  // `caps` false keeps the case as typed (the NOTE panel's CAPS chip off).
+  const askNoteText = (clientX, clientY, done, { lines = false, initial = '', caps = true } = {}) => {
     const box = document.createElement(lines ? 'textarea' : 'input');
     if (!lines) box.type = 'text';
     else { box.rows = 2; box.style.resize = 'both'; }
     box.dataset.elevNote = '';
+    if (initial) box.value = initial;
     box.placeholder = lines ? 'NOTE — Enter to place, Shift+Enter for a new line' : 'NOTE — Enter to place';
     Object.assign(box.style, { position: 'fixed', left: `${clientX}px`, top: `${clientY - 14}px`,
       zIndex: 50, font: "600 14px 'Barlow Condensed', system-ui, sans-serif",
@@ -266,7 +269,8 @@
     const settle = keep => {
       if (settled) return;
       settled = true;
-      const text = keep ? box.value.split('\n').map(line => line.trim()).join('\n').trim().toUpperCase() : '';
+      const typed = keep ? box.value.split('\n').map(line => line.trim()).join('\n').trim() : '';
+      const text = caps ? typed.toUpperCase() : typed;
       box.remove();
       done(text);
     };
@@ -339,10 +343,12 @@
     const { levelId } = onActiveLevel();
     drawing.notes = drawing.notes || [];
     const id = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0) + 1;
+    // Born with the NOTE panel's last-picked look (model/15, noteStyleDefaults).
     return selectPlaced('note', addItem(drawing.notes, {
       id, anchor: { x: anchor.x, y: 0, z: anchor.z }, text: { x: text.x, y: 0, z: text.z },
       levelId, view: activeViewId() || 'plan', body, end,
       fill: false, fillOpacity: 0.85, outline: false, bullnose: 0, layer: 'A-ANNO-NOTE',
+      ...(typeof noteStyleDefaults === 'function' ? noteStyleDefaults() : {}),
     }));
   };
   const planNoteLift = e => {
@@ -369,13 +375,16 @@
       if (!body) return;
       addPlanNote(end === 'none' ? text : anchor, text, body, end);
       sayOnStrip('NOTE placed — tap for another, or press S for SELECT.');
-    }, { lines: true });
+      // Stored as typed: CAPS is the note's own switch (its `caps`), and the
+      // painter letters it in capitals while that is on.
+    }, { lines: true, caps: false });
   };
   const paintPlanNotePreview = () => {
     if (!planNoteInHand() || !cursorWorld) return;
     const R = window.DraftRender2D;
     if (!R) return;
-    R.drawNoteScreen2D(ctx, toS(planPointerTip), toS(cursorWorld), { body: '…', end: noteEnd },
+    R.drawNoteScreen2D(ctx, toS(planPointerTip), toS(cursorWorld),
+      { body: '…', end: noteEnd, ...(typeof noteStyleDefaults === 'function' ? noteStyleDefaults() : {}) },
       { preview: true, pxPerFt: view.scale }, { color: skin['draw-note'], fillColor: skin['surface-page'] });
   };
   toolListeners.push(() => { planNotePress = null; planPointerTip = null; });

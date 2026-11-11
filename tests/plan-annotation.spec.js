@@ -68,7 +68,9 @@ test('a tap opens the text box, Shift+Enter adds a line, Enter places a note on 
 
   const notes = (await saved(page)).notes;
   expect(notes).toHaveLength(1);
-  expect(notes[0].body).toBe('PLAN OF PROPOSED SUBDIVISION\nINTO BARE LAND UNITS 20-33');
+  // Stored as typed; CAPS (on by default) letters it in capitals.
+  expect(notes[0].body).toBe('Plan of proposed subdivision\ninto bare land units 20-33');
+  expect(notes[0].caps).toBe(true);
   expect(notes[0].end).toBe('none');
   expect(notes[0].levelId).toBe(SITE);
   expect(notes[0].view).toBe('plan');
@@ -98,7 +100,7 @@ test('POINTER: tap the lot corner, tap where the text goes, and the leader ends 
   await page.keyboard.press('Enter');
 
   const [note] = (await saved(page)).notes;
-  expect(note.body).toBe('IRON PIN FOUND');
+  expect(note.body).toBe('Iron pin found');
   expect(note.end).toBe('arrow');
   expect(note.anchor.x, 'the pointer caught the lot corner').toBeCloseTo(30, 1);
   expect(note.anchor.z).toBeCloseTo(60, 1);
@@ -129,7 +131,7 @@ test('press on the thing and drag to the text is a leader; Escape in the box dro
 
   const notes = (await saved(page)).notes;
   expect(notes).toHaveLength(1);
-  expect(notes[0].body).toBe('WEST LOT LINE');
+  expect(notes[0].body).toBe('West lot line');
   expect(notes[0].end).toBe('line');
   expect(notes[0].anchor.x).toBeCloseTo(-30, 0);
   expect(notes[0].text.x).toBeCloseTo(-50, 0);
