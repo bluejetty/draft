@@ -46,7 +46,9 @@ test('CALC is a tab beside NOTES on the pad; it swaps the page for the calculato
   await open(page);
   await openCalc(page);
   await expect(page.locator('[data-pad-tab="calc"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('[data-notes-text]')).toBeHidden();
+  // The pad stays on under the calculator (jb, 11 Nov: copy over and back).
+  await expect(page.locator('[data-notes-text]')).toBeVisible();
+  await expect(page.locator('#notes-panel')).toHaveAttribute('data-split', 'stack');
   await expect(page.locator('[data-notes-clear]')).toBeHidden();
   await expect(line(page)).toBeFocused();
   await page.locator('[data-pad-tab="notes"]').click();

@@ -339,6 +339,12 @@
       </span>
       <span class="np-title"></span>
       <span class="np-count" data-notes-count></span></div>
+    <!-- NOTES BESIDE THE CALCULATOR AND THE TURTLE (jb, 11 Nov: "i'd like
+         to copy info over and back from the calc and turtle sometimes"):
+         with CALC or TURTLE showing the pad stays on, under them while the
+         pane is narrow, to their left once it is pulled wide. This strip
+         names the pad's page where it sits under them. -->
+    <div class="np-split-label" data-notes-split-label hidden>NOTES</div>
     <textarea class="np-text" data-notes-text spellcheck="false"
       aria-label="Notes" placeholder="Type or paste notes, numbers, anything..."></textarea>
     <!-- SAVE AS TXT and CLEAR AT THE FOOT, and the five PAGE keys under them
@@ -412,6 +418,13 @@
         <span class="turtle-status" data-turtle-status aria-live="polite">NO MOVES YET</span>
         <span class="turtle-name" data-turtle-name></span>
       </div>
+      <!-- ONE PASTE SPOT (jb, 11 Nov: "copy the entire command like in that
+           notepad photo ... and paste all the commands into one area for
+           the turtle"): a block of moves pasted here, one or many to a
+           line, fills the table and the spot empties. A block pasted into
+           a DIRECTION cell does the same from that row down. -->
+      <textarea id="turtle-paste" class="turtle-paste" data-turtle-paste rows="2" spellcheck="false"
+        aria-label="Paste moves" placeholder="PASTE MOVES HERE: w 86.86 / n 106.38 / e 106.86 ... one or many to a line"></textarea>
       <div class="turtle-cols"><span>DIRECTION</span><span>DISTANCE</span><span></span></div>
       <div class="turtle-rows" data-turtle-rows></div>
       <!-- DRAW AS (Movie, 10 Nov): a string of lines, the SITE PLAN's lot,

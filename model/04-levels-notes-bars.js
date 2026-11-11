@@ -131,7 +131,26 @@
     // starting at the top (11 Nov) the cap is the pad's natural height, so a
     // pulled-out pad was clipped back to it.
     rail.style.maxHeight = on && (notesSize.top != null || notesSize.bottom != null) ? 'none' : '';
+    seatPadSplit();
   }
+  // NOTES BESIDE CALC / TURTLE (jb, 11 Nov 2026: "i'd like to copy info over
+  // and back from the calc and turtle sometimes ... when it's narrow, the
+  // turtle or calc on top and the notepad bottom half, and if the user
+  // widens the notepad put the notepad on the left side and right side for
+  // the calc or turtle"). The pane says which: `stack` while it is narrow,
+  // `side` once the left grip has pulled it past --notes-split-w (model.css
+  // lays the grid out either way); nothing with NOTES itself showing.
+  let padShowing = 'notes';
+  function seatPadSplit() {
+    const panel = document.getElementById('notes-panel');
+    if (!panel) return;
+    if (padShowing === 'notes') { panel.removeAttribute('data-split'); return; }
+    const rail = document.getElementById('right-rail');
+    const wide = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--notes-split-w')) || 380;
+    const w = (notesSize && notesSize.w) || (rail ? rail.getBoundingClientRect().width : 0);
+    panel.setAttribute('data-split', w >= wide ? 'side' : 'stack');
+  }
+  window.addEventListener('resize', seatPadSplit);
   document.querySelectorAll('[data-notes-grip]').forEach(grip => {
     grip.addEventListener('pointerdown', e => {
       e.preventDefault();
@@ -213,6 +232,8 @@
     const used = notesText.value.length;
     notesCount.textContent = used >= NOTES_MAX ? `PAGE ${notesPage + 1} FULL` : `PAGE ${notesPage + 1} OF ${NOTES_PAGES}`;
     notesCount.toggleAttribute('data-full', used >= NOTES_MAX);
+    const splitLabel = document.querySelector('[data-notes-split-label]');
+    if (splitLabel) splitLabel.textContent = `NOTES \u00b7 PAGE ${notesPage + 1}`;
     syncPageKeys();
   };
   // THE PAGE KEYS 1 TO 5 ARE EVERY TAB'S (Movie, 10 Nov: "the number should
@@ -222,7 +243,6 @@
   // keeps its own page in hand; the keys show the tab's, the one showing
   // lit and a page with something on it marked. The tabs fill in their
   // own entry here as they are built below.
-  let padShowing = 'notes';
   const padPages = {
     notes: { at: () => notesPage, written: i => Boolean(notesPages[i]), turn: i => notesTurnTo(i) },
   };
@@ -483,11 +503,15 @@
   padPages.calc = { at: () => calcState.page, written: i => Boolean(calcState.pages[i].length || calcState.lines[i]), turn: calcTurnTo };
   const showPad = which => {
     padTabs.forEach(b => b.setAttribute('aria-selected', String(b.dataset.padTab === which)));
-    notesText.hidden = which !== 'notes';
+    // The pad stays on under or beside CALC and TURTLE (jb, 11 Nov), with
+    // the NOTES strip naming its page; seatPadSplit says under or beside.
+    notesText.hidden = false;
+    document.querySelector('[data-notes-split-label]').hidden = which === 'notes';
     calcBox.hidden = which !== 'calc';
     document.querySelector('[data-turtle]').hidden = which !== 'turtle';
     notesCount.hidden = which !== 'notes';
     padShowing = which;
+    seatPadSplit();
     document.querySelector('[data-notes-clear]').hidden = which !== 'notes';
     syncPageKeys();
     if (which === 'calc') calcLine.focus();
@@ -806,6 +830,41 @@
     turtleKeep();
     turtleRefresh();
   };
+  // A BLOCK OF MOVES PASTED (jb, 11 Nov: "copy the entire command like in
+  // that notepad photo ... and paste all the commands into one area for the
+  // turtle"): the paste spot over the table reads the block the way FROM
+  // NOTES reads the pad and fills the table from row `from`; a block
+  // pasted into a DIRECTION cell fills from that row down instead of
+  // turning the cell red.
+  const turtlePasteBox = turtleBox.querySelector('[data-turtle-paste]');
+  const turtleTakeBlock = (text, from = 0) => {
+    const rows = window.DraftTurtlePath.rowsFromText(text);
+    if (!rows.length) return 0;
+    const at = Math.min(from, turtleCur.rows.length);
+    turtleCur.rows.splice(at, turtleCur.rows.length - at, ...rows.slice(0, TURTLE_ROWS_MAX - at));
+    turtleKeep();
+    turtleRender();
+    sayOnStrip(`TURTLE: ${rows.length} move${rows.length === 1 ? '' : 's'} pasted onto the table.`);
+    return rows.length;
+  };
+  if (turtlePasteBox) {
+    turtlePasteBox.addEventListener('input', () => {
+      const text = turtlePasteBox.value;
+      if (!text.trim()) { turtlePasteBox.removeAttribute('data-bad'); return; }
+      if (turtleTakeBlock(text)) { turtlePasteBox.value = ''; turtlePasteBox.removeAttribute('data-bad'); }
+      else turtlePasteBox.setAttribute('data-bad', '');
+    });
+    turtlePasteBox.addEventListener('keydown', e => e.stopPropagation());
+  }
+  turtleRowsBox.addEventListener('paste', e => {
+    const rowEl = e.target.closest('[data-turtle-row]');
+    if (!rowEl || !('turtleDir' in e.target.dataset)) return;
+    const text = e.clipboardData?.getData('text') || '';
+    const rows = window.DraftTurtlePath.rowsFromText(text);
+    if (!rows.length || (rows.length === 1 && !/\n/.test(text.trim()))) return;
+    e.preventDefault();
+    turtleTakeBlock(text, Number(rowEl.dataset.turtleRow));
+  });
   turtleRowsBox.addEventListener('input', e => {
     const rowEl = e.target.closest('[data-turtle-row]');
     if (!rowEl) return;
