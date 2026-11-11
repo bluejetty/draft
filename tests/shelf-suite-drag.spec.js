@@ -117,24 +117,66 @@ test('press and hold a square and drag it onto MAIN FL: the suite comes down by 
   expect((await saved(page)).holograms, 'one UNDO and it is off').toHaveLength(0);
 });
 
-test('on an elevation, the site, or standing on a shelf, the drag does nothing and the strip says FLOOR PLAN', async ({ page }) => {
+test('on an elevation or standing on a shelf, the drag does nothing and the strip says stand on a level', async ({ page }) => {
   await open(page);
   await page.locator('.seat[data-seat="E1"]').click();
   await expect(page.locator('#north-hit')).toBeHidden();
   await drag(page, 0, [640, 300]);
-  await expect(page.locator('#strip-message')).toContainText('FLOOR PLAN');
+  await expect(page.locator('#strip-message')).toContainText('stand on a level');
   expect((await saved(page)).holograms).toHaveLength(0);
   await open(page);
   await square(page, 0).click();
   await expect(page.locator('[data-shelf="1"]')).toHaveAttribute('data-active', '');
   await drag(page, 1, [640, 300]);
-  await expect(page.locator('#strip-message')).toContainText('FLOOR PLAN');
+  await expect(page.locator('#strip-message')).toContainText('stand on a level');
   expect((await saved(page)).holograms).toHaveLength(0);
-  // THE SITE IS A PLAN BUT NOT A FLOOR: a lot is no place for a suite.
+});
+
+// jb, 11 Nov 2026: "could we make an additional option to add a 'hologram'
+// by grabbing a 'shelf' and dragging it into the model space and dropping
+// it". A suite's shelf dragged onto the SITE (any level that is not one of
+// the house's floors) comes down as a generic HOLOGRAM where the hand lets
+// go, no floor rules; one UNDO takes it off.
+test('on the SITE a suite shelf drops as a HOLOGRAM where the hand lets go', async ({ page }) => {
   await open(page, '/MODEL.html?level=8&right=1');
-  await drag(page, 0, [640, 300]);
-  await expect(page.locator('#strip-message')).toContainText('FLOOR PLAN');
-  expect((await saved(page)).holograms).toHaveLength(0);
+  const { at } = await h.planFrame(page);
+  await drag(page, 0, at(30, 20), { release: false });
+  await expect(page.locator('#strip-message')).toContainText('HOLOGRAM');
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  const file = await saved(page);
+  expect(file.holograms).toHaveLength(1);
+  const [holo] = file.holograms;
+  expect(holo.name).toBe('1BDEN');
+  expect(holo.source.suiteKind, 'the generic kind: no suite rules').toBeUndefined();
+  expect(holo.source.shelfKind).toBe('hologram');
+  expect(holo.source.walls.map(w => w.id).sort()).toEqual(['s1e', 's1n', 's1s', 's1w']);
+  // IT IS ON THE SITE, carried by the middle of its walls (no gold corner on
+  // a generic hologram): the 20 x 12 box at (100..120, 40..52) lands centred
+  // on the hand at (30, 20).
+  expect(holo.levelMap).toEqual({ '-1': 8 });
+  expect(holo.x).toBeCloseTo(30 - 110, 1);
+  expect(holo.z).toBeCloseTo(20 - 46, 1);
+  // AND ITS WALLS ARE DRAWN THERE: the SITE pass never drew a wall before,
+  // so a shelf of walls came down invisible. Pixels on its north wall that
+  // are not the paper's (the paper read a few feet above the wall, whatever
+  // the skin), in either theme.
+  const ink = await page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const [cx, cz, scale] = c.dataset.view.trim().split(/\s+/).map(Number);
+    const sx = x => c.width / 2 + (x - cx) * scale, sz = z => c.height / 2 + (z - cz) * scale;
+    const g = c.getContext('2d');
+    const paper = Array.from(g.getImageData(Math.round(sx(30)), Math.round(sz(8)), 1, 1).data);
+    const d = g.getImageData(Math.round(sx(30)) - 2, Math.round(sz(14)) - 2, 5, 5).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (Math.abs(d[i] - paper[0]) + Math.abs(d[i + 1] - paper[1]) + Math.abs(d[i + 2] - paper[2]) > 60) n++;
+    }
+    return n;
+  });
+  expect(ink, 'the north wall is inked').toBeGreaterThan(0);
+  await page.keyboard.press('Control+z');
+  expect((await saved(page)).holograms, 'one UNDO and it is off').toHaveLength(0);
 });
 
 test('Esc while it is in hand takes it back off the sheet', async ({ page }) => {
