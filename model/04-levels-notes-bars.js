@@ -2109,8 +2109,8 @@
         + `One drips in every hour, up to ${W.DRIP_CAP}.`
       : nextDripMs != null
         ? `${balance} bone${balance === 1 ? '' : 's'} \u00b7 next free bone in `
-          + `${waitLabel(nextDripMs)}. Each BUILD costs 1.`
-        : `${balance} bones \u2014 the free wallet is full. Each BUILD costs 1.`;
+          + `${waitLabel(nextDripMs)}. Each BUILD or SAVE AS costs 1.`
+        : `${balance} bones \u2014 the free wallet is full. Each BUILD or SAVE AS costs 1.`;
   };
 
   // REPAINTED ONLY ON A CHANGE, which is what makes the minute tick below

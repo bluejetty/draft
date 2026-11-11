@@ -19,10 +19,14 @@ if (!window.DraftBoneWallet) {
   // The spend registry — the growth point: elevation re-deals (#253) and
   // LAYOUT printing (#168, 3 bones) register here later. Phase 1 wires
   // ONLY the BUILD HOUSE press.
-  // A BACKUP FILE BY EMAIL is 3 (Movie, 30 Oct: "charge them 3 bones per
-  // email backup ... to slow them down a bit") -- backup-email.js, spent
-  // only once the mail has gone.
-  const COSTS = Object.freeze({ buildHouse: 1, emailBackup: 3 });
+  // A BACKUP FILE BY EMAIL was 3 (Movie, 30 Oct: "charge them 3 bones per
+  // email backup ... to slow them down a bit"). jb, 11 Nov 2026: "make a
+  // save 1 bone and make the email save an additional bone" -- SAVE AS to
+  // this computer is 1 (model/17-boot-save.js, LAYOUT.html; refused at 0,
+  // jb's ruling, while the plain SAVE to this browser stays free) and the
+  // BACKUP FILE email that follows it is 1 more (backup-email.js, spent only
+  // once the mail has gone).
+  const COSTS = Object.freeze({ buildHouse: 1, saveToComputer: 1, emailBackup: 1 });
   const STORAGE_KEY = 'draft-bone-wallet';
 
   // A stored wallet the code can trust: numbers coerced, a missing or
@@ -98,6 +102,9 @@ if (!window.DraftBoneWallet) {
     return true;
   };
 
+  // "1 bone" / "3 bones" -- one spelling for every card that names a price.
+  const bonesWord = n => `${n} bone${Number(n) === 1 ? '' : 's'}`;
+
   window.DraftBoneWallet = Object.freeze({
     SEED_BONES,
     DRIP_MS,
@@ -108,6 +115,7 @@ if (!window.DraftBoneWallet) {
     applyDrip,
     read,
     spend,
+    bonesWord,
   });
 })();
 }

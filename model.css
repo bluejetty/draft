@@ -1581,6 +1581,11 @@
     background-image: var(--surface-panel-tex, none); }
   .promote-card p { margin:0 0 12px; font-family: var(--font-ui);
     font-size:13px; line-height:1.4; color: var(--ink-primary); }
+  /* THE SAVE AS PRICE LINE: a hint under the heading, red once it refuses. */
+  .promote-card p.save-as-toll { margin-top:-6px; font-size:12px;
+    color: var(--ink-secondary); }
+  .promote-card p.save-as-toll[data-kind="error"] { color: var(--ink-warn); }
+  .promote-card p.save-as-toll:empty { display:none; }
   /* THE LEASE NOTE UNDER THE THREE ANSWERS. Dressed as #lease is -- same
      size, same letter-spacing, same uppercase, same accent press -- because
      it is the same sentence, and a drafter who reads both should recognise

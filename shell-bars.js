@@ -950,6 +950,9 @@ ${trio(true)}
   const SAVEAS = `<div id="save-as" data-save-as hidden>
   <div class="promote-card">
     <p>Save a copy as</p>
+    <!-- THE PRICE, painted on open from the bone wallet (jb, 11 Nov 2026:
+         a SAVE AS costs 1 bone; refused at 0). The plain SAVE is free. -->
+    <p class="save-as-toll" data-save-as-toll></p>
     <input id="save-as-name" data-save-as-name type="text" spellcheck="false"
       autocomplete="off" aria-label="File name" />
     <div class="promote-row">

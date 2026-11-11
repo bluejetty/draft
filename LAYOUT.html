@@ -821,6 +821,7 @@
   <div id="lay-saveas" role="dialog" aria-modal="true" aria-labelledby="lay-saveas-title">
     <div id="lay-saveas-title" class="lay-new-heading">Save a copy as</div>
     <div class="lay-new-hint">The drawing with its sheets, as MODEL's SAVE AS writes it.</div>
+    <div class="lay-new-hint" data-lay-saveas-toll></div>
     <input id="lay-saveas-name" data-lay-saveas-name type="text" spellcheck="false" autocomplete="off" aria-label="File name" />
     <div class="lay-new-row">
       <button type="button" data-new-save data-lay-saveas-go>SAVE</button>
@@ -5578,8 +5579,26 @@ page.componentDidMount();
   if (fileSaveAs && saveAsScrim && saveAsName) {
     wake(fileSaveAs, 'SAVE AS — download the drawing and its sheets under a name you pick');
     const close = () => { saveAsScrim.hidden = true; };
+    // A SAVE AS COSTS A BONE, refused at 0 (jb, 11 Nov 2026) -- the same
+    // rule as MODEL's card (model/17-boot-save.js), taken once the file is
+    // on the disk. The SAVE CURRENT rescue on the NEW / OPEN card stays free.
+    const tollLine = saveAsScrim.querySelector('[data-lay-saveas-toll]');
+    const toll = () => Number(window.DraftBoneWallet?.COSTS?.saveToComputer) || 0;
+    const affordable = () => !window.DraftBoneWallet || !toll()
+      || window.DraftBoneWallet.read().balance >= toll();
+    const paintToll = () => {
+      const W = window.DraftBoneWallet;
+      if (!tollLine) return;
+      if (!W || !toll()) { tollLine.textContent = ''; return; }
+      const held = W.read().balance;
+      tollLine.textContent = held < toll()
+        ? `SAVE AS costs ${W.bonesWord(toll())} and you have ${held}. A free bone drips in every hour. SAVE (to this browser) is still free.`
+        : `Costs ${W.bonesWord(toll())} (you have ${held}).`;
+      tollLine.style.color = held < toll() ? 'var(--ink-warn)' : '';
+    };
     fileSaveAs.addEventListener('click', () => {
       saveAsName.value = fileName();
+      paintToll();
       saveAsScrim.hidden = false;
       saveAsName.focus();
       saveAsName.select();
@@ -5587,10 +5606,15 @@ page.componentDidMount();
     const go = async () => {
       let name = saveAsName.value.trim() || fileName();
       if (!/\.(draft|json|model|plan)$/i.test(name)) name += `.${extension()}`;
+      if (!affordable()) { paintToll(); return; }
       close();
       const text = await storedText();
       if (text) {
         download(text, name);
+        if (window.DraftBoneWallet && toll()) {
+          window.DraftBoneWallet.spend(toll());
+          window.dispatchEvent(new CustomEvent('draft-bones-changed'));
+        }
         // SAVE BACKUP FILE TO EMAIL -- offered only after a local save.
         window.DraftBackupEmail?.offer({ name, blob: new Blob([text], { type: 'application/json' }) });
       }
