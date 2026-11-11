@@ -1199,9 +1199,19 @@ if (!window.DraftLayoutPlan) {
 
     // THE SITE LEVEL IS NOT A STOREY, and has no walls to find: its sheet is
     // the lot, the footprint and the eave line (drawSitePlan above).
-    if (num(levelId) === SITE_LEVEL_ID) return drawSitePlan(ctx, toS, saved, env);
-
     const view = env.view || null;
+    if (num(levelId) === SITE_LEVEL_ID) {
+      // A HOLOGRAM'S WALLS ON THE SITE (jb, 11 Nov 2026: a shelf holding a
+      // floor plan, dragged onto the SITE PLAN and dropped as a HOLOGRAM):
+      // the site pass draws a lot, a footprint and the level's marks, never
+      // a wall, so the shelf came down invisible. Its walls take the storey
+      // pass below instead, which draws the lines and shapes too, so the
+      // site pass keeps its marks to itself.
+      const bodied = env.hologram === true && planWalls(saved, SITE_LEVEL_ID, view).length > 0;
+      const site = drawSitePlan(ctx, toS, saved, bodied ? { ...env, levelMarks: false } : env);
+      if (!bodied) return site;
+    }
+
     // WHICH PILE IS WHICH, by what stands over it (Movie, 15 Oct). The rule is
     // build-house.js's; the bodies are every building outline on the drawing,
     // on any storey, with the LOT LINE left out because a lot is not a

@@ -883,12 +883,18 @@
     // THE KIND THE SHELF WAS LAST SAVED AS; a shelf never saved is a
     // RESIDENTIAL SUITE, as it always was. A HOLOGRAM drops on any plan
     // level, the SITE included (jb, 10 Nov: "place it wherever they want").
-    const kind = shelf?.shelfKind || shelf?.suiteKind || 'residential';
+    const savedKind = shelf?.shelfKind || shelf?.suiteKind || 'residential';
+    // A SUITE'S SHELF DRAGGED ONTO A LEVEL THAT IS NO FLOOR -- the SITE, the
+    // ROOF, a foundation -- COMES DOWN AS A HOLOGRAM (jb, 11 Nov 2026:
+    // "could we make an additional option to add a 'hologram' by grabbing a
+    // 'shelf' and dragging it into the model space and dropping it"): the
+    // generic kind, which lands on any plan level with no floor rules. On
+    // one of the house's floors the shelf still drops as the suite it was
+    // saved as; only a cut, a layer view or a shelf refuses the square.
+    const kind = savedKind === 'hologram' || !onFloorPlanMain() ? 'hologram' : savedKind;
     const generic = kind === 'hologram';
-    if (generic ? !onPlanMain() : !onFloorPlanMain()) {
-      sayOnStrip(generic
-        ? `${name} drops onto a plan: stand on a level and drag the square again.`
-        : `${name} drops onto a FLOOR PLAN: stand on one of the house's floors and drag the square again.`);
+    if (!onPlanMain()) {
+      sayOnStrip(`${name} drops onto a plan: stand on a level (the SITE will do) and drag the square again.`);
       return;
     }
     const file = shelfSuiteFile(shelfId, kind);
@@ -902,12 +908,34 @@
     const nodes = H()?.suiteSuperNodes ? H().suiteSuperNodes(holo, activeLevelId()) : [];
     const grip = nodes.find(n => n.registration)?.point
       || (nodes.length ? { x: nodes.reduce((a, n) => a + n.point.x, 0) / nodes.length, z: nodes.reduce((a, n) => a + n.point.z, 0) / nodes.length }
-        : { x: holo.x, z: holo.z });
+        : hologramMiddle(holo) || { x: holo.x, z: holo.z });
     holo.x += at.x - grip.x;
     holo.z += at.z - grip.z;
     traceMoving = { underlay: holo, from: at, before: { ...holo }, hologram: true, shelfDrop: true };
-    sayOnStrip(`${name} is in hand by its gold corner — let go where it belongs; Esc puts it back on the shelf.`);
+    sayOnStrip(generic
+      ? `${name} is in hand as a HOLOGRAM — let go where it belongs; Esc puts it back on the shelf.`
+      : `${name} is in hand by its gold corner — let go where it belongs; Esc puts it back on the shelf.`);
     paint();
+  };
+  // THE MIDDLE OF WHAT A HOLOGRAM HOLDS ON THE LEVEL STOOD ON, where it is
+  // placed -- what a generic HOLOGRAM (no suite corners, no gold one) is
+  // carried by, so the shelf's drawing comes down centred under the hand
+  // rather than its file's origin. Null when the level holds nothing of it.
+  const hologramMiddle = holo => {
+    const F = window.DraftDrawingFormat;
+    const moved = H()?.levelsMoved ? H().levelsMoved(holo) : holo?.source;
+    const on = item => item && Number(item.levelId) === Number(activeLevelId());
+    const list = key => (Array.isArray(moved?.[key]) ? moved[key] : []).filter(on);
+    const pts = [
+      ...list('walls').flatMap(w => [w.start, w.end]),
+      ...list('lines').flatMap(l => [l.start, l.end]),
+      ...list('outlines').filter(o => o.site !== true).flatMap(o => (Array.isArray(o.points) ? o.points : [])),
+      ...list('shapes').flatMap(sh => (Array.isArray(sh.points) ? sh.points : [])),
+      ...list('floors').flatMap(f => (Array.isArray(f.points) ? f.points : [])),
+    ].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z)).map(pt => F.hologramPoint(holo, pt));
+    if (!pts.length) return null;
+    const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
   };
   const enterShelf = shelfId => {
     goToBoneyard(shelfId);
