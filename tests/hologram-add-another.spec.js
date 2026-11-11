@@ -50,7 +50,7 @@ test('the slot after #2 says + ADD ANOTHER footprint HOLOGRAM TO PLAN, and a pre
   const card = page.locator('#hologram-ask');
   const slot = card.locator('[data-hologram-add-slot]');
   await expect(slot).toHaveCount(1);
-  await expect(slot.locator('[data-hologram-number]')).toHaveText('#3');
+  await expect(slot.locator('[data-hologram-next]')).toHaveText('#3');
   await expect(slot.locator('[data-hologram-add]')).toHaveText('+ ADD ANOTHER footprint HOLOGRAM TO PLAN');
   // The slot is the last row of the file's list.
   const rows = await card.locator('.hologram-file .hologram-copy').evaluateAll(els => els.map(e => e.dataset.hologramRow || 'slot'));
@@ -59,7 +59,7 @@ test('the slot after #2 says + ADD ANOTHER footprint HOLOGRAM TO PLAN, and a pre
   // Three rows now, the slot at #4, the new one lit (picked) with its buttons open.
   await expect(card.locator('[data-hologram-row]')).toHaveCount(3);
   await expect(card.locator('[data-hologram-copies]')).toHaveText('3 copies');
-  await expect(slot.locator('[data-hologram-number]')).toHaveText('#4');
+  await expect(slot.locator('[data-hologram-next]')).toHaveText('#4');
   const third = card.locator('[data-hologram-row]').nth(2);
   await expect(third).toHaveAttribute('data-lit', '');
   await expect(third.locator('[data-hologram-move]')).toBeVisible();

@@ -2703,7 +2703,7 @@
       slot.className = 'trace-row hologram-copy hologram-add-slot';
       slot.dataset.hologramAddSlot = key;
       const next = document.createElement('span');
-      next.dataset.hologramNumber = String(copies.length + 1);
+      next.dataset.hologramNext = String(copies.length + 1);
       next.textContent = `#${copies.length + 1}`;
       const add = document.createElement('button');
       add.type = 'button';
