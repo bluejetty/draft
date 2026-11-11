@@ -98,6 +98,10 @@ async function capturePrints(page) {
 test('the bone opens the package, every sheet ticked; PRINT sends the ticked ones at 300 dpi', async ({ page }) => {
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
+  // A package costs bones (tests/layout-print-bone-cost.spec.js); a fresh
+  // browser's seed wallet is short of the price, so this check funds it.
+  await page.evaluate(() => localStorage.setItem('draft-bone-wallet',
+    JSON.stringify({ balance: 10, lastDripAt: Date.now(), createdAt: Date.now() })));
   const count = await page.evaluate(() => document.querySelectorAll('[data-layout-sheet-thumb], [data-sheet-thumb]').length);
   await capturePrints(page);
 

@@ -1513,6 +1513,58 @@ ${trio(true)}
       if (balance) balance.style.top = art.balanceTop;
     },
 
+    // THE NUMBER ON THE PRESS, for a page that mounts the bone without
+    // MODEL's wallet code (jb, 11 Nov 2026: "the number isn't showing in the
+    // HOUSE blue button in the construction page layout"). MODEL paints its
+    // own in model/04-levels-notes-bars.js -- it also mirrors the count onto
+    // the drive-thru sign -- and this is the same rule for the plain press:
+    // the balance, or "0 · 42m" to the next free bone when the wallet is
+    // empty, the digit ladder, the grey of an empty wallet, and the title in
+    // words. Repainted on a change only, once a minute for the drip, and on
+    // `draft-bones-changed` whenever a spend lands from off the press.
+    //
+    // opts.costs  one sentence naming what the press's own verbs cost, for
+    //             the title ("Each BUILD or SAVE AS costs 1.").
+    wireBoneWallet: (opts = {}) => {
+      const press = document.getElementById('bone');
+      const balanceEl = document.getElementById('bone-balance');
+      const W = window.DraftBoneWallet;
+      if (!press || !balanceEl || !W) return null;
+      const waitLabel = ms => {
+        if (ms == null) return '';
+        const minutes = Math.ceil(ms / 60000);
+        return minutes <= 1 ? '<1m' : `${minutes}m`;
+      };
+      let shown = { balance: null, nextDripMs: null };
+      const paint = () => {
+        const { balance, nextDripMs } = shown;
+        const broke = balance < 1;
+        balanceEl.textContent = broke
+          ? `0 \u00b7 ${waitLabel(nextDripMs)}` : String(balance);
+        const chars = broke ? 8 : String(balance).length;
+        balanceEl.style.fontSize =
+          `${chars <= 1 ? 15 : chars <= 3 ? 11 : chars <= 5 ? 8 : 7}px`;
+        press.toggleAttribute('data-broke', broke);
+        const costs = opts.costs ? ` ${opts.costs}` : '';
+        press.title = broke
+          ? `Out of bones \u2014 the next free bone lands in ${waitLabel(nextDripMs)}. `
+            + `One drips in every hour, up to ${W.DRIP_CAP}.${costs}`
+          : nextDripMs != null
+            ? `${W.bonesWord(balance)} \u00b7 next free bone in ${waitLabel(nextDripMs)}.${costs}`
+            : `${balance} bones \u2014 the free wallet is full.${costs}`;
+      };
+      const refresh = () => {
+        const now = W.read();
+        if (now.balance === shown.balance && now.nextDripMs === shown.nextDripMs) return;
+        shown = { balance: now.balance, nextDripMs: now.nextDripMs };
+        paint();
+      };
+      refresh();
+      window.setInterval(refresh, 60000);
+      window.addEventListener('draft-bones-changed', refresh);
+      return { refresh };
+    },
+
     // A PULL-OUT RAIL: the tab, the panel, and the toggle between them.
     //
     // Movie asked for one on PROJECT -- "the PROJECT INFO area with the drop
