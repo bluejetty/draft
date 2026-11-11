@@ -1294,6 +1294,65 @@
     if (!best) return null;
     return { dx: dx + n.x * best.gap, dz: dz + n.z * best.gap, lit: best.make(best.gap) };
   };
+  // ── A SHAPE'S OR FLOOR'S EDGE SLID SQUARE CATCHES TOO (jb, 11 Nov 2026) ──
+  //
+  // "i'm sliding this wall over and want to snap to a node on the other one
+  // .. not creating the circle or snapping." The edge push (slideLoopEdge)
+  // read the foot and nothing else. Now the edge's line, where the hand has
+  // slid it, feels the three tiers the wall body's drag feels (wallFaceSeek):
+  // a node or a corner standing within the edge's length (a hair past the
+  // ends allowed) pulls the line through itself, and a parallel face lines
+  // up with it. A loop's edge has one face, its own line, so there is one
+  // offset to try, not two. The edge slides ACROSS itself by the shortfall
+  // and no further. Targets are worked out once per drag (magnetExcluding
+  // the loop's own corners, so an edge cannot catch its own ring). `dist` is
+  // the across travel from the ring as it stood; `{ dist, lit }` or null.
+  // OF TWO THAT CATCH ALIKE (both corners of a box standing in the edge's
+  // length), THE ONE NEARER THE HAND wins, so the ring sits where the
+  // drafter is looking; `hand` is where the pointer is, in model feet.
+  const loopEdgeSeek = (md, dist, hand = md.cursor) => {
+    const pts = md.before?.points, i = md.index;
+    if (!Array.isArray(pts) || i == null || !pts[i]) return null;
+    const magnet = (md.magnet ||= magnetExcluding(pts));
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    if (len < 1e-6) return null;
+    const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len }, n = { x: -u.z, z: u.x };
+    const along = v => (v.x - a.x) * u.x + (v.z - a.z) * u.z;
+    const across = v => (v.x - a.x) * n.x + (v.z - a.z) * n.z - dist;
+    const slack = reachFt(NODE_REACH);
+    let best = null;
+    const offer = (gap, px, make, near = null) => {
+      const share = catchShare(Math.abs(gap), px);
+      if (share === Infinity) return;
+      const reach = hand && near ? Math.hypot(near.x - hand.x, near.z - hand.z) : Infinity;
+      if (!best || share < best.share - 1e-9 || (Math.abs(share - best.share) <= 1e-9 && reach < best.reach)) {
+        best = { share, gap, make, reach };
+      }
+    };
+    // THE OWN EDGE WHERE THE SLIDE LEAVES IT, lined up with what caught it.
+    const ownAt = gap => ({
+      a: { x: a.x + n.x * (dist + gap), z: a.z + n.z * (dist + gap) },
+      b: { x: b.x + n.x * (dist + gap), z: b.z + n.z * (dist + gap) } });
+    // ANOTHER RUN'S FACE, parallel: the gap is the same all along it.
+    magnet.segs.forEach(seg => {
+      const sx = seg.b.x - seg.a.x, sz = seg.b.z - seg.a.z, sl = Math.hypot(sx, sz);
+      if (sl < 1e-6 || Math.abs(u.x * sz - u.z * sx) / sl > 1e-3) return;
+      offer(across(seg.a), LINE_REACH, gap => {
+        const own = ownAt(gap);
+        return { seg, own, pt: { x: (own.a.x + own.b.x) / 2, y: 0, z: (own.a.z + own.b.z) / 2 } };
+      });
+    });
+    // A NODE OR A CORNER within the edge's length: the edge passes through it.
+    const point = (list, px, node) => list.forEach(v => {
+      const t = along(v);
+      if (t < -slack || t > len + slack) return;
+      offer(across(v), px, gap => ({ corner: v, node, own: ownAt(gap), pt: { x: v.x, y: 0, z: v.z } }), v);
+    });
+    point(magnet.nodes, NODE_REACH, true);
+    point(magnet.corners, CORNER_REACH, false);
+    return best ? { dist: dist + best.gap, lit: best.make(best.gap) } : null;
+  };
   // Where a dragged point lands: a node first, then a face corner, then a
   // face line. `{ pt, corner }` or `{ pt, seg }`, or null.
   // WITHIN AN INCH OF A LINE IT CROSSES, A DRAGGED END CONNECTS TO IT (Movie,

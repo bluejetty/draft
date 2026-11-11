@@ -44,7 +44,7 @@ const MUTANTS = [
     test: 'flooring corner' },
   { file: 'model/10-tracking-garage.js',
     name: 'no circle on a flooring corner in hand',
-    find: "    if (moveDrag?.kind === 'roomcorner' && moveDrag.active) {",
+    find: "    if ((moveDrag?.kind === 'roomcorner' || moveDrag?.kind === 'roomedge') && moveDrag.active) {",
     with: "    if (false) {",
     test: 'flooring corner' },
 ];

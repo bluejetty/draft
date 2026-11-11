@@ -1091,7 +1091,16 @@
           const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
           const nn = { x: -(b.z - a.z) / len, z: (b.x - a.x) / len };
           let dist = (raw.x - md.grab.x) * nn.x + (raw.z - md.grab.z) * nn.z;
-          if (footOn) dist = quantiseFeet(dist);
+          // THE CATCH BEATS THE FOOT, as it does on every drag (jb, 11 Nov
+          // 2026: "want to snap to a node on the other one"): the slid
+          // edge's line takes a node, a corner or a parallel face in reach
+          // (loopEdgeSeek), with SNAP lit and Ctrl up; nothing in reach, the
+          // foot rounds the travel as it did.
+          const caught = snapLive() ? loopEdgeSeek(md, dist, raw) : null;
+          if (caught) dist = caught.dist;
+          else if (footOn) dist = quantiseFeet(dist);
+          md.lit = caught ? caught.lit : null;
+          md.cursor = raw;
           const mk = md.loopKind === 'floor' ? p => ({ x: p.x, y: 0, z: p.z }) : p => ({ x: p.x, z: p.z });
           md.points = slideLoopEdge(pts, i, dist, mk);
           md.tag.points = md.points;
@@ -1635,6 +1644,22 @@
             }
           } else {
             tag.points = md.before.points;
+            // A PRESS ON THE EDGE THAT NEVER TRAVELLED IS THE CLICK AGAIN
+            // (jb, 11 Nov 2026: "if one shape is overtop i wasn't able to
+            // press twice to select the 2nd (below) item"): the edge press
+            // armed this drag ahead of the pick, and its release stepped to
+            // nothing -- so a shape whose edge the hand was on could never
+            // give way to the one under it. The same step the other in-hand
+            // presses take (pickUnder), Shift and ASSEMBLY keeping the top one.
+            if (e && !e.shiftKey && activeTool !== 'assembly') {
+              const rect = canvas.getBoundingClientRect();
+              const under = pickUnder(e.clientX - rect.left, e.clientY - rect.top);
+              if (under.hit && (under.again || !selection.some(entry => entry.item === under.hit.item))) {
+                wallPicked = under.hit.type === 'wall' ? under.hit.item : null;
+                setSelection(withGroup(under.hit));
+                sayPickUnder(under);
+              }
+            }
           }
           moveDrag = null;
           if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
