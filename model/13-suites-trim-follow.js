@@ -3024,8 +3024,11 @@
       return;
     }
     if (m.before && !commit) Object.assign(m.underlay, m.before);
+    if (m.before && !commit) (m.riders || []).forEach(r => Object.assign(r.item, r.before));
     if (m.before && commit && (m.before.x !== m.underlay.x || m.before.z !== m.underlay.z)) {
-      undoStack.push({ kind: 'props', edits: [{ item: m.underlay, before: m.before }] });
+      // THE RIDERS GO INTO THE SAME STEP: one UNDO puts the assembly back.
+      undoStack.push({ kind: 'props', edits: [{ item: m.underlay, before: m.before },
+        ...(m.riders || []).map(r => ({ item: r.item, before: r.before }))] });
       markDirty();
     }
     sayOnStrip('');
@@ -3136,7 +3139,20 @@
     // its copy and drops any key the copy lacks -- an { x, z } here undid a
     // MOVE by deleting the picture's id, level and kind with it.
     traceMoving.before = { ...traceMoving.underlay };
+    // ITS ASSEMBLY RIDES (jb, 11 Nov 2026: Y'd holograms "stick together
+    // when i move them"): the other holograms of a FIXED assembly this one
+    // is in go by the same delta, with their own copies for UNDO.
+    traceMoving.riders = hologramRiders(traceMoving.underlay);
   }, true);
+  const hologramRiders = holo => {
+    const owner = holo ? groupOf({ type: 'hologram', item: holo }) : null;
+    if (!owner || owner.fixed !== true) return [];
+    return itemsOfGroup(owner).filter(e => e.type === 'hologram' && e.item !== holo)
+      .map(e => {
+        e.item.x = Number(e.item.x) || 0; e.item.z = Number(e.item.z) || 0;
+        return { item: e.item, before: { ...e.item } };
+      });
+  };
   window.addEventListener('pointermove', event => {
     const m = traceMoving;
     if (!m || !m.from) return;
@@ -3206,6 +3222,11 @@
       && H().suiteNear(drawing, { ...m.underlay, mode: 'suite' }, activeLevelId(), reachFt('suite')).length) {
       sayOnStrip('This hologram is blue, so it does not snap. Set it to SUITE on the HOLOGRAM card: it snaps, its lined-up walls glow, and its windows cut the shell wall.');
     }
+    // THE ASSEMBLY'S OTHER HOLOGRAMS LAND WHERE THE SNAPS LEFT THIS ONE.
+    (m.riders || []).forEach(r => {
+      r.item.x = r.before.x + (m.underlay.x - m.before.x);
+      r.item.z = r.before.z + (m.underlay.z - m.before.z);
+    });
     // ONE PAINT A FRAME (Movie, 26 Oct, his 22-suite file: the drag fell
     // behind the hand). A mouse sends more moves than the screen shows; each
     // move above has already put the suite where it goes, and the next frame
