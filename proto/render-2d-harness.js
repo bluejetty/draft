@@ -46,6 +46,9 @@ function load(mutate) {
   // line-styles.js first: a note's leader reads its weights and dashes
   // through window.DraftLineStyles, as a LINE does (jb, 10 Nov).
   new Function('window', fs.readFileSync(path.join(__dirname, '..', 'line-styles.js'), 'utf8'))(window);
+  // geometry-2d.js too: a bent segment is stroked as the circular arc it
+  // answers for (screenArc), since 11 Nov 2026.
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'geometry-2d.js'), 'utf8'))(window);
   new Function('window', src)(window);
   if (!window.DraftRender2D) throw new Error('render-2d.js defined no DraftRender2D');
   return window.DraftRender2D;
@@ -74,13 +77,8 @@ const noop = name => src => {
 const dropBulge = src => {
   const before = src;
   const out = src.replace(
-    `    if (seg.bulge) {
-      const c = toS(env.controlPoint(seg));
-      ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-    } else {
-      ctx.lineTo(b.x, b.y);
-    }`,
-    '    ctx.lineTo(b.x, b.y);',
+    '    traceSegTo2D(ctx, toS, seg, env, b);\n    ctx.stroke();',
+    '    ctx.lineTo(b.x, b.y);\n    ctx.stroke();',
   );
   if (out === before) throw new Error('dropBulge matched nothing -- the branch moved');
   return out;
@@ -345,18 +343,33 @@ suite('strokeSegPath2D', 'a straight segment strokes a line, not a curve', R => 
   expect('it strokes', count(ctx, 'stroke'), 1);
 });
 
-suite('strokeSegPath2D', 'a bulged segment curves through its control point', R => {
+suite('strokeSegPath2D', 'a bulged segment is a circular arc through its middle', R => {
   const ctx = recordingCtx();
-  let asked = 0;
+  // A bulge of 0.5 puts the middle 0.25 off a 10ft chord: radius 50.125
+  // about (5, -49.875), which toS puts at (450, -198.75), 501.25 px.
   const seg = { start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, bulge: 0.5 };
-  R.strokeSegPath2D(ctx, toS, seg, {
-    controlPoint: s => { asked += 1; expect('control point asked about this segment', s, seg); return { x: 5, z: -4 }; },
-  });
-  expect('the control point is asked for exactly once', asked, 1);
-  expect('it curves', count(ctx, 'quadraticCurveTo'), 1);
+  R.strokeSegPath2D(ctx, toS, seg, { controlPoint: () => { throw new Error('the quadratic is not asked for'); } });
+  expect('it is an arc', count(ctx, 'arc'), 1);
+  expect('not a quadratic', count(ctx, 'quadraticCurveTo'), 0);
   expect('and does NOT draw the chord', count(ctx, 'lineTo'), 0);
-  expect('the curve bends through the projected control point',
-    JSON.stringify(calls(ctx, 'quadraticCurveTo')[0]), '[450,260,500,300]');
+  const [cx, cy, r] = calls(ctx, 'arc')[0];
+  expect('about the circle\'s centre, at its radius',
+    [cx, cy, r].map(v => Math.round(v * 100) / 100).join(','), '450,-198.75,501.25');
+});
+
+suite('traceSegTo2D', 'a straight segment is a lineTo, a bent one an arc, on the path already open', R => {
+  const ctx = recordingCtx();
+  ctx.beginPath(); ctx.moveTo(400, 300);
+  R.traceSegTo2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, bulge: 0 }, {});
+  expect('straight: one lineTo to the end', JSON.stringify(calls(ctx, 'lineTo')), '[[500,300]]');
+  expect('straight: no arc', count(ctx, 'arc'), 0);
+  R.traceSegTo2D(ctx, toS, { start: { x: 10, z: 0 }, end: { x: 20, z: 0 }, bulge: 10 }, {});
+  expect('bent: one arc', count(ctx, 'arc'), 1);
+  expect('bent: no second lineTo', count(ctx, 'lineTo'), 1);
+  // A half circle of radius 5 about (15, 0): centre (550, 300), 50 px.
+  const [cx, cy, r] = calls(ctx, 'arc')[0];
+  expect('the half circle about its centre', [cx, cy, r].map(v => Math.round(v)).join(','), '550,300,50');
+  expect('it does not stroke -- the caller owns the path', count(ctx, 'stroke'), 0);
 });
 
 // ── drawGrid2D: the datum rule and the zoom ladder ──
@@ -3373,8 +3386,9 @@ suite('drawOutlines2D', 'a bulged edge curves; a straight one does not', R => {
     }),
     controlPoint: () => ({ x: 5, z: -3 }),
   }));
-  expect('one edge curves', count(ctx, 'quadraticCurveTo'), 1);
-  expect('through its control point', JSON.stringify(calls(ctx, 'quadraticCurveTo')[0].slice(0, 2)), '[450,270]');
+  expect('one edge is an arc', count(ctx, 'arc'), 1);
+  expect('not a quadratic', count(ctx, 'quadraticCurveTo'), 0);
+  expect('about a centre below the chord', calls(ctx, 'arc')[0][1] < 300, true);
 });
 
 suite('drawOutlines2D', 'a garage outline says GARAGE on itself', R => {

@@ -3357,12 +3357,7 @@ if (!window.DraftRender2D) {
         const seg = env.segment(outline, index);
         const a = toS(seg.start), b = toS(seg.end);
         if (!index) ctx.moveTo(a.x, a.y);
-        if (seg.bulge) {
-          const c = toS(env.controlPoint(seg));
-          ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-        } else {
-          ctx.lineTo(b.x, b.y);
-        }
+        traceSegTo2D(ctx, toS, seg, env, b);
       }
       ctx.stroke();
       ctx.setLineDash([]);
@@ -3464,13 +3459,25 @@ if (!window.DraftRender2D) {
   function strokeSegPath2D(ctx, toS, seg, env) {
     const a = toS(seg.start), b = toS(seg.end);
     ctx.beginPath(); ctx.moveTo(a.x, a.y);
-    if (seg.bulge) {
-      const c = toS(env.controlPoint(seg));
-      ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-    } else {
-      ctx.lineTo(b.x, b.y);
-    }
+    traceSegTo2D(ctx, toS, seg, env, b);
     ctx.stroke();
+  }
+  // THE BEND, ON AN OPEN PATH: a circular arc where the geometry module can
+  // give one (jb, 11 Nov), else the quadratic through env.controlPoint, else
+  // straight. The path is already at the segment's start.
+  function traceSegTo2D(ctx, toS, seg, env, b) {
+    const end = b || toS(seg.end);
+    if (seg.bulge) {
+      const G = typeof window !== 'undefined' ? window.DraftGeometry2D : null;
+      const arc = G && G.screenArc ? G.screenArc(seg, toS) : null;
+      if (arc) { ctx.arc(arc.x, arc.y, arc.r, arc.a0, arc.a1, arc.anticlockwise); return; }
+      if (env && env.controlPoint) {
+        const c = toS(env.controlPoint(seg));
+        ctx.quadraticCurveTo(c.x, c.y, end.x, end.y);
+        return;
+      }
+    }
+    ctx.lineTo(end.x, end.y);
   }
 
 
@@ -4150,6 +4157,7 @@ if (!window.DraftRender2D) {
     dimensionDividePoints2D,
     drawOutlines2D,
     strokeSegPath2D,
+    traceSegTo2D,
     labelAlongLine2D,
     viewerLeftIsLow,
     sinkBowlSpans,

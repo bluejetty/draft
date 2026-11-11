@@ -1357,13 +1357,26 @@
   const linePropsNode = lines => {
     const LS = window.DraftLineStyles;
     const box = document.createElement('div');
+    // AN ARC'S LENGTH IS ALONG THE CURVE, and it shows its RADIUS (jb, 11
+    // Nov, arcs in the LINE run); a straight line measures its chord.
+    const G = window.DraftGeometry2D;
+    const arcOf = line => (line.bulge && G?.lineArc ? G.lineArc(line) : null);
     const total = lines.reduce((sum, line) => sum
-      + Math.hypot(line.end.x - line.start.x, line.end.z - line.start.z), 0);
+      + (arcOf(line)?.length ?? Math.hypot(line.end.x - line.start.x, line.end.z - line.start.z)), 0);
     const len = document.createElement('div');
     len.dataset.propSpan = '';
     len.className = 'props-title';
     len.textContent = `${lines.length > 1 ? 'TOTAL ' : ''}LENGTH ${feetLabel(total)}`;
     box.append(len);
+    const radii = lines.map(arcOf).filter(Boolean).map(a => a.r);
+    if (radii.length) {
+      const same = radii.every(r => Math.abs(r - radii[0]) < 1e-6);
+      const rad = document.createElement('div');
+      rad.dataset.propRadius = '';
+      rad.className = 'props-title';
+      rad.textContent = same ? `RADIUS ${feetLabel(radii[0])}` : `RADIUS ${feetLabel(Math.min(...radii))} TO ${feetLabel(Math.max(...radii))}`;
+      box.append(rad);
+    }
     if (LS) {
       const same = key => (lines.every(l => (l[key] ?? null) === (lines[0][key] ?? null)) ? (lines[0][key] ?? null) : undefined);
       const weightNow = same('weight') === undefined ? undefined : LS.weightId(same('weight'));

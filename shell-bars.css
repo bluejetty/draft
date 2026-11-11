@@ -824,12 +824,12 @@
      the selection, whatever is in it. It is on screen exactly while there is
      something to delete -- and the iPad has no Delete key, so this button is
      the only way to delete anything at all there. */
-  #delete, #model-undo, #model-rotate, #model-flip, #model-break, #model-move, #model-wall-off, #model-rescale, #model-order, #rotate-bar button, #flip-bar button, #rescale-bar button, #order-bar button, #mirror-bar button, #array-bar button { font-family: var(--font-ui); font-size:12px; font-weight:600;
+  #delete, #model-undo, #model-rotate, #model-flip, #model-break, #model-move, #model-wall-off, #model-rescale, #model-order, #rotate-bar button, #flip-bar button, #rescale-bar button, #order-bar button, #mirror-bar button, #array-bar button, #line-bar button { font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
     color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
-  #delete:hover, #model-undo:hover, #model-rotate:hover, #model-flip:hover, #model-break:hover, #model-move:hover, #model-wall-off:hover, #model-rescale:hover, #model-order:hover, #rotate-bar button:hover, #flip-bar button:hover, #rescale-bar button:hover, #order-bar button:hover, #mirror-bar button:hover, #array-bar button:hover { color: var(--accent); border-color: var(--accent); }
+  #delete:hover, #model-undo:hover, #model-rotate:hover, #model-flip:hover, #model-break:hover, #model-move:hover, #model-wall-off:hover, #model-rescale:hover, #model-order:hover, #rotate-bar button:hover, #flip-bar button:hover, #rescale-bar button:hover, #order-bar button:hover, #mirror-bar button:hover, #array-bar button:hover, #line-bar button:hover { color: var(--accent); border-color: var(--accent); }
   /* A PAGE'S OWN VERBS IN THE BOX (BONEYARD's BREAK and UNDO) wear the same
      face as MODEL's. */
   #dt-verbs > button { font-family: var(--font-ui); font-size:12px; font-weight:600;
@@ -840,7 +840,7 @@
   #dt-verbs > button:hover, #dt-verbs > button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
   #dt-verbs > button:disabled { opacity:.45; cursor:default; color: var(--ink-primary); border-color: var(--edge-panel); }
   #dt-verbs > button[hidden] { display:none; }
-  #delete[hidden], #model-undo[hidden], #model-rotate[hidden], #model-flip[hidden], #model-break[hidden], #model-move[hidden], #model-wall-off[hidden], #model-rescale[hidden], #model-order[hidden], #rotate-bar[hidden], #flip-bar[hidden], #rescale-bar[hidden], #order-bar[hidden], #offset-bar[hidden], #mirror-bar[hidden], #turn-bar[hidden], #fillet-bar[hidden], #array-bar[hidden] { display:none; }
+  #delete[hidden], #model-undo[hidden], #model-rotate[hidden], #model-flip[hidden], #model-break[hidden], #model-move[hidden], #model-wall-off[hidden], #model-rescale[hidden], #model-order[hidden], #rotate-bar[hidden], #flip-bar[hidden], #rescale-bar[hidden], #order-bar[hidden], #offset-bar[hidden], #mirror-bar[hidden], #turn-bar[hidden], #fillet-bar[hidden], #array-bar[hidden], #line-bar[hidden] { display:none; }
   /* CROWDED, THE VERBS DRAW IN: seatFootVerbs() puts data-tight on the row
      when the verbs at full size do not fit between the pages and the trio,
      so the row never lands on the BONE. Same words, less air. */
@@ -862,9 +862,10 @@
     border-radius:6px; text-align:center; }
   /* THE CLASSIC EDITS' ROWS (9 Nov): the same row, a hint word and a box or
      two. KEEP ORIGINAL is a toggle: lit while it keeps. */
-  #offset-bar, #mirror-bar, #turn-bar, #fillet-bar, #array-bar { display:inline-flex; gap:6px; align-items:center; }
-  #mirror-bar button, #array-bar button { padding:6px 10px; border-color: var(--accent); }
-  #mirror-bar button[aria-pressed="true"] { color: var(--accent); }
+  #offset-bar, #mirror-bar, #turn-bar, #fillet-bar, #array-bar, #line-bar { display:inline-flex; gap:6px; align-items:center; }
+  #mirror-bar button, #array-bar button, #line-bar button { padding:6px 10px; border-color: var(--accent); }
+  #mirror-bar button[aria-pressed="true"], #line-bar button[aria-pressed="true"] { color: var(--accent); }
+  #line-bar button:disabled { opacity:0.35; cursor:default; }
   #offset-bar input, #turn-bar input, #fillet-bar input, #array-bar input { width:58px; font-family: var(--font-ui); font-size:12px; padding:5px 6px;
     color: var(--ink-primary); background: var(--surface-chip); border:1px solid var(--accent);
     border-radius:6px; text-align:center; }

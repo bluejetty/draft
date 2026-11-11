@@ -242,16 +242,18 @@ test('a circle comes in as eight curved lines that bend true', async ({ page }) 
   });
   // AND THE PLAN DRAWS THEM CURVED: MODEL drew every line as its chord
   // until this came in, so a curve in the record was a straight stroke.
+  // Since 11 Nov (arcs in the LINE run) a bent line is stroked as a true
+  // circular arc -- ctx.arc short of a full turn, not a quadratic.
   const curves = await page.evaluate(() => {
     let n = 0;
-    const real = CanvasRenderingContext2D.prototype.quadraticCurveTo;
-    CanvasRenderingContext2D.prototype.quadraticCurveTo = function count(...args) {
-      n += 1;
+    const real = CanvasRenderingContext2D.prototype.arc;
+    CanvasRenderingContext2D.prototype.arc = function count(...args) {
+      if (Math.abs(args[4] - args[3]) < Math.PI * 2 - 1e-6) n += 1;
       return real.apply(this, args);
     };
     window.dispatchEvent(new Event('resize'));
     return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
-      CanvasRenderingContext2D.prototype.quadraticCurveTo = real;
+      CanvasRenderingContext2D.prototype.arc = real;
       resolve(n);
     })));
   });

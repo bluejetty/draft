@@ -638,6 +638,9 @@ test.describe('MODEL.html tier 1', () => {
       './model/17-boot-save.js',
       // The classic edits (9 Nov): OFFSET, MIRROR, ROTATE, FILLET, ARRAY.
       './model/18-draft-commands.js',
+      // Arcs and circles in the LINE run (jb, 11 Nov): the right-click menu,
+      // the foot chips and the arc maths that bends a piece of the run.
+      './model/19-line-arcs.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT

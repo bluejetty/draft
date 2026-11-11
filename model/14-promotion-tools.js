@@ -561,6 +561,9 @@
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
     if (!(feet > 0) || !drawStart || !cursorWorld) return;
+    // A CIRCLE'S RADIUS, TYPED (19-line-arcs.js): the centre is down and the
+    // number is the radius, not a chord.
+    if (typeof lineArcTyped === 'function' && lineArcModeIs('circle') && lineArcTyped(feet)) { lengthBox.blur(); return; }
     // THE WALL HE TYPED IS THE WALL HE GETS: nothing is asked and nothing is
     // refused, whatever the 1 FT light says -- a typed number is the drafter
     // being exact on purpose.
@@ -572,6 +575,9 @@
     if (!fromRef && len < 1e-6) { stripMessage.textContent = 'point away from the start first'; return; }
     const end = fromRef || { x: drawStart.x + dx / len * feet, y: 0, z: drawStart.z + dz / len * feet };
     if (fromRef) dropRefLock();
+    // A 3-POINT ARC'S END, TYPED: the chord is set; the through point is
+    // the next press.
+    if (typeof lineArcTyped === 'function' && lineArcTyped(feet, end)) { lengthBox.blur(); return; }
     const made = commitDrawn(drawStart, end);
     drawStart = made.item.end;
     // THE SELECTION IS A SET ON THIS BRANCH. #398 wrote this line as

@@ -174,6 +174,7 @@
     const had = !!(drawStart || rulerFrom || cutStart || beamStart || elevLineStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
       || stretchState.a || stairHand.at || draftCommandsBusy());
+    if (typeof lineArcCancel === 'function') lineArcCancel();
     draftCommandsCancel();
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
@@ -610,6 +611,9 @@
       // wall would end at the moment the finger arrived rather than where it
       // left. The lift below closes every touch run.
       if (wallPress.touch && drawStart) { paint(); return; }
+      // AN ARC'S THROUGH POINT OR A CIRCLE'S PRESS (19-line-arcs.js) is the
+      // LINE run's own business before drawPress sees it.
+      if (typeof lineArcPress === 'function' && lineArcPress(at)) { wallPress = null; return; }
       drawPress(at);
       return;
     }
@@ -1872,7 +1876,11 @@
     // THE RIGHT BUTTON PANS; one that did not travel is the right CLICK, which
     // puts the gesture in hand down, as it did before the pan moved here.
     if (dragging.pan) {
-      if (dragging.moved <= 4) {
+      // ON THE LINE TOOL THE RIGHT CLICK IS A MENU (jb, 11 Nov): STRAIGHT,
+      // ARC, 3-POINT ARC, CIRCLE, and CLOSE / FINISH / CANCEL for the run
+      // in hand (19-line-arcs.js). Everywhere else it is still ENTER.
+      const menuUp = dragging.moved <= 4 && typeof lineRunMenu === 'function' && !!e && lineRunMenu(e.clientX, e.clientY);
+      if (dragging.moved <= 4 && !menuUp) {
         // THE RIGHT CLICK IS ENTER (jb, 9 Nov, "how AUTOCAD did it"): it
         // FINISHES what is in hand -- the run, the loop, the string, the
         // step -- and at an empty prompt repeats the last tool. It used to
@@ -2015,7 +2023,9 @@
     const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;
     if (press.opened && !travelled) return;
     const rect = canvas.getBoundingClientRect();
-    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+    const lifted = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+    if (typeof lineArcPress === 'function' && lineArcPress(lifted)) return;
+    drawPress(lifted);
   });
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointerup', e => { if (elevNotePress) elevNoteLift(e); });
