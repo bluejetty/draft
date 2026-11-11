@@ -76,6 +76,14 @@
     // dashed pen on the layer before must not leak onto it.
     const state = { layer: inner ? ctx.dxfLayer : null, pen: null, width: ctx.lineWidth, dash: [] };
     const canDash = typeof ctx.setLineDash === 'function';
+    // AND IT FOLLOWS save()/restore() (jb, 10 Nov: "the dim lines are
+    // showing as dashed dotted"): a painter that sets a dot-dash line's
+    // dash inside a save/restore pair hands the real canvas its solid dash
+    // back on restore, but this memory of what it asked for stayed
+    // dot-dash -- and the next layer named, the dimensions after the
+    // lines, got that dash reapplied. The memory is stacked with the
+    // canvas's own state so a restore forgets what the pair asked for.
+    const stack = [];
     // The dash rhythm follows the stroke it is on, as line-styles.js scales
     // a bold dashed line's pattern by its weight.
     const applyDash = () => {
@@ -102,6 +110,19 @@
         if (prop === 'dxfLayer') return state.layer;
         if (prop === 'setLineDash' && canDash) {
           return dash => { state.dash = Array.isArray(dash) ? dash.slice() : []; applyDash(); };
+        }
+        if (prop === 'save' && typeof target.save === 'function') {
+          return () => { stack.push({ width: state.width, dash: state.dash.slice() }); target.save(); };
+        }
+        if (prop === 'restore' && typeof target.restore === 'function') {
+          return () => {
+            target.restore();
+            const kept = stack.pop();
+            if (kept) { state.width = kept.width; state.dash = kept.dash; }
+            // The canvas took its own width and dash back; the pen on the
+            // layer still named stands over them as it did before the pair.
+            applyPen();
+          };
         }
         const value = target[prop];
         return typeof value === 'function' ? value.bind(target) : value;
