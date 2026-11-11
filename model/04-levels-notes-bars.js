@@ -1702,8 +1702,71 @@
     button.disabled = true;
     button.title = CLASSIC_LOCK_TITLE;
   };
+  // ── A SITE-PLAN-ONLY FILE HAS ONE LEVEL AND THREE FEWER DOORS ──────────
+  //
+  // jb, 11 Nov: "on the SITE PLAN only plans can we make the default
+  // position when they come in the SITE PLAN - (think right now its main
+  // floor)" and "in the SITE PLAN only can we block the PROJECT / WIREFRAME
+  // / EXT. FINISH AREAS (won't be needed)".
+  //
+  // ONE RULE, AND IT IS THE URL'S: activeLevelId() (model/01) reads
+  // `?level=`, so the level is put right by settling the URL, not by a
+  // second reader overruling it. adoptFile (model/17) runs this on every
+  // door a drawing comes in by -- boot, OPEN, NEW, a jump -- before the
+  // first fit, so a stale `?level=3` from the house file he was on never
+  // stands; after that only goToLevel moves the level, and on this file it
+  // is offered SITE PLAN alone. The `?view=` goes
+  // with it: SITE has no layer views, and a house view left in the URL
+  // would warn about a view the level never had. Through the same
+  // replaceState as goToLevel -- a change of viewpoint, not a navigation.
+  const siteOnly = () => drawing?.standalone === 'site';
+  const settleSiteOnlyUrl = () => {
+    if (!siteOnly() || params.get('level') === String(SITE_LEVEL_ID)) return;
+    params.set('level', String(SITE_LEVEL_ID));
+    params.delete('view');
+    syncUrl();
+  };
+  // THE DOORS ARE THE FOOT LANE'S PAGE ROW (shell-bars.js PAGES): PROJECT,
+  // BONEYARD / WIREFRAME and EXT. FINISH are about a house, and a site plan
+  // alone has none. The chips stay in the row -- the map of the job keeps
+  // its shape -- but greyed as a page that does not exist is greyed, with
+  // the reason on the title, and the press refused below. CONSTRUCTION
+  // LAYOUT and the sheet row stay live: the site plan prints.
+  const SITE_ONLY_DOORS = ['project', 'boneyard', 'ext-finish'];
+  const SITE_ONLY_LOCK_TITLE = 'SITE PLAN ONLY \u2014 this file has no house. Press NEW for a sheet that builds one.';
+  const syncSiteOnlyDoors = () => {
+    const locked = siteOnly();
+    SITE_ONLY_DOORS.forEach(id => {
+      document.querySelectorAll(`#page-row [data-page="${id}"]`).forEach(chip => {
+        if (locked) {
+          if (!chip.dataset.siteLocked) chip.dataset.siteLockedTitle = chip.title;
+          chip.dataset.siteLocked = '';
+          chip.setAttribute('aria-disabled', 'true');
+          chip.title = SITE_ONLY_LOCK_TITLE;
+          chip.tabIndex = -1;
+        } else if (chip.dataset.siteLocked !== undefined) {
+          chip.title = chip.dataset.siteLockedTitle || chip.title;
+          delete chip.dataset.siteLocked;
+          delete chip.dataset.siteLockedTitle;
+          chip.removeAttribute('aria-disabled');
+          chip.removeAttribute('tabindex');
+        }
+      });
+    });
+  };
+  // THE PRESS IS REFUSED AT THE ROW, in the capture phase, so a locked chip
+  // never navigates whatever handler sits on it -- the lock is one rule
+  // (the data attribute) and not a style.
+  document.addEventListener('click', e => {
+    const chip = e.target.closest?.('#page-row [data-site-locked]');
+    if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+
   const syncBuildBar = () => {
     if (!drawing) return;
+    syncSiteOnlyDoors();
     familyRow.replaceChildren(...BM.BUILD_MENU.map(family => {
       // A STACKED FAMILY SHOWS ITS TILES IN THE ROW ITSELF, close together in
       // one slot the ON GRADE pair's way -- the SUITE's two (Movie, 20 Oct).

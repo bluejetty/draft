@@ -76,6 +76,8 @@ async function dismissLotCard(page) {
   const later = page.locator('#lot-pick [data-lot-pick-skip]');
   if (await later.isVisible().catch(() => false)) await later.click();
 }
+const doorState = page => page.locator('#page-row [data-page]').evaluateAll(chips => Object.fromEntries(
+  chips.map(chip => [chip.dataset.page, chip.hasAttribute('data-site-locked')])));
 const levelRows = page => page.locator('#levels-panel [data-level-row]')
   .evaluateAll(rows => rows.map(row => row.dataset.levelRow));
 const panelHasText = (page, re) => page.locator('#levels-panel').locator(`text=${re}`).count();
@@ -177,6 +179,48 @@ test('a standalone file offers SITE PLAN and no other level, elevation, section 
   await expect(page.locator('#view-rail .seat .seat-label')).toHaveText(/SITE PLAN/);
 });
 
+// THE FILE OPENS ON SITE PLAN (jb, 11 Nov: "on the SITE PLAN only plans can
+// we make the default position when they come in the SITE PLAN - (think
+// right now its main floor)"). Three doors: no level asked, a stale
+// `?level=3` carried over from the house file he was on, and OPEN of the
+// file over a house file standing on MAIN FL. The URL is put right too, so
+// a reload reads the same level the page shows.
+test('a standalone file opens on SITE PLAN whatever level the URL asks for, and the URL is settled to say so', async ({ page }) => {
+  await openModel(page, standaloneWithLot());
+  expect(await h.modelLevelId(page), 'no level asked: SITE').toBe(String(SITE));
+  expect(new URL(page.url()).searchParams.get('level'), 'the URL says SITE').toBe(String(SITE));
+  await openModel(page, standaloneWithLot(), '?level=3&view=plan');
+  expect(await h.modelLevelId(page), 'MAIN FL asked: still SITE').toBe(String(SITE));
+  const url = new URL(page.url());
+  expect(url.searchParams.get('level'), 'the stale ask is overwritten').toBe(String(SITE));
+  expect(url.searchParams.get('view'), 'and the house view with it').toBeNull();
+  // A HOUSE FILE STILL OPENS ON MAIN FL: the rule is the mark's, not SITE's.
+  await openModel(page, blank());
+  expect(await h.modelLevelId(page), 'a plain file: MAIN FL').toBe('3');
+});
+
+// THE HOUSE DOORS ARE SHUT (jb, 11 Nov: "in the SITE PLAN only can we block
+// the PROJECT / WIREFRAME / EXT. FINISH AREAS (won't be needed)"): greyed as
+// a page that does not exist is greyed, and a press goes nowhere. The sheet
+// row stays open -- a site plan prints -- and a house file keeps every door.
+test('a standalone file greys PROJECT, WIREFRAME and EXT. FINISH and refuses the press; a house file keeps them', async ({ page }) => {
+  await openModel(page, standaloneWithLot());
+  await dismissLotCard(page);
+  const locked = await doorState(page);
+  expect(locked.project, 'PROJECT locked').toBe(true);
+  expect(locked.boneyard, 'WIREFRAME locked').toBe(true);
+  expect(locked['ext-finish'], 'EXT. FINISH locked').toBe(true);
+  await expect(page.locator('#page-row [data-page="project"]')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('#sheet-row [data-page="construction"]'), 'LAYOUT stays a door')
+    .not.toHaveAttribute('data-site-locked', '');
+  await page.locator('#page-row [data-page="project"]').click({ force: true });
+  await page.waitForTimeout(300);
+  expect(new URL(page.url()).pathname, 'the press went nowhere').toMatch(/MODEL\.html$/);
+  await openModel(page, blank());
+  const open = await doorState(page);
+  expect(open.project || open.boneyard || open['ext-finish'], 'a house file: every door open').toBe(false);
+});
+
 test('ordering a house off the board gives the levels back', async ({ page }) => {
   await openModel(page, standaloneWithLot(), `?level=${SITE}`);
   await dismissLotCard(page);
@@ -184,6 +228,11 @@ test('ordering a house off the board gives the levels back', async ({ page }) =>
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
   expect(await page.evaluate(() => drawing.standalone ?? null), 'the mark is gone').toBeNull();
+  // AND THE DOORS COME BACK ON THE SAME PAGE: the house is about to need
+  // PROJECT, WIREFRAME and EXT. FINISH as much as it needs the levels.
+  const doors = await doorState(page);
+  expect(doors.project || doors.boneyard || doors['ext-finish'], 'every door open again').toBe(false);
+  await expect(page.locator('#page-row [data-page="project"]')).not.toHaveAttribute('aria-disabled', 'true');
   await h.openModelRail(page);
   expect((await levelRows(page)).length, 'every level is listed again').toBeGreaterThan(1);
   expect(await panelHasText(page, /Elevations/)).toBeGreaterThan(0);
