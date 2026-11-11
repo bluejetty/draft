@@ -518,6 +518,12 @@
     sweep('fenestration', (drawing?.fenestrations || []).filter(o => walls().some(w => String(w.id) === String(o.wallId))));
     sweep('outline', outlines());
     sweep('dimension', dimensions());
+    // AND THE HOLOGRAMS (jb, 11 Nov 2026: two holograms Y'd together "don't
+    // light up and i can't select them"). createAssembly took them in by
+    // id, but this sweep never looked for them, so the new assembly came
+    // back empty: nothing lit after the Y, and a click on either member
+    // (withGroup -> itemsOfGroup) picked nothing at all.
+    sweep('hologram', holograms());
     return out;
   };
 
