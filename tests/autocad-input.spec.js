@@ -102,11 +102,12 @@ test('ENTER takes the step at the cursor in OFFSET, ROTATE, FILLET and MIRROR, a
   await page.keyboard.press(' ');
   expect(await seg(page, 'la')).toEqual([-10, 0, 2, 0]);
   expect(await seg(page, 'lb')).toEqual([2, -8, 2, 0]);
-  // ROTATE: the base point, then a right click where the angle points.
+  // ROTATE: the centre, the arm as it is, then a right click where it goes.
   await pick(page, at, -6, 0);
   await page.keyboard.press('z');
   await click(page, at, 2, 0);
-  await rightClick(page, at, 2, 6);
+  await click(page, at, -6, 0);
+  await rightClick(page, at, 2, -6);
   expect(await seg(page, 'la')).toEqual([2, -12, 2, 0]);
   expect(await tool(page)).toBe('select');
   await page.keyboard.press('Control+z');

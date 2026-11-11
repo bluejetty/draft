@@ -29,7 +29,9 @@
   var draftCmd = {
     offset: { pick: null },                 // { kind: 'seg'|'ring', item, type, list }
     mirror: { a: null },                    // the first point of the mirror line
-    turn: { base: null },                   // ROTATE's base point
+    // ROTATE: the centre, then the arm as it is now (refFrom is the centre
+    // pressed again, the AutoCAD habit; ref the arm's bearing once taken).
+    turn: { base: null, refFrom: null, ref: null },
     fillet: { first: null },                // { seg, t } the first line pressed
   };
   const DRAFT_CMD_TOOLS = Object.freeze(['offset', 'mirror', 'rotate', 'fillet', 'array']);
@@ -66,7 +68,7 @@
     const had = draftCommandsBusy();
     draftCmd.offset.pick = null;
     draftCmd.mirror.a = null;
-    draftCmd.turn.base = null;
+    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null;
     draftCmd.fillet.first = null;
     if (had) draftCmdPrompt(activeTool);
     return had;
@@ -395,19 +397,44 @@
 
   // ── MIRROR ──────────────────────────────────────────────────────────────
   // Two points for the mirror line; KEEP ORIGINAL (lit) mirrors a copy.
+  // WHERE A PICK LANDS, for MIRROR's two points and ROTATE's three: the
+  // snap (node, face, bullseye, track) as the press always took, and from a
+  // first point the instruments the LINE tool reads -- a typed angle, the
+  // protractor, else the T-SQUARE -- so the arm squares off the centre. The
+  // hover ring in model/10 (paintSnapNode) reads draftPickFrom so the hand
+  // sees the catch before the press (jb, 11 Nov: "i don't think it was
+  // workin").
+  const draftPickAt = (at, from = null) => {
+    if (!at) return null;
+    if (from) {
+      const steered = lockedPoint(from, at) || protractorPoint(from, at);
+      if (steered) return { x: steered.x, z: steered.z };
+    }
+    const snap = drawSnap(at);
+    if (snap.node || snap.face || snap.bullseye) return { x: snap.pt.x, z: snap.pt.z };
+    const p = snap.pt || at;
+    const sq = from ? squareTo(from, { x: p.x, z: p.z }) : p;
+    return { x: sq.x, z: sq.z };
+  };
+  function draftPickFrom() {
+    if (activeTool === 'mirror') return { from: draftCmd.mirror.a };
+    if (activeTool === 'rotate') { const st = draftCmd.turn; return { from: st.refFrom || st.base }; }
+    return null;
+  }
+
   var mirrorKeep = true;
   const mirrorSays = text => { barSay(mirrorBar, '[data-mirror-say]', text); sayOnStrip(`MIRROR: ${text}`); };
   const mirrorPress = at => {
     if (!selection.length) { mirrorSays('nothing is picked -- press Esc, pick what to mirror, then MIRROR.'); return; }
     const st = draftCmd.mirror;
-    const p = drawSnap(at).pt || at;
+    const p = draftPickAt(at, st.a);
     if (!st.a) {
       st.a = { x: p.x, z: p.z };
       mirrorSays('now press the other end of the mirror line.');
       paint();
       return;
     }
-    const b = squareTo(st.a, { x: p.x, z: p.z });
+    const b = p;
     if (Math.hypot(b.x - st.a.x, b.z - st.a.z) * view.scale < 4) { mirrorSays('that line has no length -- press further along it.'); return; }
     const a = st.a;
     st.a = null;
@@ -455,23 +482,58 @@
 
   // ── ROTATE about a base point ───────────────────────────────────────────
   const turnSays = text => { barSay(turnBar, '[data-turn-say]', text); sayOnStrip(`ROTATE: ${text}`); };
-  const turnAngleAt = at => {
-    const b = draftCmd.turn.base;
-    const deg = Math.atan2(at.z - b.z, at.x - b.x) * 180 / Math.PI;
+  const bearingDeg = (from, at) => {
+    const deg = Math.atan2(at.z - from.z, at.x - from.x) * 180 / Math.PI;
     return ((deg % 360) + 360) % 360;
   };
+  const turnAngleAt = at => bearingDeg(draftCmd.turn.base, at);
+  // THE TURN THE HAND IS SHOWING, once the arm is taken: from the arm as it
+  // was to the bearing of the hand, clockwise, as a typed angle reads.
+  const turnShown = at => {
+    const st = draftCmd.turn;
+    if (!st.base || st.ref == null || !at) return null;
+    const p = draftPickAt(at, st.base);
+    if (Math.hypot(p.x - st.base.x, p.z - st.base.z) * view.scale < 4) return null;
+    return ((turnAngleAt(p) - st.ref) % 360 + 360) % 360;
+  };
+  const onCentre = (p, c) => Math.hypot(p.x - c.x, p.z - c.z) * view.scale < 4;
+  // THREE PRESSES, AS ARCHICAD TURNS: the centre, a point on the arm as it
+  // is now, then where the arm goes. The centre pressed again (AutoCAD's
+  // reference habit, jb 11 Nov: "allow that and understand what they are
+  // doing") is the arm's start, and the press after is its end. Typed
+  // degrees and ENTER turn at any step after the centre.
   const turnPress = at => {
     if (!selection.length) { turnSays('nothing is picked -- press Esc, pick what to turn, then ROTATE.'); return; }
     const st = draftCmd.turn;
-    const p = drawSnap(at).pt || at;
     if (!st.base) {
+      const p = draftPickAt(at);
       st.base = { x: p.x, z: p.z };
-      turnSays('press a point for the angle, or type degrees and ENTER.');
+      turnSays('press a point on the arm as it is now -- or the centre again, then the arm\'s end -- or type degrees and ENTER.');
       paint();
       return;
     }
-    if (Math.hypot(p.x - st.base.x, p.z - st.base.z) * view.scale < 4) { turnSays('press further from the base point for the angle.'); return; }
-    turnBy(turnAngleAt(p));
+    const p = draftPickAt(at, st.refFrom || st.base);
+    if (st.ref == null) {
+      if (!st.refFrom) {
+        if (onCentre(p, st.base)) {
+          st.refFrom = { x: st.base.x, z: st.base.z };
+          turnSays('the arm starts at the centre -- now press its end.');
+          paint();
+          return;
+        }
+        st.ref = turnAngleAt(p);
+      } else {
+        if (onCentre(p, st.refFrom)) { turnSays('press further from the centre for the arm\'s end.'); return; }
+        st.ref = bearingDeg(st.refFrom, p);
+      }
+      turnSays('now press where the arm goes -- or type degrees and ENTER.');
+      paint();
+      return;
+    }
+    // THE CENTRE PRESSED AT THIS STEP (jb, 11 Nov): accepted, nothing turns,
+    // and the press after is the new direction.
+    if (onCentre(p, st.base)) { turnSays('that is the centre -- nothing turns. Press where the arm goes.'); return; }
+    turnBy(((turnAngleAt(p) - st.ref) % 360 + 360) % 360);
   };
   const turnBy = degrees => {
     const base = draftCmd.turn.base;
@@ -481,7 +543,8 @@
     const done = transformSelection(turnAbout(base, degrees), {
       holo: h => { h.angleDeg = ((((Number(h.angleDeg) || 0) + degrees) % 360) + 360) % 360; },
     });
-    draftCmd.turn.base = null;
+    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null;
+    if (turnAngleBox) turnAngleBox.placeholder = 'DEG';
     if (!done) { sayOnStrip('Nothing in the selection can be turned on its own -- doors, windows and fixtures turn with their walls.'); return; }
     setTool(RESTING_TOOL);
     const shown = Math.round(((degrees % 360) + 360) % 360 * 100) / 100;
@@ -491,9 +554,20 @@
   const paintTurn = () => {
     const st = draftCmd.turn;
     if (activeTool !== 'rotate' || !st.base) return;
-    strokeGuide(st.base, cursorWorld);
+    const hand = cursorWorld ? draftPickAt(cursorWorld, st.refFrom || st.base) : null;
+    // The arm already taken stays drawn; the guide runs from the centre (or
+    // the arm's start) to the hand.
+    const armFrom = st.refFrom || st.base;
+    if (st.ref != null) {
+      const r = (hand && Math.hypot(hand.x - armFrom.x, hand.z - armFrom.z)) || 20 / view.scale;
+      const rad = st.ref * Math.PI / 180;
+      strokeGuide(armFrom, { x: armFrom.x + Math.cos(rad) * r, z: armFrom.z + Math.sin(rad) * r });
+    }
+    if (st.refFrom) strokeGuide(st.base, null);
+    strokeGuide(armFrom, hand, !st.refFrom);
     const typed = draftDegrees(turnAngleBox);
-    const deg = typed != null ? typed : (cursorWorld ? turnAngleAt(cursorWorld) : null);
+    const deg = typed != null ? typed : turnShown(hand);
+    if (turnAngleBox && typed == null) turnAngleBox.placeholder = deg != null ? `${Math.round(deg * 10) / 10}°` : 'DEG';
     if (deg != null) strokeGhost(ghostSegs(selection, turnAbout(st.base, deg)));
   };
 
@@ -687,7 +761,7 @@
   const draftCmdPrompt = tool => {
     if (tool === 'offset') offsetSays('type the distance, press a line, wall or shape, then the side it goes.');
     else if (tool === 'mirror') mirrorSays(`press two points on the mirror line${mirrorKeep ? ' -- the original is kept' : ' -- the original is mirrored in place'}.`);
-    else if (tool === 'rotate') turnSays('press the base point.');
+    else if (tool === 'rotate') turnSays('press the centre of rotation.');
     else if (tool === 'fillet') filletSays('press the first line or wall, on the part to keep.');
     else if (tool === 'array') sayOnStrip('ARRAY: type how many across and down and the spacing, then MAKE.');
   };
@@ -708,9 +782,9 @@
   toolListeners.push(next => {
     draftCmd.offset.pick = null;
     draftCmd.mirror.a = null;
-    draftCmd.turn.base = null;
+    draftCmd.turn.base = null; draftCmd.turn.refFrom = null; draftCmd.turn.ref = null;
     draftCmd.fillet.first = null;
-    if (turnAngleBox) turnAngleBox.value = '';
+    if (turnAngleBox) { turnAngleBox.value = ''; turnAngleBox.placeholder = 'DEG'; }
     if (next === 'offset' && offsetDistBox && !offsetDistBox.value.trim()) offsetDistBox.value = '1';
     if (next === 'array') {
       if (arrayBoxes.cols && !arrayBoxes.cols.value.trim()) arrayBoxes.cols.value = '3';
@@ -745,7 +819,7 @@
   draftBox(turnAngleBox, () => {
     const deg = draftDegrees(turnAngleBox);
     if (deg == null) { turnSays('type the turn in degrees, clockwise -- 90, 45, -30.'); return; }
-    if (!draftCmd.turn.base) { turnSays('press the base point first, then ENTER turns by what is typed.'); return; }
+    if (!draftCmd.turn.base) { turnSays('press the centre first, then ENTER turns by what is typed.'); return; }
     turnBy(deg);
     turnAngleBox.value = '';
   });
