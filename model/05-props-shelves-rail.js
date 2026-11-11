@@ -736,7 +736,7 @@
     saveShelf.type = 'button';
     saveShelf.className = 'lv-add';
     saveShelf.dataset.saveShelf = '';
-    saveShelf.textContent = 'SAVE AS SUITE';
+    saveShelf.textContent = 'SAVE SHELF';
     saveShelf.hidden = !boneyardActive;
     saveShelf.title = 'Save what is on this shelf, and only it, as its own SUITE .draft';
     saveShelf.addEventListener('click', event => { event.stopPropagation(); askShelfSuite(); });
@@ -748,7 +748,7 @@
     openShelf.type = 'button';
     openShelf.className = 'lv-add';
     openShelf.dataset.openShelfSuite = '';
-    openShelf.textContent = 'OPEN SUITE';
+    openShelf.textContent = 'OPEN SHELF';
     openShelf.title = 'Open a SUITE .draft onto a new shelf, kept in this file to change';
     openShelf.addEventListener('click', event => {
       event.stopPropagation();
@@ -963,16 +963,22 @@
         b.addEventListener('click', event => { event.stopPropagation(); press(); });
         return b;
       };
+      // + ADD SHELF BETWEEN OPEN SHELF AND THE TAB (jb, 10 Nov: "between the
+      // tabs OPEN SHELF and SHELVES we squeeze in an + ADD SHELF"): the same
+      // press as + SHELF on the LEVELS pane's BONEYARD card.
+      const add = side('shelf-add', '+ ADD SHELF', 'Add a shelf — park geometry at the same spot on different shelves without overlap', () => addShelf());
+      add.dataset.add = '';
       row.append(
-        side('shelf-open-suite', 'OPEN SUITE', 'Open a SUITE .draft onto a new shelf, kept in this file to change', () => openShelfSuite()),
+        side('shelf-open-suite', 'OPEN SHELF', 'Open a SUITE .draft onto a new shelf, kept in this file to change', () => openShelfSuite()),
+        add,
         tab,
-        side('shelf-save-suite', 'SAVE AS SUITE', 'Save what is on this shelf, and only it, as its own SUITE .draft', () => askShelfSuite()));
+        side('shelf-save-suite', 'SAVE SHELF', 'Save what is on this shelf, and only it, as its own SUITE .draft', () => askShelfSuite()));
       strip.append(previews, row);
       bar.append(strip);
       // A DRAG THAT LEFT A SQUARE ENDS WHEREVER THE HAND LETS GO.
       window.addEventListener('pointerup', () => { shelfPress = null; }, true);
     }
-    ['shelf-open-suite', 'shelf-save-suite'].forEach(id => {
+    ['shelf-open-suite', 'shelf-add', 'shelf-save-suite'].forEach(id => {
       const b = strip.querySelector(`#${id}`);
       if (b) b.hidden = !boneyardActive;
     });
