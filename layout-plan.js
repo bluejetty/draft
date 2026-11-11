@@ -309,6 +309,20 @@ if (!window.DraftLayoutPlan) {
       : ''),
   });
 
+  // A ROOM TAG ON PAPER: its name, the size as typed on a listing only, and
+  // the AREA a shaped tag measures in the drawing's own units -- the same
+  // figure MODEL shows under the name (model/01 roomTagEnv), not the
+  // painter's SQ FT fallback on a metric drawing. Printing, so no UNDER MIN
+  // nag reaches paper.
+  const roomTagEnv = (saved, listing) => ({
+    color: '#1d1f20',
+    isPrinting: true,
+    areaFor: listing ? (tag => tag.size || '') : (() => ''),
+    areaLabel: sqFt => (saved?.units === 'metric'
+      ? `${(Math.round(sqFt * 0.09290304 * 10) / 10).toLocaleString('en-US')} m\u00b2`
+      : `${Math.round(sqFt).toLocaleString('en-US')} SQ FT`),
+  });
+
   // THE FIGURE ON A SHEET'S DIMENSION: the drawing's own switch (a sheet off
   // a metric drawing printed feet-and-inches while its window tags printed
   // millimetres), and a dimension that chose its own units for itself --
@@ -988,7 +1002,12 @@ if (!window.DraftLayoutPlan) {
     // a shape, and it reached the screen and never the sheet exactly as
     // the lines did.
     const shapes = of('shapes');
-    if (!lines.length && !notes.length && !dims.length && !shapes.length) return false;
+    // AND ITS ROOM TAGS (jb, 10 Nov: "it isn't showing the room tag on the
+    // construction plan"): a tag with an area shape on the SITE plan is how
+    // he labels a lot's parcels, and the sheet painted its note and not
+    // its tag. A hologram's tags draw, as they do on a storey's pass.
+    const roomTags = of('roomTags');
+    if (!lines.length && !notes.length && !dims.length && !shapes.length && !roomTags.length) return false;
     const fmt = window.DraftFormatters || {};
     composition.drawPlan(ctx, toS, {
       levelId,
@@ -996,7 +1015,9 @@ if (!window.DraftLayoutPlan) {
       hasLayerViews: false,
       isPrinting: false,
       walls: [], floors: [], roofs: [], fixtures: [], stairs: [],
-      beams: [], columns: [], roomTags: [], fenestrations: [],
+      beams: [], columns: [], fenestrations: [],
+      roomTags,
+      roomTagEnv: roomTagEnv(saved, false),
       shapes,
       shapeEnv: shapeEnv(saved),
       lines,
@@ -1705,11 +1726,7 @@ if (!window.DraftLayoutPlan) {
       // (Movie, 1 Oct: "the 2nd line will be only for REAL ESTATE LAYOUTS -
       // the 1st Line (ROOM TITLE) will be needed for both"). Printing, so no
       // UNDER MIN nag reaches paper.
-      roomTagEnv: unless({
-        color: '#1d1f20',
-        isPrinting: true,
-        areaFor: listing ? (tag => tag.size || '') : (() => ''),
-      }),
+      roomTagEnv: unless(roomTagEnv(saved, listing)),
       roomTags: only(of('roomTags')),
       noteEnv: hologram ? null : unless({ color: '#1d1f20', fillColor: paperColor }),
     });
