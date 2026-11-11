@@ -65,7 +65,7 @@ async function click(page, at, pt) {
   await page.waitForTimeout(100);
 }
 
-test('ROOM TAG placed by hand starts as a 3 ft square whose AREA shows; dragging the name carries the square', async ({ page }) => {
+test('ROOM TAG placed by hand starts as a 3 ft square whose AREA shows; dragging the name never moves the square, and outside it a leader runs back', async ({ page }) => {
   const { at } = await open(page);
   await h.armFromRail(page, 'roomtag');
   await click(page, at, [3, 7]);
@@ -77,22 +77,29 @@ test('ROOM TAG placed by hand starts as a 3 ft square whose AREA shows; dragging
   expect(xz(tag.points)).toEqual([[1.5, 5.5], [4.5, 5.5], [4.5, 8.5], [1.5, 8.5]]);
   expect(tag.areaSqFt).toBe(9);
   expect(tag.flooring).toBeUndefined();
-  // THE NAME DRAGGED TAKES ITS SQUARE WITH IT (no corner is a wall's).
+  // THE NAME DRAGGED OUT OF ITS SQUARE LEAVES THE SQUARE BEHIND (jb, 10 Nov
+  // 2026: "allow the 'room tag' to be in a position on the outside of the
+  // 'area measurement'"), and a leader runs from the name back to the edge.
   await page.keyboard.press('Escape');
   await h.armFromRail(page, 'select');
   await click(page, at, [3, 7]);
-  await drag(page, at, [3, 7], [5, 7]);
+  await drag(page, at, [3, 7], [8, 7]);
   tag = tagNamed(await saved(page), 'ROOM');
-  expect(tag.at.x).toBeCloseTo(5, 1);
-  expect(xz(tag.points)).toEqual([[3.5, 5.5], [6.5, 5.5], [6.5, 8.5], [3.5, 8.5]]);
-  // INSIDE ITS OWN FLOOR THE NAME MOVES ALONE (Movie, 23 Oct: "allow the
+  expect(tag.at.x).toBeCloseTo(8, 1);
+  expect(xz(tag.points), 'the square untouched').toEqual([[1.5, 5.5], [4.5, 5.5], [4.5, 8.5], [1.5, 8.5]]);
+  const leader = await page.evaluate(t => window.DraftRender2D.roomTagLeader(t, p => ({ x: p.x * 10, y: p.z * 10 }), { x: 80, y: 60, w: 30, h: 20 }), tag);
+  expect(leader, 'a leader from the name to the square').not.toBeNull();
+  expect(leader.to.x).toBeCloseTo(45, 1);
+  expect(leader.from.x).toBeLessThan(80);
+  // INSIDE ITS OWN FLOOR THE NAME MOVES ALONE TOO (Movie, 23 Oct: "allow the
   // ROOM TAG to be moved around within the 'flooring' area without changing
-  // the flooring"): the square stays where it is.
-  await click(page, at, [5, 7]);
-  await drag(page, at, [5, 7], [6, 8]);
+  // the flooring"), and there is no leader to draw.
+  await click(page, at, [8, 7]);
+  await drag(page, at, [8, 7], [3, 8]);
   tag = tagNamed(await saved(page), 'ROOM');
-  expect(tag.at.x).toBeCloseTo(6, 1);
-  expect(xz(tag.points), 'the square untouched').toEqual([[3.5, 5.5], [6.5, 5.5], [6.5, 8.5], [3.5, 8.5]]);
+  expect(tag.at.x).toBeCloseTo(3, 1);
+  expect(xz(tag.points), 'the square untouched').toEqual([[1.5, 5.5], [4.5, 5.5], [4.5, 8.5], [1.5, 8.5]]);
+  expect(await page.evaluate(t => window.DraftRender2D.roomTagLeader(t, p => ({ x: p.x * 10, y: p.z * 10 }), { x: 30, y: 80, w: 30, h: 20 }), tag)).toBeNull();
   // The OLD tag is as it was: a name at a point, its area kept.
   const old = tagNamed(await saved(page), 'OLD');
   expect(old.points).toBeUndefined();
