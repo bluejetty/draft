@@ -8,8 +8,10 @@
 // offer comes up only after a file has gone to this computer (SAVE AS, or a
 // PRINT package the browser could have saved as a PDF), and a browser may
 // send at most SENDS_PER_HOUR of them. And each one costs BONES (Movie, 30
-// Oct: "charge them 3 bones per email backup") from the bone wallet --
-// spent once the mail has gone, so a failed send costs nothing.
+// Oct: "charge them 3 bones per email backup"; jb, 11 Nov 2026: a SAVE AS
+// is 1 bone and "the email save an additional bone", so COSTS.emailBackup
+// is 1 now) from the bone wallet -- spent once the mail has gone, so a
+// failed send costs nothing.
 //
 // THE MAIL GOES THROUGH THE SAME WORKER AS invoice.bluejetty.ca's book: a
 // POST of { app, email, filename, dataUrl } to bluejetty-mail, a Cloudflare
@@ -33,7 +35,8 @@
   const ADDRESS_KEY = 'draft-backup-email';
   const SENT_KEY = 'draft-backup-email-sent';
   const wallet = () => window.DraftBoneWallet || null;
-  const cost = () => Number(wallet()?.COSTS?.emailBackup) || 3;
+  const cost = () => Number(wallet()?.COSTS?.emailBackup) || 1;
+  const bonesWord = n => (wallet() ? wallet().bonesWord(n) : `${n} bone${n === 1 ? '' : 's'}`);
   const bonesHeld = () => (wallet() ? wallet().read().balance : 0);
 
   const store = {
@@ -172,7 +175,7 @@
     whatLine.textContent = (blob
       ? `Saved on this computer: ${name} (${MB(blob.size)}). Also email a BACKUP FILE copy to:`
       : `Saved your ${what} on this computer? Email it as a BACKUP FILE too -- SEND asks you to pick the file you saved.`)
-      + ` It costs ${cost()} bones (you have ${bonesHeld()}).`;
+      + ` It costs ${bonesWord(cost())} more (you have ${bonesHeld()}).`;
     const to = scrim.querySelector('[data-bk-to]');
     to.value = store.get(ADDRESS_KEY) || '';
     const status = scrim.querySelector('[data-bk-status]');
@@ -197,7 +200,7 @@
       const address = to.value.trim();
       if (!validAddress(address)) { say('Enter a valid email address.', 'error'); to.focus(); return; }
       if (!wallet() || bonesHeld() < cost()) {
-        say(`A BACKUP FILE email costs ${cost()} bones and you have ${bonesHeld()}. A free bone drips in every hour.`, 'error');
+        say(`A BACKUP FILE email costs ${bonesWord(cost())} and you have ${bonesHeld()}. A free bone drips in every hour.`, 'error');
         return;
       }
       let file = blob, fileName = name;

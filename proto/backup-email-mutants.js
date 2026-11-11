@@ -1,7 +1,8 @@
 // DOES tests/backup-email.spec.js CATCH A BACKUP FILE EMAIL THAT DOES NOTHING?
 //
 // Movie, 30 Oct: SAVE BACKUP FILE TO EMAIL after a local save only, 3 bones a
-// backup, big files zipped into parts, at most a few an hour.
+// backup (1 since jb's 11 Nov 2026 ruling: SAVE AS 1 + email 1), big files
+// zipped into parts, at most a few an hour.
 const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
@@ -10,7 +11,7 @@ const SPEC = 'tests/backup-email.spec.js';
 const MUTANTS = [
   { file: 'model/17-boot-save.js',
     name: 'SAVE AS no longer offers the BACKUP FILE',
-    find: '      if ((await save({ download: typed, handle })) && lastLocalSave && window.DraftBackupEmail) {',
+    find: '      if ((await save({ download: typed, handle })) && lastLocalSave) {',
     with: '      if ((await save({ download: typed, handle })) && false) {',
     test: 'SAVE AS offers' },
   { file: 'LAYOUT.html',
@@ -27,7 +28,7 @@ const MUTANTS = [
     name: 'an empty wallet still sends',
     find: '      if (!wallet() || bonesHeld() < cost()) {',
     with: '      if (false) {',
-    test: 'without 3 bones' },
+    test: 'without a bone' },
   { file: 'backup-email.js',
     name: 'a big file goes whole',
     find: '    if (blob.size <= PART_BYTES) return [{ filename: name, blob }];',

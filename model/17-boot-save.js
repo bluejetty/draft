@@ -1289,9 +1289,35 @@
   // SAVE AS SAVES. It is the same write as SAVE with a download hung off the
   // end of it, in that order, so the copy on disk is a copy of what the store
   // took -- byte for byte, from one serialization.
+  // A SAVE AS TO THIS COMPUTER COSTS A BONE (jb, 11 Nov 2026: "make a save 1
+  // bone and make the email save an additional bone"), and jb ruled an empty
+  // wallet is REFUSED, not waived: the card says so and the file stays put,
+  // while the plain SAVE to this browser is still free, so no work is ever
+  // lost to a bone. The toll is taken only after the file is on the disk, so
+  // a cancelled picker or a refused write costs nothing. The NEW card's
+  // "save a copy to your computer first" is a rescue, not a SAVE AS, and
+  // stays free.
+  const saveAsToll = () => Number(window.DraftBoneWallet?.COSTS?.saveToComputer) || 0;
+  const saveAsTollLine = saveAsBox ? saveAsBox.querySelector('[data-save-as-toll]') : null;
+  const paintSaveAsToll = () => {
+    const W = window.DraftBoneWallet;
+    if (!saveAsTollLine) return;
+    if (!W || !saveAsToll()) { saveAsTollLine.textContent = ''; return; }
+    const held = W.read().balance;
+    const broke = held < saveAsToll();
+    saveAsTollLine.textContent = broke
+      ? `SAVE AS costs ${W.bonesWord(saveAsToll())} and you have ${held}. A free bone drips in every hour. SAVE (to this browser) is still free.`
+      : `Costs ${W.bonesWord(saveAsToll())} (you have ${held}).`;
+    saveAsTollLine.dataset.kind = broke ? 'error' : '';
+  };
+  const saveAsAffordable = () => {
+    const W = window.DraftBoneWallet;
+    return !W || !saveAsToll() || W.read().balance >= saveAsToll();
+  };
   const openSaveAs = () => {
     if (!drawing || !saveAsBox || !saveAsName) return;
     saveAsName.value = generatedFileName();
+    paintSaveAsToll();
     saveAsBox.hidden = false;
     paint();
     saveAsName.focus();
@@ -1309,6 +1335,8 @@
   if (saveAsBox) {
     saveAsBox.querySelector('[data-save-as-go]').addEventListener('click', async () => {
       const typed = saveAsName.value.trim() || generatedFileName();
+      // NO BONE, NO PICKER: the card stays up with the price line in red.
+      if (!saveAsAffordable()) { paintSaveAsToll(); return; }
       // The picker first, because the gesture is spent by the first await.
       const handle = await pickSaveTarget(typed);
       // A cancelled dialog leaves the card up: the drafter's typed name is
@@ -1317,9 +1345,16 @@
       if (handle === 'cancelled') return;
       closeSaveAs();
       lastLocalSave = null;
-      if ((await save({ download: typed, handle })) && lastLocalSave && window.DraftBackupEmail) {
-        window.DraftBackupEmail.offer({ name: lastLocalSave.name,
-          blob: new Blob([lastLocalSave.contents], { type: 'application/json' }) });
+      if ((await save({ download: typed, handle })) && lastLocalSave) {
+        // PAID ONCE THE FILE IS ON THE DISK.
+        if (window.DraftBoneWallet && saveAsToll()) {
+          window.DraftBoneWallet.spend(saveAsToll());
+          window.dispatchEvent(new CustomEvent('draft-bones-changed'));
+        }
+        if (window.DraftBackupEmail) {
+          window.DraftBackupEmail.offer({ name: lastLocalSave.name,
+            blob: new Blob([lastLocalSave.contents], { type: 'application/json' }) });
+        }
       }
     });
     saveAsBox.querySelector('[data-save-as-cancel]').addEventListener('click', closeSaveAs);

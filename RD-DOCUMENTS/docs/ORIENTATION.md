@@ -58,7 +58,9 @@ It is **mostly product with a play skin**, and the split matters:
 
 - `build-house.js` — the actual generator. Pure, and the most valuable code in
   the repo. Entirely product.
-- `bone-wallet.js` — you get 3 bones on a new browser, a press costs 1, they
+- `bone-wallet.js` — you get 3 bones on a new browser, a press costs 1, a
+  SAVE AS to the computer costs 1 (refused at 0; the plain SAVE to the
+  browser is free) and the BACKUP FILE email after it 1 more, they
   drip back over time. This is play *and* a real product decision: it stops a
   client mashing the button instead of thinking. Note the ruling encoded in
   `_pressBuildHouse`: a true no-op press is **free**, only a press that builds
