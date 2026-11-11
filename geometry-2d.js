@@ -3391,7 +3391,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // handle.
   const loopSegmentCount = points => (Array.isArray(points) ? points.length : 0);
   function loopSegment(points, index) {
-    const start = points[index], end = points[(index + 1) % points.length];
+    const n = points.length;
+    const start = points[index], end = points[(index + 1) % n];
     return { start, end, bulge: Number(start?.bulge) || 0 };
   }
   const loopHasArcs = points => Array.isArray(points) && points.some(pt => Math.abs(Number(pt?.bulge) || 0) >= 2 * ARC_MIN_SAGITTA_FT);
