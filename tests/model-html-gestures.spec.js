@@ -876,6 +876,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // and ARRAY's MAKE. OFFSET, ROTATE and FILLET's rows are a box
             // and words only.
             'KEEP ORIGINAL', 'MAKE',
+            // THE LINE RUN'S ROW (jb, 11 Nov, arcs in the LINE command):
+            // STRAIGHT / ARC / 3-POINT ARC / CIRCLE and CLOSE. The right-click
+            // menu offers the same and is built when it opens, so it is not
+            // in the page's static controls.
+            'STRAIGHT', 'ARC', '3-POINT ARC', 'CIRCLE', 'CLOSE',
             // THE STAIR'S POPUP (Movie, 25 Oct: "give them a popup choice"):
             // the shape, the hand it turns, which way from this floor, and
             // DONE. The choices set what the STAIR tool's two presses make;
