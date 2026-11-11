@@ -721,24 +721,27 @@
     lengthBox.setSelectionRange(lengthBox.value.length, lengthBox.value.length);
   }, true);
 
-  // ── R AND L OPEN IT TOO, AND MID-DRAG (Movie, 20 Oct) ────────────────────
+  // ── R OPENS IT TOO, AND MID-DRAG (Movie, 20 Oct) ─────────────────────────
   //
   // "i click the ASSEMBLY to highlight it.. i move it in the direction i
   // want to move (with T SQUARE ON it will be in a 90 direction... then i
   // press 'R' or 'L' and it takes me into the text box to type the length,
   // and i press enter or the mouse button or the space bar to finish the
   // length and make the MOVE" -- "R = RADIUS (not right) L = LENGTH (not
-  // left)". Either letter puts the caret in the LENGTH box whenever a length
-  // is typable -- a run in hand, a move just made, a dimension picked -- and
-  // ALSO WHILE A MOVE IS STILL IN HAND, button down: the drag gives the line,
-  // the box takes the distance, and the release (finishTypedMidDrag) is the
-  // ENTER. At any other time L is the LINE key and R is whatever the profile
-  // says, exactly as before: this listener lets them through.
+  // left)". R puts the caret in the LENGTH box whenever a length is typable
+  // -- a run in hand, a move just made, a dimension picked -- and ALSO WHILE
+  // A MOVE IS STILL IN HAND, button down: the drag gives the line, the box
+  // takes the distance, and the release (finishTypedMidDrag) is the ENTER.
+  // L IS THE LINE KEY, ALWAYS (jb, 11 Nov 2026: "lets take out the 'L'
+  // command for entering length - R works good and 'L' conflicts with the
+  // line command"); it was a second opener here until then. At any other
+  // time R is whatever the profile says, exactly as before: this listener
+  // lets it through.
   const dragInHand = () => !!((moveDrag && moveDrag.active && ['wall', 'group', 'corner'].includes(moveDrag.kind))
     || (moveState?.drag && (moveState.drag.kind === 'selection' || moveState.drag.kind === 'opening')));
   window.addEventListener('keydown', event => {
     if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
-    if (!/^[rl]$/i.test(event.key) || inAField(event.target) || modalUp()) return;
+    if (!/^r$/i.test(event.key) || inAField(event.target) || modalUp()) return;
     const mid = dragInHand();
     if (lengthBox.disabled && !mid) return;
     event.preventDefault();

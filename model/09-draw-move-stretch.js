@@ -966,8 +966,9 @@
   // it in the direction i want to move ... then i press 'R' or 'L' and it
   // takes me into the text box to type the length, and i press enter or the
   // mouse button or the space bar to finish the length and make the MOVE".
-  // R and L open the box mid-drag (the handler by the digit opener); this
-  // remembers that they did, so the release knows to finish the length.
+  // R opens the box mid-drag (the handler by the digit opener; L was taken
+  // off it 11 Nov 2026, it is the LINE key); this remembers that it did, so
+  // the release knows to finish the length.
   var typedMidDrag = false;
   // A DRAG UNDER SELECT IS FINISHED THE SAME WAY (Movie, 20 Oct: "when i
   // move the line it doesn't allow me to enter the LENGTH textbox to allow it
@@ -1865,6 +1866,11 @@
       if (tsquareLive() && !d.set.across) {
         if (Math.abs(at.x - d.at.x) >= Math.abs(at.z - d.at.z)) { dz = 0; axis = 'x'; } else { dx = 0; axis = 'z'; }
       }
+      // REMEMBERED FOR A TYPED LENGTH (jb, 11 Nov 2026): the release reads
+      // the hand's raw travel for the way a typed distance goes, and that
+      // travel must be squared the way the drag was, or 20'-4" typed after
+      // a straight drag went off along the hand's slant.
+      d.axis = axis;
       // BY THE FOOT WITH THE 1' LIGHT LIT (Movie, 20 Oct: "when i MOVE a group
       // of items and i use the '1'' key (beside T SQUARE - which works) the
       // '1'' key doesn't make it go 'by the foot'"). Each axis rounded to a
@@ -2034,8 +2040,21 @@
       // release: with a corner taken exactly (moveGrabAt) the drag's start
       // stood a little off the press, and that small jump would tilt a
       // straight drag into a slant.
-      const way = d.grab && d.press && d.cursor
+      // AND THAT TRAVEL IS HELD THE WAY THE DRAG WAS HELD (jb, 11 Nov 2026,
+      // a SUITE hologram on SITE, T-SQUARE lit, R 20-4: "i want it to move
+      // over at 90 degree angle STRAIGHT (which is how it moves when i'm
+      // adjusting it), but when i press enter or click it follows the angle
+      // of my cursor location"). The ghost went square along d.axis; the
+      // raw press-to-release travel did not, so the typed distance went off
+      // on the slant. Squared to the drag's axis, or along a beam row's
+      // across line, so the typed move lands where the drag was pointing.
+      let way = d.grab && d.press && d.cursor
         ? { x: d.cursor.x - d.press.x, z: d.cursor.z - d.press.z } : null;
+      if (way && d.axis) way = d.axis === 'x' ? { x: way.x, z: 0 } : { x: 0, z: way.z };
+      if (way && d.set.across) {
+        const k = way.x * d.set.across.x + way.z * d.set.across.z;
+        way = { x: d.set.across.x * k, z: d.set.across.z * k };
+      }
       moveTyped = Math.hypot(d.dx || 0, d.dz || 0) > 1e-6
         ? { set: d.set, dx: d.dx, dz: d.dz, ...(way && Math.hypot(way.x, way.z) > 1e-6 ? { way } : {}),
           moveStep, step: undoStack[undoStack.length - 1] } : null;
