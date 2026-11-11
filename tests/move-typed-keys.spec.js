@@ -1,4 +1,4 @@
-// R AND L OPEN THE LENGTH BOX, MID-DRAG TOO.
+// R OPENS THE LENGTH BOX, MID-DRAG TOO; L IS THE LINE KEY.
 //
 // Movie, 20 Oct: "i click the ASSEMBLY to highlight it.. i move it in the
 // direction i want to move (with T SQUARE ON it will be in a 90 direction...
@@ -8,7 +8,9 @@
 // left)". A typed length after a MOVE already existed (move-tsquare.spec.js);
 // this is the two letters that open the box, the box opening while the
 // button is still down, and the three ways to finish: ENTER, the mouse, and
-// SPACE twice ("14 6" is a length with a space in it).
+// SPACE twice ("14 6" is a length with a space in it). L opened it too until
+// 11 Nov 2026 (jb: "lets take out the 'L' command for entering length - R
+// works good and 'L' conflicts with the line command"): L is LINE, always.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -70,7 +72,7 @@ async function lightTsquare(page) {
 
 const lineKey = page => page.locator('[data-tool-key="line"]');
 
-test('L pressed mid-drag opens the box, and the release moves it the typed length along the push', async ({ page }) => {
+test('R pressed mid-drag opens the box, and the release moves it the typed length along the push', async ({ page }) => {
   const { at } = await open(page);
   await pickAssembly(page, at);
   await lightTsquare(page);
@@ -79,9 +81,9 @@ test('L pressed mid-drag opens the box, and the release moves it the typed lengt
   await page.mouse.move(...from);
   await page.mouse.down();
   await page.mouse.move(...to, { steps: 6 });
-  await page.keyboard.press('l');
+  await page.keyboard.press('r');
   const box = page.locator('#frozen-length');
-  await expect(box, 'L put the caret in the LENGTH box with the button still down').toBeFocused();
+  await expect(box, 'R put the caret in the LENGTH box with the button still down').toBeFocused();
   await page.keyboard.type("12'1");
   await page.mouse.up();
   await expect(page.locator('#strip-message')).toContainText('Moved');
@@ -113,7 +115,7 @@ test('SPACE twice finishes it; one space is part of the length', async ({ page }
   await lightTsquare(page);
   await page.locator('#model-move').click();
   await drag(page, at(4, 3), at(9, 3.6));
-  await page.keyboard.press('l');
+  await page.keyboard.press('r');
   await page.keyboard.type('7 6 ');
   await expect(page.locator('#frozen-length'), 'one space typed, nothing moved yet').toBeFocused();
   await page.keyboard.press(' ');
@@ -127,7 +129,7 @@ test('a press on the sheet finishes it, and the assembly stays picked', async ({
   await lightTsquare(page);
   await page.locator('#model-move').click();
   await drag(page, at(4, 3), at(9, 3.6));
-  await page.keyboard.press('l');
+  await page.keyboard.press('r');
   // SEVEN, NOT THE FIVE THE DRAG ALREADY WENT: a press that finished nothing
   // would leave it at five and read as a pass.
   await page.keyboard.type('7');
@@ -137,7 +139,7 @@ test('a press on the sheet finishes it, and the assembly stays picked', async ({
   await expect(page.locator('#delete'), 'still picked').toBeVisible();
 });
 
-test('an assembly dragged under SELECT takes L mid-drag the same way', async ({ page }) => {
+test('an assembly dragged under SELECT takes R mid-drag the same way', async ({ page }) => {
   const { at } = await open(page);
   await pickAssembly(page, at);
   await lightTsquare(page);
@@ -145,7 +147,7 @@ test('an assembly dragged under SELECT takes L mid-drag the same way', async ({ 
   await page.mouse.move(...from);
   await page.mouse.down();
   await page.mouse.move(...to, { steps: 6 });
-  await page.keyboard.press('l');
+  await page.keyboard.press('r');
   await expect(page.locator('#frozen-length')).toBeFocused();
   await page.keyboard.type('8');
   await page.mouse.up();
@@ -154,11 +156,58 @@ test('an assembly dragged under SELECT takes L mid-drag the same way', async ({ 
   expect(wall(d, 'wc1').start.z).toBeCloseTo(0, 6);
 });
 
-test('with nothing in hand, L is still the LINE key', async ({ page }) => {
-  await open(page);
+test('L is the LINE key: with nothing in hand, and after a move too', async ({ page }) => {
+  const { at } = await open(page);
   await page.keyboard.press('l');
   await expect(lineKey(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#frozen-length')).not.toBeFocused();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('l');
+  await expect(lineKey(page)).toHaveAttribute('aria-pressed', 'false');
+  // A MOVE JUST MADE makes a length typable (R opens the box); L still arms
+  // LINE instead of the box (jb, 11 Nov 2026).
+  await pickAssembly(page, at);
+  await lightTsquare(page);
+  await page.locator('#model-move').click();
+  await drag(page, at(4, 3), at(9, 3.6));
+  await expect(page.locator('#strip-message')).toContainText('Moved');
+  await page.keyboard.press('l');
+  await expect(lineKey(page), 'L armed LINE, not the LENGTH box').toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#frozen-length')).not.toBeFocused();
+});
+
+// THE TYPED LENGTH GOES THE WAY THE DRAG WAS HELD (jb, 11 Nov 2026, a SUITE
+// hologram on SITE with the T-SQUARE lit, R 20-4: "i want it to move over at
+// 90 degree angle STRAIGHT (which is how it moves when i'm adjusting it), but
+// when i press enter or click it follows the angle of my cursor location
+// rather than the t-Square locked direction"). The slant came in only when
+// the press TOOK A CORNER: the release then read the hand's raw travel for the
+// way, and that travel was never squared. The corner at (8, 0) is the grab.
+test('a corner-grabbed drag under the T-SQUARE, R and a length: square, not along the hand', async ({ page }) => {
+  const { at } = await open(page);
+  await pickAssembly(page, at);
+  await lightTsquare(page);
+  await page.locator('#model-move').click();
+  // Grab the corner exactly; the hand slants 5 across and 2 down.
+  await drag(page, at(8, 0), at(13, 2));
+  await expect(page.locator('#strip-message')).toContainText('Moved');
+  let d = await saved(page);
+  expect(wall(d, 'wc1').start.z, 'the drag itself went square').toBeCloseTo(0, 6);
+  await page.keyboard.press('r');
+  await expect(page.locator('#frozen-length')).toBeFocused();
+  await page.keyboard.type('20-4');
+  await page.keyboard.press('Enter');
+  d = await saved(page);
+  expect(wall(d, 'wc1').start.x, "20'-4\" straight across").toBeCloseTo(20 + 4 / 12, 6);
+  expect(wall(d, 'wc1').start.z, 'nothing down').toBeCloseTo(0, 6);
+  expect(wall(d, 'wc2').end.x, 'the whole assembly').toBeCloseTo(28 + 4 / 12, 6);
+  // And the mouse button finishes it the same way, square.
+  await page.keyboard.press('r');
+  await page.keyboard.type('30');
+  await page.mouse.click(...at(2, 4));
+  d = await saved(page);
+  expect(wall(d, 'wc1').start.x, 'thirty across on the press').toBeCloseTo(30, 6);
+  expect(wall(d, 'wc1').start.z).toBeCloseTo(0, 6);
 });
 
 // ENTER WITH THE BUTTON STILL DOWN (Movie, 25 Oct: "press 0-2 and press
@@ -166,7 +215,7 @@ test('with nothing in hand, L is still the LINE key', async ({ page }) => {
 // direction i chose, but it doesn't do it at that point"): ENTER ends the
 // drag there and moves it the typed length; the button let go after adds
 // nothing.
-test('a lone wall dragged under SELECT, L, 0-2 and ENTER mid-drag: two inches over, there and then', async ({ page }) => {
+test('a lone wall dragged under SELECT, R, 0-2 and ENTER mid-drag: two inches over, there and then', async ({ page }) => {
   const file = drawing();
   file.groups = [];
   file.walls = [W('free', [0, 0], [0, 8]), W('far', [12, 0], [12, 8])];
@@ -177,7 +226,7 @@ test('a lone wall dragged under SELECT, L, 0-2 and ENTER mid-drag: two inches ov
   await page.mouse.move(...at(0, 4));
   await page.mouse.down();
   await page.mouse.move(...at(3, 4.3), { steps: 6 });
-  await page.keyboard.press('l');
+  await page.keyboard.press('r');
   await expect(page.locator('#frozen-length')).toBeFocused();
   await page.keyboard.type('0-2');
   await page.keyboard.press('Enter');
