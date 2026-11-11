@@ -270,8 +270,12 @@ test.describe('MODEL.html instrument strip', () => {
         'the refusal is cut off, which is the whole complaint').toBe(false);
       expect(read.top, 'the message is not below the bar it came off')
         .toBeGreaterThanOrEqual(read.barBottom);
-      expect(read.left, `the message sits at ${read.left} and STATUS READOUT `
-        + `at ${read.tabLeft}`).toBeCloseTo(read.tabLeft, 0);
+      // STATUS READOUT WENT TO THE RIGHT SIDE on 11 Nov (Movie, with a
+      // mockup), so the message keeps the sheet's 12px margin the readout
+      // used to mark, and the readout stands in the right margin now.
+      expect(read.left, `the message sits at ${read.left}`).toBeCloseTo(12, 0);
+      expect(read.tabLeft, `STATUS READOUT at ${read.tabLeft} is on the right side`)
+        .toBeGreaterThan(1366 / 2);
       expect([read.size, read.family, read.colour, read.caps],
         'the message does not read as the same voice as STATUS READOUT')
         .toEqual([read.tabSize, read.tabFamily, read.tabColour, read.tabCaps]);
