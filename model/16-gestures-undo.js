@@ -174,8 +174,8 @@
     const had = !!(drawStart || rulerFrom || cutStart || beamStart || elevLineStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
       || stretchState.a || stairHand.at || draftCommandsBusy());
-    draftCommandsCancel();
     if (typeof lineArcCancel === 'function') lineArcCancel();
+    draftCommandsCancel();
     drawStart = null;
     stretchState = { a: null, b: null, base: null };
     if (dimPlacing) dimKeep();
@@ -1876,17 +1876,17 @@
     // THE RIGHT BUTTON PANS; one that did not travel is the right CLICK, which
     // puts the gesture in hand down, as it did before the pan moved here.
     if (dragging.pan) {
-      if (dragging.moved <= 4) {
+      // ON THE LINE TOOL THE RIGHT CLICK IS A MENU (jb, 11 Nov): STRAIGHT,
+      // ARC, 3-POINT ARC, CIRCLE, and CLOSE / FINISH / CANCEL for the run
+      // in hand (19-line-arcs.js). Everywhere else it is still ENTER.
+      const menuUp = dragging.moved <= 4 && typeof lineRunMenu === 'function' && !!e && lineRunMenu(e.clientX, e.clientY);
+      if (dragging.moved <= 4 && !menuUp) {
         // THE RIGHT CLICK IS ENTER (jb, 9 Nov, "how AUTOCAD did it"): it
         // FINISHES what is in hand -- the run, the loop, the string, the
         // step -- and at an empty prompt repeats the last tool. It used to
         // cancel (Movie, 27 Sep); Esc alone does that now. See the ENTER
         // rule in 14-promotion-tools.js.
-        // ON THE LINE TOOL THE RIGHT CLICK IS A MENU (jb, 11 Nov): STRAIGHT,
-        // ARC, 3-POINT ARC, CIRCLE, and CLOSE / FINISH / CANCEL for the run
-        // in hand (19-line-arcs.js). Everywhere else it is still ENTER.
-        if (typeof lineRunMenu === 'function' && e && lineRunMenu(e.clientX, e.clientY)) { /* open */ }
-        else if (finishOrRepeat()) { stripRefresh(); paint(); }
+        if (finishOrRepeat()) { stripRefresh(); paint(); }
       }
       dragging = null;
       canvas.classList.remove('dragging');

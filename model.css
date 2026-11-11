@@ -1764,3 +1764,20 @@
   #notice code { font-family: var(--font-mono); font-size:0.92em;
     color: var(--ink-primary); padding:1px 5px; border-radius:3px;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
+
+/* THE LINE RUN'S RIGHT-CLICK MENU (jb, 11 Nov; 19-line-arcs.js): the LAYOUT
+   sheet's own menu, on the model. Lives here, not in shell-bars.css, because
+   it is MODEL's alone. */
+#line-menu { position:fixed; z-index:40; min-width:150px; padding:4px; box-sizing:border-box;
+    background: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:4px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
+#line-menu[hidden] { display:none; }
+#line-menu button { display:block; width:100%; text-align:left; border:1px solid transparent;
+    background:none; color: var(--ink-primary); cursor:pointer; padding:5px 10px;
+    font-family: var(--font-ui); font-weight:600; font-size:12px;
+    letter-spacing:0.04em; text-transform:uppercase; border-radius:3px; }
+#line-menu button:hover, #line-menu button:focus-visible { border-color: var(--accent); color: var(--accent); outline:none; }
+#line-menu button.lit { color: var(--accent); }
+#line-menu button:disabled { opacity:0.35; cursor:default; }
+#line-menu button:disabled:hover { border-color:transparent; color: var(--ink-primary); }
+#line-menu .line-menu-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }
