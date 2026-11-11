@@ -156,12 +156,17 @@
   #hint { position:fixed; right:12px; bottom:var(--readout-bottom); z-index:5; color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
-  /* REGISTRATION (Movie, 28 Oct), seated just over the pan hint in the
-     same corner, in the panel's own surface so it reads as furniture. ON
-     TOP of the side tabs and the open panel ("that box should cover over
-     the side tabs if those are exposed, this one will only be needed on
-     site plan but will be important to see"). */
-  #registration { position:fixed; right:12px; bottom:calc(var(--readout-bottom) + 20px);
+  /* REGISTRATION (Movie, 28 Oct), seated just over the foot lane, in the
+     panel's own surface so it reads as furniture. ON TOP of the side tabs
+     and the open panel ("that box should cover over the side tabs if those
+     are exposed, this one will only be needed on site plan but will be
+     important to see").
+     BOTTOM LEFT SINCE 11 NOV (Movie, with a mockup: "move the page rotate,
+     full screen, and registration area over to the left side"): it stood in
+     the pan hint's corner from 28 Oct. HOUSE turn and ZOOM TO FILL stand in
+     the corner itself and the box to their right; seatNorthDock sets the
+     box's left from the pair's width, this 12px is the seat before it runs. */
+  #registration { position:fixed; left:12px; bottom:calc(var(--readout-bottom) + 20px);
     z-index:7; display:flex; flex-direction:column; gap:4px; padding:6px 8px;
     border:1px solid var(--edge-panel); border-radius:4px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);

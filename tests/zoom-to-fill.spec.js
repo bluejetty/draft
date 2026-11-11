@@ -42,7 +42,7 @@ async function airAbove(page, topWorldY, spanPx) {
   return (topWorldY - (bar.y + bar.height)) / spanPx;
 }
 
-test('the three chips are one size: the arrow at the top right by the rail, HOUSE turn over ZOOM TO FILL at the bottom right', async ({ page }) => {
+test('the three chips are one size: the arrow at the top right by the rail, HOUSE turn over ZOOM TO FILL at the bottom left', async ({ page }) => {
   await open(page);
   // SINCE 11 NOV (Movie, with a mockup): the arrow's hand went left of the
   // rail so the rail could go to the top, and the turn and fill pair went
@@ -55,6 +55,9 @@ test('the three chips are one size: the arrow at the top right by the rail, HOUS
   expect(Math.abs(turn.cx - fill.cx), 'the turn and the fill in one column').toBeLessThanOrEqual(1);
   expect(turn.cy, 'the turn over the fill').toBeLessThan(fill.cy);
   expect(fill.cy, 'at the foot of the sheet').toBeGreaterThan(page.viewportSize().height / 2);
+  const leftRail = await page.locator('#left-rail').boundingBox();
+  expect(fill.cx - fill.w / 2, 'at the left, just right of the open left rail (bottom left since 11 Nov)').toBeGreaterThanOrEqual(leftRail.x + leftRail.width);
+  expect(fill.cx - fill.w / 2 - (leftRail.x + leftRail.width), 'and close beside it').toBeLessThanOrEqual(12);
   expect([north.w, north.h, turn.w, turn.h, fill.w, fill.h].every(v => Math.abs(v - 32) < 1), 'all 32px square').toBe(true);
   // THE ARROW WEARS THE SAME BOX AS ITS NEIGHBOURS (23 Oct; it went bare on
   // 14 Oct), and is drawn inside it.

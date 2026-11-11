@@ -250,8 +250,9 @@ test('the box sits ON TOP of the open right panel and its tabs, not beside them'
   await page.goto(`/MODEL.html?level=${SITE}&right=1&pane=levels`);
   await expect(box(page)).toBeVisible({ timeout: 10000 });
   const r = await box(page).boundingBox();
-  const vw = page.viewportSize().width;
-  expect(vw - (r.x + r.width), 'in the corner').toBeLessThan(20);
+  // BOTTOM LEFT SINCE 11 NOV, right of the HOUSE turn / ZOOM TO FILL pair.
+  expect(r.x, 'in the corner').toBeLessThan(80);
+  expect(r.x, 'and right of the turn and fill pair').toBeGreaterThan(12 + 24);
   const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('#registration') !== null,
     [r.x + r.width - 6, r.y + 6]);
   expect(top, 'nothing over it').toBe(true);
