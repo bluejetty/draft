@@ -1713,8 +1713,9 @@
   // `?level=`, so the level is put right by settling the URL, not by a
   // second reader overruling it. adoptFile (model/17) runs this on every
   // door a drawing comes in by -- boot, OPEN, NEW, a jump -- before the
-  // first fit, and syncBuildBar runs it again on every re-sync so a stale
-  // `?level=3` from the house file he was on never stands. The `?view=` goes
+  // first fit, so a stale `?level=3` from the house file he was on never
+  // stands; after that only goToLevel moves the level, and on this file it
+  // is offered SITE PLAN alone. The `?view=` goes
   // with it: SITE has no layer views, and a house view left in the URL
   // would warn about a view the level never had. Through the same
   // replaceState as goToLevel -- a change of viewpoint, not a navigation.
@@ -1765,7 +1766,6 @@
 
   const syncBuildBar = () => {
     if (!drawing) return;
-    settleSiteOnlyUrl();
     syncSiteOnlyDoors();
     familyRow.replaceChildren(...BM.BUILD_MENU.map(family => {
       // A STACKED FAMILY SHOWS ITS TILES IN THE ROW ITSELF, close together in
