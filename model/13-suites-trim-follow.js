@@ -2189,6 +2189,31 @@
     paint();
     sayOnStrip(`A copy of ${hologramNoun(holo)} is on ${suiteFloorName(copy)}, right over this one \u2014 UNDO takes it off.`);
   };
+  // + ADD ANOTHER ... HOLOGRAM TO PLAN: one more copy of the file, made from
+  // the last copy in the list, ten feet over so the two do not sit on top of
+  // each other, on the level being looked at when the file has a level
+  // there (else where the last copy stands), and picked.
+  const ADD_ANOTHER_STEP_FT = 10;
+  const addAnotherHologram = copies => {
+    const last = copies[copies.length - 1];
+    if (!last || !drawing) return;
+    const { demo, levelMap, ...rest } = last;
+    let id = newDrawingItemId('hologram');
+    while (holograms().some(h => h.id === id)) id = newDrawingItemId('hologram');
+    const copy = { ...rest, id, x: (Number(last.x) || 0) + ADD_ANOTHER_STEP_FT };
+    if (last.mode === 'suite' || isGenericHolo(last)) {
+      const here = shellLevelsOf(last).findIndex(l => Number(l.id) === Number(activeLevelId()));
+      const map = (here >= 0 && suiteMapFor(last, here)) || levelMap;
+      if (map && !sameMap(last, map)) copy.levelMap = map;
+    }
+    drawing.holograms = drawing.holograms || [];
+    addItem(drawing.holograms, copy);
+    hologramOpenId = copy.id;
+    setSelection([{ type: 'hologram', item: copy }]);
+    paint();
+    sayOnStrip(`#${copies.length + 1} of ${hologramNoun(last)} is on the plan${copy.levelMap || last.mode === 'suite' || isGenericHolo(last) ? ` on ${suiteFloorName(copy)}` : ''}, ${ADD_ANOTHER_STEP_FT} ft over from #${copies.length} \u2014 MOVE puts it where you want; UNDO takes it off.`);
+    renderHologramList();
+  };
   // ITS DRAWING ON A NEW SHELF: its lowest floor's walls, doors, windows,
   // fixtures and the rest, pasted the way PASTE puts a copy down (fresh ids,
   // each opening on its wall's copy), on a shelf named for the file.
@@ -2677,6 +2702,26 @@
         }));
       fileCard.appendChild(row);
       });
+      // THE LAST ROW OF EVERY FILE'S LIST IS A SLOT (jb, 10 Nov: "in the
+      // #3 position can we put a slot that has a + ADD ANOTHER footprint
+      // HOLOGRAM TO PLAN"): the next number, and a press puts one more copy
+      // of the file on the plan -- no drag to place, it lands a step over
+      // from the last copy, on the level being looked at, lit so its row's
+      // buttons are open. UNDO takes it off.
+      const slot = document.createElement('div');
+      slot.className = 'trace-row hologram-copy hologram-add-slot';
+      slot.dataset.hologramAddSlot = key;
+      const next = document.createElement('span');
+      next.dataset.hologramNext = String(copies.length + 1);
+      next.textContent = `#${copies.length + 1}`;
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.dataset.hologramAdd = key;
+      add.textContent = `+ ADD ANOTHER ${first.name || first.id} HOLOGRAM TO PLAN`;
+      add.title = `One more ${first.name || first.id} on the plan, a step over from #${copies.length}, on the level you are looking at`;
+      add.addEventListener('click', () => addAnotherHologram(copies));
+      slot.append(next, add);
+      fileCard.appendChild(slot);
       list.appendChild(fileCard);
     });
   }

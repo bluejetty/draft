@@ -1474,6 +1474,9 @@
      selected so it won't be as tall, and this menu could also go to 2 or 3
      columns and be wider too"). */
   .hologram-copy [data-hologram-where] { opacity:0.75; }
+  .hologram-add-slot { cursor:default; }
+  .hologram-add-slot [data-hologram-next] { opacity:0.5; }
+  .hologram-add-slot [data-hologram-add] { flex:1 1 auto; text-align:left; }
   .hologram-file-head [data-hologram-copies], .hologram-tools [data-hologram-floor] { flex:0 0 auto; white-space:nowrap; align-self:center; }
   .hologram-inside { padding-left:14px; cursor:pointer; }
   .hologram-inside input { margin:0 6px 0 0; }
