@@ -119,6 +119,20 @@ if (!window.DraftFormatters) {
     if (!raw) return { ok: false, error: 'Enter a dimension such as 8-1 1/8.' };
     if (/^[+-]?0(?:\.0+)?$/.test(raw)) return architecturalLengthResult(0);
 
+    // A METRIC SUFFIX FORCES METRES ON ANY DRAWING (jb, 10 Nov: "21m" in
+    // the LENGTH box of an imperial drawing was refused, then "21.6M"; "a
+    // trailing m means metres, whatever the drawing's units are"). The
+    // imperial reader runs for every typed length -- LENGTH box, dimension
+    // and property boxes, the trace and lot cards -- so the suffix is read
+    // HERE, once, and every one of them takes it. `m`, `cm` and `mm`, any
+    // case, a space or none; nothing imperial ever ends in an m, so the
+    // branch cannot steal a feet-inches reading. Not snapped to the
+    // sixteenth, for the reason parseLength gives below: 21.6 m is
+    // 850.394", and the snap would hand back 850.375" -- half a
+    // millimetre the drafter did not type.
+    const metricTyped = parseMetricSuffix(raw);
+    if (metricTyped) return metricTyped;
+
     let match = raw.match(/^([+-]?\d+(?:\.\d+)?)\s*(?:'|ft)\s*(.*)$/i);
     if (match) {
       const feetValue = Number(match[1]);
@@ -174,7 +188,7 @@ if (!window.DraftFormatters) {
       return architecturalLengthResult(Number(raw) * 12);
     }
 
-    return { ok: false, error: `Use 15 for feet, 15-6 or 15 6 for feet and inches, or 5" for inches.` };
+    return { ok: false, error: `Use 15 for feet, 15-6 or 15 6 for feet and inches, 5" for inches, or 6.5m for metres.` };
   }
 
   // Joist depth, spacing, and sheathing are inch-scale values, so a bare number
@@ -228,6 +242,15 @@ if (!window.DraftFormatters) {
   // snap would hand back 141.75" -- 3.6005 m, half a millimetre the drafter
   // did not type. The millimetre is the metric grid (formatMetres).
   const METRES_PER_UNIT = { mm: 0.001, cm: 0.01, m: 1 };
+  // "21m", "21.6 M", "2160cm", "21600mm": a number with a metric suffix, in
+  // inches, or null when the text is not that. The suffix is required here;
+  // parseLength's metric branch is where a BARE number is metres.
+  function parseMetricSuffix(raw) {
+    const match = String(raw ?? '').trim().match(/^([+-]?\d+(?:\.\d+)?)\s*(mm|cm|m)$/i);
+    if (!match) return null;
+    const metres = Number(match[1]) * METRES_PER_UNIT[match[2].toLowerCase()];
+    return { ok: true, inches: metres / 0.0254 };
+  }
   function parseLength(value, units) {
     if (units !== 'metric') return parseArchitecturalLength(value);
     const raw = String(value ?? '').trim();
