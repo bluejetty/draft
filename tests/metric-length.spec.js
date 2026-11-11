@@ -96,6 +96,51 @@ for (const [typed, metres, said] of [
   });
 }
 
+// A METRIC SUFFIX FORCES METRES ON AN IMPERIAL DRAWING (jb, 10 Nov: "21m"
+// typed into the LENGTH box of an imperial drawing was refused, and so was
+// "21.6M"; "a trailing m means metres, whatever the drawing's units are").
+// Imperial typed into a metric drawing already read, so this is the mirror.
+for (const [typed, metres, said] of [
+  ['21m', 21, 'm says metres'],
+  ['21.6M', 21.6, 'capital M and a decimal'],
+  ['21.6 m', 21.6, 'a space before the suffix'],
+  ['2160cm', 21.6, 'cm says centimetres'],
+  ['21600 mm', 21.6, 'mm says millimetres'],
+]) {
+  test(`typed into the box on an IMPERIAL drawing: ${typed} -- ${said}`, async ({ page }) => {
+    const { at } = await open(page, 'imperial');
+    await h.armFromRail(page, 'line');
+    await press(page, at, 2, 2);
+    await hover(page, at, 12, 2);
+    await expect(lengthBox(page)).toBeEnabled();
+    await lengthBox(page).fill(typed);
+    await lengthBox(page).press('Enter');
+    await page.keyboard.press('Escape');
+    const d = await saved(page);
+    expect(d.lines).toHaveLength(1);
+    const line = d.lines[0];
+    expect(r3(line.end.x - line.start.x), `${metres} m along +X, in the file's feet`)
+      .toBe(r3(metres / 0.3048));
+    expect(r3(line.end.z - line.start.z)).toBe(0);
+  });
+}
+
+test('on an imperial drawing a bare number is still feet, and the refusal names metres', async ({ page }) => {
+  const { at } = await open(page, 'imperial');
+  await h.armFromRail(page, 'line');
+  await press(page, at, 2, 2);
+  await hover(page, at, 12, 2);
+  await lengthBox(page).fill('abc');
+  await lengthBox(page).press('Enter');
+  await expect(page.locator('#strip-message')).toContainText('6.5m for metres');
+  await lengthBox(page).fill('21');
+  await lengthBox(page).press('Enter');
+  await page.keyboard.press('Escape');
+  const d = await saved(page);
+  expect(d.lines).toHaveLength(1);
+  expect(r3(d.lines[0].end.x - d.lines[0].start.x)).toBe(21);
+});
+
 test('on a metric drawing, what cannot be read is refused and says so', async ({ page }) => {
   const { at } = await open(page, 'metric');
   await h.armFromRail(page, 'line');

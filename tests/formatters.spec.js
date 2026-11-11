@@ -52,6 +52,28 @@ test('formatInchesOnly prints assembly values as plain inches', async ({ page })
   expect(results.mixed).toBe(`4 1/2"`);
 });
 
+test('parseArchitecturalLength reads a metric suffix as metres, any case, unsnapped', async ({ page }) => {
+  const r = await page.evaluate(() => {
+    const f = window.DraftFormatters;
+    return {
+      m: f.parseArchitecturalLength('21m'), M: f.parseArchitecturalLength('21.6M'),
+      spaced: f.parseArchitecturalLength('21.6 m'), cm: f.parseArchitecturalLength('2160cm'),
+      mm: f.parseArchitecturalLength('21600 mm'), negative: f.parseArchitecturalLength('-3m'),
+      imperialBox: f.parseLength('21m', 'imperial'), noUnits: f.parseLength('21m', undefined),
+      assembly: f.parseAssemblyInches('50mm'),
+    };
+  });
+  expect(r.m.inches).toBeCloseTo(21 / 0.0254, 6);
+  expect(r.M.inches).toBeCloseTo(21.6 / 0.0254, 6);
+  expect(r.spaced.inches).toBeCloseTo(21.6 / 0.0254, 6);
+  expect(r.cm.inches).toBeCloseTo(21.6 / 0.0254, 6);
+  expect(r.mm.inches).toBeCloseTo(21.6 / 0.0254, 6);
+  expect(r.negative.inches).toBeCloseTo(-3 / 0.0254, 6);
+  expect(r.imperialBox.inches).toBeCloseTo(21 / 0.0254, 6);
+  expect(r.noUnits.inches).toBeCloseTo(21 / 0.0254, 6);
+  expect(r.assembly.inches).toBeCloseTo(50 / 25.4, 6);
+});
+
 test('parseArchitecturalLength reads the drafting grammar; bare numbers are feet', async ({ page }) => {
   const results = await page.evaluate(() => {
     const f = window.DraftFormatters;
