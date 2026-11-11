@@ -113,16 +113,32 @@ test('ENTER, SPACE or the right button once ends the LINE run; none of them is a
   await hover(page, 16, 9);
   await key(page, ' ');
   await expect(page.locator('#strip-message')).toContainText(/run ended/i);
-  // And one ended by the right button, which no longer cancels it.
+  // And one ended by the right button, which no longer cancels it. On a
+  // LINE run the right button opens the run's menu (ARC, CIRCLE, CLOSE ...;
+  // jb, 11 Nov, PR #986), and its FINISH is the ENTER; the cursor's spot is
+  // still no corner.
   await tapWorld(page, 20, 2);
   await tapWorld(page, 20, 6);
   const { px, py } = await pixelOf(page, 24, 6);
   await page.mouse.click(px, py, { button: 'right' });
   await page.waitForTimeout(80);
+  await expect(page.locator('#line-menu')).toBeVisible();
+  await page.locator('#line-menu [data-line-menu-item="finish"]').click();
+  await page.waitForTimeout(80);
+  await expect(page.locator('#line-menu')).toBeHidden();
+  await expect(page.locator('#strip-message')).toContainText(/run ended/i);
+  // ON A WALL RUN the right button itself is the FINISH, with no menu.
+  await arm(page, 'wall');
+  await tapWorld(page, 28, 2);
+  await tapWorld(page, 28, 6);
+  const w = await pixelOf(page, 32, 6);
+  await page.mouse.click(w.px, w.py, { button: 'right' });
+  await page.waitForTimeout(80);
+  await expect(page.locator('#line-menu')).toBeHidden();
   await expect(page.locator('#strip-message')).toContainText(/run ended/i);
   const d = await save(page);
   expect(d.lines.map(seg)).toEqual([[2, 2, 8, 2], [12, 6, 12, 9], [20, 2, 20, 6]]);
-  expect(d.walls, 'a LINE writes lines').toHaveLength(0);
+  expect(d.walls.map(seg), 'a LINE writes lines; the WALL run wrote the one wall').toEqual([[28, 2, 28, 6]]);
 });
 
 test('ENTER with nothing in hand puts no corner down, and the tool stays up', async ({ page }) => {

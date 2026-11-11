@@ -238,7 +238,13 @@
 
   // ── what the strip says ─────────────────────────────────────────────────
   function lineArcStrip() {
-    if (!lineToolUp() || lineArcModeIs('straight')) return null;
+    if (!lineToolUp()) return null;
+    if (lineArcModeIs('straight')) {
+      // The right button opens the menu here, not FINISH as on a WALL run.
+      return drawStart
+        ? 'line — second point · ENTER, SPACE or a double-click ends the run · the right button: ARC, CIRCLE, CLOSE · ESC abandons it'
+        : 'line — first point · the right button: ARC, CIRCLE';
+    }
     if (lineArcModeIs('circle')) return `line — CIRCLE · ${drawStart ? 'press or type the radius' : 'press the centre'} · ESC abandons it`;
     const kind = lineArcModeIs('arc3') ? '3-POINT ARC' : 'ARC';
     if (!drawStart) return `line — ${kind} · first point`;
