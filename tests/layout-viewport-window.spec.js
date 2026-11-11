@@ -205,8 +205,11 @@ test('the crop survives a reload, moves with the viewport, and FIT WINDOW takes 
   const reloaded = await windowOf(page);
   expect(reloaded.hIn).toBeCloseTo(before.hIn - 0.6, 1);
 
-  // MOVED WHOLE: the window keeps its crop wherever the viewport goes.
-  await dragSheet(page, { xIn: 8, yIn: 5 }, { xIn: 10, yIn: 5 });
+  // MOVED WHOLE: the window keeps its crop wherever the viewport goes. The
+  // drag starts on the BORDER, away from a grip -- since the pan went in
+  // (layout-viewport-pan.spec.js) the body pans the drawing instead.
+  const westEdge = { xIn: reloaded.xIn, yIn: reloaded.yIn + reloaded.hIn / 4 };
+  await dragSheet(page, westEdge, { xIn: westEdge.xIn + 2, yIn: westEdge.yIn });
   const moved = await windowOf(page);
   expect(moved.hIn).toBeCloseTo(before.hIn - 0.6, 1);
   expect(moved.xIn).toBeCloseTo(before.xIn + 2, 1);
