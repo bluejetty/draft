@@ -789,11 +789,11 @@
       const b = noteBox(note);
       if (p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom) return true;
       if (note.end === 'none') return false;
+      // The leader runs from the text point (the block's node) to the anchor.
       const a = toS(note.anchor), t = toS(note.text);
-      const from = b.world ? t : { x: t.x >= a.x ? b.left : b.right, y: t.y };
       // pointToSegment reads x/z; screen y stands in for z.
       return window.DraftGeometry2D.pointToSegment({ x: p.x, z: p.y },
-        { start: { x: a.x, z: a.y }, end: { x: from.x, z: from.y } }).d <= NOTE_LEADER_GRAB_PX;
+        { start: { x: a.x, z: a.y }, end: { x: t.x, z: t.y } }).d <= NOTE_LEADER_GRAB_PX;
     }) || null;
   };
   // FIXTURES INHERIT THEIR WALL'S VISIBILITY -- they do not carry a view rule

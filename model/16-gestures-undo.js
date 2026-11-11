@@ -325,12 +325,16 @@
     Object.assign(box.style, { position: 'fixed', left: `${rect.left + b.left}px`,
       top: `${rect.top + b.top}px`, minWidth: `${Math.max(180, b.width)}px`, zIndex: 50,
       font: "600 14px 'Barlow Condensed', system-ui, sans-serif", padding: '2px 6px',
-      textTransform: 'uppercase', resize: 'none' });
+      textTransform: note.caps === false ? 'none' : 'uppercase', resize: 'none' });
     let settled = false;
     const settle = keep => {
       if (settled) return;
       settled = true;
-      const body = box.value.split('\n').map(line => line.trimEnd()).join('\n').trim().toUpperCase();
+      // A note with a CAPS switch (the NOTE panel) stores the words as
+      // typed and the painter capitalises; one from before the switch is
+      // capitalised here, as it always was.
+      const typed = box.value.split('\n').map(line => line.trimEnd()).join('\n').trim();
+      const body = typeof note.caps === 'boolean' ? typed : typed.toUpperCase();
       box.remove();
       if (!keep || !body || body === note.body) return;
       undoStack.push(brushUndoStep([note]));

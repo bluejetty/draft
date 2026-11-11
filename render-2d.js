@@ -3298,118 +3298,142 @@ if (!window.DraftRender2D) {
   // no toS and reads nothing from the model: two colours are its whole env.
   // It was callable from any page all along; only its location said otherwise.
   // THE TEXT BLOCK'S BOX, in screen px -- the one place its size is worked
-  // out, so the painter and a page's hit test agree on it to the pixel. The
-  // block grows away from the anchor; the leader meets its near edge.
+  // out, so the painter and a page's hit test agree on it to the pixel.
+  //
+  // ONE BOX FOR EVERY NOTE (jb, 10 Nov: "add some properties that can be
+  // changed for the annotation"). A note's TEXT POINT is the node the leader
+  // meets; `node` says which point of the block that is -- a corner, a side's
+  // middle or the centre -- and AUTO (every note drawn before today) is the
+  // middle of the side nearer the anchor, so the block grows away from it.
+  // `align` sets the lines inside the block, `rot` (radians, counter-
+  // clockwise as the DXF has it) turns the whole block about its text point,
+  // `font` picks the lettering and `caps` upper-cases it.
   //
   // TEXT AT ITS REAL SIZE (Movie, 10 Oct, for DXF text brought in as notes:
-  // "1"). A note with `heightFt` is lettered that many feet tall on the plan,
-  // so it zooms with the drawing as CAD text does, turned by `rot` (radians,
-  // counter-clockwise as the DXF has it) about its text point and set by
-  // `align` and `baseline` there. It needs the plan's px per foot to size it;
-  // without one it falls back to the fixed screen note. Its box is the square
-  // box round the turned block, which is what a hit test can use.
-  const NOTE_FONT = "600 12px 'Barlow Condensed', system-ui, sans-serif";
-  const NOTE_PAD_X = 6, NOTE_LINE_H = 14;
+  // "1"; jb, 10 Nov, as the TEXT SIZE chips). A note with `heightFt` is
+  // lettered that many feet tall on the plan, so it zooms with the drawing
+  // as CAD text does. It needs the plan's px per foot to size it; without one
+  // -- or without a height -- it is the fixed screen note, 12px at any zoom.
+  // A DXF note set by `baseline` and no `node` keeps the file's own placing:
+  // no padding, hung from its point as the file said.
+  const NOTE_FONTS = Object.freeze([
+    Object.freeze({ id: 'hand', name: 'HAND', weight: 600, family: "'Barlow Condensed', system-ui, sans-serif" }),
+    Object.freeze({ id: 'plain', name: 'PLAIN', weight: 400, family: "Arial, Helvetica, system-ui, sans-serif" }),
+    Object.freeze({ id: 'serif', name: 'SERIF', weight: 400, family: "Georgia, 'Times New Roman', serif" }),
+    Object.freeze({ id: 'mono', name: 'MONO', weight: 400, family: "'Courier New', Courier, monospace" }),
+  ]);
+  const NOTE_NODES = Object.freeze(['auto', 'tl', 't', 'tr', 'l', 'c', 'r', 'bl', 'b', 'br']);
+  const NOTE_ENDS = Object.freeze(['arrow', 'line', 'dot', 'none']);
+  const noteFontOf = id => NOTE_FONTS.find(f => f.id === String(id)) || NOTE_FONTS[0];
+  const noteFontCss = (note, px) => { const f = noteFontOf(note?.font); return `${f.weight} ${px}px ${f.family}`; };
+  const NOTE_PAD_X = 6, NOTE_LINE_H = 14, NOTE_SCREEN_PX = 12;
   // DXF height is the capital's height; the font's em is about 1.4 of that.
   const NOTE_EM_PER_CAP = 1.4;
-  function worldNoteBox(ctx, text, note, pxPerFt) {
-    const fontPx = Number(note.heightFt) * pxPerFt * NOTE_EM_PER_CAP;
-    const lines = String(note.body || '').split('\n');
-    const lineH = fontPx * 1.2;
+  const noteLines = note => {
+    const body = String(note?.body || '');
+    return (note?.caps === true ? body.toUpperCase() : body).split('\n');
+  };
+  // Where the block's top-left sits from the text point, by node.
+  const noteNodeOffset = (node, width, height, anchor, text) => {
+    const col = { l: 0, c: -width / 2, r: -width };
+    const row = { t: 0, m: -height / 2, b: -height };
+    switch (node) {
+      case 'tl': return [col.l, row.t]; case 't': return [col.c, row.t]; case 'tr': return [col.r, row.t];
+      case 'l': return [col.l, row.m]; case 'c': return [col.c, row.m]; case 'r': return [col.r, row.m];
+      case 'bl': return [col.l, row.b]; case 'b': return [col.c, row.b]; case 'br': return [col.r, row.b];
+      default: return [text.x >= anchor.x ? col.l : col.r, row.m];
+    }
+  };
+  function noteBoxScreen2D(ctx, anchor, text, note, pxPerFt) {
+    const world = Number(note.heightFt) > 0 && Number(pxPerFt) > 0;
+    const fontPx = world ? Number(note.heightFt) * pxPerFt * NOTE_EM_PER_CAP : NOTE_SCREEN_PX;
+    // A DXF note set by its baseline keeps the file's bare block.
+    const dxf = !NOTE_NODES.includes(note.node) && typeof note.baseline === 'string' && world;
+    const lineH = world ? fontPx * 1.2 : NOTE_LINE_H;
+    const padX = dxf ? 0 : world ? fontPx * 0.4 : NOTE_PAD_X;
+    const padY = dxf ? 0 : world ? fontPx * 0.25 : 4;
+    const lines = noteLines(note);
     ctx.save();
-    ctx.font = `600 ${fontPx}px 'Barlow Condensed', system-ui, sans-serif`;
+    ctx.font = noteFontCss(note, fontPx);
     const widths = lines.map(line => ctx.measureText(line).width);
     ctx.restore();
-    const width = Math.max(0, ...widths), height = lines.length * lineH;
+    const width = Math.max(world ? 0 : 24, ...widths) + padX * 2;
+    const height = lines.length * lineH + padY * 2;
     const align = ['center', 'right'].includes(note.align) ? note.align : 'left';
-    const x0 = align === 'center' ? -width / 2 : align === 'right' ? -width : 0;
-    const y0 = note.baseline === 'top' ? 0
-      : note.baseline === 'middle' ? -height / 2
-        : note.baseline === 'bottom' ? -height
-          : -height + fontPx * 0.25;
+    let x0, y0;
+    if (dxf) {
+      x0 = align === 'center' ? -width / 2 : align === 'right' ? -width : 0;
+      y0 = note.baseline === 'top' ? 0
+        : note.baseline === 'middle' ? -height / 2
+          : note.baseline === 'bottom' ? -height
+            : -height + fontPx * 0.25;
+    } else {
+      [x0, y0] = noteNodeOffset(note.node, width, height, anchor, text);
+    }
     const angle = -(Number(note.rot) || 0);
     const cos = Math.cos(angle), sin = Math.sin(angle);
     const quad = [[x0, y0], [x0 + width, y0], [x0 + width, y0 + height], [x0, y0 + height]]
       .map(([x, y]) => ({ x: text.x + x * cos - y * sin, y: text.y + x * sin + y * cos }));
     const xs = quad.map(p => p.x), ys = quad.map(p => p.y);
     const left = Math.min(...xs), top = Math.min(...ys);
-    return { world: true, left, top, right: Math.max(...xs), bottom: Math.max(...ys),
+    return { world, dxf, left, top, right: Math.max(...xs), bottom: Math.max(...ys),
       width: Math.max(...xs) - left, height: Math.max(...ys) - top,
-      lines, fontPx, lineH, align, x0, y0, angle, quad };
+      boxW: width, boxH: height, lines, fontPx, lineH, padX, padY, align, x0, y0, angle, quad };
   }
-  function noteBoxScreen2D(ctx, anchor, text, note, pxPerFt) {
-    if (Number(note.heightFt) > 0 && Number(pxPerFt) > 0) return worldNoteBox(ctx, text, note, pxPerFt);
-    ctx.save();
-    ctx.font = NOTE_FONT;
-    const lines = String(note.body || '').split('\n');
-    const width = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + NOTE_PAD_X * 2;
-    ctx.restore();
-    const height = lines.length * NOTE_LINE_H + 8;
-    const left = text.x >= anchor.x ? text.x : text.x - width;
-    const top = text.y - height / 2;
-    return { left, top, right: left + width, bottom: top + height, width, height, lines };
-  }
-  function drawWorldNote(ctx, anchor, text, note, box, alpha, env) {
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = env.color;
-    ctx.fillStyle = env.color;
-    ctx.lineWidth = 1;
-    if (note.end !== 'none') {
-      ctx.beginPath();
-      ctx.moveTo(text.x, text.y);
-      ctx.lineTo(anchor.x, anchor.y);
-      ctx.stroke();
+  // THE LEADER'S INK: a note may carry a LINE's weight and style (line-
+  // styles.js); one without draws the hairline it always did.
+  const noteLeaderInk = (note, env) => {
+    const LS = typeof window !== 'undefined' ? window.DraftLineStyles : null;
+    const k = env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1;
+    if (LS && (note.weight != null || note.style != null)) {
+      const s = LS.strokeFor({ weight: note.weight ?? 2, style: note.style ?? 'solid' }, { inkScale: k });
+      return { lineWidth: s.lineWidth, dash: s.dash };
     }
-    // Too small to read is not drawn: a DXF zoomed far out holds thousands.
-    if (box.fontPx >= 2) {
-      ctx.translate(text.x, text.y);
-      ctx.rotate(box.angle);
-      ctx.font = `600 ${box.fontPx}px 'Barlow Condensed', system-ui, sans-serif`;
-      ctx.textAlign = box.align;
-      ctx.textBaseline = 'top';
-      const x = box.align === 'left' ? box.x0 : 0;
-      box.lines.forEach((line, i) => ctx.fillText(line, x, box.y0 + i * box.lineH));
-    }
-    ctx.restore();
-  }
+    return { lineWidth: 1 * k, dash: [] };
+  };
   function drawNoteScreen2D(ctx, anchor, text, note, options = {}, env) {
     const preview = options.preview === true;
     const alpha = preview ? 0.6 : 1;
     const box = noteBoxScreen2D(ctx, anchor, text, note, options.pxPerFt);
-    if (box.world) { drawWorldNote(ctx, anchor, text, note, box, alpha, env); return; }
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = env.color;
     ctx.fillStyle = env.color;
-    ctx.lineWidth = 1;
-    ctx.font = NOTE_FONT;
-    const { lines, left, top } = box;
-    const padX = NOTE_PAD_X, lineH = NOTE_LINE_H;
-    const boxW = box.width, boxH = box.height;
-    const leaderX = text.x >= anchor.x ? left : left + boxW;
+    const ink = noteLeaderInk(note, env);
+    ctx.lineWidth = ink.lineWidth;
+    const head = box.world ? Math.max(6, box.fontPx * 0.75) : 9;
+    // THE LEADER, from the text point (the node) to the anchor.
     if (note.end !== 'none') {
-      if (preview) ctx.setLineDash([5, 4]);
+      ctx.setLineDash(preview ? [5, 4] : ink.dash);
       ctx.beginPath();
-      ctx.moveTo(leaderX, text.y);
+      ctx.moveTo(text.x, text.y);
       ctx.lineTo(anchor.x, anchor.y);
       ctx.stroke();
       ctx.setLineDash([]);
     }
     if (note.end === 'arrow') {
-      const angle = Math.atan2(anchor.y - text.y, anchor.x - leaderX);
+      const angle = Math.atan2(anchor.y - text.y, anchor.x - text.x);
       ctx.beginPath();
       ctx.moveTo(anchor.x, anchor.y);
-      ctx.lineTo(anchor.x - 9 * Math.cos(angle - 0.3), anchor.y - 9 * Math.sin(angle - 0.3));
-      ctx.lineTo(anchor.x - 9 * Math.cos(angle + 0.3), anchor.y - 9 * Math.sin(angle + 0.3));
+      ctx.lineTo(anchor.x - head * Math.cos(angle - 0.3), anchor.y - head * Math.sin(angle - 0.3));
+      ctx.lineTo(anchor.x - head * Math.cos(angle + 0.3), anchor.y - head * Math.sin(angle + 0.3));
       ctx.closePath();
       ctx.fill();
+    } else if (note.end === 'dot') {
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, Math.max(2, head / 3), 0, Math.PI * 2);
+      ctx.fill();
     }
+    // THE BLOCK, turned about its text point.
+    ctx.translate(text.x, text.y);
+    ctx.rotate(box.angle);
+    ctx.lineWidth = 1 * (env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1);
+    const { x0, y0, boxW, boxH, lineH, padX, padY, lines } = box;
     if (note.fill || note.outline) {
       const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
       ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') ctx.roundRect(left, top, boxW, boxH, radius);
-      else ctx.rect(left, top, boxW, boxH);
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(x0, y0, boxW, boxH, radius);
+      else ctx.rect(x0, y0, boxW, boxH);
       if (note.fill) {
         ctx.save();
         ctx.globalAlpha = alpha * Math.min(1, Math.max(0, note.fillOpacity ?? 0.85));
@@ -3419,10 +3443,20 @@ if (!window.DraftRender2D) {
       }
       if (note.outline) ctx.stroke();
     }
-    ctx.fillStyle = env.color;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    lines.forEach((line, i) => ctx.fillText(line, left + padX, top + 4 + lineH * i + lineH / 2));
+    // Too small to read is not drawn: a DXF zoomed far out holds thousands.
+    if (box.fontPx >= 2) {
+      ctx.fillStyle = env.color;
+      ctx.font = noteFontCss(note, box.fontPx);
+      ctx.textAlign = box.align;
+      const x = box.align === 'left' ? x0 + padX : box.align === 'right' ? x0 + boxW - padX : x0 + boxW / 2;
+      if (box.dxf) {
+        ctx.textBaseline = 'top';
+        lines.forEach((line, i) => ctx.fillText(line, x, y0 + i * lineH));
+      } else {
+        ctx.textBaseline = 'middle';
+        lines.forEach((line, i) => ctx.fillText(line, x, y0 + padY + lineH * i + lineH / 2));
+      }
+    }
     ctx.restore();
   }
 
@@ -3919,6 +3953,7 @@ if (!window.DraftRender2D) {
     counterSpans2D,
     drawNoteScreen2D,
     noteBoxScreen2D,
+    NOTE_FONTS, NOTE_NODES, NOTE_ENDS, noteFontOf,
     drawStairNotes2D,
     drawCutMarks2D,
     drawCutPreview2D,

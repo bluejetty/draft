@@ -1321,10 +1321,24 @@ if (!window.DraftDrawingFormat) {
       const noteLevelId = levelId(note?.levelId, levelIds);
       const view = oneOf(note?.view, ['plan', 'floor', 'e-power', 'foundation', 'stair'], null);
       const body = String(note?.body ?? '').trim();
-      const end = oneOf(note?.end, ['arrow', 'line', 'none'], 'arrow');
+      const end = oneOf(note?.end, ['arrow', 'line', 'dot', 'none'], 'arrow');
       if (!safeId(id) || seen.has(id) || !anchor || !text || noteLevelId == null || !view || !body) return null;
       if (end !== 'none' && Math.hypot(text.x - anchor.x, text.z - anchor.z) < 0.001) return null;
       seen.add(id);
+      // ITS LOOK (jb, 10 Nov, the NOTE properties panel): the leader's LINE
+      // weight and style from line-styles.js, the lettering (font, caps,
+      // justification, turn), and which point of the block the leader meets
+      // (node). Each is written only when the note carries it, so a note
+      // drawn before today saves exactly as it did.
+      const rot = number(note?.rot, 0);
+      const look = {
+        ...(['hand', 'plain', 'serif', 'mono'].includes(note?.font) ? { font: note.font } : {}),
+        ...(['auto', 'tl', 't', 'tr', 'l', 'c', 'r', 'bl', 'b', 'br'].includes(note?.node) ? { node: note.node } : {}),
+        ...(['left', 'center', 'right'].includes(note?.align) ? { align: note.align } : {}),
+        ...(Number.isFinite(rot) && rot !== 0 ? { rot } : {}),
+        ...(typeof note?.caps === 'boolean' ? { caps: note.caps } : {}),
+        ...lineStyleFields({ weight: note?.weight, style: note?.style }),
+      };
       return {
         id,
         anchor,
@@ -1344,8 +1358,10 @@ if (!window.DraftDrawingFormat) {
           heightFt: number(note.heightFt, 0),
           rot: number(note?.rot, 0),
           align: oneOf(note?.align, ['left', 'center', 'right'], 'left'),
-          baseline: oneOf(note?.baseline, ['alphabetic', 'bottom', 'middle', 'top'], 'alphabetic'),
+          ...(typeof note?.baseline === 'string'
+            ? { baseline: oneOf(note?.baseline, ['alphabetic', 'bottom', 'middle', 'top'], 'alphabetic') } : {}),
         } : {}),
+        ...look,
         layer: 'A-ANNO-NOTE',
       };
     }).filter(Boolean);
