@@ -57,7 +57,8 @@ async function open(page) {
   await page.goto('/MODEL.html?level=3');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
-const chip = page => page.locator('[data-mode-trace]');
+// PHOTO is a line of the UNDERLAY chip's menu since 13 Nov.
+const chip = page => ({ click: () => h.underlayPick(page, 'trace') });
 const card = page => page.locator('#trace-insert');
 const savedUnderlays = async page => {
   await page.locator('#save').click();
@@ -78,37 +79,71 @@ const savedUnderlays = async page => {
 // eyeballed because "leave the outer frame only" is a claim about geometry:
 // the rect that was already there, to the pixel, with the block of lots gone
 // from inside it.
-test('the chip says PHOTO, and its glyph is a picture in the old frame', async ({ page }) => {
+// ONE UNDERLAY CHIP (jb, 13 Nov: "lets combine the PHOTO TRACE and HOLOGRAM
+// buttons and make them a right click to see the 3 options" ... "the
+// monopoly house"). A press opens the card with every kind on it; a
+// right-click is the three-line menu, and PHOTO from it shows that section
+// alone -- and the section still says PHOTO, the word a drafter meets.
+test('the UNDERLAY chip is a house, opens every kind on a press, and one kind from its menu', async ({ page }) => {
   await open(page);
-  await expect(chip(page)).toHaveAttribute('title', /^PHOTO\b/);
-  const glyph = await chip(page).locator('svg').evaluate(svg => ({
-    rects: [...svg.querySelectorAll('rect')].map(r => ['x', 'y', 'width', 'height']
-      .map(a => r.getAttribute(a)).join(',')),
+  const underlay = page.locator('[data-mode-underlay]');
+  await expect(underlay).toHaveAttribute('title', /^UNDERLAY\b/);
+  const glyph = await underlay.locator('svg').evaluate(svg => ({
+    filled: svg.getAttribute('fill'),
     paths: svg.querySelectorAll('path').length,
+    rects: svg.querySelectorAll('rect').length,
   }));
-  // ONE RECT, AND IT IS THE FRAME IT ALWAYS WAS. The six that drew the lots
-  // are gone; a seventh standing anywhere means the block came back.
-  expect(glyph.rects, 'the outer frame is not the one that was there')
-    .toEqual(['1,1,14,14']);
-  expect(glyph.paths, 'the boat is not drawn inside it').toBeGreaterThanOrEqual(4);
-
-  // AND THE CARD AGREES, which is where the word actually reaches a drafter.
-  await chip(page).click();
+  expect(glyph.filled, 'a solid house, the Monopoly piece').toBe('currentColor');
+  expect(glyph.paths + glyph.rects).toBeGreaterThanOrEqual(2);
+  // A PRESS: all three sections and the head with OPEN ANY FILE.
+  await expect(underlay).toHaveAttribute('aria-pressed', 'false');
+  await underlay.click();
+  await expect(underlay).toHaveAttribute('aria-pressed', 'true');
+  for (const sel of ['[data-underlay-head]', '#trace-ask', '#trace-dxf-ask', '#hologram-ask']) {
+    await expect(page.locator(sel), `${sel} is up`).toBeVisible();
+  }
   await expect(page.locator('#trace-ask')).toContainText('PHOTO');
   await expect(page.locator('#trace-ask')).not.toContainText('TRACE');
+  await expect(page.locator('#trace-dxf-ask')).toContainText('TRACE');
+  await expect(page.locator('[data-underlay-any]')).toHaveText('OPEN ANY FILE');
+  // CLOSE takes the whole card down; a second press on the chip does too.
+  await page.locator('[data-underlay-close]').click();
+  await expect(page.locator('#underlay-ask')).toBeHidden();
+  await expect(underlay).toHaveAttribute('aria-pressed', 'false');
+  // THE MENU: three lines, and PHOTO shows the PHOTO section alone.
+  await underlay.click({ button: 'right' });
+  const menu = page.locator('#underlay-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[role="menuitem"]')).toHaveText(['PHOTO', 'TRACE', 'HOLOGRAM']);
+  await menu.locator('[data-mode-trace]').click();
+  await expect(menu).toBeHidden();
+  await expect(page.locator('#trace-ask')).toBeVisible();
+  await expect(page.locator('[data-underlay-head]')).toBeHidden();
+  await expect(page.locator('#trace-dxf-ask')).toBeHidden();
+  await expect(page.locator('#hologram-ask')).toBeHidden();
+  // And TRACE from the menu: the DXF / DWG section alone, with its two doors.
+  // (The card's backdrop covers the strip, so NOT NOW first.)
+  await page.locator('[data-trace-later]').click();
+  await underlay.click({ button: 'right' });
+  await menu.locator('[data-mode-dxf]').click();
+  await expect(page.locator('#trace-dxf-ask')).toBeVisible();
+  await expect(page.locator('#trace-ask')).toBeHidden();
+  await expect(page.locator('[data-trace-dxf-upload]')).toHaveText('UPLOAD DXF / DWG');
+  await expect(page.locator('[data-trace-dxf-page-ask]')).toContainText('OPEN THE DXF PAGE');
 });
 
-test('the chip turns TRACE on, asks to upload, and turns it off again', async ({ page }) => {
+test('PHOTO turns the photos on and asks to upload; HIDE PHOTOS turns them off again', async ({ page }) => {
   await open(page);
-  await expect(chip(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-mode-trace]')).toHaveAttribute('aria-pressed', 'false');
   await chip(page).click();
-  await expect(chip(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-mode-trace]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#trace-ask')).toBeVisible();
   await expect(page.locator('[data-trace-count]')).toContainText('No images on');
   await page.locator('[data-trace-later]').click();
   await expect(page.locator('#trace-ask')).toBeHidden();
   await chip(page).click();
-  await expect(chip(page)).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('[data-trace-off]').click();
+  await expect(page.locator('[data-mode-trace]')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#trace-ask')).toBeHidden();
 });
 
@@ -147,8 +182,9 @@ test('a photo comes in at the length CALIBRATE gives it, and hides with TRACE of
   expect(Math.abs(u[0].heightFt - u[0].widthFt / 2)).toBeLessThan(0.5);
   await expect(page.locator('#readout')).not.toContainText('hidden');
 
-  // OFF hides it, and the readout says so rather than looking like a loss.
+  // HIDE PHOTOS hides it, and the readout says so rather than looking like a loss.
   await chip(page).click();
+  await page.locator('[data-trace-off]').click();
   await expect(page.locator('#readout')).toContainText('1 tracing image hidden');
 });
 

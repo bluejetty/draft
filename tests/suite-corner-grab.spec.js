@@ -58,7 +58,7 @@ const grabAt = async page => JSON.parse(await page.locator('#plan').getAttribute
 const OUT = 2.75 / 12;
 // MOVE on the HOLOGRAM card, then the suite dragged from inside it.
 async function dragSuite(page, at, from, to, { release = true } = {}) {
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('#hologram-ask [data-hologram-move="h1"]').click();
   await page.mouse.move(...at(...from));
   await page.mouse.down();
@@ -76,7 +76,7 @@ const hostOpenings = (page, d) => page.evaluate(d => window.DraftHologram.hostOp
 
 test('a press by the suite\'s corner takes that corner exactly: cyan before the press, held under the hand', async ({ page }) => {
   const { at } = await open(page, shell());
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('#hologram-ask [data-hologram-move="h1"]').click();
   // A pixel or two off the bottom-left outside corner, (20 - 2 3/4", -2 3/4").
   const [cx, cy] = at(20 - OUT, -OUT);
@@ -137,7 +137,7 @@ test('a blue suite file is held by its corner too', async ({ page }) => {
 
 test('Ctrl held: nothing catches, the corner goes where the hand is', async ({ page }) => {
   const { at } = await open(page, shell());
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('#hologram-ask [data-hologram-move="h1"]').click();
   await page.mouse.move(...at(20 - OUT, -OUT));
   await page.mouse.down();

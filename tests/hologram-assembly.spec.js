@@ -102,7 +102,7 @@ test('MOVE of one carries the other, so does the card MOVE of one, and one UNDO 
   await page.keyboard.press('Escape');
   await page.evaluate(() => setSelection([]));
   await clickAt(page, MID(ONE));
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('.hologram-copy[data-lit] [data-hologram-move]').first().click();
   if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
   const f = await h.planFrame(page);

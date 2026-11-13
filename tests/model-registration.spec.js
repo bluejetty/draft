@@ -238,7 +238,7 @@ test('the TYPES list: a phase box on, a suite box off; ALIGN leaves the suite wh
 test('a hologram card\'s ALIGN lines up that file alone, box or no box', async ({ page }) => {
   await openWith(page, withSuite());
   const before = await xz(page);
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-align="SUITE A"]').click();
   const after = await xz(page);
   expect(after[1]).not.toEqual(before[1]);

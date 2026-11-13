@@ -44,7 +44,8 @@ async function open(page) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-const chip = page => page.locator('[data-mode-hologram]');
+// PHOTO / HOLOGRAM are lines of the UNDERLAY chip's menu since 13 Nov.
+const chip = page => ({ click: () => h.underlayPick(page, 'hologram') });
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
   if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();

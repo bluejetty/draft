@@ -975,6 +975,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // and PDFs under a level, the ask that follows switching it on,
             // and the insert card. It places a tracing image -- the old
             // page's INSERT UNDERLAY, which the table now records as present.
+            // ONE UNDERLAY CHIP (jb, 13 Nov) where PHOTO and HOLOGRAM stood:
+            // its card's head (OPEN ANY FILE, CLOSE), the TRACE section for
+            // a DXF / DWG, HIDE PHOTOS on the PHOTO section, the DWG
+            // verdict's door to the converter, and the menu's TRACE line.
+            // Every one opens a file or a page; none draws.
+            'strip-underlay', 'underlay-open-any', 'underlay-close', 'strip-dxf',
+            'trace-dxf-upload', 'trace-dxf-convert', 'trace-dxf-later', 'trace-off', 'trace-dxf-page',
             'strip-trace', 'trace-upload', 'trace-later', 'trace-prev', 'trace-next',
             'trace-calibrate', 'trace-cal-apply', 'trace-go', 'trace-other', 'trace-cancel',
             // And a DXF's second button (Movie, 9 Oct): EDITABLE brings the
@@ -1143,6 +1150,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // TRACE's picker and its card's three boxes: scale, width, and
             // CALIBRATE's real length.
             'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length',
+            // The UNDERLAY card's any-kind picker and the TRACE section's DXF / DWG one (13 Nov).
+            'underlay-file', 'trace-dxf-file',
             // ROTATE's typed angle, which turns what is held and authors nothing.
             'rotate-angle',
             // THE CLASSIC EDITS' BOXES (9 Nov): OFFSET's distance, FILLET's
@@ -1273,7 +1282,15 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       expect(notepad.includes('.txt'), 'OPEN TXT takes a notepad').toBe(true);
       expect(notepad.includes('.draft') || notepad.includes('.pdf') || notepad.includes('image'),
         'and nothing else').toBe(false);
-      expect(await page.locator('input[type=file]').count()).toBe(4);
+      // AND TWO MORE (jb, 13 Nov), both on the UNDERLAY card: OPEN ANY FILE
+      // takes every kind the three above take and routes by the name, and
+      // the TRACE section's takes a DXF or DWG and nothing else.
+      const any = await page.locator('#underlay-file').getAttribute('accept');
+      expect(any.includes('.draft') && any.includes('.pdf') && any.includes('.png') && any.includes('.dxf'),
+        'OPEN ANY FILE takes a drawing, a picture, a PDF and a DXF').toBe(true);
+      const cad = await page.locator('#trace-dxf-file').getAttribute('accept');
+      expect(cad, 'the TRACE section takes CAD files only').toBe('.dxf,.dwg');
+      expect(await page.locator('input[type=file]').count()).toBe(6);
     });
 
   // T LATCHES THE T-SQUARE since 27 Oct (Movie: "get it working fairly

@@ -72,15 +72,35 @@ if (!window.DraftDxfReader) {
   // ── GROUP CODES ─────────────────────────────────────────────────────────
   // A DXF is pairs of lines: a number saying what the next line is, then the
   // value. Every object starts at a 0.
+  //
+  // A VALUE SPLIT OVER LINES IS FOLDED BACK (jb, 13 Nov: a DWG turned into a
+  // DXF by the converter page stopped the read at line 55441, "should be a
+  // group code and reads </Materi"). libredwg writes a MATERIAL's XML with
+  // the line breaks the DWG held, so the value runs on for several lines and
+  // every line after it lands on the wrong parity. A line where a code should
+  // be that is not a whole number is the rest of the value before it, not a
+  // broken file -- so it is joined on, and the pairs pick up again at the
+  // next real code. Only a file whose FIRST line is not a code is refused,
+  // which is what tells a text file from a DXF.
+  const isCode = line => /^[+-]?\d+$/.test(line.trim());
   function pairsOf(text) {
     const lines = String(text).split(/\r\n|\r|\n/);
     const out = [];
-    for (let i = 0; i + 1 < lines.length; i += 2) {
-      const code = parseInt(lines[i].trim(), 10);
-      if (!Number.isFinite(code)) {
-        throw new Error(`line ${i + 1} should be a group code and reads "${lines[i].trim().slice(0, 20)}"`);
+    let i = 0;
+    while (i + 1 < lines.length) {
+      // A blank line where a code should be is a stray line break, not a
+      // value: stepped over, the parity kept.
+      if (lines[i].trim() === '') { i += 1; continue; }
+      if (!isCode(lines[i])) {
+        if (!out.length) {
+          throw new Error(`line ${i + 1} should be a group code and reads "${lines[i].trim().slice(0, 20)}"`);
+        }
+        out[out.length - 1][1] += `\n${lines[i].replace(/\s+$/, '')}`;
+        i += 1;
+        continue;
       }
-      out.push([code, lines[i + 1].replace(/\s+$/, '')]);
+      out.push([parseInt(lines[i].trim(), 10), lines[i + 1].replace(/\s+$/, '')]);
+      i += 2;
     }
     return out;
   }

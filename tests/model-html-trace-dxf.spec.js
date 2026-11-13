@@ -55,7 +55,8 @@ async function open(page) {
   await page.goto('/MODEL.html?level=3');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
-const chip = page => page.locator('[data-mode-trace]');
+// PHOTO / HOLOGRAM are lines of the UNDERLAY chip's menu since 13 Nov.
+const chip = page => ({ click: () => h.underlayPick(page, 'trace') });
 const card = page => page.locator('#trace-insert');
 const pick = async (page, name, buffer) => {
   await chip(page).click();
@@ -119,8 +120,7 @@ test('a layer switches off and on from the TRACE card, one UNDO each', async ({ 
   await card(page).locator('[data-trace-go]').click();
   await expect.poll(async () => (await inks(page)).green).toBeGreaterThan(20);
 
-  // TRACE off and on again opens the card listing what is on the level.
-  await chip(page).click();
+  // PHOTO from the menu opens the card listing what is on the level.
   await chip(page).click();
   const furn = page.locator('#trace-ask [data-trace-layer="FURN"]');
   await expect(furn).toHaveAttribute('aria-pressed', 'true');
