@@ -113,7 +113,7 @@ const MUTATIONS = [
     c => c.replace('              const reach = Number.isFinite(along) && along > 0.05 ? along : fallback;\n',
       '              const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;\n')],
   ['a grown run end leans to its first station instead of rising plumb', 'cut-view.js',
-    c => c.replace('            if (top > s.base + fasciaFt + 0.05) ctx.lineTo(X(u0), Y(top));\n', '')],
+    c => c.replace('            if (top > s.base + s.fascia + 0.05) ctx.lineTo(X(u0), Y(top));\n', '')],
   // THE `min` IN garageGround HAS NO ROW, and the reason is written here so
   // nobody adds one and watches it survive: the faces of a 2 storey garage
   // arrive ground storey first, so "lowest" and "first seen" give the same

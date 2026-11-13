@@ -21,12 +21,12 @@ const MUTANTS = [
     with: "    if (turn >= 0) roof.edges",
     test: "a BREAK node DELETEd from a straight eave just goes; no SLOPED edge" },
   { file: 'model/15-panels.js', name: "the EDGE panel has no SLOPED chip",
-    find: "['gable', 'GABLE'], ['sloped', 'SLOPED']];",
-    with: "['gable', 'GABLE']];",
+    find: "['gable', 'GABLE'], ['sloped', 'SLOPED'], ['joint', 'JOINT']];",
+    with: "['gable', 'GABLE'], ['joint', 'JOINT']];",
     test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
   { file: 'model/15-panels.js', name: "a SLOPED edge reads as an eave in the page",
-    find: "  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' ? k : 'eave');",
-    with: "  const roofEdgeKind = k => (k === 'gable' ? k : 'eave');",
+    find: "  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' || k === 'joint' ? k : 'eave');",
+    with: "  const roofEdgeKind = k => (k === 'gable' || k === 'joint' ? k : 'eave');",
     test: "a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corner had, cut along it" },
   // THE FORMAT'S MUTANT LIVES IN proto/roof-types-harness.js: MODEL never
   // reads roofs through drawing-format, so here it was equivalent.

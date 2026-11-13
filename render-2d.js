@@ -537,9 +537,14 @@ if (!window.DraftRender2D) {
     const hidden = (env.roofHidden && !referenceColor) ? env.roofHidden(roof) : null;
     const hiddenOk = Array.isArray(hidden) && hidden.length === pts.length
       && hidden.some(list => Array.isArray(list) && list.length);
+    // AND A JOINT IS NOT AN EDGE OF THE SHEET (jb, 13 Nov 2026): it is the
+    // hip, valley or ridge a busted roof's piece shares with the next piece,
+    // so it leaves the solid stroke and is drawn below as the guide it was.
+    const joints = pts.map((_, index) => (roof.edges?.[index] === 'joint' ? [[0, 1]] : []));
     const omitted = pts.map((_, index) => [
       ...((Array.isArray(welds) && welds.length === pts.length && Array.isArray(welds[index])) ? welds[index] : []),
       ...((hiddenOk && Array.isArray(hidden[index])) ? hidden[index] : []),
+      ...joints[index],
     ]);
     const welded = omitted.some(list => list.length);
     if (!welded) {
@@ -669,8 +674,9 @@ if (!window.DraftRender2D) {
         ctx.font = '10px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        const isJoint = roof.edges[index] === 'joint';
         ctx.fillStyle = isGable ? roofColor : atAlpha(roofColor, 0.7);
-        ctx.fillText(isGable ? 'GABLE' : 'EAVE', (a.x + b.x) / 2 - dy / len * 12, (a.y + b.y) / 2 + dx / len * 12);
+        ctx.fillText(isGable ? 'GABLE' : (isJoint ? 'JOINT' : 'EAVE'), (a.x + b.x) / 2 - dy / len * 12, (a.y + b.y) / 2 + dx / len * 12);
       }
     }
     // Generated ridge / hip / valley guides.
@@ -684,6 +690,12 @@ if (!window.DraftRender2D) {
     env.roofSkeleton(roof)
       .flatMap(seg => (env.cutRoofSegment ? env.cutRoofSegment(seg, roof) : [seg])).forEach(seg => {
       const a = toS(seg.a), b = toS(seg.b);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+    // A piece's JOINT edges, as the guides they were before the bust.
+    pts.forEach((a, index) => {
+      if (!joints[index].length) return;
+      const b = pts[(index + 1) % pts.length];
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     });
     // CROSS GABLES (Movie, 18 Oct): the ridge and the two valleys as guides,

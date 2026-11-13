@@ -1491,6 +1491,13 @@
   // group, and Y arms as it always did. UNDO puts the group back.
   const bustByKey = () => {
     if (activeTool === 'assembly' || !selection.length) return false;
+    // AND Y ON A LOOSE ROOF BUSTS THE ROOF (jb, 13 Nov 2026: "Y for bust yes
+    // please"): one roof becomes its planes, in an assembly -- so the next Y
+    // on them busts that assembly, as Y always has.
+    if (selection.every(entry => entry.type === 'roof' && !groupOf(entry))) {
+      bustRoofs(selection.map(entry => entry.item));
+      return true;
+    }
     if (!selection.every(entry => groupOf(entry))) return false;
     const going = selectedGroups();
     if (!going.length) return false;

@@ -446,11 +446,11 @@ const MUTATIONS = [
   // ── THE LEGEND ──────────────────────────────────────────────────────
   // ── THE RECORD ──────────────────────────────────────────────────────
   ['the format turns SLOPED back into an eave, so a cut corner reopens square',
-    s => sub(s, 'drawing-format.js', "(roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')",
-      "(roof.edges[index] === 'gable')")],
+    s => sub(s, 'drawing-format.js', "(roof.edges[index] === 'gable' || roof.edges[index] === 'sloped' || roof.edges[index] === 'joint')",
+      "(roof.edges[index] === 'gable' || roof.edges[index] === 'joint')")],
   ['the format keeps any word it is handed as an edge',
-    s => sub(s, 'drawing-format.js', "(Array.isArray(roof?.edges) && (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')",
-      "(Array.isArray(roof?.edges) && roof.edges[index]")],
+    s => sub(s, 'drawing-format.js', "&& (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped' || roof.edges[index] === 'joint')",
+      "&& roof.edges[index]")],
   // ── THE RECORD -- WHAT A ROOF WEARS ──────────────────────────────────────────────────────
   ['the roofing is written onto every roof, so opening an old drawing is a migration',
     s => sub(s, 'drawing-format.js',
