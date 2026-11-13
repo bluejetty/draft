@@ -1027,9 +1027,16 @@
     }
     // HOUSE: the master on the shelf and a copy on every level, exactly as
     // a traced OUTLINE closes (model/10 commitOutline).
+    // AND THE GARAGE'S LOOP SAYS SO: with a type picked that hangs a garage
+    // on the house and the house walk already down, this walk is the garage
+    // (jb, 13 Nov 2026), as a second loop under the OUTLINE tool is. A
+    // DETACHED GARAGE order's one walk is the garage too.
     const OM = window.DraftOutlineMaster;
-    const master = OM.storageMaster(OM.masterFromLoop({ points: loop, shelfId: activeShelfId(), sourceLevelId: activeLevelId(),
-      newItemId: () => newDrawingItemId('outline'), newPointId: () => newDrawingItemId('op') }));
+    const spec = OM.masterFromLoop({ points: loop, shelfId: activeShelfId(), sourceLevelId: activeLevelId(),
+      newItemId: () => newDrawingItemId('outline'), newPointId: () => newDrawingItemId('op') });
+    rec.garage = wantsGarageNext() || isGarageChoice(window.ModelBuild.chosen());
+    if (rec.garage) spec.garage = true;
+    const master = OM.storageMaster(spec);
     const copies = OM.copiesForLevels(master, drawing.levels || [], { newItemId: () => newDrawingItemId('outline') });
     drawing.boneyardOutlines = drawing.boneyardOutlines || [];
     drawing.boneyardOutlines.push(master);
@@ -1107,6 +1114,16 @@
     paint();
     turtleRender();
     turtleSays(kind, kind === 'lines' ? made.length : turtleLoopPoints(w).length, w, 'drawn');
+    // A HOUSE WALK IS THE TRACED HOUSE (jb, 13 Nov 2026: "use the TURTLE or
+    // the manual OUTLINE to build his house outline, and then produce the
+    // autohouse at that point"). model/10 traceLanded says what comes next
+    // over the line above -- the garage, or the bone -- when a type is
+    // picked; with no type on the board it keeps the line above, and the
+    // bone's first press raises the board as it always has.
+    if (kind === 'house') {
+      const master = (drawing.boneyardOutlines || []).find(m => String(m.id) === String(rec.masterId));
+      if (master) traceLanded(master, made, { garage: rec.garage === true });
+    }
     return true;
   };
   // REGENERATE: the same items, moved to the new numbers from the same
@@ -1729,12 +1746,59 @@
   // type at all. Nothing reads buildType during a build, which is exactly why
   // that would have gone unnoticed -- the house would rise correctly into a
   // file that had forgotten what it was.
+  // THE GARAGE HALF OF THE ENTRY, in PROJECT's three words (planForEntry):
+  // 1 STOREY and 1 STOREY + GARAGE share a buildType, so the file needs this
+  // beside it to say which tile was pressed.
+  const planOfEntry = entry => (!entry?.garage ? 'none' : (entry.overGarage ? 'attachedRoomOver' : 'attached'));
   const stampBuildType = () => {
-    const type = chosen()?.entry?.type ?? null;
+    const entry = chosen()?.entry || null;
+    const type = entry?.type ?? null;
     if (drawing && type && drawing.buildType !== type) {
       drawing.buildType = window.DraftDrawingFormat.buildType(type);
       markDirty();
     }
+    // AND THE GARAGE PLAN WITH IT (jb, 13 Nov 2026), so the pick can be read
+    // back off the file -- by PROJECT's family row, and by this page on open
+    // (restorePickFromFile). It was written only on the way to PROJECT before.
+    const plan = entry?.type ? planOfEntry(entry) : null;
+    if (drawing && plan && drawing.garagePlan !== plan) {
+      drawing.garagePlan = plan;
+      markDirty();
+    }
+  };
+  // ── THE PICK, READ BACK OFF THE FILE ────────────────────────────────────
+  //
+  // jb, 13 Nov 2026: pick the type, ESC the board, go and set the PROJECT
+  // numbers (or reload), come back, draw the outline, build. The pressed tile
+  // was page state and a trip to PROJECT lost it: the bone said NOTHING TO
+  // BUILD YET and raised the board over a type the file already carried.
+  //
+  // READ THE WAY PROJECT'S FAMILY ROW READS IT (syncFamilyRow): the type, the
+  // garage plan, and MAIN FL's framing for the pair of bungalows that differ
+  // only there. A bare type with no garage plan -- a file stamped before the
+  // plan was written at the pick -- lights the plain tile of that type.
+  //
+  // ONLY ON A FILE WITH NO BUILDING STANDING: once the house is up the tile
+  // is spent (orderServed), and lighting it again would offer to build the
+  // house a second time. A classic sheet locks every tile and gets nothing.
+  const restorePickFromFile = () => {
+    if (!drawing || chosenEntryId || classicLocked()) return false;
+    const type = window.DraftDrawingFormat.buildType(drawing.buildType);
+    if (!type || window.DraftBuildingBodies.hasBuilding(drawing)) return false;
+    const plan = window.DraftDrawingFormat.garagePlan(drawing.garagePlan);
+    const framing = drawing.levelAssemblies?.[3]?.framing || 'platform';
+    const entries = BM.BUILD_MENU.flatMap(family => family.entries)
+      .filter(entry => entry.type === type && !entry.suite);
+    const entry = entries.find(e => planOfEntry(e) === (plan || 'none') && (e.framing || 'platform') === framing)
+      || entries.find(e => planOfEntry(e) === (plan || 'none'))
+      || null;
+    if (!entry) return false;
+    chosenEntryId = entry.id;
+    chosenSizeId = null;
+    syncBuildBar();
+    // THE TRACE KNOWS WHOSE HOUSE THE NEXT LOOP IS, and no tool is armed.
+    rememberOrder(chosen());
+    return true;
   };
 
   const pressEntry = entryId => {
@@ -2394,7 +2458,7 @@
     const picked = chosen();
     if (!picked?.entry || !drawing) return;
     const entry = picked.entry;
-    const plan = !entry.garage ? 'none' : (entry.overGarage ? 'attachedRoomOver' : 'attached');
+    const plan = planOfEntry(entry);
     if (entry.type && drawing.garagePlan !== plan) { drawing.garagePlan = plan; markDirty(); }
     const card = PROJECT_CARD[picked.family?.id] || null;
     Promise.resolve(save()).catch(() => false).then(() => {
@@ -2634,10 +2698,28 @@
     history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
     return from;
   })();
-  document.getElementById('dt-close').addEventListener('click', () => {
+  // LEAVING THE WINDOW WITH A TYPE PICKED PUTS THE OUTLINE TOOL DOWN (jb, 13
+  // Nov 2026: "allow him to ESC out of the AUTOHOUSE / DRIVETHRU menu ... and
+  // then allow him to either change the project info ... or use the TURTLE
+  // or the manual OUTLINE"). The tile press arms the trace (armOutline) and
+  // the board going down left it in his hand: OUTLINE — NEXT CORNER on the
+  // strip and a rubber band following the mouse over a sheet he meant to
+  // draw on his own way. The type stays picked and the bone keeps pulsing;
+  // the strip says what the choice is. ONLY an empty trace is put down: a
+  // corner already placed is a gesture in progress, and ESC on the sheet
+  // already owns what happens to that (model/16).
+  const PICKED_LINE = label => `ONE ${label} picked. Draw its outline with OUTLINE (U) or TURTLE, `
+    + 'or set the PROJECT numbers first, then press the bone to build it.';
+  const leaveWindow = () => {
     setSign(false);
     boneFoot.focus();
-  });
+    const picked = chosen();
+    if (!picked?.entry || activeTool !== 'outline' || outlineCorners.length) return;
+    setTool(RESTING_TOOL);
+    sayOnStrip(PICKED_LINE(picked.entry.label));
+    paint();
+  };
+  document.getElementById('dt-close').addEventListener('click', leaveWindow);
   // THE SIGN'S BONE IS THE ORDER, not the drafter's outline -- the other
   // seam, and nothing is listening on it yet because neither the premade
   // designs nor the guided trace exist. A press with nothing behind it is
@@ -2897,7 +2979,6 @@
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape' || signShut()) return;
     event.stopPropagation();
-    setSign(false);
-    boneFoot.focus();
+    leaveWindow();
   }, true);
 
