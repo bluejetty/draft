@@ -696,6 +696,10 @@ if (!window.DraftLevelAssembly) {
   };
   const roofsFollowingProject = (roofs, before, after, offsetVariable) => {
     if (!Array.isArray(roofs) || !roofs.length || typeof offsetVariable !== 'function') return null;
+    // HAND ROOF (jb, 13 Nov 2026): with the file's `autoRoof` switch off, the
+    // PROJECT page's overhang and pitch move nothing -- every roof is the
+    // drafter's as drawn, whatever its `follows` still says.
+    if (before?.autoRoof === false || after?.autoRoof === false) return null;
     const wanted = {};
     ROOF_ROWS.forEach(row => {
       const was = projectRoofFor(before, row);

@@ -1649,7 +1649,12 @@
     // ROOF PLAN ONLY: roofs() is empty on any other level, and the tops of
     // walls drawn there read as walls (a room over the garage showed up as a
     // wall through the garage on MAIN FL).
-    const tops = G.roofPlanWalls && drawing && roofs().length ? G.roofPlanWalls({ walls: drawing.walls || [],
+    // AND ON THE ROOF PLAN WITH NO ROOF YET (jb, 13 Nov 2026, on HAND ROOF:
+    // "will need the 'roof gables' to show (ceiling lines of 2nd fl)"): the
+    // wall tops are what a hand roof is drawn to, so they show on the ROOF
+    // level whether or not a roof stands on them.
+    const tops = G.roofPlanWalls && drawing && (roofs().length || activeLevelId() === ROOF_LEVEL_ID)
+      ? G.roofPlanWalls({ walls: drawing.walls || [],
       outlines: drawing.outlines || [], floors: drawing.floors || [], levels: drawing.levels || [] }) : [];
     if (R.drawWallTops2D) {
       R.drawWallTops2D(ctx, toS, tops, {

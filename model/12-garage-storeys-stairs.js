@@ -271,6 +271,14 @@
   // made that way, and a bone press is not permission to restructure it.
   const levelPresent = id => (drawing?.levels || [])
     .some(level => Number(level.id) === id);
+  // AUTO ROOF / HAND ROOF (jb, 13 Nov 2026: "kindof like the AUTODIMS on and
+  // HAND DIMS have a ability to TURN OFF THE AUTOROOF and do a HANDROOF").
+  // The switch is the file's (`autoRoof`, false = HAND ROOF; absent = AUTO,
+  // so every file made before it reads as it always did). With HAND ROOF on,
+  // the bone raises no roof over a house or a detached garage and the
+  // PROJECT page leaves every roof as drawn (level-assembly
+  // roofsFollowingProject); the drafter draws them.
+  const autoRoofOn = () => drawing?.autoRoof !== false;
 
   // THE CONCRETE UNDER THE HOUSE: walls, slab and footings, all on FOUNDATION.
   //
@@ -4755,7 +4763,9 @@
       const ring = G.loopWithoutJogs ? G.loopWithoutJogs(cleaned.points).points : cleaned.points;
       return !!G.roofEndAttachment(ring);
     };
-    if (levelPresent(ROOF_LEVEL_ID)) {
+    if (levelPresent(ROOF_LEVEL_ID) && !autoRoofOn()) {
+      parts.push('no roof (HAND ROOF is on)');
+    } else if (levelPresent(ROOF_LEVEL_ID)) {
       // THE ROOF'S OWN LOOP, which is NOT always the house's body. A
       // bungalow with a garage is roofed over the perimeter of both -- the
       // design says so through `houseRoof`, because where the two bodies
