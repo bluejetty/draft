@@ -915,6 +915,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // AUTO DIMS / HAND DIMS beside the north arrow (Movie, 18 Oct):
             // each kind of string shown or hidden on the sheet.
             'AUTO DIMS', 'HAND DIMS',
+            // AUTO ROOF / HAND ROOF on the ROOF level's foot lane (jb, 13
+            // Nov: "TURN OFF THE AUTOROOF and do a HANDROOF"): the file's
+            // switch on whether the bone and PROJECT touch the roofs. It
+            // writes one key and makes nothing, so no absence row moves.
+            'AUTO ROOF', 'HAND ROOF',
             // AND HOUSE FOOTPRINT (Movie, 6 Nov: "the AUTOHOUSE should be
             // optional"): the building shown or hidden on the SITE plan. It
             // writes a switch in the file and makes nothing, so no absence
