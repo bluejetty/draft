@@ -633,11 +633,15 @@ async function armedTypeAndLoop(page, corners = SQUARE) {
   await pickHouseType(page);
   await page.locator('#dt-close').click();
   await page.waitForTimeout(150);
-  // NO `U` HERE. Picking a type at the window already ARMS the trace -- the
-  // old page's _pressBuildType "does two things, records the type AND arms
-  // the outline tool" -- and pressing the armed key again puts it DOWN, which
-  // is the register's own rule. An earlier draft of this helper pressed it
-  // and traced with SELECT in hand.
+  // `U` IS PRESSED AGAIN NOW. Picking a type at the window ARMS the trace --
+  // the old page's _pressBuildType "does two things, records the type AND
+  // arms the outline tool" -- and until 13 Nov 2026 this helper traced
+  // straight off that. jb then ruled that leaving the window (ESC or the X)
+  // with a type picked puts the empty OUTLINE tool DOWN, so he can set the
+  // PROJECT numbers or walk the house with TURTLE instead
+  // (tests/outline-to-autohouse.spec.js); a drafter who wants the tool back
+  // picks it up with its key, and so does this.
+  await page.keyboard.press('U');
   await traceLoop(page, corners);
 }
 
