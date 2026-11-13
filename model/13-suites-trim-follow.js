@@ -1361,7 +1361,16 @@
   // a photo, and CALIBRATE -- two clicks on a line you know and its real
   // length. The binary goes to the shared store's 'underlays' bucket and the
   // drawing keeps the placement, so either page draws what the other placed.
-  const traceChip = strip.querySelector('[data-mode-trace]');
+  // THE UNDERLAY CHIP AND ITS MENU (jb, 13 Nov). PHOTO and HOLOGRAM are
+  // lines of the menu now, keeping their ids and data-mode names, so they
+  // are found on the document rather than on the strip.
+  const underlayChip = strip.querySelector('[data-mode-underlay]');
+  const underlayAsk = document.getElementById('underlay-ask');
+  const underlayMenu = document.getElementById('underlay-menu');
+  const underlayFile = document.querySelector('[data-underlay-file]');
+  const traceDxfAsk = document.getElementById('trace-dxf-ask');
+  const traceDxfFile = document.querySelector('[data-trace-dxf-file]');
+  const traceChip = document.querySelector('[data-mode-trace]');
   const traceAsk = document.getElementById('trace-ask');
   const traceCard = document.getElementById('trace-insert');
   const traceFile = document.querySelector('[data-trace-file]');
@@ -1376,10 +1385,21 @@
     const level = (drawing?.levels || []).find(l => Number(l.id) === activeLevelId());
     return level ? levelLabel(level.id, level.name) : 'this level';
   };
+  const underlaySections = () => (underlayAsk ? [...underlayAsk.querySelectorAll('[data-underlay-section]')] : []);
+  const underlayCardUp = () => underlaySections().some(section => !section.hidden);
+  // LIT WHILE ANYTHING IS UNDER THE LEVEL: photos on, or a hologram loaded.
+  // Pressed while its card is up.
+  function setUnderlayChip() {
+    if (!underlayChip) return;
+    underlayChip.classList.toggle('lit', traceOn || holograms().length > 0);
+    underlayChip.setAttribute('aria-pressed', underlayCardUp() ? 'true' : 'false');
+  }
   const setTraceChip = () => {
-    if (!traceChip) return;
-    traceChip.classList.toggle('lit', traceOn);
-    traceChip.setAttribute('aria-pressed', traceOn ? 'true' : 'false');
+    if (traceChip) {
+      traceChip.classList.toggle('lit', traceOn);
+      traceChip.setAttribute('aria-pressed', traceOn ? 'true' : 'false');
+    }
+    setUnderlayChip();
   };
   setTraceChip();
   const setTraceOn = on => {
@@ -1412,6 +1432,10 @@
     tq('[data-trace-go]').textContent = isDxf ? 'NON-EDITABLE' : 'INSERT';
     tq('[data-trace-editable]').hidden = !ready || !isDxf;
     tq('[data-trace-other]').hidden = !traceScan && !status;
+    // THE DOOR TO THE CONVERTER, only on the DWG verdict below: the card used
+    // to name "the DXF page" with nothing to press (jb, 13 Nov: "i tried both
+    // DWG and DXF both didn't work").
+    tq('[data-trace-dxf-page]').hidden = true;
     if (!ready) return;
     const scan = traceScan;
     tq('[data-trace-preview]').src = scan.previewUrl;
@@ -1556,7 +1580,8 @@
     if (/\.dwg$/i.test(file.name)) {
       // THE CONVERTER IS ONE PAGE OVER (Movie, 11 Oct: roughdrafter.com/DXF),
       // a separate program that hands its DXF back here through ?trace=handoff.
-      showTraceCard(`${file.name} is a DWG \u2014 turn it into a DXF on the DXF page (DXF/ on this site), then pick that.`);
+      showTraceCard(`${file.name} is a DWG \u2014 turn it into a DXF on the DXF page, then pick that. The page can hand the DXF straight back here.`);
+      tq('[data-trace-dxf-page]').hidden = false;
       return;
     }
     if (/\.dxf$/i.test(file.name)) {
@@ -1849,13 +1874,10 @@
   };
 
   if (traceChip) {
-    traceChip.addEventListener('click', () => {
-      if (!drawing) return;
-      if (traceOn) { setTraceOn(false); return; }
-      setTraceOn(true);
-      // ON ASKS whether to bring in another, naming what is already there.
-      openTraceAsk();
-    });
+    // PHOTO, from the menu: the photos come on and the PHOTO section opens
+    // alone. HIDE PHOTOS on that section is what turns them off (the chip
+    // toggled until 13 Nov, when it became one line of the UNDERLAY menu).
+    traceChip.addEventListener('click', () => openUnderlayCard('photo'));
   }
   // ── MOVE AND DELETE (Movie, 7 Oct) ──────────────────────────────────────
   //
@@ -1969,22 +1991,126 @@
   // and keeps where it sits. Every one of them is one UNDO.
   const hologramFile = document.querySelector('[data-hologram-file]');
   const hologramAsk = document.getElementById('hologram-ask');
-  const hologramChip = strip.querySelector('[data-mode-hologram]');
-  const closeHologramCards = () => { traceAsk.hidden = true; if (hologramAsk) hologramAsk.hidden = true; setHologramChip(); };
+  const hologramChip = document.querySelector('[data-mode-hologram]');
+  // CLOSE TAKES THE WHOLE CARD DOWN, every section: the card is one thing
+  // to the drafter even when it shows one kind.
+  const closeUnderlayCard = () => {
+    underlaySections().forEach(section => { section.hidden = true; });
+    setHologramChip();
+    setUnderlayChip();
+  };
+  const closeHologramCards = closeUnderlayCard;
   function setHologramChip() {
-    if (!hologramChip) return;
-    hologramChip.classList.toggle('lit', holograms().length > 0);
-    hologramChip.setAttribute('aria-pressed', hologramAsk && !hologramAsk.hidden ? 'true' : 'false');
+    if (hologramChip) {
+      hologramChip.classList.toggle('lit', holograms().length > 0);
+      hologramChip.setAttribute('aria-pressed', hologramAsk && !hologramAsk.hidden ? 'true' : 'false');
+    }
+    setUnderlayChip();
   }
-  if (hologramChip && hologramAsk) {
-    hologramChip.addEventListener('click', () => {
-      if (!drawing) return;
-      if (!hologramAsk.hidden) { closeHologramCards(); return; }
-      traceAsk.hidden = true;
+  // THE CARD, by kind: 'all' from a press on the chip, one kind from a line
+  // of its menu (jb, 13 Nov: "if they just click it it will offer them to
+  // open all items, if they select one certain type only show them that
+  // type to open"). PHOTO turns the photos on as the old chip did, so what
+  // the list names is also on the sheet.
+  const openUnderlayCard = kind => {
+    if (!drawing || !underlayAsk) return;
+    closeUnderlayCard();
+    const all = kind === 'all';
+    if (all || kind === 'photo') {
+      if (!traceOn) setTraceOn(true);
+      openTraceAsk();
+    }
+    if ((all || kind === 'dxf') && traceDxfAsk) {
+      traceDxfAsk.querySelector('[data-trace-dxf-level]').textContent = traceLevelName();
+      traceDxfAsk.hidden = false;
+    }
+    if ((all || kind === 'hologram') && hologramAsk) {
       hologramAsk.hidden = false;
       renderHologramList();
+    }
+    const head = underlayAsk.querySelector('[data-underlay-head]');
+    if (head) {
+      head.querySelector('[data-underlay-level]').textContent = traceLevelName();
+      head.hidden = !all;
+    }
+    setHologramChip();
+  };
+  const closeUnderlayMenu = () => { if (underlayMenu && !underlayMenu.hidden) underlayMenu.hidden = true; };
+  const openUnderlayMenu = (clientX, clientY) => {
+    if (!underlayMenu || !drawing) return;
+    underlayMenu.hidden = false;
+    const w = underlayMenu.offsetWidth, hh = underlayMenu.offsetHeight;
+    underlayMenu.style.left = `${Math.max(4, Math.min(clientX, window.innerWidth - w - 4))}px`;
+    underlayMenu.style.top = `${Math.max(4, Math.min(clientY, window.innerHeight - hh - 4))}px`;
+  };
+  if (underlayChip) {
+    // A PRESS: the card with every kind, or down again if it is up.
+    underlayChip.addEventListener('click', () => {
+      if (!drawing) return;
+      closeUnderlayMenu();
+      if (underlayCardUp()) { closeUnderlayCard(); paint(); return; }
+      openUnderlayCard('all');
     });
+    // A RIGHT-CLICK: the three lines, under the chip.
+    underlayChip.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (underlayMenu && !underlayMenu.hidden) { closeUnderlayMenu(); return; }
+      const r = underlayChip.getBoundingClientRect();
+      openUnderlayMenu(r.left, r.bottom + 2);
+    });
+    window.addEventListener('pointerdown', e => {
+      if (!underlayMenu || underlayMenu.hidden || underlayMenu.contains(e.target) || e.target === underlayChip) return;
+      closeUnderlayMenu();
+    }, true);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && underlayMenu && !underlayMenu.hidden) { closeUnderlayMenu(); e.stopPropagation(); }
+    }, true);
+    underlayMenu?.querySelectorAll('[role="menuitem"]').forEach(item => item.addEventListener('click', closeUnderlayMenu));
+  }
+  const dxfItem = document.querySelector('[data-mode-dxf]');
+  if (dxfItem) dxfItem.addEventListener('click', () => openUnderlayCard('dxf'));
+  // THE CONVERTER IS ONE PAGE OVER and comes back through ?trace=handoff, so
+  // the drawing is asked about first like any other way off the page.
+  const goToDxfPage = () => guardUnsaved('opening the DXF page', () => {
+    location.href = new URL('DXF/', location.href).href;
+  });
+  if (hologramChip && hologramAsk) {
+    hologramChip.addEventListener('click', () => openUnderlayCard('hologram'));
     hologramAsk.querySelector('[data-hologram-close]').addEventListener('click', closeHologramCards);
+  }
+  if (underlayAsk) {
+    underlayAsk.querySelector('[data-underlay-close]')?.addEventListener('click', () => { closeUnderlayCard(); paint(); });
+    // OPEN ANY FILE: the kind is read off the name. A .draft is a hologram,
+    // a DXF or DWG goes to the TRACE card, anything else is a photo or PDF.
+    underlayAsk.querySelector('[data-underlay-any]')?.addEventListener('click', () => {
+      closeUnderlayCard();
+      if (underlayFile) underlayFile.click();
+    });
+    traceDxfAsk?.querySelector('[data-trace-dxf-upload]')?.addEventListener('click', () => {
+      closeUnderlayCard();
+      if (traceDxfFile) traceDxfFile.click();
+    });
+    traceDxfAsk?.querySelector('[data-trace-dxf-page-ask]')?.addEventListener('click', () => { closeUnderlayCard(); goToDxfPage(); });
+    traceDxfAsk?.querySelector('[data-trace-dxf-later]')?.addEventListener('click', () => { closeUnderlayCard(); paint(); });
+  }
+  const isHologramFile = file => /\.(draft|json)$/i.test(file.name) || file.type === 'application/json';
+  if (underlayFile) {
+    underlayFile.addEventListener('change', () => {
+      const file = underlayFile.files && underlayFile.files[0];
+      underlayFile.value = '';
+      if (!file || !drawing) return;
+      if (isHologramFile(file)) { takeHologramFile(file, null); return; }
+      traceDropAt = null;
+      inspectTraceFile(file);
+    });
+  }
+  if (traceDxfFile) {
+    traceDxfFile.addEventListener('change', () => {
+      const file = traceDxfFile.files && traceDxfFile.files[0];
+      traceDxfFile.value = '';
+      traceDropAt = null;
+      if (file) inspectTraceFile(file);
+    });
   }
   // A DOUBLE-CLICK ON A HOLOGRAM OPENS ITS CARD (Movie, 18 Oct: "when a user
   // double clicks on a HOLOGRAM can you bring up this menu for him make it
@@ -2753,12 +2879,17 @@
     }
     return suiteOnFloor(parsed);
   };
-  hologramFile.addEventListener('change', async () => {
+  hologramFile.addEventListener('change', () => {
     const file = hologramFile.files && hologramFile.files[0];
     hologramFile.value = '';
     const refreshing = hologramRefreshing;
     hologramRefreshing = null;
     if (!file || !drawing) return;
+    takeHologramFile(file, refreshing);
+  });
+  // ONE READER FOR BOTH DOORS: the HOLOGRAM section's BRING IN and the
+  // UNDERLAY card's OPEN ANY FILE (13 Nov) hand their .draft here.
+  async function takeHologramFile(file, refreshing) {
     const parsed = await readHologramFile(file);
     if (!parsed) return;
     const F = window.DraftDrawingFormat;
@@ -2785,7 +2916,7 @@
       return;
     }
     if (!bringInHologram(parsed, name)) sayOnStrip(`${file.name} is not a drawing this page can read.`);
-  });
+  }
   // A PARSED FILE INTO A HOLOGRAM IN HAND -- the upload's own tail, shared
   // since 23 Oct with a shelf square dragged onto the plan. Null when the
   // file is not a drawing.
@@ -3283,9 +3414,11 @@
   }, true);
 
   // Closed through paint(), which is what shows UNDO again once no card is up.
-  traceAsk.querySelector('[data-trace-later]').addEventListener('click', () => { traceAsk.hidden = true; paint(); });
+  traceAsk.querySelector('[data-trace-later]').addEventListener('click', () => { closeUnderlayCard(); paint(); });
+  // HIDE PHOTOS (13 Nov): what the second press on the old PHOTO chip did.
+  traceAsk.querySelector('[data-trace-off]').addEventListener('click', () => { closeUnderlayCard(); setTraceOn(false); });
   traceAsk.querySelector('[data-trace-upload]').addEventListener('click', () => {
-    traceAsk.hidden = true;
+    closeUnderlayCard();
     traceFile.click();
   });
   traceFile.addEventListener('change', () => {
@@ -3337,6 +3470,9 @@
   });
   tq('[data-trace-cancel]').addEventListener('click', closeTraceCard);
   tq('[data-trace-other]').addEventListener('click', () => traceFile.click());
+  // The converter is one page over and comes back through ?trace=handoff, so
+  // the drawing is asked about first like any other way off the page.
+  tq('[data-trace-dxf-page]').addEventListener('click', () => { closeTraceCard(); goToDxfPage(); });
   tq('[data-trace-go]').addEventListener('click', () => { insertTrace(); });
   tq('[data-trace-editable]').addEventListener('click', () => {
     if (traceScan?.kind === 'dxf') insertTraceDxfEditable(traceScan);

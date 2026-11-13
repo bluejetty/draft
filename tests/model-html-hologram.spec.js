@@ -35,7 +35,8 @@ async function open(page, drawing = BLANK) {
   await page.goto('/MODEL.html?level=3');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
-const chip = page => page.locator('[data-mode-hologram]');
+// PHOTO / HOLOGRAM are lines of the UNDERLAY chip's menu since 13 Nov.
+const chip = page => ({ click: () => h.underlayPick(page, 'hologram') });
 // The card covers SAVE and UNDO while it is up, as it does for images.
 const closeCard = async page => {
   if (await page.locator('#trace-ask').isVisible()) await page.locator('[data-trace-later]').click();
@@ -511,13 +512,13 @@ test('the PHOTO card lists pictures only; the holograms are on their own card', 
   await bringIn(page);
   await page.keyboard.press('Escape');
   if (await page.locator('#hologram-ask').isVisible()) await page.locator('[data-hologram-close]').click();
-  await page.locator('[data-mode-trace]').click();
+  await h.underlayPick(page, 'trace');
   const photo = page.locator('#trace-ask');
   await expect(photo).toBeVisible();
   await expect(photo.locator('[data-hologram-list], [data-hologram-count], [data-hologram-upload]')).toHaveCount(0);
   await expect(photo).not.toContainText('HOLOGRAM');
   await photo.locator('[data-trace-later]').click();
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('#hologram-ask [data-hologram-count]')).toContainText('1 hologram');
   await expect(page.locator('#hologram-ask [data-hologram-ask-upload]')).toBeVisible();
 });

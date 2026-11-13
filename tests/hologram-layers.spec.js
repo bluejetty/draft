@@ -58,7 +58,7 @@ const namesDrawn = page => page.evaluate(() => {
   return window.__names;
 });
 const card = async page => {
-  if (!await page.locator('#hologram-ask').isVisible()) await page.locator('[data-mode-hologram]').click();
+  if (!await page.locator('#hologram-ask').isVisible()) await h.underlayPick(page, 'hologram');
   await expect(page.locator('#hologram-ask [data-hologram-layers]')).toBeVisible();
 };
 const target = (page, value) => page.locator('[data-hologram-layer-target]').selectOption(value);

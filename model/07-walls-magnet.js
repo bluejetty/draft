@@ -2436,7 +2436,8 @@
     const roofPlateFt = assemblyFor(levelId).wallHeightFt + (wantsRoom
       ? LAsm.levelFloorFt(assemblyFor(upperId)) + assemblyFor(upperId).wallHeightFt
       : 0);
-    const roof = levelPresent(ROOF_LEVEL_ID)
+    // AND NONE WITH HAND ROOF ON (autoRoofOn, model/12): the drafter roofs it.
+    const roof = levelPresent(ROOF_LEVEL_ID) && autoRoofOn()
       ? raiseRoofOver(corners, {
         garage: true,
         follows: 'detachedGarage',

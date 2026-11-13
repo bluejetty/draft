@@ -65,7 +65,7 @@ async function saveShelfAs(page, kind) {
   return JSON.parse(require('fs').readFileSync(await download.path(), 'utf8'));
 }
 async function bringIn(page, file, name = 'SHELF 1.draft') {
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) });
   // IT ARRIVES IN HAND; Esc leaves it where the file had it.
@@ -127,7 +127,7 @@ test('a HOLOGRAM file brought in on the SITE plan lands on the SITE and is drawn
   expect(d.holograms[0].mode).toBeUndefined();
   expect(await inkInside(page), 'the outline is on the screen').toBeGreaterThan(before + 0.01);
   // The card names the level it stands on, with LEVEL ▲▼ to walk the ladder.
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('[data-hologram-where]').first()).toContainText('SITE');
   await expect(page.locator('[data-hologram-name]').first()).toContainText('HOLOGRAM · SHELF 1');
   await page.locator('[data-hologram-where]').first().click();

@@ -106,7 +106,7 @@ test('the saved shelf comes into another plan as a suite, standing on its floor'
   // INTO A PLAN WITH NOTHING ON ITS SHELVES.
   const plan = { ...drawing(), walls: drawing().walls.filter(w => w.levelId === 3), fenestrations: [], lines: [] };
   await open(page, plan);
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles({ name: 'SHELF 1.draft', mimeType: 'application/json', buffer: Buffer.from(text) });
   await page.keyboard.press('Escape');
@@ -123,7 +123,7 @@ test('EDIT ON SHELF puts a suite\'s drawing on a new shelf named for it, its win
   const plan = { ...drawing(), walls: drawing().walls.filter(w => w.levelId === 3), fenestrations: [], lines: [],
     holograms: [{ id: 'h1', name: '2 bedroom', mode: 'suite', x: 0, z: 0, angleDeg: 0, pivotX: 10, pivotZ: 7.5, source: SUITE }] };
   await open(page, plan);
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-edit-shelf="h1"]').click();
   await expect(page.locator('[data-shelf="3"]')).toHaveText('2 BEDROOM');
   const d = await saved(page);

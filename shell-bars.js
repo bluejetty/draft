@@ -442,54 +442,24 @@ if (!window.DraftShellBars) {
         <path d="M3.5 4.75 H12.5"></path>
       </svg>
     </button>
-    <!-- PHOTO: a photo or PDF under the plan to draw over (Movie, 7 Oct:
-         "make it an INSTRUMENT PANEL. when you press it it turn ON and if
-         there is images already loaded it will show them, click it again and
-         it turns off the images turn off").
-
-         IT WAS A BLOCK OF LOTS SEEN FROM THE AIR, drawn to his first
-         description, and it did not say what it was: six filled rectangles
-         either side of a heavy line read as zigzag at 15px, not as an aerial
-         photo, and nothing in it suggested you could bring a picture IN.
-         Movie, 14 Oct: "for the TRACE - it has a bunch of zigzaps can you
-         take this sailboat as inspiration for that TRACE - instrument design
-         to suggest they can upload a PHOTO or other type. maybe we should
-         rename it PHOTO rather than TRACE", then "leave the outer frame only
-         and then put the sailboat design on the inside of the rounded outer
-         frame".
-
-         SO THE FRAME IS THE ONE THAT WAS ALREADY THERE, to the pixel, and
-         what changed is what stands inside it: a sailboat, which is a
-         PICTURE of something rather than a plan of it -- the whole point of
-         the chip being that it takes a snapshot as readily as a survey.
-
-         FILLED SAILS AND A FILLED HULL, measured rather than chosen: at the
-         15px this actually renders at, stroked sails close up into a blob
-         and the hull welds itself to the waterline. Rendered side by side at
-         15, 22 and 88px before picking. -->
-    <button type="button" id="strip-trace" class="chip" data-mode-trace aria-pressed="false"
-      title="PHOTO — show the photos and PDFs under this level, and bring in another to draw over">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-        stroke-width="1.2" stroke-linejoin="round" aria-hidden="true">
-        <rect x="1" y="1" width="14" height="14" rx="1"></rect>
-        <path d="M2.3 11.5 H13.7" stroke-width="0.8"></path>
-        <path d="M8 3.7 V10" stroke-width="0.9"></path>
-        <path d="M7.35 4.7 L7.35 9.9 L4.5 9.9 Z" fill="currentColor" stroke="none"></path>
-        <path d="M8.65 5.9 L8.65 9.9 L11.5 9.9 Z" fill="currentColor" stroke="none"></path>
-        <path d="M4 10.4 H12 L10.6 12.2 H5.4 Z" fill="currentColor" stroke="none"></path>
-      </svg>
-    </button>
-    <!-- HOLOGRAM (Movie, 18 Oct): "an area on the MODEL AREA that shows which
-         HOLOGRAMS are loaded (maybe up by the PHOTO IMAGE loading button we
-         could have a HOLOGRAM button". A house over a house, the back one
-         dashed: another drawing under this one. Lit while any is loaded. -->
-    <button type="button" id="strip-hologram" class="chip" data-mode-hologram aria-pressed="false"
-      title="HOLOGRAM — the .draft files shown under this one (an existing house, or SUITES), and bring in another">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-        stroke-width="1.2" stroke-linejoin="round" aria-hidden="true">
-        <path d="M5 7 L9 3.5 L13 7 V12 H5 Z" stroke-dasharray="1.4 1.1" stroke-width="0.9"></path>
-        <path d="M2.5 9 L6.5 5.5 L10.5 9 V14.5 H2.5 Z"></path>
-        <path d="M5.5 14.5 V11.5 H7.5 V14.5" stroke-width="0.9"></path>
+    <!-- UNDERLAY (jb, 13 Nov: "lets combine the PHOTO TRACE and HOLOGRAM
+         buttons and make them a right click to see the 3 options" ... "if
+         they just click it it will offer them to open all items, if they
+         select one certain type only show them that type to open" ... "use
+         the monopoly house" for the picture). ONE chip where PHOTO and
+         HOLOGRAM stood: a press opens the UNDERLAY card with every kind on
+         it -- the level's photos, a DXF / DWG to trace, the holograms -- and
+         OPEN ANY FILE, which reads the kind off the file. A right-click is
+         the short way: a three-line menu, PHOTO / TRACE / HOLOGRAM, and the
+         card shows that kind alone. Lit while photos are on or a hologram is
+         loaded. The old chips' ids and data-mode names live on as the menu's
+         lines (MODEL.html #underlay-menu), so every spec that pressed them
+         still finds them. -->
+    <button type="button" id="strip-underlay" class="chip" data-mode-underlay aria-pressed="false"
+      title="UNDERLAY — photos, PDFs, DXF / DWG and holograms under this level. Press to open any kind; right-click for one">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" stroke="none" aria-hidden="true">
+        <path d="M1.5 8.6 L8 2.4 L14.5 8.6 V14.5 H1.5 Z"></path>
+        <rect x="10.6" y="3.2" width="1.9" height="3.4"></rect>
       </svg>
     </button>
     <!-- THE TURTLE LAMP (Movie, 10 Nov: "a little turtle illuminated thing

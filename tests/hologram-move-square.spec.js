@@ -43,7 +43,8 @@ async function open(page, drawing = BLANK) {
   await page.goto('/MODEL.html?level=3');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
-const chip = page => page.locator('[data-mode-hologram]');
+// PHOTO / HOLOGRAM are lines of the UNDERLAY chip's menu since 13 Nov.
+const chip = page => ({ click: () => h.underlayPick(page, 'hologram') });
 const tsquare = page => page.locator('[data-mode-tsquare]');
 const foot = page => page.locator('[data-mode-scale]');
 const closeCard = async page => {

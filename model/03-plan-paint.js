@@ -1526,8 +1526,73 @@
       if (chip) Object.assign(chip.style, { left: `${left}px`, top: `${top}px`, width: `${side}px`, height: `${side}px` });
     });
     seatDimsShow(northDock);
+    seatRoofMode(northDock);
     syncNorthHands();
   };
+  // ── AUTO ROOF / HAND ROOF ──────────────────────────────────────────────
+  //
+  // jb, 13 Nov 2026: "the autoroof is really cool for doing the quick house
+  // but unless it is nearly perfect at the begining its hard to modify. i'd
+  // like the option to - kindof like the AUTODIMS on and HAND DIMS have a
+  // ability to TURN OFF THE AUTOROOF and do a HANDROOF."
+  //
+  // Two chips on the ROOF level, left of the dims chips on the foot lane,
+  // one lit. The switch is the FILE'S (`autoRoof`: false = HAND ROOF, absent
+  // = AUTO), so it is saved with the drawing and LAYOUT agrees. HAND ROOF
+  // means: the bone raises no roof (model/12 autoRoofOn) and the PROJECT page
+  // reshapes none (level-assembly roofsFollowingProject). The roofs already
+  // on the sheet stay exactly as they are either way -- the switch is about
+  // what the machine may do next, not about what is drawn; DELETE and BUST
+  // ROOF are the drafter's tools for those.
+  var roofModeBox = null;
+  function seatRoofMode(dock) {
+    if (!roofModeBox) {
+      roofModeBox = document.createElement('div');
+      roofModeBox.id = 'roof-mode';
+      roofModeBox.dataset.roofMode = '';
+      [['auto', 'AUTO ROOF', 'AUTO ROOF -- the house build raises the roof, and PROJECT reshapes roofs that follow it'],
+        ['hand', 'HAND ROOF', 'HAND ROOF -- the build raises no roof and PROJECT leaves every roof as drawn; draw them yourself']]
+        .forEach(([kind, label, title]) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'sel-chip';
+          btn.dataset.roofMode = kind;
+          btn.textContent = label;
+          btn.title = title;
+          btn.addEventListener('click', () => {
+            if (!drawing) return;
+            const wantHand = kind === 'hand';
+            if ((drawing.autoRoof === false) === wantHand) return;
+            const before = drawing.autoRoof;
+            if (wantHand) drawing.autoRoof = false; else delete drawing.autoRoof;
+            undoStack.push({ kind: 'node', undo: () => {
+              if (before === false) drawing.autoRoof = false; else delete drawing.autoRoof;
+            } });
+            markDirty();
+            sayOnStrip(wantHand
+              ? 'HAND ROOF: the build raises no roof and PROJECT leaves every roof as drawn. The roofs here stay as they are; DELETE or BUST ROOF them, and draw your own.'
+              : 'AUTO ROOF: the build raises the roof again, and PROJECT reshapes the roofs that still follow it.');
+            paint();
+          });
+          roofModeBox.append(btn);
+        });
+      dock.append(roofModeBox);
+    }
+    const show = !!drawing && !boneyardActive && activeLevelId() === ROOF_LEVEL_ID;
+    roofModeBox.hidden = !show;
+    if (!show) return;
+    const hand = drawing.autoRoof === false;
+    roofModeBox.querySelectorAll('[data-roof-mode]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String((btn.dataset.roofMode === 'hand') === hand));
+    });
+    // LEFT OF THE DIMS CHIPS when they are up, else where they would stand:
+    // 12px short of the clock.
+    const dims = dimsShowBox && !dimsShowBox.hidden ? dimsShowBox.getBoundingClientRect() : null;
+    const clock = document.getElementById('clock');
+    const clockBox = clock && clock.offsetWidth ? clock.getBoundingClientRect() : null;
+    const rightEdge = dims && dims.width ? dims.left : (clockBox ? clockBox.left : window.innerWidth);
+    roofModeBox.style.right = `${window.innerWidth - rightEdge + 12}px`;
+  }
   // --readout-bottom in pixels: where the hint row stands over the foot bar.
   const readoutBottomPx = () => {
     const hint = document.getElementById('hint');

@@ -40,6 +40,21 @@ test('a DWG comes out as a full DXF of the same version, and is saved', async ({
   expect(layerColours.filter(([, c]) => c > 0).length, 'layers that are on in the DWG are on in the DXF')
     .toBeGreaterThan(0);
   expect(layerColours.find(([n]) => n === '0')[1], 'layer 0 is on').toBeGreaterThan(0);
+  // EVERY CODE LINE IS A NUMBER (jb, 13 Nov: the DXF this page made would
+  // not open in RoughDrafter, "line 55441 should be a group code and reads
+  // </Materi"). libredwg writes a MATERIAL's XML with its line breaks; the
+  // worker folds those back onto one line before the file goes anywhere.
+  const codeLines = text.split(/\r\n|\r|\n/).filter((_, i) => i % 2 === 0);
+  const odd = codeLines.findIndex(line => line.trim() !== '' && !/^[+-]?\d+$/.test(line.trim()));
+  expect(odd, `code line ${odd} reads "${codeLines[odd]}"`).toBe(-1);
+  // And the fold itself, on a value made to split.
+  const folded = await page.evaluate(async () => {
+    const { foldSplitValues } = await import('/DXF/worker.js');
+    const bytes = s => Uint8Array.from(s, ch => ch.charCodeAt(0));
+    const out = foldSplitValues(bytes('  0\r\nMATERIAL\r\n  1\r\n<Material\r\n  name="x"\r\n</Material>\r\n  0\r\nEOF\r\n'));
+    return String.fromCharCode(...out);
+  });
+  expect(folded).toBe('  0\r\nMATERIAL\r\n  1\r\n<Material name="x" </Material>\r\n  0\r\nEOF\r\n');
   // The row says what it read.
   const meta = page.locator('[data-row="example_2018.dwg"] .meta');
   await expect(meta).toContainText('Converted');

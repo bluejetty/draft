@@ -46,7 +46,7 @@ test('the slot after #2 says + ADD ANOTHER footprint HOLOGRAM TO PLAN, and a pre
   await open(page, { ...BLANK, holograms: [
     { id: 'hologram-1', name: 'footprint', x: 4, z: -2, angleDeg: 0, pivotX: 0, pivotZ: 0, source: HOUSE },
     { id: 'hologram-2', name: 'footprint', x: 40, z: 6, angleDeg: 90, pivotX: 0, pivotZ: 0, source: HOUSE }] });
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   const card = page.locator('#hologram-ask');
   const slot = card.locator('[data-hologram-add-slot]');
   await expect(slot).toHaveCount(1);
@@ -84,7 +84,7 @@ test('ADD ANOTHER on a suite puts the copy on the level being looked at', async 
     { id: 'hologram-1', name: 'suite', mode: 'suite', x: 4, z: -2, angleDeg: 0, pivotX: 0, pivotZ: 0, source: HOUSE }] });
   await page.goto('/MODEL.html?level=5');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-add]').click();
   await expect(page.locator('#hologram-ask [data-hologram-row]')).toHaveCount(2);
   await expect(page.locator('#hologram-ask [data-hologram-row]').nth(1).locator('[data-hologram-where]')).toContainText('2ND FL');

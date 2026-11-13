@@ -37,6 +37,8 @@ const MUTATIONS = [
     c => c.replace('draw(target.entities, m, { layer, color }, depth + 1);\n              break;', 'break;')],
   ['a layer the file has off shows', 'dxf-reader.js',
     c => c.replace('off: color < 0 || Boolean(flags & 1),', 'off: false,')],
+  ['a value split over lines stops the read', 'dxf-reader.js',
+    c => c.replace("        if (!out.length) {\n          throw new Error(", "        {\n          throw new Error(")],
   ['the drawing forgets a DXF', 'drawing-format.js',
     c => c.replace("const kind = oneOf(underlay?.kind, ['pdf', 'image', 'dxf'], null);", "const kind = oneOf(underlay?.kind, ['pdf', 'image'], null);")],
   ['the drawing forgets which layers are off', 'drawing-format.js',
@@ -171,6 +173,17 @@ const throws = (label, fn, words) => {
   check('and a HATCH is counted as skipped', g.skipped.HATCH, 1);
   throws('a binary DXF is refused by name', () => D.parse('AutoCAD Binary DXF\r\n\x1a\x00'), 'binary DXF');
   throws('and a file that is not one at all', () => D.parse('hello\nworld\n'), 'group code');
+  // A VALUE SPLIT OVER LINES (jb, 13 Nov): the converter page's DXF carried
+  // a MATERIAL's XML with its line breaks, and the read stopped at
+  // "</Materi". The lines of the value fold back into it and the pairs pick
+  // up at the next code, so the drawing after it is still read.
+  const split = file({ entities: [...LINE('A', 0, 0, 10, 0), 0, 'TEXT', 8, 'A', 10, 0, 20, 0, 40, 1,
+    1, '<Material\n  name="x"\n</Material>', ...LINE('B', 0, 0, 0, 5)] });
+  const folded = D.parse(split);
+  check('a value split over lines does not stop the read', folded.paths.length, 2);
+  check('and the line after it is still read', box(folded, 'B'), '0,0,0,5');
+  check('and the split value is one text, folded back together', folded.texts.map(t => t.lines.join('|')).join(';'),
+    '<Material|  name="x"|</Material>');
   throws('a DXF with nothing in model space', () => D.parse(file({})), 'nothing in it is drawn');
 }
 
