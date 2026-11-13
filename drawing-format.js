@@ -1010,9 +1010,16 @@ if (!window.DraftDrawingFormat) {
   //
   // 5.5 was a bare literal here and a second `const ROOF_FASCIA_IN = 5.5` in
   // PROJECT.html and cut-view.js. It gets one home in the module that decides
-  // what a roof record IS, because this is the copy that wins: roofs() writes
-  // it unconditionally, so a fascia typed anywhere else is replaced on the
-  // next load whatever the page believed.
+  // what a roof record IS, because this is the copy that wins: roofs() used
+  // to write it unconditionally, so a fascia typed anywhere else was replaced
+  // on the next load whatever the page believed.
+  //
+  // AND NOW EACH ROOF MAY WEAR ITS OWN (jb, 13 Nov 2026, off the 1412 Empress
+  // drawings: a 10" fascia on the front gable, the standard 5 1/2" elsewhere
+  // -- "i will need to add a OBJ / PROP where i can change the fascia height
+  // of the induvidual roof peices"). roofs() keeps a typed `fascia` in
+  // inches inside the drafting limits; anything else is the standard board,
+  // so an old file and a hand-made fixture read as they always did.
   //
   // roofHeelIn came from project-page.js:345, which now delegates here. It is
   // the same arithmetic, moved for the reason level-assembly.js exists: a
@@ -1021,6 +1028,12 @@ if (!window.DraftDrawingFormat) {
   // ROOF panel needs it and cannot afford the PROJECT page's 1855 lines --
   // tests/model-html-tier1.spec.js:244 is the guard that says so, by name.
   const ROOF_FASCIA_IN = 5.5;
+  const ROOF_FASCIA_MIN_IN = 1;
+  const ROOF_FASCIA_MAX_IN = 24;
+  const roofFasciaIn = value => {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= ROOF_FASCIA_MIN_IN && n <= ROOF_FASCIA_MAX_IN ? n : ROOF_FASCIA_IN;
+  };
   const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;
 
   // ── WHAT A ROOF WEARS, AND HOW ITS GABLE ENDS ──────────────────────────
@@ -1060,7 +1073,12 @@ if (!window.DraftDrawingFormat) {
         ...(levelId(roof?.drawnOn, levelIds) != null ? { drawnOn: levelId(roof.drawnOn, levelIds) } : {}),
         edges: points.map((_, index) =>
           // SLOPED (18 Oct): the planes kept, cut off along the edge.
-          (Array.isArray(roof?.edges) && (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped')
+          // JOINT (jb, 13 Nov): the edge a busted roof's piece shares with
+          // the piece next door -- a hip, valley or ridge -- or an edge laid
+          // against a wall by hand: it holds the plane like a gable and the
+          // elevations draw no fascia, rake or gable wall under it.
+          (Array.isArray(roof?.edges)
+            && (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped' || roof.edges[index] === 'joint')
             ? roof.edges[index] : 'eave')),
         // TEN FEET, not six (Movie, 18 Oct: North Point's main eave is 8').
         overhang: Math.min(ROOF_OVERHANG_MAX_FT, Math.max(0, number(roof?.overhang, 2))),
@@ -1118,7 +1136,7 @@ if (!window.DraftDrawingFormat) {
           }).filter(Boolean);
           return list.length ? { crossGables: list } : {};
         })()),
-        fascia: ROOF_FASCIA_IN,
+        fascia: roofFasciaIn(roof?.fascia),
         garage: roof?.garage === true,
         // A real number or nothing: `Number(null)` is 0, and a stored null
         // read as a plate height of ZERO bears a garage roof at the main
@@ -2719,6 +2737,9 @@ if (!window.DraftDrawingFormat) {
     roofs,
     ROOF_OVERHANG_MAX_FT,
     ROOF_FASCIA_IN,
+    ROOF_FASCIA_MIN_IN,
+    ROOF_FASCIA_MAX_IN,
+    roofFasciaIn,
     WINDOW_HEAD_FT,
     SUPERSEDED_WINDOW_HEADS_FT,
     roofHeelIn,

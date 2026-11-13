@@ -309,6 +309,12 @@
   const roofPress = at => {
     const hit = roofEdgeAt(at);
     if (!hit) return null;
+    // A JOINT is where two pieces of a busted roof meet (or an edge laid
+    // against a wall): not an end to flip. The panel's EDGE row changes it.
+    if (hit.roof.edges[hit.index] === 'joint') {
+      sayOnStrip('That edge is a JOINT where this piece meets the next. Change it on the EDGE row in PROPERTIES.');
+      return hit;
+    }
     const was = hit.roof.edges[hit.index] === 'gable' ? 'gable' : 'eave';
     const now = was === 'gable' ? 'eave' : 'gable';
     hit.roof.edges[hit.index] = now;

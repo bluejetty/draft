@@ -1798,8 +1798,20 @@
     targets.forEach(normaliseForMove);
     const carried = node != null && moveState.node?.roof === roof && moveState.node.list.length > 1
       && moveState.node.list.includes(node);
+    // SHARED CORNERS RIDE (jb, 13 Nov 2026): a busted roof's pieces meet at
+    // their hips and ridges, so a corner dragged on one piece takes the same
+    // corner of every other piece in its assembly along, and the roof stays
+    // in one sheet. Riders are the pieces' own indices; the main piece's
+    // corner is `node` and decides where they all go.
+    const riders = (node != null && !carried && owner)
+      ? whole.filter(rf => rf !== roof).flatMap(rf => {
+        const own = roof.points[node];
+        return rf.points.map((p, i) => (Math.hypot(p.x - own.x, p.z - own.z) < 1e-3 ? { roof: rf, i } : null)).filter(Boolean);
+      })
+      : [];
+    riders.forEach(r => { if (!targets.includes(r.roof)) { normaliseForMove(r.roof); targets.push(r.roof); } });
     moveState.drag = { kind: carried ? 'nodes' : node != null ? 'node' : edge != null ? 'edge' : 'roof', at, node, edge, targets,
-      befores: targets.map(roofBefore), moved: false };
+      riders, befores: targets.map(roofBefore), moved: false };
     canvas.setPointerCapture(event.pointerId);
   }, true);
   canvas.addEventListener('pointermove', event => {
@@ -1921,6 +1933,15 @@
           roof.points[k] = { ...roof.points[k], x: b.points[k].x + dx, z: b.points[k].z + dz };
           if (roof.footprint) roof.footprint[k] = { ...roof.footprint[k], x: b.footprint[k].x + dx, z: b.footprint[k].z + dz };
         });
+      } else if (d.kind === 'node' && roof !== d.targets[0]) {
+        // A RIDER: the same corner of a piece next door, put where the
+        // corner in hand went.
+        (d.riders || []).filter(r => r.roof === roof).forEach(r => {
+          if (!d.to) return;
+          const sx = d.to.x - b.points[r.i].x, sz = d.to.z - b.points[r.i].z;
+          roof.points[r.i] = { ...roof.points[r.i], x: d.to.x, z: d.to.z };
+          if (roof.footprint) roof.footprint[r.i] = { ...roof.footprint[r.i], x: roof.footprint[r.i].x + sx, z: roof.footprint[r.i].z + sz };
+        });
       } else if (d.kind === 'node') {
         // A ROOF'S CORNER IN HAND reads the three tiers and the cross lines,
         // never itself: its own place is kept out of the magnet.
@@ -1941,6 +1962,7 @@
           to = snap ? { x: snap.x, z: snap.z } : at;
         }
         const sx = to.x - b.points[d.node].x, sz = to.z - b.points[d.node].z;
+        d.to = to;
         roof.points[d.node] = { ...roof.points[d.node], x: to.x, z: to.z };
         if (roof.footprint) roof.footprint[d.node] = { ...roof.footprint[d.node], x: roof.footprint[d.node].x + sx, z: roof.footprint[d.node].z + sz };
       } else {

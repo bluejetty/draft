@@ -661,11 +661,16 @@ if (!window.DraftGeometry2D) {
     return (polygonArea(first) >= polygonArea(points)) === (distance > 0) ? first : offsetWith(-1);
   };
 
+  // A JOINT (jb, 13 Nov 2026) is the edge a busted roof's piece shares with
+  // the piece next door -- the hip, valley or ridge the whole roof solved --
+  // and it holds the plane the way a gable does: the wavefront does not
+  // move off it. Everything that asks "does this edge move" asks this.
+  const isSolidEdge = kind => kind === 'gable' || kind === 'joint';
   const solveNotchedGableRoof = (roof) => {
     const EPS = 1e-6;
     const pts = roof.points.map(p => ({ x: p.x, z: p.z }));
     const n = pts.length;
-    const kinds = pts.map((_, i) => (roof.edges?.[i] === 'gable' ? 'gable' : 'eave'));
+    const kinds = pts.map((_, i) => (isSolidEdge(roof.edges?.[i]) ? 'gable' : 'eave'));
     const area = pts.reduce((s, p, i) => { const q = pts[(i + 1) % n]; return s + p.x * q.z - q.x * p.z; }, 0);
     const sign = area > 0 ? 1 : -1;
     const edges = pts.map((a, i) => {
@@ -880,7 +885,7 @@ if (!window.DraftGeometry2D) {
     const pts = roof.points || [];
     const n = pts.length;
     if (n < 4) return null;
-    const kinds = pts.map((_, i) => (roof.edges?.[i] === 'gable' ? 'gable' : 'eave'));
+    const kinds = pts.map((_, i) => (isSolidEdge(roof.edges?.[i]) ? 'gable' : 'eave'));
     if (!kinds.includes('gable') || !kinds.includes('eave')) return null;
     if (!pts.every((p, i) => {
       const q = pts[(i + 1) % n];
@@ -1049,7 +1054,7 @@ if (!window.DraftGeometry2D) {
     const n = pts.length;
     const kinds = Array.isArray(roof.edges) ? roof.edges : [];
     if (n < 3 || !kinds.includes('sloped')) return null;
-    const kindAt = k => (kinds[(k + n) % n] === 'gable' ? 'gable' : 'eave');
+    const kindAt = k => (isSolidEdge(kinds[(k + n) % n]) ? 'gable' : 'eave');
     const per = Array.isArray(roof.edgeOverhang) && roof.edgeOverhang.length === n;
     const overAt = k => (per ? Number(roof.edgeOverhang[(k + n) % n]) : Number(roof.overhang) || 0);
     const foot = Array.isArray(roof.footprint) && roof.footprint.length === n ? roof.footprint : null;
@@ -1121,7 +1126,7 @@ if (!window.DraftGeometry2D) {
     const kinds = Array.isArray(roof.edges) ? roof.edges : [];
     const push = pts.map((_, i) => {
       const h = Number(heel[i]);
-      return kinds[i] === 'gable' || kinds[i] === 'sloped' || !(h > 0) ? 0 : h / pitch;
+      return isSolidEdge(kinds[i]) || kinds[i] === 'sloped' || !(h > 0) ? 0 : h / pitch;
     });
     if (!push.some(d => d > 0)) return null;
     const area2 = pts.reduce((sum, p, i) => { const q = pts[(i + 1) % n]; return sum + p.x * q.z - q.x * p.z; }, 0);
@@ -1229,7 +1234,7 @@ if (!window.DraftGeometry2D) {
     const notched = notchedGableRoof(roof);
     if (notched) return notched;
     let pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
-    let kinds = pts.map((_, index) => (roof.edges[index] === 'gable' ? 'gable' : 'eave'));
+    let kinds = pts.map((_, index) => (isSolidEdge(roof.edges[index]) ? 'gable' : 'eave'));
     // A CORNER THAT IS NOT A CORNER IS DROPPED BEFORE THE WAVEFRONT RUNS.
     // Movie, 18 Oct: the main eave at 8' and the jog-out's front at 2' put
     // the two on ONE line -- the jog's short sides shrink to nothing and its
@@ -1555,7 +1560,7 @@ const roofFaces = (roof, arcs) => {
   const sloped = slopedVirtual(roof);
   if (sloped) return roofFaces(sloped.roof, roofSkeleton(sloped.roof));
   const pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
-  const kinds = pts.map((_, i) => (roof.edges?.[i] === 'gable' ? 'gable' : 'eave'));
+  const kinds = pts.map((_, i) => (isSolidEdge(roof.edges?.[i]) ? 'gable' : 'eave'));
   // Arc endpoints can land mid-edge on the footprint (the skeleton drops
   // arcs that slide along a gable, leaving a ridge end sitting on it), so
   // each footprint edge splits at any such point. Sub-segments keep the
@@ -1812,6 +1817,181 @@ const roofRiseAt = (roof, p, faces) => {
     if (inside) return roofFaceRise(face, p, roof.pitch || 4);
   }
   return null;
+};
+
+// ── A ROOF BUSTED INTO ITS PLANES (jb, 13 Nov 2026) ──────────────────────
+//
+// "the autoroof is really cool for doing the quick house but unless it is
+// nearly perfect at the begining its hard to modify" -- "would it be
+// possible to BUST it in to peices". Every solved face becomes a roof of
+// its own: the same polygon, ONE eave edge (the plane's own line, with that
+// edge's overhang and heel), the parent's rakes kept as GABLE, and every
+// hip, valley, ridge or cut line a JOINT -- the edge a piece shares with
+// the piece next door, which the elevations draw no fascia and no gable
+// wall under. A piece solves as the one plane it is (roofSkeleton: one eave
+// is one plane; roofFaces: the face whose eave line is that edge), so the
+// busted roof paints exactly as the whole one did, and each piece's
+// corners, pitch and overhang are the drafter's from then on.
+//
+// WHAT RIDES ALONG. A raised heel: the faces are read off the pushed-out
+// ring the heel is solved on (heelVirtual), then each piece's eave is pulled
+// back IN by the same push and the heel put on it, so heelVirtual on the
+// piece raises the very plane again. A hood cut (an upper roof's walls
+// coming down through this one) goes to every piece its box reaches, and
+// cutRoofFaces clips the piece as it clipped the face. A cross gable goes
+// to the piece whose eave it stands on -- crossGableShapes finds the same
+// wall line there, at the same overhang, so the dormer solves where it did.
+// A SLOPED edge's cut lines come out as JOINTs, which is what they are.
+//
+// An empty list means there is nothing to bust: a roof that is already one
+// plane, or one the solver cannot face.
+const ROOF_PIECE_EPS = 1 / 384;
+const ROOF_PIECE_KEYS = ['levelId', 'sourceLevelId', 'sourceShapeId', 'drawnOn', 'garage',
+  'plateHeightFt', 'fascia', 'roofing', 'gableCorner', 'layer'];
+const roofPieces = roof => {
+  if (!roof || !Array.isArray(roof.points) || roof.points.length < 3) return [];
+  const { crossGables, cuts, ...bare } = roof;
+  const pitch = Number(bare.pitch) || 4;
+  const y = Number(bare.points[0]?.y) || 0;
+  // 1. The real ring: slivers out, a SLOPED edge's virtual corner put in
+  // (its triangle a cut). The heels ride slopedVirtual's own index rule by
+  // going through as the overhangs of a second pass.
+  const cleaned = cleanRoofRing(bare) || { ...bare };
+  const n0 = cleaned.points.length;
+  const heels0 = Array.isArray(cleaned.edgeHeelIn) && cleaned.edgeHeelIn.length === n0
+    ? cleaned.edgeHeelIn.map(v => Math.max(0, Number(v) || 0)) : cleaned.points.map(() => 0);
+  const plain = { ...cleaned };
+  delete plain.edgeHeelIn;
+  const slopedReal = slopedVirtual(plain);
+  const real = slopedReal ? { ...slopedReal.roof } : plain;
+  let heels = heels0;
+  if (slopedReal) {
+    const pass = slopedVirtual({ ...plain, edgeOverhang: heels0, overhang: 0 });
+    heels = pass ? pass.roof.edgeOverhang.map(v => Number(v) || 0) : real.points.map(() => 0);
+  }
+  const ring = real.points.map(p => ({ x: Number(p.x), z: Number(p.z) }));
+  const n = ring.length;
+  if (heels.length !== n) heels = ring.map(() => 0);
+  const kinds = ring.map((_, i) => (isSolidEdge(real.edges?.[i]) ? 'gable' : 'eave'));
+  const per = Array.isArray(real.edgeOverhang) && real.edgeOverhang.length === n;
+  const overs = ring.map((_, i) => {
+    const v = per ? Number(real.edgeOverhang[i]) : NaN;
+    return Number.isFinite(v) ? Math.max(0, v) : Math.max(0, Number(real.overhang) || 0);
+  });
+  // 2. The ring the planes are SOLVED on: the real one with each raised
+  // eave pushed out (heelVirtual), the strips between kept to cut away.
+  const raised = heelVirtual({ ...real, edgeHeelIn: heels });
+  const solved = { ...(raised ? raised.roof : real) };
+  delete solved.heelCuts;
+  delete solved.edgeHeelIn;
+  solved.cuts = Array.isArray(solved.cuts) ? solved.cuts : [];
+  const virt = solved.points.map(p => ({ x: Number(p.x), z: Number(p.z) }));
+  const strips = raised ? cutLoopsOf({ cuts: raised.cuts }) : [];
+  const faces = roofFaces(solved, roofSkeleton(solved));
+  if (!faces.length) return [];
+  // ── Which real ring edge a polygon edge lies along, if any ──────────
+  const offLine = (a, b, p) => {
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return Math.abs((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x)) / len;
+  };
+  const alongT = (a, b, p) => ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z))
+    / (Math.pow(b.x - a.x, 2) + Math.pow(b.z - a.z, 2) || 1);
+  const onEdge = (a, b, p) => offLine(a, b, p) < ROOF_PIECE_EPS
+    && alongT(a, b, p) > -1e-6 && alongT(a, b, p) < 1 + 1e-6;
+  const ringEdgeOf = (p, q) => {
+    for (let i = 0; i < n; i += 1) {
+      const a = ring[i], b = ring[(i + 1) % n];
+      if (Math.hypot(b.x - a.x, b.z - a.z) < ROOF_PIECE_EPS) continue;
+      if (onEdge(a, b, p) && onEdge(a, b, q)) return i;
+    }
+    return -1;
+  };
+  // The plane's own eave is the SOLVED ring's edge j, on the face's line.
+  const planeEdge = (face, j) => virt.length === n
+    && offLine(face.eave.a, face.eave.b, virt[j]) < ROOF_PIECE_EPS
+    && offLine(face.eave.a, face.eave.b, virt[(j + 1) % n]) < ROOF_PIECE_EPS;
+  const inside = (p, poly) => {
+    let on = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const pi = poly[i], pj = poly[j];
+      if ((pi.z > p.z) !== (pj.z > p.z) && p.x < (pj.x - pi.x) * (p.z - pi.z) / (pj.z - pi.z) + pi.x) on = !on;
+    }
+    return on;
+  };
+  const rawCuts = (Array.isArray(cuts) ? cuts : []).filter(c => Array.isArray(c?.points) && c.points.length >= 3);
+  const rawGables = (Array.isArray(crossGables) ? crossGables : []).filter(g => g?.at);
+  const box = pts => pts.reduce((b, p) => ({
+    x0: Math.min(b.x0, p.x), x1: Math.max(b.x1, p.x), z0: Math.min(b.z0, p.z), z1: Math.max(b.z1, p.z) }),
+  { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity });
+  const boxesMeet = (a, b) => a.x0 <= b.x1 + 1e-6 && b.x0 <= a.x1 + 1e-6 && a.z0 <= b.z1 + 1e-6 && b.z0 <= a.z1 + 1e-6;
+  const pieceOf = (face, polygon) => {
+    // Doubled points out; then each edge named.
+    const poly = [];
+    polygon.forEach(p => {
+      const last = poly[poly.length - 1];
+      if (!last || Math.hypot(p.x - last.x, p.z - last.z) >= ROOF_PIECE_EPS) poly.push({ x: p.x, z: p.z });
+    });
+    while (poly.length > 1 && Math.hypot(poly[0].x - poly[poly.length - 1].x, poly[0].z - poly[poly.length - 1].z) < ROOF_PIECE_EPS) poly.pop();
+    if (poly.length < 3 || Math.abs(polyArea2(poly)) < 1e-4) return null;
+    const named = poly.map((p, i) => {
+      const q = poly[(i + 1) % poly.length];
+      const j = ringEdgeOf(p, q);
+      if (j < 0) return { p, kind: 'joint', over: 0, heel: 0 };
+      if (kinds[j] === 'gable') return { p, kind: 'gable', over: overs[j], heel: 0 };
+      return planeEdge(face, j) ? { p, kind: 'eave', over: overs[j], heel: heels[j] } : { p, kind: 'joint', over: 0, heel: 0 };
+    });
+    if (!named.some(e => e.kind === 'eave')) return null;
+    // A point in the middle of a straight run of one kind is not a corner.
+    const merged = named.filter((e, i) => {
+      const prev = named[(i - 1 + named.length) % named.length];
+      if (prev.kind !== e.kind || prev.over !== e.over || prev.heel !== e.heel) return true;
+      const next = named[(i + 1) % named.length];
+      const ax = e.p.x - prev.p.x, az = e.p.z - prev.p.z, bx = next.p.x - e.p.x, bz = next.p.z - e.p.z;
+      const la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+      return !(Math.abs(ax * bz - az * bx) < 1e-7 * Math.max(1, la * lb) && ax * bx + az * bz > 0);
+    });
+    if (merged.length < 3) return null;
+    const pts = merged.map(e => e.p);
+    const edges = merged.map(e => e.kind);
+    const eo = merged.map(e => Number(e.over.toFixed(4)));
+    const eh = merged.map(e => (e.kind === 'eave' ? e.heel : 0));
+    const foot = offsetOutlineVariable(pts, eo.map(v => -v));
+    const footOk = foot.length === pts.length && foot.every(p => Number.isFinite(p.x) && Number.isFinite(p.z));
+    const piece = {};
+    ROOF_PIECE_KEYS.forEach(key => { if (bare[key] !== undefined) piece[key] = bare[key]; });
+    piece.points = pts.map(p => ({ x: p.x, y, z: p.z }));
+    piece.edges = edges;
+    piece.overhang = eo[edges.indexOf('eave')];
+    piece.edgeOverhang = eo;
+    if (eh.some(v => v > 0)) piece.edgeHeelIn = eh;
+    if (footOk) piece.footprint = foot.map(p => ({ x: p.x, y: 0, z: p.z }));
+    piece.pitch = pitch;
+    piece.follows = 'none';
+    // The hoods this piece reaches, and the cross gables standing on its eave.
+    const mine = box(pts);
+    const reached = rawCuts.filter(c => boxesMeet(mine, box(c.points.map(p => ({ x: Number(p.x), z: Number(p.z) })))));
+    if (reached.length) {
+      piece.cuts = reached.map(c => ({ points: c.points.map(p => ({ x: Number(p.x), z: Number(p.z) })),
+        ...(c.hoodOf ? { hoodOf: c.hoodOf } : {}) }));
+    }
+    const standing = rawGables.filter(g => edges.some((kind, i) => {
+      if (kind !== 'eave') return false;
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const t = alongT(a, b, g.at);
+      return Math.abs(offLine(a, b, g.at) - eo[i]) < 0.01 && t > -1e-6 && t < 1 + 1e-6
+        && (eo[i] === 0 || inside(g.at, pts));
+    }));
+    if (standing.length) piece.crossGables = standing.map(g => ({ ...g, at: { x: Number(g.at.x), z: Number(g.at.z) } }));
+    return piece;
+  };
+  const pieces = faces.flatMap(face => {
+    if (face.crossGable) return [];
+    // The strip outside a raised eave is not roof: cut away, as roofFaces
+    // cuts it from the face.
+    const polys = strips.reduce((list, strip) => list.flatMap(poly => minusConvex(poly, strip)), [face.points || []]);
+    return polys.map(poly => pieceOf(face, poly)).filter(Boolean);
+  });
+  return pieces.length >= 2 ? pieces : [];
 };
 
 // ── WHICH ENDS OF A ROOF HIP, AND WHICH GABLE (Movie, 16 Oct) ────────────
@@ -4312,6 +4492,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     crossGableLines,
     roofWallLine,
     roofRiseAt,
+    roofPieces,
+    isSolidEdge,
     roofWeldSpans,
     roofWingKinds,
     roofWingsOf,

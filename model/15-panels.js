@@ -1979,8 +1979,11 @@
   };
   // SLOPED (Movie, 18 Oct): the planes either side kept, cut off along this
   // edge (geometry-2d slopedVirtual) -- what a corner node DELETEd leaves.
-  const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE'], ['sloped', 'SLOPED']];
-  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' ? k : 'eave');
+  // JOINT (jb, 13 Nov 2026): the edge a busted roof's piece shares with the
+  // piece next door, or one laid against a wall by hand -- no fascia, no
+  // rake, no gable wall under it; the plane held as a gable holds it.
+  const ROOF_EDGE_KINDS = [['eave', 'EAVE'], ['gable', 'GABLE'], ['sloped', 'SLOPED'], ['joint', 'JOINT']];
+  const roofEdgeKind = k => (k === 'gable' || k === 'sloped' || k === 'joint' ? k : 'eave');
   // A ROOF IN AN ASSEMBLY WITH OTHER ROOFS (Movie, 18 Oct): "ASSEMBLY roof
   // peices that are similar so i can adjust the EAVE and PITCH for the
   // grouped roofs seperately but be able to edit the properties of all as one
@@ -2015,6 +2018,77 @@
     roof.follows = 'none';
     return null;
   };
+  // ── BUST ROOF (jb, 13 Nov 2026) ─────────────────────────────────────────
+  //
+  // "the autoroof is really cool for doing the quick house but unless it is
+  // nearly perfect at the begining its hard to modify" -- "would it be
+  // possible to BUST it in to peices". geometry-2d's roofPieces cuts a roof
+  // into one roof per solved plane (hips, valleys and ridges become JOINT
+  // edges); the pieces take the roof's place in the list, held together as
+  // one assembly (NOT fixed, so a click picks one piece) so a MOVE from
+  // inside still carries them as one and PITCH / OVERHANG still reach all
+  // of them -- THIS ROOF on the panel picks one out. Busted
+  // pieces are hand roofs (`follows: 'none'`): nothing rebuilds them. ONE
+  // UNDO puts the whole roof back, grouping and all.
+  const bustRoofs = list => {
+    const G = window.DraftGeometry2D;
+    const all = drawing?.roofs || [];
+    const targets = list.filter(roof => all.includes(roof));
+    if (!targets.length) { sayOnStrip('Pick a roof first, then BUST ROOF.'); return null; }
+    const jobs = targets.map(roof => ({ roof, pieces: G.roofPieces(roof) })).filter(job => job.pieces.length >= 2);
+    if (!jobs.length) {
+      sayOnStrip(targets.length === 1 ? 'This roof is one plane already -- there is nothing to bust.'
+        : 'Those roofs are one plane each already -- there is nothing to bust.');
+      return null;
+    }
+    const groupsBefore = groups().slice();
+    const made = [];
+    const done = [];
+    jobs.forEach(({ roof, pieces }) => {
+      // An id no roof holds -- a hand-made file can carry 'roof-1' with the
+      // counter never advanced past it.
+      const freshId = () => {
+        let id = newDrawingItemId('roof');
+        while (all.some(r => String(r.id) === id)) id = newDrawingItemId('roof');
+        return id;
+      };
+      const items = pieces.map(piece => ({ ...piece, id: freshId() }));
+      const at = all.indexOf(roof);
+      all.splice(at, 1, ...items);
+      done.push({ roof, items });
+      // The roof leaves whatever assembly held it; its pieces make their own.
+      const n = nextGroupNumber();
+      drawing.groups = groups()
+        .map(group => ({ ...group,
+          members: (group.members || []).filter(m => !(m.type === 'roof' && String(m.id) === String(roof.id))) }))
+        .filter(group => group.members.length > 0);
+      // NOT FIXED: a click picks one piece, which is the point of the bust;
+      // a MOVE from inside any piece still carries the whole assembly (the
+      // ROOF move's own rule), and PITCH / OVERHANG reach all of them.
+      drawing.groups.push({ id: `group-${n}`, name: `ROOF PIECES ${n}`, fixed: false, stretchBehavior: 'item-geometry',
+        members: items.map(item => ({ type: 'roof', id: item.id })), wallSettings: null });
+      drawing.nextGroupId = n + 1;
+      made.push(...items);
+    });
+    undoStack.push({ kind: 'assembly', undo: () => {
+      done.slice().reverse().forEach(({ roof, items }) => {
+        const list = drawing.roofs || [];
+        const first = list.indexOf(items[0]);
+        items.forEach(item => { const k = list.indexOf(item); if (k >= 0) list.splice(k, 1); });
+        list.splice(first < 0 ? list.length : first, 0, roof);
+      });
+      drawing.groups = groupsBefore;
+      syncAssembly();
+    } });
+    roofEdgeIdx = null;
+    roofScopeOne = false;
+    setSelection(made.map(item => ({ type: 'roof', item })));
+    markDirty();
+    paint();
+    sayOnStrip(`ROOF busted into ${made.length} pieces, held as one assembly. `
+      + 'Pick a piece and THIS ROOF for its own pitch or overhang; UNDO joins the roof back.');
+    return made;
+  };
   const roofPropsNode = picked => {
     const box = document.createElement('div');
     const again = () => { if (selection.every(e => e.type === 'roof')) showSelectionProps(); };
@@ -2026,6 +2100,21 @@
         roofScopeOne ? 'one' : 'assembly', id => { roofScopeOne = id === 'one'; again(); }));
     }
     const items = kin.length > 1 && !roofScopeOne ? kin : picked;
+    {
+      const G = window.DraftGeometry2D;
+      const canBust = G?.roofPieces ? picked.some(roof => G.roofPieces(roof).length >= 2) : false;
+      const bust = document.createElement('button');
+      bust.type = 'button';
+      bust.className = 'sel-chip';
+      bust.dataset.roofBust = '';
+      bust.textContent = 'BUST ROOF';
+      bust.disabled = !canBust;
+      bust.title = canBust
+        ? 'Cut this roof into one piece per plane (hips, valleys and ridges become JOINT edges) so each can be shaped on its own. Y does the same. UNDO joins it back.'
+        : 'This roof is one plane already -- there is nothing to bust.';
+      bust.addEventListener('click', () => { if (bustRoofs(picked)) again(); });
+      box.append(bust);
+    }
     box.append(numberField('PITCH', lone ? lone.pitch : items[0].pitch, 0, 24, 0.5, v => {
       if (v !== null) {
         const refusal = editRoofs(items, roof => { roof.pitch = v; roof.follows = 'none'; return null; });
@@ -2033,6 +2122,21 @@
       }
       again();
       return items[0].pitch;
+    }));
+    // THE BOARD'S DEPTH, PER ROOF (jb, 13 Nov 2026, off the 1412 Empress
+    // drawings: a 10" fascia on the front gable, the standard 5 1/2" on the
+    // rest -- "i will need to add a OBJ / PROP where i can change the fascia
+    // height of the induvidual roof peices"). Inches; the elevations and
+    // sections hang this board under the eaves and rakes, and the heel grows
+    // with it. Like PITCH, a typed board frees the roof from the PROJECT page.
+    box.append(numberField('FASCIA, IN', window.DraftDrawingFormat.roofFasciaIn(items[0].fascia),
+      window.DraftDrawingFormat.ROOF_FASCIA_MIN_IN, window.DraftDrawingFormat.ROOF_FASCIA_MAX_IN, 0.25, v => {
+      if (v !== null) {
+        const refusal = editRoofs(items, roof => { roof.fascia = v; roof.follows = 'none'; return null; });
+        if (refusal) sayOnStrip(refusal);
+      }
+      again();
+      return window.DraftDrawingFormat.roofFasciaIn(items[0].fascia);
     }));
     // SITS ON (Movie, 27 Oct: "cut the roof how it is now and drop it down to
     // match the one beside it" -- "we shouldn't drop it automatically but
@@ -2132,7 +2236,7 @@
           heelLine.className = 'props-title';
           heelLine.dataset.roofEdgeHeel = '';
           heelLine.textContent = `HEEL, THIS EDGE ${window.DraftFormatters.formatArchitecturalInches(
-            window.DraftDrawingFormat.roofHeelIn(ROOF_FASCIA_IN, roofOverhangs(lone)[index], lone.pitch || 4)
+            window.DraftDrawingFormat.roofHeelIn(window.DraftDrawingFormat.roofFasciaIn(lone.fascia), roofOverhangs(lone)[index], lone.pitch || 4)
             + heelNow())}`;
           box.append(heelLine);
         }

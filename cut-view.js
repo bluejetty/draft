@@ -272,6 +272,13 @@ if (!window.DraftCutView) {
   // the frame; see the note at `yFit`.
   const GROUND_UNDER_FOOTING_FT = 1 / 12;
   const ROOF_FASCIA_IN = 5.5;
+  // EACH ROOF WEARS ITS OWN BOARD (jb, 13 Nov 2026, off the 1412 Empress
+  // drawings: a 10" fascia on the front gable, "STANDARD 5.5" FASCIA"
+  // elsewhere -- "i will need to add a OBJ / PROP where i can change the
+  // fascia height of the induvidual roof peices"). The record's `fascia` is
+  // inches, written by drawing-format's roofFasciaIn; a roof without one, or
+  // a harness fixture made by hand, wears the standard board.
+  const roofFasciaFt = roof => (Number(roof?.fascia) > 0 ? Number(roof.fascia) : ROOF_FASCIA_IN) / 12;
   // A truss chord in section: 3 1/2" measured ACROSS the member, so the
   // vertical drop under a sloped top chord grows with the pitch.
   const ROOF_CHORD_IN = 3.5;
@@ -1350,7 +1357,7 @@ if (!window.DraftCutView) {
     const k = ((i % n) + n) % n;
     const kind = roof.edges?.[k];
     const h = Number(heel[k]);
-    return kind === 'gable' || kind === 'sloped' || !(h > 0) ? 0 : h / 12;
+    return kind === 'gable' || kind === 'sloped' || kind === 'joint' || !(h > 0) ? 0 : h / 12;
   }
   function heelLiftsFt(roof) {
     const n = (roof?.points || []).length;
@@ -1362,7 +1369,7 @@ if (!window.DraftCutView) {
     return out;
   }
   function roofEaveElev(roof, stack, env) {
-    return roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+    return roofBaseElev(roof, stack, env) + roofFasciaFt(roof);
   }
 
   // ── A PILE OUT IN THE OPEN CARRIES A POST ──────────────────────────────
@@ -2195,7 +2202,6 @@ if (!window.DraftCutView) {
     const roofSamples = [];
     const roofChords = [];
     const roofs = env.roofs();
-    const fasciaFt = ROOF_FASCIA_IN / 12;
     if (roofs.length) {
       const profiles = [];
       roofs
@@ -2205,12 +2211,12 @@ if (!window.DraftCutView) {
           const profile = geo().roofProfile(
             roof, geo().roofFaces(roof, geo().roofSkeleton(roof)),
             cut.startPt, cut.endPt, axis)
-            .map(pt => ({ u: pt.u, rise: base + fasciaFt + pt.rise }));
+            .map(pt => ({ u: pt.u, rise: base + roofFasciaFt(roof) + pt.rise }));
           if (profile.length < 2) return;
           profiles.push(profile);
           roofChords.push({
             u0: profile[0].u, u1: profile[profile.length - 1].u, elev: base,
-            profile, overhang: Number(roof.overhang) || 0,
+            profile, overhang: Number(roof.overhang) || 0, fascia: roofFasciaFt(roof),
           });
         });
       geo().profileEnvelope(profiles).forEach(pt => {
@@ -2696,25 +2702,31 @@ if (!window.DraftCutView) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
       ctx.beginPath();
       let pen = null;
+      // The board under a break is the board of the roof whose edge it is:
+      // the envelope's break points are a profile's own ends, so the chord
+      // that owns the point names the fascia.
+      const fasciaAt = s => roofChords.find(c => c.profile.some(p =>
+        Math.abs(p.u - s.u) < 1e-6 && Math.abs(p.rise - s.elev) < 1e-6))?.fascia
+        ?? ROOF_FASCIA_IN / 12;
       roofSamples.forEach(s => {
         if (s.elev == null) {
           // A BREAK. Usually an eave: the fascia drops and the pen lifts. A
           // roof running in UNDER a higher eave (`noDrop`) has no fascia there
           // -- it just stops behind the other one.
-          if (pen && !s.noDrop) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaFt));
+          if (pen && !s.noDrop) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaAt(pen)));
           pen = null;
           return;
         }
         if (!pen) {
           if (s.resume) ctx.moveTo(X(s.u), Y(s.elev));  // carries on under a higher eave
           else {
-            ctx.moveTo(X(s.u), Y(s.elev - fasciaFt));   // fascia drop at the edge
+            ctx.moveTo(X(s.u), Y(s.elev - fasciaAt(s)));   // fascia drop at the edge
             ctx.lineTo(X(s.u), Y(s.elev));
           }
         } else ctx.lineTo(X(s.u), Y(s.elev));
         pen = s;
       });
-      if (pen) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaFt));
+      if (pen) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaAt(pen)));
       ctx.stroke();
       // The truss in section, chords only -- the settled ruling (Movie,
       // 17 Sep 2026, on the PROJECT detail: "lock that in !!"), drawn with
@@ -2735,7 +2747,7 @@ if (!window.DraftCutView) {
         // An end is an EAVE when the surface lands on the fascia top there;
         // the bearing wall stands the overhang inside it, and the heel's two
         // faces rise from the plate and the bottom chord to the underside.
-        const eaveAt = pt => Math.abs(pt.rise - (chord.elev + fasciaFt)) < 0.05;
+        const eaveAt = pt => Math.abs(pt.rise - (chord.elev + chord.fascia)) < 0.05;
         const first = prof[0], last = prof[prof.length - 1];
         const span = last.u - first.u;
         const hasHeel = chord.overhang > 0.05
@@ -3441,7 +3453,7 @@ if (!window.DraftCutView) {
             if (rise == null) return;
             const { base, eave } = bearingByRoof.get(roof);
             const elev = eave + rise;
-            if (tallest === null || elev > tallest.elev) tallest = { elev, base };
+            if (tallest === null || elev > tallest.elev) tallest = { elev, base, fascia: eave - base };
           });
           return tallest;
         };
@@ -3469,6 +3481,7 @@ if (!window.DraftCutView) {
           u: bx * axis.x + bz * axis.z,
           elev: best === null ? null : best.elev,
           base: best === null ? null : best.base,
+          fascia: best === null ? null : best.fascia,
         };
       };
       for (let i = 0; i <= steps; i++) {
@@ -4841,6 +4854,8 @@ if (!window.DraftCutView) {
     // it: the flush cut where a garage roof dies into the house, and the ridge
     // starting off that wall, both sit on that line and stay drawn.
     const WALL_EDGE_EPS = 0.05;
+    // The standard board, where no one roof owns the measure: a run's
+    // shortest drawable length and a dormer's rake board.
     const fasciaFt = ROOF_FASCIA_IN / 12;
     const roofClippedTop = (pt, depth, top) => {
       if (!facesByRoof || !facesByRoof.size) return top;
@@ -4857,7 +4872,7 @@ if (!window.DraftCutView) {
           if (elev < lo) lo = elev;
         });
         if (hi === -Infinity) return;   // the ray misses this roof entirely
-        lo -= fasciaFt;
+        lo -= roofFasciaFt(roof);
         if (top > lo + ROOF_COVER_EPS && top <= hi + ROOF_COVER_EPS) clipped = Math.min(clipped, lo);
       });
       return clipped;
@@ -4910,7 +4925,7 @@ if (!window.DraftCutView) {
           if (elev < lo) lo = elev;
         });
         if (hi === -Infinity) return;   // the ray misses this roof entirely
-        lo -= fasciaFt;
+        lo -= roofFasciaFt(roof);
         if (floor >= lo - ROOF_COVER_EPS && floor < hi - ROOF_COVER_EPS) {
           lifted = Math.max(lifted, hi);
         }
@@ -6285,7 +6300,7 @@ if (!window.DraftCutView) {
             const ends = pts.slice().sort((p1, p2) => p1.x - p2.x || p1.y - p2.y);
             const lo = ends[0], hi = ends[ends.length - 1];
             if (hi.x - lo.x < 1) return;   // truly edge on: no paper either way
-            const drop = fasciaFt * pxPerFt;
+            const drop = roofFasciaFt(roof) * pxPerFt;
             parts.push([{ x: lo.x, y: lo.y }, { x: hi.x, y: hi.y },
               { x: hi.x, y: hi.y + drop }, { x: lo.x, y: lo.y + drop }]);
             const depthEdge = Math.max(...pts.map(pt => pt.d));
@@ -6810,7 +6825,7 @@ if (!window.DraftCutView) {
           if (e < lo) lo = e;
         });
         if (hi === -Infinity) return;   // the ray misses this roof entirely
-        lo -= fasciaFt;
+        lo -= roofFasciaFt(roof);
         if (elev > lo + ROOF_COVER_EPS && elev < hi - ROOF_COVER_EPS) covered = true;
       });
       return covered;
@@ -7033,7 +7048,7 @@ if (!window.DraftCutView) {
       silhouette.forEach((s, i) => {
         if (s.elev == null || (run && run.base !== s.base)) run = null;
         if (s.elev == null) return;
-        if (!run) { run = { base: s.base, u0: s.u, u1: s.u, i0: i, i1: i }; runs.push(run); }
+        if (!run) { run = { base: s.base, fascia: s.fascia, u0: s.u, u1: s.u, i0: i, i1: i }; runs.push(run); }
         else { run.u1 = s.u; run.i1 = i; }
       });
       // AND THE WALK CAN RUN THE OTHER WAY. E3 and E4 look back along their
@@ -7076,7 +7091,7 @@ if (!window.DraftCutView) {
       // second is the slack the eps above already allows for a run and an edge
       // that end a sample apart. Anything further off is another surface's
       // eave, seen past the point where this run stopped.
-      extendRunsToEaves(runs.map(r => ({ ...r, top: r.base + ROOF_FASCIA_IN / 12 })),
+      extendRunsToEaves(runs.map(r => ({ ...r, top: r.base + r.fascia })),
         eaveSpans, 0.05, silhouette.length > 1
           ? 2 * Math.abs(silhouette[1].u - silhouette[0].u) : Infinity)
         .forEach((grown, index) => {
@@ -7128,18 +7143,18 @@ if (!window.DraftCutView) {
       // On a hip that height is the eave's and nothing changes.
       // Asked a hair inside the run: the grown end is the roof's own edge,
       // where a point-in-polygon test is a coin toss.
-      const riserTop = (u, base, inward) => {
+      const riserTop = (u, base, fascia, inward) => {
         const top = tallestAtU(u + inward * 0.02);
-        return top != null && top > base + fasciaFt + 0.05 ? top : base + fasciaFt;
+        return top != null && top > base + fascia + 0.05 ? top : base + fascia;
       };
       const closePen = (openAir = true) => {
         if (!pen) return;
         if (!openAir) { pen = null; return; }
         const u1 = grownAt.has(penI) ? grownAt.get(penI) : pen.u;
         if (u1 !== pen.u) {
-          const top = riserTop(u1, pen.base, u1 > pen.u ? -1 : 1);
+          const top = riserTop(u1, pen.base, pen.fascia, u1 > pen.u ? -1 : 1);
           ctx.lineTo(X(u1), Y(top));
-          if (top > pen.base + fasciaFt + 0.05) ctx.lineTo(X(u1), Y(pen.base + fasciaFt));
+          if (top > pen.base + pen.fascia + 0.05) ctx.lineTo(X(u1), Y(pen.base + pen.fascia));
         }
         ctx.lineTo(X(u1), Y(pen.base));
         pen = null;
@@ -7158,9 +7173,9 @@ if (!window.DraftCutView) {
           const u0 = grownAt.has(i) ? grownAt.get(i) : s.u;
           ctx.moveTo(X(u0), Y(s.base));
           if (u0 !== s.u) {
-            ctx.lineTo(X(u0), Y(s.base + fasciaFt));
-            const top = riserTop(u0, s.base, u0 < s.u ? 1 : -1);
-            if (top > s.base + fasciaFt + 0.05) ctx.lineTo(X(u0), Y(top));
+            ctx.lineTo(X(u0), Y(s.base + s.fascia));
+            const top = riserTop(u0, s.base, s.fascia, u0 < s.u ? 1 : -1);
+            if (top > s.base + s.fascia + 0.05) ctx.lineTo(X(u0), Y(top));
             ctx.lineTo(X(s.u), Y(s.elev));
           }
           else ctx.lineTo(X(u0), Y(s.elev));
@@ -7549,7 +7564,7 @@ if (!window.DraftCutView) {
                 // drawn the whole length of that run -- straight across the
                 // main roof's ridge, which stands nearer and between the two.
                 // So the foot gets its own visibility, at its own height.
-                const footE = boardTop - ROOF_FASCIA_IN / 12;
+                const footE = boardTop - roofFasciaFt(roof);
                 const tLo = Math.min(r.t0, r.t1), tHi = Math.max(r.t0, r.t1);
                 // Half-foot stations, then bisected to the real boundary the
                 // way the run's own ends are: a ridge poking 1 1/2" past the
@@ -7608,7 +7623,7 @@ if (!window.DraftCutView) {
                 // 0.05 ft is the same slack the run filter above uses to
                 // decide a run has any extent at all, rather than a second
                 // tolerance invented here.
-                const drop = ROOF_FASCIA_IN / 12;
+                const drop = roofFasciaFt(roof);
                 ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
@@ -7636,7 +7651,7 @@ if (!window.DraftCutView) {
               // Halved-gable builds (board #252) and intent-pulled edges
               // both land the line exactly on the wall face this way;
               // roof.overhang stays the fallback for unlinked roofs.
-              const drop = ROOF_FASCIA_IN / 12;
+              const drop = roofFasciaFt(roof);
               const lo = ea <= eb ? { p: a, u: ua, e: ea } : { p: b, u: ub, e: eb };
               const hi = ea <= eb ? { p: b, u: ub, e: eb } : { p: a, u: ua, e: ea };
               const len = Math.hypot(hi.p.x - lo.p.x, hi.p.z - lo.p.z) || 1;
@@ -7844,7 +7859,7 @@ if (!window.DraftCutView) {
           ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
           ctx.beginPath();
           ctx.moveTo(X(u), Y(cornerTop));
-          ctx.lineTo(X(u), Y(cornerTop - ROOF_FASCIA_IN / 12));
+          ctx.lineTo(X(u), Y(cornerTop - roofFasciaFt(roof)));
           ctx.stroke();
         });
       });
