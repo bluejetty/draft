@@ -118,7 +118,7 @@ test('a suite dragged within 3" of lining up snaps onto the shell, both ways in 
     { ...d.holograms[0], x: 2, z: 2 }, 3, 0.25), d);
   expect([far.x, far.z]).toEqual([0, 0]);
   // And MOVE on the card drags it there.
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('#hologram-ask [data-hologram-move="h1"]').click();
   const { at } = await h.planFrame(page);
   await page.mouse.move(...at(10, 7.5));
@@ -132,9 +132,9 @@ test('a suite dragged within 3" of lining up snaps onto the shell, both ways in 
 
 test('the HOLOGRAM chip lists what is loaded; a SUITE row has no DEMO and switches back to HOLOGRAM', async ({ page }) => {
   await open(page, shell());
-  const chip = page.locator('[data-mode-hologram]');
-  await expect(chip).toHaveClass(/lit/);
-  await chip.click();
+  // The UNDERLAY chip is lit while a hologram is loaded (13 Nov).
+  await expect(page.locator('[data-mode-underlay]')).toHaveClass(/lit/);
+  await h.underlayPick(page, 'hologram');
   const card = page.locator('#hologram-ask');
   await expect(card).toBeVisible();
   // ONE CARD PER FILE (Movie, 20 Oct): the file's name on its card, the copy
@@ -213,7 +213,7 @@ test('a shell window where a suite window lands: both drawn, and the card warns'
   await open(page, shell({}, [WIN('clash', 'a', 9)]));
   const d = await saved(page);
   expect(await page.evaluate(d => window.DraftHologram.clashes(d).length, d)).toBe(1);
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('#hologram-ask [data-hologram-count]')).toContainText('1 window clash');
 });
 
@@ -244,7 +244,7 @@ const row = (page, id) => page.locator(`#hologram-ask [data-hologram-row="${id}"
 
 test('COPY up puts the suite on the next floor, lined up, its windows in that floor\'s shell wall', async ({ page }) => {
   await open(page, shell3());
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(row(page, 'h1').locator('[data-hologram-floor]')).toContainText('MAIN FL');
   await row(page, 'h1').locator('[data-hologram-copy-up]').click();
   await row(page, 'h1').locator('[data-hologram-copy-up]').click();
@@ -260,7 +260,7 @@ test('COPY up puts the suite on the next floor, lined up, its windows in that fl
 
 test('FLOOR up and down move a suite where it stands; past the top it stays', async ({ page }) => {
   await open(page, shell3());
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   const up = row(page, 'h1').locator('[data-hologram-floor-up]');
   await up.click();
   await expect(row(page, 'h1').locator('[data-hologram-floor]')).toContainText('2ND FL');
@@ -278,7 +278,7 @@ test('FLOOR up and down move a suite where it stands; past the top it stays', as
     window.DraftDrawingFormat.levels(d.levels)).fenestrations().map(o => o.levelId), d);
   expect(lv).toEqual([9]);
   // Down twice is back where it was drawn: no map at all.
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await row(page, 'h1').locator('[data-hologram-floor-down]').click();
   await row(page, 'h1').locator('[data-hologram-floor-down]').click();
   await page.locator('[data-hologram-close]').click();
@@ -290,7 +290,7 @@ test('a two-storey suite moves as one: its upper floor takes the next floor of t
   const TWO = { ...SUITE, walls: [...SUITE.walls, W('u1', [0, 0], [20, 0], { levelId: 5 }), W('u2', [20, 0], [20, 15], { levelId: 5 })],
     fenestrations: [...SUITE.fenestrations, { ...WIN('wu', 'u1', 2), levelId: 5 }] };
   await open(page, shell3(TWO));
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await row(page, 'h1').locator('[data-hologram-floor-up]').click();
   await row(page, 'h1').locator('[data-hologram-floor-up]').click();   // no room for its upper floor
   await page.locator('[data-hologram-close]').click();
@@ -328,7 +328,7 @@ const accentPixels = page => page.evaluate(() => {
   return n;
 });
 async function holdSuite(page, from, to) {
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('#hologram-ask [data-hologram-move="h1"]').click();
   const { at } = await h.planFrame(page);
   await page.mouse.move(...at(...from));

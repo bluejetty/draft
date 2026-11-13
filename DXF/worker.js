@@ -107,6 +107,35 @@ const toBytes = text => {
   for (let i = 0; i < text.length; i += 1) out[i] = text.charCodeAt(i);
   return out;
 };
+// A VALUE SPLIT OVER LINES IS PUT BACK ON ONE (jb, 13 Nov: the DXF this page
+// made from a DWG would not open in RoughDrafter -- "line 55441 should be a
+// group code and reads </Materi"). libredwg writes a MATERIAL's XML text with
+// the line breaks the DWG held, and a DXF has no room for a line break inside
+// a value: every line after it is read on the wrong parity, and not only by
+// RoughDrafter. So every line that sits where a code should be and is not a
+// whole number is joined to the value before it with a space. The first line
+// is left alone: a file that does not start with a code is not a DXF at all.
+export function foldSplitValues(dxf) {
+  const text = toText(dxf);
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r\n|\r|\n/);
+  const out = [];
+  let expectCode = true;
+  let changed = 0;
+  for (const line of lines) {
+    // A blank line where a code should be is the file's last line break,
+    // not a value: it stays as it is and moves nothing.
+    if (expectCode && line.trim() === '') { out.push(line); continue; }
+    if (expectCode && out.length && !/^[+-]?\d+$/.test(line.trim())) {
+      out[out.length - 1] += ` ${line.trim()}`;
+      changed += 1;
+      continue;
+    }
+    out.push(line);
+    expectCode = !expectCode;
+  }
+  return changed ? toBytes(out.join(eol)) : dxf;
+}
 export function fixLayerStates(dxf, layers) {
   const state = new Map(layers.map(l => [l.name, l]));
   const lines = toText(dxf).split('\n');
@@ -284,7 +313,7 @@ self.onmessage = async ({ data }) => {
     try {
       const rc = w.dwg_write_dxf(inName, outName);
       if (!w.FS.analyzePath(outName, false).exists) throw new Error(`libredwg could not write the DXF (code ${rc})`);
-      dxf = w.FS.readFile(outName);
+      dxf = foldSplitValues(w.FS.readFile(outName));
     } finally {
       if (w.FS.analyzePath(inName, false).exists) w.FS.unlink(inName);
       if (w.FS.analyzePath(outName, false).exists) w.FS.unlink(outName);

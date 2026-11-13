@@ -1483,12 +1483,24 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #hologram-ask, #trace-insert,
+  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #underlay-ask, #trace-insert,
   #footprint-ask, #room-corner-ask, #stair-fit { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
   #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
-  #trace-ask[hidden], #hologram-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden], #room-corner-ask[hidden], #stair-fit[hidden] { display:none; }
+  #trace-insert[hidden], #footprint-ask[hidden], #room-corner-ask[hidden], #stair-fit[hidden] { display:none; }
+  /* THE UNDERLAY CARD IS UP WHILE ANY SECTION IS (jb, 13 Nov): the sections
+     keep their own hidden flags, so the older presses that hide #trace-ask
+     or #hologram-ask by hand still take the card down when the last one goes. */
+  #underlay-ask:not(:has([data-underlay-section]:not([hidden]))) { display:none; }
+  #underlay-ask .underlay-stack { display:flex; flex-direction:column; align-items:center; gap:10px;
+    max-height:calc(100vh - 48px); overflow:auto; }
+  #underlay-ask [data-underlay-section][hidden] { display:none; }
+  /* ONE WIDTH FOR EVERY SECTION, the HOLOGRAM card's, so the stack reads
+     as one card and not three sizes of card. */
+  #underlay-ask .underlay-stack { width:min(1100px, 94vw); }
+  #underlay-ask .underlay-stack > [data-underlay-section] { width:100%; }
+  #underlay-ask .underlay-stack .promote-card { max-width:none; width:100%; box-sizing:border-box; }
   /* A button the pull puts out of reach is HIDDEN, not greyed -- see the
      card's own note. The row is flex, so this has to beat its display. */
   #footprint-ask button[hidden] { display:none !important; }
@@ -1855,3 +1867,17 @@
 #line-menu button:disabled { opacity:0.35; cursor:default; }
 #line-menu button:disabled:hover { border-color:transparent; color: var(--ink-primary); }
 #line-menu .line-menu-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }
+/* THE UNDERLAY CHIP'S MENU (jb, 13 Nov), the LINE menu's look to the pixel. */
+#underlay-menu { position:fixed; z-index:40; min-width:150px; padding:4px; box-sizing:border-box;
+    background: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:4px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
+#underlay-menu[hidden] { display:none; }
+#underlay-menu button { display:block; width:100%; text-align:left; border:1px solid transparent;
+    background:none; color: var(--ink-primary); cursor:pointer; padding:5px 10px;
+    font-family: var(--font-ui); font-weight:600; font-size:12px;
+    letter-spacing:0.04em; text-transform:uppercase; border-radius:3px; }
+#underlay-menu button:hover, #underlay-menu button:focus-visible { border-color: var(--accent); color: var(--accent); outline:none; }
+#underlay-menu button.lit { color: var(--accent); }
+#underlay-menu button:disabled { opacity:0.35; cursor:default; }
+#underlay-menu button:disabled:hover { border-color:transparent; color: var(--ink-primary); }
+#underlay-menu .line-menu-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }

@@ -56,7 +56,7 @@ const saved = async page => {
 const r3 = n => Math.round(n * 1000) / 1000;
 const lockAt = async page => JSON.parse(await page.locator('#plan').getAttribute('data-super-lock') || 'null');
 async function grab(page, at, from) {
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   // TWO COPIES ON THE CARD: h1's row picked opens its buttons.
   await page.locator('#hologram-ask [data-hologram-row="h1"]').click();
   await page.locator('#hologram-ask [data-hologram-move="h1"]').click();

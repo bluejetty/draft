@@ -36,7 +36,7 @@ async function open(page, holograms) {
     new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), 'model-drawing'), drawing(holograms));
   await page.goto('/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('#hologram-ask')).toBeVisible();
 }
 test.afterEach(async ({ page }) => { expect(page.__errors || [], 'no page errors').toEqual([]); });
@@ -88,7 +88,7 @@ test('INSIDE lists its own holograms with a tick each; unticking one hides it, o
   // KEPT IN THE FILE: a reload still has it off.
   await page.reload();
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('[data-hologram-inside]')).toContainText('INSIDE (2/3)');
 });
 
@@ -105,13 +105,13 @@ test('HIDE ALL INSIDE takes every one away, SHOW ALL INSIDE brings them back, an
   // before stays hidden (with an empty undo list the key would step a
   // version instead, which proves nothing about this press).
   await page.keyboard.press('Control+z');
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('[data-hologram-inside-all]')).toHaveText('HIDE ALL INSIDE');
   await page.locator('[data-hologram-show="p1"]').click();
   await page.locator('[data-hologram-inside-all]').click();
   await page.locator('[data-hologram-close]').click();
   await page.keyboard.press('Control+z');
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('[data-hologram-inside-all]')).toHaveText('HIDE ALL INSIDE');
   await expect(page.locator('[data-hologram-show="p1"]'), 'still hidden').toHaveText('SHOW');
   await page.locator('[data-hologram-show="p1"]').click();

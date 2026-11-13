@@ -772,7 +772,17 @@ function deckCallouts(saved, levelId) {
   return LP.joistCalloutsFor(saved, Number(levelId), under);
 }
 
+// THE UNDERLAY CHIP'S MENU (13 Nov): PHOTO, TRACE and HOLOGRAM are lines
+// of a right-click menu on the one UNDERLAY chip, not chips of their own.
+// `kind` is the line's data-mode name: 'trace' (PHOTO), 'dxf' (TRACE) or
+// 'hologram'.
+async function underlayPick(page, kind) {
+  await page.locator('[data-mode-underlay]').click({ button: 'right' });
+  await page.locator(`#underlay-menu [data-mode-${kind}]`).click();
+}
+
 module.exports = {
+  underlayPick,
   deckCallouts,
   undesignedTile,
   HALF_HEIGHT_FT,

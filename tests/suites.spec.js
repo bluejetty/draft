@@ -115,7 +115,7 @@ test('INSERTED INTO A HOUSE: it comes in a blue hologram, standing on a floor, a
     boneyardShelves: [{ id: 1, name: 'SHELF 1' }], activeBoneyardShelfId: 1,
     walls: [W('s1', [0, 0], [12, 0], -1), W('s2', [12, 0], [12, 10], -1)] });
   await open(page, drawing(), '/MODEL.html?level=3');
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'cafe.draft', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(suite)) });
@@ -124,6 +124,6 @@ test('INSERTED INTO A HOUSE: it comes in a blue hologram, standing on a floor, a
   const [holo] = d.holograms;
   expect(holo.mode ?? null, 'a blue hologram until it is set to SUITE').toBeNull();
   expect(holo.source.walls.map(w => w.levelId), 'standing on its MAIN FL').toEqual([3, 3]);
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('#hologram-ask [data-hologram-name]').first()).toHaveText('COMMERCIAL SUITE · cafe');
 });

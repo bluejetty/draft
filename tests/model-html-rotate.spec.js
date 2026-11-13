@@ -117,16 +117,16 @@ test('a WC turns whole, and lets go of the corner it shared with the house wall;
 
 test('the PHOTO popup has ROTATE: a quarter turn, the picture\'s sides swapped; one in hand glows and turns from the foot', async ({ page }) => {
   await open(page, { ...drawing(), underlays: [PHOTO] });
-  await page.locator('[data-mode-trace]').click();
-  if (!await page.locator('#trace-ask').isVisible()) await page.locator('[data-mode-trace]').click();
+  await h.underlayPick(page, 'trace');
+  if (!await page.locator('#trace-ask').isVisible()) await h.underlayPick(page, 'trace');
   await expect(page.locator('#trace-ask')).toBeVisible();
   await page.locator('[data-trace-rotate="u1"]').click();
   await page.locator('[data-trace-later]').click();
   let u = (await saved(page)).underlays[0];
   expect([u.turn, u.widthFt, u.heightFt, u.x, u.z]).toEqual([1, 10, 20, -4, 4]);
   // In hand (MOVE): ROTATE in the foot turns the picture.
-  await page.locator('[data-mode-trace]').click();
-  if (!await page.locator('#trace-ask').isVisible()) await page.locator('[data-mode-trace]').click();
+  await h.underlayPick(page, 'trace');
+  if (!await page.locator('#trace-ask').isVisible()) await h.underlayPick(page, 'trace');
   await page.locator('[data-trace-move="u1"]').click();
   await expect(page.locator('#model-rotate')).toBeVisible();
   await page.locator('#model-rotate').click();

@@ -165,7 +165,7 @@ const OTHER = { ...SUITE, walls: SUITE.walls.map(w => ({ ...w })) };
 const twoFiles = () => ({ ...shell(), holograms: [holo('h1', 0), holo('h2', 30),
   { id: 'h3', name: 'suite-b', mode: 'suite', x: 0, z: 15, angleDeg: 0, pivotX: 10, pivotZ: 7.5, source: OTHER }] });
 const openList = async page => {
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await expect(page.locator('#hologram-ask')).toBeVisible();
 };
 
@@ -234,7 +234,7 @@ test('a paste on the plan shows in the list as the next copy', async ({ page }) 
 
 test('a new file brought in takes a colour no file here has, and keeps it', async ({ page }) => {
   await open(page, twoFiles());
-  await page.locator('[data-mode-hologram]').click();
+  await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-ask-upload]').click();
   await page.locator('[data-hologram-file]').setInputFiles(
     { name: 'suite-c.draft', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(SUITE)) });
