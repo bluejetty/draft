@@ -219,11 +219,14 @@ test.describe('the blue house builds', () => {
       await page.keyboard.press('Escape');
       await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
 
-      // NO selectTool HERE. Picking a type at the window ARMS the trace --
-      // "_pressBuildType does two things, records the type AND arms the
-      // outline tool" -- so pressing the key again would put it down, and
-      // the corners below would land on a SELECT tool. The first draft of
-      // this check did exactly that and traced nothing.
+      // THE TOOL IS PICKED UP AGAIN. Picking a type at the window ARMS the
+      // trace -- "_pressBuildType does two things, records the type AND arms
+      // the outline tool" -- and this check once traced straight off that.
+      // Since 13 Nov 2026 the ESC that shuts the board puts the empty OUTLINE
+      // tool down (jb: he draws the house his own way, or sets PROJECT first;
+      // tests/outline-to-autohouse.spec.js), so the corners below would land
+      // on SELECT without this press.
+      await page.keyboard.press('U');
       //
       // pressWorld, NOT h.clickWorld: that helper reads
       // [data-model-canvas], which is the OLD page's canvas, and waits out
