@@ -67,6 +67,12 @@
   #dims-show .sel-chip { flex:none; white-space:nowrap; padding:3px 6px; font-size:9px; line-height:1.2; }
   #dims-show select { font-size:9px; padding:2px 3px; }
   #dims-show .sel-chip[hidden] { display:none; }
+  /* AUTO ROOF / HAND ROOF (jb, 13 Nov 2026): the ROOF level's own pair on
+     the same lane, left of the dims chips. */
+  #roof-mode { position:fixed; bottom:0; height:var(--browser-lane, 24px); z-index:7;
+    display:flex; align-items:center; gap:4px; pointer-events:auto; }
+  #roof-mode[hidden] { display:none; }
+  #roof-mode .sel-chip { flex:none; white-space:nowrap; padding:3px 6px; font-size:9px; line-height:1.2; }
   /* AUTO DIMS ROWS: four rows a side, ticked on or off. */
   #auto-rows { position:fixed; z-index:40; display:flex; flex-direction:column; gap:4px; padding:8px;
     background:var(--surface-page, #fff); border:1px solid var(--line-soft, #c9c9c9);
