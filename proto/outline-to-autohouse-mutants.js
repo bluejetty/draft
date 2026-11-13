@@ -6,11 +6,13 @@
 // TURTLE HOUSE or the OUTLINE tool (or set the PROJECT numbers first), then
 // press the bone and get the autohouse on it.
 //
-// Nine defects that still render: a turtle walk the trace never hears, a
-// second walk that is a second house instead of the garage, a U-key second
-// loop the same, an ESC that leaves the OUTLINE tool in hand, a pick stamped
-// without its garage plan, a re-open that forgets the tile (three ways), and
-// a tile press that throws away the house drawn before it.
+// Twelve defects that still render: a turtle walk the trace never hears, a
+// walk that lands and waits for a bone press, a second walk that is a second
+// house instead of the garage, a U-key second loop the same, an ESC that
+// leaves the OUTLINE tool in hand, a pick stamped without its garage plan, a
+// re-open that forgets the tile (three ways), a walk with no type that asks
+// nothing, a tile press that throws away the house drawn before it, and one
+// that keeps it but waits for the bone.
 //
 // Run: node proto/outline-to-autohouse-mutants.js
 //      (refuses a dirty tree on the mutated files; restores from HEAD)
@@ -23,9 +25,24 @@ const SPEC = 'tests/outline-to-autohouse.spec.js';
 const MUTANTS = [
   { file: 'model/04-levels-notes-bars.js',
     name: 'a TURTLE HOUSE walk is handed to the trace',
-    find: "      if (master) traceLanded(master, made, { garage: rec.garage === true });",
+    find: "      if (master) traceLanded(master, made, { garage: rec.garage === true, buildOnClose: true, fromTurtle: true });",
     with: "",
     test: 'a TURTLE HOUSE walk after ESC is the traced house' },
+  { file: 'model/04-levels-notes-bars.js',
+    name: 'the walk builds on its close, no bone press',
+    find: "      if (master) traceLanded(master, made, { garage: rec.garage === true, buildOnClose: true, fromTurtle: true });",
+    with: "      if (master) traceLanded(master, made, { garage: rec.garage === true, buildOnClose: false, fromTurtle: true });",
+    test: 'a TURTLE HOUSE walk after ESC is the traced house' },
+  { file: 'model/10-tracking-garage.js',
+    name: 'a walk with no type asks with the board',
+    find: "      if (fromTurtle) askTypeForOutline();",
+    with: "",
+    test: 'raises the board to ask' },
+  { file: 'model/10-tracking-garage.js',
+    name: 'the tile pressed over a drawn house builds at once',
+    find: "      paint();\n      window.ModelBuild.build();\n      return;",
+    with: "      paint();\n      return;",
+    test: 'raises the board to ask' },
   { file: 'model/04-levels-notes-bars.js',
     name: 'the second walk is the garage when the type hangs one on the house',
     find: "    rec.garage = wantsGarageNext() || isGarageChoice(window.ModelBuild.chosen());",
@@ -65,7 +82,7 @@ const MUTANTS = [
     name: 'a house drawn before the type is kept as that type’s house',
     find: "      ? { house: tracedHouse, masters: tracedMasters } : null;",
     with: "      ? null : null;",
-    test: 'drawn before any type is picked' },
+    test: 'raises the board to ask' },
 ];
 
 const run = name => {

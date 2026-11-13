@@ -1122,7 +1122,11 @@
     // bone's first press raises the board as it always has.
     if (kind === 'house') {
       const master = (drawing.boneyardOutlines || []).find(m => String(m.id) === String(rec.masterId));
-      if (master) traceLanded(master, made, { garage: rec.garage === true });
+      // AND IT BUILDS ON THE CLOSE, like the board's DRAW HOUSE OUTLINE
+      // press (jb, 13 Nov 2026: "when i draw as a 'house' it should be like
+      // the autohouse using the project info"): the type and the PROJECT
+      // numbers are on the file, so the walk is the whole order.
+      if (master) traceLanded(master, made, { garage: rec.garage === true, buildOnClose: true, fromTurtle: true });
     }
     return true;
   };
@@ -2716,8 +2720,20 @@
     const picked = chosen();
     if (!picked?.entry || activeTool !== 'outline' || outlineCorners.length) return;
     setTool(RESTING_TOOL);
-    sayOnStrip(PICKED_LINE(picked.entry.label));
+    sayOnStrip(wantsGarageNext() ? GARAGE_NEXT_LINE(picked.entry.label) : PICKED_LINE(picked.entry.label));
     paint();
+  };
+  // A TURTLE HOUSE WALK WITH NO TYPE ON THE BOARD asks which house it is:
+  // the board rises with the question, and the tile pressed builds on the
+  // walk at once (model/10 armOutline's orphan rule). jb's card choice, 13
+  // Nov 2026: ask with the board rather than build a 1 STOREY nobody named.
+  const askTypeForOutline = () => {
+    if (classicLocked()) return;
+    signRefusal = {
+      line: 'WHICH HOUSE IS THIS?',
+      note: 'Pick a type off the board and it goes up on your outline.',
+    };
+    callSign(boneFoot, 'menu');
   };
   document.getElementById('dt-close').addEventListener('click', leaveWindow);
   // THE SIGN'S BONE IS THE ORDER, not the drafter's outline -- the other

@@ -101,6 +101,15 @@ async function escapeBoard(page) {
   await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
   await expect(page.locator('#drivethru')).toBeHidden();
 }
+// THE WALK BUILT ON ITS CLOSE (jb, 13 Nov: "when i draw as a 'house' it
+// should be like the autohouse using the project info"): nothing to press,
+// only save and read the file back.
+async function builtOnClose(page) {
+  await page.waitForTimeout(600);
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  return h.savedDrawing(page);
+}
 async function boneBuild(page) {
   await page.locator('#bone').click();
   await page.locator('[data-build-choice-build]').click();
@@ -142,15 +151,13 @@ test('ESC off the board with a type picked puts the OUTLINE tool down and says w
   expect(await page.evaluate(() => [drawing.buildType, drawing.garagePlan])).toEqual(['bungalow', 'attached']);
 });
 
-test('a TURTLE HOUSE walk after ESC is the traced house: the bone builds the whole 1 STOREY on it', async ({ page }) => {
+test('a TURTLE HOUSE walk after ESC is the traced house, and the whole 1 STOREY goes up on it as the walk closes', async ({ page }) => {
   await open(page);
   await pickType(page, 'bungalow', 'bungalow');
   await escapeBoard(page);
   await turtleHouse(page, HOUSE_WALK);
-  // THE TRACE HEARD IT: the next step is the bone, not "draw the outline".
-  await expect(strip(page)).toContainText('Press the bone to build your 1 STOREY');
-  expect(await tool(page), 'no tool armed under a turtle drafter').toBe('select');
-  const d = await boneBuild(page);
+  // THE TRACE HEARD IT AND BUILT, no bone press (jb, 13 Nov).
+  const d = await builtOnClose(page);
   const b = built(d);
   expect(b.main, 'walls round his loop').toBeGreaterThanOrEqual(4);
   expect(b.concrete, 'concrete under it').toBeGreaterThan(0);
@@ -171,11 +178,11 @@ test('with a type that hangs a garage on the house, the second TURTLE HOUSE walk
   await turtleHouse(page, HOUSE_WALK);
   await expect(strip(page)).toContainText('Now the garage: another TURTLE HOUSE walk, or OUTLINE (U)');
   expect(await tool(page)).toBe('select');
+  expect(await page.evaluate(() => drawing.walls.length), 'the house waits for its garage').toBe(0);
   await nextPadPage(page, 2);
   await turtleHouse(page, GARAGE_WALK, { atPoint: [0, 0] });
-  await expect(strip(page)).toContainText('Press the bone to build your 1 STOREY + GARAGE');
-  expect(await page.evaluate(() => drawing.boneyardOutlines.map(m => m.garage === true))).toEqual([false, true]);
-  const d = await boneBuild(page);
+  // THE GARAGE WALK CLOSES THE ORDER: both go up at once.
+  const d = await builtOnClose(page);
   const b = built(d);
   expect(b.houses, 'the house body').toBe(1);
   expect(b.garages, 'the garage body').toBe(1);
@@ -221,7 +228,7 @@ test('the OUTLINE key by hand works the same way: house loop, then the garage lo
   expect(b.roofs).toBe(1);
 });
 
-test('the pick survives a reload: the file carries the type, and the bone builds the turtle house on it', async ({ page }) => {
+test('the pick survives a reload: the file carries the type, and the turtle house goes up on it', async ({ page }) => {
   await open(page);
   await pickType(page, 'bungalow', 'bungalow');
   await escapeBoard(page);
@@ -235,22 +242,23 @@ test('the pick survives a reload: the file carries the type, and the bone builds
   expect(await tool(page), 'and no tool was armed by the re-open').toBe('select');
   await expect(page.locator('#drivethru'), 'the board does not rise over a drafter coming back').toHaveAttribute('data-shut', '');
   await turtleHouse(page, HOUSE_WALK);
-  await expect(strip(page)).toContainText('Press the bone to build your 1 STOREY');
-  const b = built(await boneBuild(page));
-  expect(b.main).toBeGreaterThanOrEqual(4);
+  const b = built(await builtOnClose(page));
+  expect(b.main, 'the restored type built on the walk').toBeGreaterThanOrEqual(4);
   expect(b.roofs).toBe(1);
   expect(b.shelf).toBe(0);
 });
 
-test('a TURTLE HOUSE drawn before any type is picked is the house the tile then builds on', async ({ page }) => {
+test('a TURTLE HOUSE drawn with no type on the board raises the board to ask, and the tile pressed builds on it at once', async ({ page }) => {
   await open(page);
   await turtleHouse(page, HOUSE_WALK);
-  await expect(strip(page)).toContainText('press the bone to build on it');
-  await pickType(page, 'bungalow', 'bungalow');
-  await expect(strip(page)).toContainText('Press the bone to build your 1 STOREY on the outline you drew');
-  expect(await tool(page)).toBe('select');
-  await escapeBoard(page);
-  const d = await boneBuild(page);
+  // THE BOARD RISES WITH THE QUESTION (jb's card choice, 13 Nov: ask rather
+  // than build a 1 STOREY nobody named); the press glows two seconds first.
+  await expect(page.locator('#drivethru')).not.toHaveAttribute('data-shut', '', { timeout: 6000 });
+  await expect(page.locator('#dt-line')).toContainText('WHICH HOUSE IS THIS?');
+  await page.locator('[data-build-family="bungalow"]').click();
+  await page.locator('[data-build-entry="bungalow"]').click();
+  await expect(page.locator('#drivethru'), 'the board came down for the build').toHaveAttribute('data-shut', '');
+  const d = await builtOnClose(page);
   const b = built(d);
   expect(b.roofs).toBe(1);
   expect(b.shelf).toBe(0);

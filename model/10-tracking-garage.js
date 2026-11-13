@@ -1289,12 +1289,17 @@
       if (window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
         // THE HOUSE IS DOWN, SO THE TOOL IN HAND IS THE GARAGE'S.
         outlineGarage = true;
-        sayOnStrip(GARAGE_RUN_LINE);
-      } else {
-        setTool(RESTING_TOOL);
-        sayOnStrip(`Press the bone to build your ${label} on the outline you drew.`);
+        sayOnStrip(GARAGE_NEXT_LINE(label));
+        paint();
+        return;
       }
+      // AND THE HOUSE GOES UP ON THE PRESS (jb, 13 Nov 2026): the walk was
+      // drawn, the tile says which house, nothing is left to ask. The board
+      // comes down first so the build's own show is what he sees.
+      setTool(RESTING_TOOL);
+      setSign(false);
       paint();
+      window.ModelBuild.build();
       return;
     }
     // ── AND THE FIRST CORNER IS ALREADY ON THE BULLSEYE ──────────────────
@@ -1869,7 +1874,11 @@
   // wants the tool out of his hand once he has left the board, and a turtle
   // drafter draws the garage from the pad or picks U himself; the strip says
   // both ways.
-  const traceLanded = (master, copies, { garage = false, armNext = false, buildOnClose = false } = {}) => {
+  // THE TURTLE'S GARAGE LINE, said by the landing and again by ESC off the
+  // board (model/04 leaveWindow) while the house is waiting for its garage.
+  const GARAGE_NEXT_LINE = label => `${label} outline taken. Now the garage: another TURTLE HOUSE walk, or OUTLINE (U) — `
+    + 'start ON the house, three legs out, around and back, and land ON the house.';
+  const traceLanded = (master, copies, { garage = false, armNext = false, buildOnClose = false, fromTurtle = false } = {}) => {
     tracedOutline = copies.find(copy =>
       Number(copy.levelId) === Number(activeLevelId())) || copies[0] || null;
     // THE TYPE ON THE BOARD IS THE ORDER, set by the tile press (armOutline)
@@ -1879,10 +1888,16 @@
     if (garage) tracedGarage = tracedOutline;
     else tracedHouse = tracedOutline;
     // NO TYPE ON THE BOARD YET: the loop is kept as the house in hand, so a
-    // type picked after it builds on it (armOutline keeps an orphan loop),
-    // and the strip's own line stands -- "press the bone", which raises the
-    // board to pick one.
-    if (!tracedOrder) return;
+    // type picked after it builds on it (armOutline keeps an orphan loop).
+    // A TURTLE HOUSE walk raises the board to ask which house this is (jb,
+    // 13 Nov 2026: "when i draw as a 'house' it should be like the autohouse
+    // using the project info" -- the type is the one part of the project
+    // info the walk cannot do without); a U-key loop keeps the strip's own
+    // line, "press the bone", which raises the same board.
+    if (!tracedOrder) {
+      if (fromTurtle) askTypeForOutline();
+      return;
+    }
     const label = tracedOrder.entry?.label || 'house';
     if (!garage && window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
       if (armNext) {
@@ -1892,8 +1907,7 @@
         sayOnStrip(GARAGE_RUN_LINE);
         openGarageLesson();
       } else {
-        sayOnStrip(`${label} outline taken. Now the garage: another TURTLE HOUSE walk, or OUTLINE (U) — `
-          + 'start ON the house, three legs out, around and back, and land ON the house.');
+        sayOnStrip(GARAGE_NEXT_LINE(label));
       }
     } else {
       // THE LAST LOOP CLOSED, SO THE HOUSE GOES UP when the trace came off
