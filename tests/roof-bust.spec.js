@@ -139,6 +139,9 @@ test('UNDO joins the roof back, grouping and all', async ({ page }) => {
   await page.locator('#props-slot [data-roof-bust]').click();
   await page.waitForTimeout(150);
   expect((await state(page)).roofs.length).toBeGreaterThan(1);
+  // One step of the fine-grained UNDO, not a jump back through the history
+  // versions (which Ctrl+Z falls back to when the stack is empty).
+  expect(await page.evaluate(() => undoStack[undoStack.length - 1]?.kind)).toBe('assembly');
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(150);
   const back = await state(page);
@@ -183,9 +186,21 @@ test('a ridge corner dragged on one piece takes the same corner of its neighbour
     return { x, z, n };
   });
   expect(corner.n).toBeGreaterThanOrEqual(3);
-  // Pick the piece whose eave is the north edge, arm MOVE, drag that corner 4' east.
-  await click(page, at, 30, -4);
-  expect((await state(page)).picked.length).toBe(1);
+  // Pick one of the pieces that owns that corner (a press inside it), arm
+  // MOVE, and drag the corner 4' east.
+  const inside = await page.evaluate(({ x, z }) => {
+    const r = drawing.roofs.find(rf => rf.points.some(p => Math.abs(p.x - x) < 0.05 && Math.abs(p.z - z) < 0.05));
+    const n = r.points.length;
+    return { id: r.id, x: r.points.reduce((a, p) => a + p.x, 0) / n, z: r.points.reduce((a, p) => a + p.z, 0) / n };
+  }, corner);
+  await click(page, at, inside.x, inside.z);
+  expect((await state(page)).picked).toEqual([`roof:${inside.id}`]);
+  // Every other corner, to be found where it was afterwards: the drag takes
+  // ONE corner (and its twins), not the pieces.
+  const others = () => page.evaluate(({ x, z }) => drawing.roofs.flatMap(r => r.points
+    .filter(p => Math.abs(p.z - z) > 0.05 || (Math.abs(p.x - x) > 0.05 && Math.abs(p.x - (x + 4)) > 0.05))
+    .map(p => `${r.id}:${p.x.toFixed(2)},${p.z.toFixed(2)}`)).sort(), corner);
+  const othersBefore = await others();
   await page.locator('#model-move').click();
   await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
   await page.mouse.move(...at(corner.x, corner.z));
@@ -200,6 +215,7 @@ test('a ridge corner dragged on one piece takes the same corner of its neighbour
     Math.abs(p.x - x) < 0.05 && Math.abs(p.z - z) < 0.05)).length, corner);
   expect(moved, 'pieces whose corner followed the drag').toBe(corner.n);
   expect(left, 'pieces whose corner stayed behind').toBe(0);
+  expect(await others(), 'every other corner').toEqual(othersBefore);
   // One UNDO puts every piece's corner back.
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(150);
@@ -356,4 +372,26 @@ test('E1 hangs a 10" board under the main roof once its fascia is typed', async 
   const span = rows => rows.length ? rows[rows.length - 1] - rows[0] : -1;
   expect(before.length, `before ${before}`).toBeGreaterThan(1);
   expect(span(after) - span(before), `after ${after}, before ${before}`).toBeGreaterThanOrEqual(3);
+});
+
+// THE READER EVERY SHEET GOES THROUGH. MODEL keeps a roof as it was saved, but
+// LAYOUT's elevations and ESTIMATES read the file through drawing-format's
+// roofs(), which once wrote the standard board on every roof and knew no
+// JOINT. A busted roof with a 10" fascia has to come out of it as it went in;
+// a fascia past the drafting limits comes out as the standard board.
+test('LAYOUT\'s reader keeps a piece\'s JOINT edges and its typed fascia', async ({ page }) => {
+  await page.goto('/LAYOUT.html');
+  await page.waitForFunction(() => window.DraftCutViewEnv && window.DraftDrawingFormat);
+  const saved = drawing();
+  saved.roofs[0].edges = ['eave', 'joint', 'joint', 'gable', 'joint', 'joint', 'joint', 'joint'];
+  saved.roofs[0].fascia = 10;
+  saved.roofs.push({ ...saved.roofs[0], id: 'roof-2', fascia: 40 });
+  const got = await page.evaluate(saved => {
+    const env = window.DraftCutViewEnv.buildCutViewEnv(saved, saved.levels.map(l => ({ ...l })));
+    return env.roofs().map(r => ({ id: r.id, edges: r.edges, fascia: r.fascia }));
+  }, saved);
+  expect(got).toEqual([
+    { id: 'roof-1', edges: saved.roofs[0].edges, fascia: 10 },
+    { id: 'roof-2', edges: saved.roofs[0].edges, fascia: 5.5 },
+  ]);
 });
