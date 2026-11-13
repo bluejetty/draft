@@ -565,9 +565,18 @@ if (!window.DraftGeometry2D) {
   // against the house wall and drains the roof onto it. So a step there is
   // roofed straight up to ROOF_SEAM_JOG_FT. A step is AT THE SEAM when the
   // jog edge and the parallel edge after it belong to different bodies
-  // (`opts.bodies`: the house loop, the garage loop, the room over it) --
-  // a step in the house's own front stays a step past 1'-2".
+  // (`opts.bodies`: the house loop FIRST, then the garage loop, the room
+  // over it) -- a step in the house's own front stays a step past 10".
+  // AND IT IS THE GARAGE'S ROOF THAT GROWS, NOT THE HOUSE'S: past the old
+  // 1'-6" the edge that slides out must not be the house's. A garage front
+  // 3 ft behind the house's front slides out to the house's line; a garage
+  // side 5 ft proud of the house's side (the premade bungalow's) would slide
+  // the house's 40 ft wall out 5 ft and hang a storey's length of roof off
+  // nothing, so it stays a step. Movie's 17 Oct garage, a foot proud of the
+  // house's front, still slides the house's front out that foot (the rule
+  // as it stood, kept for the house's edge: ROOF_SEAM_HOUSE_JOG_FT).
   const ROOF_SEAM_JOG_FT = 6;
+  const ROOF_SEAM_HOUSE_JOG_FT = 1.5;
   const loopWithoutJogs = (points, jogFt = ROOF_JOG_FT, opts = {}) => {
     const ring = Array.isArray(points) ? points.map(pt => ({ x: pt.x, z: pt.z })) : [];
     const bodies = (Array.isArray(opts.bodies) ? opts.bodies : [])
@@ -632,6 +641,12 @@ if (!window.DraftGeometry2D) {
         // the step lands in B's own strip and says nothing).
         const probe = { x: (a.x + v.x) / 2 + jx / jl * 0.01, z: (a.z + v.z) / 2 + jz / jl * 0.01 };
         const jOutward = !insideOf(probe, live);
+        // AT THE SEAM the inner edge, the one about to slide out, must be
+        // the garage's (or the room's) past 1'-6": bodies[0] is the house.
+        if (jl > Math.max(jogFt, ROOF_SEAM_HOUSE_JOG_FT) + eps) {
+          const inner = jOutward ? bodiesOf(a, v) : bodiesOf(b, c);
+          if (inner.includes(0)) continue;
+        }
         const next = live.map(pt => ({ ...pt }));
         const keptNext = kept.slice();
         if (jOutward) {
@@ -4528,6 +4543,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     loopWithoutJogs,
     ROOF_JOG_FT,
     ROOF_SEAM_JOG_FT,
+    ROOF_SEAM_HOUSE_JOG_FT,
     roofSkeleton,
     mergeVertex,
     roofFaces,

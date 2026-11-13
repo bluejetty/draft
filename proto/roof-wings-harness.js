@@ -375,6 +375,42 @@ check("a 6 ft step at the seam is still roofed straight; 6'-1\" is past the limi
   };
   return [[at(6), at(6 + 1 / 12)].join(','), '4,6'];
 });
+// THE PREMADE BUNGALOW: the garage's right side stands 5 ft proud of the
+// house's, so at the seam the HOUSE's 39 ft wall is the inner edge. Roofed
+// straight it would carry the house's eave 5 ft out along the whole
+// house; it stays a step. Only the garage's edge may slide to the house's line.
+check("a 5 ft step at the seam whose inner edge is the house's wall stays a step", G => {
+  const house = ring([[-16, -20], [16, -20], [16, 20], [-16, 20]]);
+  const garage = ring([[16, 20], [16, 19], [21, 19], [21, 46], [-4, 46], [-4, 20]]);
+  const loop = ring([[-16, -20], [16, -20], [16, 19], [21, 19], [21, 46], [-4, 46], [-4, 20], [-16, 20]]);
+  const out = G.loopWithoutJogs(loop, undefined, { bodies: [house, garage] });
+  return [out.points.length, 8];
+});
+check("a 1'-6\" step at the seam still slides the house's edge (Movie's garage, 17 Oct); 1'-7\" does not", G => {
+  const at = d => {
+    const house = ring([[-16, -20], [16, -20], [16, 20], [-16, 20]]);
+    const garage = ring([[16, 20], [16, 19], [16 + d, 19], [16 + d, 46], [-4, 46], [-4, 20]]);
+    const loop = ring([[-16, -20], [16, -20], [16, 19], [16 + d, 19], [16 + d, 46], [-4, 46], [-4, 20], [-16, 20]]);
+    return G.loopWithoutJogs(loop, undefined, { bodies: [house, garage] }).points.length;
+  };
+  return [[at(1.5), at(1.5 + 1 / 12)].join(','), '6,8'];
+});
+check("the same step with the bodies the other way round (garage first) slides: the order says which is the house", G => {
+  const house = ring([[-16, -20], [16, -20], [16, 20], [-16, 20]]);
+  const garage = ring([[16, 20], [16, 19], [21, 19], [21, 46], [-4, 46], [-4, 20]]);
+  const loop = ring([[-16, -20], [16, -20], [16, 19], [21, 19], [21, 46], [-4, 46], [-4, 20], [-16, 20]]);
+  const out = G.loopWithoutJogs(loop, undefined, { bodies: [garage, house] });
+  return [out.points.length, 6];
+});
+check("a 3 ft step in the GARAGE's own side wall is a step even with both bodies named", G => {
+  // The garage's east wall steps 3 ft at z=30: both edges of that step are
+  // the garage's, so it is no seam, and the garage's roof follows it.
+  const house = ring([[-16, -20], [16, -20], [16, 20], [-16, 20]]);
+  const garage = ring([[16, 20], [19, 20], [19, 30], [22, 30], [22, 46], [-4, 46], [-4, 20]]);
+  const loop = ring([[-16, -20], [16, -20], [16, 20], [19, 20], [19, 30], [22, 30], [22, 46], [-4, 46], [-4, 20], [-16, 20]]);
+  const out = G.loopWithoutJogs(loop, undefined, { bodies: [house, garage] });
+  return [out.points.length, 10];
+});
 check("a 6'-1\" step at the seam stays (second reading, plain call)", G => {
   const house = ring([[0, 0], [20, 0], [20, 30], [0, 30]]);
   const garage = ring([[20, 6 + 1 / 12], [32, 6 + 1 / 12], [32, 30], [20, 30]]);
@@ -429,6 +465,12 @@ const MUTATIONS = [
     s => s.replace('  const ROOF_JOG_FT = 10 / 12;', '  const ROOF_JOG_FT = 1;')],
   ['the seam limit is a plain 1\'-2" (no house-seam rule)',
     s => s.replace('  const ROOF_SEAM_JOG_FT = 6;', '  const ROOF_SEAM_JOG_FT = 14 / 12;')],
+  ["the house's edge at the seam slides only to 10\" (its 1'-6\" allowance gone)",
+    s => s.replace('  const ROOF_SEAM_HOUSE_JOG_FT = 1.5;', '  const ROOF_SEAM_HOUSE_JOG_FT = 0;')],
+  ["the house's edge at the seam slides to 2 ft",
+    s => s.replace('  const ROOF_SEAM_HOUSE_JOG_FT = 1.5;', '  const ROOF_SEAM_HOUSE_JOG_FT = 2;')],
+  ["the house's own wall slides out at the seam (inner-edge test gone)",
+    s => s.replace('          if (inner.includes(0)) continue;', '          if (false) continue;')],
   ['the seam limit is 8 ft',
     s => s.replace('  const ROOF_SEAM_JOG_FT = 6;', '  const ROOF_SEAM_JOG_FT = 8;')],
   ['a step at the seam is read as any step (seam test always false)',
