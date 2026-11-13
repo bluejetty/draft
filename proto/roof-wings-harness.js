@@ -321,20 +321,73 @@ check('his 16 Oct house: the stub is the east part, flush where it stands agains
 // stands a foot north of the house's line: the roof ring takes the outer
 // line, the wall keeps its jog.
 const JOGGED_GARAGE = ring([[0, 0], [0, -1], [6, -1], [6, 21], [-20, 21], [-20, 0]]);
-check('a foot of jog in the garage front comes out of the roof ring, onto the outer line', G => {
-  const out = G.loopWithoutJogs(JOGGED_GARAGE);
+const JOGGED_HOUSE = ring([[0, 0], [0, 21], [-20, 21], [-20, 0]]);
+const JOGGED_GARAGE_BODY = ring([[0, -1], [6, -1], [6, 21], [0, 21]]);
+check('a foot of jog in the garage front, at the house seam, comes out of the roof ring, onto the outer line', G => {
+  const out = G.loopWithoutJogs(JOGGED_GARAGE, undefined, { bodies: [JOGGED_HOUSE, JOGGED_GARAGE_BODY] });
   return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[6,-1],[6,21],[-20,21],[-20,-1]]'];
 });
 check('a jog that steps inward slides the inner edge out too', G => {
-  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 11], [0, 11]]));
-  return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[0,0],[10,0],[10,11],[0,11]]'];
+  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 10.5], [0, 10.5]]));
+  return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[0,0],[10,0],[10,10.5],[0,10.5]]'];
+});
+check("a jog of 10\" is still a jog: out of the ring", G => {
+  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 10 + 10 / 12], [0, 10 + 10 / 12]]));
+  return [out.points.length, 4];
+});
+check("a step of 11\" is a step (jb, 13 Nov 2026: \"everywhere else make it 10in\"): the roof follows it", G => {
+  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 10 + 11 / 12], [0, 10 + 11 / 12]]));
+  return [out.points.length, 6];
+});
+check("a foot of jog in the garage front with NO bodies named is a step now", G => {
+  return [G.loopWithoutJogs(JOGGED_GARAGE).points.length, 6];
+});
+// THE SEAM WITH THE HOUSE (jb, 13 Nov 2026: "don't jog if its connected to
+// the house, allow 2-6 even ... maybe we should even make it 4 ft"; jb
+// chose 6 ft): the
+// garage's front stands 3 ft back from the house's; roofed as the walls
+// stand, the valley drains into the house wall. With the two bodies named
+// the step is roofed straight on the house's line.
+const SEAM_HOUSE = ring([[0, 0], [20, 0], [20, 30], [0, 30]]);
+const SEAM_GARAGE = ring([[20, 3], [32, 3], [32, 30], [20, 30]]);
+const SEAM_LOOP = ring([[0, 0], [20, 0], [20, 3], [32, 3], [32, 30], [0, 30]]);
+check("a 3 ft step where the garage meets the house is roofed straight (6 ft seam limit)", G => {
+  const out = G.loopWithoutJogs(SEAM_LOOP, undefined, { bodies: [SEAM_HOUSE, SEAM_GARAGE] });
+  return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[0,0],[32,0],[32,30],[0,30]]'];
+});
+check("the same 3 ft step with no bodies named is a step: the roof follows it", G => {
+  const out = G.loopWithoutJogs(SEAM_LOOP);
+  return [out.points.length, 6];
+});
+check("a 3 ft step in the house's OWN front is a step even with the garage named", G => {
+  const loop = ring([[0, 0], [10, 0], [10, 3], [20, 3], [20, 30], [0, 30]]);
+  const house = loop;
+  const garage = ring([[20, 10], [30, 10], [30, 30], [20, 30]]);
+  const out = G.loopWithoutJogs(loop, undefined, { bodies: [house, garage] });
+  return [out.points.length, 6];
+});
+check("a 6 ft step at the seam is still roofed straight; 6'-1\" is past the limit and stays", G => {
+  const at = d => {
+    const house = ring([[0, 0], [20, 0], [20, 30], [0, 30]]);
+    const garage = ring([[20, d], [32, d], [32, 30], [20, 30]]);
+    const loop = ring([[0, 0], [20, 0], [20, d], [32, d], [32, 30], [0, 30]]);
+    return G.loopWithoutJogs(loop, undefined, { bodies: [house, garage] }).points.length;
+  };
+  return [[at(6), at(6 + 1 / 12)].join(','), '4,6'];
+});
+check("a 6'-1\" step at the seam stays (second reading, plain call)", G => {
+  const house = ring([[0, 0], [20, 0], [20, 30], [0, 30]]);
+  const garage = ring([[20, 6 + 1 / 12], [32, 6 + 1 / 12], [32, 30], [20, 30]]);
+  const loop = ring([[0, 0], [20, 0], [20, 6 + 1 / 12], [32, 6 + 1 / 12], [32, 30], [0, 30]]);
+  const out = G.loopWithoutJogs(loop, undefined, { bodies: [house, garage] });
+  return [out.points.length, 6];
 });
 check('four feet of step is a step, not a jog, and stays', G => {
   const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 14], [0, 14]]));
   return [out.points.length, 6];
 });
 check("the caller's edge numbers follow the slide: the edge after the jog is still found", G => {
-  const out = G.loopWithoutJogs(JOGGED_GARAGE);
+  const out = G.loopWithoutJogs(JOGGED_GARAGE, undefined, { bodies: [JOGGED_HOUSE, JOGGED_GARAGE_BODY] });
   // edge 2 was (6,-1)->(6,21), the garage's front; edge 1 was the jog
   // itself and now reads as the edge before it; edge 5, (-20,0)->(0,0),
   // slid onto the outer line as the first edge.
@@ -369,9 +422,21 @@ const MUTATIONS = [
   ['a wall grazing a sliver splits the ring',
     s => s.replace("  if (primaryAt < 0 || !(info[primaryAt].wallSide.wallLen > sliverFt)) {", "  if (primaryAt < 0) {")],
   ['a jog is left in the roof ring',
-    s => s.replace('        if (jl < eps || jl > jogFt + eps) continue;', '        continue;')],
+    s => s.replace('        if (jl < eps || jl > limit + eps) continue;', '        continue;')],
   ['a four-foot step is taken out like a jog',
-    s => s.replace('  const ROOF_JOG_FT = 1.5;', '  const ROOF_JOG_FT = 4.1;')],
+    s => s.replace('  const ROOF_JOG_FT = 10 / 12;', '  const ROOF_JOG_FT = 4.1;')],
+  ["a foot of step in a body's own wall is taken out like a jog",
+    s => s.replace('  const ROOF_JOG_FT = 10 / 12;', '  const ROOF_JOG_FT = 1;')],
+  ['the seam limit is a plain 1\'-2" (no house-seam rule)',
+    s => s.replace('  const ROOF_SEAM_JOG_FT = 6;', '  const ROOF_SEAM_JOG_FT = 14 / 12;')],
+  ['the seam limit is 8 ft',
+    s => s.replace('  const ROOF_SEAM_JOG_FT = 6;', '  const ROOF_SEAM_JOG_FT = 8;')],
+  ['a step at the seam is read as any step (seam test always false)',
+    s => s.replace("        if (jl > jogFt + eps && !atSeam(v, b, b, c) && !atSeam(a, v, v, b)) continue;",
+      '        if (jl > jogFt + eps) continue;')],
+  ['a step anywhere is a jog once bodies are named (seam test always true)',
+    s => s.replace("        if (jl > jogFt + eps && !atSeam(v, b, b, c) && !atSeam(a, v, v, b)) continue;",
+      '        if (false) continue;')],
   ['the jog slides onto the inner line, leaving a foot of wall bare',
     s => s.replace('        const jOutward = !insideOf(probe, live);', '        const jOutward = insideOf(probe, live);')],
   ['the stepped offset slants like the variable one',

@@ -549,9 +549,49 @@ if (!window.DraftGeometry2D) {
   // foot along its own edge. The wall keeps its jog; the roof does not.
   // `kept` is the surviving vertices' old indices, moved ones included, so
   // a caller's edge indices follow (raiseRoofOver's flush / rake lists).
-  const ROOF_JOG_FT = 1.5;
-  const loopWithoutJogs = (points, jogFt = ROOF_JOG_FT) => {
+  //
+  // HOW SHORT IS A JOG: 10" (jb, 13 Nov 2026, on a house whose corner
+  // stepped back a foot and a half: "how come it didn't jog the roof
+  // overhang where the gable jogged back?" ... "everywhere else make it
+  // 10in"). The limit was 1'-6"; a step of more than 10" in a body's own
+  // wall is a step the roof follows with a hip of its own. Movie's garage
+  // jog is one foot, but it is AT THE HOUSE SEAM, and that is the rule below.
+  const ROOF_JOG_FT = 10 / 12;
+  // ...EXCEPT WHERE THE GARAGE MEETS THE HOUSE (jb, 13 Nov 2026: "don't jog
+  // if its connected to the house, allow 2-6 even ... when it connects to
+  // the house if it jogs back it messes up the drainage ... maybe we should
+  // even make it 4 ft" -- jb chose 6 ft). A garage front set back from the house
+  // front, roofed as the walls stand, puts a valley into the inside corner
+  // against the house wall and drains the roof onto it. So a step there is
+  // roofed straight up to ROOF_SEAM_JOG_FT. A step is AT THE SEAM when the
+  // jog edge and the parallel edge after it belong to different bodies
+  // (`opts.bodies`: the house loop, the garage loop, the room over it) --
+  // a step in the house's own front stays a step past 1'-2".
+  const ROOF_SEAM_JOG_FT = 6;
+  const loopWithoutJogs = (points, jogFt = ROOF_JOG_FT, opts = {}) => {
     const ring = Array.isArray(points) ? points.map(pt => ({ x: pt.x, z: pt.z })) : [];
+    const bodies = (Array.isArray(opts.bodies) ? opts.bodies : [])
+      .filter(body => Array.isArray(body) && body.length >= 3);
+    const seamJogFt = Number.isFinite(opts.seamJogFt) ? opts.seamJogFt : ROOF_SEAM_JOG_FT;
+    const limit = bodies.length > 1 ? Math.max(jogFt, seamJogFt) : jogFt;
+    // WHICH BODIES AN EDGE LIES ON: its middle sits on one of the body's
+    // walls (within a tenth of an inch).
+    const onWall = (p, body) => body.some((a, k) => {
+      const b = body[(k + 1) % body.length];
+      const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
+      if (len2 < 1e-12) return false;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
+      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t)) < 0.01;
+    });
+    const bodiesOf = (p, q) => {
+      const mid = { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 };
+      return bodies.map((body, k) => (onWall(mid, body) ? k : -1)).filter(k => k >= 0);
+    };
+    const atSeam = (p, q, r, s) => {
+      const first = bodiesOf(p, q), second = bodiesOf(r, s);
+      return first.length > 0 && second.length > 0
+        && (first.some(k => !second.includes(k)) || second.some(k => !first.includes(k)));
+    };
     let kept = ring.map((_, index) => index);
     let live = ring;
     const eps = 1e-6;
@@ -576,7 +616,7 @@ if (!window.DraftGeometry2D) {
         const a = live[(i + n - 1) % n], c = live[(i + 2) % n];
         const jx = b.x - v.x, jz = b.z - v.z;
         const jl = Math.hypot(jx, jz);
-        if (jl < eps || jl > jogFt + eps) continue;
+        if (jl < eps || jl > limit + eps) continue;
         // A and B axis-aligned, parallel to each other and square to J.
         const ax = v.x - a.x, az = v.z - a.z, bx = c.x - b.x, bz = c.z - b.z;
         const al = Math.hypot(ax, az), bl = Math.hypot(bx, bz);
@@ -584,6 +624,9 @@ if (!window.DraftGeometry2D) {
         const parallel = Math.abs(ax * bz - az * bx) < 1e-6 * al * bl;
         const square = Math.abs(ax * jx + az * jz) < 1e-6 * al * jl;
         if (!parallel || !square) continue;
+        // PAST THE PLAIN LIMIT only a step at the house seam is a jog: the
+        // jog edge is one body's wall and the edge after it another's.
+        if (jl > jogFt + eps && !atSeam(v, b, b, c) && !atSeam(a, v, v, b)) continue;
         // Which of the two lines is the outer one: J points outward when a
         // step along it from the MIDDLE of A leaves the ring (from A's end
         // the step lands in B's own strip and says nothing).
@@ -4483,6 +4526,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     cricketRing,
     loopWithoutSpikes,
     loopWithoutJogs,
+    ROOF_JOG_FT,
+    ROOF_SEAM_JOG_FT,
     roofSkeleton,
     mergeVertex,
     roofFaces,

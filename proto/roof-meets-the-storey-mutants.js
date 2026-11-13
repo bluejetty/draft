@@ -70,8 +70,8 @@ const MUTANTS = [
 
   { file: 'model/12-garage-storeys-stairs.js',
     name: 'the roof is never asked to meet the wall: the cut is not passed',
-    find: '          buildType: roofType, notch: houseRoofNotch, collect,\n',
-    with: '          buildType: roofType, notch: null, collect,\n',
+    find: '          buildType: roofType, notch: houseRoofNotch, collect, seamBodies,\n',
+    with: '          buildType: roofType, notch: null, collect, seamBodies,\n',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'model/12-garage-storeys-stairs.js',

@@ -532,7 +532,8 @@
     const { garage = false, plateHeightFt = null,
       sourceLevelId = null, against = null, flush = null, rake = null,
       follows = garage ? 'attachedGarage' : 'house', buildType = drawing.buildType,
-      stepped = false, cuts = null, notch = null, collect = null, wings = true } = opts;
+      stepped = false, cuts = null, notch = null, collect = null, wings = true,
+      seamBodies = null } = opts;
     const G = window.DraftGeometry2D;
     // ── THE OVERHANG AND PITCH ARE THE PROJECT PAGE'S ────────────────────
     //
@@ -561,8 +562,12 @@
     // AND A JOG IN THE WALL IS NOT A JOG IN THE ROOF (Movie, 17 Oct: "should
     // just be a normal hip without the extra little hip where it jogs"):
     // geometry-2d loopWithoutJogs takes a foot of step out of the ring, and
-    // the caller's edge numbers follow through both cleanings.
-    const unjogged = G.loopWithoutJogs ? G.loopWithoutJogs(cleaned.points)
+    // the caller's edge numbers follow through both cleanings. `seamBodies` (the
+    // house, its garage, the room over it) lets a deeper step be roofed
+    // straight where one body meets the other (jb, 13 Nov 2026: a garage
+    // front jogged back from the house would put a valley into the house
+    // wall and "messes up the drainage").
+    const unjogged = G.loopWithoutJogs ? G.loopWithoutJogs(cleaned.points, undefined, { bodies: seamBodies })
       : { points: cleaned.points, kept: cleaned.points.map((_, index) => index) };
     let ring = unjogged.points;
     const ringIndexOf = new Map();
@@ -4756,6 +4761,11 @@
       return !!G.roofEndAttachment(ring);
     };
     if (levelPresent(ROOF_LEVEL_ID)) {
+      // THE BODIES THE LOOPS ARE MADE OF -- the house, its garage, the room
+      // over it -- so raiseRoofOver knows a step at the seam between two of
+      // them from a step in one body's own wall (loopWithoutJogs' house-seam
+      // rule, jb 13 Nov 2026).
+      const seamBodies = [plan.house, plan.garage, plan.overGarage].filter(Array.isArray);
       // THE ROOF'S OWN LOOP, which is NOT always the house's body. A
       // bungalow with a garage is roofed over the perimeter of both -- the
       // design says so through `houseRoof`, because where the two bodies
@@ -4771,9 +4781,9 @@
       const gableWallRuns = [];
       madeRoofs.push(twoRoofs
         ? raiseRoofOver(twoRoofs.house.ring, { buildType: roofType, flush: twoRoofs.house.flush,
-          stepped: true, cuts: twoRoofs.house.cuts, collect })
+          stepped: true, cuts: twoRoofs.house.cuts, collect, seamBodies })
         : raiseRoofOver(plan.houseRoof || plan.house, {
-          buildType: roofType, notch: houseRoofNotch, collect,
+          buildType: roofType, notch: houseRoofNotch, collect, seamBodies,
           // ONE ROOF STAYS ONE ROOF (Movie, 6 Oct: "if both walls are same
           // height exactly they should be ONE roof"). When the design hands
           // the house and its garage one loop to roof, and the house's OWN
@@ -4840,7 +4850,7 @@
         madeRoofs.push(raiseRoofOver(plan.garageRoof, {
           buildType: roofType,
           garage: true,
-          collect,
+          collect, seamBodies,
           plateHeightFt: garagePlateFt,
           sourceLevelId: levelId,
           // THE EDGE THE DESIGN SAYS DIES INTO THE BUILDING BEHIND IT. With a
