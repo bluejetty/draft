@@ -513,14 +513,16 @@
     const { overhangFt, pitch } = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
     const edges = s.wallRing.map((p, i) => (s.gables.has(i) ? 'gable' : 'eave'));
     const overs = hipOvers(s);
-    const onStorey = storeyHere();
+    // Where it sits and bears: the piece's own rules (pieceBearsOn, and
+    // drawn on the storey it was drawn on, none from the ROOF plan).
+    const hipDrawnOn = storeyHere() ? { drawnOn: Number(activeLevelId()) } : {};
     drawing.roofs = drawing.roofs || [];
     const roof = addItem(drawing.roofs, {
       id: newDrawingItemId('roof'),
       points: ring.map(p => ({ x: p.x, y: 0, z: p.z })),
       levelId: ROOF_LEVEL_ID,
       sourceLevelId: pieceBearsOn(),
-      ...(onStorey ? { drawnOn: Number(activeLevelId()) } : {}),
+      ...hipDrawnOn,
       sourceShapeId: null,
       edges,
       overhang: Number((overhangFt > 0 ? overhangFt : 0).toFixed(4)),
