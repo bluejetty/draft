@@ -1105,6 +1105,64 @@
       drop(hit);
     }
   };
+  // A ROOF PULLED ACROSS ITSELF IS TWO ROOFS (jb, 14 Nov 2026, seen on a
+  // roof piece: the broken edge pulled over the far edge made "an inverted
+  // shape"; ArchiCAD "would split it into 2 shapes when i finish the
+  // command"). The crossing ring is cut at the crossing (splitCrossedLoop)
+  // and each lobe is a roof of its own: each edge keeps its kind, overhang
+  // and heel from the edge it lies along, the pitch, fascia and finish are
+  // the one roof's, a dormer goes with the lobe it stands on, and the wall
+  // line is worked out again from the overhangs (no footprint carried, as
+  // BREAK ROOF does). The pieces take the roof's place in the list and in
+  // any assembly; the roof itself is left as it stood before the drag, so
+  // ONE UNDO puts it back whole. Null when the ring does not cross.
+  const splitCrossedRoof = (roof, before) => {
+    const G = window.DraftGeometry2D;
+    const list = drawing?.roofs;
+    if (!G?.splitCrossedLoop || !Array.isArray(list) || !list.includes(roof)) return null;
+    const lobes = G.splitCrossedLoop(roof.points);
+    if (!lobes || lobes.length < 2) return null;
+    const n = roof.points.length;
+    const y = roof.points[0]?.y ?? 0;
+    const kinds = roof.points.map((_, k) => roofEdgeKind(roof.edges?.[k]));
+    const overs = roofOverhangs(roof);
+    const heels = Array.isArray(roof.edgeHeelIn) && roof.edgeHeelIn.length === n ? roof.edgeHeelIn : null;
+    const gables = Array.isArray(roof.crossGables) ? roof.crossGables : [];
+    const freshId = () => {
+      let id = newDrawingItemId('roof');
+      while (list.some(r => String(r.id) === id)) id = newDrawingItemId('roof');
+      return id;
+    };
+    const base = JSON.parse(JSON.stringify(before));
+    delete base.footprint;
+    delete base.crossGables;
+    const pieces = lobes.map(lobe => {
+      const piece = { ...base, id: freshId(), follows: 'none',
+        points: lobe.map(e => (e.made ? { x: e.pt.x, y, z: e.pt.z } : { ...e.pt })),
+        edges: lobe.map(e => kinds[e.edge]),
+        edgeOverhang: lobe.map(e => overs[e.edge]) };
+      if (heels) piece.edgeHeelIn = lobe.map(e => heels[e.edge]);
+      const own = gables.filter(g => g?.at && pointInRing(piece.points, g.at));
+      if (own.length) piece.crossGables = own.map(g => ({ ...g, at: { ...g.at } }));
+      return piece;
+    });
+    Object.keys(roof).forEach(key => { if (!(key in before)) delete roof[key]; });
+    Object.assign(roof, before);
+    const at = list.indexOf(roof);
+    list.splice(at, 1, ...pieces);
+    const groupsBefore = groups().slice();
+    drawing.groups = groups().map(group => ({ ...group,
+      members: (group.members || []).flatMap(m => (m.type === 'roof' && String(m.id) === String(roof.id)
+        ? pieces.map(piece => ({ type: 'roof', id: piece.id })) : [m])) }));
+    undoStack.push({ kind: 'assembly', undo: () => {
+      const first = list.indexOf(pieces[0]);
+      pieces.forEach(piece => { const k = list.indexOf(piece); if (k >= 0) list.splice(k, 1); });
+      list.splice(first < 0 ? list.length : first, 0, roof);
+      drawing.groups = groupsBefore;
+      syncAssembly();
+    } });
+    return pieces;
+  };
   const roofNodeAt = (roof, at, px = SELECT_GRAB_PX) => {
     const reach = px / view.scale;
     let best = null;
@@ -1991,7 +2049,12 @@
         const catchFt = snapLive() ? ROOF_EDGE_STOP_IN / 12 * snapStrength() : 0;
         stops.sort((p, q) => Math.abs(p) - Math.abs(q));
         const stop = stops[0];
-        if (stop != null && (Math.abs(dist) > Math.abs(stop) || Math.abs(dist - stop) < catchFt)) dist = stop;
+        // A BROKEN HALF IS NOT HELD AT THE CORNER (jb, 14 Nov 2026): pulled
+        // across and over the far edge it crosses the roof, and the release
+        // cuts the roof in two there (splitCrossedRoof), ArchiCAD's way. The
+        // 3" catch still lands it flush when the hand is near.
+        const half = n > d.befores[0].points.length;
+        if (stop != null && ((!half && Math.abs(dist) > Math.abs(stop)) || Math.abs(dist - stop) < catchFt)) dist = stop;
         roof.points = slideEdge(roof.points, i, dist);
         if (roof.footprint) roof.footprint = slideEdge(roof.footprint, i, dist);
       }
@@ -2101,6 +2164,18 @@
       const near = d.kind === 'nodes' ? moveState.node.list.slice()
         : d.kind === 'node' ? [d.node] : [d.edgeNow ?? d.edge, ((d.edgeNow ?? d.edge) + 1) % n];
       tidyRoof(roof, near);
+      // PULLED ACROSS ITSELF, IT IS TWO ROOFS (jb, 14 Nov 2026): the lobes
+      // picked, their own UNDO step in place of the move's.
+      const split = splitCrossedRoof(roof, d.befores[0]);
+      if (split) {
+        moveState.node = null;
+        roofEdgeIdx = null;
+        markDirty();
+        setSelection(split.map(item => ({ type: 'roof', item })));
+        sayOnStrip(`${d.kind === 'edge' ? 'Edge' : 'Node'} moved across the roof, so it is now ${split.length} roofs. UNDO joins them back.`);
+        paint();
+        return;
+      }
     }
     undoStack.push({ kind: 'props', edits: d.targets.map((item, k) => ({ item, before: d.befores[k] })) });
     moveState.node = null;

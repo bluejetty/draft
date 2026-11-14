@@ -1621,7 +1621,13 @@
             const next = pts[(i + 1) % pts.length], prev = pts[(i - 1 + pts.length) % pts.length];
             if (pts.length > 3 && (same(pts[i], next) || same(pts[i], prev))) pts.splice(i, 1);
             const crossed = window.DraftGeometry2D.selfIntersects(pts);
-            if (crossed) {
+            const split = crossed ? splitCrossedLoopItem(tag, md.loopKind, pts, md.before) : null;
+            if (split) {
+              markDirty();
+              setSelection(split.map(item => ({ type: md.loopKind, item })));
+              sayOnStrip(`Corner dragged across the ${md.loopKind === 'floor' ? 'floor' : 'shape'}, so it is now ${split.length} ${md.loopKind === 'floor' ? 'floors' : 'shapes'}`
+                + ` (${split.map(piece => roomTagEnv().areaLabel(window.DraftDrawingFormat.loopAreaSqFt(piece.points))).join(' and ')}). UNDO joins them back.`);
+            } else if (crossed) {
               tag.points = md.before.points;
               sayOnStrip('That corner would make the shape cross itself, so it goes back.');
             } else {
@@ -1647,7 +1653,16 @@
           const tag = md.tag;
           if (md.moved) {
             const pts = tidyLoop(md.points);
-            if (window.DraftGeometry2D.selfIntersects(pts)) {
+            const crossed = window.DraftGeometry2D.selfIntersects(pts);
+            // PULLED ACROSS ITSELF, IT IS TWO (jb, 14 Nov 2026, ArchiCAD's
+            // way): the lobes become their own shapes or floors, both picked.
+            const split = crossed ? splitCrossedLoopItem(tag, md.loopKind, pts, md.before) : null;
+            if (split) {
+              markDirty();
+              setSelection(split.map(item => ({ type: md.loopKind, item })));
+              sayOnStrip(`Edge ${md.dist > 0 ? 'pushed' : 'pulled'} across the ${md.loopKind === 'floor' ? 'floor' : 'shape'}, so it is now ${split.length} ${md.loopKind === 'floor' ? 'floors' : 'shapes'}`
+                + ` (${split.map(piece => roomTagEnv().areaLabel(window.DraftDrawingFormat.loopAreaSqFt(piece.points))).join(' and ')}). UNDO joins them back.`);
+            } else if (crossed) {
               tag.points = md.before.points;
               sayOnStrip('That push would make the shape cross itself, so it goes back.');
             } else {
