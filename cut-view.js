@@ -3418,6 +3418,40 @@ if (!window.DraftCutView) {
     // Roof silhouette: at each spot along the cut, the tallest roof surface
     // anywhere along the viewing depth — the ridge/hip outline from outside.
     const roofs = env.roofs();
+    // ── A JOINT WITH NOTHING BESIDE IT IS A GABLE (jb, 13 Nov 2026) ──────
+    //
+    // A busted roof's pieces meet along JOINT edges: no overhang, no board,
+    // the surface carries on into the next piece. jb deleted the front slope
+    // of a busted hip and lined the pieces up by hand, and E2 "is messed up
+    // the same way": the two pieces' front edges were still JOINTS, drawn as
+    // a bare line where the one-record gable drew rakes and a gable wall
+    // ("it knew how to draw gable roofs nicely before"). A joint's meaning
+    // is the piece on its other side; with no piece there it is an edge
+    // against open air, and that is a gable. deleteRoofPiece writes the
+    // same answer into the file now, and this reads it for files from
+    // before, and for any piece moved away from its neighbour.
+    //
+    // SHARED means both ends of this edge lie on one edge of another roof
+    // (to 0.1 ft, the delete's own slack): a short joint along a longer one
+    // is shared; a joint whose neighbour is gone, or moved, is not.
+    const jointShared = (roof, a, b) => roofs.some(other => {
+      if (other === roof) return false;
+      const pts = other.points || [];
+      return pts.some((p, k) => {
+        const q = pts[(k + 1) % pts.length];
+        const seg = { start: p, end: q };
+        return geo().pointToSegment(a, seg).d < 0.1 && geo().pointToSegment(b, seg).d < 0.1;
+      });
+    });
+    const edgeKindOf = (roof, i) => {
+      const pts = roof.points || [];
+      const n = pts.length;
+      if (!n) return undefined;
+      const k = ((i % n) + n) % n;
+      const kind = roof.edges?.[k];
+      if (kind !== 'joint') return kind;
+      return jointShared(roof, pts[k], pts[(k + 1) % n]) ? 'joint' : 'gable';
+    };
     const silhouette = [];
     let facesByRoof = null;
     let dLo = Infinity, dHi = -Infinity;
@@ -4816,7 +4850,7 @@ if (!window.DraftCutView) {
         const reach = (Number(roof.overhang) || 0) + 1;
         const pts = roof.points || [];
         const nearGable = pts.some((a, i) => {
-          if (roof.edges?.[i] !== 'gable') return false;
+          if (edgeKindOf(roof, i) !== 'gable') return false;
           const b = pts[(i + 1) % pts.length];
           const gx = b.x - a.x, gz = b.z - a.z;
           const gLen = Math.hypot(gx, gz) || 1;
@@ -5129,7 +5163,7 @@ if (!window.DraftCutView) {
           .find(f => !f.garage && Math.abs(f.level.wallTop - base) <= 0.6);
         if (!storey) return;
         pts.forEach((a, i) => {
-          if (edges[i] !== 'gable') return;
+          if (edgeKindOf(roof, i) !== 'gable') return;
           const b = pts[(i + 1) % pts.length];
           const ex = b.x - a.x, ez = b.z - a.z;
           const len = Math.hypot(ex, ez);
@@ -7419,7 +7453,7 @@ if (!window.DraftCutView) {
         // the viewer, and closed the question. The sign is not a thing to
         // remember: `behindRoof` states it, in this file.
         const gableSegs = rpts.flatMap((a, i) => {
-          if (roof.edges?.[i] !== 'gable') return [];
+          if (edgeKindOf(roof, i) !== 'gable') return [];
           const b = rpts[(i + 1) % rpts.length];
           const dx = b.x - a.x, dz = b.z - a.z;
           const len = Math.hypot(dx, dz);
@@ -7808,7 +7842,7 @@ if (!window.DraftCutView) {
               // same number as before on every square gable, and the whole
               // way to the wall on a diagonal one.
               const footAt = rpts.findIndex(rp => Math.hypot(rp.x - lo.p.x, rp.z - lo.p.z) < 0.05);
-              const edgeKind = k => (roof.edges || [])[(k + rpts.length) % rpts.length];
+              const edgeKind = k => edgeKindOf(roof, k);
               const eaveAtFoot = footAt < 0 ? null
                 : edgeKind(footAt) === 'eave' ? [rpts[footAt], rpts[(footAt + 1) % rpts.length]]
                   : edgeKind(footAt - 1) === 'eave' ? [rpts[(footAt + rpts.length - 1) % rpts.length], rpts[footAt]] : null;
@@ -7910,9 +7944,18 @@ if (!window.DraftCutView) {
         rpts.forEach((pt, i) => {
           const prev = rpts[(i + rpts.length - 1) % rpts.length];
           const next = rpts[(i + 1) % rpts.length];
-          const kindPrev = roof.edges?.[(i + rpts.length - 1) % rpts.length];
-          const kindNext = roof.edges?.[i];
+          const kindPrev = edgeKindOf(roof, i - 1);
+          const kindNext = edgeKindOf(roof, i);
           if (kindPrev === 'gable' && kindNext === 'gable') return;
+          // AND NOT AT A CORNER BETWEEN TWO JOINTS, OR A JOINT AND A GABLE
+          // (jb, 13 Nov 2026, E2 of his busted hip: ticks on the eave line
+          // under the ridge). A busted roof's ridge ends are corners of its
+          // PIECES -- joint meets joint at (9.8, 1) on his house -- and each
+          // piece creased its fascia there, 5.5" of board hanging at eave
+          // height under a ridge 4 ft up. A crease is a fold in the fascia
+          // BOARD, and the board runs along EAVES: a corner with no eave on
+          // either side has no board to fold.
+          if (kindPrev !== 'eave' && kindNext !== 'eave' && (kindPrev === 'joint' || kindNext === 'joint')) return;
           const d1 = { x: pt.x - prev.x, z: pt.z - prev.z };
           const d2 = { x: next.x - pt.x, z: next.z - pt.z };
           const cross = d1.x * d2.z - d1.z * d2.x;
