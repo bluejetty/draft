@@ -511,7 +511,10 @@
   const commitHipRoof = s => {
     const ring = s.ring;
     const { overhangFt, pitch } = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
-    const edges = s.wallRing.map((p, i) => (s.gables.has(i) ? 'gable' : 'eave'));
+    const pressed = s.wallRing.map((p, i) => (s.gables.has(i) ? 'gable' : 'eave'));
+    // A gable runs past a step in the wall (geometry-2d gableJogKinds): the
+    // foot of step and the piece beyond it go gable with the pressed edge.
+    const edges = window.DraftGeometry2D?.gableJogKinds ? window.DraftGeometry2D.gableJogKinds(s.wallRing, pressed) : pressed;
     const overs = hipOvers(s);
     // Where it sits and bears: the piece's own rules (pieceBearsOn, and
     // drawn on the storey it was drawn on, none from the ROOF plan).

@@ -62,8 +62,13 @@ const WIDE = ring([[-23, 7], [-32, 7], [-32, -17], [32, -17], [32, 17], [-23, 17
 const CHECKS = [
   { label: 'the foot between two gables is a gable',
     fn: G => [K(G.gableJogKinds(STEPPED, AS_SAVED)), 'ggegeg'] },
-  { label: 'a step with one gable beside it keeps its eave',
-    fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'gable', 'eave', 'eave', 'eave', 'eave'])), 'egeeee'] },
+  // jb, 14 Nov 2026: one gable beside the step takes the foot and the eave
+  // beyond it along -- the gable runs flush across the stepped end
+  // (proto/flush-gable-harness.js has the whole of it).
+  { label: 'a step with one gable beside it carries the gable past the step onto the piece beyond',
+    fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'gable', 'eave', 'eave', 'eave', 'eave'])), 'ggeeeg'] },
+  { label: 'a step with eaves both sides stays an eave',
+    fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'eave', 'eave', 'gable', 'eave', 'eave'])), 'eeegee'] },
   { label: 'a notch\'s bottom between two gables stays an eave',
     fn: G => [K(G.gableJogKinds(NOTCHED, NOTCH_KINDS)), 'eeegeg' + 'ee'] },
   { label: 'a step past the limit keeps its eave',
@@ -119,12 +124,13 @@ const MUTATIONS = [
   ['the step rule is switched off',
     s => s.replace('  const ROOF_GABLE_JOG_FT = 6;', '  const ROOF_GABLE_JOG_FT = 0;')],
   ['a step of any length is a gable',
-    s => s.replace("        if (!d || d.len > jogFt + eps) continue;\n        if (!solid(i - 1) || !solid(i + 1)) continue;",
-      "        if (!d) continue;\n        if (!solid(i - 1) || !solid(i + 1)) continue;")],
+    s => s.replace("        if (!d || d.len > jogFt + eps) continue;", "        if (!d) continue;")],
   ['a notch\'s bottom is a gable too',
     s => s.replace('        if (!squareToBoth || !sameWay) continue;', '        if (!squareToBoth) continue;')],
-  ['a step beside one gable is a gable',
-    s => s.replace("        if (!solid(i - 1) || !solid(i + 1)) continue;", "        if (!solid(i - 1) && !solid(i + 1)) continue;")],
+  ['a step beside one gable keeps its eave (both sides had to be solid)',
+    s => s.replace('        if (!before && !after) continue;', '        if (!before || !after) continue;')],
+  ['a step with no gable beside it is a gable',
+    s => s.replace('        if (!before && !after) continue;', '')],
   ['the ring is solved as it stands, step and all',
     s => s.replace("    const stepped = stepVirtual(roof);\n    if (stepped) return roofSkeleton(stepped.roof)", "    const stepped = null;\n    if (stepped) return roofSkeleton(stepped.roof)")],
   ['the solver reads the record\'s kinds as saved',

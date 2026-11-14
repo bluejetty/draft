@@ -800,6 +800,19 @@ if (!window.DraftGeometry2D) {
   // Past that, a step is a real wing end and the ordinary rules hold.
   // jb, same night: the AUTOROOF never makes a shed (one eave) up top; a
   // lower roof against a taller wall may (roofAgainstWall's shed arm).
+  //
+  // AND A GABLE RUNS PAST THE STEP ON ITS OWN (jb, 14 Nov 2026, a hand roof
+  // over the same house with only the long front piece made GABLE: "the
+  // front gable only likes to gable all the way across ... the jogged back
+  // gable wall should be flush across"). One gable, the foot of step and
+  // the parallel eave beyond it: the solver raised a plane off the foot
+  // that met the gable's own plane in a sliver ridge eight feet short of
+  // the real one, with the hip over the stepped piece wedged under it.
+  // There is no small gable to make there -- a gable end that stops at a
+  // step would need a wall up the step to close it -- so a step of up to
+  // ROOF_GABLE_JOG_FT between a solid edge and an eave running on the same
+  // way is a step in the gable wall too: the foot and the eave beyond go
+  // GABLE with it, and the roof runs flush across the whole end.
   const ROOF_GABLE_JOG_FT = 6;
   const gableJogKinds = (points, kinds, { jogFt = ROOF_GABLE_JOG_FT } = {}) => {
     const pts = Array.isArray(points) ? points : [];
@@ -819,7 +832,13 @@ if (!window.DraftGeometry2D) {
         if (solid(i) || out[i] === 'sloped') continue;
         const d = dirOf(i);
         if (!d || d.len > jogFt + eps) continue;
-        if (!solid(i - 1) || !solid(i + 1)) continue;
+        // One side solid at least; the other solid, or an eave the gable
+        // runs on past the step (never a sloped edge: that is a roof's own
+        // business, not a wall's).
+        const eaveOn = k => out[((k % n) + n) % n] === 'eave';
+        const before = solid(i - 1), after = solid(i + 1);
+        if (!before && !after) continue;
+        if ((!before && !eaveOn(i - 1)) || (!after && !eaveOn(i + 1))) continue;
         const p = dirOf(i - 1), q = dirOf(i + 1);
         if (!p || !q) continue;
         const squareToBoth = Math.abs(p.x * d.x + p.z * d.z) < 1e-6 && Math.abs(q.x * d.x + q.z * d.z) < 1e-6;
@@ -829,6 +848,8 @@ if (!window.DraftGeometry2D) {
         const sameWay = p.x * q.x + p.z * q.z > 1 - 1e-6;
         if (!squareToBoth || !sameWay) continue;
         out[i] = 'gable';
+        if (!before) out[(i + n - 1) % n] = 'gable';
+        if (!after) out[(i + 1) % n] = 'gable';
         changed = true;
       }
       if (!changed) break;
