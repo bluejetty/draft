@@ -355,7 +355,7 @@ test('a typed 0 lands the sill on the house sill, stored off MAIN FL', async ({ 
 
   const house = -(11.875 + 0.75) / 12;   // main joists + sheathing, in feet
   await expect.poll(async () =>
-    (await h.savedDrawing(page)).zoneHeights?.zones?.attachedGarage?.offsetFt)
+    (await h.savedDrawing(page))?.zoneHeights?.zones?.attachedGarage?.offsetFt)
     .toBeCloseTo(house, 5);
   // The box still shows the number the drafter typed, in its own datum.
   expect(offsetFt(await box.inputValue())).toBeCloseTo(0, 5);
