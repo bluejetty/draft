@@ -186,6 +186,6 @@ if (MUTATION_MODE) {
     if (!caught) missed += 1;
     console.log(`${caught ? 'caught  ' : 'SURVIVED'}  ${name}`);
   });
-  console.log(`\n${MUTANTS.length - missed}/${MUTANTS.length} mutants caught`);
+  console.log(`\nelev-snap: ${MUTANTS.length - missed}/${MUTANTS.length} mutations caught`);
   process.exit(missed ? 1 : 0);
 }
