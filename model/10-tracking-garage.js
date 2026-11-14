@@ -1287,6 +1287,7 @@
     tracedGarage = null;
     tracedMasters = [];
     roomOverFt = null;
+    if (drawing && !orphan) delete drawing.houseInHand;
     if (orphan && tracedOrder) {
       tracedHouse = orphan.house;
       tracedGarage = orphan.garage;
@@ -1894,6 +1895,7 @@
     tracedMasters.push({ master, copies });
     if (garage) tracedGarage = tracedOutline;
     else tracedHouse = tracedOutline;
+    writeHouseInHand();
     // NO TYPE ON THE BOARD YET: the loop is kept as the house in hand, so a
     // type picked after it builds on it (armOutline keeps an orphan loop).
     // A TURTLE HOUSE walk goes to PROJECT to have the type and the numbers
@@ -1961,18 +1963,19 @@
   };
   // THE HOUSE IN HAND, READ OFF THE FILE ON OPEN (jb, 13 Nov 2026): a walk
   // drawn, saved, and brought back from PROJECT or a reload is still the
-  // house the next order builds on. The newest house master on the shelf
-  // and, if one is there, the newest attached garage master; the copy on
-  // MAIN FL is the loop the builder reads. Only while nothing is raised
-  // (model/04 houseInHand): a file with walls has its house already.
+  // house the next order builds on. The masters the file names in
+  // `houseInHand` (writeHouseInHand); the copy on MAIN FL is the loop the
+  // builder reads. Only while nothing is raised (model/04 houseInHand): a
+  // file with walls has its house already.
   const adoptHouseInHand = () => {
     if (!houseInHand()) return false;
     const masters = drawing.boneyardOutlines || [];
+    const rec = drawing.houseInHand;
     const copiesOf = master => (drawing.outlines || []).filter(copy => String(copy.masterId) === String(master.id));
     const mainCopy = copies => copies.find(copy => Number(copy.levelId) === 3)
       || copies.find(copy => Number(copy.levelId) === Number(activeLevelId())) || copies[0] || null;
-    const houseMaster = [...masters].reverse().find(m => m && m.garage !== true && m.detached !== true && m.site !== true);
-    const garageMaster = [...masters].reverse().find(m => m && m.garage === true && m.detached !== true);
+    const houseMaster = masters.find(m => m && String(m.id) === String(rec.house));
+    const garageMaster = rec.garage != null ? masters.find(m => m && String(m.id) === String(rec.garage)) : null;
     if (!houseMaster) return false;
     const house = mainCopy(copiesOf(houseMaster));
     if (!house) return false;
@@ -2092,7 +2095,20 @@
     ROOM_NEEDS_RECTANGLE: 'The room over the garage needs a rectangular garage against the house.',
   });
   const traceStillThere = rec => !!rec && (drawing?.outlines || []).includes(rec);
+  // THE FILE'S WORD FOR THE HOUSE IN HAND (model/04 houseInHand): the house
+  // master and, when one is down, the garage master, written as they land
+  // and taken off with the build (traceRestore) or when a new type starts a
+  // new house (armOutline). Only while nothing is raised.
+  const writeHouseInHand = () => {
+    if (!drawing) return;
+    const masterFor = loop => loop && tracedMasters.find(({ copies }) => copies.includes(loop))?.master;
+    const house = masterFor(traceStillThere(tracedHouse) ? tracedHouse : null);
+    if (!house || (drawing.walls || []).some(wall => wall && wall.start && wall.end)) { delete drawing.houseInHand; return; }
+    const garage = masterFor(traceStillThere(tracedGarage) ? tracedGarage : null);
+    drawing.houseInHand = { house: house.id, garage: garage ? garage.id : null };
+  };
   const traceRestore = () => {
+    delete drawing.houseInHand;
     const restore = [];
     tracedMasters.forEach(({ master, copies }) => {
       const mi = (drawing.boneyardOutlines || []).indexOf(master);

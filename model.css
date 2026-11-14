@@ -405,6 +405,11 @@
     transition:transform 220ms ease-out, visibility 220ms;
     pointer-events:none; }
   #drivethru[data-shut] { transform:translate(-50%, 104%); visibility:hidden; }
+  /* A SHUT BOARD CATCHES NO PRESS while it slides out: its banner,
+     arrows and tiles turn pointer-events back on, and a press on the
+     drawing in the 220ms after ESC landed on them (an OUTLINE corner lost,
+     tests/model-html-blue-house.spec.js flaked on it). */
+  #drivethru[data-shut] * { pointer-events:none !important; }
   #dt-frame { position:relative; width:100%; aspect-ratio:var(--dt-aspect); }
   #dt-board { position:absolute; inset:0; width:100%; height:100%;
     display:block; pointer-events:none; }

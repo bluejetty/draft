@@ -865,6 +865,7 @@
         <p id="build-ask-title" class="build-ask-title">Build <span data-build-ask-name></span></p>
         <div class="build-ask-row">
           <button type="button" data-build-ask="outline">Draw outline</button>
+          <button type="button" data-build-ask="turtle">Turtle outline</button>
           <button type="button" data-build-ask="menu">No outline</button>
         </div>
         <button type="button" class="build-ask-cancel" data-build-ask="cancel">Cancel</button>
@@ -5671,6 +5672,10 @@
       };
       if (buildAsk) {
         buildAsk.querySelector('[data-build-ask="outline"]').addEventListener('click', () => sendOrder('outline'));
+        // TURTLE OUTLINE (jb, 14 Nov 2026: "show it the turtle for the outline
+        // and give them the option to do the turtle or draw it"): MODEL opens
+        // the pad on TURTLE with HOUSE pressed, and the walk builds on close.
+        buildAsk.querySelector('[data-build-ask="turtle"]').addEventListener('click', () => sendOrder('turtle'));
         buildAsk.querySelector('[data-build-ask="menu"]').addEventListener('click', () => sendOrder('menu'));
         buildAsk.querySelector('[data-build-ask="cancel"]').addEventListener('click', closeAsk);
         document.addEventListener('keydown', event => {
@@ -5728,8 +5733,10 @@
           // A HOUSE OUTLINE ALREADY DRAWN AND NOT RAISED (jb, 13 Nov 2026) is
           // the outline, so DRAW OUTLINE / NO OUTLINE is not a question:
           // MODEL builds on it as the order lands (runProjectOrder).
-          const houseInHand = !(drawing?.walls || []).some(wall => wall && wall.start && wall.end)
-            && (drawing?.boneyardOutlines || []).some(m => m && m.garage !== true && m.detached !== true && m.site !== true);
+          const inHand = drawing?.houseInHand;
+          const houseInHand = !!inHand?.house
+            && !(drawing?.walls || []).some(wall => wall && wall.start && wall.end)
+            && (drawing?.boneyardOutlines || []).some(m => m && String(m.id) === String(inHand.house));
           if (houseInHand && entry.type) { sendOrder('menu'); return; }
           const family = window.DraftBuildMenu.BUILD_MENU
             .find(item => (item.entries || []).includes(entry));

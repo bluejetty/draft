@@ -6,7 +6,7 @@
 // TURTLE HOUSE or the OUTLINE tool (or set the PROJECT numbers first), then
 // press the bone and get the autohouse on it.
 //
-// Sixteen defects that still render: a turtle walk the trace never hears, a
+// Seventeen defects that still render: a turtle walk the trace never hears, a
 // walk that lands and waits for a bone press, a second walk that is a second
 // house instead of the garage, a U-key second loop the same, an ESC that
 // leaves the OUTLINE tool in hand, a pick stamped without its garage plan, a
@@ -55,8 +55,13 @@ const MUTANTS = [
     test: 'goes to PROJECT as a 1 STOREY' },
   { file: 'model/10-tracking-garage.js',
     name: 'the house in hand is read off the file on open',
-    find: "    if (!houseInHand()) return false;\n    const masters",
-    with: "    return false;\n    const masters",
+    find: "    if (!houseInHand()) return false;\n    const masters = drawing.boneyardOutlines || [];\n    const rec",
+    with: "    return false;\n    const masters = drawing.boneyardOutlines || [];\n    const rec",
+    test: 'a house in hand survives a reload' },
+  { file: 'model/10-tracking-garage.js',
+    name: 'the file is told which house is in hand as the loop lands',
+    find: "    else tracedHouse = tracedOutline;\n    writeHouseInHand();",
+    with: "    else tracedHouse = tracedOutline;",
     test: 'a house in hand survives a reload' },
   { file: 'model/04-levels-notes-bars.js',
     name: 'the pick is restored over a house in hand',

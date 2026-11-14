@@ -295,3 +295,33 @@ test('a house in hand survives a reload: the pick and the walk are read off the 
   expect(b.garages).toBe(1);
   expect(b.shelf).toBe(0);
 });
+
+// TO PROJECT FROM THE BOARD, AND THE TURTLE OFFERED THERE (jb, 14 Nov 2026:
+// "take them from the drive thru menu when they select their house type
+// take them to the PROJECT area and tell them to verify and press the bone"
+// ... "show it the turtle for the outline and give them the option to do the
+// turtle or draw it"). The board's SPECIFY ... PROJECT AREA press carries
+// the verify line now; PROJECT's bone asks DRAW OUTLINE / TURTLE OUTLINE /
+// NO OUTLINE when nothing is drawn yet.
+test('PROJECT\'s bone offers TURTLE OUTLINE: MODEL opens the pad on TURTLE with HOUSE pressed, and the walk builds the house', async ({ page }) => {
+  await open(page);
+  await pickType(page, 'bungalow', 'bungalow');
+  await page.locator('#dt-project-go').click();
+  await page.waitForURL(/PROJECT\.html/);
+  await expect(page.locator('#verify-notice'), 'the board\'s PROJECT press says verify too').toBeVisible();
+  await page.locator('#bone').click();
+  await expect(page.locator('#project-build-ask')).toBeVisible();
+  await page.locator('[data-build-ask="turtle"]').click();
+  await page.waitForURL(/MODEL\.html/);
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await expect(page.locator('[data-turtle]')).toBeVisible();
+  await expect(page.locator('[data-turtle-kind="house"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(strip(page)).toContainText('Walk your 1 STOREY');
+  expect(await tool(page), 'no tool in hand: the pad is the tool').toBe('select');
+  await typeRows(page, HOUSE_WALK);
+  await act(page, 'target').click();
+  const b = built(await builtOnClose(page));
+  expect(b.main).toBeGreaterThanOrEqual(4);
+  expect(b.roofs).toBe(1);
+  expect(b.shelf).toBe(0);
+});

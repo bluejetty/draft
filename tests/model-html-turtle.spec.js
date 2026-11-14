@@ -306,48 +306,42 @@ test('DRAW AS LOT makes the SITE PLAN lot line from a closed path, and REGENERAT
   expect(file.turtles[0].itemIds).toEqual([lots[0].id]);
 });
 
-test('DRAW AS HOUSE makes the outline the bone builds on, a copy on every level; AREA makes a shape', async ({ page }) => {
+// DRAW AS HOUSE (jb, 13 Nov 2026: "when i draw as a 'house' it should be
+// like the autohouse using the project info" ... "can you make 1 storey but
+// can it go to the PROJECT menu for them and tell them to 'specify project
+// type & project details, and press bone when complete'"). With no type on
+// the file the walk is taken as the house of a 1 STOREY and MODEL hands
+// over to PROJECT with those words; the file carries the house in hand so
+// PROJECT's bone builds on it (tests/outline-to-autohouse.spec.js).
+test('AREA makes a shape on this level; DRAW AS HOUSE with no type goes to PROJECT as a 1 STOREY with the outline in hand', async ({ page }) => {
   await open(page);
   await openTurtle(page);
-  await typeRows(page, [['E', '40'], ['N', '30'], ['W', '40'], ['S', '30']]);
-  await kind(page, 'house').click();
-  await act(page, 'target').click();
-  const house = await page.evaluate(() => ({
-    masters: (drawing.boneyardOutlines || []).length,
-    copies: drawing.outlines.map(o => ({ levelId: o.levelId, masterId: o.masterId, n: o.points.length })),
-    picked: selection.map(e => `${e.type}:${e.item.levelId}`),
-  }));
-  expect(house.masters).toBe(1);
-  expect(house.copies.map(c => c.levelId).sort()).toEqual([1, 3, 5, 7, 8]);
-  expect(house.copies.every(c => c.n === 4 && c.masterId)).toBe(true);
-  expect(house.picked).toEqual(['outline:3']);
-  await expect(page.locator('#strip-message')).toContainText('press the bone to build on it');
-  // Wider: every copy and the master move together, the same records.
-  await distAt(page, 0).fill('50');
-  await distAt(page, 2).fill('50');
-  await act(page, 'regen').click();
-  const wider = await page.evaluate(() => ({
-    master: drawing.boneyardOutlines[0].points.map(p => [p.x, p.z]),
-    copies: drawing.outlines.map(o => o.points[1].x),
-  }));
-  expect(wider.master).toEqual([[0, 0], [50, 0], [50, -30], [0, -30]]);
-  expect(wider.copies).toEqual([50, 50, 50, 50, 50]);
-  // AREA on a new page: a shape on this level.
-  await page.locator('[data-notes-page="2"]').click();
-  await expect(page.locator('[data-turtle-row]')).toHaveCount(1);
+  // AREA first: a shape on this level, one UNDO.
   await typeRows(page, [['N', '10'], ['E', '10'], ['S', '10'], ['W', '10']]);
   await kind(page, 'area').click();
   await act(page, 'target').click();
   const shapes = await page.evaluate(() => drawing.shapes.map(sh => ({ levelId: sh.levelId, layer: sh.layer, n: sh.points.length })));
   expect(shapes).toEqual([{ levelId: 3, layer: 'SHAPE', n: 4 }]);
   await expect(page.locator('[data-turtle-name]')).toHaveText('AREA / SHAPE');
-  // Back on page 1 the house's table is still there, lit as HOUSE.
-  await page.locator('[data-notes-page="1"]').click();
-  await expect(page.locator('[data-turtle-name]')).toHaveText('HOUSE OUTLINE');
-  await expect(distAt(page, 0)).toHaveValue('50');
-  // One UNDO per draw.
   await page.keyboard.press('Control+z');
   expect(await page.evaluate(() => (drawing.shapes || []).length)).toBe(0);
+  // HOUSE on page 2: the master and a copy on every level, then PROJECT.
+  await page.locator('[data-notes-page="2"]').click();
+  await expect(page.locator('[data-turtle-row]')).toHaveCount(1);
+  await typeRows(page, [['E', '40'], ['N', '30'], ['W', '40'], ['S', '30']]);
+  await kind(page, 'house').click();
+  await act(page, 'target').click();
+  await page.waitForURL(/PROJECT\.html.*say=verify/);
+  await expect(page.locator('#verify-notice')).toContainText('SPECIFY PROJECT TYPE & PROJECT DETAILS, AND PRESS THE BONE WHEN COMPLETE');
+  await expect(page.locator('[data-family-entry="bungalow"]')).toHaveAttribute('aria-pressed', 'true');
+  const file = await h.savedDrawing(page);
+  expect(file.buildType).toBe('bungalow');
+  expect((file.boneyardOutlines || []).length).toBe(1);
+  const copies = file.outlines.map(o => ({ levelId: o.levelId, masterId: o.masterId, n: o.points.length }));
+  expect(copies.map(c => c.levelId).sort()).toEqual([1, 3, 5, 7, 8]);
+  expect(copies.every(c => c.n === 4 && c.masterId === file.boneyardOutlines[0].id)).toBe(true);
+  expect(file.houseInHand).toEqual({ house: file.boneyardOutlines[0].id, garage: null });
+  expect(file.turtlePages[1].kind).toBe('house');
 });
 
 // FIVE PAGES ON EVERY TAB (Movie, 10 Nov: "the number should apply for

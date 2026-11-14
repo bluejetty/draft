@@ -1792,9 +1792,20 @@
   // about to build on it (jb, 13 Nov 2026): the pick is still restored over
   // it, PROJECT's bone builds on it rather than offering a clean file, and
   // the trace adopts it on open (model/10 adoptHouseInHand).
-  const houseInHand = () => !!drawing
-    && !(drawing.walls || []).some(wall => wall && wall.start && wall.end)
-    && (drawing.boneyardOutlines || []).some(m => m && m.garage !== true && m.detached !== true && m.site !== true);
+  //
+  // THE FILE SAYS SO, in `houseInHand` ({ house: masterId, garage: masterId
+  // or null }, written by model/10 traceLanded as the loop lands and taken
+  // off by the build), rather than this page guessing from any unbuilt
+  // master on the shelf: a drawing loaded from an old file can carry
+  // outlines whose walls were never made (model-drivethru.spec.js's fixture
+  // carries five), and a tile press over one of those would raise a house
+  // the drafter never asked about. Same lesson as outlineToBuild's.
+  const houseInHand = () => {
+    const rec = drawing?.houseInHand;
+    if (!rec || !rec.house) return false;
+    if ((drawing.walls || []).some(wall => wall && wall.start && wall.end)) return false;
+    return (drawing.boneyardOutlines || []).some(m => m && String(m.id) === String(rec.house));
+  };
   const restorePickFromFile = () => {
     if (!drawing || chosenEntryId || classicLocked()) return false;
     const type = window.DraftDrawingFormat.buildType(drawing.buildType);
@@ -2484,7 +2495,7 @@
       location.href = url.pathname + url.search;
     });
   };
-  projectGoPresses.forEach(press => press.addEventListener('click', () => goToProjectWithOrder()));
+  projectGoPresses.forEach(press => press.addEventListener('click', () => goToProjectWithOrder({ say: 'verify' })));
 
   const setSign = show => {
     sign.toggleAttribute('data-shut', !show);
@@ -2743,6 +2754,18 @@
   // tile lit to change from, the walk is saved with it, and PROJECT's bone
   // sends the order back here, where the house in hand is built on at once
   // (model/17 runProjectOrder, model/10 armOutline's orphan rule).
+  // PROJECT'S TURTLE OUTLINE PRESS LANDS HERE (jb, 14 Nov 2026: "show it the
+  // turtle for the outline and give them the option to do the turtle or
+  // draw it"): the pad opens on TURTLE with HOUSE pressed, no tool in hand,
+  // and the walk builds the house as it closes (traceLanded).
+  const openTurtleForHouse = () => {
+    if (paneShowing() !== 'notes' || !railOpen('right')) setPane('notes');
+    showPad('turtle');
+    const house = document.querySelector('[data-turtle] [data-turtle-kind="house"]');
+    if (house && house.getAttribute('aria-pressed') !== 'true') house.click();
+    const label = chosen()?.entry?.label || 'house';
+    sayOnStrip(`Walk your ${label}: a direction and a distance per row, then DRAW AT TARGET or DRAW AT POINT — it builds as the path closes.`);
+  };
   const sendToProjectForType = () => {
     if (!drawing || classicLocked()) return;
     chosenEntryId = 'bungalow';

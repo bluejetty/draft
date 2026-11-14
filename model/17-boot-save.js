@@ -1278,6 +1278,11 @@
         setSign(false);
         const picked = chosen();
         outlineHandlers.forEach(fn => fn(picked));
+      } else if (wanted === 'turtle') {
+        // TURTLE OUTLINE (jb, 14 Nov 2026): the pad, not the tool.
+        setSign(false);
+        setTool(RESTING_TOOL);
+        openTurtleForHouse();
       } else {
         orderAtWindow();
       }
