@@ -109,9 +109,12 @@ test('a unit price typed against a line totals it, the section and the whole; it
   await row(page, '8-B:36x48').locator('[data-price]').press('Enter');
   await expect(page.locator('[data-grand-total]')).toHaveText('588.00');
   await expect(page.locator('[data-division="8"] .div-title .total')).toHaveText('$450.00');
-  await expect(page.locator('#status')).toContainText('priced');
+  // THE FILE IS POLLED, NOT READ ONCE. `#status` already said 'priced' after
+  // the FIRST price, so waiting on it again returned at once and the read
+  // could land before the second save did -- red about 3 runs in 4.
+  await expect.poll(async () => (await stored(page)).estimates?.prices)
+    .toEqual({ '9-A:tile': 2.5, '8-B:36x48': 450 });
   const d = await stored(page);
-  expect(d.estimates.prices).toEqual({ '9-A:tile': 2.5, '8-B:36x48': 450 });
   expect(d.walls.map(w => w.id), 'the drawing itself is untouched, the other tab\'s wall with it').toContain('later');
   expect(d.walls).toHaveLength(6);
   // Reopened, the prices are still there.
@@ -130,13 +133,13 @@ test('the waste percent per category rides every area in it and is saved; a blan
   await expect(row(page, '9-A:tile').locator('[data-amount]')).toHaveText('$105.60');
   await expect(row(page, '7-B:asphalt:6').locator('[data-qty]'), 'roofing keeps its own').toHaveText('493.7 SQ FT');
   await expect(page.locator('#status')).toContainText('flooring waste 10%');
-  let d = await stored(page);
-  expect(d.estimates.waste).toEqual({ flooring: 10 });
+  // Polled for the same reason as the prices above: the page shows the new
+  // quantity before its save has landed in the file.
+  await expect.poll(async () => (await stored(page)).estimates?.waste).toEqual({ flooring: 10 });
   await waste.fill('');
   await waste.press('Enter');
   await expect(row(page, '9-A:tile').locator('[data-qty]')).toHaveText('55.2 SQ FT');
-  d = await stored(page);
-  expect(d.estimates.waste).toEqual({});
+  await expect.poll(async () => (await stored(page)).estimates?.waste).toEqual({});
 });
 
 test('the foot\'s ESTIMATES is a link to the page, and the page marks itself as where you are', async ({ page }) => {
