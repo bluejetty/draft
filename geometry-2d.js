@@ -1285,8 +1285,9 @@ if (!window.DraftGeometry2D) {
       kindsOut[at] = kinds[ib];
     }
     virt = virt.filter((_, k) => k !== dropAt);
-    const { footprint, ...rest } = roof;
-    void footprint;
+    // THE WALL LINE GOES: it was drawn point for point against the stepped ring.
+    const rest = { ...roof };
+    delete rest.footprint;
     const cuts = [{ points: cut.map(p => ({ x: p.x, z: p.z })) }];
     const virtual = { ...rest, points: virt, edges: pick(kindsOut, dropAt),
       edgeOverhang: pick(roof.edgeOverhang, dropAt), edgeHeelIn: pick(roof.edgeHeelIn, dropAt) };
