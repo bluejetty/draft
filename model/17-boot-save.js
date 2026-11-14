@@ -564,6 +564,14 @@
     // 1/60" strip, and that is the sliver.
     (drawing.roofs || []).forEach(roof => {
       const pts = roof.points || [];
+      // A STEP BETWEEN TWO GABLES IS A GABLE (jb, 13 Nov 2026; geometry-2d
+      // gableJogKinds): healed here, on open and on save, because this page
+      // carries the roof records raw and a file saved with a one-foot eave
+      // between its gable pieces would raise a plane off it everywhere else.
+      if (G.gableJogKinds && Array.isArray(roof.edges) && roof.edges.length === pts.length) {
+        const kinds = G.gableJogKinds(pts, roof.edges);
+        if (kinds.some((k, i) => k !== roof.edges[i])) { roof.edges = kinds; trimmed += 1; }
+      }
       const landed = pts.some((p, i) => {
         const q = pts[(i + 1) % pts.length];
         return Math.hypot(q.x - p.x, q.z - p.z) < 1e-6;

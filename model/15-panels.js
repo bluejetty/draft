@@ -1837,10 +1837,20 @@
     const d = dir(index);
     if (!d) return null;
     const across = k => { const e = dir(k); return e && Math.abs(e.x * d.x + e.z * d.z) < Math.sin(5 * Math.PI / 180); };
+    const along = k => { const e = dir(k); return e && Math.abs(e.x * d.z - e.z * d.x) < Math.sin(5 * Math.PI / 180); };
+    const len = k => { const a = ring[k % n], b = ring[(k + 1) % n]; return Math.hypot(b.x - a.x, b.z - a.z); };
+    // A STEP IN THE END IS NOT A FLANK (jb, 13 Nov 2026: an end wall stepped
+    // back a foot for its last ten feet; GABLE END stopped at the foot and
+    // gabled only the long piece). An across edge of up to the gable-jog
+    // limit followed by an edge running the end's own way is a jog in the
+    // end: walk on past it to the eave that really runs the house's length.
+    const jogFt = window.DraftGeometry2D?.ROOF_GABLE_JOG_FT ?? 6;
+    const stepAt = (k, dirn) => len(k) <= jogFt + 1e-6 && along((k + dirn + n) % n);
     let l = null, r = null;
     for (let step = 1; step < n; step += 1) {
-      if (l == null && across((index - step + n) % n)) l = (index - step + n) % n;
-      if (r == null && across((index + step) % n)) r = (index + step) % n;
+      const kl = (index - step + n) % n, kr = (index + step) % n;
+      if (l == null && across(kl) && !stepAt(kl, -1)) l = kl;
+      if (r == null && across(kr) && !stepAt(kr, 1)) r = kr;
     }
     if (l == null || r == null || l === r) return null;
     // Rotated so the eave BEFORE the end is edge 0 and the one after is `rr`.
@@ -1878,6 +1888,7 @@
     const kinds = roof.points.map((_, k) => (roof.edges?.[k] === 'gable' ? 'gable' : 'eave'));
     const nextOvers = keep(overs); nextOvers[1] = overs[index];
     const nextKinds = keep(kinds); nextKinds[1] = 'gable';
+    const jogKinds = G.gableJogKinds ? G.gableJogKinds(done.ring, nextKinds) : nextKinds;
     const eave = G.offsetOutlineVariable(done.ring, nextOvers);
     if (eave.some(pt => !Number.isFinite(pt.x) || !Number.isFinite(pt.z))
       || Math.sign(ringArea(eave)) !== Math.sign(ringArea(done.ring))) {
@@ -1886,7 +1897,7 @@
     const y = roof.points[0]?.y ?? 0;
     roof.footprint = done.ring.map(pt => ({ x: pt.x, y: 0, z: pt.z }));
     roof.points = eave.map(pt => ({ x: pt.x, y, z: pt.z }));
-    roof.edges = nextKinds;
+    roof.edges = jogKinds;
     roof.edgeOverhang = nextOvers;
     roof.follows = 'none';
     roofEdgeIdx = 1;
@@ -2201,8 +2212,14 @@
         box.append(propRow('EDGE', ROOF_EDGE_KINDS, kind, id => {
           if (id === kind) return;
           editRoofs([lone], roof => {
-            roof.edges = roof.points.map((_, i) => (i === index ? id
+            const kinds = roof.points.map((_, i) => (i === index ? id
               : roofEdgeKind(roof.edges?.[i])));
+            // A STEP BETWEEN TWO GABLES GOES WITH THEM (jb, 13 Nov 2026):
+            // both pieces of a jogged end made GABLE, the foot between them
+            // stayed an eave and the solver ran a plane off it the length
+            // of the house. geometry-2d gableJogKinds, up to 6 ft.
+            const G = window.DraftGeometry2D;
+            roof.edges = G && G.gableJogKinds ? G.gableJogKinds(roof.points, kinds) : kinds;
             roof.follows = 'none';
             return null;
           });
