@@ -352,6 +352,30 @@ if (!window.DraftWallTypes) {
     siding_h_bb: 'siding_h',
   });
   const DEFAULT_FINISH_ID = 'stucco';
+
+  // ── WHAT A FASCIA WEARS ─────────────────────────────────────────────
+  //
+  // jb, 13 Nov 2026: "default fascia, soffit, eavestroughs = PFM (pre-finished
+  // metal); stucco etc chosen per piece". A fascia is a band 5.5" deep, so
+  // its finish is not a hatch to look at but a MATERIAL to compare: where a
+  // wall stands flush under it wearing the same thing, the two are one
+  // surface and the painter draws no line between them (cut-view.js, the
+  // seam rule). PFM heads the list because it is the default; the rest is
+  // the wall table, so a stucco fascia and a stucco wall are the same word.
+  //
+  // A roof carries `fasciaFinish`; absent means PFM, the record rule every
+  // finish on this file keeps (the default is stored as nothing).
+  const PFM_FINISH = Object.freeze({ id: 'pfm', label: 'Pre-Finished Metal (PFM)',
+    pattern: 'none', thicknessIn: 0, params: Object.freeze([]) });
+  const FASCIA_FINISHES = Object.freeze([PFM_FINISH, ...EXTERIOR_FINISHES]);
+  const DEFAULT_FASCIA_FINISH_ID = PFM_FINISH.id;
+  const fasciaFinishById = id => FASCIA_FINISHES.find(f => f.id === id)
+    || PFM_FINISH;
+  // THE WORD A ROOF'S FASCIA WEARS, and the word a wall's base finish wears,
+  // from the records -- so "same finish" is one comparison everywhere.
+  const fasciaFinishIdOf = roof => (typeof roof?.fasciaFinish === 'string'
+    && FASCIA_FINISHES.some(f => f.id === roof.fasciaFinish))
+    ? roof.fasciaFinish : DEFAULT_FASCIA_FINISH_ID;
   const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)
     || EXTERIOR_FINISHES.find(f => f.id === LEGACY_FINISH_IDS[id])
     || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);
@@ -544,6 +568,10 @@ if (!window.DraftWallTypes) {
     LEGACY_FINISH_IDS,
     DEFAULT_FINISH_ID,
     finishById,
+    FASCIA_FINISHES,
+    DEFAULT_FASCIA_FINISH_ID,
+    fasciaFinishById,
+    fasciaFinishIdOf,
     FINISH_ANCHORS,
     DEFAULT_FINISH_ANCHOR,
     FINISH_NUDGE_FT,

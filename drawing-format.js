@@ -1155,6 +1155,12 @@ if (!window.DraftDrawingFormat) {
           ? { roofing: roof.roofing } : {}),
         ...(Array.isArray(env.cornerStyles) && env.cornerStyles.includes(roof?.gableCorner)
           ? { gableCorner: roof.gableCorner } : {}),
+        // WHAT THE FASCIA WEARS (jb, 13 Nov 2026): a finish id off wall-types'
+        // FASCIA_FINISHES; absent is PFM. A word, not a vocabulary from env,
+        // the way a dormer's `finish` is kept -- so no writer that forgets to
+        // name the list drops it on the way past.
+        ...(typeof roof?.fasciaFinish === 'string' && /^[a-z0-9_-]{1,40}$/i.test(roof.fasciaFinish)
+          ? { fasciaFinish: roof.fasciaFinish } : {}),
         // WHAT IS CUT OUT OF IT: convex loops, each tagged with the upper
         // roof whose walls it stops at (`hoodOf`) so BONEYARD's next push can
         // replace exactly its own. See geometry-2d's cutRoofFaces.
