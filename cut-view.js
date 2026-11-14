@@ -65,7 +65,7 @@ if (!window.DraftCutView) {
     return false;
   };
   const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped,
-    bandRange, bandSpan } = window.DraftWallTypes;
+    bandRange, bandSpan, fasciaFinishIdOf } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
 
   // Physical drafting standards, shared with the Model Space via STANDARDS.
@@ -279,6 +279,31 @@ if (!window.DraftCutView) {
   // inches, written by drawing-format's roofFasciaIn; a roof without one, or
   // a harness fixture made by hand, wears the standard board.
   const roofFasciaFt = roof => (Number(roof?.fascia) > 0 ? Number(roof.fascia) : ROOF_FASCIA_IN) / 12;
+
+  // ── THE SEAM RULE ──────────────────────────────────────────────────────
+  //
+  // jb, 13 Nov 2026: a line is drawn between two surfaces only where they
+  // differ -- "if wall is siding and fascia is PFM there should be a seam
+  // still", and then the general form: "should be used for whenever 2
+  // surface of the same finish meet on the same plane". So a stucco wall
+  // standing flush under a stucco fascia, a storey over a storey in one
+  // skin, a gable end over its own wall: one surface, no line. Siding under
+  // PFM, stone under stucco: the line stays.
+  //
+  // THE WORDS COMPARED ARE THE RECORDS' BASE FINISHES. A wall's `finish`
+  // (absent = stucco), a roof's `fasciaFinish` (absent = PFM, wall-types
+  // fasciaFinishIdOf). A finish BAND part way up a wall is not read here: the
+  // seams this rule governs are at the top and bottom of a surface, and a
+  // band that reaches a wall's head is a wall wearing that finish there,
+  // which is the one case this misses. Three readers, one comparison.
+  const skinOf = wall => (wall && wall.finish) || DEFAULT_FINISH_ID;
+  const fasciaSkinOf = roof => fasciaFinishIdOf(roof);
+  const sameSkin = (a, b) => a === b;
+  // HOW FAR OFF A WALL'S FACE AN EAVE STILL STANDS "FLUSH". A wall is
+  // 5 1/2" to a foot thick and a roof outline sits on its reference line, so
+  // an eave with no overhang is within one wall of the face; the shortest
+  // overhang anyone types (a foot) is not.
+  const FLUSH_FT = 0.6;
   // A truss chord in section: 3 1/2" measured ACROSS the member, so the
   // vertical drop under a sloped top chord grows with the pitch.
   const ROOF_CHORD_IN = 3.5;
@@ -5802,7 +5827,15 @@ if (!window.DraftCutView) {
       const standsOn = (a, b) => faceGeoms.some(g => g !== geom
         && Math.abs(g.face.depth - face.depth) < 0.05
         && Math.abs(g.floor - a.top) < 0.02 && Math.abs(g.floor - b.top) < 0.02
-        && g.loU <= Math.min(a.u, b.u) + 1e-6 && g.hiU >= Math.max(a.u, b.u) - 1e-6);
+        && g.loU <= Math.min(a.u, b.u) + 1e-6 && g.hiU >= Math.max(a.u, b.u) - 1e-6)
+        // THE SEAM RULE AT THE FLOOR: a floor band on this wall's head with
+        // one skin over and under it is the same surface going on up, and
+        // the plate line under the band is no line. Two skins, and the
+        // band is the joint between them, drawn.
+        || rimBands.some(band => band.oneSkin
+          && Math.abs(band.depth - face.depth) < 0.05
+          && Math.abs(band.bottom - a.top) < 0.02 && Math.abs(band.bottom - b.top) < 0.02
+          && band.lo <= Math.min(a.u, b.u) + 1e-6 && band.hi >= Math.max(a.u, b.u) - 1e-6);
       ctx.beginPath();
       endL.forEach(([lo, hi]) => { ctx.moveTo(xa, Y(lo)); ctx.lineTo(xa, Y(hi)); });
       ctx.moveTo(X(tops[0].u), Y(tops[0].top));
@@ -6541,6 +6574,22 @@ if (!window.DraftCutView) {
     // The run is the house's own extent; the PARTS are what survived the
     // clip against whatever stands in front, and the two are different the
     // moment a garage laps the house.
+    // THE SEAM RULE, READ ACROSS THE FLOOR: the walls standing over and
+    // under this band, in its plane. One skin on both sides and the band
+    // is the same surface carried on: with the finishes asked for, the
+    // cladding is painted across it.
+    const skinsAtBand = (level, part, depth) => {
+      if (depth == null) return null;
+      const skins = side => faces
+        .filter(f => Math.abs(f.depth - depth) < 0.05
+          && (side > 0 ? f.level.id === level.id
+            : Math.abs(f.level.wallTop - level.floorBottom) < 0.02))
+        .filter(f => { const s = spanOf(f); return s.hi > part.lo + 0.05 && s.lo < part.hi - 0.05; })
+        .map(f => skinOf(f.wall));
+      const above = skins(1), below = skins(-1);
+      if (!above.length || !below.length) return null;
+      return new Set([...above, ...below]).size === 1 ? above[0] : null;
+    };
     const rimBands = [];
     const bandLevels = [];
     stack.floors.forEach(level => {
@@ -6587,12 +6636,18 @@ if (!window.DraftCutView) {
           rimBands.push({
             lo: part.lo, hi: part.hi,
             bottom: level.floorBottom, top: level.floorTop, depth,
+            // THE SEAM RULE: the one finish over and under this band, or
+            // null where they differ (skinsAtBand). Read when the wall
+            // under it strokes its top: in one skin the plate line is no
+            // line, the surface carries on up through the band.
+            oneSkin: skinsAtBand(level, part, depth),
           });
         });
       });
       bandLevels.push({ level, spans, runs, paintedOf, bandFills });
     });
-    const paintRimBand = (level, part) => {
+    const paintRimBand = (level, part, depth) => {
+      const oneSkin = skinsAtBand(level, part, depth);
       // A FLOOR ON THE FOUNDATION HAS NO WALL HEAD UNDER IT, only the sill
       // plate's top line -- which is wanted. Movie, 4 Oct, on a MOD BILEVEL's
       // E1: "the sill plate lines don't show both lines on the house". The
@@ -6636,6 +6691,26 @@ if (!window.DraftCutView) {
       // BILEVEL's ENTRY top). Inset from the ends, because the corner lines
       // run through there and a full row would put a gap in them.
       ctx.fillRect(X(part.lo) + 1, Y(level.floorBottom) + 0.5, (part.hi - part.lo) * pxPerFt - 2, 1);
+      // THE SEAM RULE ACROSS THE FLOOR: one skin over and under the band and
+      // the cladding runs straight across it -- a stucco house is one coat
+      // from grade to soffit, not two storeys with a plain strip between.
+      // Where the skins differ the band stays bare, the floor package seen
+      // between two finishes.
+      const FP = oneSkin && opts && opts.finishes ? window.DraftFinishPatterns : null;
+      if (FP) {
+        // A POLYGON, NOT rect(): the harnesses' recording context keeps a
+        // clip only from a path it saw drawn, and the cladding check wants
+        // every finish painted inside one.
+        const x0 = X(part.lo), x1 = X(part.hi);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x0, yTopPx); ctx.lineTo(x1, yTopPx); ctx.lineTo(x1, yBotPx); ctx.lineTo(x0, yBotPx);
+        ctx.closePath();
+        ctx.clip();
+        FP.drawFinish(ctx, { x0, x1, yTop: yTopPx, yBottom: yBotPx, pxPerFt },
+          finishById(oneSkin), C);
+        ctx.restore();
+      }
     };
 
     // FAR FIRST, AND ON A TIE THE WALL GOES DOWN BEFORE THE ROOF. A sheet
@@ -6679,7 +6754,7 @@ if (!window.DraftCutView) {
         // MARKED, so the two ways of getting this wrong can each be written
         // as one edit -- see the mutations in garage-bearing-harness.js.
         bl.bandFills.forEach(f => wallItems.push({ depth: f.depth, band: true,
-          go: () => paintRimBand(bl.level, f.part) }));
+          go: () => paintRimBand(bl.level, f.part, f.depth) }));
       });
       faceGeoms.filter(geom => !faceHidden(geom) && geom.face.level.id === level.id)
         .forEach(geom => {
@@ -7583,6 +7658,25 @@ if (!window.DraftCutView) {
                 // every station of it past `hidden`, which is why the band
                 // moved off the silhouette pass and onto this one.
                 const spans = [{ u0: Math.min(r.u0, r.u1), u1: Math.max(r.u0, r.u1) }];
+                // THE BOARD WEARS ITS FINISH when the finishes are asked for
+                // (EXT. FINISH): a siding fascia over a siding wall is the
+                // same surface carried up, lines and all. PFM and stucco
+                // paint plain, which is what the band has always been.
+                const bandFP = opts && opts.finishes ? window.DraftFinishPatterns : null;
+                if (bandFP && finishById) {
+                  const bandFinish = (window.DraftWallTypes.fasciaFinishById || finishById)(fasciaSkinOf(roof));
+                  spans.filter(sp => sp.u1 - sp.u0 > 0.2).forEach(sp => {
+                    const x0 = X(sp.u0), x1 = X(sp.u1);
+                    const yT = Y(boardTop), yB = Y(boardTop - roofFasciaFt(roof));
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x0, yT); ctx.lineTo(x1, yT); ctx.lineTo(x1, yB); ctx.lineTo(x0, yB);
+                    ctx.closePath();
+                    ctx.clip();
+                    bandFP.drawFinish(ctx, { x0, x1, yTop: yT, yBottom: yB, pxPerFt }, bandFinish, C);
+                    ctx.restore();
+                  });
+                }
                 spans.filter(sp => sp.u1 - sp.u0 > 0.2).forEach(sp => {
                   ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                   ctx.beginPath();
@@ -7630,8 +7724,44 @@ if (!window.DraftCutView) {
                   const t1 = k < ts.length - 1 && !shows[k + 1] ? footEdge(t, ts[k + 1]) : t;
                   foot.u1 = ua + (ub - ua) * t1;
                 });
+                const shownFeet = feet.filter(f => Math.abs(f.u1 - f.u0) > 0.05)
+                  .map(f => ({ u0: Math.min(f.u0, f.u1), u1: Math.max(f.u0, f.u1) }));
+                // THE BAND, HANDED OUT: EXT. FINISH aims a click at it to
+                // pick this roof (the fascia is a thing a drafter can see
+                // and point at, where the roof plane behind is a line).
+                if (opts && Array.isArray(opts.fasciaBands)) {
+                  shownFeet.forEach(f => opts.fasciaBands.push({
+                    roofId: roof.id, u0: f.u0, u1: f.u1, top: boardTop, foot: footE }));
+                }
+                // ── THE SEAM RULE AT THE FOOT ──────────────────────────
+                //
+                // jb, 13 Nov 2026: "if wall is siding and fascia is PFM there
+                // should be a seam still" -- and no seam where the wall flush
+                // under the board wears what the board wears. A wall is
+                // flush when its face stands within one wall of the eave's
+                // line and its head reaches the board's foot; with an
+                // overhang the fascia stands off the wall and the heavy
+                // line is the eave's shadow, whatever either wears.
+                const edgeDepth = ((a.x + b.x) / 2) * dir.x + ((a.z + b.z) / 2) * dir.z;
+                const fasciaSkin = fasciaSkinOf(roof);
+                const seamlessAt = u => faceGeoms.some(g =>
+                  u > g.loU - 0.01 && u < g.hiU + 0.01
+                  && Math.abs(g.face.depth - edgeDepth) < FLUSH_FT
+                  && Math.abs(topAtU(g, u) - footE) < 0.1
+                  && sameSkin(skinOf(g.face.wall), fasciaSkin));
+                const lined = [];
+                shownFeet.forEach(f => {
+                  const n = Math.max(1, Math.ceil((f.u1 - f.u0) / 0.25));
+                  let open = null;
+                  for (let k = 0; k < n; k += 1) {
+                    const u0 = f.u0 + (f.u1 - f.u0) * k / n, u1 = f.u0 + (f.u1 - f.u0) * (k + 1) / n;
+                    if (seamlessAt((u0 + u1) / 2)) { open = null; continue; }
+                    if (!open) { open = { u0, u1 }; lined.push(open); }
+                    open.u1 = u1;
+                  }
+                });
                 ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
-                feet.filter(f => Math.abs(f.u1 - f.u0) > 0.05).forEach(f => {
+                lined.filter(f => f.u1 - f.u0 > 0.05).forEach(f => {
                   ctx.beginPath();
                   ctx.moveTo(X(f.u0), Y(footE)); ctx.lineTo(X(f.u1), Y(footE));
                   ctx.stroke();
@@ -7658,6 +7788,10 @@ if (!window.DraftCutView) {
                 // decide a run has any extent at all, rather than a second
                 // tolerance invented here.
                 const drop = roofFasciaFt(roof);
+                if (opts && Array.isArray(opts.fasciaBands)) {
+                  opts.fasciaBands.push({ roofId: roof.id, u0: r.u0, u1: r.u1,
+                    e0: r.e0, e1: r.e1, drop });
+                }
                 ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
