@@ -52,7 +52,7 @@ const MUTATIONS = [
   ['the across cut slices no stringers', 'cut-view.js',
     c => c.replace('        [xa, xb - sx].forEach(x => {', '        [].forEach(x => {')],
   ['the turned stair\'s landing is not drawn', 'cut-view.js',
-    c => c.replace('      if (parts.landing && flights[1]) {', '      if (false) {')],
+    c => c.replace('        if (!band) return;\n        const eL = band.e;', '        if (true) return;\n        const eL = band.e;')],
   ['the stringer throat is measured off the nosings again', 'stair-section.js',
     c => c.replace('- (layout.riserIn / treadRunIn()) * (u - flight.u0 + STAIR_RISER_FACE_IN / 12);',
       '- (layout.riserIn / treadRunIn()) * (u - flight.u0);')],

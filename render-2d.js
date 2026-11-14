@@ -2860,7 +2860,10 @@ if (!window.DraftRender2D) {
       if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;
       ctx.strokeStyle = env.stairColor;
       ctx.fillStyle = env.stairColor;
-      parts.runs.forEach(run => {
+      // A U's MIDDLE FLIGHT, between its two landings, draws as a run of its
+      // own -- as wide as the landing it crosses.
+      [...parts.runs, ...(parts.middle ? [parts.middle] : [])].forEach(run => {
+        const half = Math.max(2, ((Number(run.widthFt) || stair.widthFt) / 2) * pxPerFt);
         const a = pt(run.start);
         const b = pt({ x: run.start.x + run.dir.x * run.lenFt, z: run.start.z + run.dir.z * run.lenFt });
         const dx = b.x - a.x, dy = b.y - a.y;
@@ -2898,19 +2901,23 @@ if (!window.DraftRender2D) {
       }
       // Landing square, with winder division lines fanning from the inside
       // corner when the landing converts to 2 or 3 winders.
-      if (parts.landing) {
-        const poly = parts.landing.poly.map(pt);
+      // A U's TWO landings (jb, 14 Nov 2026) draw square by square, so the
+      // line where they meet is on the plan -- a riser when they part.
+      const landings = parts.landings && parts.landings.length ? parts.landings
+        : parts.landing ? [parts.landing] : [];
+      landings.forEach(landing => {
+        const poly = landing.poly.map(pt);
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         poly.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
         ctx.closePath();
         ctx.stroke();
         ctx.lineWidth = 1;
-        parts.landing.winderLines.forEach(line => {
+        (landing.winderLines || []).forEach(line => {
           const a = pt(line[0]), b = pt(line[1]);
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         });
-      }
+      });
       // The U gap line: the rail or wall the 4.5" between the runs is for.
       if (parts.gap) {
         const a = pt(parts.gap[0]), b = pt(parts.gap[1]);
