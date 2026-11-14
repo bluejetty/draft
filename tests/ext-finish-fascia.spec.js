@@ -172,6 +172,16 @@ test('the seam rule at the eave: no foot line where a flush wall wears the fasci
     }));
     expect(footAcross(differ, HOUSE_FOOT_E, -8, 8), 'stucco over siding: the house foot line').toBe(true);
 
+    // AND THE WALL HAS TO REACH THE BOARD. The MAIN storey's front stands in
+    // the same plane as the 2ND FL's and wears stucco, but its head is a
+    // storey under the house eave; a stucco fascia over a siding 2ND FL
+    // keeps its line, whatever the storey below wears.
+    const under = paintE1(flushCopy(c => {
+      c.walls.forEach(w => { if (w.levelId === 5) w.finish = 'siding_h'; });
+      c.roofs.forEach(r => { r.fasciaFinish = 'stucco'; });
+    }));
+    expect(footAcross(under, HOUSE_FOOT_E, -8, 8), 'stucco over siding, stucco storey below: the house foot line').toBe(true);
+
     // AND WITH AN OVERHANG THE WALL IS NOT FLUSH: the heavy line is the
     // eave's shadow, whatever either wears.
     const hung = JSON.parse(JSON.stringify(REPRO));
