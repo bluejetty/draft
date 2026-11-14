@@ -428,6 +428,28 @@
     bearing2: 'GABLE ROOF 2/3: click two points along the opposite wall -- the other eave. The peak runs between them.',
     ask: 'GABLE ROOF 3/3: the overhangs and the pitch, then MAKE ROOF.',
   };
+  // ── A ROOF PIECE, DRAWN BY HAND (jb, 13 Nov 2026) ───────────────────────
+  //
+  // The HAND ROOF's own tool, beside the two special roofs: with AUTO ROOF
+  // off (or a busted roof to finish by hand) the drafter draws each plane as
+  // a piece. The outline from above, overhang and all, as the single slope
+  // roof's is; then ONE PRESS NAMES THE EAVE EDGE (the low side) and the
+  // rest start as GABLE -- except an edge laid along another roof's edge,
+  // which is a JOINT, so pieces drawn side by side join like a busted roof.
+  // Pitch, overhang and fascia are the PROJECT's to start and the ROOF
+  // panel's after; the piece is a hand roof from birth (`follows: 'none'`).
+  // On a storey it sits on the storey below and shows on both plans, as the
+  // single slope roof does; on the ROOF plan it sits on the top storey.
+  const PIECE_SAYS = {
+    shape: 'ROOF PIECE 1/2: click the piece’s outline from above, overhang and all; close on the first corner or ENTER.',
+    eave: 'ROOF PIECE 2/2: click the EAVE edge -- the low side the piece slopes down to.',
+  };
+  const startPieceRoof = () => {
+    if (roofPickCard) roofPickCard.hidden = true;
+    shedRoof = { kind: 'piece', stage: 'shape', a: null, b: null, down: null, corners: [], ring: null };
+    sayOnStrip(PIECE_SAYS.shape);
+    paint();
+  };
   const startShedRoof = () => {
     if (roofPickCard) roofPickCard.hidden = true;
     shedRoof = { kind: 'shed', stage: 'bearing', a: null, b: null, down: null, corners: [] };
@@ -485,6 +507,7 @@
   const shedPress = at => {
     const s = shedRoof;
     if (s.stage === 'ask') return;
+    if (s.stage === 'eave') { pieceEavePress(at); return; }
     if (s.stage === 'bearing') {
       const p = shedPoint(s, at);
       if (!s.a) { s.a = p; paint(); return; }
@@ -553,6 +576,7 @@
   const commitShedRoof = () => {
     const G = window.DraftGeometry2D;
     const s = shedRoof;
+    if (s.kind === 'piece') return pieceOutlineDone(s);
     const ring = s.corners.map(p => ({ x: p.x, z: p.z }));
     if (ring.length < 3) { sayOnStrip('A roof needs at least three corners.'); return null; }
     if (G.selfIntersects(ring)) { sayOnStrip('That outline crosses itself, so it encloses no roof.'); return null; }
@@ -663,6 +687,92 @@
     if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); commitGableRoof(); }
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); endShedRoof(); sayOnStrip('GABLE ROOF put down.'); }
   });
+  // THE PIECE'S OUTLINE CLOSED: it is held as a ring and the eave is asked.
+  function pieceOutlineDone(s) {
+    const G = window.DraftGeometry2D;
+    const ring = s.corners.map(p => ({ x: p.x, z: p.z }));
+    if (ring.length < 3) { sayOnStrip('A roof piece needs at least three corners.'); return null; }
+    if (G.selfIntersects(ring)) { sayOnStrip('That outline crosses itself, so it encloses no roof.'); return null; }
+    s.ring = ring;
+    s.stage = 'eave';
+    sayOnStrip(PIECE_SAYS.eave);
+    paint();
+    return s;
+  }
+  // THE EDGE OF THE RING UNDER A POINT, within the grab reach, else null.
+  const pieceEdgeAt = (ring, at) => {
+    const G = window.DraftGeometry2D;
+    let best = null, bestD = SELECT_GRAB_PX / view.scale;
+    ring.forEach((p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      const { d } = G.pointToSegment(at, { start: p, end: q });
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  };
+  const pieceEavePress = at => {
+    const s = shedRoof;
+    const index = pieceEdgeAt(s.ring, at);
+    if (index == null) { sayOnStrip('Click ON one edge of the outline -- the EAVE, where the piece slopes down to.'); return; }
+    commitPieceRoof(s, index);
+  };
+  // AN EDGE LAID ALONG ANOTHER ROOF'S EDGE IS A JOINT: both its ends within
+  // a tenth of a foot of that edge.
+  const pieceEdgeOnOtherRoof = (p, q) => {
+    const G = window.DraftGeometry2D;
+    return (drawing?.roofs || []).some(roof => (roof.points || []).some((a, k) => {
+      const b = roof.points[(k + 1) % roof.points.length];
+      const seg = { start: { x: a.x, z: a.z }, end: { x: b.x, z: b.z } };
+      return G.pointToSegment(p, seg).d < 0.1 && G.pointToSegment(q, seg).d < 0.1;
+    }));
+  };
+  // THE STOREY THE PIECE BEARS ON: under the storey it is drawn on, or the
+  // top storey from the ROOF plan.
+  const pieceBearsOn = () => {
+    if (storeyHere()) return shedBearsOn();
+    const storeys = typeof roofStoreys === 'function' ? roofStoreys() : [];
+    return storeys.length ? storeys[storeys.length - 1].id : shedBearsOn();
+  };
+  const commitPieceRoof = (s, eaveIndex) => {
+    const G = window.DraftGeometry2D;
+    const ring = s.ring;
+    const { overhangFt, pitch } = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
+    const edges = ring.map((p, i) => {
+      if (i === eaveIndex) return 'eave';
+      return pieceEdgeOnOtherRoof(p, ring[(i + 1) % ring.length]) ? 'joint' : 'gable';
+    });
+    const over = Number((overhangFt > 0 ? overhangFt : 0).toFixed(4));
+    const overs = edges.map(e => (e === 'joint' ? 0 : over));
+    const foot = G.offsetOutlineVariable(ring, overs.map(v => -v));
+    const footOk = foot.length === ring.length && foot.every(p => Number.isFinite(p.x) && Number.isFinite(p.z));
+    const onStorey = storeyHere();
+    drawing.roofs = drawing.roofs || [];
+    const roof = addItem(drawing.roofs, {
+      id: newDrawingItemId('roof'),
+      points: ring.map(p => ({ x: p.x, y: 0, z: p.z })),
+      levelId: ROOF_LEVEL_ID,
+      sourceLevelId: pieceBearsOn(),
+      ...(onStorey ? { drawnOn: Number(activeLevelId()) } : {}),
+      sourceShapeId: null,
+      edges,
+      overhang: over,
+      edgeOverhang: overs,
+      ...(footOk ? { footprint: foot.map(p => ({ x: p.x, y: 0, z: p.z })) } : {}),
+      pitch,
+      fascia: ROOF_FASCIA_IN,
+      garage: false,
+      follows: 'none',
+      layer: 'A-ROOF',
+    });
+    shedRoof = null;
+    markDirty();
+    setTool(RESTING_TOOL);
+    selectPlaced('roof', roof);
+    const joints = edges.filter(e => e === 'joint').length;
+    sayOnStrip(`ROOF PIECE made at ${pitch}/12${joints ? `, ${joints} JOINT edge${joints > 1 ? 's' : ''} on the roof beside it` : ''}. `
+      + 'Change its pitch, overhangs or edges in PROPERTIES.');
+    return roof;
+  };
   // THE STEPS IN HAND: the walls it can bear on, faint; the bearing line;
   // the slope arrow; the outline with a band to the cursor.
   function paintShedRoof() {
@@ -704,6 +814,22 @@
       ctx.lineTo(pt.x - 9 * Math.cos(ang + 0.45), pt.y - 9 * Math.sin(ang + 0.45));
       ctx.closePath(); ctx.fill();
     }
+    if (s.stage === 'eave' && s.ring) {
+      // THE RING CLOSED, and the edge under the cursor thick: the one a
+      // press would name the EAVE.
+      ctx.beginPath();
+      s.ring.forEach((pt, i) => { const p = toS(pt); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
+      ctx.closePath(); ctx.stroke();
+      const hot = cursorWorld ? pieceEdgeAt(s.ring, cursorWorld) : null;
+      if (hot != null) {
+        const a = toS(s.ring[hot]), b = toS(s.ring[(hot + 1) % s.ring.length]);
+        ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.lineWidth = 2;
+      }
+      ctx.restore();
+      return;
+    }
     if (s.corners.length) {
       const trace = cursorWorld ? s.corners.concat([shedPoint(s, cursorWorld)]) : s.corners;
       ctx.setLineDash([6, 4]);
@@ -720,6 +846,7 @@
   }
   roofPickCard?.querySelector('[data-roof-kind="shed"]')?.addEventListener('click', startShedRoof);
   roofPickCard?.querySelector('[data-roof-kind="gable"]')?.addEventListener('click', startGableRoof);
+  roofPickCard?.querySelector('[data-roof-kind="piece"]')?.addEventListener('click', startPieceRoof);
   // A PRESS ON THE PLAN IS AN ANSWER TOO: the ROOF tool's own edge flip, not
   // a hand-drawn roof, so the question goes away.
   canvas.addEventListener('pointerdown', () => {
@@ -739,7 +866,7 @@
     if (event.key === 'Escape') {
       const kind = shedRoof.kind;
       endShedRoof();
-      sayOnStrip(kind === 'gable' ? 'GABLE ROOF put down.' : 'SINGLE SLOPE ROOF put down.');
+      sayOnStrip(kind === 'gable' ? 'GABLE ROOF put down.' : kind === 'piece' ? 'ROOF PIECE put down.' : 'SINGLE SLOPE ROOF put down.');
     }
   }, true);
 

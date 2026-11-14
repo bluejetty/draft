@@ -2341,7 +2341,15 @@
       shedRoof = null;
       return;
     }
-    if (roofPickCard && storeyHere()) roofPickCard.hidden = false;
+    // AND ON THE ROOF PLAN (jb, 13 Nov 2026), where only the ROOF PIECE
+    // can be drawn: the single slope and gable roofs bear on the walls of
+    // the storey below the one they are drawn on, and the ROOF plan has none.
+    const onRoofPlan = !boneyardActive && activeLevelId() === ROOF_LEVEL_ID;
+    if (roofPickCard && (storeyHere() || onRoofPlan)) {
+      roofPickCard.querySelectorAll('[data-roof-kind="shed"], [data-roof-kind="gable"]')
+        .forEach(button => { button.hidden = !storeyHere(); });
+      roofPickCard.hidden = false;
+    }
   });
   const setTool = id => {
     const roster = window.DraftToolRoster;
