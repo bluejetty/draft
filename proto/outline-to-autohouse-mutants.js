@@ -95,13 +95,13 @@ const MUTANTS = [
     test: 'the pick survives a reload' },
   { file: 'model/10-tracking-garage.js',
     name: 'the restored pick is the trace’s order too',
-    find: "    tracedOrder = picked?.entry ? picked : null;\n  };",
-    with: "    tracedOrder = null;\n  };",
+    find: "    tracedOrder = picked?.entry ? picked : null;\n    tracedOrderFromFile = !!tracedOrder;",
+    with: "    tracedOrder = null;\n    tracedOrderFromFile = false;",
     test: 'the pick survives a reload' },
   { file: 'model/10-tracking-garage.js',
     name: 'a house drawn before the type is kept as that type’s house',
-    find: "      ? { house: tracedHouse, masters: tracedMasters } : null;",
-    with: "      ? null : null;",
+    find: "      ? { house: tracedHouse, garage: traceStillThere(tracedGarage) ? tracedGarage : null, masters: tracedMasters }\n      : null;",
+    with: "      ? null\n      : null;",
     test: 'goes to PROJECT as a 1 STOREY' },
 ];
 
