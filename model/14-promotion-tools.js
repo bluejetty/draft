@@ -221,6 +221,10 @@
   toolListeners.push(next => { if (next !== RESTING_TOOL) lastToolArmed = next; });
   // FINISH what is in hand; true when something was.
   const finishInHand = () => {
+    // THE HIP ROOF'S GABLE QUESTION ends on FINISH too (jb, 13 Nov 2026):
+    // its outline is closed and held, so no loop is in hand, and ENTER is
+    // the answer "no more gable ends".
+    if (activeTool === 'roof' && shedRoof?.kind === 'hip' && shedRoof.stage === 'gables') { commitShedRoof(); return true; }
     if (loopInHand()) return closeLoop();
     if (drawsRun() && drawStart) { endDrawRun(); return true; }
     if (dimInHand()) return dimOnceEnds();

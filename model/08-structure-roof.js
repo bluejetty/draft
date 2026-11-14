@@ -450,6 +450,97 @@
     sayOnStrip(PIECE_SAYS.shape);
     paint();
   };
+  // ── A HIP ROOF OFF THE WALL LINE (jb, 13 Nov 2026) ────────────────────────
+  //
+  // "can i make one where i draw an outline and it will make a hip/pyramid
+  // style roof from it" -- "i'd like to draw the line on the ext wall and
+  // make the roof create the desired overhang". The outline is clicked ON
+  // THE EXTERIOR WALL LINE; the tool pushes it out by the PROJECT's overhang
+  // (the SIDE OVERHANG on a gable end) and every edge starts as an EAVE, so
+  // the solver raises the hip, or the pyramid, by itself. Then any edge
+  // pressed is a GABLE end (pressed again, an eave again); ENTER, SPACE or
+  // the right click finish. The wall ring is kept as the footprint.
+  const HIP_SAYS = {
+    shape: 'HIP ROOF 1/2: click the outline ON the exterior wall line; close on the first corner or ENTER. The overhang is added for you.',
+    gables: 'HIP ROOF 2/2: click any edge that is a GABLE end (click again for an eave). ENTER or right-click finishes.',
+  };
+  const startHipRoof = () => {
+    if (roofPickCard) roofPickCard.hidden = true;
+    shedRoof = { kind: 'hip', stage: 'shape', a: null, b: null, down: null, corners: [], ring: null, wallRing: null, gables: new Set() };
+    sayOnStrip(HIP_SAYS.shape);
+    paint();
+  };
+  // THE RING THE HIP STANDS AT: the wall ring pushed out per edge, a gable
+  // end by the side overhang, an eave by the main one.
+  const hipOvers = s => {
+    const { overhangFt, sideOverhangFt } = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
+    const eave = Number((overhangFt > 0 ? overhangFt : 0).toFixed(4));
+    const gable = Number((sideOverhangFt > 0 ? sideOverhangFt : 0).toFixed(4));
+    return s.wallRing.map((p, i) => (s.gables.has(i) ? gable : eave));
+  };
+  const hipRing = s => {
+    const G = window.DraftGeometry2D;
+    const out = G.offsetOutlineVariable(s.wallRing, hipOvers(s));
+    const ok = out.length === s.wallRing.length && out.every(p => Number.isFinite(p.x) && Number.isFinite(p.z));
+    return ok ? out.map(p => ({ x: p.x, z: p.z })) : s.wallRing.map(p => ({ x: p.x, z: p.z }));
+  };
+  function hipOutlineDone(s) {
+    const G = window.DraftGeometry2D;
+    const ring = s.corners.map(p => ({ x: p.x, z: p.z }));
+    if (ring.length < 3) { sayOnStrip('A hip roof needs at least three corners.'); return null; }
+    if (G.selfIntersects(ring)) { sayOnStrip('That outline crosses itself, so it encloses no roof.'); return null; }
+    s.wallRing = ring;
+    s.ring = hipRing(s);
+    s.stage = 'gables';
+    sayOnStrip(HIP_SAYS.gables);
+    paint();
+    return s;
+  }
+  // A PRESS ON AN EDGE FLIPS IT between eave and gable end; the ring moves
+  // with it, since the two overhangs can differ.
+  const hipGablePress = at => {
+    const s = shedRoof;
+    const index = pieceEdgeAt(s.ring, at) ?? pieceEdgeAt(s.wallRing, at);
+    if (index == null) { sayOnStrip('Click ON an edge to make it a GABLE end, or ENTER to finish the hip roof.'); return; }
+    if (s.gables.has(index)) s.gables.delete(index); else s.gables.add(index);
+    s.ring = hipRing(s);
+    const n = s.gables.size;
+    sayOnStrip(`${n ? `${n} GABLE end${n > 1 ? 's' : ''}` : 'Every edge an eave'} -- ENTER or right-click finishes, or click another edge.`);
+    paint();
+  };
+  const commitHipRoof = s => {
+    const ring = s.ring;
+    const { overhangFt, pitch } = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
+    const edges = s.wallRing.map((p, i) => (s.gables.has(i) ? 'gable' : 'eave'));
+    const overs = hipOvers(s);
+    const onStorey = storeyHere();
+    drawing.roofs = drawing.roofs || [];
+    const roof = addItem(drawing.roofs, {
+      id: newDrawingItemId('roof'),
+      points: ring.map(p => ({ x: p.x, y: 0, z: p.z })),
+      levelId: ROOF_LEVEL_ID,
+      sourceLevelId: pieceBearsOn(),
+      ...(onStorey ? { drawnOn: Number(activeLevelId()) } : {}),
+      sourceShapeId: null,
+      edges,
+      overhang: Number((overhangFt > 0 ? overhangFt : 0).toFixed(4)),
+      edgeOverhang: overs,
+      footprint: s.wallRing.map(p => ({ x: p.x, y: 0, z: p.z })),
+      pitch,
+      fascia: ROOF_FASCIA_IN,
+      garage: false,
+      follows: 'none',
+      layer: 'A-ROOF',
+    });
+    shedRoof = null;
+    markDirty();
+    setTool(RESTING_TOOL);
+    selectPlaced('roof', roof);
+    const gables = edges.filter(e => e === 'gable').length;
+    sayOnStrip(`HIP ROOF made at ${pitch}/12${gables ? `, ${gables} GABLE end${gables > 1 ? 's' : ''}` : ', every edge an eave'}. `
+      + 'Change its pitch, overhangs or edges in PROPERTIES.');
+    return roof;
+  };
   const startShedRoof = () => {
     if (roofPickCard) roofPickCard.hidden = true;
     shedRoof = { kind: 'shed', stage: 'bearing', a: null, b: null, down: null, corners: [] };
@@ -508,6 +599,7 @@
     const s = shedRoof;
     if (s.stage === 'ask') return;
     if (s.stage === 'eave') { pieceEavePress(at); return; }
+    if (s.stage === 'gables') { hipGablePress(at); return; }
     if (s.stage === 'bearing') {
       const p = shedPoint(s, at);
       if (!s.a) { s.a = p; paint(); return; }
@@ -577,6 +669,7 @@
     const G = window.DraftGeometry2D;
     const s = shedRoof;
     if (s.kind === 'piece') return pieceOutlineDone(s);
+    if (s.kind === 'hip') return s.stage === 'gables' ? commitHipRoof(s) : hipOutlineDone(s);
     const ring = s.corners.map(p => ({ x: p.x, z: p.z }));
     if (ring.length < 3) { sayOnStrip('A roof needs at least three corners.'); return null; }
     if (G.selfIntersects(ring)) { sayOnStrip('That outline crosses itself, so it encloses no roof.'); return null; }
@@ -814,6 +907,28 @@
       ctx.lineTo(pt.x - 9 * Math.cos(ang + 0.45), pt.y - 9 * Math.sin(ang + 0.45));
       ctx.closePath(); ctx.fill();
     }
+    if (s.stage === 'gables' && s.ring) {
+      // THE WALL RING FAINT, THE ROOF RING OUT FROM IT; a gable end drawn
+      // heavy, and the edge under the cursor heavier still.
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      s.wallRing.forEach((pt, i) => { const p = toS(pt); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
+      ctx.closePath(); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      s.ring.forEach((pt, i) => { const p = toS(pt); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
+      ctx.closePath(); ctx.stroke();
+      const hot = cursorWorld ? (pieceEdgeAt(s.ring, cursorWorld) ?? pieceEdgeAt(s.wallRing, cursorWorld)) : null;
+      s.ring.forEach((pt, i) => {
+        if (!s.gables.has(i) && i !== hot) return;
+        const a = toS(pt), b = toS(s.ring[(i + 1) % s.ring.length]);
+        ctx.lineWidth = i === hot ? 6 : 4;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
+      ctx.lineWidth = 2;
+      ctx.restore();
+      return;
+    }
     if (s.stage === 'eave' && s.ring) {
       // THE RING CLOSED, and the edge under the cursor thick: the one a
       // press would name the EAVE.
@@ -847,6 +962,7 @@
   roofPickCard?.querySelector('[data-roof-kind="shed"]')?.addEventListener('click', startShedRoof);
   roofPickCard?.querySelector('[data-roof-kind="gable"]')?.addEventListener('click', startGableRoof);
   roofPickCard?.querySelector('[data-roof-kind="piece"]')?.addEventListener('click', startPieceRoof);
+  roofPickCard?.querySelector('[data-roof-kind="hip"]')?.addEventListener('click', startHipRoof);
   // A PRESS ON THE PLAN IS AN ANSWER TOO: the ROOF tool's own edge flip, not
   // a hand-drawn roof, so the question goes away.
   canvas.addEventListener('pointerdown', () => {
@@ -866,7 +982,8 @@
     if (event.key === 'Escape') {
       const kind = shedRoof.kind;
       endShedRoof();
-      sayOnStrip(kind === 'gable' ? 'GABLE ROOF put down.' : kind === 'piece' ? 'ROOF PIECE put down.' : 'SINGLE SLOPE ROOF put down.');
+      sayOnStrip(kind === 'gable' ? 'GABLE ROOF put down.' : kind === 'piece' ? 'ROOF PIECE put down.'
+        : kind === 'hip' ? 'HIP ROOF put down.' : 'SINGLE SLOPE ROOF put down.');
     }
   }, true);
 
