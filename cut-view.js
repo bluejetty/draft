@@ -5764,21 +5764,13 @@ if (!window.DraftCutView) {
       // AND UNDER A RAISED HEEL the corner climbs with the wall to the soffit
       // (Movie, 29 Oct): there is no soffit triangle there, only the wall.
       //
-      // BUT NOT UP A STEP IN THE GABLE WALL (jb, 14 Nov 2026, a front wall
-      // stepped back a foot for its last six: "the jogged back gable wall
-      // should be flush across ... not a line in the middle where the lower
-      // wall extends up"). The wall next door there runs the SAME way a
-      // step back, not across, and the roof runs flush over both (geometry-2d
-      // gableJogKinds): the gable above the plate is one wall in one plane,
-      // and the step is a corner of the storey under it only. So a parallel
-      // neighbour up to ROOF_GABLE_JOG_FT behind or in front lifts no corner;
-      // a wall running across (the 45 above, a wing's side) still does.
-      const jogFt = geo().ROOF_GABLE_JOG_FT ?? 6;
-      const stepsPast = g => {
-        if (!g.wallDir || !geom.wallDir) return false;
-        if (Math.abs(g.face.depth - face.depth) > jogFt + 0.05) return false;
-        return Math.abs(g.wallDir.x * geom.wallDir.z - g.wallDir.z * geom.wallDir.x) < 0.1;
-      };
+      // AND UP A STEP IN THE GABLE WALL, TO THE ROOF (jb, 14 Nov 2026, a
+      // front wall stepped back a foot for its last six: "the front gable
+      // and the further back gable ... the front line should go up to the
+      // bottom roof"). The gable end stepped is two gable walls a foot
+      // apart, and the front one's edge is a corner the whole way up to
+      // the rake's underside -- the parallel wall behind it climbs the same
+      // rake, so the corner climbs with it, as the 45 above does.
       const cornerTopAt = (u, own) => {
         const lifted = worldAt && geom.wallDir
           ? heelTopAt(worldAt(Math.min(hiU, Math.max(loU, u))), level.wallTop, geom.wallDir, wall)
@@ -5788,7 +5780,7 @@ if (!window.DraftCutView) {
           if (g === geom || Math.abs(g.face.depth - face.depth) < 0.05) return;
           const end = Math.abs(g.loU - u) < 0.05 ? g.tops[0]
             : Math.abs(g.hiU - u) < 0.05 ? g.tops[g.tops.length - 1] : null;
-          if (!end || stepsPast(g)) return;
+          if (!end) return;
           top = Math.max(top, Math.min(own, end.top));
         });
         return top;

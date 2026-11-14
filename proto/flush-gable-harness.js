@@ -11,16 +11,16 @@
 // roof. "the jogged back gable wall should be flush across ... not a line in
 // the middle where the lower wall extends up".
 //
-// TWO RULES, both pinned here:
-//   geometry-2d gableJogKinds -- a step of up to ROOF_GABLE_JOG_FT between
-//   a solid edge and an eave running on the same way takes the step and the
-//   eave with it: one GABLE, flush across (before, both sides had to be
-//   solid already).
-//   cut-view cornerTopAt -- the corner where a gable wall steps back is a
-//   corner of the storey only: a parallel neighbour up to the jog limit
-//   behind or in front lifts no crease into the gable. A wall running
-//   ACROSS (the 45 of elevation-harness's clipped gable, a wing's side)
-//   still does, and so does a parallel wall past the limit (a real wing).
+// THE RULE, pinned here: geometry-2d gableJogKinds -- a step of up to
+// ROOF_GABLE_JOG_FT between a solid edge and an eave running on the same
+// way takes the step and the eave with it: one GABLE press, the roof flush
+// across (before, both sides had to be solid already). jb, later that day,
+// on seeing it: "the front gable and the further back gable ... the front
+// line should go up to the bottom roof". So the gable end stepped is TWO
+// gable walls a foot apart under one roof, and in the elevation the front
+// one's edge at the step is a corner the whole way up to the rake's
+// underside (cut-view cornerTopAt, the rule the clipped gable's 45 corner
+// set): PR #1010's cap at the plate is undone, and this pins the climb.
 //
 // Run: node proto/flush-gable-harness.js            (checks)
 //      node proto/flush-gable-harness.js --mutate   (checks + mutation table)
@@ -34,10 +34,6 @@ const MUTATIONS = [
     c => c.replace('        if (!before && !after) continue;', '        if (!before || !after) continue;')],
   ['the eave beyond the step keeps its kind; only the foot goes gable', 'geometry-2d.js',
     c => c.replace("        if (!before) out[(i + n - 1) % n] = 'gable';\n        if (!after) out[(i + 1) % n] = 'gable';\n", '')],
-  ['the step corner climbs into the gable again', 'cut-view.js',
-    c => c.replace('          if (!end || stepsPast(g)) return;', '          if (!end) return;')],
-  ['a parallel wall any distance back is a step (a wing\'s corner lifts no crease)', 'cut-view.js',
-    c => c.replace('        if (Math.abs(g.face.depth - face.depth) > jogFt + 0.05) return false;', '        return true;')],
 ];
 
 if (MUTATE) {
@@ -126,10 +122,13 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
   && Math.abs(x.a.u - u) < 0.01 && Math.abs(x.b.u - u) < 0.01 && Math.max(x.a.e, x.b.e) > PLATE + 0.1);
 {
   const e1 = paint(house(LONG), 'E1');
-  check('E1: no wall line stands up through the gable at the step (u 13)', inkPlumbAt(e1, 13).length === 0, fmt(inkPlumbAt(e1, 13)));
-  const corner = e1.filter(x => x.ink !== '#fff' && x.w >= 1.2 && Math.abs(x.a.u - 13) < 0.01 && Math.abs(x.b.u - 13) < 0.01);
-  check('E1: the step is still a corner of the storeys under the plate',
-    corner.length > 0 && Math.abs(Math.max(...corner.flatMap(x => [x.a.e, x.b.e])) - PLATE) < 0.05, fmt(corner));
+  // The rake's underside at the step: the rake board's foot line (its
+  // apex) less a third a foot over the 3.25 ft from the ridge.
+  const corner = inkPlumbAt(e1, 13);
+  const cornerTop = Math.max(...corner.flatMap(x => [x.a.e, x.b.e]));
+  const rakeUnder = e1.filter(x => x.w === 2.25).reduce((m, x) => Math.max(m, x.a.e, x.b.e), 0) - 3.25 / 3;
+  check('E1: the front gable wall\'s edge at the step runs up to the rake\'s underside (two gable walls, a foot apart)',
+    corner.length > 0 && Math.abs(cornerTop - rakeUnder) < 0.05, `top ${cornerTop.toFixed(2)}, rake underside ${rakeUnder.toFixed(2)}: ${fmt(corner)}`);
   // The rake boards: every heavy sloped line lies on the gable's two rakes
   // through the apex -- one gable, flush, not a small one beside a hip.
   const apexE = Math.max(...e1.filter(x => x.w === 2.25).flatMap(x => [x.a.e, x.b.e]));
@@ -159,13 +158,7 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
     !onlyRaw.length && !onlyHealed.length,
     `only raw: ${onlyRaw.slice(0, 5).join(' | ') || 'none'}; only healed: ${onlyHealed.slice(0, 5).join(' | ') || 'none'}`);
   const e1 = paint(house(LONG, 5), 'E1');
-  check('E1 of a 5 ft step: no wall line up through the gable at u 13', inkPlumbAt(e1, 13).length === 0, fmt(inkPlumbAt(e1, 13)));
-}
-// ── A WING, NOT A STEP: 8 ft back, both pieces gable by hand ───────────
-{
-  const e1 = paint(house(['gable', 'eave', 'gable', 'eave', 'eave', 'eave'], 8), 'E1');
-  check('E1 of an 8 ft step: the corner at u 13 still climbs into the gable (a wing\'s corner is a crease)',
-    inkPlumbAt(e1, 13).length > 0, fmt(inkPlumbAt(e1, 13)));
+  check('E1 of a 5 ft step: the corner at u 13 climbs into the gable too', inkPlumbAt(e1, 13).length > 0, fmt(inkPlumbAt(e1, 13)));
 }
 
 const failed = CHECKS.filter(c => !c.ok);
