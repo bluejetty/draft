@@ -2421,6 +2421,35 @@ if (!window.DraftCutView) {
         ctx.strokeRect(fx, Y(base), fwid, (fdn.footingIn / 12) * pxPerFt);
       }
     });
+    // ── THE SLAB STOPS AT THE INSIDE FACE ────────────────────────────────
+    //
+    // Movie, 14 Oct, reading S2 of the two-storey detached garage: "the slab
+    // should stop on the inside of the garage wall (it overlaps now)". Both
+    // spans below were measured to the wall LINE -- the crossing's centre on
+    // a frost wall, the outline (which is the outer face) on a grade beam --
+    // so the slab was drawn straight through the concrete it is poured
+    // against, half a wall at each end on one and a whole wall on the other.
+    //
+    // ONE INSET FOR BOTH, taken off the wall the cut actually crossed rather
+    // than from a wall-type lookup: `c.width` is the thickness this section
+    // is already drawing that wall at, so the slab cannot stop anywhere but
+    // against the face on the sheet. The crossing has to be AT that end --
+    // within half a wall of it -- or it is the other side of the garage and
+    // the end is left alone, which is what keeps a cut that clips a single
+    // grade-beam leg (audit C5) drawing its slab to the outline at the far
+    // end.
+    //
+    // THE DOOR BUCKS ARE UNAFFECTED: `withBucks` inside paintGarageFloor
+    // still reaches the span back OUT to any buck the cut passes, because
+    // there the slab really does pour over the beam and fill the void.
+    const insideFace = (cs, lo, hi) => {
+      const endFace = (u, sign) => {
+        const near = cs.filter(c => Math.abs(c.u - u) <= c.width).sort(
+          (a, b) => Math.abs(a.u - u) - Math.abs(b.u - u))[0];
+        return near ? near.u + sign * near.width / 2 : u;
+      };
+      return { lo: Math.max(lo, endFace(lo, 1)), hi: Math.min(hi, endFace(hi, -1)) };
+    };
     // The house slab spans the HOUSE's bearing walls. A frost-wall garage
     // bears too, but its slab is its own, higher and sloped, so its
     // crossings are kept out of the house span and drawn below.
@@ -2436,7 +2465,21 @@ if (!window.DraftCutView) {
       : (bearingCrossings.length
         ? [{ min: Math.min(...bearingCrossings.map(c => c.u)), max: Math.max(...bearingCrossings.map(c => c.u)) }]
         : []);
-    fdnSpans.forEach(fdnSpan => {
+    // ── AND THE HOUSE SLAB IS POURED TO THE INSIDE FACE TOO ──────────────
+    //
+    // jb, 14 Nov, on S1 through a basement: "make the conc floor slab in the
+    // basement get poured to the INSIDE edge of the foundation wall". The
+    // slab polygon is the foundation outline, which is the wall's OUTER
+    // face, so the band ran the whole way through the concrete it is poured
+    // against (and half a wall past the centre on the crossings fallback).
+    // The garage slabs below already stop at the inside face (Movie, 14 Oct);
+    // this is the same `insideFace`, asked of the house's own walls. A run
+    // end with no house wall within a wall's width of it -- a cut that
+    // clips the slab past the last wall -- is left where it was.
+    const houseFdnCrossings = fdnCrossings.filter(c => !c.garage);
+    fdnSpans.forEach(span0 => {
+      const face = insideFace(houseFdnCrossings, span0.min, span0.max);
+      const fdnSpan = { min: face.lo, max: face.hi };
       if (fdnSpan.max - fdnSpan.min <= 1) return;
       ctx.fillStyle = weight(C.concrete, 0.35);
       ctx.strokeStyle = INK; ctx.lineWidth = 1;
@@ -2529,35 +2572,6 @@ if (!window.DraftCutView) {
       ctx.fill();
       ctx.stroke();
       return { lo, hi };
-    };
-    // ── THE SLAB STOPS AT THE INSIDE FACE ────────────────────────────────
-    //
-    // Movie, 14 Oct, reading S2 of the two-storey detached garage: "the slab
-    // should stop on the inside of the garage wall (it overlaps now)". Both
-    // spans below were measured to the wall LINE -- the crossing's centre on
-    // a frost wall, the outline (which is the outer face) on a grade beam --
-    // so the slab was drawn straight through the concrete it is poured
-    // against, half a wall at each end on one and a whole wall on the other.
-    //
-    // ONE INSET FOR BOTH, taken off the wall the cut actually crossed rather
-    // than from a wall-type lookup: `c.width` is the thickness this section
-    // is already drawing that wall at, so the slab cannot stop anywhere but
-    // against the face on the sheet. The crossing has to be AT that end --
-    // within half a wall of it -- or it is the other side of the garage and
-    // the end is left alone, which is what keeps a cut that clips a single
-    // grade-beam leg (audit C5) drawing its slab to the outline at the far
-    // end.
-    //
-    // THE DOOR BUCKS ARE UNAFFECTED: `withBucks` inside paintGarageFloor
-    // still reaches the span back OUT to any buck the cut passes, because
-    // there the slab really does pour over the beam and fill the void.
-    const insideFace = (cs, lo, hi) => {
-      const endFace = (u, sign) => {
-        const near = cs.filter(c => Math.abs(c.u - u) <= c.width).sort(
-          (a, b) => Math.abs(a.u - u) - Math.abs(b.u - u))[0];
-        return near ? near.u + sign * near.width / 2 : u;
-      };
-      return { lo: Math.max(lo, endFace(lo, 1)), hi: Math.min(hi, endFace(hi, -1)) };
     };
     // A frost-wall garage's slab, between the garage's own bearing walls.
     const frostGarages = [...new Set(fdnCrossings
