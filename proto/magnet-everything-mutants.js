@@ -42,8 +42,8 @@ const MUTANTS = [
     test: 'MOVE carries a floor onto the outline\'s corner by whichever corner comes nearest' },
   { file: 'model/07-walls-magnet.js',
     name: 'a roof corner is its own magnet',
-    find: '    return { nodes: nodeEnds({ faces: false }).filter(stillPt),\n',
-    with: '    return { nodes: nodeEnds({ faces: false }),\n',
+    find: '    return { nodes: [...nodeEnds({ faces: false }).filter(stillPt), ...topEnds],\n',
+    with: '    return { nodes: [...nodeEnds({ faces: false }), ...topEnds],\n',
     test: 'a roof node dragged lands on another roof\'s corner, and never on itself' },
 ];
 
