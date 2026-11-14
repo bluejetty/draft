@@ -1785,10 +1785,20 @@
   // ONLY ON A FILE WITH NO BUILDING STANDING: once the house is up the tile
   // is spent (orderServed), and lighting it again would offer to build the
   // house a second time. A classic sheet locks every tile and gets nothing.
+  // A HOUSE IN HAND: a house outline on the shelf and not a wall on the
+  // sheet -- a plan drawn (TURTLE HOUSE, or the U key) and not yet raised.
+  // building-bodies counts the outline as the file's building, which is right
+  // for the one-building cap and wrong for the drafter who drew it and is
+  // about to build on it (jb, 13 Nov 2026): the pick is still restored over
+  // it, PROJECT's bone builds on it rather than offering a clean file, and
+  // the trace adopts it on open (model/10 adoptHouseInHand).
+  const houseInHand = () => !!drawing
+    && !(drawing.walls || []).some(wall => wall && wall.start && wall.end)
+    && (drawing.boneyardOutlines || []).some(m => m && m.garage !== true && m.detached !== true && m.site !== true);
   const restorePickFromFile = () => {
     if (!drawing || chosenEntryId || classicLocked()) return false;
     const type = window.DraftDrawingFormat.buildType(drawing.buildType);
-    if (!type || window.DraftBuildingBodies.hasBuilding(drawing)) return false;
+    if (!type || (window.DraftBuildingBodies.hasBuilding(drawing) && !houseInHand())) return false;
     const plan = window.DraftDrawingFormat.garagePlan(drawing.garagePlan);
     const framing = drawing.levelAssemblies?.[3]?.framing || 'platform';
     const entries = BM.BUILD_MENU.flatMap(family => family.entries)
@@ -2458,7 +2468,9 @@
   // order came from is named on the way over -- which is what carries a
   // DETACHED GARAGE, whose entry has no type to stamp.
   const PROJECT_CARD = { bungalow: 'bungalow', bilevel: 'bilevel', detachedGarage: 'detached' };
-  const goToProjectWithOrder = () => {
+  // `say` is a word for PROJECT's notice line: 'verify' = "specify project
+  // type & project details, and press the bone when complete" (jb, 13 Nov).
+  const goToProjectWithOrder = ({ say = null } = {}) => {
     const picked = chosen();
     if (!picked?.entry || !drawing) return;
     const entry = picked.entry;
@@ -2468,10 +2480,11 @@
     Promise.resolve(save()).catch(() => false).then(() => {
       const url = new URL('./PROJECT.html', location.href);
       if (card) url.searchParams.set('type', card);
+      if (say) url.searchParams.set('say', say);
       location.href = url.pathname + url.search;
     });
   };
-  projectGoPresses.forEach(press => press.addEventListener('click', goToProjectWithOrder));
+  projectGoPresses.forEach(press => press.addEventListener('click', () => goToProjectWithOrder()));
 
   const setSign = show => {
     sign.toggleAttribute('data-shut', !show);
@@ -2723,17 +2736,20 @@
     sayOnStrip(wantsGarageNext() ? GARAGE_NEXT_LINE(picked.entry.label) : PICKED_LINE(picked.entry.label));
     paint();
   };
-  // A TURTLE HOUSE WALK WITH NO TYPE ON THE BOARD asks which house it is:
-  // the board rises with the question, and the tile pressed builds on the
-  // walk at once (model/10 armOutline's orphan rule). jb's card choice, 13
-  // Nov 2026: ask with the board rather than build a 1 STOREY nobody named.
-  const askTypeForOutline = () => {
-    if (classicLocked()) return;
-    signRefusal = {
-      line: 'WHICH HOUSE IS THIS?',
-      note: 'Pick a type off the board and it goes up on your outline.',
-    };
-    callSign(boneFoot, 'menu');
+  // A TURTLE HOUSE WALK WITH NO TYPE ON THE FILE goes to PROJECT (jb, 13 Nov
+  // 2026: "make 1 storey but can it go to the PROJECT menu for them and tell
+  // them to 'specify project type & project details, and press bone when
+  // complete'"). The file is stamped 1 STOREY so PROJECT's family row has a
+  // tile lit to change from, the walk is saved with it, and PROJECT's bone
+  // sends the order back here, where the house in hand is built on at once
+  // (model/17 runProjectOrder, model/10 armOutline's orphan rule).
+  const sendToProjectForType = () => {
+    if (!drawing || classicLocked()) return;
+    chosenEntryId = 'bungalow';
+    chosenSizeId = null;
+    stampBuildType();
+    syncBuildBar();
+    goToProjectWithOrder({ say: 'verify' });
   };
   document.getElementById('dt-close').addEventListener('click', leaveWindow);
   // THE SIGN'S BONE IS THE ORDER, not the drafter's outline -- the other

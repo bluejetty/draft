@@ -609,6 +609,11 @@
   <script>window.DraftShellBars.topBar();</script>
   <main>
     <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; showing the office defaults, read-only.</div>
+    <!-- SENT HERE WITH A HOUSE OUTLINE DRAWN (jb, 13 Nov 2026): MODEL's TURTLE
+         HOUSE walk lands with no type on the file, stamps 1 STOREY and comes
+         here with ?say=verify -- "specify project type & project details,
+         and press bone when complete". The bone then builds on that outline. -->
+    <div class="notice" id="verify-notice">SPECIFY PROJECT TYPE &amp; PROJECT DETAILS, AND PRESS THE BONE WHEN COMPLETE. Your house outline is drawn and waiting on MODEL.</div>
 
   <!-- THE PROJECT INFO RAIL (Movie, 23 Sep): "a little tab on left for
        PROJECT INFO" -- "the site information lot legal desctiption etc" --
@@ -5518,6 +5523,9 @@
       // they go to the PROJECT AREA can it be on that exact same one they have
       // selected". A file with no home still opens where the URL says.
       showType(homeType() || new URLSearchParams(location.search).get('type'), false);
+      if (new URLSearchParams(location.search).get('say') === 'verify') {
+        document.querySelector('#verify-notice')?.classList.add('visible');
+      }
 
       // ── AND THE FIT HAS TO SURVIVE THE WINDOW MOVING ────────────────────
       //
@@ -5717,6 +5725,12 @@
           // A SUITE IS NOT BUILT, it is started on the boneyard: no outline to
           // ask about.
           if (entry.suite) { sendOrder('menu'); return; }
+          // A HOUSE OUTLINE ALREADY DRAWN AND NOT RAISED (jb, 13 Nov 2026) is
+          // the outline, so DRAW OUTLINE / NO OUTLINE is not a question:
+          // MODEL builds on it as the order lands (runProjectOrder).
+          const houseInHand = !(drawing?.walls || []).some(wall => wall && wall.start && wall.end)
+            && (drawing?.boneyardOutlines || []).some(m => m && m.garage !== true && m.detached !== true && m.site !== true);
+          if (houseInHand && entry.type) { sendOrder('menu'); return; }
           const family = window.DraftBuildMenu.BUILD_MENU
             .find(item => (item.entries || []).includes(entry));
           const name = entry.foundation

@@ -6,7 +6,7 @@
 // TURTLE HOUSE or the OUTLINE tool (or set the PROJECT numbers first), then
 // press the bone and get the autohouse on it.
 //
-// Twelve defects that still render: a turtle walk the trace never hears, a
+// Sixteen defects that still render: a turtle walk the trace never hears, a
 // walk that lands and waits for a bone press, a second walk that is a second
 // house instead of the garage, a U-key second loop the same, an ESC that
 // leaves the OUTLINE tool in hand, a pick stamped without its garage plan, a
@@ -34,15 +34,35 @@ const MUTANTS = [
     with: "      if (master) traceLanded(master, made, { garage: rec.garage === true, buildOnClose: false, fromTurtle: true });",
     test: 'a TURTLE HOUSE walk after ESC is the traced house' },
   { file: 'model/10-tracking-garage.js',
-    name: 'a walk with no type asks with the board',
-    find: "      if (fromTurtle) askTypeForOutline();",
+    name: 'a walk with no type goes to PROJECT',
+    find: "      if (fromTurtle) sendToProjectForType();",
     with: "",
-    test: 'raises the board to ask' },
+    test: 'goes to PROJECT as a 1 STOREY' },
+  { file: 'model/04-levels-notes-bars.js',
+    name: 'the file is stamped 1 STOREY on the way to PROJECT',
+    find: "    chosenEntryId = 'bungalow';\n    chosenSizeId = null;\n    stampBuildType();",
+    with: "    chosenEntryId = null;\n    chosenSizeId = null;\n    stampBuildType();",
+    test: 'goes to PROJECT as a 1 STOREY' },
+  { file: 'PROJECT.html',
+    name: 'PROJECT\u2019s bone builds on a house in hand without asking DRAW OUTLINE / NO OUTLINE',
+    find: "          if (houseInHand && entry.type) { sendOrder('menu'); return; }",
+    with: "",
+    test: 'goes to PROJECT as a 1 STOREY' },
   { file: 'model/10-tracking-garage.js',
     name: 'the tile pressed over a drawn house builds at once',
     find: "      paint();\n      window.ModelBuild.build();\n      return;",
     with: "      paint();\n      return;",
-    test: 'raises the board to ask' },
+    test: 'goes to PROJECT as a 1 STOREY' },
+  { file: 'model/10-tracking-garage.js',
+    name: 'the house in hand is read off the file on open',
+    find: "    if (!houseInHand()) return false;\n    const masters",
+    with: "    return false;\n    const masters",
+    test: 'a house in hand survives a reload' },
+  { file: 'model/04-levels-notes-bars.js',
+    name: 'the pick is restored over a house in hand',
+    find: "    if (!type || (window.DraftBuildingBodies.hasBuilding(drawing) && !houseInHand())) return false;",
+    with: "    if (!type || window.DraftBuildingBodies.hasBuilding(drawing)) return false;",
+    test: 'a house in hand survives a reload' },
   { file: 'model/04-levels-notes-bars.js',
     name: 'the second walk is the garage when the type hangs one on the house',
     find: "    rec.garage = wantsGarageNext() || isGarageChoice(window.ModelBuild.chosen());",
@@ -82,7 +102,7 @@ const MUTANTS = [
     name: 'a house drawn before the type is kept as that type’s house',
     find: "      ? { house: tracedHouse, masters: tracedMasters } : null;",
     with: "      ? null : null;",
-    test: 'raises the board to ask' },
+    test: 'goes to PROJECT as a 1 STOREY' },
 ];
 
 const run = name => {

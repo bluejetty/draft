@@ -248,21 +248,50 @@ test('the pick survives a reload: the file carries the type, and the turtle hous
   expect(b.shelf).toBe(0);
 });
 
-test('a TURTLE HOUSE drawn with no type on the board raises the board to ask, and the tile pressed builds on it at once', async ({ page }) => {
+test('a TURTLE HOUSE drawn with no type on the file goes to PROJECT as a 1 STOREY, and PROJECT\'s bone builds on it', async ({ page }) => {
   await open(page);
   await turtleHouse(page, HOUSE_WALK);
-  // THE BOARD RISES WITH THE QUESTION (jb's card choice, 13 Nov: ask rather
-  // than build a 1 STOREY nobody named); the press glows two seconds first.
-  await expect(page.locator('#drivethru')).not.toHaveAttribute('data-shut', '', { timeout: 6000 });
-  await expect(page.locator('#dt-line')).toContainText('WHICH HOUSE IS THIS?');
-  await page.locator('[data-build-family="bungalow"]').click();
-  await page.locator('[data-build-entry="bungalow"]').click();
-  await expect(page.locator('#drivethru'), 'the board came down for the build').toHaveAttribute('data-shut', '');
+  // TO PROJECT, WITH THE WORDS (jb, 13 Nov: "make 1 storey but can it go to
+  // the PROJECT menu for them and tell them to 'specify project type &
+  // project details, and press bone when complete'").
+  await page.waitForURL(/PROJECT\.html/);
+  await expect(page.locator('#verify-notice')).toBeVisible();
+  await expect(page.locator('#verify-notice')).toContainText('SPECIFY PROJECT TYPE & PROJECT DETAILS, AND PRESS THE BONE WHEN COMPLETE');
+  await expect(page.locator('[data-family-entry="bungalow"]'), 'the 1 STOREY tile lit to change from').toHaveAttribute('aria-pressed', 'true');
+  // HE CHANGES HIS MIND TO A 2 STOREY, then presses the bone: no DRAW
+  // OUTLINE / NO OUTLINE question, the outline is already drawn.
+  await page.locator('[data-family-entry="twoStorey"]').click();
+  await page.locator('#bone').click();
+  await expect(page.locator('#project-build-ask')).toBeHidden();
+  await page.waitForURL(/MODEL\.html/);
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   const d = await builtOnClose(page);
   const b = built(d);
-  expect(b.roofs).toBe(1);
+  expect(b.main, 'the house went up on the walk').toBeGreaterThanOrEqual(4);
+  expect(d.walls.filter(w => Number(w.levelId) === 5).length, 'as the 2 STOREY he picked on PROJECT').toBeGreaterThan(0);
   expect(b.shelf).toBe(0);
   const house = d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
   const xs = house.points.map(p => p.x);
   expect([Math.min(...xs), Math.max(...xs)]).toEqual([0, 40]);
+});
+
+test('a house in hand survives a reload: the pick and the walk are read off the file, and the bone builds on it', async ({ page }) => {
+  await open(page);
+  await pickType(page, 'bungalow', 'bungalow-garage');
+  await escapeBoard(page);
+  await turtleHouse(page, HOUSE_WALK);
+  await expect(strip(page)).toContainText('Now the garage');
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  expect(await page.evaluate(() => window.ModelBuild.chosen()?.entry?.id)).toBe('bungalow-garage');
+  // THE GARAGE WALK AFTER THE RELOAD still closes the order.
+  await openTurtle(page);
+  await nextPadPage(page, 2);
+  await turtleHouse(page, GARAGE_WALK, { atPoint: [0, 0] });
+  const b = built(await builtOnClose(page));
+  expect(b.houses).toBe(1);
+  expect(b.garages).toBe(1);
+  expect(b.shelf).toBe(0);
 });
