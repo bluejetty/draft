@@ -632,9 +632,12 @@
   // that edge, and the two halves are edges of their own.
   var breakState = { held: null, pieces: [] };
   const BREAKABLE = ['roof', 'wall', 'line', 'shape', 'floor'];
-  // A PIECE OF AN ASSEMBLY IS THE ASSEMBLY: BUST it first.
+  // A PIECE OF A FIXED ASSEMBLY IS THE ASSEMBLY: BUST it first. A piece of
+  // a NOT FIXED one (ROOF PIECES: a click picks one piece) is held on its
+  // own and BREAKS on its own (jb, 14 Nov 2026: "when i select a peice, i'd
+  // like to click on an edge and break it so i can move that point").
   const breakHeld = () => (selection.length === 1 && BREAKABLE.includes(selection[0].type)
-    && !selectedGroups().length ? selection[0] : null);
+    && !selectedGroups().some(group => group.fixed === true) ? selection[0] : null);
   function syncBreakVerb() {
     if (!breakState || !breakButton) return;
     const one = breakHeld();
