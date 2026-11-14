@@ -1122,7 +1122,11 @@
     // bone's first press raises the board as it always has.
     if (kind === 'house') {
       const master = (drawing.boneyardOutlines || []).find(m => String(m.id) === String(rec.masterId));
-      if (master) traceLanded(master, made, { garage: rec.garage === true });
+      // AND IT BUILDS ON THE CLOSE, like the board's DRAW HOUSE OUTLINE
+      // press (jb, 13 Nov 2026: "when i draw as a 'house' it should be like
+      // the autohouse using the project info"): the type and the PROJECT
+      // numbers are on the file, so the walk is the whole order.
+      if (master) traceLanded(master, made, { garage: rec.garage === true, buildOnClose: true, fromTurtle: true });
     }
     return true;
   };
@@ -1781,10 +1785,31 @@
   // ONLY ON A FILE WITH NO BUILDING STANDING: once the house is up the tile
   // is spent (orderServed), and lighting it again would offer to build the
   // house a second time. A classic sheet locks every tile and gets nothing.
+  // A HOUSE IN HAND: a house outline on the shelf and not a wall on the
+  // sheet -- a plan drawn (TURTLE HOUSE, or the U key) and not yet raised.
+  // building-bodies counts the outline as the file's building, which is right
+  // for the one-building cap and wrong for the drafter who drew it and is
+  // about to build on it (jb, 13 Nov 2026): the pick is still restored over
+  // it, PROJECT's bone builds on it rather than offering a clean file, and
+  // the trace adopts it on open (model/10 adoptHouseInHand).
+  //
+  // THE FILE SAYS SO, in `houseInHand` ({ house: masterId, garage: masterId
+  // or null }, written by model/10 traceLanded as the loop lands and taken
+  // off by the build), rather than this page guessing from any unbuilt
+  // master on the shelf: a drawing loaded from an old file can carry
+  // outlines whose walls were never made (model-drivethru.spec.js's fixture
+  // carries five), and a tile press over one of those would raise a house
+  // the drafter never asked about. Same lesson as outlineToBuild's.
+  const houseInHand = () => {
+    const rec = drawing?.houseInHand;
+    if (!rec || !rec.house) return false;
+    if ((drawing.walls || []).some(wall => wall && wall.start && wall.end)) return false;
+    return (drawing.boneyardOutlines || []).some(m => m && String(m.id) === String(rec.house));
+  };
   const restorePickFromFile = () => {
     if (!drawing || chosenEntryId || classicLocked()) return false;
     const type = window.DraftDrawingFormat.buildType(drawing.buildType);
-    if (!type || window.DraftBuildingBodies.hasBuilding(drawing)) return false;
+    if (!type || (window.DraftBuildingBodies.hasBuilding(drawing) && !houseInHand())) return false;
     const plan = window.DraftDrawingFormat.garagePlan(drawing.garagePlan);
     const framing = drawing.levelAssemblies?.[3]?.framing || 'platform';
     const entries = BM.BUILD_MENU.flatMap(family => family.entries)
@@ -2454,7 +2479,9 @@
   // order came from is named on the way over -- which is what carries a
   // DETACHED GARAGE, whose entry has no type to stamp.
   const PROJECT_CARD = { bungalow: 'bungalow', bilevel: 'bilevel', detachedGarage: 'detached' };
-  const goToProjectWithOrder = () => {
+  // `say` is a word for PROJECT's notice line: 'verify' = "specify project
+  // type & project details, and press the bone when complete" (jb, 13 Nov).
+  const goToProjectWithOrder = ({ say = null } = {}) => {
     const picked = chosen();
     if (!picked?.entry || !drawing) return;
     const entry = picked.entry;
@@ -2464,10 +2491,11 @@
     Promise.resolve(save()).catch(() => false).then(() => {
       const url = new URL('./PROJECT.html', location.href);
       if (card) url.searchParams.set('type', card);
+      if (say) url.searchParams.set('say', say);
       location.href = url.pathname + url.search;
     });
   };
-  projectGoPresses.forEach(press => press.addEventListener('click', goToProjectWithOrder));
+  projectGoPresses.forEach(press => press.addEventListener('click', () => goToProjectWithOrder({ say: 'verify' })));
 
   const setSign = show => {
     sign.toggleAttribute('data-shut', !show);
@@ -2716,8 +2744,35 @@
     const picked = chosen();
     if (!picked?.entry || activeTool !== 'outline' || outlineCorners.length) return;
     setTool(RESTING_TOOL);
-    sayOnStrip(PICKED_LINE(picked.entry.label));
+    sayOnStrip(wantsGarageNext() ? GARAGE_NEXT_LINE(picked.entry.label) : PICKED_LINE(picked.entry.label));
     paint();
+  };
+  // A TURTLE HOUSE WALK WITH NO TYPE ON THE FILE goes to PROJECT (jb, 13 Nov
+  // 2026: "make 1 storey but can it go to the PROJECT menu for them and tell
+  // them to 'specify project type & project details, and press bone when
+  // complete'"). The file is stamped 1 STOREY so PROJECT's family row has a
+  // tile lit to change from, the walk is saved with it, and PROJECT's bone
+  // sends the order back here, where the house in hand is built on at once
+  // (model/17 runProjectOrder, model/10 armOutline's orphan rule).
+  // PROJECT'S TURTLE OUTLINE PRESS LANDS HERE (jb, 14 Nov 2026: "show it the
+  // turtle for the outline and give them the option to do the turtle or
+  // draw it"): the pad opens on TURTLE with HOUSE pressed, no tool in hand,
+  // and the walk builds the house as it closes (traceLanded).
+  const openTurtleForHouse = () => {
+    if (paneShowing() !== 'notes' || !railOpen('right')) setPane('notes');
+    showPad('turtle');
+    const house = document.querySelector('[data-turtle] [data-turtle-kind="house"]');
+    if (house && house.getAttribute('aria-pressed') !== 'true') house.click();
+    const label = chosen()?.entry?.label || 'house';
+    sayOnStrip(`Walk your ${label}: a direction and a distance per row, then DRAW AT TARGET or DRAW AT POINT — it builds as the path closes.`);
+  };
+  const sendToProjectForType = () => {
+    if (!drawing || classicLocked()) return;
+    chosenEntryId = 'bungalow';
+    chosenSizeId = null;
+    stampBuildType();
+    syncBuildBar();
+    goToProjectWithOrder({ say: 'verify' });
   };
   document.getElementById('dt-close').addEventListener('click', leaveWindow);
   // THE SIGN'S BONE IS THE ORDER, not the drafter's outline -- the other

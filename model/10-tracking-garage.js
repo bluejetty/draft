@@ -1264,9 +1264,15 @@
     // follows is the type for it, not a new house. Only an ORPHAN loop is
     // kept -- one drawn under an earlier type is still a new house below,
     // which is Movie's rule for a type changed mid-trace.
-    const orphan = !tracedOrder && traceStillThere(tracedHouse) && !isGarageChoice(picked)
-      && !outlineIsBuilt(tracedHouse, tracedHouse.levelId)
-      ? { house: tracedHouse, masters: tracedMasters } : null;
+    // AND A HOUSE READ OFF THE FILE ON OPEN IS AN ORPHAN TOO (adoptHouseInHand):
+    // the type beside it was read off the same file, so the tile pressed now
+    // -- from the board, or PROJECT's bone sending the order back -- is the
+    // type FOR that house, not a change of mind mid-trace.
+    const orphan = (!tracedOrder || tracedOrderFromFile) && traceStillThere(tracedHouse)
+      && !isGarageChoice(picked) && !outlineIsBuilt(tracedHouse, tracedHouse.levelId)
+      ? { house: tracedHouse, garage: traceStillThere(tracedGarage) ? tracedGarage : null, masters: tracedMasters }
+      : null;
+    tracedOrderFromFile = false;
     setTool('outline');
     outlineFamily = picked?.family ?? null;
     outlineGarage = isGarageChoice(picked);
@@ -1281,20 +1287,27 @@
     tracedGarage = null;
     tracedMasters = [];
     roomOverFt = null;
+    if (drawing && !orphan) delete drawing.houseInHand;
     if (orphan && tracedOrder) {
       tracedHouse = orphan.house;
+      tracedGarage = orphan.garage;
       tracedMasters = orphan.masters;
       tracedOutline = orphan.house;
       const label = tracedOrder.entry?.label || 'house';
-      if (window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
+      if (!orphan.garage && window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
         // THE HOUSE IS DOWN, SO THE TOOL IN HAND IS THE GARAGE'S.
         outlineGarage = true;
-        sayOnStrip(GARAGE_RUN_LINE);
-      } else {
-        setTool(RESTING_TOOL);
-        sayOnStrip(`Press the bone to build your ${label} on the outline you drew.`);
+        sayOnStrip(GARAGE_NEXT_LINE(label));
+        paint();
+        return;
       }
+      // AND THE HOUSE GOES UP ON THE PRESS (jb, 13 Nov 2026): the walk was
+      // drawn, the tile says which house, nothing is left to ask. The board
+      // comes down first so the build's own show is what he sees.
+      setTool(RESTING_TOOL);
+      setSign(false);
       paint();
+      window.ModelBuild.build();
       return;
     }
     // ── AND THE FIRST CORNER IS ALREADY ON THE BULLSEYE ──────────────────
@@ -1869,7 +1882,11 @@
   // wants the tool out of his hand once he has left the board, and a turtle
   // drafter draws the garage from the pad or picks U himself; the strip says
   // both ways.
-  const traceLanded = (master, copies, { garage = false, armNext = false, buildOnClose = false } = {}) => {
+  // THE TURTLE'S GARAGE LINE, said by the landing and again by ESC off the
+  // board (model/04 leaveWindow) while the house is waiting for its garage.
+  const GARAGE_NEXT_LINE = label => `${label} outline taken. Now the garage: another TURTLE HOUSE walk, or OUTLINE (U) — `
+    + 'start ON the house, three legs out, around and back, and land ON the house.';
+  const traceLanded = (master, copies, { garage = false, armNext = false, buildOnClose = false, fromTurtle = false } = {}) => {
     tracedOutline = copies.find(copy =>
       Number(copy.levelId) === Number(activeLevelId())) || copies[0] || null;
     // THE TYPE ON THE BOARD IS THE ORDER, set by the tile press (armOutline)
@@ -1878,11 +1895,17 @@
     tracedMasters.push({ master, copies });
     if (garage) tracedGarage = tracedOutline;
     else tracedHouse = tracedOutline;
+    writeHouseInHand();
     // NO TYPE ON THE BOARD YET: the loop is kept as the house in hand, so a
-    // type picked after it builds on it (armOutline keeps an orphan loop),
-    // and the strip's own line stands -- "press the bone", which raises the
-    // board to pick one.
-    if (!tracedOrder) return;
+    // type picked after it builds on it (armOutline keeps an orphan loop).
+    // A TURTLE HOUSE walk goes to PROJECT to have the type and the numbers
+    // set (jb, 13 Nov 2026: "when i draw as a 'house' it should be like the
+    // autohouse using the project info"); a U-key loop keeps the strip's own
+    // line, "press the bone", which raises the board.
+    if (!tracedOrder) {
+      if (fromTurtle) sendToProjectForType();
+      return;
+    }
     const label = tracedOrder.entry?.label || 'house';
     if (!garage && window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
       if (armNext) {
@@ -1892,8 +1915,7 @@
         sayOnStrip(GARAGE_RUN_LINE);
         openGarageLesson();
       } else {
-        sayOnStrip(`${label} outline taken. Now the garage: another TURTLE HOUSE walk, or OUTLINE (U) — `
-          + 'start ON the house, three legs out, around and back, and land ON the house.');
+        sayOnStrip(GARAGE_NEXT_LINE(label));
       }
     } else {
       // THE LAST LOOP CLOSED, SO THE HOUSE GOES UP when the trace came off
@@ -1934,8 +1956,41 @@
   // PROJECT numbers, come back, draw, build). armOutline would put the
   // OUTLINE tool in a hand that did not ask for it; this only tells the trace
   // whose house the next loop is.
+  let tracedOrderFromFile = false;
   const rememberOrder = picked => {
     tracedOrder = picked?.entry ? picked : null;
+    tracedOrderFromFile = !!tracedOrder;
+  };
+  // THE HOUSE IN HAND, READ OFF THE FILE ON OPEN (jb, 13 Nov 2026): a walk
+  // drawn, saved, and brought back from PROJECT or a reload is still the
+  // house the next order builds on. The masters the file names in
+  // `houseInHand` (writeHouseInHand); the copy on MAIN FL is the loop the
+  // builder reads. Only while nothing is raised (model/04 houseInHand): a
+  // file with walls has its house already.
+  const adoptHouseInHand = () => {
+    if (!houseInHand()) return false;
+    const masters = drawing.boneyardOutlines || [];
+    const rec = drawing.houseInHand;
+    const copiesOf = master => (drawing.outlines || []).filter(copy => String(copy.masterId) === String(master.id));
+    const mainCopy = copies => copies.find(copy => Number(copy.levelId) === 3)
+      || copies.find(copy => Number(copy.levelId) === Number(activeLevelId())) || copies[0] || null;
+    const houseMaster = masters.find(m => m && String(m.id) === String(rec.house));
+    const garageMaster = rec.garage != null ? masters.find(m => m && String(m.id) === String(rec.garage)) : null;
+    if (!houseMaster) return false;
+    const house = mainCopy(copiesOf(houseMaster));
+    if (!house) return false;
+    tracedMasters = [{ master: houseMaster, copies: copiesOf(houseMaster) }];
+    tracedHouse = house;
+    tracedOutline = house;
+    tracedGarage = null;
+    if (garageMaster) {
+      const garage = mainCopy(copiesOf(garageMaster));
+      if (garage) {
+        tracedGarage = garage;
+        tracedMasters.push({ master: garageMaster, copies: copiesOf(garageMaster) });
+      }
+    }
+    return true;
   };
 
   // ── THE BONE BUILDS WHAT THE DRAFTER DREW ────────────────────────────────
@@ -2040,7 +2095,20 @@
     ROOM_NEEDS_RECTANGLE: 'The room over the garage needs a rectangular garage against the house.',
   });
   const traceStillThere = rec => !!rec && (drawing?.outlines || []).includes(rec);
+  // THE FILE'S WORD FOR THE HOUSE IN HAND (model/04 houseInHand): the house
+  // master and, when one is down, the garage master, written as they land
+  // and taken off with the build (traceRestore) or when a new type starts a
+  // new house (armOutline). Only while nothing is raised.
+  const writeHouseInHand = () => {
+    if (!drawing) return;
+    const masterFor = loop => loop && tracedMasters.find(({ copies }) => copies.includes(loop))?.master;
+    const house = masterFor(traceStillThere(tracedHouse) ? tracedHouse : null);
+    if (!house || (drawing.walls || []).some(wall => wall && wall.start && wall.end)) { delete drawing.houseInHand; return; }
+    const garage = masterFor(traceStillThere(tracedGarage) ? tracedGarage : null);
+    drawing.houseInHand = { house: house.id, garage: garage ? garage.id : null };
+  };
   const traceRestore = () => {
+    delete drawing.houseInHand;
     const restore = [];
     tracedMasters.forEach(({ master, copies }) => {
       const mi = (drawing.boneyardOutlines || []).indexOf(master);

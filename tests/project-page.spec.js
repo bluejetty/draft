@@ -355,7 +355,7 @@ test('a typed 0 lands the sill on the house sill, stored off MAIN FL', async ({ 
 
   const house = -(11.875 + 0.75) / 12;   // main joists + sheathing, in feet
   await expect.poll(async () =>
-    (await h.savedDrawing(page)).zoneHeights?.zones?.attachedGarage?.offsetFt)
+    (await h.savedDrawing(page))?.zoneHeights?.zones?.attachedGarage?.offsetFt)
     .toBeCloseTo(house, 5);
   // The box still shows the number the drafter typed, in its own datum.
   expect(offsetFt(await box.inputValue())).toBeCloseTo(0, 5);
@@ -421,6 +421,9 @@ test('a family press sets the building method, one at a time, and it saves',
     await page.locator('[data-family-entry="bilevel"]').click();
     await expect(page.locator('[data-family-entry="bilevel"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('[data-family-entry="bilevel-garage"]')).toHaveAttribute('aria-pressed', 'false');
+    // The press's save is asynchronous; a reload that beats it to the store
+    // reads the garage plan back as it was (seen in slow full-suite runs).
+    await expect.poll(async () => (await h.savedDrawing(page))?.garagePlan).toBe('none');
 
     // Survives the reload, which is the whole claim of "project data".
     await page.reload();
