@@ -2430,7 +2430,7 @@
       const note = roofPickCard.querySelector('[data-roof-pick-note]');
       if (note) {
         note.textContent = storeyHere() ? 'Drawn here, it sits on the walls of the storey below.'
-          : 'A ROOF PIECE drawn here sits on the top storey: one plane of the hand roof, its EAVE edge named after the outline.';
+          : 'A ROOF PIECE or HIP ROOF drawn here sits on the top storey: a piece is one plane, its EAVE named after the outline; a hip is drawn on the wall line and gets the overhang.';
       }
       roofPickCard.hidden = false;
     }
