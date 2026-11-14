@@ -1787,6 +1787,9 @@
     // AFTER BOOT, BECAUSE THAT IS WHEN THERE IS A DRAWING TO ASK ABOUT -- see
     // `arrivedFrom`. drawingHasWork() is the same answer NEW uses before it
     // offers to save, so "is there anything here" has one definition.
+    // THE TYPE THE FILE CARRIES IS STILL THE ORDER (jb, 13 Nov 2026): a trip
+    // to PROJECT, or a reload, no longer forgets the tile that was pressed.
+    restorePickFromFile();
     if (arrivedFrom === 'boneyard' || (arrivedFrom === 'entry' && !drawingHasWork())) {
       pullUpToWindow();
     }
