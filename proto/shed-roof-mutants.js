@@ -16,8 +16,8 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/shed-roof.spec.js';
 const MUTANTS = [
   { file: 'model/09-draw-move-stretch.js', name: 'ROOF on a storey never asks',
-    find: "    if (roofPickCard && storeyHere()) roofPickCard.hidden = false;",
-    with: "    void storeyHere;",
+    find: "    if (roofPickCard && (storeyHere() || onRoofPlan)) {",
+    with: "    if (false) {",
     test: 'asks which roof' },
   { file: 'model/16-gestures-undo.js', name: 'the half-drawn roof never takes the press',
     find: "    if (activeTool === 'roof') { if (shedRoof) { loopPress(at); return; } roofPress(at); return; }",
