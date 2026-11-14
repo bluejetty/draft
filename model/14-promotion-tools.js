@@ -221,6 +221,9 @@
   toolListeners.push(next => { if (next !== RESTING_TOOL) lastToolArmed = next; });
   // FINISH what is in hand; true when something was.
   const finishInHand = () => {
+    // ON AN ELEVATION OR SECTION: the line run, the shape, the string's
+    // points (model/13 elevFinish).
+    if (typeof elevFinish === 'function' && elevFinish()) return true;
     // THE HIP ROOF'S GABLE QUESTION ends on FINISH too (jb, 13 Nov 2026):
     // its outline is closed and held, so no loop is in hand, and ENTER is
     // the answer "no more gable ends".
@@ -262,6 +265,10 @@
   // put the run down. On a loop tool it closes the loop the same way.
   canvas.addEventListener('dblclick', e => {
     if (modalUp()) return;
+    if (drawing && activeCut()) {
+      if (elevFinish()) { e.preventDefault(); stripRefresh(); paint(); }
+      return;
+    }
     if (loopInHand()) { e.preventDefault(); closeLoop(); stripRefresh(); paint(); return; }
     if (!drawsRun() || !drawStart) return;
     e.preventDefault();
