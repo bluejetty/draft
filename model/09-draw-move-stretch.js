@@ -2348,6 +2348,11 @@
     if (roofPickCard && (storeyHere() || onRoofPlan)) {
       roofPickCard.querySelectorAll('[data-roof-kind="shed"], [data-roof-kind="gable"]')
         .forEach(button => { button.hidden = !storeyHere(); });
+      const note = roofPickCard.querySelector('[data-roof-pick-note]');
+      if (note) {
+        note.textContent = storeyHere() ? 'Drawn here, it sits on the walls of the storey below.'
+          : 'A ROOF PIECE drawn here sits on the top storey: one plane of the hand roof, its EAVE edge named after the outline.';
+      }
       roofPickCard.hidden = false;
     }
   });

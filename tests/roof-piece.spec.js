@@ -71,6 +71,10 @@ async function drawPiece(page, at, corners, eaveAt) {
 
 test('on a storey the card offers the ROOF PIECE; outline, then the EAVE press, make a hand roof over the floor below', async ({ page }) => {
   const { at } = await open(page);
+  await page.locator('[data-tool-key="roof"]').click();
+  await expect(page.locator('[data-roof-pick-note]'), 'on a storey the card speaks of the storey below').toContainText('storey below');
+  await expect(page.locator('[data-roof-kind="shed"]')).toBeVisible();
+  await page.evaluate(() => setTool('select'));
   await drawPiece(page, at, [[-1, -2], [31, -2], [31, 10], [-1, 10]], [15, 10]);
   await expect(strip(page)).toContainText('ROOF PIECE made at 3/12');
   const over = await projectOverhang(page);
@@ -102,6 +106,7 @@ test('on the ROOF plan the card offers only the ROOF PIECE; it sits on the top s
   await expect(page.locator('[data-roof-kind="shed"]'), 'the single slope roof needs a storey below').toBeHidden();
   await expect(page.locator('[data-roof-kind="gable"]')).toBeHidden();
   await expect(page.locator('[data-roof-kind="piece"]')).toBeVisible();
+  await expect(page.locator('[data-roof-pick-note]'), 'the card says where a piece sits from here').toContainText('top storey');
   await page.locator('[data-roof-pick-cancel]').click();
   await expect(page.locator('#roof-pick')).toBeHidden();
   // THE TOOL IS STILL ARMED after CANCEL (the ROOF tool's edge flip); put
