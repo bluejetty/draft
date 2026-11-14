@@ -416,6 +416,14 @@
             <label for="gable-corner">Gable corner</label>
             <select id="gable-corner"></select>
           </div>
+          <!-- WHAT THE FASCIA WEARS (jb, 13 Nov 2026): PFM by default, or any
+               finish off the wall table. The word matters for the SEAM RULE:
+               a wall flush under a fascia in the same finish draws no line
+               between them, and the comparison is by these ids. -->
+          <div class="prop" style="margin-top:6px">
+            <label for="fascia-finish">Fascia</label>
+            <select id="fascia-finish"></select>
+          </div>
           <p class="empty" id="roof-weight"></p>
         </div>
       </div>
@@ -642,6 +650,7 @@
             roofPicked = btn.dataset.roof;
             paintRoofList();
             paintRoofProps();
+            paintElevation();
           }));
       };
 
@@ -670,6 +679,8 @@
         `<option value="">Office \u2014 ${cornerLabel(officeCorner)}</option>`
         + PROFILES.GABLE_CORNER_STYLES
           .map(id => `<option value="${id}">${cornerLabel(id)}</option>`).join('');
+      document.getElementById('fascia-finish').innerHTML = WT.FASCIA_FINISHES
+        .map(f => `<option value="${f.id}">${f.label}</option>`).join('');
 
       const paintRoofProps = () => {
         const roof = storedRoof();
@@ -678,6 +689,7 @@
         const roofing = RT.roofingById(roof.roofing);
         document.getElementById('roofing').value = roofing.id;
         document.getElementById('gable-corner').value = roof.gableCorner || '';
+        document.getElementById('fascia-finish').value = WT.fasciaFinishIdOf(roof);
         // THE WEIGHT, SAID OUT LOUD where the choice is made. It is the one
         // number on that table with a consequence -- a tile roof is four times
         // an asphalt one, which is a truss somebody designs rather than buys
@@ -716,6 +728,11 @@
           ? null : event.target.value }));
       document.getElementById('gable-corner').addEventListener('change', event =>
         writeRoof({ gableCorner: event.target.value || null }));
+      // PFM IS STORED AS NOTHING, the record rule: a roof nobody has touched
+      // carries no key and reads as PFM.
+      document.getElementById('fascia-finish').addEventListener('change', event =>
+        writeRoof({ fasciaFinish: event.target.value === WT.DEFAULT_FASCIA_FINISH_ID
+          ? null : event.target.value }));
 
       // ── THE BAND BEING ADJUSTED ────────────────────────────────
       //
@@ -1071,12 +1088,17 @@
         // the painter's own and not this page's guess at it.
         const colors = CV.inksFromSkin(window.__reSkin);
         frame = null;
+        // THE FASCIA BANDS COME BACK OUT with the frame: every eave foot and
+        // rake board the painter drew, by roof, so a click can land on one.
+        fasciaBands = [];
         CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
-          { colors, finishes: true, cushion: ELEVATION_CUSHION,
+          { colors, finishes: true, cushion: ELEVATION_CUSHION, fasciaBands,
             onFrame: f => { frame = { ...f, cut, axis }; } });
         if (!frame) return;
         // Read by the specs, which aim clicks at what was drawn.
         window.__extFinishFrame = frame;
+        window.__extFinishFasciaBands = () => fasciaBands.map(b => ({ ...b, roofId: String(b.roofId) }));
+        if (roofPicked && !picked) paintFasciaMark(ctx);
         window.__extFinishDormers = () => (CV.dormerGables && env && CV.sectionLevelStack(env)
           ? CV.dormerGables(env, cut, CV.sectionLevelStack(env), axis)
             .map(dg => ({ lo: dg.lo, hi: dg.hi, mid: dg.mid, base: dg.base, apex: dg.apex, finish: dg.finish })) : []);
@@ -1122,12 +1144,64 @@
         return out.sort((a, b) => a.depth - b.depth);
       };
 
+      // ── A FASCIA IS PICKED OFF THE DRAWING ───────────────────────────
+      //
+      // The roof list stays (a roof seen edge on is a line), but its FASCIA
+      // is a band a drafter can see and aim at, so a click on one picks that
+      // roof the way a click on a wall picks the wall. The bands are what the
+      // painter drew this frame, in feet along the view and feet of
+      // elevation; an eave band is level (top/foot), a rake band slopes
+      // (e0/e1 along the board's top, `drop` deep).
+      let fasciaBands = [];
+      const fasciaAt = (u, e) => {
+        const reach = 0.15;
+        for (let i = fasciaBands.length - 1; i >= 0; i -= 1) {
+          const b = fasciaBands[i];
+          const lo = Math.min(b.u0, b.u1), hi = Math.max(b.u0, b.u1);
+          if (u < lo - reach || u > hi + reach) continue;
+          if (b.e0 == null) {
+            if (e >= b.foot - reach && e <= b.top + reach) return b;
+          } else {
+            const t = (u - b.u0) / ((b.u1 - b.u0) || 1);
+            const topE = b.e0 + (b.e1 - b.e0) * Math.min(1, Math.max(0, t));
+            if (e >= topE - b.drop - reach && e <= topE + reach) return b;
+          }
+        }
+        return null;
+      };
+      const paintFasciaMark = ctx => {
+        const X = u => frame.x0 + (u - frame.uMin) * frame.pxPerFt;
+        const Y = el => frame.y0 + (frame.yTop - el) * frame.pxPerFt;
+        const mine = fasciaBands.filter(b => String(b.roofId) === roofPicked);
+        if (!mine.length) return;
+        ctx.save();
+        ctx.strokeStyle = window.__reSkin['accent-mark'];
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        mine.forEach(b => {
+          ctx.beginPath();
+          if (b.e0 == null) {
+            ctx.rect(X(Math.min(b.u0, b.u1)), Y(b.top),
+              Math.abs(b.u1 - b.u0) * frame.pxPerFt, (b.top - b.foot) * frame.pxPerFt);
+          } else {
+            ctx.moveTo(X(b.u0), Y(b.e0)); ctx.lineTo(X(b.u1), Y(b.e1));
+            ctx.lineTo(X(b.u1), Y(b.e1 - b.drop)); ctx.lineTo(X(b.u0), Y(b.e0 - b.drop));
+            ctx.closePath();
+          }
+          ctx.stroke();
+        });
+        ctx.restore();
+      };
+
       const faceAt = (px, py) => {
         if (!frame || !env) return null;
         const u = frame.uMin + (px - frame.x0) / frame.pxPerFt;
         const e = frame.yTop - (py - frame.y0) / frame.pxPerFt;
         const stack = CV.sectionLevelStack(env);
         if (!stack) return null;
+        // THE FASCIA FIRST OF ALL: it hangs in front of the wall under it.
+        const band = fasciaAt(u, e);
+        if (band) return { fascia: band };
         // A DORMER'S GABLE FIRST: it stands in front of the roof behind it, and
         // no wall face reaches up there.
         const dormer = (CV.dormerGables ? CV.dormerGables(env, frame.cut, stack, frame.axis) : []).find(dg =>
@@ -1185,6 +1259,20 @@
         const face = faceAt(
           (event.clientX - box.left) * canvas.width / box.width,
           (event.clientY - box.top) * canvas.height / box.height);
+        if (face?.fascia) {
+          const roofs = Array.isArray(drawing?.roofs) ? drawing.roofs : [];
+          const index = roofs.findIndex(r => String(r.id) === String(face.fascia.roofId));
+          if (index >= 0) {
+            roofPicked = String(roofs[index].id);
+            picked = null;
+            paintRoofList();
+            paintRoofProps();
+            paintElevation();
+            paintProps();
+            say(`Fascia of ${roofLabel(roofs[index], index)}, ${WT.fasciaFinishById(WT.fasciaFinishIdOf(roofs[index])).label}`);
+            return;
+          }
+        }
         if (face?.dormer) {
           const dg = face.dormer;
           picked = `dormer:${dg.roof.id}:${dg.index}`;
