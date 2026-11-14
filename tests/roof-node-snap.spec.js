@@ -31,6 +31,10 @@ const LEVELS = [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0
 // Two pieces over the box: A on the left, B on the right, sharing x = 10.
 const RA = () => ROOF('ra', [[-2, -2], [10, -2], [10, 14], [-2, 14]], ['eave', 'joint', 'eave', 'eave']);
 const RB = () => ROOF('rb', [[10, -2], [22, -2], [22, 14], [10, 14]], ['eave', 'eave', 'eave', 'joint']);
+// A third piece east of B, sharing x = 22 with it: B's right edge is a JOINT
+// with C, not with A, and a deleted A must leave that one alone.
+const RB_C = () => ROOF('rb', [[10, -2], [22, -2], [22, 14], [10, 14]], ['eave', 'joint', 'eave', 'joint']);
+const RC = () => ROOF('rc', [[22, -2], [30, -2], [30, 14], [22, 14]], ['eave', 'eave', 'eave', 'joint']);
 const drawing = ({ roofs, groups = [] } = {}) => ({
   version: 1, board: 'drafting', planTurn: 0, levels: LEVELS, activeLevelIdx: 1, nextDrawingItemId: 50,
   walls: BOX, lines: [], floors: [], roofs, fenestrations: [], dimensions: [], outlines: [], shapes: [],
@@ -38,15 +42,15 @@ const drawing = ({ roofs, groups = [] } = {}) => ({
   groups, nextGroupId: groups.length + 1, levelLocks: [], underlays: [],
 });
 
-async function open(page, f, { footLight = false } = {}) {
+async function open(page, f, { footLight = false, level = 7 } = {}) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f, footLight }) => {
     try { localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight })); } catch { /* fine */ }
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f, footLight });
-  await page.goto('/MODEL.html?level=7');
-  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.goto(`/MODEL.html?level=${level}`);
+  await expect(page.locator('#readout')).toContainText(level === 7 ? 'walls' : 'line', { timeout: 10000 });
   const levels = page.getByRole('button', { name: 'LEVELS / LAYERS' });
   if (await levels.count() && await levels.getAttribute('aria-expanded') === 'true') await levels.click();
 }
@@ -144,9 +148,9 @@ test('with 1 FT lit and nothing caught, the corner lands a whole foot out', asyn
 });
 
 test('a deleted piece leaves the assembly and turns the JOINT edges beside it to GABLE; UNDO puts it all back', async ({ page }) => {
-  await open(page, drawing({ roofs: [RA(), RB()],
+  await open(page, drawing({ roofs: [RA(), RB_C(), RC()],
     groups: [{ id: 'group-1', name: 'ROOF PIECES 1', fixed: false, stretchBehavior: 'item-geometry',
-      members: [{ type: 'roof', id: 'ra' }, { type: 'roof', id: 'rb' }], wallSettings: null }] }));
+      members: [{ type: 'roof', id: 'ra' }, { type: 'roof', id: 'rb' }, { type: 'roof', id: 'rc' }], wallSettings: null }] }));
   const { at } = await zoomTo(page, 22);
   await onSheet(page, at, [4, 6]);
   await page.keyboard.press('s');
@@ -162,12 +166,54 @@ test('a deleted piece leaves the assembly and turns the JOINT edges beside it to
   await page.waitForTimeout(100);
   await expect(page.locator('#strip-message')).toContainText('GABLE now');
   let d = await saved(page);
-  expect(d.roofs.map(r => r.id)).toEqual(['rb']);
-  expect(d.roofs[0].edges).toEqual(['eave', 'eave', 'eave', 'gable']);
+  expect(d.roofs.map(r => r.id)).toEqual(['rb', 'rc']);
+  // B's edge beside A is GABLE now; its JOINT with C, and C's with it, stay.
+  expect(d.roofs[0].edges).toEqual(['eave', 'joint', 'eave', 'gable']);
+  expect(d.roofs[1].edges).toEqual(['eave', 'eave', 'eave', 'joint']);
   expect((d.groups || []).every(g => !g.members.some(m => m.id === 'ra')), 'no group holds the dead piece').toBe(true);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(100);
   d = await saved(page);
+  expect(d.roofs.map(r => r.id).sort()).toEqual(['ra', 'rb', 'rc']);
+  expect(d.roofs.find(r => r.id === 'rb').edges).toEqual(['eave', 'joint', 'eave', 'joint']);
+});
+
+test('a piece deleted from inside its unbusted assembly (a click picks one piece) leaves the group; a group of one goes', async ({ page }) => {
+  // jb's own case: the ROOF PIECES assembly is NOT FIXED, so a click picks
+  // one piece and DELETE takes it alone -- and the assembly still listed it.
+  await open(page, drawing({ roofs: [RA(), RB()],
+    groups: [{ id: 'group-1', name: 'ROOF PIECES 1', fixed: false, stretchBehavior: 'item-geometry',
+      members: [{ type: 'roof', id: 'ra' }, { type: 'roof', id: 'rb' }], wallSettings: null }] }));
+  const { at } = await zoomTo(page, 22);
+  await onSheet(page, at, [4, 6]);
+  await page.keyboard.press('s');
+  await page.mouse.click(...at(4, 6));
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(100);
+  let d = await saved(page);
+  expect(d.roofs.map(r => r.id)).toEqual(['rb']);
+  expect((d.groups || []).filter(g => g.members.some(m => m.type === 'roof')), 'no group lists a dead piece, and a group of one is no group').toEqual([]);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(100);
+  d = await saved(page);
   expect(d.roofs.map(r => r.id).sort()).toEqual(['ra', 'rb']);
-  expect(d.roofs.find(r => r.id === 'rb').edges).toEqual(['eave', 'eave', 'eave', 'joint']);
+  expect((d.groups || []).some(g => g.members.some(m => m.id === 'ra') && g.members.some(m => m.id === 'rb')), 'the assembly is back').toBe(true);
+});
+
+test('off the ROOF plan the wall tops are no magnet: a line\'s end on SITE passes the box\'s corner', async ({ page }) => {
+  const f = drawing({ roofs: [RA(), RB()] });
+  f.lines = [{ id: 'l1', start: { x: 30, y: 0, z: -6 }, end: { x: 22, y: 0, z: -2 }, levelId: 8, view: 'plan', layer: 'draft', bulge: 0 }];
+  await open(page, f, { level: 8 });
+  const { at } = await zoomTo(page, 22);
+  await onSheet(page, at, [26, -4], [22, -2], [20.08, 0.08]);
+  await armMoveOn(page, at, 26, -4);
+  await dragFrom(page, at, [22, -2], [20.08, 0.08]);
+  const lit = await magnet(page);
+  expect(lit?.kind === 'node' && lit.at[0] === 20 && lit.at[1] === 0, 'the storey\'s wall corner is not lit on SITE').toBe(false);
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  const l1 = (await saved(page)).lines.find(l => l.id === 'l1');
+  expect(Math.abs(l1.end.x - 20.08)).toBeLessThan(0.05);
+  expect(Math.abs(l1.end.z - 0.08)).toBeLessThan(0.05);
 });
