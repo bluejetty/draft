@@ -127,9 +127,9 @@
   // rotateSelection and flipSelection in 09, with the point map taken as an
   // argument. `after` adds property edits (a mirror's side swaps) once the
   // points have moved and gets the entries and the holograms.
-  const transformSelection = (map, { holo, after } = {}) => {
+  const transformSelection = (map, { holo, after, alone = false } = {}) => {
     if (!selection.length) return null;
-    const { entries, detached, points, linked } = turnSet();
+    const { entries, detached, points, linked } = turnSet({ alone });
     const holos = entries.filter(e => e.type === 'hologram').map(e => e.item);
     if (!points.length && !holos.length) {
       detached.forEach(d => { d.wall[d.key] = d.orig; });
@@ -446,6 +446,7 @@
     if (keep && !duplicateSelection()) { sayOnStrip('MIRROR: nothing in the selection can be copied -- turn KEEP ORIGINAL off to mirror it in place.'); return; }
     const map = reflectAcross(a, b);
     const done = transformSelection(map, {
+      alone: !!keep,
       holo: h => {
         if (h.flip === true) delete h.flip; else h.flip = true;
         const t = Number(h.angleDeg) || 0;
@@ -755,7 +756,7 @@
     for (const cell of plan.cells) {
       setSelection(original);
       if (!duplicateSelection()) break;
-      if (transformSelection(shiftBy(cell.dx, cell.dz))) made += 1;
+      if (transformSelection(shiftBy(cell.dx, cell.dz), { alone: true })) made += 1;
     }
     if (!made) {
       while (undoStack.length > mark) undoOnce();

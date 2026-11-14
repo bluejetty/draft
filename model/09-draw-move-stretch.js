@@ -119,13 +119,18 @@
   // as a drag of it takes the lot. CORNERS SHARED WITH WALLS THAT STAY ARE
   // LET GO: the WC's wall gets its own copy of that corner, and UNDO hands
   // the shared one back. Then every point the set owns, once.
-  const turnSet = () => {
-    const entries = selection.slice();
+  // A STAIR TURNS WITH ITS STACK (jb, 14 Nov 2026), the flights on the
+  // other floors it stands over or under -- unless `alone`: a copy just made
+  // (MIRROR / ROTATE keeping the original, ARRAY) overlaps the ORIGINAL's
+  // stack, which is not its own and stays.
+  const turnSet = ({ alone = false } = {}) => {
+    const picked = selection.slice();
     selection.forEach(entry => {
       const owner = groupOf(entry);
       if (!owner || owner.fixed !== true) return;
-      itemsOfGroup(owner).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
+      itemsOfGroup(owner).forEach(w => { if (!picked.some(e => e.item === w.item)) picked.push(w); });
     });
+    const entries = alone ? picked : withStairStacks(picked);
     const chosen = new Set(entries.map(entry => entry.item));
     const keep = (drawing.walls || []).filter(wall => !chosen.has(wall));
     const held = new Set(keep.flatMap(wall => [wall.start, wall.end]));
@@ -1387,6 +1392,8 @@
     return { edits, said };
   };
   // The selection with every FIXED assembly it touches held whole.
+  // And every picked stair's stack (jb, 14 Nov 2026: stairs on the floors
+  // above and below that it overlaps move with it).
   const selectionEntries = () => {
     const entries = selection.slice();
     selection.forEach(entry => {
@@ -1394,7 +1401,7 @@
       if (unit?.fixed !== true) return;
       itemsOfGroup(unit).forEach(w => { if (!entries.some(e => e.item === w.item)) entries.push(w); });
     });
-    return entries;
+    return withStairStacks(entries);
   };
   // Every point those entries carry: read by the move, and by the hover
   // glow before it, which must not detach anything.
@@ -1840,8 +1847,12 @@
         return;
       }
       const grab = moveGrabAt(at);
+      // ALT on the press moves a stair without its stack (jb, 14 Nov 2026).
+      stairStackAlone = !!event.altKey;
+      let stackSet;
+      try { stackSet = selectionMoveSet(); } finally { stairStackAlone = false; }
       moveState.drag = { kind: 'selection', at: grab ? { x: grab.x, z: grab.z } : at, grab: grab || null, press: at,
-        set: selectionMoveSet(), moved: false };
+        set: stackSet, moved: false };
       canvas.setPointerCapture(event.pointerId);
       return;
     }

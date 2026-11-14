@@ -821,6 +821,20 @@
         sx: e.clientX, sy: e.clientY, active: false,
       };
       moveDrag.framingBefore = [...moveDrag.framing.beams, ...moveDrag.framing.columns].map(item => ({ item, before: { ...item } }));
+      // ITS STACK RIDES ALONG (jb, 14 Nov 2026: "the multi-level stairs
+      // LOCKED together, so that the stairs move as one peice"): every
+      // flight on another floor it overlaps, each with its own well and
+      // framing, by the grabbed flight's delta. ALT on the press: alone.
+      moveDrag.mates = (e.altKey ? [] : stairStackOf(stairGrab)).map(mate => {
+        const w = stairWellOf(mate);
+        const f = stairFramingOf(mate);
+        return {
+          stair: mate, before: { ...mate }, start: { ...mate.start }, end: { ...mate.end },
+          well: w.hole, wellBefore: w.hole ? { ...w.hole } : null,
+          wellPoints: w.hole ? w.hole.points.map(pt => ({ x: pt.x, z: pt.z })) : null,
+          framingBefore: [...f.beams, ...f.columns].map(item => ({ item, before: { ...item } })),
+        };
+      });
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -1193,10 +1207,20 @@
             md.well.points = md.wellPoints.map(pt => ({ x: pt.x + dx, z: pt.z + dz }));
           }
           // ITS FRAMING BY THE SAME DELTA, from where each piece started.
-          md.framingBefore.forEach(({ item, before }) => {
+          const frameBy = list => list.forEach(({ item, before }) => {
             const by = p => ({ ...p, x: p.x + dx, z: p.z + dz });
             if (item.point) item.point = by(before.point);
             else { item.start = by(before.start); item.end = by(before.end); }
+          });
+          frameBy(md.framingBefore);
+          // AND ITS STACK, each flight on the other floors by the same delta
+          // the grabbed one finally took (snaps and all), so they stay over
+          // one another exactly.
+          (md.mates || []).forEach(m => {
+            m.stair.start = { x: m.start.x + dx, z: m.start.z + dz };
+            m.stair.end = { x: m.end.x + dx, z: m.end.z + dz };
+            if (m.well) m.well.points = m.wellPoints.map(pt => ({ x: pt.x + dx, z: pt.z + dz }));
+            frameBy(m.framingBefore);
           });
           md.moved = Math.abs(dx) > 1e-9 || Math.abs(dz) > 1e-9;
           paint();
@@ -1731,9 +1755,21 @@
             // rode along for the drag so the drafter sees it go with him, and
             // is laid fresh on the drop -- a stair slid into a room of its own
             // can need a side beam it did not, or no longer need one it had.
-            const reframed = [reframeStair(md.stair)];
+            // ITS STACK IN THE SAME STEP, each mate locked, touched and
+            // framed again where it landed as the grabbed one is.
+            const mates = md.mates || [];
+            mates.forEach(m => {
+              edits.push({ item: m.stair, before: m.before });
+              if (m.well) edits.push({ item: m.well, before: m.wellBefore });
+              edits.push(...m.framingBefore);
+              const mLock = stairLockNow(m.stair);
+              if (mLock) m.stair.lock = mLock; else delete m.stair.lock;
+              m.stair.auto = false;
+            });
+            const reframed = [reframeStair(md.stair), ...mates.map(m => reframeStair(m.stair))];
             const slid = { kind: 'props', edits };
-            undoStack.push(reframed[0].steps.length ? { kind: 'batch', steps: [slid, ...reframed[0].steps] } : slid);
+            const reSteps = reframed.flatMap(r => r.steps);
+            undoStack.push(reSteps.length ? { kind: 'batch', steps: [slid, ...reSteps] } : slid);
             markDirty();
             // WHAT MOVED AND WHAT DID NOT, in one sentence. The two things a
             // drafter cannot see from the plan are a well left behind because
@@ -1742,6 +1778,7 @@
             const said = [md.well ? 'STAIR and its well moved' : 'STAIR moved'];
             if (md.shared) said.push('the shared well stayed put — two flights climb through it');
             if (md.well && wellOffItsFloor(md.well)) said.push('the well now runs off its floor');
+            if (mates.length) said.push(stairStackSaid(mates.map(m => m.stair)));
             sayOnStrip(`${said.join(' · ')}.${stairFramingSaid(reframed)}`);
           }
           moveDrag = null;
