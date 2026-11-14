@@ -74,20 +74,17 @@ const planes = (page, roof) => page.evaluate(r => {
   };
 }, roof);
 
-test('GABLE on both pieces of a stepped end makes the step a gable too: the ridge runs out to it, no shed off the foot', async ({ page }) => {
+test('GABLE on one piece of a stepped end runs the gable flush across the step and the piece beyond: the ridge runs out to it, no shed off the foot', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 0, 0);
-  // The long piece of the west end, x = -32 ... then the short piece, x = -31.
+  // The long piece of the west end, x = -32. jb, 14 Nov 2026: one press
+  // gables the whole stepped end -- the foot and the short piece at x = -31
+  // go with it (geometry-2d gableJogKinds; proto/flush-gable-harness.js).
   await click(page, at, -31.8, -5);
   await expect(page.locator('[data-roof-edge-label]')).toHaveText('EDGE 2 OF 6');
   await page.locator('[data-prop-row="edge"] [data-prop-value="gable"]').click();
   let roof = await saved(page);
-  expect(roof.edges, 'one gable so far: the foot beside it is still an eave').toEqual(['eave', 'gable', 'eave', 'eave', 'eave', 'eave']);
-  await click(page, at, -30.8, 12);
-  await expect(page.locator('[data-roof-edge-label]')).toHaveText('EDGE 6 OF 6');
-  await page.locator('[data-prop-row="edge"] [data-prop-value="gable"]').click();
-  roof = await saved(page);
-  expect(roof.edges, 'the foot between two gables went with them').toEqual(['gable', 'gable', 'eave', 'eave', 'eave', 'gable']);
+  expect(roof.edges, 'one press: the foot and the piece beyond it went gable with it').toEqual(['gable', 'gable', 'eave', 'eave', 'eave', 'gable']);
   expect(roof.follows).toBe('none');
   if (process.env.SHOT) {
     await page.keyboard.press('Escape');
@@ -109,10 +106,10 @@ test('GABLE on both pieces of a stepped end makes the step a gable too: the ridg
   expect(got.lines.length, 'ridge and two hips').toBe(3);
   expect(got.ridgeX, 'the ridge runs out to the gable end').toEqual([-32, 15]);
   expect(got.covered, 'the planes cover the ring exactly').toBe(got.ring);
-  // ONE UNDO takes the foot back with the second gable.
+  // ONE UNDO takes all three back.
   await page.keyboard.press('Control+z');
   roof = await saved(page);
-  expect(roof.edges).toEqual(['eave', 'gable', 'eave', 'eave', 'eave', 'eave']);
+  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
 });
 
 test('GABLE END on a stepped end squares across the whole end, not just to the step', async ({ page }) => {
