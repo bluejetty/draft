@@ -2006,18 +2006,22 @@
         const own = b.points[d.node];
         const magnet = snapLive() ? (d.magnet ||= magnetExcluding([own])) : null;
         let to;
+        // 1 FT (the foot light), as a wall's or a shape's corner takes it:
+        // with nothing caught, the corner lands a whole foot from where it
+        // started (model/16 roomcorner, PR #959). A snap always wins.
+        const footed = pt => (footOn ? onTheFoot(own, { x: pt.x, z: pt.z }, 0) : pt);
         if (squareMove) {
           // Square to where it started; what it catches sets the free
           // coordinate only, and the ring is drawn where it lands.
           const aim = { x: own.x + dx, y: 0, z: own.z + dz };
           const hit = magnet ? axisMagnet(aim, across ? 'z' : 'x', [own], magnet) : null;
           d.lit = hit || null;
-          to = hit ? { x: hit.pt.x, z: hit.pt.z } : { x: aim.x, z: aim.z };
+          to = hit ? { x: hit.pt.x, z: hit.pt.z } : (f => ({ x: f.x, z: f.z }))(footed(aim));
         } else {
           const hit = magnet ? dragMagnetAt(at, own, magnet) : null;
           d.lit = hit || null;
           const snap = hit?.pt || trackSnap(at, [own])?.pt || null;
-          to = snap ? { x: snap.x, z: snap.z } : at;
+          to = snap ? { x: snap.x, z: snap.z } : (f => ({ x: f.x, z: f.z }))(footed(at));
         }
         const sx = to.x - b.points[d.node].x, sz = to.z - b.points[d.node].z;
         d.to = to;

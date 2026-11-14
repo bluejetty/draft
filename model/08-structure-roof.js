@@ -1143,6 +1143,7 @@
         + `${storey ? ` \u2014 any walls on ${storey.name} still stand` : ''}. UNDO puts it back.`);
       return true;
     }
+    if (entry.type === 'roof') return deleteRoofPiece(entry.item);
     const key = SELECTION_LISTS[entry.type];
     const list = key ? drawing[key] : null;
     if (!Array.isArray(list)) return false;
@@ -1152,6 +1153,72 @@
     undoStack.push({ kind: 'remove-item', list, index, item: entry.item });
     markDirty();
     return true;
+  };
+  // ── A DELETED ROOF LEAVES NOTHING BEHIND ────────────────────────────
+  //
+  // jb, 13 Nov 2026, after busting a hip and deleting its front slope:
+  // "when i deleted the front roof it appears something is still left
+  // behind". Two things were. The assembly (ROOF PIECES) still listed the
+  // dead id, so the group held a member that no longer existed; and the
+  // neighbours' JOINT edges along the deleted slope -- the hips it shared
+  // -- were joints to nothing, which the elevations drew as bare hip lines
+  // across a hole. A JOINT is an edge SHARED with the next piece; with that
+  // piece gone the edge is the piece's own end, and the painter's word for
+  // an end that is not an eave is GABLE: a rake along it, the wall under it
+  // filled up to it. One UNDO puts the piece, the group and the edges back.
+  const deleteRoofPiece = roof => {
+    const list = drawing.roofs || [];
+    const index = list.indexOf(roof);
+    if (index < 0) return false;
+    list.splice(index, 1);
+    const groups = Array.isArray(drawing.groups) ? drawing.groups : [];
+    const groupsBefore = groups.map(g => ({ g, members: g.members }));
+    const groupsWere = groups.slice();
+    groups.forEach(g => { g.members = (g.members || []).filter(m => !(m && m.type === 'roof' && String(m.id) === String(roof.id))); });
+    for (let i = groups.length - 1; i >= 0; i -= 1) {
+      if (!groups[i] || !Array.isArray(groups[i].members) || groups[i].members.length < 2) groups.splice(i, 1);
+    }
+    const edits = orphanedJointsToGable(roof);
+    undoStack.push({ kind: 'node', undo: () => {
+      list.splice(Math.min(index, list.length), 0, roof);
+      groups.splice(0, groups.length, ...groupsWere);
+      groupsBefore.forEach(({ g, members }) => { g.members = members; });
+      edits.forEach(({ item, before }) => { Object.keys(item).forEach(k => delete item[k]); Object.assign(item, before); });
+    } });
+    markDirty();
+    if (edits.length) {
+      const n = edits.reduce((sum, e) => sum + e.turned, 0);
+      sayOnStrip(`Roof piece deleted; ${n === 1 ? 'the JOINT edge beside it is' : `${n} JOINT edges beside it are`} GABLE now. UNDO puts it all back.`);
+    }
+    return true;
+  };
+  // THE EDGES THAT SHARED THE DELETED PIECE: a neighbour's JOINT whose both
+  // ends lie along one of the gone piece's edges (the bust's own test for a
+  // shared edge, pieceEdgeOnOtherRoof, read against one roof).
+  const orphanedJointsToGable = gone => {
+    const G = window.DraftGeometry2D;
+    const ring = Array.isArray(gone?.points) ? gone.points : [];
+    if (ring.length < 2 || !G?.pointToSegment) return [];
+    const alongGone = (p, q) => ring.some((a, k) => {
+      const b = ring[(k + 1) % ring.length];
+      const seg = { start: { x: a.x, z: a.z }, end: { x: b.x, z: b.z } };
+      return G.pointToSegment(p, seg).d < 0.1 && G.pointToSegment(q, seg).d < 0.1;
+    });
+    const edits = [];
+    (drawing.roofs || []).forEach(other => {
+      if (other === gone || !Array.isArray(other.edges) || !Array.isArray(other.points)) return;
+      const edges = other.edges.slice();
+      let turned = 0;
+      other.points.forEach((p, i) => {
+        if (edges[i] !== 'joint') return;
+        if (alongGone(p, other.points[(i + 1) % other.points.length])) { edges[i] = 'gable'; turned += 1; }
+      });
+      if (!turned) return;
+      const before = { ...other, edges: other.edges };
+      other.edges = edges;
+      edits.push({ item: other, before, turned });
+    });
+    return edits;
   };
   // TWO RINGS SHARE GROUND when either holds a point of the other, or
   // their boxes cross: a roof over a body is one or the other, and a roof

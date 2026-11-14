@@ -1090,6 +1090,26 @@
   // node lands a corner on it and keeps its shape. Moving points are kept
   // out by reference AND by position (a roof's points are rebuilt on every
   // move, so the reference alone would miss them).
+  // ── THE WALL TOPS ON THE ROOF PLAN ARE MAGNETS TOO ──────────────────
+  //
+  // jb, 13 Nov 2026, moving a busted roof's corner on the ROOF plan: "the
+  // node snaps don't seem to work when i adjust the roof". The ROOF level
+  // has no walls of its own; what it draws is the top storey's wall tops
+  // (model/01, geometry-2d roofPlanWalls), and the hover magnets already
+  // read those (wallFaceNodes / wallFaceSegs above). A DRAG's magnet was
+  // built from walls() alone, which is empty up here -- so a roof corner
+  // carried over a wall's corner found nothing to catch. The same tops go
+  // into the drag's nodes, corners and faces, exactly as the hover's.
+  let roofPlanTopsCache = { key: null, list: [] };
+  const roofPlanWallTops = () => {
+    const G = window.DraftGeometry2D;
+    if (!drawing || !G?.roofPlanWalls || activeLevelId() !== ROOF_LEVEL_ID || walls().length) return [];
+    const key = `${modelEpoch}|${activeLevelId()}|${activeViewId() || ''}`;
+    if (roofPlanTopsCache.key === key) return roofPlanTopsCache.list;
+    roofPlanTopsCache = { key, list: G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],
+      floors: drawing.floors || [], levels: drawing.levels || [] }) };
+    return roofPlanTopsCache.list;
+  };
   const magnetExcluding = pts => {
     const G = window.DraftGeometry2D;
     if (!G?.wallFaceLines) return { nodes: [], corners: [], segs: [] };
@@ -1097,11 +1117,21 @@
     const stillPt = v => v && !moving.has(v)
       && !pts.some(p => Math.abs(p.x - v.x) < 0.001 && Math.abs(p.z - v.z) < 0.001);
     const stillRun = r => stillPt(r.start) && stillPt(r.end);
-    const stillWalls = walls().filter(stillRun);
+    const tops = roofPlanWallTops();
+    const stillWalls = [...walls(), ...tops].filter(stillRun);
     const stillOthers = [...lines(), ...loopEdges()].filter(stillRun);
-    return { nodes: nodeEnds({ faces: false }).filter(stillPt),
+    const topEnds = tops.flatMap(t => [t.start, t.end]).filter(stillPt)
+      .map(v => ({ x: v.x, y: 0, z: v.z }));
+    // AND WHERE A ROOF EDGE CROSSES A WALL TOP'S FACE (jb, 13 Nov: "make it
+    // easy to line up on the outside of the gable wall too, make that
+    // intersection like a node"): the face lines of the tops are runs for
+    // the crossing finder, as the hover's crossingNodes already treats them.
+    const topFaces = tops.length && G.lineCrossings
+      ? G.wallFaceLines(tops, openingThicknessFt()).map(f => ({ start: f.a, end: f.b })) : [];
+    return { nodes: [...nodeEnds({ faces: false }).filter(stillPt), ...topEnds],
       corners: [...G.wallFaceCorners(stillWalls, openingThicknessFt()),
-        ...(G.lineCrossings ? G.lineCrossings([...stillWalls, ...stillOthers]) : [])],
+        ...(G.lineCrossings ? G.lineCrossings([...stillWalls, ...stillOthers]) : []),
+        ...(topFaces.length ? G.lineCrossings([...stillOthers, ...topFaces]) : [])],
       segs: [...G.wallFaceLines(stillWalls, openingThicknessFt()), ...bodySegs(stillOthers)] };
   };
   const pointsSeek = (before, dx, dz, magnet) => {
