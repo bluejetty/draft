@@ -31,12 +31,29 @@ const drawing = () => ({
     edgeOverhang: EAVE.map(() => 8) }],
 });
 
-async function open(page, level = 7) {
+// jb's ROOF PIECES (14 Nov 2026): a busted roof's pieces in a NOT FIXED
+// assembly, so a click picks one piece. Two halves of the one roof, the
+// cut between them a JOINT.
+const PIECES = () => {
+  const d = drawing();
+  const ring = pts => pts.map(([x, z]) => ({ x, y: 0, z }));
+  d.roofs = [
+    { id: 'roof-a', levelId: 7, pitch: 4, overhang: 8, follows: 'none', points: ring([[-8, -8], [30, -8], [30, 38], [-8, 38]]),
+      edges: ['eave', 'joint', 'eave', 'eave'], edgeOverhang: [8, 0, 8, 8] },
+    { id: 'roof-b', levelId: 7, pitch: 4, overhang: 8, follows: 'none', points: ring([[30, -8], [68, -8], [68, 38], [30, 38]]),
+      edges: ['eave', 'eave', 'eave', 'joint'], edgeOverhang: [8, 8, 8, 0] }];
+  d.groups.push({ id: 'group-2', name: 'ROOF PIECES 1', fixed: false, stretchBehavior: 'item-geometry',
+    members: [{ type: 'roof', id: 'roof-a' }, { type: 'roof', id: 'roof-b' }] });
+  d.nextGroupId = 3;
+  return d;
+};
+
+async function open(page, level = 7, file = drawing) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
+  }, { bucket: BUCKET, f: file() });
   await page.goto(`/MODEL.html?level=${level}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
@@ -164,4 +181,34 @@ test('an assembly selected: the foot button says BUST and busts it into its piec
   const d = await saved(page);
   expect(d.groups || []).toHaveLength(0);
   expect(d.walls.map(w => w.id).sort()).toEqual(['a', 'b', 'c']);
+});
+
+test('a piece of a NOT FIXED ROOF PIECES assembly: the foot button says BREAK and a click on its edge adds a node to that piece alone', async ({ page }) => {
+  const { at } = await open(page, 7, PIECES);
+  // Inside the left piece, well off the joint and the eaves.
+  await click(page, at, 10, 15);
+  await expect(page.locator('#model-break')).toBeVisible();
+  await armBreak(page);
+  // Its front eave, half way along.
+  await click(page, at, 11, -8);
+  await expect(page.locator('#strip-message')).toContainText('node added');
+  await page.keyboard.press('Enter');
+  const d = await saved(page);
+  const a = d.roofs.find(r => r.id === 'roof-a'), b = d.roofs.find(r => r.id === 'roof-b');
+  expect(a.points.map(xz), 'the left piece gained the node on its front eave').toEqual([[-8, -8], [11, -8], [30, -8], [30, 38], [-8, 38]]);
+  expect(a.edges).toEqual(['eave', 'eave', 'joint', 'eave', 'eave']);
+  expect(b.points, 'the other piece is untouched').toHaveLength(4);
+  expect((d.groups || []).map(g => g.id), 'the assembly stands').toContain('group-2');
+});
+
+test('a roof alone in a FIXED assembly: the foot button says BUST (the assembly is one unit; bust it first)', async ({ page }) => {
+  const FIXED = () => {
+    const d = drawing();
+    d.groups.push({ id: 'group-2', name: 'ROOF 1', fixed: true, stretchBehavior: 'rigid', members: [{ type: 'roof', id: 'roof-1' }] });
+    return d;
+  };
+  const { at } = await open(page, 7, FIXED);
+  await click(page, at, 30, 15);
+  await expect(page.locator('#model-break')).toBeVisible();
+  await expect(page.locator('#model-break')).toHaveText('BUST');
 });

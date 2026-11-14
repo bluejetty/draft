@@ -224,6 +224,54 @@ test('a ridge corner dragged on one piece takes the same corner of its neighbour
   expect(back).toBe(corner.n);
 });
 
+test('ALT held on the corner press lets it go: this piece\'s corner moves alone, the neighbours keep theirs', async ({ page }) => {
+  const { at } = await open(page);
+  await click(page, at, 30, 15);
+  await page.locator('#props-slot [data-roof-bust]').click();
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Escape');
+  const corner = await page.evaluate(() => {
+    const spots = new Map();
+    drawing.roofs.forEach(r => r.points.forEach(p => {
+      const key = `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+      spots.set(key, (spots.get(key) || 0) + 1);
+    }));
+    const [key, n] = [...spots.entries()].sort((a, b) => b[1] - a[1])[0];
+    const [x, z] = key.split(',').map(Number);
+    return { x, z, n };
+  });
+  expect(corner.n).toBeGreaterThanOrEqual(3);
+  const inside = await page.evaluate(({ x, z }) => {
+    const r = drawing.roofs.find(rf => rf.points.some(p => Math.abs(p.x - x) < 0.05 && Math.abs(p.z - z) < 0.05));
+    const n = r.points.length;
+    return { id: r.id, x: r.points.reduce((a, p) => a + p.x, 0) / n, z: r.points.reduce((a, p) => a + p.z, 0) / n };
+  }, corner);
+  await click(page, at, inside.x, inside.z);
+  expect((await state(page)).picked).toEqual([`roof:${inside.id}`]);
+  await page.locator('#model-move').click();
+  await expect(page.locator('#model-move')).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(...at(corner.x, corner.z));
+  await page.keyboard.down('Alt');
+  await page.mouse.down();
+  await page.keyboard.up('Alt');
+  await page.mouse.move(...at(corner.x + 2, corner.z), { steps: 4 });
+  await page.mouse.move(...at(corner.x + 4, corner.z), { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  await expect(page.locator('#strip-message')).toContainText('moved alone');
+  const moved = await page.evaluate(({ x, z }) => drawing.roofs.filter(r => r.points.some(p =>
+    Math.abs(p.x - (x + 4)) < 0.05 && Math.abs(p.z - z) < 0.05)).map(r => r.id), corner);
+  const left = await page.evaluate(({ x, z }) => drawing.roofs.filter(r => r.points.some(p =>
+    Math.abs(p.x - x) < 0.05 && Math.abs(p.z - z) < 0.05)).length, corner);
+  expect(moved, 'only the piece in hand followed').toEqual([inside.id]);
+  expect(left, 'the neighbours kept the corner').toBe(corner.n - 1);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  const back = await page.evaluate(({ x, z }) => drawing.roofs.filter(r => r.points.some(p =>
+    Math.abs(p.x - x) < 0.05 && Math.abs(p.z - z) < 0.05)).length, corner);
+  expect(back).toBe(corner.n);
+});
+
 test('a piece\'s JOINT edge is named on the panel and a ROOF press does not flip it', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 30, 15);
