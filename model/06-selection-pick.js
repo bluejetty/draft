@@ -927,6 +927,76 @@
     };
   };
 
+  // ── STAIRS STACKED FLOOR OVER FLOOR MOVE AS ONE PIECE (jb, 14 Nov 2026) ─
+  //
+  // "can we make the multi-level stairs LOCKED together, so that the stairs
+  // move as one peice. on the floor plans when they are moved." Each storey's
+  // flight is its own record (filed on the floor it goes DOWN from), so a
+  // 2ND -> MAIN flight over a MAIN -> BASEMENT one is two stairs. THE STACK
+  // IS WHAT OVERLAPS: a stair on another floor whose plan footprint (runs and
+  // landing, stairRings) overlaps this one's is locked to it, and so on up
+  // and down the house. Asked at the press, so an older file's stacks lock
+  // with no field to write. A stair on the SAME floor is never a mate -- two
+  // flights side by side on one plan are two things the drafter picked or
+  // did not. ALT on the press takes the one stair alone (the roof corner's
+  // ALT, PR #1012).
+  const convexOverlap = (a, b) => {
+    // Separating axes: two convex rings overlap unless an edge normal of one
+    // of them parts them. Rings that only TOUCH (an edge shared, a corner on
+    // an edge) do not overlap -- two flights end to end are not a stack.
+    const EPS = 1e-4;
+    for (const ring of [a, b]) {
+      for (let i = 0; i < ring.length; i++) {
+        const p = ring[i], q = ring[(i + 1) % ring.length];
+        const nx = -(q.z - p.z), nz = q.x - p.x;
+        const len = Math.hypot(nx, nz);
+        if (len < 1e-9) continue;
+        const proj = r => r.map(v => (v.x * nx + v.z * nz) / len);
+        const pa = proj(a), pb = proj(b);
+        if (Math.max(...pa) <= Math.min(...pb) + EPS || Math.max(...pb) <= Math.min(...pa) + EPS) return false;
+      }
+    }
+    return true;
+  };
+  const stairStackOf = stair => {
+    if (!stair) return [];
+    const levels = stairLevels();
+    const ringsOf = new Map();
+    const rings = st => {
+      if (!ringsOf.has(st)) ringsOf.set(st, stairRings(st, levels).filter(r => Array.isArray(r) && r.length >= 3));
+      return ringsOf.get(st);
+    };
+    const home = Number(stair.levelId);
+    const pool = (drawing?.stairs || []).filter(st => st !== stair && st?.start && st?.end && Number(st.levelId) !== home);
+    const found = [stair];
+    for (let i = 0; i < found.length; i++) {
+      const here = found[i];
+      pool.forEach(st => {
+        if (found.includes(st) || Number(st.levelId) === Number(here.levelId)) return;
+        if (rings(here).some(ra => rings(st).some(rb => convexOverlap(ra, rb)))) found.push(st);
+      });
+    }
+    return found.slice(1);
+  };
+  // The entries with every picked stair's stack added, once each -- unless
+  // the press that began the gesture held ALT (stairStackAlone).
+  let stairStackAlone = false;
+  const withStairStacks = entries => {
+    const out = entries.slice();
+    if (stairStackAlone) return out;
+    entries.filter(e => e.type === 'stair').forEach(({ item }) => stairStackOf(item).forEach(mate => {
+      if (!out.some(e => e.item === mate)) out.push({ type: 'stair', item: mate, stacked: true });
+    }));
+    return out;
+  };
+  // "1 stair on MAIN FL" -- the strip's word for what rode along.
+  const stairStackSaid = mates => {
+    if (!mates.length) return '';
+    const names = [...new Set(mates.map(st => (drawing?.levels || [])
+      .find(l => Number(l.id) === Number(st.levelId))?.name || 'another floor'))];
+    return `${mates.length} stacked stair${mates.length === 1 ? '' : 's'} on ${names.join(', ')} went with it (ALT moves one alone)`;
+  };
+
   // AND THE BEAMS THAT FRAME IT (Movie, 18 Oct: "the beam stayed in the old
   // location too"). The open side's flush beams carry the stair's id; their
   // posts do not, so a post goes with them when it stands on one of their
