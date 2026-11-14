@@ -34,6 +34,8 @@ const MUTATIONS = [
     c => c.replace('        if (!before && !after) continue;', '        if (!before || !after) continue;')],
   ['the eave beyond the step keeps its kind; only the foot goes gable', 'geometry-2d.js',
     c => c.replace("        if (!before) out[(i + n - 1) % n] = 'gable';\n        if (!after) out[(i + 1) % n] = 'gable';\n", '')],
+  ['the peak is no station: the wall top runs flat under the apex', 'cut-view.js',
+    c => c.replace('      if (tops.length < 4) return tops;', '      return tops;')],
 ];
 
 if (MUTATE) {
@@ -159,6 +161,31 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
     `only raw: ${onlyRaw.slice(0, 5).join(' | ') || 'none'}; only healed: ${onlyHealed.slice(0, 5).join(' | ') || 'none'}`);
   const e1 = paint(house(LONG, 5), 'E1');
   check('E1 of a 5 ft step: the corner at u 13 climbs into the gable too', inkPlumbAt(e1, 13).length > 0, fmt(inkPlumbAt(e1, 13)));
+}
+
+// ── THE WALL REACHES THE PEAK ──────────────────────────────────────────
+//
+// jb, 14 Nov 2026: "right at the top under the peak fascia the wall doesn't
+// get high enough you can see a little triangle on front and back". The
+// ridge (u 9.75) falls between two half-foot stations, and the wall top ran
+// flat between them a sixth of a foot under the rake's underside. Now the
+// bend is a station of its own (cut-view peakStations): no level ink near
+// the apex, front and back, whole roof and busted pieces alike.
+{
+  const flatUnderApex = segs => {
+    const apexE = Math.max(...segs.filter(x => x.w === 2.25).flatMap(x => [x.a.e, x.b.e]));
+    return segs.filter(x => x.ink !== '#fff' && Math.abs(x.a.e - x.b.e) < 0.01
+      && Math.abs(x.a.u - x.b.u) > 0.05 && x.a.e > apexE - 1
+      && [x.a.u, x.b.u].every(u => Math.abs(u) > 8.5 && Math.abs(u) < 11));   // E3 looks back: u runs negative
+  };
+  const busted = saved => ({ ...saved, roofs: G.roofPieces(saved.roofs[0]).map((r, i) => ({ ...r, id: `roof-p${i}` })) });
+  const ENDS = ['gable', 'eave', 'eave', 'eave', 'gable', 'eave'];
+  [['E1', house(ENDS)], ['E3', house(ENDS)], ['E1', busted(house(ENDS))], ['E3', busted(house(ENDS))]]
+    .forEach(([cut, saved], k) => {
+      const flat = flatUnderApex(paint(saved, cut));
+      check(`${cut}${k > 1 ? ' (busted pieces)' : ''}: the gable wall climbs to the peak, no flat top under the apex`,
+        flat.length === 0, fmt(flat));
+    });
 }
 
 const failed = CHECKS.filter(c => !c.ok);

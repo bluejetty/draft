@@ -5033,6 +5033,48 @@ if (!window.DraftCutView) {
       const at = garageGround.find(g => sameGarageBody(g.garage, face.garage));
       return !at || face.level.floorTop <= at.floorTop + 0.01;
     };
+    // ── THE PEAK IS A STATION ─────────────────────────────────────────
+    //
+    // jb, 14 Nov 2026, E2 and E4 of a gabled 2 storey: "right at the top
+    // under the peak fascia the wall doesn't get high enough you can see a
+    // little triangle on front and back". A wall's top is sampled every half
+    // foot and joined station to station, and the ridge falls between two
+    // stations as often as not -- 9.75 ft across a 19.5 ft house sits between
+    // 9.5 and 10.0 -- so the top ran FLAT across the peak a sixth of a foot
+    // under it, and the rake's underside showed a triangle of sky over it.
+    //
+    // Where the top bends between two stations (its middle stands off the
+    // chord), the lines through the stations on either side are run on to
+    // where they cross, and that point becomes a station, read off the roof
+    // itself. Only a bend the roof confirms is kept: a crossing outside the
+    // gap, or a sample there that misses the two lines, leaves the top as it
+    // was -- so the plumb steps where a nearer roof swallows the top (two
+    // stations a hair apart) are never touched.
+    const PEAK_GAP_MIN = 0.1, PEAK_EPS = 0.01;
+    const peakStations = (tops, topAtU) => {
+      if (tops.length < 4) return tops;
+      const out = [tops[0]];
+      for (let i = 1; i < tops.length; i++) {
+        const p0 = tops[i - 2], a = tops[i - 1], b = tops[i], p3 = tops[i + 1];
+        if (p0 && p3 && b.u - a.u >= PEAK_GAP_MIN
+          && a.u - p0.u >= PEAK_GAP_MIN && p3.u - b.u >= PEAK_GAP_MIN) {
+          const mid = (a.u + b.u) / 2;
+          if (Math.abs(topAtU(mid) - (a.top + b.top) / 2) > PEAK_EPS) {
+            const k1 = (a.top - p0.top) / (a.u - p0.u), k2 = (p3.top - b.top) / (p3.u - b.u);
+            if (Math.abs(k1 - k2) > 1e-6) {
+              const u = (b.top - a.top + k1 * a.u - k2 * b.u) / (k1 - k2);
+              if (u > a.u + 1e-4 && u < b.u - 1e-4) {
+                const line = a.top + k1 * (u - a.u);
+                const top = topAtU(u);
+                if (Math.abs(top - line) <= PEAK_EPS) out.push({ u, top });
+              }
+            }
+          }
+        }
+        out.push(b);
+      }
+      return out;
+    };
     const faceGeoms = faces.map(face => {
       const { wall, u1, u2, level } = face;
       const loU = Math.max(Math.min(u1, u2), uMin);
@@ -5090,7 +5132,7 @@ if (!window.DraftCutView) {
         tops.push({ u, top: here.top });
         prev = { u, clipped: here.clipped };
       }
-      return { face, loU, hiU, floor, worldAt, wallDir, tops };
+      return { face, loU, hiU, floor, worldAt, wallDir, tops: peakStations(tops, u => sampleTop(u).top) };
     });
     // A face standing entirely behind a nearer, taller face paints nothing
     // visible; skipping it keeps the shared corner verticals single-stroked.
@@ -5232,6 +5274,7 @@ if (!window.DraftCutView) {
               const u = u0 + (u1 - u0) * k / n;
               tops.push({ u, top: topAt(u) });
             }
+            tops.splice(0, tops.length, ...peakStations(tops, topAt));
             if (!tops.some(t => t.top > base + 0.05)) return;
             const donorFace = r.before || r.after;
             const donor = donorFace ? donorFace.face.wall
