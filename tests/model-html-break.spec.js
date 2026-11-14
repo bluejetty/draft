@@ -200,3 +200,15 @@ test('a piece of a NOT FIXED ROOF PIECES assembly: the foot button says BREAK an
   expect(b.points, 'the other piece is untouched').toHaveLength(4);
   expect((d.groups || []).map(g => g.id), 'the assembly stands').toContain('group-2');
 });
+
+test('a roof alone in a FIXED assembly: the foot button says BUST (the assembly is one unit; bust it first)', async ({ page }) => {
+  const FIXED = () => {
+    const d = drawing();
+    d.groups.push({ id: 'group-2', name: 'ROOF 1', fixed: true, stretchBehavior: 'rigid', members: [{ type: 'roof', id: 'roof-1' }] });
+    return d;
+  };
+  const { at } = await open(page, 7, FIXED);
+  await click(page, at, 30, 15);
+  await expect(page.locator('#model-break')).toBeVisible();
+  await expect(page.locator('#model-break')).toHaveText('BUST');
+});

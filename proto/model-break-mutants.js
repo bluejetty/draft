@@ -57,7 +57,7 @@ const MUTANTS = [
   { file: 'model/09-draw-move-stretch.js', name: "a piece of a fixed assembly offers BREAK, not BUST",
     find: "    && !selectedGroups().some(group => group.fixed === true) ? selection[0] : null);\n",
     with: "    ? selection[0] : null);\n",
-    test: "an assembly selected: the foot button says BUST and busts it into its pieces; a roof's says BREAK" },
+    test: "a roof alone in a FIXED assembly: the foot button says BUST (the assembly is one unit; bust it first)" },
   { file: 'model/09-draw-move-stretch.js', name: "a piece of a NOT FIXED assembly (ROOF PIECES) is the assembly: BUST, no BREAK",
     find: "    && !selectedGroups().some(group => group.fixed === true) ? selection[0] : null);\n",
     with: "    && !selectedGroups().length ? selection[0] : null);\n",

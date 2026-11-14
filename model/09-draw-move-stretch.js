@@ -1864,7 +1864,12 @@
     // corner of every other piece in its assembly along, and the roof stays
     // in one sheet. Riders are the pieces' own indices; the main piece's
     // corner is `node` and decides where they all go.
-    const riders = (node != null && !carried && owner)
+    // ALT HELD LETS THE CORNER GO (jb, 14 Nov 2026: "when nodes are on the
+    // same location they get linked, i made a way to seperate them") -- the
+    // same key that lets a wall's corner go (model/10 detachCorner): this
+    // piece's corner moves alone, the pieces next door keep theirs.
+    const alone = !!event.altKey;
+    const riders = (node != null && !carried && owner && !alone)
       ? whole.filter(rf => rf !== roof).flatMap(rf => {
         const own = roof.points[node];
         return rf.points.map((p, i) => (Math.hypot(p.x - own.x, p.z - own.z) < 1e-3 ? { roof: rf, i } : null)).filter(Boolean);
@@ -1872,7 +1877,8 @@
       : [];
     riders.forEach(r => { if (!targets.includes(r.roof)) { normaliseForMove(r.roof); targets.push(r.roof); } });
     moveState.drag = { kind: carried ? 'nodes' : node != null ? 'node' : edge != null ? 'edge' : 'roof', at, node, edge, targets,
-      riders, befores: targets.map(roofBefore), moved: false };
+      riders, alone: node != null && alone && !!owner, befores: targets.map(roofBefore), moved: false };
+    if (node != null && alone && owner) sayOnStrip('Corner let go -- this piece\'s corner moves alone; the pieces next door keep theirs. UNDO puts it back.');
     canvas.setPointerCapture(event.pointerId);
   }, true);
   canvas.addEventListener('pointermove', event => {
@@ -2188,8 +2194,10 @@
     moveState.node = null;
     markDirty();
     setSelection([...selection]);
-    sayOnStrip(d.kind === 'roof' ? 'Roof moved. UNDO puts it back.' : d.kind === 'node' || d.kind === 'nodes' ? 'Node moved; the roof keeps its pitch. UNDO puts it back.'
-      : 'Edge moved; its overhang kept. UNDO puts it back.');
+    sayOnStrip(d.kind === 'roof' ? 'Roof moved. UNDO puts it back.'
+      : d.kind === 'node' && d.alone ? 'Corner moved alone; the pieces next door keep theirs. UNDO puts it back.'
+        : d.kind === 'node' || d.kind === 'nodes' ? 'Node moved; the roof keeps its pitch. UNDO puts it back.'
+          : 'Edge moved; its overhang kept. UNDO puts it back.');
     paint();
   }, true);
   // ESC NEEDS NO LISTENER OF ITS OWN: the page's Escape puts the roof down,
