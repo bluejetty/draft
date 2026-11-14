@@ -1055,6 +1055,12 @@ if (!window.DraftDrawingFormat) {
   // that passes neither gets a roof with neither key, which is the same trap
   // the finish page fell into -- so every call site names them.
   const ROOF_OVERHANG_MAX_FT = 10;
+  // geometry-2d loads after this file on every page but MODEL; it is asked
+  // for at open time, and a page without it reads the kinds as written.
+  const gableJogKinds = (points, kinds) => {
+    const G = (typeof window !== 'undefined' && window.DraftGeometry2D) || null;
+    return G && typeof G.gableJogKinds === 'function' ? G.gableJogKinds(points, kinds) : kinds;
+  };
   const roofs = (rawRoofs, levelIds, env = {}) => (Array.isArray(rawRoofs) ? rawRoofs : [])
     .map(roof => {
       const roofLevelId = levelId(roof?.levelId, levelIds);
@@ -1071,7 +1077,10 @@ if (!window.DraftDrawingFormat) {
         // ROOF plan"). It bears on `sourceLevelId`, the storey under it.
         // Absent on every roof the build cut.
         ...(levelId(roof?.drawnOn, levelIds) != null ? { drawnOn: levelId(roof.drawnOn, levelIds) } : {}),
-        edges: points.map((_, index) =>
+        // A STEP BETWEEN TWO GABLES IS A GABLE (jb, 13 Nov 2026; geometry-2d
+        // gableJogKinds): healed as the file opens, so a roof saved with a
+        // one-foot eave between its gable pieces never raises a plane off it.
+        edges: gableJogKinds(points, points.map((_, index) =>
           // SLOPED (18 Oct): the planes kept, cut off along the edge.
           // JOINT (jb, 13 Nov): the edge a busted roof's piece shares with
           // the piece next door -- a hip, valley or ridge -- or an edge laid
@@ -1079,7 +1088,7 @@ if (!window.DraftDrawingFormat) {
           // elevations draw no fascia, rake or gable wall under it.
           (Array.isArray(roof?.edges)
             && (roof.edges[index] === 'gable' || roof.edges[index] === 'sloped' || roof.edges[index] === 'joint')
-            ? roof.edges[index] : 'eave')),
+            ? roof.edges[index] : 'eave'))),
         // TEN FEET, not six (Movie, 18 Oct: North Point's main eave is 8').
         overhang: Math.min(ROOF_OVERHANG_MAX_FT, Math.max(0, number(roof?.overhang, 2))),
         // PER EDGE, WHEN THE WRITER KNEW. `overhang` is one number for the

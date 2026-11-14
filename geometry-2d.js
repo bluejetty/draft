@@ -724,6 +724,57 @@ if (!window.DraftGeometry2D) {
   // and it holds the plane the way a gable does: the wavefront does not
   // move off it. Everything that asks "does this edge move" asks this.
   const isSolidEdge = kind => kind === 'gable' || kind === 'joint';
+  // ── A STEP BETWEEN TWO GABLES IS PART OF THE GABLE WALL ────────────────
+  //
+  // jb, 13 Nov 2026 ("when i change the autoroof to gable it goes nuts"): a
+  // 2 storey whose end wall stepped back a foot for its last ten feet. Both
+  // pieces of that end made GABLE, the foot between them stayed an EAVE --
+  // and the solver, asked for a plane off a one-foot eave, raised one that
+  // ran the whole length of the house: on E2 a shed slope past the house, a
+  // second peak under it, a stray wall line. There is no roof there to
+  // drain; the step is the gable wall turning a corner. So an eave of up to
+  // ROOF_GABLE_JOG_FT that runs square between two parallel solid edges
+  // (gable or joint) is a gable too, wherever the kinds are read or set --
+  // the ROOF panel's chips and GABLE END, the autoroof, a file opening, and
+  // the solver itself (stepVirtual) for a record nothing else touched.
+  // Past that, a step is a real wing end and the ordinary rules hold.
+  // jb, same night: the AUTOROOF never makes a shed (one eave) up top; a
+  // lower roof against a taller wall may (roofAgainstWall's shed arm).
+  const ROOF_GABLE_JOG_FT = 6;
+  const gableJogKinds = (points, kinds, { jogFt = ROOF_GABLE_JOG_FT } = {}) => {
+    const pts = Array.isArray(points) ? points : [];
+    const n = pts.length;
+    const out = pts.map((_, i) => (Array.isArray(kinds) ? kinds[i] : 'eave'));
+    if (n < 4) return out;
+    const eps = 1e-6;
+    const solid = i => isSolidEdge(out[((i % n) + n) % n]);
+    const dirOf = i => {
+      const a = pts[((i % n) + n) % n], b = pts[(((i + 1) % n) + n) % n];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      return len < eps ? null : { x: (b.x - a.x) / len, z: (b.z - a.z) / len, len };
+    };
+    for (let guard = 0; guard < n; guard += 1) {
+      let changed = false;
+      for (let i = 0; i < n; i += 1) {
+        if (solid(i) || out[i] === 'sloped') continue;
+        const d = dirOf(i);
+        if (!d || d.len > jogFt + eps) continue;
+        if (!solid(i - 1) || !solid(i + 1)) continue;
+        const p = dirOf(i - 1), q = dirOf(i + 1);
+        if (!p || !q) continue;
+        const squareToBoth = Math.abs(p.x * d.x + p.z * d.z) < 1e-6 && Math.abs(q.x * d.x + q.z * d.z) < 1e-6;
+        // A STEP, NOT A NOTCH: the gables either side run the SAME way (the
+        // wall carries on past the step). Run opposite ways they are the two
+        // sides of a notch cut into the ring, and its bottom keeps its kind.
+        const sameWay = p.x * q.x + p.z * q.z > 1 - 1e-6;
+        if (!squareToBoth || !sameWay) continue;
+        out[i] = 'gable';
+        changed = true;
+      }
+      if (!changed) break;
+    }
+    return out;
+  };
   const solveNotchedGableRoof = (roof) => {
     const EPS = 1e-6;
     const pts = roof.points.map(p => ({ x: p.x, z: p.z }));
@@ -1175,6 +1226,72 @@ if (!window.DraftGeometry2D) {
   //
   // `edgeHeelIn` is per edge, inches, on eaves only; a gable or a sloped
   // edge has no eave to lift.
+  // ── A STEP IN A GABLE WALL: THE PLANES CARRY ON PAST IT ─────────────────
+  //
+  // The ring with a gable step (gableJogKinds) is solved as if the stepped
+  // piece stood on the outer line -- the wall turns a corner under the roof,
+  // the roof does not -- and the strip between the two lines is cut away
+  // afterwards (heelVirtual's pattern). Solved as it stands, the notched
+  // solver handed the sliver behind the step to the other plane and the
+  // ridge stopped a foot short with a stray line up the step. roofFaces
+  // needs no hook of its own: built from these arcs on the real ring, the
+  // planes come out whole and cover it.
+  const stepVirtual = roof => {
+    const pts = roof.points || [];
+    const n = pts.length;
+    if (n < 5) return null;
+    const kinds = gableJogKinds(pts, Array.isArray(roof.edges) ? roof.edges : pts.map(() => 'eave'));
+    const eps = 1e-6;
+    const dirOf = i => {
+      const a = pts[((i % n) + n) % n], b = pts[(((i + 1) % n) + n) % n];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      return len < eps ? null : { x: (b.x - a.x) / len, z: (b.z - a.z) / len, len };
+    };
+    let at = -1;
+    for (let i = 0; i < n && at < 0; i += 1) {
+      const d = dirOf(i), p = dirOf(i - 1), q = dirOf(i + 1);
+      if (!d || !p || !q || d.len > ROOF_GABLE_JOG_FT + eps) continue;
+      if (!isSolidEdge(kinds[i]) || !isSolidEdge(kinds[(i + n - 1) % n]) || !isSolidEdge(kinds[(i + 1) % n])) continue;
+      if (Math.abs(p.x * d.x + p.z * d.z) > eps || Math.abs(q.x * d.x + q.z * d.z) > eps) continue;
+      if (p.x * q.x + p.z * q.z < 1 - eps) continue;
+      at = i;
+    }
+    if (at < 0) return null;
+    const a = pts[at], b = pts[(at + 1) % n];
+    const jx = b.x - a.x, jz = b.z - a.z;
+    // Which side is the outer line: the step vector points OUT of the ring
+    // from the middle of the edge before it when the edge after it is the
+    // outer one.
+    const prevA = pts[(at + n - 1) % n];
+    const probe = { x: (prevA.x + a.x) / 2 + jx * 0.01 / Math.hypot(jx, jz), z: (prevA.z + a.z) / 2 + jz * 0.01 / Math.hypot(jx, jz) };
+    const nextOuter = !ringInside(probe, pts);
+    const pick = (list, drop) => (Array.isArray(list) && list.length === n ? list.filter((_, k) => k !== drop) : list);
+    let virt, cut, dropAt, kindsOut;
+    if (nextOuter) {
+      // The edge before the step slides out onto the next one's line.
+      const ia = (at + n - 1) % n;
+      virt = pts.map((p, k) => (k === ia ? { ...p, x: p.x + jx, z: p.z + jz } : { ...p }));
+      cut = [prevA, { x: prevA.x + jx, z: prevA.z + jz }, b, a];
+      dropAt = at;
+      kindsOut = kinds.slice();
+    } else {
+      // The edge after the step slides back onto the one before it.
+      const ic = (at + 2) % n, ib = (at + 1) % n;
+      const c = pts[ic];
+      virt = pts.map((p, k) => (k === ic ? { ...p, x: p.x - jx, z: p.z - jz } : { ...p }));
+      cut = [b, a, { x: c.x - jx, z: c.z - jz }, c];
+      dropAt = ib;
+      kindsOut = kinds.slice();
+      kindsOut[at] = kinds[ib];
+    }
+    virt = virt.filter((_, k) => k !== dropAt);
+    const { footprint, ...rest } = roof;
+    void footprint;
+    const cuts = [{ points: cut.map(p => ({ x: p.x, z: p.z })) }];
+    const virtual = { ...rest, points: virt, edges: pick(kindsOut, dropAt),
+      edgeOverhang: pick(roof.edgeOverhang, dropAt), edgeHeelIn: pick(roof.edgeHeelIn, dropAt) };
+    return { roof: virtual, cuts };
+  };
   const heelVirtual = roof => {
     const pts = roof.points || [];
     const n = pts.length;
@@ -1280,6 +1397,9 @@ if (!window.DraftGeometry2D) {
     if (initialCount < 3) return [];
     const cleaned = cleanRoofRing(roof);
     if (cleaned) return roofSkeleton(cleaned);
+    // A STEP IN A GABLE WALL: the ring squared past it, the strip cut away.
+    const stepped = stepVirtual(roof);
+    if (stepped) return roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts }));
     // A RAISED HEEL: the pushed-out roof's lines, the strip outside cut away.
     const raised = heelVirtual(roof);
     if (raised) return roofSkeleton(raised.roof).flatMap(seg => cutRoofSegment(seg, { cuts: raised.cuts }));
@@ -4541,6 +4661,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     cricketRing,
     loopWithoutSpikes,
     loopWithoutJogs,
+    gableJogKinds,
+    ROOF_GABLE_JOG_FT,
     ROOF_JOG_FT,
     ROOF_SEAM_JOG_FT,
     ROOF_SEAM_HOUSE_JOG_FT,
