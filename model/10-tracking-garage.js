@@ -544,6 +544,48 @@
     }
     return out;
   };
+  // A LOOP PULLED ACROSS ITSELF IS TWO LOOPS (jb, 14 Nov 2026, from
+  // ArchiCAD: "take one side and break it and pull it across and over the
+  // other side edge ... it would split it into 2 shapes when i finish the
+  // command"; "for floors and shapes i think i'd also like this"). The ring
+  // the drag left, crossing itself, is cut at the crossing
+  // (splitCrossedLoop) and each lobe becomes its own SHAPE or FLOOR with
+  // the record's every other property -- hatch, linetype, label, flooring,
+  // a floor's assembly -- taking the one record's place in its list and in
+  // any assembly that held it. The one record is left as it stood, so ONE
+  // UNDO puts it back whole. Rooms (room tags, wall-linked) and loops with
+  // an arc corner are not split: null, and the caller refuses as before.
+  const splitCrossedLoopItem = (tag, kind, pts, before) => {
+    const G = window.DraftGeometry2D;
+    if (kind !== 'shape' && kind !== 'floor' || !G?.splitCrossedLoop) return null;
+    if (pts.some(p => p.bulge)) return null;
+    const list = kind === 'floor' ? drawing?.floors : drawing?.shapes;
+    if (!Array.isArray(list) || !list.includes(tag)) return null;
+    const lobes = G.splitCrossedLoop(pts);
+    if (!lobes || lobes.length < 2) return null;
+    const mk = kind === 'floor' ? p => ({ x: p.x, y: 0, z: p.z }) : p => ({ x: p.x, z: p.z });
+    const freshId = () => {
+      let id = newDrawingItemId(kind);
+      while (list.some(item => String(item.id) === id)) id = newDrawingItemId(kind);
+      return id;
+    };
+    const pieces = lobes.map(lobe => ({ ...JSON.parse(JSON.stringify(before)), id: freshId(), points: lobe.map(e => mk(e.pt)) }));
+    tag.points = before.points;
+    const at = list.indexOf(tag);
+    list.splice(at, 1, ...pieces);
+    const groupsBefore = groups().slice();
+    drawing.groups = groups().map(group => ({ ...group,
+      members: (group.members || []).flatMap(m => (m.type === kind && String(m.id) === String(tag.id)
+        ? pieces.map(piece => ({ type: kind, id: piece.id })) : [m])) }));
+    undoStack.push({ kind: 'assembly', undo: () => {
+      const first = list.indexOf(pieces[0]);
+      pieces.forEach(piece => { const k = list.indexOf(piece); if (k >= 0) list.splice(k, 1); });
+      list.splice(first < 0 ? list.length : first, 0, tag);
+      drawing.groups = groupsBefore;
+      syncAssembly();
+    } });
+    return pieces;
+  };
   const undoJogs = step => (step.jog || []).forEach(j => {
     (j.farRings || []).forEach(({ pt, x, z }) => { pt.x = x; pt.z = z; });
     unJog(j);

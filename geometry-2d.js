@@ -147,6 +147,66 @@ if (!window.DraftGeometry2D) {
     return false;
   };
 
+  // WHAT TO DO ABOUT A CROSSING, ruled at last (jb, 14 Nov 2026, from
+  // ArchiCAD: a broken edge pulled "across and over the other side edge ...
+  // would split it into 2 shapes when i finish the command"): the ring is
+  // CUT AT THE CROSSING into two rings, each lobe of the bow-tie its own
+  // loop, and a lobe that still crosses itself is cut again. Every output
+  // corner says which edge of the given ring its outgoing edge lies along
+  // (`edge`), so a caller with arrays parallel to the ring -- a roof's edge
+  // kinds, overhangs, heels -- can hand each piece its own entries; a corner
+  // the cut MADE (the crossing point) is a fresh {x, z} with `made: true`,
+  // the rest are the given ring's own point objects. Lobes of no area (a
+  // sliver thinner than a quarter inch, or fewer than three distinct
+  // corners) are dropped. Returns null when the ring does not cross itself.
+  const splitCrossedLoop = points => {
+    if (!Array.isArray(points) || points.length < 4 || !selfIntersects(points)) return null;
+    const area = ring => Math.abs(ring.reduce((sum, e, k) => {
+      const q = ring[(k + 1) % ring.length].pt;
+      return sum + e.pt.x * q.z - q.x * e.pt.z;
+    }, 0)) / 2;
+    const side = (a, b, p) => (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
+    const cutOnce = ring => {
+      const n = ring.length;
+      for (let i = 0; i < n; i += 1) {
+        const a = ring[i].pt, b = ring[(i + 1) % n].pt;
+        for (let j = i + 2; j < n; j += 1) {
+          if (i === 0 && j === n - 1) continue;
+          const c = ring[j].pt, d = ring[(j + 1) % n].pt;
+          if (!(Math.sign(side(a, b, c)) * Math.sign(side(a, b, d)) < 0 && Math.sign(side(c, d, a)) * Math.sign(side(c, d, b)) < 0)) continue;
+          const den = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
+          if (Math.abs(den) < 1e-12) continue;
+          const t = ((c.x - a.x) * (d.z - c.z) - (c.z - a.z) * (d.x - c.x)) / den;
+          const x = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+          // Lobe one: the crossing, then corners i+1 .. j, closing back along
+          // edge j's line. Lobe two: the crossing, then j+1 .. i, closing
+          // along edge i's line.
+          const run = (from, to) => { const out = []; for (let k = from; ; k = (k + 1) % n) { out.push(ring[k]); if (k === to) break; } return out; };
+          return [
+            [{ pt: x, edge: ring[i].edge, made: true }, ...run((i + 1) % n, j)],
+            [{ pt: x, edge: ring[j].edge, made: true }, ...run((j + 1) % n, i)],
+          ];
+        }
+      }
+      return null;
+    };
+    const dedupe = ring => ring.filter((e, k) => {
+      const q = ring[(k + 1) % ring.length].pt;
+      return Math.hypot(q.x - e.pt.x, q.z - e.pt.z) > 1e-6;
+    });
+    const out = [];
+    const todo = [points.map((pt, edge) => ({ pt, edge, made: false }))];
+    let guard = 0;
+    while (todo.length && guard < 64) {
+      guard += 1;
+      const ring = dedupe(todo.pop());
+      if (ring.length < 3 || area(ring) < 0.02) continue;
+      const cut = ring.length >= 4 ? cutOnce(ring) : null;
+      if (cut) todo.push(...cut); else out.push(ring);
+    }
+    return out.length ? out : null;
+  };
+
   // Is `inner` wholly inside `outer`? Both must be simple rings.
   //
   // Corner containment alone is NOT enough: on a concave host, every corner of
@@ -4651,6 +4711,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     paramAlongSegment,
     segmentIntersection,
     selfIntersects,
+    splitCrossedLoop,
     ringInsideRing,
     uncoveredRegions,
     nearestIntersection,
