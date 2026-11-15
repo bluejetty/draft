@@ -2238,6 +2238,114 @@
       + 'Pick a piece and THIS ROOF for its own pitch or overhang; UNDO joins the roof back.');
     return made;
   };
+  // ── A STEPPED GABLE END: TWO GABLES, OR ONE FLUSH ──────────────────────
+  //
+  // jb, 15 Nov 2026: "can you make it 2 seperate gables ?" -- the end of a
+  // house that steps back a foot (or up to 6 ft) roofed the way he did it by
+  // hand: the big gable across the whole house on the stepped-back line, and
+  // a small lower gable over the part that sticks out (geometry-2d
+  // gableJogPieces). A GABLE press that makes such a step splits the roof so;
+  // the ROOF panel's ONE FLUSH GABLE puts the one gable across back (the big
+  // piece keeps it as `flushOf`), and TWO GABLES splits a flush one. The
+  // small piece knows its big one (`jogOf`); both ride one assembly.
+  const jogPartners = roof => {
+    const all = drawing?.roofs || [];
+    const big = roof?.flushOf ? roof : all.find(r => roof?.jogOf != null && String(r.id) === String(roof.jogOf));
+    if (!big || !big.flushOf) return null;
+    const small = all.find(r => r.jogOf != null && String(r.jogOf) === String(big.id));
+    return small ? { big, small } : null;
+  };
+  const splitJogGable = (roof, kinds) => {
+    const G = window.DraftGeometry2D;
+    const all = drawing?.roofs || [];
+    const at = all.indexOf(roof);
+    if (at < 0 || !G?.gableJogPieces) return null;
+    const pieces = G.gableJogPieces({ ...roof, edges: kinds });
+    if (!pieces) return null;
+    const before = JSON.parse(JSON.stringify(roof));
+    const groupsBefore = groups().slice();
+    const { id: _id, flushOf: _f, jogOf: _j, ...flat } = before;
+    void _id; void _f; void _j;
+    const flush = { ...flat, edges: G.gableJogKinds(roof.points, kinds) };
+    Object.keys(roof).forEach(key => { if (key !== 'id') delete roof[key]; });
+    Object.assign(roof, pieces.big, { id: before.id, follows: 'none', flushOf: flush });
+    let smallId = newDrawingItemId('roof');
+    while (all.some(r => String(r.id) === smallId)) smallId = newDrawingItemId('roof');
+    const small = { ...pieces.small, id: smallId, follows: 'none', jogOf: before.id };
+    all.splice(at + 1, 0, small);
+    const owner = groupOf({ type: 'roof', item: roof });
+    if (owner) {
+      drawing.groups = groups().map(group => (group === owner
+        ? { ...group, members: [...(group.members || []), { type: 'roof', id: small.id }] } : group));
+    } else {
+      const n = nextGroupNumber();
+      drawing.groups = [...groups(), { id: `group-${n}`, name: `ROOF PIECES ${n}`, fixed: false,
+        stretchBehavior: 'item-geometry', members: [{ type: 'roof', id: roof.id }, { type: 'roof', id: small.id }],
+        wallSettings: null }];
+      drawing.nextGroupId = n + 1;
+    }
+    undoStack.push({ kind: 'assembly', undo: () => {
+      const list = drawing.roofs || [];
+      const k = list.indexOf(small);
+      if (k >= 0) list.splice(k, 1);
+      Object.keys(roof).forEach(key => delete roof[key]);
+      Object.assign(roof, before);
+      drawing.groups = groupsBefore;
+      syncAssembly();
+    } });
+    roofEdgeIdx = null;
+    markDirty();
+    paint();
+    sayOnStrip('TWO GABLES: the big one across the house, a small one over the part that sticks out. '
+      + 'ONE FLUSH GABLE on the ROOF panel (or UNDO) puts one gable across.');
+    return { big: roof, small };
+  };
+  const joinJogGable = roof => {
+    const pair = jogPartners(roof);
+    if (!pair) return null;
+    const { big, small } = pair;
+    const all = drawing?.roofs || [];
+    const before = JSON.parse(JSON.stringify(big));
+    const groupsBefore = groups().slice();
+    const at = all.indexOf(small);
+    // What was set on the big piece since carries over: pitch, board, seat.
+    const keep = {};
+    ['pitch', 'fascia', 'fasciaFinish', 'sourceLevelId', 'drawnOn', 'levelId', 'layer'].forEach(key => {
+      if (key in big) keep[key] = big[key];
+    });
+    const flush = big.flushOf;
+    Object.keys(big).forEach(key => { if (key !== 'id') delete big[key]; });
+    Object.assign(big, flush, keep, { id: before.id, follows: 'none' });
+    if (at >= 0) all.splice(at, 1);
+    drawing.groups = groups()
+      .map(group => ({ ...group, members: (group.members || [])
+        .filter(m => !(m.type === 'roof' && String(m.id) === String(small.id))) }))
+      .filter(group => group.members.length > 1
+        || !group.members.every(m => m.type === 'roof'));
+    undoStack.push({ kind: 'assembly', undo: () => {
+      const list = drawing.roofs || [];
+      Object.keys(big).forEach(key => delete big[key]);
+      Object.assign(big, before);
+      const k = list.indexOf(big);
+      list.splice(at >= 0 ? at : k + 1, 0, small);
+      drawing.groups = groupsBefore;
+      syncAssembly();
+    } });
+    roofEdgeIdx = null;
+    setSelection([{ type: 'roof', item: big }]);
+    markDirty();
+    paint();
+    sayOnStrip('ONE FLUSH GABLE across the stepped end. TWO GABLES on the ROOF panel (or UNDO) splits it again.');
+    return big;
+  };
+  // A GABLE PRESS THAT MAKES A STEP: which ring edges are its three (the
+  // gable sticking out, the step, the gable stepped back).
+  const jogPressSplits = (roof, kinds, index) => {
+    const G = window.DraftGeometry2D;
+    const split = G?.gableJogSplit ? G.gableJogSplit(roof.points, kinds) : null;
+    if (!split) return false;
+    return split.three.includes(index);
+  };
   const roofPropsNode = picked => {
     const box = document.createElement('div');
     const again = () => { if (selection.every(e => e.type === 'roof')) showSelectionProps(); };
@@ -2263,6 +2371,25 @@
         : 'This roof is one plane already -- there is nothing to bust.';
       bust.addEventListener('click', () => { if (bustRoofs(picked)) again(); });
       box.append(bust);
+      // TWO GABLES / ONE FLUSH GABLE on a stepped gable end (jb, 15 Nov).
+      const pair = lone ? jogPartners(lone) : null;
+      const canTwo = lone && !pair && G?.gableJogPieces ? Boolean(G.gableJogPieces(lone)) : false;
+      if (pair || canTwo) {
+        const jog = document.createElement('button');
+        jog.type = 'button';
+        jog.className = 'sel-chip';
+        jog.dataset.roofJogGable = pair ? 'flush' : 'two';
+        jog.textContent = pair ? 'ONE FLUSH GABLE' : 'TWO GABLES';
+        jog.title = pair
+          ? 'Put one gable flush across the stepped end, as before the split.'
+          : 'Split the stepped end into two gables: the big one across the house, a small one over the part that sticks out.';
+        jog.addEventListener('click', () => {
+          if (pair) { if (joinJogGable(lone)) again(); return; }
+          const made = splitJogGable(lone, lone.edges);
+          if (made) { setSelection([{ type: 'roof', item: made.big }]); again(); }
+        });
+        box.append(jog);
+      }
     }
     box.append(numberField('PITCH', lone ? lone.pitch : items[0].pitch, 0, 24, 0.5, v => {
       if (v !== null) {
@@ -2349,6 +2476,10 @@
         const kind = roofEdgeKind(lone.edges?.[index]);
         box.append(propRow('EDGE', ROOF_EDGE_KINDS, kind, id => {
           if (id === kind) return;
+          if (id === 'gable') {
+            const kinds = lone.points.map((_, i) => (i === index ? id : roofEdgeKind(lone.edges?.[i])));
+            if (jogPressSplits(lone, kinds, index) && splitJogGable(lone, kinds)) { again(); return; }
+          }
           editRoofs([lone], roof => {
             const kinds = roof.points.map((_, i) => (i === index ? id
               : roofEdgeKind(roof.edges?.[i])));

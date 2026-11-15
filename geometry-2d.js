@@ -1317,6 +1317,134 @@ if (!window.DraftGeometry2D) {
   // ridge stopped a foot short with a stray line up the step. roofFaces
   // needs no hook of its own: built from these arcs on the real ring, the
   // planes come out whole and cover it.
+  // ── OR TWO GABLES (jb, 15 Nov 2026) ───────────────────────────────────
+  //
+  // "can you make it 2 seperate gables ?" -- the stepped end as jb roofed it
+  // by hand that afternoon: the big gable across the whole house, standing
+  // on the stepped-back line, and a small lower gable over the part that
+  // sticks out, peaking at ITS middle and running back under the big roof.
+  // Two plain records: the big one is the ring with the protrusion cut off
+  // at the back line, the small one the protrusion run back to that line --
+  // its two sides eaves, its front the gable, its back a JOINT along the big
+  // gable. Under the big roof the small one is hidden (its far slope is
+  // parallel and lower), so the painters need nothing new: it is the
+  // three-piece hand roof, made in one press.
+  //
+  // Returns null when the ring has no such step (or the corner beyond the
+  // protrusion is not square), else { big, small } rings (x, z), their
+  // kinds, `bigFrom` / `smallFrom` (piece edge k came from ring edge
+  // from[k], -1 for the small piece's new JOINT) so the caller can carry
+  // per-edge lists across, and `three`: the ring edges of the gable that
+  // sticks out, the step, and the gable stepped back.
+  const gableJogSplit = (points, kinds) => {
+    const pts0 = (Array.isArray(points) ? points : []).map(p => ({ x: Number(p.x), z: Number(p.z) }));
+    const n = pts0.length;
+    if (n < 6) return null;
+    const healed0 = gableJogKinds(pts0, kinds);
+    const eps = 1e-6;
+    const area2 = ring => ring.reduce((sum, p, k) => {
+      const q = ring[(k + 1) % ring.length];
+      return sum + p.x * q.z - q.x * p.z;
+    }, 0);
+    // In one winding: the ring R and its kinds K (edge k = R[k] -> R[k+1]).
+    // `idx` maps a position back to the caller's point / edge index.
+    const tryWinding = (R, K, ptIdx, edgeIdx) => {
+      const at = k => ((k % n) + n) % n;
+      const dirOf = k => {
+        const a = R[at(k)], b = R[at(k + 1)];
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        return len < eps ? null : { x: (b.x - a.x) / len, z: (b.z - a.z) / len, len };
+      };
+      for (let i = 0; i < n; i += 1) {
+        // P = edge i-1 (the protruding gable), S = edge i (the step),
+        // Q = edge i+1 (the gable stepped back), and edge i-2 runs square
+        // from the protrusion's far corner back past Q's line.
+        const d = dirOf(i), p = dirOf(i - 1), q = dirOf(i + 1), beyond = dirOf(i - 2);
+        if (!d || !p || !q || !beyond || d.len > ROOF_GABLE_JOG_FT + eps) continue;
+        if (![i - 1, i, i + 1].every(k => isSolidEdge(K[at(k)]))) continue;
+        if (Math.abs(p.x * d.x + p.z * d.z) > eps || Math.abs(q.x * d.x + q.z * d.z) > eps) continue;
+        if (p.x * q.x + p.z * q.z < 1 - eps) continue;
+        if (Math.abs(beyond.x * p.x + beyond.z * p.z) > eps) continue;
+        // Edge i-2 runs INTO the far corner; back along it is -beyond.
+        const shift = d.len;
+        if (beyond.len <= shift + 0.05) continue;
+        const A = R[at(i - 1)], B = R[at(i)], C = R[at(i + 1)];
+        const farIn = { x: A.x - beyond.x * shift, z: A.z - beyond.z * shift };
+        // farIn must sit on Q's line, inward of P: the step runs the way
+        // edge i-2 runs back (otherwise P is the stepped-back one).
+        if (Math.abs((C.x - farIn.x) * -q.z + (C.z - farIn.z) * q.x) > 1e-4) continue;
+        const big = [], bigKinds = [], bigFrom = [];
+        for (let k = i + 2; k < i + n - 1; k += 1) {           // R[i+2] .. R[i-2]
+          big.push(R[at(k)]); bigKinds.push(K[at(k)]); bigFrom.push(edgeIdx[at(k)]);
+        }
+        // R[i-2] -> farIn is edge i-2 cut short; farIn -> R[i+2] is Q run out.
+        big.push(farIn); bigKinds.push(K[at(i + 1)]); bigFrom.push(edgeIdx[at(i + 1)]);
+        const small = [A, B, C, farIn];
+        const smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];
+        const smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, edgeIdx[at(i - 2)]];
+        const a0 = area2(R), a1 = area2(big), a2 = area2(small);
+        if (Math.sign(a1) !== Math.sign(a0) || Math.sign(a2) !== Math.sign(a0)) continue;
+        if (Math.abs(a1 + a2 - a0) > 1e-3 * Math.max(1, Math.abs(a0))) continue;
+        return { big, bigKinds, bigFrom, small, smallKinds, smallFrom, ptIdx,
+          three: [edgeIdx[at(i - 1)], edgeIdx[at(i)], edgeIdx[at(i + 1)]] };
+      }
+      return null;
+    };
+    const ids = pts0.map((_, k) => k);
+    const fwd = tryWinding(pts0, healed0, ids, ids);
+    if (fwd) return fwd;
+    // The other way round: point k of the reversed ring is pts0[n-1-k], and
+    // its edge k (R[k] -> R[k+1]) is the caller's edge n-2-k.
+    const R = pts0.slice().reverse();
+    const edgeIdx = R.map((_, k) => ((n - 2 - k) % n + n) % n);
+    const K = edgeIdx.map(e => healed0[e]);
+    const back = tryWinding(R, K, ids, edgeIdx);
+    if (!back) return null;
+    // Put both rings back in the caller's winding (edges follow their points).
+    const flip = (ring, kindsOf, fromOf) => {
+      const m = ring.length;
+      const rp = ring.slice().reverse();
+      // reversed edge k = rp[k] -> rp[k+1] = old edge m-2-k
+      const rk = rp.map((_, k) => kindsOf[((m - 2 - k) % m + m) % m]);
+      const rf = rp.map((_, k) => fromOf[((m - 2 - k) % m + m) % m]);
+      return [rp, rk, rf];
+    };
+    const [big, bigKinds, bigFrom] = flip(back.big, back.bigKinds, back.bigFrom);
+    const [small, smallKinds, smallFrom] = flip(back.small, back.smallKinds, back.smallFrom);
+    return { big, bigKinds, bigFrom, small, smallKinds, smallFrom, three: back.three };
+  };
+  // The two records gableJogSplit names, built off a roof record: the big
+  // one keeps everything the roof had (pitch, fascia, SITS ON ...), the
+  // small one is a plain piece. Per-edge lists ride across by `from`; the
+  // small piece's JOINT hangs nothing. Wall rings (footprint) and cut-outs
+  // are left behind: neither ring is the old one any more.
+  const gableJogPieces = roof => {
+    if (!roof || !Array.isArray(roof.points)) return null;
+    const split = gableJogSplit(roof.points, roof.edges);
+    if (!split) return null;
+    const y = Number(roof.points[0]?.y) || 0;
+    const n = roof.points.length;
+    const per = list => (Array.isArray(list) && list.length === n ? list : null);
+    const overs = per(roof.edgeOverhang);
+    const heels = per(roof.edgeHeelIn);
+    const overAt = (k, kind) => (kind === 'joint' || k < 0 ? 0
+      : overs ? Math.max(0, Number(overs[k]) || 0) : Math.max(0, Number(roof.overhang) || 0));
+    const make = (pts, kinds, from) => {
+      const { footprint, crossGables, cuts, flushOf, ...rest } = roof;
+      void footprint; void crossGables; void cuts; void flushOf;
+      const out = { ...rest,
+        points: pts.map(p => ({ x: p.x, y, z: p.z })),
+        edges: kinds.slice(),
+        edgeOverhang: from.map((k, i) => overAt(k, kinds[i])) };
+      if (heels) out.edgeHeelIn = from.map((k, i) => (k < 0 || kinds[i] !== 'eave' ? 0 : Number(heels[k]) || 0));
+      else delete out.edgeHeelIn;
+      return out;
+    };
+    return {
+      big: make(split.big, split.bigKinds, split.bigFrom),
+      small: make(split.small, split.smallKinds, split.smallFrom),
+    };
+  };
   const stepVirtual = roof => {
     const pts = roof.points || [];
     const n = pts.length;
@@ -4745,6 +4873,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     loopWithoutSpikes,
     loopWithoutJogs,
     gableJogKinds,
+    gableJogSplit,
+    gableJogPieces,
     ROOF_GABLE_JOG_FT,
     ROOF_JOG_FT,
     ROOF_SEAM_JOG_FT,

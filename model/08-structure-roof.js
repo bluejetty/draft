@@ -317,6 +317,12 @@
     }
     const was = hit.roof.edges[hit.index] === 'gable' ? 'gable' : 'eave';
     const now = was === 'gable' ? 'eave' : 'gable';
+    // A GABLE THAT MAKES A STEPPED END makes TWO GABLES (jb, 15 Nov 2026;
+    // model/15 splitJogGable), with its own UNDO.
+    if (now === 'gable' && typeof jogPressSplits === 'function') {
+      const kinds = hit.roof.edges.map((k, i) => (i === hit.index ? 'gable' : k));
+      if (jogPressSplits(hit.roof, kinds, hit.index) && splitJogGable(hit.roof, kinds)) return hit;
+    }
     hit.roof.edges[hit.index] = now;
     // A FOURTH UNDO KIND rather than a wider existing one, for the reason
     // addItem's comment gives: 'add-item' pops a record OUT of a list, and a

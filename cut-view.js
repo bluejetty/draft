@@ -8036,10 +8036,49 @@ if (!window.DraftCutView) {
                 ctx.beginPath();
                 ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
                 ctx.stroke();
+                // ── AND ITS FOOT IS ASKED ON ITS OWN, as the eave's is ───────
+                //
+                // jb, 15 Nov 2026, the two gables on a stepped end: "the top
+                // chord bottom line of the top roof goes through the bottom
+                // roof fascia but shouldn't". The big gable's rake runs down
+                // into the small gable's peak; its TOP stays clear of the
+                // small roof the whole run, so the run is shown -- but the
+                // board's foot, 5 1/2" under, passes behind the small gable's
+                // rake board in front, and was drawn across it. Stations and
+                // halving, the eave foot's own way.
                 ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
-                ctx.beginPath();
-                ctx.moveTo(X(r.u0), Y(r.e0 - drop)); ctx.lineTo(X(r.u1), Y(r.e1 - drop));
-                ctx.stroke();
+                {
+                  const tLo = Math.min(r.t0, r.t1), tHi = Math.max(r.t0, r.t1);
+                  const at = t => ({ p: { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t },
+                    u: ua + (ub - ua) * t, e: ea + (eb - ea) * t - drop });
+                  const footShows = t => { const q = at(t); return !hidden(q.p, q.e, q.u); };
+                  const edgeT = (tIn, tOut) => {
+                    let lo = tIn, hi = tOut;
+                    for (let i = 0; i < 10; i += 1) {
+                      const mid = (lo + hi) / 2;
+                      if (footShows(mid)) lo = mid; else hi = mid;
+                    }
+                    return lo;
+                  };
+                  const steps = Math.max(2, Math.ceil(Math.abs(r.u1 - r.u0) / 0.25));
+                  const ts = [];
+                  for (let k = 0; k <= steps; k += 1) ts.push(tLo + (tHi - tLo) * k / steps);
+                  const shows = ts.map(footShows);
+                  const feet = [];
+                  let foot = null;
+                  ts.forEach((t, k) => {
+                    if (!shows[k]) { foot = null; return; }
+                    if (!foot) { foot = { t0: k > 0 ? edgeT(t, ts[k - 1]) : t, t1: t }; feet.push(foot); }
+                    foot.t1 = k < ts.length - 1 && !shows[k + 1] ? edgeT(t, ts[k + 1]) : t;
+                  });
+                  feet.forEach(f => {
+                    const p0 = at(f.t0), p1 = at(f.t1);
+                    if (Math.hypot(p1.u - p0.u, p1.e - p0.e) <= 0.05) return;
+                    ctx.beginPath();
+                    ctx.moveTo(X(p0.u), Y(p0.e)); ctx.lineTo(X(p1.u), Y(p1.e));
+                    ctx.stroke();
+                  });
+                }
               } else {
                 ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
                 ctx.beginPath();
