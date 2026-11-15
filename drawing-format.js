@@ -1170,6 +1170,21 @@ if (!window.DraftDrawingFormat) {
         // name the list drops it on the way past.
         ...(typeof roof?.fasciaFinish === 'string' && /^[a-z0-9_-]{1,40}$/i.test(roof.fasciaFinish)
           ? { fasciaFinish: roof.fasciaFinish } : {}),
+        // TWO GABLES ON A STEPPED END (jb, 15 Nov 2026; model/15
+        // splitJogGable): the small piece names its big one (`jogOf`), and
+        // the big one keeps the flush roof it was cut from (`flushOf`) for
+        // ONE FLUSH GABLE. Dropped here, a reopened file lost both: the
+        // elevations stood the front wall up to the big rake again, and the
+        // panel could not put the one gable back.
+        ...(roof?.jogOf != null && String(roof.jogOf).trim()
+          ? { jogOf: String(roof.jogOf).trim() } : {}),
+        ...((() => {
+          if (!roof?.flushOf || typeof roof.flushOf !== 'object' || roof.flushOf.flushOf) return {};
+          const flat = roofs([{ ...roof.flushOf, id: roof.id }], levelIds, env)[0];
+          if (!flat) return {};
+          const { id: _id, ...rest } = flat;
+          return { flushOf: rest };
+        })()),
         // WHAT IS CUT OUT OF IT: convex loops, each tagged with the upper
         // roof whose walls it stops at (`hoodOf`) so BONEYARD's next push can
         // replace exactly its own. See geometry-2d's cutRoofFaces.
