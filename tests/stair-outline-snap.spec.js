@@ -90,6 +90,24 @@ test('held by a corner, an L lands it exactly on a T wall\'s inside corner', asy
     .toEqual([r3(t.x - c.x), r3(t.z - c.z)]);
 });
 
+test('dragged by its body, any corner of an L lands on a T\'s corner it comes to', async ({ page }) => {
+  const { frame, facts } = await open(page);
+  const t = facts.faceCorners.filter(p => p.x < 16 && p.z > -12).sort((a, b) => b.x - a.x || a.z - b.z)[0];
+  const c = facts.corners.slice().sort((a, b) => (b.x - b.z) - (a.x - a.z))[0];
+  // Pressed on the first flight, well away from any corner.
+  await page.mouse.move(...frame.at(0, -4));
+  await page.mouse.down();
+  await page.mouse.move(...frame.at(t.x - c.x - 0.04, -4 + t.z - c.z + 0.04), { steps: 8 });
+  await page.waitForTimeout(100);
+  const lit = await attr(page, 'data-snap-magnet');
+  expect(lit?.kind, 'a face corner holds it').toBe('corner');
+  expect(lit.at).toEqual([r4(t.x), r4(t.z)]);
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const s = await saved(page);
+  expect([r3(s.start.x - (-2)), r3(s.start.z - (-4))]).toEqual([r3(t.x - c.x), r3(t.z - c.z)]);
+});
+
 test('dragged by its body, an L\'s edge lies on a wall face it comes beside', async ({ page }) => {
   const { frame, facts } = await open(page);
   // North edge of the flight; the wall's south face is at z = -12 + 4/12.

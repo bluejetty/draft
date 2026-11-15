@@ -23,7 +23,7 @@ const MUTANTS = [
     name: 'the outline\'s corners catch nothing',
     find: "    if (best) return { dx: dx + best.hit.land.x - best.at.x, dz: dz + best.hit.land.z - best.at.z, lit: best.hit };\n",
     with: "    if (best) return null;\n",
-    test: 'inside corner' },
+    test: 'any corner of an L lands' },
   { file: 'model/07-walls-magnet.js',
     name: 'no edge lies on a face',
     find: "    const first = edgeCatch(dx, dz);\n",
