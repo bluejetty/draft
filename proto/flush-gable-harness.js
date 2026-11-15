@@ -45,6 +45,8 @@ const MUTATIONS = [
     c => c.replace('        if (!coarse && prev && prev.elev != null', '        if (false && prev && prev.elev != null')],
   ['the small gable has no JOINT at its back (it raises a plane off it)', 'geometry-2d.js',
     c => c.replace("const smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];", "const smallKinds = [K[at(i - 1)], 'eave', 'eave', K[at(i - 2)]];")],
+  ['a rake\'s foot is drawn the whole run, through what stands in front', 'cut-view.js',
+    c => c.replace("const footShows = t => { const q = at(t); return !hidden(q.p, q.e, q.u); };", "const footShows = () => true;")],
 ];
 
 if (MUTATE) {
@@ -284,6 +286,14 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
   check('two gables, E1: two peaks, the big one mid-house (u 9.75) and the small one over the front piece (u 6.5), lower',
     apexAt(9.75) && apexAt(6.5) && top(6.5) < top(9.75) - 0.5,
     `peaks 9.75: ${apexAt(9.75) && top(9.75).toFixed(2)}, 6.5: ${apexAt(6.5) && top(6.5).toFixed(2)}`);
+  // jb, 15 Nov: "the top chord bottom line of the top roof goes through the
+  // bottom roof fascia". The big rake's foot (heavy, rising from the small
+  // peak toward 9.75) stops where it goes behind the small gable's rake board.
+  const bigFoot = heavy.filter(x => x.b.u !== x.a.u && (x.b.e - x.a.e) / (x.b.u - x.a.u) > 0.2
+    && Math.max(x.a.u, x.b.u) > 9 && Math.max(x.a.u, x.b.u) < 10);
+  const lowEnd = Math.min(...bigFoot.flatMap(x => [x.a.u, x.b.u]));
+  check('two gables, E1: the big rake\'s heavy foot stops at the small gable\'s rake board (u ~7.15), not through it to the peak',
+    bigFoot.length > 0 && lowEnd > 7.0, `low end u ${lowEnd.toFixed(2)}`);
 }
 
 const failed = CHECKS.filter(c => !c.ok);
