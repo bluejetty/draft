@@ -1000,13 +1000,18 @@
     }
     // A FLIGHT HELD BY ITS CORNER (stairCornerAt): what it has landed on,
     // or the corner cyan in the hand.
-    if (moveDrag?.kind === 'stair' && moveDrag.corner) {
+    // HELD ANYWHERE, what its outline caught (stairSeek): an edge lit on the
+    // face it lies on, a corner ringed on what it landed on.
+    if (moveDrag?.kind === 'stair' && (moveDrag.corner || moveDrag.lit)) {
       canvas.removeAttribute('data-snap-node');
-      const held = { x: moveDrag.corner.x + moveDrag.stair.start.x - moveDrag.start.x, y: 0,
-        z: moveDrag.corner.z + moveDrag.stair.start.z - moveDrag.start.z };
+      if (moveDrag.lit?.own) paintFaceLit(moveDrag.lit.own);
       if (moveDrag.lit) paintDonut(moveDrag.lit.pt, tierOf(moveDrag.lit));
-      else paintDonut(held, 'grab');
-      grabMark(held);
+      if (moveDrag.corner) {
+        const held = { x: moveDrag.corner.x + moveDrag.stair.start.x - moveDrag.start.x, y: 0,
+          z: moveDrag.corner.z + moveDrag.stair.start.z - moveDrag.start.z };
+        if (!moveDrag.lit) paintDonut(held, 'grab');
+        grabMark(held);
+      }
       markMagnet(moveDrag.lit || null);
       return;
     }
@@ -1046,6 +1051,7 @@
       canvas.removeAttribute('data-snap-node');
       paintMagnets(mv.cursor, mv.magnet, mv.lit, { nodes: mv.kind === 'selection' });
       if (mv.lit?.guide) paintGuide(mv.lit.guide, tierOf(mv.lit));
+      if (mv.lit?.own) paintFaceLit(mv.lit.own);
       if (mv.lit) paintDonut(mv.lit.pt, tierOf(mv.lit));
       markMagnet(mv.lit);
       return;

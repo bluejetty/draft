@@ -1057,12 +1057,45 @@
     return { c: { x: (stair.start.x + stair.end.x) / 2, z: (stair.start.z + stair.end.z) / 2 },
       u, n: { x: -u.z, z: u.x }, len, half: (Number(stair.widthFt) || 3) / 2 };
   };
-  // A STRAIGHT FLIGHT'S FOUR CORNERS, start side then end side.
+  // A STRAIGHT FLIGHT'S FOUR CORNERS, start side then end side; AN L'S OR
+  // A U'S every corner of its flights and landing (jb, 15 Nov 2026: "make
+  // the stair corners NODE snapable so i can position the corner or edge to
+  // a edge wall") -- they had none, so a turned stair could not be held by
+  // a corner at all.
   const stairCorners = stair => {
     const f = stairFrame(stair);
-    if (!f) return [];
+    if (!f) return stairOutlineOf(stair).corners;
     const side = (p, k) => ({ x: p.x + f.n.x * f.half * k, z: p.z + f.n.z * f.half * k });
     return [side(stair.start, 1), side(stair.start, -1), side(stair.end, -1), side(stair.end, 1)];
+  };
+  // ITS OUTLINE AS A MAGNET READS IT: every corner once, and every edge with
+  // open floor on one side (an edge between a flight and its landing is
+  // inside the stair and lines up with nothing). A straight flight is its
+  // frame's rectangle, the one the face lock measures; a turned one is the
+  // rings a click picks it by. Edges carry their run `u`, normal `n` and
+  // length, for stairSeek (model/07).
+  const stairOutlineOf = stair => {
+    const f = stairFrame(stair);
+    const rings = f ? [(() => {
+      const side = (p, k) => ({ x: p.x + f.n.x * f.half * k, z: p.z + f.n.z * f.half * k });
+      return [side(stair.start, 1), side(stair.start, -1), side(stair.end, -1), side(stair.end, 1)];
+    })()] : stairRings(stair, stairLevels());
+    const corners = [];
+    rings.forEach(ring => ring.forEach(p => {
+      if (!corners.some(c => Math.abs(c.x - p.x) < 1e-4 && Math.abs(c.z - p.z) < 1e-4)) corners.push({ x: p.x, z: p.z });
+    }));
+    const inside = p => rings.some(ring => pointInRing(ring, p));
+    const edges = [];
+    rings.forEach(ring => ring.forEach((a, i) => {
+      const b = ring[(i + 1) % ring.length];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 1e-6) return;
+      const u = { x: (b.x - a.x) / len, z: (b.z - a.z) / len }, n = { x: -u.z, z: u.x };
+      const m = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, e = 0.02;
+      const open = !inside({ x: m.x + n.x * e, z: m.z + n.z * e }) || !inside({ x: m.x - n.x * e, z: m.z - n.z * e });
+      if (open) edges.push({ a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z }, u, n, len });
+    }));
+    return { corners, edges };
   };
   // THE CORNER A PRESS TAKES (Movie, 26 Oct, the one snap rule: a whole
   // thing dragged is held by the nearest of its own corners within a node's
