@@ -593,14 +593,15 @@ if (!window.DraftLevelAssembly) {
   const projectRoofFor = (drawing, row = 'house', type = drawing?.buildType) => {
     const rows = drawing?.sectionTable?.rows || {};
     const own = row === 'house' ? (isSplitType(type) ? rows[type] : null) : rows[row];
-    const overhangFt = cellNumber(own?.roofOverhangFt) ?? positiveNumber(drawing?.roofOverhang) ?? 2;
+    // An eave of 0 is a real roof (jb, 15 Nov), so the overhangs read 0 as a number.
+    const overhangFt = cellNumber(own?.roofOverhangFt) ?? cellNumber(drawing?.roofOverhang) ?? 2;
     const pitch = cellNumber(own?.roofPitch) ?? positiveNumber(drawing?.roofPitch) ?? 4;
     // THE SIDE EAVE FALLS BACK TO THE MAIN ONE, which is what makes this
     // change invisible to every drawing that predates it: a roof cut with one
     // number is symmetrical, and asking it for its side eave gives that same
     // number back. Only a drafter who types into SIDE OVERHANG gets two.
     const sideOverhangFt = cellNumber(own?.roofSideOverhangFt)
-      ?? positiveNumber(drawing?.roofSideOverhang) ?? overhangFt;
+      ?? cellNumber(drawing?.roofSideOverhang) ?? overhangFt;
     return {
       overhangFt: Math.min(6, Math.max(0, overhangFt)),
       sideOverhangFt: Math.min(6, Math.max(0, sideOverhangFt)),

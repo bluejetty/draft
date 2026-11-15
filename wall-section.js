@@ -79,7 +79,8 @@ if (!window.DraftWallSection) {
     const attachment = fdnIsIcf ? 'sill' : (saved.foundationAttachment === 'ladder' ? 'ladder' : 'sill');
     const ladderIn = PP.ladderDepthIn(saved.foundationLadderIn);
     const roofPitch = positive(saved.roofPitch, 4);
-    const roofOverhang = positive(saved.roofOverhang, 2);
+    const roofOverhang = saved.roofOverhang != null && Number(saved.roofOverhang) >= 0
+      ? Number(saved.roofOverhang) : 2;
     const heelIn = saved.roofHeelIn != null && Number.isFinite(Number(saved.roofHeelIn))
       ? Number(saved.roofHeelIn) : PP.roofHeelIn(ROOF_FASCIA_IN, roofOverhang, roofPitch);
     // PROJECT: houseSillFt / attachedOffsetFt / derivedGradeOffsetFt.
