@@ -2486,7 +2486,7 @@
     const lowest = floors.length > 0 && Number(floors[0].id) === Number(levelId);
     const totalIn = id => (WT.WALL_TYPES.find(type => type.id === id) || {}).totalIn || 0;
     const thickest = (walls, fallbackIn) => walls.reduce((most, wall) =>
-      Math.max(most, totalIn(wall.wallType || 'stud_2x6')), fallbackIn);
+      Math.max(most, WT.isCustomWall(wall) ? WT.wallTypeOf(wall).totalIn : totalIn(wall.wallType || 'stud_2x6')), fallbackIn);
     // EXTERIOR MEANS STANDING ON THE OUTLINE, and that test is geometry-2d's
     // edgeOnLoop -- the same one the garage walls and the auto-pile skip use.
     //

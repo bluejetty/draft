@@ -57,6 +57,7 @@ if (!window.DraftCutViewEnv) {
         view: wall?.view || 'plan',
         ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
         wallType: wall?.wallType,
+        ...(wall?.wallType === 'custom' && Number(wall?.widthIn) > 0 ? { widthIn: Number(wall.widthIn) } : {}),
         baseHeight: num(wall?.baseHeight) ?? 0,
         // HUNG UNDER A ROOF (`hoodOf`, boneyard-edit.js roofHood): a wall that
         // stands on the storey below's ceiling, with no floor of its own under it.

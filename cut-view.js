@@ -1311,7 +1311,7 @@ if (!window.DraftCutView) {
       const t = ((c.x - a.x) * (b.z - a.z) - (c.z - a.z) * (b.x - a.x)) / denom;
       if (s < 0 || s > 1 || t < 0 || t > 1) return;
       const px = a.x + (b.x - a.x) * s, pz = a.z + (b.z - a.z) * s;
-      const type = WALL_TYPES.find(w => w.id === wall.wallType);
+      const type = (window.DraftWallTypes && window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : WALL_TYPES.find(w => w.id === wall.wallType));
       const wallLen = Math.hypot(d.x - c.x, d.z - c.z);
       // A skewed wall reads wider on the section — its thickness over the
       // sine of the crossing angle, capped so near-parallel walls stay sane.
@@ -1803,7 +1803,7 @@ if (!window.DraftCutView) {
       const p1 = proj(wall.start), p2 = proj(wall.end);
       if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
       if ((wall.view || 'plan') === 'foundation') {
-        const type = WALL_TYPES.find(w => w.id === wall.wallType);
+        const type = (window.DraftWallTypes && window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : WALL_TYPES.find(w => w.id === wall.wallType));
         fdnFaces.push({
           // ── THE WALL RECORD COMES WITH IT ─────────────────────────────
           //

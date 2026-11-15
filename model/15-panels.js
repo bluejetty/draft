@@ -552,9 +552,17 @@
     paint();
   };
 
-  const applyToWalls = (walls, patch) => {
+  const applyToWalls = (walls, patchOrFn) => {
+    const patch = typeof patchOrFn === 'function' ? {} : { ...patchOrFn };
+    // ONE UNDO puts every wall in hand back.
+    undoStack.push({ kind: 'props', edits: walls.map(item => ({ item, before: { ...item } })) });
     walls.forEach(wall => {
-      Object.assign(wall, patch);
+      const own = typeof patchOrFn === 'function' ? patchOrFn(wall) : patchOrFn;
+      Object.assign(wall, own);
+      if (own.wallType !== undefined) patch.wallType = own.wallType;
+      // A CUSTOM WIDTH GOES WITH ITS TYPE: a wall set back to a table type
+      // keeps no width of its own.
+      if (own.wallType !== undefined && own.wallType !== 'custom') delete wall.widthIn;
       // A DRAFTER'S CHANGE ENDS THE SUBSTITUTION (MODEL.dc.html:18114). The
       // loader records a wall whose retired type was mapped onto a current
       // one and the saver puts the ORIGINAL back; without this line a wall
@@ -568,6 +576,298 @@
     markDirty();
     showSelectionProps();
     paint();
+  };
+
+  // ── CUSTOM WIDTH WALL (jb, 15 Nov 2026) ───────────────────────────────
+  //
+  // "add one more selection that allows the user to enter the WIDTH of the
+  // wall and just make a basic wall that width". One more chip at the end of
+  // the TYPE row; the width rides on the wall (`widthIn`), so each custom
+  // wall can be its own width. Picking it starts at the width the wall
+  // already is, so nothing jumps until a width is typed.
+  const CUSTOM_CHIP = ['custom', 'Custom Width'];
+  const wallTypeChips = types => [...types.map(type => [type.id, type.label]), CUSTOM_CHIP];
+  const wallTypePatch = (walls, id) => (id === 'custom'
+    ? wall => ({ wallType: 'custom', widthIn: window.DraftWallTypes.wallTypeOf(wall).totalIn })
+    : { wallType: id });
+  // A WIDTH IS INCHES: a bare 4 1/2 or 4.5 is inches here (a wall is never
+  // feet thick), and 4 1/2", 0'-5", 115mm and 0.115m read as they do in
+  // every other box.
+  const parseWallWidth = text => {
+    const F = window.DraftFormatters;
+    const WT = window.DraftWallTypes;
+    let raw = String(text || '').trim();
+    if (!raw) return { error: 'Type a width, like 4 1/2" or 115mm.' };
+    if (!/['"a-z]/i.test(raw)) raw += '"';
+    const parsed = F.parseArchitecturalLength(raw);
+    if (!parsed.ok) return { error: parsed.error };
+    const inches = Math.round(parsed.inches * 16) / 16;
+    if (WT.customWidthIn(inches) == null) {
+      return { error: `A custom wall is ${F.formatInchesOnly(WT.CUSTOM_WALL_MIN_IN)} to ${F.formatInchesOnly(WT.CUSTOM_WALL_MAX_IN)} wide.` };
+    }
+    return { inches };
+  };
+  const wallWidthField = (label, inchesNow, commit) => {
+    const F = window.DraftFormatters;
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'prop-field';
+    input.dataset.wallWidthField = '';
+    input.setAttribute('aria-label', label);
+    const shown = () => (inchesNow == null ? '' : F.formatInchesOnly(inchesNow));
+    input.value = shown();
+    if (inchesNow == null) input.placeholder = '—';
+    const apply = () => {
+      if (input.value.trim() === shown()) return;
+      if (inchesNow == null && !input.value.trim()) return;
+      const got = parseWallWidth(input.value);
+      if (got.error) { sayOnStrip(got.error); input.value = shown(); return; }
+      const refusal = commit(got.inches);
+      if (refusal) sayOnStrip(refusal);
+      showSelectionProps();
+    };
+    input.addEventListener('blur', apply);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+    });
+    row.append(name, input);
+    return row;
+  };
+
+  // ── MAIN WALLS AND THE SPECIAL CASE (jb, 15 Nov 2026) ─────────────────
+  //
+  // "for the WALL - OBJ / PROP can we add a MAIN, and SPECIAL CASES, same
+  // idea as the roof. so i can change the wall height, type, without the
+  // others changing. or if i go back to default it will take main
+  // properties" -- and, offered per floor or per assembly, jb took per
+  // assembly. So a wall in an assembly (Y) shows two sections:
+  //   MAIN WALLS            TYPE, BASE, TOP for every wall of the assembly
+  //                         that has not been given its own;
+  //   THIS WALL (SPECIAL)   the picked wall's own, each reading MAIN until
+  //                         it is set; MAIN (or the x) puts it back.
+  // The assembly keeps MAIN in the `wallSettings` it has carried since the
+  // first assembly; a wall lists what it keeps for itself in `own`. Every
+  // wall still carries its own values, so nothing that paints a wall has to
+  // know about either.
+  //
+  // A WALL THAT ALREADY DIFFERS FROM MAIN IS SPECIAL without an `own` -- an
+  // assembly Y'd from walls of two heights must not flatten one of them the
+  // first time MAIN is touched.
+  const WALL_OWN_KEYS = ['wallType', 'baseHeight', 'topHeight'];
+  const wallValue = (wall, key) => (key === 'wallType'
+    ? { wallType: wall.wallType || 'stud_2x6',
+      ...(window.DraftWallTypes.isCustomWall(wall) ? { widthIn: window.DraftWallTypes.wallTypeOf(wall).totalIn } : {}) }
+    : Number(wall[key]) || 0);
+  const sameWallValue = (key, a, b) => (key === 'wallType'
+    ? a?.wallType === b?.wallType && (a?.wallType !== 'custom' || Math.abs((a.widthIn || 0) - (b.widthIn || 0)) < 1e-6)
+    : Math.abs((a ?? 0) - (b ?? 0)) < 1e-6);
+  const mostCommon = (kin, key) => {
+    const seen = [];
+    kin.forEach(wall => {
+      const v = wallValue(wall, key);
+      const hit = seen.find(s => sameWallValue(key, s.v, v));
+      if (hit) hit.n += 1; else seen.push({ v, n: 1 });
+    });
+    return seen.sort((a, b) => b.n - a.n)[0]?.v ?? null;
+  };
+  const wallMainValue = (group, kin, key) => {
+    const kept = group?.wallSettings;
+    if (key === 'wallType' && kept?.wallType) {
+      return { wallType: kept.wallType, ...(kept.wallType === 'custom'
+        ? { widthIn: window.DraftWallTypes.customWidthIn(kept.widthIn) ?? window.DraftWallTypes.CUSTOM_WALL_DEFAULT_IN } : {}) };
+    }
+    if (key !== 'wallType' && Number.isFinite(Number(kept?.[key])) && kept?.[key] !== null) return Number(kept[key]);
+    return mostCommon(kin, key);
+  };
+  const wallOwns = (wall, key, main) => (Array.isArray(wall.own) && wall.own.includes(key))
+    || !sameWallValue(key, wallValue(wall, key), main);
+  const setWallOwn = (wall, key, on) => {
+    const list = (Array.isArray(wall.own) ? wall.own : []).filter(k => k !== key && WALL_OWN_KEYS.includes(k));
+    if (on) list.push(key);
+    if (list.length) wall.own = list; else delete wall.own;
+  };
+  const writeWallValue = (wall, key, v) => {
+    if (key === 'wallType') {
+      wall.wallType = v.wallType;
+      if (v.wallType === 'custom') wall.widthIn = v.widthIn; else delete wall.widthIn;
+      substitutedWallTypes.delete(wall.id);
+    } else wall[key] = v;
+  };
+  // One UNDO, and nothing at all if any wall would end with its top at or
+  // under its base.
+  const editWalls = (list, change) => {
+    const edits = list.map(item => ({ item, before: { ...item } }));
+    list.forEach(change);
+    const F = window.DraftFormatters;
+    const bad = list.find(item => Array.isArray(drawing?.walls) && drawing.walls.includes(item)
+      && !((Number(item.topHeight) || 0) > (Number(item.baseHeight) || 0)));
+    if (bad) {
+      edits.forEach(({ item, before }) => {
+        Object.keys(item).forEach(key => { if (!(key in before)) delete item[key]; });
+        Object.assign(item, before);
+      });
+      return `A wall from ${F.formatArchitecturalInches((Number(bad.baseHeight) || 0) * 12)} to `
+        + `${F.formatArchitecturalInches((Number(bad.topHeight) || 0) * 12)} is not a wall.`;
+    }
+    undoStack.push({ kind: 'props', edits });
+    showStairFitNote(followStairLocks());
+    markDirty();
+    showSelectionProps();
+    paint();
+    return null;
+  };
+  // A MAIN change: every wall that follows MAIN takes it, and the assembly
+  // keeps it.
+  const setWallMain = (group, kin, key, v) => {
+    const main = wallMainValue(group, kin, key);
+    const followers = kin.filter(wall => !wallOwns(wall, key, main));
+    return editWalls([group, ...followers], item => {
+      if (item === group) {
+        const ws = { ...(group.wallSettings || {}) };
+        if (key === 'wallType') {
+          ws.wallType = v.wallType;
+          if (v.wallType === 'custom') ws.widthIn = v.widthIn; else delete ws.widthIn;
+        } else ws[key] = v;
+        group.wallSettings = ws;
+        return;
+      }
+      writeWallValue(item, key, v);
+    });
+  };
+  // This wall's own value, or (v null) back to MAIN.
+  const setWallSpecial = (group, kin, wall, key, v) => {
+    const main = wallMainValue(group, kin, key);
+    return editWalls([wall], item => {
+      setWallOwn(item, key, v != null);
+      writeWallValue(item, key, v == null ? main : v);
+    });
+  };
+  const wallSectionHead = (text, key) => {
+    const head = document.createElement('div');
+    head.className = 'props-title';
+    head.dataset.wallSection = key;
+    head.style.marginTop = '8px';
+    head.style.paddingTop = '4px';
+    head.style.borderTop = '1px solid currentColor';
+    head.style.fontWeight = '600';
+    head.textContent = text;
+    return head;
+  };
+  const wallMainNode = (group, kin, lone, types) => {
+    const WT = window.DraftWallTypes;
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches(feet * 12);
+    const wrap = document.createElement('div');
+    wrap.dataset.wallMain = '';
+    const say = refusal => { if (refusal) sayOnStrip(refusal); };
+    const mains = Object.fromEntries(WALL_OWN_KEYS.map(key => [key, wallMainValue(group, kin, key)]));
+    const specials = key => kin.filter(wall => wallOwns(wall, key, mains[key])).length;
+    const tail = key => (specials(key) ? ` (${specials(key)} SPECIAL)` : '');
+    const typeValue = (id, from) => (id === 'custom'
+      ? { wallType: 'custom', widthIn: from?.wallType === 'custom' ? from.widthIn : WT.wallTypeOf(from).totalIn }
+      : { wallType: id });
+    const titled = (row, text) => { row.firstChild.textContent = text; return row; };
+
+    wrap.append(wallSectionHead(`MAIN WALLS — ${group.name || 'ASSEMBLY'} (${kin.length} WALLS)`, 'main'));
+    const mainType = mains.wallType;
+    wrap.append(titled(propRow('TYPE', wallTypeChips(types), mainType?.wallType ?? null,
+      id => say(setWallMain(group, kin, 'wallType', typeValue(id, mainType)))), `TYPE${tail('wallType')}`));
+    if (mainType?.wallType === 'custom') {
+      wrap.append(wallWidthField('WIDTH', mainType.widthIn,
+        inches => setWallMain(group, kin, 'wallType', { wallType: 'custom', widthIn: inches })));
+    }
+    [['baseHeight', 'BASE'], ['topHeight', 'TOP']].forEach(([key, label]) => {
+      wrap.append(titled(propField(label, mains[key],
+        feet => setWallMain(group, kin, key, feet), showSelectionProps), `${label}${tail(key)}`));
+    });
+    if (!lone) {
+      const note = document.createElement('div');
+      note.className = 'sel-help';
+      note.textContent = 'Click one wall of the assembly to give it its own TYPE, BASE or TOP (SPECIAL CASE).';
+      wrap.append(note);
+      return wrap;
+    }
+
+    wrap.append(wallSectionHead('THIS WALL (SPECIAL CASE)', 'special'));
+    const ownsType = wallOwns(lone, 'wallType', mainType);
+    const loneType = wallValue(lone, 'wallType');
+    const typeRow = propRow('TYPE', [['main', 'MAIN'], ...wallTypeChips(types)],
+      ownsType ? loneType.wallType : 'main',
+      id => {
+        if (id === 'main') { say(setWallSpecial(group, kin, lone, 'wallType', null)); return; }
+        const v = typeValue(id, loneType);
+        // A GUARDRAIL BRINGS ITS 42" WITH IT, as the toggle always has --
+        // and that height is this wall's own too.
+        if (id === 'guardrail' && Number(lone.topHeight) !== GUARDRAIL_HEIGHT_FT) {
+          say(editWalls([lone], item => {
+            setWallOwn(item, 'wallType', true); writeWallValue(item, 'wallType', v);
+            setWallOwn(item, 'topHeight', true); item.topHeight = GUARDRAIL_HEIGHT_FT;
+          }));
+          return;
+        }
+        say(setWallSpecial(group, kin, lone, 'wallType', v));
+      });
+    typeRow.dataset.propRow = 'special type';
+    wrap.append(typeRow);
+    if (ownsType && loneType.wallType === 'custom') {
+      const width = wallWidthField('WIDTH', loneType.widthIn,
+        inches => setWallSpecial(group, kin, lone, 'wallType', { wallType: 'custom', widthIn: inches }));
+      width.dataset.propRow = 'special width';
+      wrap.append(width);
+    }
+    [['baseHeight', 'BASE'], ['topHeight', 'TOP']].forEach(([key, label]) => {
+      const own = wallOwns(lone, key, mains[key]);
+      const row = document.createElement('div');
+      row.dataset.propRow = `special ${label.toLowerCase()}`;
+      const name = document.createElement('div');
+      name.className = 'props-title';
+      name.textContent = label;
+      const line = document.createElement('div');
+      line.style.display = 'flex';
+      line.style.gap = '4px';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'prop-field';
+      input.dataset.wallOwnField = key;
+      input.setAttribute('aria-label', `${label}, this wall`);
+      input.value = own ? ftIn(Number(lone[key]) || 0) : '';
+      input.placeholder = `MAIN (${ftIn(mains[key] ?? 0)})`;
+      const apply = () => {
+        const text = input.value.trim();
+        if (!text || /^main$/i.test(text)) {
+          if (own) say(setWallSpecial(group, kin, lone, key, null));
+          else showSelectionProps();
+          return;
+        }
+        if (own && text === ftIn(Number(lone[key]) || 0)) return;
+        const parsed = F.parseArchitecturalLength(text);
+        if (!parsed.ok) { sayOnStrip(parsed.error); showSelectionProps(); return; }
+        say(setWallSpecial(group, kin, lone, key, parsed.inches / 12));
+      };
+      input.addEventListener('blur', apply);
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+      });
+      line.append(input);
+      if (own) {
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'sel-chip';
+        back.dataset.wallOwnClear = key;
+        back.textContent = '✕';
+        back.title = 'Back to MAIN WALLS';
+        back.addEventListener('click', () => say(setWallSpecial(group, kin, lone, key, null)));
+        line.append(back);
+      }
+      row.append(name, line);
+      wrap.append(row);
+    });
+    return wrap;
   };
 
   const wallPropsNode = walls => {
@@ -584,9 +884,34 @@
     // two views agrees on nothing and gets the whole table.
     const view = agreedOn(walls, wall => wall.view || 'plan');
     const types = view === null ? WT.WALL_TYPES : contextWallTypes(view);
-    box.append(propRow('TYPE', types.map(type => [type.id, type.label]),
+
+    // ── ONE ASSEMBLY: MAIN WALLS + THIS WALL (SPECIAL CASE) ──────────────
+    // jb, 15 Nov 2026 -- the roof's MAIN ROOF / SPECIAL CASE idea, per
+    // assembly. See wallMainNode.
+    const owner = groupOf({ type: 'wall', item: walls[0] });
+    const kin = owner ? itemsOfGroup(owner).filter(e => e.type === 'wall').map(e => e.item) : [];
+    if (kin.length > 1 && walls.every(wall => kin.includes(wall))) {
+      const lone = walls.length === 1 ? walls[0]
+        : (wallPicked && walls.includes(wallPicked) ? wallPicked : null);
+      box.append(wallMainNode(owner, kin, lone, types));
+      box.append(wallSectionHead(lone ? 'WALL SIDE (THIS WALL)' : 'WALL SIDE (ALL PICKED)', 'side'));
+      const sideOf = lone ? [lone] : walls;
+      box.append(propRow('WALL SIDE', REF_LINES,
+        agreedOn(sideOf, wall => wall.refLine || 'center'),
+        id => applyToWalls(sideOf, { refLine: id })));
+      return box;
+    }
+
+    box.append(propRow('TYPE', wallTypeChips(types),
       agreedOn(walls, wall => wall.wallType || 'stud_2x6'),
-      id => applyToWalls(walls, { wallType: id })));
+      id => applyToWalls(walls, wallTypePatch(walls, id))));
+    // CUSTOM WIDTH: the width box, only while every wall in hand is one.
+    if (walls.every(wall => WT.isCustomWall(wall))) {
+      box.append(wallWidthField('WIDTH', agreedOn(walls, wall => WT.wallTypeOf(wall).totalIn), inches => {
+        applyToWalls(walls, { wallType: 'custom', widthIn: inches });
+        return null;
+      }));
+    }
 
     box.append(propRow('WALL SIDE', REF_LINES,
       agreedOn(walls, wall => wall.refLine || 'center'),

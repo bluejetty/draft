@@ -54,10 +54,12 @@ if (!window.DraftLayoutPlan) {
       .map(wall => {
         const start = intern(wall.start), end = intern(wall.end);
         if (!start || !end || start === end) return null;
-        const wallType = WALL_TYPES.some(type => type.id === wall.wallType)
+        const custom = wall.wallType === 'custom' && Number(wall.widthIn) > 0;
+        const wallType = custom || WALL_TYPES.some(type => type.id === wall.wallType)
           ? wall.wallType
           : (LEGACY_WALL_TYPES[wall.wallType] || 'stud_2x6');
         return {
+          ...(custom ? { widthIn: Number(wall.widthIn) } : {}),
           id: wall.id,
           start,
           end,
@@ -99,7 +101,7 @@ if (!window.DraftLayoutPlan) {
   function wallBounds(walls) {
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     walls.forEach(wall => {
-      const def = WALL_TYPES.find(type => type.id === wall.wallType) || WALL_TYPES[1];
+      const def = (window.DraftWallTypes && window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : (WALL_TYPES.find(type => type.id === wall.wallType) || WALL_TYPES[1]));
       // A WHOLE ASSEMBLY EACH WAY, ON PURPOSE (audit 3.2 asked). A wall drawn
       // on its LEFT or RIGHT face puts all of its thickness on one side of
       // the line, and a mitred corner carries the outer face past the
@@ -359,8 +361,7 @@ if (!window.DraftLayoutPlan) {
   });
 
   const thicknessFt = wall =>
-    ((WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1])
-      .totalIn / 12);
+    ((window.DraftWallTypes && window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : (WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1])).totalIn / 12);
 
   // Paint one plan viewport. The ORDER and the FILTERING are
   // plan-composition.js's now, shared with the Model Space; this builds the
@@ -451,7 +452,8 @@ if (!window.DraftLayoutPlan) {
         roof.drawnOn != null ? lowerEnv : roofEnv);
     });
     const thicknessFt = wall => {
-      const type = WALL_TYPES.find(t => t.id === wall.wallType)
+      const type = (window.DraftWallTypes?.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : null)
+        || WALL_TYPES.find(t => t.id === wall.wallType)
         || WALL_TYPES.find(t => t.id === LEGACY_WALL_TYPES[wall.wallType])
         || WALL_TYPES.find(t => t.id === 'stud_2x6');
       return (type ? type.totalIn : 5.5) / 12;
@@ -1122,7 +1124,8 @@ if (!window.DraftLayoutPlan) {
       const level = num(body.levelId);
       const walls = planWalls(saved, level).filter(wall => wall.wallType);
       const type = walls.length
-        ? (WALL_TYPES.find(t => t.id === walls[0].wallType)
+        ? ((window.DraftWallTypes?.isCustomWall(walls[0]) ? window.DraftWallTypes.wallTypeOf(walls[0]) : null)
+          || WALL_TYPES.find(t => t.id === walls[0].wallType)
           || WALL_TYPES.find(t => t.id === LEGACY_WALL_TYPES[walls[0].wallType]))
         : null;
       const thick = (type ? type.totalIn : 5.5) / 12;

@@ -135,6 +135,7 @@ if (!window.DraftEstimates) {
     const WT = window.DraftWallTypes;
     const G = window.DraftGeometry2D;
     const thick = wall => {
+      if (WT?.isCustomWall(wall)) return WT.wallTypeOf(wall).totalIn;
       const def = WT ? WT.WALL_TYPES.find(w => w.id === wall.wallType) : null;
       return def ? def.totalIn : 0;
     };

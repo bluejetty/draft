@@ -1380,6 +1380,7 @@
     if (siteDatumCache.epoch !== modelEpoch || siteDatumCache.shelf !== shelf) {
       const WT = window.DraftWallTypes;
       const thicknessFt = wall => {
+        if (WT?.isCustomWall(wall)) return WT.wallThicknessFt(wall);
         const def = WT && WT.WALL_TYPES.find(type => type.id === wall.wallType);
         return def ? def.totalIn / 12 : 0;
       };

@@ -1336,7 +1336,7 @@
         const onFdn = face && (face.wall.view || 'plan') === 'foundation';
         say(face
           ? `${onFdn ? 'Foundation' : ''}`
-            + `${WT.WALL_TYPES.find(t => t.id === face.wall.wallType)?.label || 'Wall'}`
+            + `${(WT.isCustomWall(face.wall) ? WT.wallTypeOf(face.wall) : WT.WALL_TYPES.find(t => t.id === face.wall.wallType))?.label || 'Wall'}`
               .replace(/^/, onFdn ? ' ' : '')
             + `, ${(face.hi - face.lo).toFixed(1)} ft on ${currentElev}`
           : 'Nothing there — click a wall face or the exposed concrete.');

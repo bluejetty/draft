@@ -558,8 +558,62 @@ if (!window.DraftWallTypes) {
     return !!span && Number.isFinite(lines?.head) && span.hi < lines.head - 1e-6;
   };
 
+  // ── CUSTOM WIDTH (jb, 15 Nov 2026) ─────────────────────────────────────
+  //
+  // "add one more selection that allows the user to enter the WIDTH of the
+  // wall and just make a basic wall that width ... so the user can enter a
+  // specific width he wants for a specific wall". The TYPE is 'custom' and
+  // the width lives on the wall itself (`widthIn`), so two custom walls can
+  // be two widths. It is ONE plain layer -- the stud fill, which is the
+  // blank wall colour with no hatch -- so it reads as a basic wall.
+  //
+  // wallTypeOf(wall) IS THE ONE ANSWER to "what is this wall made of", for
+  // every painter: a custom wall gets its own row built from its width, any
+  // other the table's row (a retired id its substitute, an unknown one 2x6).
+  const CUSTOM_WALL_TYPE_ID = 'custom';
+  const CUSTOM_WALL_MIN_IN = 0.5;
+  const CUSTOM_WALL_MAX_IN = 48;
+  const CUSTOM_WALL_DEFAULT_IN = 4.5;
+  const customWidthIn = value => {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= CUSTOM_WALL_MIN_IN && n <= CUSTOM_WALL_MAX_IN ? n : null;
+  };
+  const inchWords = inches => {
+    const F = window.DraftFormatters;
+    return F?.formatInchesOnly ? F.formatInchesOnly(inches) : `${inches}"`;
+  };
+  const customCache = new Map();
+  const customWallType = widthIn => {
+    const w = customWidthIn(widthIn) ?? CUSTOM_WALL_DEFAULT_IN;
+    if (!customCache.has(w)) {
+      customCache.set(w, Object.freeze({ id: CUSTOM_WALL_TYPE_ID, custom: true,
+        label: `Custom Width  (${inchWords(w)})`, totalIn: w,
+        layers: Object.freeze([Object.freeze({ in: w, fill: 'stud' })]) }));
+    }
+    return customCache.get(w);
+  };
+  const isCustomWall = wall => (wall?.wallType || '') === CUSTOM_WALL_TYPE_ID;
+  const wallTypeOf = (wall, fallbackId = 'stud_2x6') => {
+    if (isCustomWall(wall)) return customWallType(wall.widthIn);
+    const id = wall?.wallType || fallbackId;
+    return WALL_TYPES.find(t => t.id === id)
+      || WALL_TYPES.find(t => t.id === LEGACY_WALL_TYPES[id])
+      || WALL_TYPES.find(t => t.id === fallbackId)
+      || WALL_TYPES[1];
+  };
+  const wallThicknessFt = wall => wallTypeOf(wall).totalIn / 12;
+
   window.DraftWallTypes = Object.freeze({
     WALL_TYPES,
+    CUSTOM_WALL_TYPE_ID,
+    CUSTOM_WALL_MIN_IN,
+    CUSTOM_WALL_MAX_IN,
+    CUSTOM_WALL_DEFAULT_IN,
+    customWidthIn,
+    customWallType,
+    isCustomWall,
+    wallTypeOf,
+    wallThicknessFt,
     LEGACY_WALL_TYPES,
     FOUNDATION_WALL_TYPE_IDS,
     EXTERIOR_WALL_TYPE_IDS,

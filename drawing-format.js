@@ -849,6 +849,15 @@ if (!window.DraftDrawingFormat) {
     return out;
   };
 
+  const WALL_OWN_KEYS = Object.freeze(['wallType', 'baseHeight', 'topHeight']);
+  const customWidth = value => {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0.5 && n <= 48 ? n : null;
+  };
+  const wallOwnOf = wall => {
+    const list = Array.isArray(wall?.own) ? [...new Set(wall.own.filter(k => WALL_OWN_KEYS.includes(k)))] : [];
+    return list.length ? list : null;
+  };
   const walls = (rawWalls, levelIds, env = {}) => {
     const types = env.wallTypes || [];
     const legacy = env.legacyWallTypes || {};
@@ -904,8 +913,16 @@ if (!window.DraftDrawingFormat) {
         // changes nothing for any of them.
         ...(String(wall?.body ?? '').trim()
           ? { body: String(wall.body).trim() } : {}),
-        wallType: types.some(type => type.id === wall?.wallType) ? wall.wallType
-          : (legacy[wall?.wallType] || defaultType),
+        // CUSTOM WIDTH (jb, 15 Nov 2026): the type is 'custom' and the width
+        // rides on the wall. A custom wall with no usable width is no custom
+        // wall, and reads as the default type.
+        ...(wall?.wallType === 'custom' && customWidth(wall?.widthIn) != null
+          ? { wallType: 'custom', widthIn: customWidth(wall.widthIn) }
+          : { wallType: types.some(type => type.id === wall?.wallType) ? wall.wallType
+            : (legacy[wall?.wallType] || defaultType) }),
+        // THE SETTINGS THIS WALL KEEPS FOR ITSELF against its assembly's MAIN
+        // WALLS (jb, 15 Nov 2026), as a roof piece keeps its `own`.
+        ...(wallOwnOf(wall) ? { own: wallOwnOf(wall) } : {}),
         baseHeight: number(wall?.baseHeight, 0),
         topHeight: number(wall?.topHeight, defaultTop),
         refLine: (raw => (raw === 'centre' ? 'center' : raw))(oneOf(wall?.refLine, refLines, 'left')),

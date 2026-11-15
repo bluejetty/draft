@@ -28,7 +28,7 @@ if (!window.DraftRender2D) {
     // material pattern is drawn: a listing reads walls as black, not as studs
     // and concrete.
     const solidWalls    = env.solid === true;
-    const wtDef = env.wallTypes.find(w => w.id === (seg.wallType || 'stud_2x6')) || env.wallTypes[1];
+    const wtDef = (window.DraftWallTypes && window.DraftWallTypes.isCustomWall(seg) ? window.DraftWallTypes.wallTypeOf(seg) : (env.wallTypes.find(w => w.id === (seg.wallType || 'stud_2x6')) || env.wallTypes[1]));
     const totalFt = wtDef.totalIn / 12;
     const half = totalFt / 2;
 
@@ -50,7 +50,7 @@ if (!window.DraftRender2D) {
     const alpha = preview ? 0.45 : 1;
 
     const wallMetrics = wall => {
-      const def = env.wallTypes.find(w => w.id === (wall.wallType || 'stud_2x6')) || env.wallTypes[1];
+      const def = (window.DraftWallTypes && window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : (env.wallTypes.find(w => w.id === (wall.wallType || 'stud_2x6')) || env.wallTypes[1]));
       const total = def.totalIn / 12;
       const mid = total / 2;
       const ref = wall.refLine || 'center';
