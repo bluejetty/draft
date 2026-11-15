@@ -1350,7 +1350,13 @@ if (!window.DraftDrawingFormat) {
         rail: oneOf(stair?.rail, ['left', 'right', 'both', 'none'], 'left'),
         shape,
         turn: oneOf(stair?.turn, ['left', 'right'], 'right'),
-        winders: shape === 'L' ? oneOf(Number(stair?.winders), [0, 2, 3], 0) : 0,
+        // A U HAS TWO LANDINGS (jb, 14 Nov 2026): `winders` is the upper
+        // (an L's only one), `lowerWinders` the lower, and `midRisers` the
+        // risers between them (0 = level). Written only when set.
+        winders: shape === 'straight' ? 0 : oneOf(Number(stair?.winders), [0, 2, 3], 0),
+        ...(shape === 'U' && [2, 3].includes(Number(stair?.lowerWinders)) ? { lowerWinders: Number(stair.lowerWinders) } : {}),
+        ...(shape === 'U' && Number.isInteger(Number(stair?.midRisers)) && Number(stair?.midRisers) > 0
+          ? { midRisers: Number(stair.midRisers) } : {}),
         auto: stair?.auto === true,
         ...(Number.isInteger(splitTreads) && splitTreads > 0 ? { splitTreads } : {}),
         ...(Number.isInteger(riserCount) && riserCount > 0 ? { riserCount } : {}),

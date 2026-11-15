@@ -157,35 +157,117 @@ if (!window.DraftStairGeometry) {
     return { fewest, most };
   };
 
-  // How a turned shape spends its treads. The one landing (flat, or 2-3
-  // winders on an L) sits near the middle of the descent and the straight
-  // treads split as evenly as possible around it; too few treads to turn
-  // falls back to a straight run. At most ONE landing per stair may be
-  // winders -- with a single landing the rule holds by construction; a
-  // future double-landing stair must keep its other landing flat.
+  // How a turned shape spends its treads. The landing (flat, or 2-3
+  // winders) sits near the middle of the descent and the straight treads
+  // split as evenly as possible around it; too few treads to turn falls back
+  // to a straight run.
+  //
+  // A U HAS TWO LANDINGS (jb, 14 Nov 2026: "on U shaped the wide landing
+  // should be considered 2 landings (put them level at first and then they
+  // can add a step by increasing the upper landing"; "on the U we should also
+  // allow stairs between the upper and lower landings too"). The UPPER
+  // landing is the first turn walking down (the record's `winders`), the
+  // LOWER the second (`lowerWinders`); each is FLAT or 2 or 3 winders.
+  // `midRisers` is how many risers part them: 0 is one level landing drawn
+  // as two squares (the stair as it always was), 1 is a single step between
+  // them, more is a short middle flight of midRisers - 1 treads across.
+  // An L has ONE landing (jb, same day: "l only has one landing it only has 2
+  // lengths of stairs").
+  //
+  // THE TREAD SLOTS THE TURN EATS (`landSlots`): a flat landing is one slot
+  // (it is a tread, a deep one), each winder a slot, each middle tread a
+  // slot. Two level flat landings are ONE slot between them.
   const stairShapeSplit = (stair, layout) => {
     const shape = STAIR_SHAPE_OPTIONS.some(option => option.id === stair.shape) ? stair.shape : 'straight';
     if (shape === 'straight' || layout.treads < 3) return null;
-    const winders = shape === 'L' && STAIR_WINDER_OPTIONS.includes(stair.winders) ? stair.winders : 0;
-    const landTreads = winders || 1; // the turn eats this many tread slots
+    const pick = n => (STAIR_WINDER_OPTIONS.includes(Number(n)) ? Number(n) : 0);
+    const winders = pick(stair.winders);
+    const lowerWinders = shape === 'U' ? pick(stair.lowerWinders) : 0;
+    const wantMid = shape === 'U' && Number.isInteger(stair.midRisers) && stair.midRisers > 0 ? stair.midRisers : 0;
+    const slotsFor = mid => {
+      if (shape === 'L') return winders || 1;
+      if (!winders && !lowerWinders && mid === 0) return 1;
+      return (winders || 1) + (lowerWinders || 1) + Math.max(0, mid - 1);
+    };
+    // Both flights keep a tread: a middle flight the rise cannot afford is
+    // shortened, never a flight taken to nothing.
+    let midRisers = wantMid;
+    while (midRisers > 0 && layout.treads - slotsFor(midRisers) < 2) midRisers -= 1;
+    let landTreads = slotsFor(midRisers);
+    // Winders the rise cannot afford fall back to the even turn the old page
+    // had: a flight too short for them still turns.
+    const fits = layout.treads - landTreads >= 2;
+    const w1 = fits ? winders : 0, w2 = fits ? lowerWinders : 0;
+    if (!fits) { midRisers = 0; landTreads = 1; }
+    const merged = shape === 'U' && !w1 && !w2 && midRisers === 0;
+    const midTreads = shape === 'U' && !merged ? Math.max(0, midRisers - 1) : 0;
     // Board #260: splitTreads overrides the even split with the TOP leg's
     // tread count -- the entry L's short flight (2-3 down to the front-wall
-    // landing), or its stacked mirror (treads - 2..3). Clamped so both
-    // legs keep at least one tread; absent = the even split, unchanged.
+    // landing), or its stacked mirror (treads - 2..3). OBJ / PROP's FLIGHTS
+    // row writes the same field (jb, 14 Nov 2026: "add more stairs to the
+    // upper portion (delete from lower) or vice versa"). Clamped so both legs
+    // keep at least one tread; absent = the even split, unchanged.
+    const avail = layout.treads - landTreads;
     const override = Number.isInteger(stair.splitTreads) && stair.splitTreads > 0
-      ? Math.min(stair.splitTreads, layout.treads - landTreads - 1)
+      ? Math.min(stair.splitTreads, avail - 1)
       : null;
     const t1 = override != null ? Math.max(1, override)
-      : Math.max(1, Math.floor((layout.treads - landTreads) / 2));
-    const t2 = Math.max(1, layout.treads - landTreads - t1);
-    return { shape, winders, t1, t2, landFt: stairLandFt(stair.widthFt), turn: stair.turn === 'left' ? 'left' : 'right' };
+      : Math.max(1, Math.floor(avail / 2));
+    const t2 = Math.max(1, avail - t1);
+    const runStep = stairStandards().treadRunIn / 12;
+    const gapFt = STAIR_U_GAP_IN / 12;
+    const widthFt = Number(stair.widthFt) || 3;
+    // The space between a U's two flights: the 4.5" for the rail or wall, or
+    // the middle flight's run where there is one.
+    const sepFt = shape === 'U' ? Math.max(gapFt, midTreads * runStep) : 0;
+    return { shape, winders: w1, lowerWinders: w2, midRisers: shape === 'U' ? midRisers : 0, midTreads, merged,
+      landTreads, t1, t2, landFt: stairLandFt(widthFt), turn: stair.turn === 'left' ? 'left' : 'right',
+      sepFt, offFt: shape === 'U' ? widthFt + sepFt : 0 };
+  };
+
+  // THE DESCENT UNFOLDED along the walk line, top to bottom: `{ treads }` for
+  // a stretch of treads (winders and a middle flight count as treads), `{ flatFt }`
+  // for a flat landing that deep. The section draws its flights from it.
+  const stairSequence = split => {
+    if (!split) return null;
+    const seq = [{ treads: split.t1 }];
+    const landing = n => seq.push(n ? { treads: n } : { flatFt: split.landFt });
+    if (split.shape === 'L' || split.merged) landing(split.winders);
+    else {
+      landing(split.winders);
+      if (split.midTreads) seq.push({ treads: split.midTreads });
+      landing(split.lowerWinders);
+    }
+    seq.push({ treads: split.t2 });
+    return seq;
+  };
+
+  // Fan lines across a landing square from the inside corner of its turn:
+  // 45 degrees (2 winders) or 30 / 60 (3 winders). `pivot` is that corner,
+  // `a` the way the flight came in, `b` the way the next goes out; the lines
+  // run until they meet the square's far sides (`aLen` along a, `bLen` along b).
+  const winderFan = (count, pivot, a, b, aLen, bLen) => {
+    const angles = count === 2 ? [45] : count === 3 ? [30, 60] : [];
+    return angles.map(deg => {
+      const rad = deg * Math.PI / 180;
+      const ra = Math.sin(rad), rb = Math.cos(rad);
+      const t = Math.min(ra > 0 ? aLen / ra : Infinity, rb > 0 ? bLen / rb : Infinity);
+      return [pivot, { x: pivot.x + a.x * ra * t + b.x * rb * t, z: pivot.z + a.z * ra * t + b.z * rb * t }];
+    });
   };
 
   // The stair's plan parts in world space: one straight run, or two runs
   // joined by the landing square -- L turns 90 degrees (min 36" clear each
   // way, winder division lines fanning from the inside corner of the turn);
-  // U switches back 180 degrees with the runs held 4.5" apart for a rail or
-  // wall. The walk polyline traces the descent for the DN arrow.
+  // U switches back 180 degrees over TWO landing squares, the runs held 4.5"
+  // apart for a rail or wall -- or further, with a middle flight between the
+  // squares. The walk polyline traces the descent for the DN arrow.
+  //
+  // `landing` is the turn's whole landing (both of a U's squares and what
+  // lies between, as one ring) for whoever wants the area; `landings` the
+  // squares one by one, each with its winder lines and `flatIndex` (which
+  // flat of the descent it is, for its elevation, or null for winders);
+  // `middle` the run between a U's squares, or null.
   const stairPlanParts = (stair, layout) => {
     const split = stairShapeSplit(stair, layout);
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
@@ -204,7 +286,7 @@ if (!window.DraftStairGeometry) {
     if (!split) {
       const end = { x: S.x + d.x * layout.runFt, z: S.z + d.z * layout.runFt };
       const rp = { x: -d.z, z: d.x }; // right side walking down
-      return { shape: 'straight', split: null, landing: null, gap: null,
+      return { shape: 'straight', split: null, landing: null, landings: [], middle: null, gap: null,
         runs: [{ start: S, dir: d, treads: layout.treads, lenFt: layout.runFt }],
         rails: railSides.map(side => [
           { x: S.x + rp.x * side * railOff, z: S.z + rp.z * side * railOff },
@@ -225,16 +307,9 @@ if (!window.DraftStairGeometry) {
       const run2Start = at(run1Len + L / 2, v1);
       const run2End = { x: run2Start.x + perp.x * run2Len, z: run2Start.z + perp.z * run2Len };
       // Winder treads pivot the inside corner of the turn -- the corner the
-      // entry face and the exit face share. Division lines fan across the
-      // square at 45 degrees (2 winders) or 30/60 (3 winders).
+      // entry face and the exit face share.
       const pivot = at(run1Len, v1);
-      const angles = split.winders === 2 ? [45] : split.winders === 3 ? [30, 60] : [];
-      const winderLines = angles.map(deg => {
-        const rad = deg * Math.PI / 180;
-        const rx = Math.sin(rad), ry = Math.cos(rad);
-        const t = Math.min(rx > 0 ? L / rx : Infinity, ry > 0 ? L / ry : Infinity);
-        return [pivot, at(run1Len + rx * t, v1 - ry * t)];
-      });
+      const winderLines = winderFan(split.winders, pivot, d, { x: -perp.x, z: -perp.z }, L, L);
       // A rail on one hand stays on that hand through the turn: the bar runs
       // the first flight at v = +/-railOff, corners over the landing, and
       // carries down the second flight at the matching offset.
@@ -243,22 +318,44 @@ if (!window.DraftStairGeometry) {
         const u = run1Len + L / 2 - side * s * railOff;     // offset on run 2
         return [at(0, v), at(u, v), at(u, v1 + run2Len)];
       });
-      return { shape: 'L', split, gap: null,
+      const landing = { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len, v1)],
+        winderLines, flatIndex: split.winders ? null : 0 };
+      return { shape: 'L', split, gap: null, middle: null,
         runs: [
           { start: S, dir: d, treads: split.t1, lenFt: run1Len },
           { start: run2Start, dir: perp, treads: split.t2, lenFt: run2Len },
         ],
-        landing: { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len, v1)], winderLines },
+        landing, landings: [landing],
         rails: lRails,
         walk: [S, at(run1Len + L / 2, 0), run2Start, run2End] };
     }
-    // U: switchback -- the landing spans both runs plus the 4.5" gap.
+    // U: switchback over two landing squares. Run 2's centreline stands
+    // `off` across from run 1's: a width and the space between the flights.
     const gapFt = STAIR_U_GAP_IN / 12;
-    const off = w + gapFt; // centreline to centreline
-    const v0 = -w / 2, v1 = off + w / 2;
+    const off = split.offFt;
+    const v0 = -w / 2, vTop = off + w / 2;
     const back = { x: -d.x, z: -d.z };
     const run2Start = at(run1Len, off);
     const run2End = { x: run2Start.x + back.x * run2Len, z: run2Start.z + back.z * run2Len };
+    // Where the upper square stops and the lower begins: level squares meet
+    // in the middle of the 4.5"; a middle flight stands between them.
+    const mid = split.midTreads > 0;
+    const upTop = mid ? w / 2 : w / 2 + split.sepFt / 2;
+    const lowBot = mid ? off - w / 2 : upTop;
+    const upFlat = split.winders ? null : 0;
+    const lowFlat = split.lowerWinders ? null : split.merged ? 0 : (upFlat == null ? 0 : 1);
+    // Upper square: in along +u, out along +v; its inside corner is on the
+    // run-1 side of the turn. Lower square: in along +v, out along -u.
+    const upper = { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, upTop), at(run1Len, upTop)],
+      winderLines: winderFan(split.winders, at(run1Len, w / 2), d, { x: -perp.x, z: -perp.z }, L, w),
+      flatIndex: upFlat };
+    const lower = { poly: [at(run1Len, lowBot), at(run1Len + L, lowBot), at(run1Len + L, vTop), at(run1Len, vTop)],
+      winderLines: winderFan(split.lowerWinders, at(run1Len, off - w / 2), d, perp, L, w),
+      flatIndex: lowFlat };
+    const middle = mid
+      ? { start: at(run1Len + L / 2, w / 2), dir: perp, treads: split.midTreads,
+        lenFt: split.midTreads * runStep, widthFt: L }
+      : null;
     // The two flights are antiparallel, so a rail on one hand can't corner
     // straight across: it runs out to the far landing edge, turns level along
     // it, and comes back on the matching offset of the second flight.
@@ -268,14 +365,21 @@ if (!window.DraftStairGeometry) {
       const uEdge = run1Len + L - STAIR_RAIL_INSET_FT;
       return [at(0, v), at(uEdge, v), at(uEdge, v2), at(run1Len - run2Len, v2)];
     });
+    const gapV = w / 2 + split.sepFt / 2;
     return { shape: 'U', split,
       runs: [
         { start: S, dir: d, treads: split.t1, lenFt: run1Len },
         { start: run2Start, dir: back, treads: split.t2, lenFt: run2Len },
       ],
-      landing: { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len, v1)], winderLines: [] },
+      landing: { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, vTop), at(run1Len, vTop)],
+        winderLines: [...upper.winderLines, ...lower.winderLines], flatIndex: upFlat },
+      landings: [upper, lower],
+      middle,
       rails: uRails,
-      gap: [at(run1Len, w / 2 + gapFt / 2), at(Math.max(0, run1Len - run2Len), w / 2 + gapFt / 2)],
+      // The rail or wall between the flights, down the middle of the space
+      // between them, from the landing to the shorter flight's end.
+      gap: [at(run1Len, gapV), at(Math.max(0, run1Len - run2Len), gapV)],
+      gapFt,
       walk: [S, at(run1Len + L / 2, 0), at(run1Len + L / 2, off), run2End] };
   };
 
@@ -343,6 +447,7 @@ if (!window.DraftStairGeometry) {
     stairCurrentLayout,
     stairRiserRange,
     stairShapeSplit,
+    stairSequence,
     stairEndFor,
     stairPlanParts,
     // READ LIVE, so every painter and every page follows the office's numbers

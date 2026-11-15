@@ -171,44 +171,34 @@ test('an L re-cuts the stairwell, and one undo puts both back', async ({ page })
   expect(wellOf(undone).points).toEqual(well.points);
 });
 
-test('winders are behind a double-click on L, and only on an L', async ({ page }) => {
+// THE LANDING IS A SECTION OF ITS OWN NOW (jb, 14 Nov 2026: "ad a section
+// for LOWER STAIR LANDING and UPPER STAIR LANDING ... and then allow the use
+// to put 2 or 3 winders per landing"). The double-click door that hid the
+// winder row is gone: jb asked for the sections in the open.
+test('an L shows its LANDING row: FLAT, 2 or 3 WINDERS, kept on reload', async ({ page }) => {
   await open(page, base());
   await pickStair(page, base().stairs[0]);
+  await expect(page.locator('#props-slot [data-prop-row="landing"]'), 'a straight flight has no landing').toHaveCount(0);
 
-  // A SINGLE CLICK ON L MAKES AN L AND NOTHING MORE. Revealing the winder row
-  // on the first click would advertise winders, which the arrangement exists
-  // not to do -- MODEL.dc.html's own note: "never the default and never
-  // advertised".
   await chip(page, 'shape', 'L').click();
-  await expect(page.locator('#props-slot [data-prop-row="winders"]')).toHaveCount(0);
+  await expect(page.locator('#props-slot [data-prop-row="landing"]')).toBeVisible();
+  await expect(chip(page, 'landing', '0')).toHaveAttribute('aria-pressed', 'true');
 
-  await chip(page, 'shape', 'L').dblclick();
-  await expect(page.locator('#props-slot [data-prop-row="winders"]')).toBeVisible();
-  await expect(chip(page, 'winders', '0')).toHaveAttribute('aria-pressed', 'true');
-
-  await chip(page, 'winders', '2').click();
+  await chip(page, 'landing', '2').click();
   await save(page);
   expect(stairOf(await survives(page)).winders, '2 winders survive a reload').toBe(2);
+  await expect(chip(page, 'landing', '2')).toHaveAttribute('aria-pressed', 'true');
 
-  // THE FORMAT'S RULE, APPLIED BY THE PAGE: winders are L-only, so moving to
-  // a U clears them here rather than letting the record say 2 and the reader
-  // say 0 -- which would be the panel showing a choice the file does not hold.
-  await chip(page, 'shape', 'U').click();
-  await expect(page.locator('#props-slot [data-prop-row="winders"]')).toHaveCount(0);
-  await save(page);
-  expect(stairOf(await survives(page)).winders, 'a U carries no winders').toBe(0);
+  // AN L HAS ONE LANDING (jb: "l only has one landing it only has 2 lengths
+  // of stairs"): no UPPER / LOWER on it.
+  await expect(page.locator('#props-slot [data-prop-row="lower landing"]')).toHaveCount(0);
 });
 
-test('a stair that already has winders shows the row without being asked',
-  async ({ page }) => {
-    // NOT A SECRET TO KEEP FROM THE DRAFTER WHO IS LOOKING AT THEM. The hidden
-    // door is about not advertising winders, not about hiding ones already
-    // drawn -- a panel that omitted the row would make them unreachable.
-    await open(page, base({ shape: 'L', winders: 3 }));
-    await pickStair(page, base({ shape: 'L', winders: 3 }).stairs[0]);
-    await expect(page.locator('#props-slot [data-prop-row="winders"]')).toBeVisible();
-    await expect(chip(page, 'winders', '3')).toHaveAttribute('aria-pressed', 'true');
-  });
+test('a stair that already has winders shows them lit', async ({ page }) => {
+  await open(page, base({ shape: 'L', winders: 3 }));
+  await pickStair(page, base({ shape: 'L', winders: 3 }).stairs[0]);
+  await expect(chip(page, 'landing', '3')).toHaveAttribute('aria-pressed', 'true');
+});
 
 test('a well two flights share is not re-cut, and the strip says so', async ({ page }) => {
   await open(page, base({ shared: true }));

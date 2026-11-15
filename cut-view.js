@@ -3214,9 +3214,17 @@ if (!window.DraftCutView) {
       const railOff = Math.max(0.05, half - SG.STAIR_RAIL_INSET_FT);
       const yOf = e => Y(top.floorTop + e);
       ctx.save();
-      parts.runs.forEach((run, i) => {
-        const flight = flights[i];
-        if (!flight) return;
+      // EACH RUN WITH ITS FLIGHT: the top run the first, the bottom run the
+      // last, and a U's middle flight (jb, 14 Nov 2026) the one between its
+      // landings. Unfolded winders make one flight, drawn along the top run.
+      const paired = flights.length > 1
+        ? [[parts.runs[0], flights[0]],
+          ...(parts.middle && flights.length > 2 ? [[parts.middle, flights[1]]] : []),
+          [parts.runs[parts.runs.length - 1], flights[flights.length - 1]]]
+        : [[parts.runs[0], flights[0]]];
+      paired.forEach(([run, flight]) => {
+        if (!flight || !run) return;
+        const half = (Number(run.widthFt) || stair.widthFt) / 2;
         const d = run.dir;
         const rp = { x: -d.z, z: d.x };   // right hand, walking down
         const at = (s, v) => ({ x: run.start.x + d.x * s + rp.x * v, z: run.start.z + d.z * s + rp.z * v });
@@ -3356,9 +3364,13 @@ if (!window.DraftCutView) {
       });
       // The landing of a turned stair, where the cut crosses it: a level
       // band 8" deep at the foot of the first flight.
-      if (parts.landing && flights[1]) {
-        const eL = flights[1].e0;
-        floorRuns(cut, axis, [{ points: parts.landing.poly }]).forEach(span => {
+      // A U's two landings each at their own height (stairUnfold's flats).
+      const flats = SS.stairUnfold ? SS.stairUnfold(layout, parts.split).flats : [];
+      (parts.landings || []).forEach(landing => {
+        const band = landing.flatIndex == null ? null : flats[landing.flatIndex];
+        if (!band) return;
+        const eL = band.e;
+        floorRuns(cut, axis, [{ points: landing.poly }]).forEach(span => {
           ctx.fillStyle = weight(C.assembly, 0.15);
           ctx.strokeStyle = C.line; ctx.lineWidth = 1.25;
           const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
@@ -3371,7 +3383,7 @@ if (!window.DraftCutView) {
             ctx.stroke();
           }
         });
-      }
+      });
       ctx.restore();
     });
   }
