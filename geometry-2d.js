@@ -814,7 +814,13 @@ if (!window.DraftGeometry2D) {
   // way is a step in the gable wall too: the foot and the eave beyond go
   // GABLE with it, and the roof runs flush across the whole end.
   const ROOF_GABLE_JOG_FT = 6;
-  const gableJogKinds = (points, kinds, { jogFt = ROOF_GABLE_JOG_FT } = {}) => {
+  // ONE PIECE AT A TIME (jb, 15 Nov 2026: "when i switch the hip to gable it
+  // changes BOTH ... sometimes i'd like only one to be hip and the other to
+  // be gable"). Running a gable on past the step onto the eave beyond is now
+  // only what GABLE END and the autoroof ask for (`runPast`); a press on one
+  // piece of a stepped end changes that piece, and the roof is cut into the
+  // pieces that say so (jogEndPieces).
+  const gableJogKinds = (points, kinds, { jogFt = ROOF_GABLE_JOG_FT, runPast = false } = {}) => {
     const pts = Array.isArray(points) ? points : [];
     const n = pts.length;
     const out = pts.map((_, i) => (Array.isArray(kinds) ? kinds[i] : 'eave'));
@@ -838,6 +844,7 @@ if (!window.DraftGeometry2D) {
         const eaveOn = k => out[((k % n) + n) % n] === 'eave';
         const before = solid(i - 1), after = solid(i + 1);
         if (!before && !after) continue;
+        if (!runPast && (!before || !after)) continue;
         if ((!before && !eaveOn(i - 1)) || (!after && !eaveOn(i + 1))) continue;
         const p = dirOf(i - 1), q = dirOf(i + 1);
         if (!p || !q) continue;
@@ -1341,6 +1348,10 @@ if (!window.DraftGeometry2D) {
     const n = pts0.length;
     if (n < 6) return null;
     const healed0 = gableJogKinds(pts0, kinds);
+    // `anyKinds`: find the step by its shape alone (jogEndPieces reads the
+    // kinds itself); `pick(three)` passes over steps the caller does not want.
+    const anyKinds = Boolean(opts && opts.anyKinds);
+    const pick = opts && typeof opts.pick === 'function' ? opts.pick : null;
     const eps = 1e-6;
     const area2 = ring => ring.reduce((sum, p, k) => {
       const q = ring[(k + 1) % ring.length];
@@ -1361,7 +1372,8 @@ if (!window.DraftGeometry2D) {
         // from the protrusion's far corner back past Q's line.
         const d = dirOf(i), p = dirOf(i - 1), q = dirOf(i + 1), beyond = dirOf(i - 2);
         if (!d || !p || !q || !beyond || d.len > ROOF_GABLE_JOG_FT + eps) continue;
-        if (![i - 1, i, i + 1].every(k => isSolidEdge(K[at(k)]))) continue;
+        if (!anyKinds && ![i - 1, i, i + 1].every(k => isSolidEdge(K[at(k)]))) continue;
+        if (pick && !pick([edgeIdx[at(i - 1)], edgeIdx[at(i)], edgeIdx[at(i + 1)]])) continue;
         if (Math.abs(p.x * d.x + p.z * d.z) > eps || Math.abs(q.x * d.x + q.z * d.z) > eps) continue;
         if (p.x * q.x + p.z * q.z < 1 - eps) continue;
         if (Math.abs(beyond.x * p.x + beyond.z * p.z) > eps) continue;
@@ -1394,7 +1406,33 @@ if (!window.DraftGeometry2D) {
         // half its slope is the big roof's own plane (one eave line, one
         // pitch), so it stops at the big roof's edge as before.
         const backBy = Number(opts && opts.backBy) || 0;
-        if (backBy > 1e-3) {
+        const mode = opts && opts.mode;
+        if (mode === 'hipBump') {
+          // THE PART THAT STICKS OUT, HIPPED (jb, 15 Nov 2026: "the hip
+          // should end at the 'gable wall' that goes across for the large
+          // gable"). The big gable across the house as for two gables; the
+          // part in front of it a small roof with its front and sides EAVES
+          // (hipped at both front corners) and its back a JOINT on the big
+          // gable's wall line, `backBy` behind the big roof's gable edge.
+          const deep = shift + backBy;
+          small = [A, B, { x: B.x + d.x * deep, z: B.z + d.z * deep }, { x: A.x + d.x * deep, z: A.z + d.z * deep }];
+          smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];
+          smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, edgeIdx[at(i - 2)]];
+        } else if (mode === 'gableBump') {
+          // THE OTHER WAY ROUND (jb: "othe way around needs a valley"). The
+          // end hipped across the stepped-back line, and the part that
+          // sticks out a small gable that runs back into the hip: its two
+          // side eaves rise to a ridge over its middle, which meets the big
+          // roof's end plane half its width behind that plane's eave -- the
+          // two JOINTs from the eave line to there are the valleys (or, where
+          // a side is the house's own side eave, the big roof's hip).
+          const half = Math.hypot(B.x - A.x, B.z - A.z) / 2;
+          const M = { x: (A.x + B.x) / 2, z: (A.z + B.z) / 2 };
+          const apex = { x: M.x + d.x * (shift + half), z: M.z + d.z * (shift + half) };
+          small = [A, B, C, apex, farIn];
+          smallKinds = [K[at(i - 1)], 'eave', 'joint', 'joint', K[at(i - 2)]];
+          smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, -1, edgeIdx[at(i - 2)]];
+        } else if (backBy > 1e-3) {
           const M = { x: (A.x + B.x) / 2, z: (A.z + B.z) / 2 };
           const deep = shift + backBy;
           const C2 = { x: B.x + d.x * deep, z: B.z + d.z * deep };
@@ -1437,17 +1475,41 @@ if (!window.DraftGeometry2D) {
   // small one is a plain piece. Per-edge lists ride across by `from`; the
   // small piece's JOINT hangs nothing. Wall rings (footprint) and cut-outs
   // are left behind: neither ring is the old one any more.
-  const gableJogPieces = roof => {
+  //
+  // WHICH PIECES (jb, 15 Nov 2026, one piece of a stepped end at a time): the
+  // kinds of the part that sticks out (P) and the stepped-back part (Q) say.
+  // Both solid: TWO GABLES (`mode` 'two'). Only Q a gable: the big gable
+  // across, the part that sticks out hipped against its wall ('hipBump').
+  // Only P a gable: the end hipped across, a small gable over the part that
+  // sticks out running back into it with valleys ('gableBump'). `index`, when
+  // given, is the edge just pressed: the step must be the one it belongs to.
+  const gableJogPieces = (roof, { index = null } = {}) => {
     if (!roof || !Array.isArray(roof.points)) return null;
     const n = roof.points.length;
     const per = list => (Array.isArray(list) && list.length === n ? list : null);
     const overs = per(roof.edgeOverhang);
-    // The big gable's wall stands its overhang in from its rake.
-    const plain = gableJogSplit(roof.points, roof.edges);
+    const kindsIn = roof.points.map((_, k) => (Array.isArray(roof.edges) ? roof.edges[k] : 'eave'));
+    const modeOf = three => {
+      const p = kindsIn[three[0]], q = kindsIn[three[2]];
+      if (isSolidEdge(p) && isSolidEdge(q)) return 'two';
+      if (q === 'gable' && (p === 'eave' || p == null)) return 'hipBump';
+      if (p === 'gable' && (q === 'eave' || q == null)) return 'gableBump';
+      return null;
+    };
+    const wanted = three => (index == null || three.includes(index)) && Boolean(modeOf(three));
+    const solid = gableJogSplit(roof.points, roof.edges);
+    const plain = solid && wanted(solid.three) ? solid
+      : gableJogSplit(roof.points, roof.edges, { anyKinds: true, pick: wanted });
     if (!plain) return null;
+    const mode = modeOf(plain.three);
+    if (mode === 'two' && !solid) return null;   // two gables still want the step solid
     const q = plain.three[2];
+    const pick = three => three.every((e, k) => e === plain.three[k]);
+    // The big gable's wall stands its overhang in from its rake.
     const backBy = overs ? Math.max(0, Number(overs[q]) || 0) : Math.max(0, Number(roof.overhang) || 0);
-    const split = gableJogSplit(roof.points, roof.edges, { backBy });
+    const split = gableJogSplit(roof.points, roof.edges, mode === 'two' ? { backBy, pick }
+      : { backBy, pick, anyKinds: true, mode });
+    if (!split) return null;
     const y = Number(roof.points[0]?.y) || 0;
     const heels = per(roof.edgeHeelIn);
     const overAt = (k, kind) => (kind === 'joint' || k < 0 ? 0
@@ -1464,8 +1526,12 @@ if (!window.DraftGeometry2D) {
       return out;
     };
     return {
+      mode,
+      three: split.three.slice(),
       big: make(split.big, split.bigKinds, split.bigFrom),
       small: make(split.small, split.smallKinds, split.smallFrom),
+      bigFrom: split.bigFrom.slice(),
+      smallFrom: split.smallFrom.slice(),
     };
   };
   const stepVirtual = roof => {

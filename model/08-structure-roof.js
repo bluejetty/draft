@@ -317,12 +317,10 @@
     }
     const was = hit.roof.edges[hit.index] === 'gable' ? 'gable' : 'eave';
     const now = was === 'gable' ? 'eave' : 'gable';
-    // A GABLE THAT MAKES A STEPPED END makes TWO GABLES (jb, 15 Nov 2026;
-    // model/15 splitJogGable), with its own UNDO.
-    if (now === 'gable' && typeof jogPressSplits === 'function') {
-      const kinds = hit.roof.edges.map((k, i) => (i === hit.index ? 'gable' : k));
-      if (jogPressSplits(hit.roof, kinds, hit.index) && splitJogGable(hit.roof, kinds)) return hit;
-    }
+    // ONE PIECE OF A STEPPED END AT A TIME (jb, 15 Nov 2026; model/15
+    // jogEndPress): the roof is cut into the pieces the press asks for --
+    // two gables, or one part hipped -- with its own UNDO.
+    if (typeof jogEndPress === 'function' && jogEndPress(hit.roof, hit.index, now)) return hit;
     hit.roof.edges[hit.index] = now;
     // A FOURTH UNDO KIND rather than a wider existing one, for the reason
     // addItem's comment gives: 'add-item' pops a record OUT of a list, and a
@@ -518,8 +516,9 @@
     const ring = s.ring;
     const { overhangFt, pitch } = window.DraftLevelAssembly.projectRoofFor(drawing, 'house', drawing.buildType);
     const pressed = s.wallRing.map((p, i) => (s.gables.has(i) ? 'gable' : 'eave'));
-    // A gable runs past a step in the wall (geometry-2d gableJogKinds): the
-    // foot of step and the piece beyond it go gable with the pressed edge.
+    // A step between two pressed gables goes gable with them (geometry-2d
+    // gableJogKinds). One part of a stepped end pressed alone stays alone
+    // (jb, 15 Nov 2026): the roof is cut into its pieces once it is down.
     const edges = window.DraftGeometry2D?.gableJogKinds ? window.DraftGeometry2D.gableJogKinds(s.wallRing, pressed) : pressed;
     const overs = hipOvers(s);
     // Where it sits and bears: the piece's own rules (pieceBearsOn, and
@@ -546,7 +545,12 @@
     shedRoof = null;
     markDirty();
     setTool(RESTING_TOOL);
-    selectPlaced('roof', roof);
+    const mixed = window.DraftGeometry2D?.gableJogPieces ? window.DraftGeometry2D.gableJogPieces(roof) : null;
+    if (mixed && mixed.mode !== 'two' && typeof splitJogGable === 'function') {
+      const made = splitJogGable(roof, roof.edges.slice());
+      selectPlaced('roof', made ? made.big : roof);
+      if (made) return roof;
+    } else selectPlaced('roof', roof);
     const gables = edges.filter(e => e === 'gable').length;
     sayOnStrip(`HIP ROOF made at ${pitch}/12${gables ? `, ${gables} GABLE end${gables > 1 ? 's' : ''}` : ', every edge an eave'}. `
       + 'Change its pitch, overhangs or edges in PROPERTIES.');

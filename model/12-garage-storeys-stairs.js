@@ -941,7 +941,7 @@
     // AND A STEP BETWEEN TWO GABLES IS THE GABLE WALL TURNING A CORNER (jb,
     // 13 Nov 2026), never a one-foot eave with a plane of its own off it:
     // geometry-2d gableJogKinds, the same rule the ROOF panel's chips use.
-    const shaped = { ...cut, edges: G.gableJogKinds ? G.gableJogKinds(cut.points, wingKinds) : wingKinds };
+    const shaped = { ...cut, edges: G.gableJogKinds ? G.gableJogKinds(cut.points, wingKinds, { runPast: true }) : wingKinds };
     // ── AND IT KEEPS UNDER THE WALL IT GABLES INTO (Movie, 17 Oct) ────────
     //
     // "the back roof can have a lower slope if it doesn't fit (like this

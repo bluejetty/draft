@@ -85,13 +85,39 @@ const allRoofs = async page => {
   await h.waitForSaved(page);
   return (await h.savedDrawing(page)).roofs;
 };
-test('GABLE on one piece of a stepped end makes two gables: the big one on the stepped-back line, a small one over the piece that sticks out', async ({ page }) => {
+test('GABLE on one piece of a stepped end changes that piece only; both pieces make two gables', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 0, 0);
   await click(page, at, -31.8, -5);
   await expect(page.locator('[data-roof-edge-label]')).toHaveText('EDGE 2 OF 6');
+  // ONE PIECE AT A TIME (jb, 15 Nov 2026: "sometimes i'd like only one to
+  // be hip and the other to be gable"; "othe way around needs a valley").
+  // The long piece that sticks out made GABLE alone: the end stays hipped
+  // across the stepped-back line, and a small gable over the long piece runs
+  // back into it, its two JOINTs meeting half its width (12 ft) in.
   await page.locator('[data-prop-row="edge"] [data-prop-value="gable"]').click();
+  await expect(page.locator('#strip-message')).toContainText('valleys');
   let roofs = await allRoofs(page);
+  expect(roofs.length, 'the hipped roof and the small gable').toBe(2);
+  let bigOne = roofs.find(r => r.id === 'roof-1');
+  let smallOne = roofs.find(r => r.id !== 'roof-1');
+  expect(ring(bigOne).sort(), 'the end hipped on the stepped-back line').toEqual([[-31, -17], [-31, 17], [32, -17], [32, 17]].sort());
+  expect(bigOne.edges.includes('gable'), 'no gable on the hipped roof').toBe(false);
+  expect(ring(smallOne).sort(), 'the small gable: the long piece, run back to where its valleys meet')
+    .toEqual([[-32, -17], [-32, 7], [-31, 7], [-19, -5], [-31, -17]].sort());
+  expect(smallOne.edges.slice().sort()).toEqual(['eave', 'eave', 'gable', 'joint', 'joint']);
+  expect(smallOne.jogOf).toBe('roof-1');
+  // Then the stepped-back line pressed too (the hipped roof's end edge):
+  // both pieces gable is TWO GABLES, as before.
+  await page.evaluate(() => {
+    const big = drawing.roofs.find(r => r.id === 'roof-1');
+    const i = big.points.findIndex((p, k) => {
+      const q = big.points[(k + 1) % big.points.length];
+      return Math.abs(p.x + 31) < 1e-6 && Math.abs(q.x + 31) < 1e-6;
+    });
+    jogEndPress(big, i, 'gable');
+  });
+  roofs = await allRoofs(page);
   expect(roofs.length, 'two records: the big gable and the small one').toBe(2);
   const big = roofs.find(r => r.id === 'roof-1');
   const small = roofs.find(r => r.id !== 'roof-1');
@@ -128,7 +154,8 @@ test('GABLE on one piece of a stepped end makes two gables: the big one on the s
   // TWO GABLES splits it again.
   await page.locator('[data-roof-jog-gable="two"]').click();
   expect((await allRoofs(page)).length).toBe(2);
-  // UNDO, UNDO, UNDO: back to two, one, and the plain eaves.
+  // UNDO, UNDO, UNDO, UNDO: back to two, one, the small gable, and the
+  // plain eaves.
   await page.keyboard.press('Control+z');
   roofs = await allRoofs(page);
   expect(roofs.length).toBe(1);
@@ -136,8 +163,63 @@ test('GABLE on one piece of a stepped end makes two gables: the big one on the s
   expect((await allRoofs(page)).length).toBe(2);
   await page.keyboard.press('Control+z');
   roofs = await allRoofs(page);
+  expect(roofs.length).toBe(2);
+  expect(roofs.find(r => r.id === 'roof-1').edges.includes('gable'), 'the hipped end and its small gable again').toBe(false);
+  await page.keyboard.press('Control+z');
+  roofs = await allRoofs(page);
   expect(roofs.length).toBe(1);
   expect(roofs[0].edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
+});
+
+test('GABLE on the stepped-back piece alone: the big gable across, the part that sticks out hipped back to its wall', async ({ page }) => {
+  const { at } = await open(page);
+  await click(page, at, 0, 0);
+  await click(page, at, -31, 12);
+  await expect(page.locator('[data-roof-edge-label]')).toHaveText('EDGE 6 OF 6');
+  // jb, 15 Nov 2026: "the hip should end at the 'gable wall' that goes
+  // across for the large gable".
+  await page.locator('[data-prop-row="edge"] [data-prop-value="gable"]').click();
+  await expect(page.locator('#strip-message')).toContainText('HIPPED');
+  let roofs = await allRoofs(page);
+  expect(roofs.length).toBe(2);
+  const big = roofs.find(r => r.id === 'roof-1');
+  const small = roofs.find(r => r.id !== 'roof-1');
+  expect(ring(big).sort(), 'the big gable across, on the stepped-back line').toEqual([[-31, -17], [-31, 17], [32, -17], [32, 17]].sort());
+  expect(big.edges.filter(k => k === 'gable').length).toBe(1);
+  expect(ring(small).sort(), 'the part that sticks out, back to the big gable wall (x -29)')
+    .toEqual([[-32, -17], [-32, 7], [-29, 7], [-29, -17]].sort());
+  expect(small.edges.slice().sort(), 'hipped: eaves front and sides, a JOINT on the wall').toEqual(['eave', 'eave', 'eave', 'joint']);
+  // Its front pressed GABLE too: TWO GABLES.
+  await page.evaluate(() => {
+    const piece = drawing.roofs.find(r => r.jogOf === 'roof-1');
+    const i = piece.points.findIndex((p, k) => {
+      const q = piece.points[(k + 1) % piece.points.length];
+      return Math.abs(p.x + 32) < 1e-6 && Math.abs(q.x + 32) < 1e-6;
+    });
+    jogEndPress(piece, i, 'gable');
+  });
+  roofs = await allRoofs(page);
+  expect(roofs.length).toBe(2);
+  expect(roofs.find(r => r.id !== 'roof-1').edges.filter(k => k === 'gable').length, 'the small one a gable now').toBe(1);
+  await expect(page.locator('[data-roof-jog-gable="flush"]')).toBeVisible();
+  // And the big one's gable pressed back to an eave, then the small one's:
+  // the stepped end hipped, one roof.
+  await page.evaluate(() => {
+    const big = drawing.roofs.find(r => r.id === 'roof-1');
+    const i = big.edges.indexOf('gable');
+    jogEndPress(big, i, 'eave');
+  });
+  roofs = await allRoofs(page);
+  expect(roofs.length, 'the small gable on a hipped end').toBe(2);
+  await page.evaluate(() => {
+    const piece = drawing.roofs.find(r => r.jogOf === 'roof-1');
+    jogEndPress(piece, piece.edges.indexOf('gable'), 'eave');
+  });
+  roofs = await allRoofs(page);
+  expect(roofs.length).toBe(1);
+  expect(roofs[0].edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
+  await page.keyboard.press('Control+z');
+  expect((await allRoofs(page)).length, 'UNDO cuts it again').toBe(2);
 });
 
 test('GABLE END on a stepped end squares across the whole end, not just to the step', async ({ page }) => {
