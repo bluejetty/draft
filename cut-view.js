@@ -3601,6 +3601,9 @@ if (!window.DraftCutView) {
       return jointShared(roof, pts[k], pts[(k + 1) % n]) ? 'joint' : 'gable';
     };
     const silhouette = [];
+    // The stations' own spacing, kept apart from the list: a step in the
+    // roofline adds stations a hair apart (below).
+    let silhouetteStep = Infinity;
     let facesByRoof = null;
     let dLo = Infinity, dHi = -Infinity;
     // The roof's height at any u along the cut, sampled the way the
@@ -3691,12 +3694,38 @@ if (!window.DraftCutView) {
           fascia: best === null ? null : best.fascia,
         };
       };
+      const atS = s => stationAt(
+        cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s,
+        cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s);
       for (let i = 0; i <= steps; i++) {
         const s = i / steps;
-        silhouette.push(stationAt(
-          cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s,
-          cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s));
+        const here = atS(s);
+        // ── A STEP IN THE ROOFLINE IS PLUMB ───────────────────────────
+        //
+        // jb, 14 Nov 2026, E3 of his hand roof: where the big roof stops
+        // and a lower front piece carries on, the top of the fascia band
+        // stepped down on a SLANT -- the two stations either side of the
+        // step joined by a line a station wide. Steeper than any roof
+        // (twice a 12/12) between two stations is a step, so it is found by
+        // halving and drawn plumb: the station before it, the one after.
+        const prev = i ? silhouette[silhouette.length - 1] : null;
+        if (!coarse && prev && prev.elev != null && here.elev != null
+          && Math.abs(here.elev - prev.elev) > 2 * Math.abs(here.u - prev.u) + 0.05) {
+          let a = (i - 1) / steps, b = s;
+          let sa = prev, sb = here;
+          for (let k = 0; k < 14; k++) {
+            const m = (a + b) / 2;
+            const sm = atS(m);
+            if (sm.elev == null) break;
+            if (Math.abs(sm.elev - prev.elev) <= Math.abs(sm.elev - here.elev)) { a = m; sa = sm; }
+            else { b = m; sb = sm; }
+          }
+          if (sa !== prev) silhouette.push(sa);
+          if (sb !== here) silhouette.push(sb);
+        }
+        silhouette.push(here);
       }
+      if (silhouette.length > 1) silhouetteStep = Math.abs(silhouette[silhouette.length - 1].u - silhouette[0].u) / steps;
       tallestAtU = u => {
         const ua = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
         const ub = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
@@ -7400,8 +7429,7 @@ if (!window.DraftCutView) {
       // that end a sample apart. Anything further off is another surface's
       // eave, seen past the point where this run stopped.
       extendRunsToEaves(runs.map(r => ({ ...r, top: r.base + r.fascia })),
-        eaveSpans, 0.05, silhouette.length > 1
-          ? 2 * Math.abs(silhouette[1].u - silhouette[0].u) : Infinity)
+        eaveSpans, 0.05, 2 * silhouetteStep)
         .forEach((grown, index) => {
         runs[index].u0 = grown.u0;
         runs[index].u1 = grown.u1;
@@ -7560,9 +7588,22 @@ if (!window.DraftCutView) {
           && u > band.lo + WALL_EDGE_EPS && u < band.hi - WALL_EDGE_EPS
           && elev > band.bottom - ROOF_COVER_EPS && elev < band.top + ROOF_COVER_EPS);
       };
+      // ── THE SEAM BETWEEN TWO COVERS IS COVERED ──────────────────────
+      //
+      // jb, 14 Nov 2026, E4 of his hand roof (three pieces, a small front
+      // gable whose peak meets the big roof's slope): a tick of rake board
+      // poking through the back gable just under the peak. Under a rake the
+      // gable wall climbs to the board's foot and the board covers from its
+      // foot up, and each cover keeps its own hair of slack -- so a line
+      // lying ON that seam answered "shown" to both, and the run's end,
+      // bisected to the boundary, settled there and drew the front piece's
+      // rake from its peak out to the seam. Wall just under the point and
+      // roof just over it is a point covered.
+      const SEAM_PROBE_FT = 2 * ROOF_COVER_EPS;
       const hidden = (pt, elev, u) => {
         if (u != null && behindWall(pt, u, elev)) return true;
-        return behindRoof(pt, elev);
+        if (behindRoof(pt, elev)) return true;
+        return u != null && behindWall(pt, u, elev - SEAM_PROBE_FT) && behindRoof(pt, elev + SEAM_PROBE_FT);
       };
       // ── WHERE A SHEET CARRIES ON, THERE IS NO EDGE AND NO BOARD ───────
       //
@@ -8069,8 +8110,14 @@ if (!window.DraftCutView) {
               // at the corner's height. So the foot is asked which plan
               // edges meet at its corner, and a corner between two gable
               // edges draws none of this.
-              const atEave = footAt < 0
-                || edgeKind(footAt) !== 'gable' || edgeKind(footAt - 1) !== 'gable';
+              //
+              // AND A JOINT IS NO EAVE EITHER. jb, 14 Nov 2026, on his hand
+              // roof: the big roof's rake over a small front gable ends where
+              // its piece meets the front piece along a JOINT, and the return
+              // ran level from there two feet across the gable wall. A joint
+              // is where two sheets meet; there is no soffit to close.
+              const noSoffit = k => edgeKind(k) === 'gable' || edgeKind(k) === 'joint';
+              const atEave = footAt < 0 || !noSoffit(footAt) || !noSoffit(footAt - 1);
               if (shown && atEave && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
                 && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
                 const wallUc = Math.max(uMin, Math.min(uMax, wallU));

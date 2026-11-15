@@ -36,6 +36,13 @@ const MUTATIONS = [
     c => c.replace("        if (!before) out[(i + n - 1) % n] = 'gable';\n        if (!after) out[(i + 1) % n] = 'gable';\n", '')],
   ['the peak is no station: the wall top runs flat under the apex', 'cut-view.js',
     c => c.replace('      if (tops.length < 4) return tops;', '      return tops;')],
+  ['a rake ending at a JOINT hangs a soffit return', 'cut-view.js',
+    c => c.replace("const noSoffit = k => edgeKind(k) === 'gable' || edgeKind(k) === 'joint';",
+      "const noSoffit = k => edgeKind(k) === 'gable';")],
+  ['the seam between a gable wall and its rake board shows what lies on it', 'cut-view.js',
+    c => c.replace('        return u != null && behindWall(pt, u, elev - SEAM_PROBE_FT)', '        return false && behindWall(pt, u, elev - SEAM_PROBE_FT)')],
+  ['a step in the roofline is joined station to station', 'cut-view.js',
+    c => c.replace('        if (!coarse && prev && prev.elev != null', '        if (false && prev && prev.elev != null')],
 ];
 
 if (MUTATE) {
@@ -186,6 +193,62 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
       check(`${cut}${k > 1 ? ' (busted pieces)' : ''}: the gable wall climbs to the peak, no flat top under the apex`,
         flat.length === 0, fmt(flat));
     });
+}
+
+// ── JB'S HAND ROOF: THREE PIECES OVER THE STEP ─────────────────────────
+//
+// jb, 14 Nov 2026, the same house roofed by hand: the big roof as two
+// pieces meeting at the ridge (x 9.75), the left one notched at the front,
+// and a small front piece whose peak (x 6.5) meets the left piece's slope
+// and which falls to an eave at x 15 -- a little gable in front of the big
+// one. "some minor problems with the roof still":
+//   E1  a level line from the small peak two feet across the big gable wall
+//       (a soffit return off the rake's foot, where the foot is a JOINT);
+//   E3  a tick of the front piece's rake poking through the back rake board
+//       under the peak (a run end bisected onto the seam between the gable
+//       wall's top and the board's foot, which neither cover took);
+//   E4  the top of the fascia band stepping down on a slant where the big
+//       roof stops and the front pieces carry on (two silhouette stations
+//       joined across the step).
+{
+  const P = pts => pts.map(([x, z]) => ({ x, y: 0, z }));
+  const piece = (id, ring, edges) => ({ id, levelId: 7, follows: 'none', pitch: 4, overhang: 2, fascia: 5.5,
+    points: P(ring), edges, edgeOverhang: edges.map((k, i) => (i ? 0 : 2)) });
+  const hand = { ...house(LONG), roofs: [
+    piece('roof-66', [[-2, 2], [-2, -43.5], [9.75, -43.5], [9.75, 1], [6.5, 1], [6.5, 2]],
+      ['eave', 'gable', 'joint', 'gable', 'joint', 'gable']),
+    piece('roof-68', [[21.5, -43.5], [21.5, 1], [9.75, 1], [9.75, -43.5]], ['eave', 'gable', 'joint', 'gable']),
+    piece('roof-70', [[15, -1], [15, 2], [6.5, 2], [6.5, -1]], ['eave', 'gable', 'joint', 'gable']),
+  ] };
+  const inked = segs => segs.filter(x => x.ink !== '#fff' && x.ink !== 'rgba(255,255,255,1)');
+  {
+    const level = inked(paint(hand, 'E1')).filter(x => Math.abs(x.a.e - x.b.e) < 0.01 && x.a.e > 19.5
+      && Math.min(x.a.u, x.b.u) >= 6.4 && Math.max(x.a.u, x.b.u) <= 9 && Math.abs(x.a.u - x.b.u) > 0.5);
+    check('hand roof E1: no level line off the small peak (a rake ending at a JOINT has no soffit return)',
+      level.length === 0, fmt(level));
+  }
+  {
+    // From the back u = -x. The back rakes climb toward the ridge (u -9.75);
+    // anything near u -6.5..-7.5 up there falling the OTHER way is the front
+    // piece's rake showing through.
+    const tick = inked(paint(hand, 'E3')).filter(x => {
+      const lo = Math.min(x.a.u, x.b.u), hi = Math.max(x.a.u, x.b.u);
+      if (lo < -7.6 || hi > -6.3 || hi - lo < 0.1 || Math.max(x.a.e, x.b.e) < 19.5) return false;
+      return (x.b.e - x.a.e) / (x.b.u - x.a.u) > 0.1;
+    });
+    check('hand roof E3: the front piece\'s rake does not poke through the back rake board',
+      tick.length === 0, fmt(tick));
+  }
+  {
+    // The big roof stops at z 1 (E4: u -1); past it the front pieces are
+    // a foot lower. The step is plumb: no segment crosses it on a slant.
+    const slant = inked(paint(hand, 'E4')).filter(x => {
+      const lo = Math.min(x.a.u, x.b.u), hi = Math.max(x.a.u, x.b.u);
+      return lo < -0.95 && hi > -1.15 && hi - lo > 0.05 && hi - lo < 1
+        && Math.abs(x.a.e - x.b.e) > 0.5 && Math.min(x.a.e, x.b.e) > 20;
+    });
+    check('hand roof E4: the roofline steps down plumb where the big roof stops', slant.length === 0, fmt(slant));
+  }
 }
 
 const failed = CHECKS.filter(c => !c.ok);
