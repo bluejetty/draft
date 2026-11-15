@@ -1336,7 +1336,7 @@ if (!window.DraftGeometry2D) {
   // from[k], -1 for the small piece's new JOINT) so the caller can carry
   // per-edge lists across, and `three`: the ring edges of the gable that
   // sticks out, the step, and the gable stepped back.
-  const gableJogSplit = (points, kinds) => {
+  const gableJogSplit = (points, kinds, opts) => {
     const pts0 = (Array.isArray(points) ? points : []).map(p => ({ x: Number(p.x), z: Number(p.z) }));
     const n = pts0.length;
     if (n < 6) return null;
@@ -1379,12 +1379,31 @@ if (!window.DraftGeometry2D) {
         }
         // R[i-2] -> farIn is edge i-2 cut short; farIn -> R[i+2] is Q run out.
         big.push(farIn); bigKinds.push(K[at(i + 1)]); bigFrom.push(edgeIdx[at(i + 1)]);
-        const small = [A, B, C, farIn];
-        const smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];
-        const smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, edgeIdx[at(i - 2)]];
+        let small = [A, B, C, farIn];
+        let smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];
+        let smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, edgeIdx[at(i - 2)]];
         const a0 = area2(R), a1 = area2(big), a2 = area2(small);
         if (Math.sign(a1) !== Math.sign(a0) || Math.sign(a2) !== Math.sign(a0)) continue;
         if (Math.abs(a1 + a2 - a0) > 1e-3 * Math.max(1, Math.abs(a0))) continue;
+        // TUCKED BACK OVER THE JOG-OUT (jb, 15 Nov 2026: "should cover
+        // overtop of the jog out and go to the larger gable wall"). From
+        // its peak to the step side the small roof runs on back, under the
+        // big roof's gable overhang, to the big gable's wall line -- there
+        // its slope falls away from the big one's, so it must reach the wall
+        // or the jog-out's top stands open under the big rake. On the other
+        // half its slope is the big roof's own plane (one eave line, one
+        // pitch), so it stops at the big roof's edge as before.
+        const backBy = Number(opts && opts.backBy) || 0;
+        if (backBy > 1e-3) {
+          const M = { x: (A.x + B.x) / 2, z: (A.z + B.z) / 2 };
+          const deep = shift + backBy;
+          const C2 = { x: B.x + d.x * deep, z: B.z + d.z * deep };
+          const Mb = { x: M.x + d.x * deep, z: M.z + d.z * deep };
+          const Mf = { x: M.x + d.x * shift, z: M.z + d.z * shift };
+          small = [A, B, C2, Mb, Mf, farIn];
+          smallKinds = [K[at(i - 1)], 'eave', 'joint', 'joint', 'joint', K[at(i - 2)]];
+          smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, -1, -1, edgeIdx[at(i - 2)]];
+        }
         return { big, bigKinds, bigFrom, small, smallKinds, smallFrom, ptIdx,
           three: [edgeIdx[at(i - 1)], edgeIdx[at(i)], edgeIdx[at(i + 1)]] };
       }
@@ -1420,12 +1439,16 @@ if (!window.DraftGeometry2D) {
   // are left behind: neither ring is the old one any more.
   const gableJogPieces = roof => {
     if (!roof || !Array.isArray(roof.points)) return null;
-    const split = gableJogSplit(roof.points, roof.edges);
-    if (!split) return null;
-    const y = Number(roof.points[0]?.y) || 0;
     const n = roof.points.length;
     const per = list => (Array.isArray(list) && list.length === n ? list : null);
     const overs = per(roof.edgeOverhang);
+    // The big gable's wall stands its overhang in from its rake.
+    const plain = gableJogSplit(roof.points, roof.edges);
+    if (!plain) return null;
+    const q = plain.three[2];
+    const backBy = overs ? Math.max(0, Number(overs[q]) || 0) : Math.max(0, Number(roof.overhang) || 0);
+    const split = gableJogSplit(roof.points, roof.edges, { backBy });
+    const y = Number(roof.points[0]?.y) || 0;
     const heels = per(roof.edgeHeelIn);
     const overAt = (k, kind) => (kind === 'joint' || k < 0 ? 0
       : overs ? Math.max(0, Number(overs[k]) || 0) : Math.max(0, Number(roof.overhang) || 0));
@@ -1602,6 +1625,43 @@ if (!window.DraftGeometry2D) {
       edgeOverhang: pick(roof.edgeOverhang), edgeHeelIn: pick(roof.edgeHeelIn) };
   };
 
+  // ── AN ARC RUNNING ON ALONG A SOLID EDGE (jb, 15 Nov 2026) ───────────
+  //
+  // The small of two gables tucked back over the jog-out has its ridge end
+  // on the peak's JOINT, and the trace ran on down that joint as one arc --
+  // half ridge, half edge. Only the stretch off the edge is a roof line;
+  // left whole, the faces could not be traced at all. `solid` is the
+  // roof's JOINT edges as { a, b } (solidEdgesOf).
+  const arcsOffSolidEdges = (arcs, solid) => arcs.flatMap(arc => {
+    const ax = arc.b.x - arc.a.x, az = arc.b.z - arc.a.z;
+    const alen2 = ax * ax + az * az;
+    if (alen2 < 1e-12) return [arc];
+    let pieces = [[0, 1]];
+    solid.forEach(edge => {
+      const dx = edge.b.x - edge.a.x, dz = edge.b.z - edge.a.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-6) return;
+      const off = p => Math.abs((p.x - edge.a.x) * dz - (p.z - edge.a.z) * dx) / len;
+      if (off(arc.a) > 0.01 || off(arc.b) > 0.01) return;
+      const tOf = p => ((p.x - arc.a.x) * ax + (p.z - arc.a.z) * az) / alen2;
+      const lo = Math.min(tOf(edge.a), tOf(edge.b)), hi = Math.max(tOf(edge.a), tOf(edge.b));
+      pieces = pieces.flatMap(([s0, s1]) => {
+        if (hi <= s0 || lo >= s1) return [[s0, s1]];
+        return [[s0, Math.max(s0, lo)], [Math.min(s1, hi), s1]].filter(([u0, u1]) => u1 - u0 > 1e-6);
+      });
+    });
+    const at = t => ({ x: arc.a.x + ax * t, z: arc.a.z + az * t });
+    return pieces.filter(([s0, s1]) => (s1 - s0) * Math.sqrt(alen2) > 0.01)
+      .map(([s0, s1]) => (s0 === 0 && s1 === 1 ? arc : { ...arc, a: at(s0), b: at(s1) }));
+  });
+  const solidEdgesOf = roof => {
+    const rp = roof.points || [];
+    // JOINTS only: a gable's own trace is dropped whole above, and a hip that
+    // happens to run on along a gable's line (his staircase in
+    // proto/roof-skeleton-harness.js) has always been kept whole.
+    return rp.map((a, i) => ({ a, b: rp[(i + 1) % rp.length], solid: roof.edges?.[i] === 'joint' }))
+      .filter(e => e.solid);
+  };
   const roofSkeleton = (roof) => {
     const initialCount = roof.points.length;
     if (initialCount < 3) return [];
@@ -1609,7 +1669,10 @@ if (!window.DraftGeometry2D) {
     if (cleaned) return roofSkeleton(cleaned);
     // A STEP IN A GABLE WALL: the ring squared past it, the strip cut away.
     const stepped = stepVirtual(roof);
-    if (stepped) return roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts }));
+    if (stepped) {
+      return arcsOffSolidEdges(roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts })),
+        solidEdgesOf(roof));
+    }
     // A RAISED HEEL: the pushed-out roof's lines, the strip outside cut away.
     const raised = heelVirtual(roof);
     if (raised) return roofSkeleton(raised.roof).flatMap(seg => cutRoofSegment(seg, { cuts: raised.cuts }));
@@ -1620,7 +1683,7 @@ if (!window.DraftGeometry2D) {
         ? cutRoofSegment(seg, { cuts: sloped.cuts }) : [seg]));
     }
     const notched = notchedGableRoof(roof);
-    if (notched) return notched;
+    if (notched) return arcsOffSolidEdges(notched, solidEdgesOf(roof));
     let pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
     let kinds = pts.map((_, index) => (isSolidEdge(roof.edges[index]) ? 'gable' : 'eave'));
     // A CORNER THAT IS NOT A CORNER IS DROPPED BEFORE THE WAVEFRONT RUNS.
@@ -1852,7 +1915,8 @@ if (!window.DraftGeometry2D) {
       const px = seg.a.x + dx * t, pz = seg.a.z + dz * t;
       return Math.hypot(pt.x - px, pt.z - pz) < 0.01;
     };
-    return arcs.filter(arc => !gableEdges.some(edge => onSegment(arc.a, edge) && onSegment(arc.b, edge)));
+    return arcsOffSolidEdges(arcs.filter(arc => !gableEdges.some(edge => onSegment(arc.a, edge) && onSegment(arc.b, edge))),
+      solidEdgesOf(roof));
   };
 
 
@@ -3135,6 +3199,65 @@ const offsetOutlineStepped = (ring, kinds, overhangs) => {
     edges: out.map(o => (o.kind.gable ? 'gable' : 'eave')),
     edgeOverhang: out.map(o => o.kind.over),
   };
+};
+
+// ── A GABLE WALL THAT STANDS OVER A LOWER ROOF (jb, 15 Nov 2026) ─────────
+//
+// "i think we should show the back gable wall on the roof plan maybe grey or
+// dotted lines". Two gables on a stepped end: the small lower piece runs back
+// over the jog-out to the big gable's wall, and that wall stands on it, under
+// the big rake. The plan's inner line of a gable (its wall face, the ring
+// pulled in by the edge's overhang) is solid where the wall stands on its
+// own plate; where it stands over another roof's sheet it is a hidden wall
+// and is drawn grey and dashed. Per edge, in the wall line's own parameter:
+// the stretches whose middle lies inside another roof's ring.
+const gableWallOverSpans = (roof, others, wallRing) => {
+  const n = (roof && roof.points || []).length;
+  const none = Array.from({ length: n }, () => []);
+  if (!Array.isArray(wallRing) || wallRing.length !== n) return none;
+  const rings = (others || []).filter(o => o && o !== roof && (o.points || []).length >= 3)
+    .map(o => o.points.map(pt => ({ x: pt.x, z: pt.z })));
+  if (!rings.length) return none;
+  return wallRing.map((a, index) => {
+    if (!isSolidEdge(roof.edges && roof.edges[index]) || roof.edges[index] !== 'gable') return [];
+    const b = wallRing[(index + 1) % n];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    if (Math.hypot(dx, dz) < 1e-6) return [];
+    const ts = new Set([0, 1]);
+    rings.forEach(ring => ring.forEach((p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      const ex = q.x - p.x, ez = q.z - p.z;
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-12) return;
+      const t = ((p.x - a.x) * ez - (p.z - a.z) * ex) / den;
+      const u = ((p.x - a.x) * dz - (p.z - a.z) * dx) / den;
+      if (t > 1e-6 && t < 1 - 1e-6 && u > -1e-6 && u < 1 + 1e-6) ts.add(Math.round(t * 1e6) / 1e6);
+      // A ring corner ON the wall line (the tucked piece's back corners sit
+      // exactly on it) cuts it too.
+      const tc = ((p.x - a.x) * dx + (p.z - a.z) * dz) / (dx * dx + dz * dz);
+      const off = Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / Math.hypot(dx, dz);
+      if (off < 1e-4 && tc > 1e-6 && tc < 1 - 1e-6) ts.add(Math.round(tc * 1e6) / 1e6);
+    }));
+    const cuts = [...ts].sort((p, q) => p - q);
+    // Toward the rake (outward of the wall): the side the overhang hangs on,
+    // where a piece tucked against the wall lies.
+    const len = Math.hypot(dx, dz);
+    const ra = roof.points[index], rb = roof.points[(index + 1) % n];
+    const rm = { x: (ra.x + rb.x) / 2, z: (ra.z + rb.z) / 2 };
+    let nx = -dz / len, nz = dx / len;
+    const wm = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    if ((rm.x - wm.x) * nx + (rm.z - wm.z) * nz < 0) { nx = -nx; nz = -nz; }
+    const spans = [];
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const t0 = cuts[k], t1 = cuts[k + 1];
+      if (t1 - t0 < 1e-6) continue;
+      const mid = { x: a.x + dx * (t0 + t1) / 2 + nx * 0.02, z: a.z + dz * (t0 + t1) / 2 + nz * 0.02 };
+      if (!rings.some(ring => ringInside(mid, ring))) continue;
+      const last = spans[spans.length - 1];
+      if (last && Math.abs(last[1] - t0) < 1e-6) last[1] = t1; else spans.push([t0, t1]);
+    }
+    return spans;
+  });
 };
 
 // ── WHAT A ROOF'S EDGE DOES UNDER A HIGHER ROOF ────────────────────────────
@@ -4898,6 +5021,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     offsetOutlineStepped,
     pointInLoop: (p, ring) => ringInside(p, (ring || []).map(pt => ({ x: pt.x, z: pt.z }))),
     roofHiddenSpans,
+    gableWallOverSpans,
     SLIVER_FT,
     roofProfile,
     profileEnvelope,

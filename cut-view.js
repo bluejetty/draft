@@ -5076,7 +5076,7 @@ if (!window.DraftCutView) {
       let best = null, skip = null;
       facesByRoof.forEach((roofFaces, roof) => {
         const pts = roof.points || [];
-        if (!roof.jogOf && !(pts.length === 4 && (roof.edges || []).includes('joint'))) return;
+        if (!roof.jogOf && !(roof.edges || []).includes('joint')) return;
         const base = roofBaseElev(roof, stack, env);
         if (Math.abs(base - plateTop) > 0.6) return;
         pts.forEach((a, i) => {
@@ -5092,29 +5092,37 @@ if (!window.DraftCutView) {
           const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
           const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
           if ((cx - a.x) * nx + (cz - a.z) * nz < 0) { nx = -nx; nz = -nz; }
-          const depth = Math.max(...pts.map(p => (p.x - a.x) * nx + (p.z - a.z) * nz));
+          // The step: the JOINT parallel to the gable nearest it, where the
+          // big roof's gable runs. (Behind it the piece may run on back over
+          // the jog-out to the big gable's wall -- geometry-2d's tuck.)
+          const offOf = p => (p.x - a.x) * nx + (p.z - a.z) * nz;
+          let step = null, stepEdge = null;
+          pts.forEach((c, k) => {
+            if (roof.edges?.[k] !== 'joint') return;
+            const d = pts[(k + 1) % pts.length];
+            if (Math.abs((d.x - c.x) * gz - (d.z - c.z) * gx) / gLen > 0.05 * Math.hypot(d.x - c.x, d.z - c.z)) return;
+            const o = offOf(c);
+            if (o > 0.05 && o <= ROOF_JOG_PIECE_FT + 1e-6 && (step == null || o < step)) { step = o; stepEdge = [c, d]; }
+          });
+          if (step == null) return;
           // The partner: the big roof named, or -- a file written before the
-          // name was kept -- the roof whose gable runs along this piece's
-          // JOINT, the edge opposite its gable, a step (6 ft or less) back.
+          // name was kept -- the roof whose gable runs along that JOINT.
           let partner = roof.jogOf != null ? String(roof.jogOf) : null;
           if (partner == null) {
-            const j = (i + 2) % 4;
-            if (roof.edges[j] !== 'joint' || depth > ROOF_JOG_PIECE_FT) return;
-            const c = pts[j], d = pts[(j + 1) % 4];
             facesByRoof.forEach((_, other) => {
               if (other === roof || partner != null) return;
               const op = other.points || [];
               if (op.some((e, k) => edgeKindOf(other, k) === 'gable'
-                && [c, d].every(p => distToLine(p, e, op[(k + 1) % op.length]) < 0.05))) partner = String(other.id);
+                && stepEdge.every(p => distToLine(p, e, op[(k + 1) % op.length]) < 0.05))) partner = String(other.id);
             });
             if (partner == null) return;
           }
           const over = Array.isArray(roof.edgeOverhang) && Number.isFinite(Number(roof.edgeOverhang[i]))
             ? Number(roof.edgeOverhang[i]) : (Number(roof.overhang) || 0);
-          const off = (pt.x - a.x) * nx + (pt.z - a.z) * nz;
-          if (off < depth - 1e-6 || off > over + depth / 2 + 1e-6 || off < over - depth / 2 - 1e-6) return;
-          const q = { x: a.x + gx / gLen * along + nx * depth / 2, z: a.z + gz / gLen * along + nz * depth / 2 };
-          const rise = sectionRoofHeightAt(q, roof, roofFaces);
+          const off = offOf(pt);
+          if (off < step - 1e-6 || off > over + step / 2 + 1e-6 || off < over - step / 2 - 1e-6) return;
+          const q = { x: a.x + gx / gLen * along + nx * step / 2, z: a.z + gz / gLen * along + nz * step / 2 };
+          const rise = sectionRoofHeightAt(pt, roof, roofFaces) ?? sectionRoofHeightAt(q, roof, roofFaces);
           if (rise == null) return;
           if (best == null || base + rise > best) { best = base + rise; skip = partner; }
         });

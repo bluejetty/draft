@@ -132,7 +132,7 @@ const MUTATIONS = [
   ['a step with no gable beside it is a gable',
     s => s.replace('        if (!before && !after) continue;', '')],
   ['the ring is solved as it stands, step and all',
-    s => s.replace("    const stepped = stepVirtual(roof);\n    if (stepped) return roofSkeleton(stepped.roof)", "    const stepped = null;\n    if (stepped) return roofSkeleton(stepped.roof)")],
+    s => s.replace("    const stepped = stepVirtual(roof);\n    if (stepped) {", "    const stepped = null;\n    if (stepped) {")],
   ['the solver reads the record\'s kinds as saved',
     s => s.replace("    const kinds = gableJogKinds(pts, Array.isArray(roof.edges) ? roof.edges : pts.map(() => 'eave'));\n    const eps = 1e-6;",
       "    const kinds = Array.isArray(roof.edges) ? roof.edges : pts.map(() => 'eave');\n    const eps = 1e-6;")],
