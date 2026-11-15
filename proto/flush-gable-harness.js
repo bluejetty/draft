@@ -88,6 +88,8 @@ const MUTATIONS = [
     c => c.replace('  if (outline && onOutline(p, q, outline)) return false;\n', '')],
   ['a gable wall\'s top is read off a JOINT it only touches', 'cut-view.js',
     c => c.replace("        if (pts.some((a, i) => roof.edges?.[i] === 'joint' && edgeKindOf(roof, i) !== 'joint'", "        if (false && pts.some((a, i) => roof.edges?.[i] === 'joint' && edgeKindOf(roof, i) !== 'joint'")],
+  ['a wall under a gable brought out past it reads its reach off the overhang alone', 'cut-view.js',
+    c => c.replace('          const reach = inside ? Math.max(reachOut, GABLE_BROUGHT_OUT_FT) : reachOut;', '          const reach = reachOut;')],
   ['a reopened file drops jogOf', 'drawing-format.js',
     c => c.replace("          ? { jogOf: String(roof.jogOf).trim() } : {}),", '          ? {} : {}),')],
 ];
@@ -497,6 +499,52 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
     check('E1 with the tail cut: no sliver of wall climbs the small rake where its valley comes down',
       sliver.length === 0, fmt(sliver));
   }
+}
+
+// ── A GABLE BROUGHT OUT PAST ITS WALL (jb, 15 Nov 2026) ────────────────
+//
+// jb's own file (20261115T1547.draft): every overhang 0, the hip ending on
+// the walls, and the small gable's gable edge dragged 2 ft out past the
+// wall that sticks out. "the line still shows across front o elevation
+// making gable a triangle shape bottom line on triangle": the wall under
+// the small gable read its reach off the overhang (0 + 1 ft), never
+// climbed, and its plate line ran across the gable's foot.
+{
+  const P = list => list.map(([x, z]) => ({ x, y: 0, z }));
+  const roofs = [
+    { id: 'roof-63', levelId: 7, sourceLevelId: null, follows: 'none', pitch: 8, overhang: 0, fascia: 5.5,
+      points: P([[0, -1], [0, -41.5], [19.5, -41.5], [19.5, -1]]), edges: ['eave', 'eave', 'eave', 'eave'], edgeOverhang: [0, 0, 0, 0],
+      cuts: [{ points: [{ x: 0, z: -1 }, { x: 6.5, z: -7.5 }, { x: 13, z: -1 }], jog: true }] },
+    { id: 'roof-66', levelId: 7, sourceLevelId: null, follows: 'none', pitch: 8, overhang: 0, fascia: 5.5, jogOf: 'roof-63',
+      points: P([[0, -1], [6.5, -7.5], [13, -1], [13, 2], [0, 2]]), edges: ['joint', 'joint', 'eave', 'gable', 'eave'], edgeOverhang: [0, 0, 0, 0, 0] },
+  ];
+  // What shows is what is painted LAST over a spot: the plate line may go
+  // down under the gable wall's fill, but not over it.
+  const saved = { ...house(LONG), roofs };
+  const env = H.buildEnv(win, saved);
+  const v = H.paintElevation(win, env, H.standardElevationCuts(env).find(c => c.id === 'E1'), {});
+  const inPoly = (pt, poly) => {
+    let inside = false;
+    poly.forEach((p, k) => {
+      const q = poly[(k + 1) % poly.length];
+      if ((p.e > pt.e) !== (q.e > pt.e) && pt.u < (q.u - p.u) * (pt.e - p.e) / (q.e - p.e) + p.u) inside = !inside;
+    });
+    return inside;
+  };
+  const lastFillOver = pt => Math.max(-1, ...v.modelFills.filter(f => f.pts.length >= 3 && inPoly(pt, f.pts)).map(f => f.seq));
+  const across = [];
+  v.strokes.forEach(st => st.pts.forEach((p, k) => {
+    if (!k || p.move || st.ink === '#fff' || st.w < 1.2) return;
+    const q = st.pts[k - 1];
+    if (Math.abs(p.e - q.e) > 0.01 || Math.abs(p.e - PLATE) > 0.1) return;
+    const mid = { u: (p.u + q.u) / 2, e: p.e };
+    if (mid.u < 1 || mid.u > 12) return;
+    if (st.seq > lastFillOver({ u: mid.u, e: mid.e + 0.02 }) && st.seq > lastFillOver({ u: mid.u, e: mid.e - 0.02 })) {
+      across.push({ a: q, b: p, w: st.w, ink: st.ink });
+    }
+  }));
+  check('the small gable brought 2 ft out past its wall (overhang 0): no plate line across the gable\'s foot',
+    across.length === 0, fmt(across.slice(0, 6)));
 }
 
 const failed = CHECKS.filter(c => !c.ok);
