@@ -2232,6 +2232,11 @@
     // REGISTRATION's box, outside the timed paint body: it is DOM, not ink.
     paintRegistration();
     sealDrawnChain();
+    // THE RAILS' FOOTPRINT, read outside the timed paint body too. Reading it
+    // is the first layout query after a resize, so it pays the browser's whole
+    // reflow of the page -- half the "paint" a section reported on CI (15 Nov
+    // 2026), none of it ink. Read once here, used by the cut branch below.
+    const marginsThisPaint = drawing && activeCut() ? furnitureMargins() : undefined;
     const t0 = performance.now();
     // Hand dimensions onto the corners they were put on, before anything draws.
     if (typeof followDimLinks === 'function') followDimLinks();
@@ -2255,7 +2260,7 @@
       const cut = drawing ? activeCut() : null;
       if (!stairWorkspaceOn()) delete canvas.dataset.stairPane;
       if (cut) {
-        const rails = furnitureMargins();
+        const rails = marginsThisPaint !== undefined ? marginsThisPaint : furnitureMargins();
         paintedForRails = railKey(rails);
         // IN THE SKIN, like everything else on this page. Movie, 24 Sep,
         // looking at a white elevation over a night page: "would it be
