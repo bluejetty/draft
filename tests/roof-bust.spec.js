@@ -420,6 +420,10 @@ test('E1 hangs a 10" board under the main roof once its fascia is typed', async 
   const span = rows => rows.length ? rows[rows.length - 1] - rows[0] : -1;
   expect(before.length, `before ${before}`).toBeGreaterThan(1);
   expect(span(after) - span(before), `after ${after}, before ${before}`).toBeGreaterThanOrEqual(3);
+  // AND IT GROWS DOWN (jb, 15 Nov 2026: "when the size increases add to the
+  // bottom (not to the top)"): the band's top line -- the eave the roof
+  // surface starts from -- stays where the standard board put it.
+  expect(Math.abs(after[0] - before[0]), `after ${after}, before ${before}`).toBeLessThanOrEqual(1);
 });
 
 // THE READER EVERY SHEET GOES THROUGH. MODEL keeps a roof as it was saved, but

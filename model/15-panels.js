@@ -2588,7 +2588,7 @@
           heelLine.className = 'props-title';
           heelLine.dataset.roofEdgeHeel = '';
           heelLine.textContent = `HEEL, THIS EDGE ${window.DraftFormatters.formatArchitecturalInches(
-            window.DraftDrawingFormat.roofHeelIn(window.DraftDrawingFormat.roofFasciaIn(lone.fascia), roofOverhangs(lone)[index], lone.pitch || 4)
+            window.DraftDrawingFormat.roofHeelIn(window.DraftDrawingFormat.ROOF_FASCIA_IN, roofOverhangs(lone)[index], lone.pitch || 4)
             + heelNow())}`;
           box.append(heelLine);
         }
