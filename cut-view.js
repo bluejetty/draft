@@ -638,7 +638,23 @@ if (!window.DraftCutView) {
   // MEASURED AGAINST THE BODY, so the sense is the garage's own and not the
   // wall's. `sameGarageBody` for the same reason it exists at the buck pass:
   // the outline is filed once per storey.
+  // ASKED ONCE PER PAINT AND GARAGE. A section asks this for every floor
+  // sample under the garage and every buck, and each ask walked every wall
+  // and every opening -- a quarter of a whole section's paint on a 24-wall
+  // house (CI's frame-budget spec, 15 Nov 2026). Keyed on the ENV: MODEL
+  // builds a fresh one for every paint (cutEnv()), and the drawing cannot
+  // change in the middle of one, so an edit always gets a fresh answer.
+  const doorDatumCache = new WeakMap();
   function garageDoorDatum(env, garage) {
+    if (!env || typeof env !== 'object' || !garage || typeof garage !== 'object') {
+      return garageDoorDatumOf(env, garage);
+    }
+    let answers = doorDatumCache.get(env);
+    if (!answers) doorDatumCache.set(env, (answers = new WeakMap()));
+    if (!answers.has(garage)) answers.set(garage, garageDoorDatumOf(env, garage));
+    return answers.get(garage);
+  }
+  function garageDoorDatumOf(env, garage) {
     const byId = new Map(env.walls().map(w => [w.id, w]));
     const cache = {};
     const overhead = env.fenestrations().find(f => f.garage === true
@@ -4734,8 +4750,31 @@ if (!window.DraftCutView) {
           ctx.stroke();
           if (g.projFt > 0) {
             const out = u === g.lo ? u - g.projFt : u + g.projFt;
+            // ── ONLY THE OUTSIDE EDGE OF THE FOOTING ──────────────────────
+            //
+            // jb, 15 Nov 2026, on E2 of a house whose front steps back a
+            // foot: "the footing should only show the ext 'edge' of the
+            // footing", circling the short riser on the wrong side of the
+            // jog's corner line, "and i added a purple line where the top
+            // of the footing could show too".
+            //
+            // AN INSIDE CORNER HAS TWO FACES ENDING ON IT. The face that
+            // sticks out ends there and its footing turns the corner under
+            // the return wall, out past the return wall's outside face --
+            // the edge jb kept. The face stepped back ends there too, and
+            // its 6" "beyond the end" runs in UNDER the part that sticks
+            // out: an interior footing, inside the building's own outline.
+            // Told apart by what stands on the out side: a nearer bearing
+            // face covering the stretch the riser would bound means the
+            // footing carries on under the building there, so no edge.
+            const inward = run.faces.some(o => o !== g && o.bearing
+              && g.depth + 1e-6 < o.depth
+              && o.lo <= Math.min(u, out) + 0.05 && o.hi >= Math.max(u, out) - 0.05);
+            if (inward) return;
             ctx.beginPath();
-            ctx.moveTo(X(out), Y(g.baseE));
+            // The footing's top, from the wall corner out to its edge.
+            ctx.moveTo(X(u), Y(g.baseE));
+            ctx.lineTo(X(out), Y(g.baseE));
             ctx.lineTo(X(out), Y(bottomOf(g)));
             ctx.stroke();
           }

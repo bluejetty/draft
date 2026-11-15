@@ -114,6 +114,12 @@ const MUTATIONS = [
       '              const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;\n')],
   ['a grown run end leans to its first station instead of rising plumb', 'cut-view.js',
     c => c.replace('            if (top > s.base + s.fascia + 0.05) ctx.lineTo(X(u0), Y(top));\n', '')],
+  // jb, 15 Nov 2026 -- the inside corner's footing, outside edge only.
+  ['the stepped-back face draws its footing riser in under the jog', 'cut-view.js',
+    c => c.replace('            if (inward) return;\n', '')],
+  ['the jog\'s footing gets no top line out to its edge', 'cut-view.js',
+    c => c.replace('            ctx.moveTo(X(u), Y(g.baseE));\n            ctx.lineTo(X(out), Y(g.baseE));\n            ctx.lineTo(X(out), Y(bottomOf(g)));',
+      '            ctx.moveTo(X(out), Y(g.baseE));\n            ctx.lineTo(X(out), Y(bottomOf(g)));')],
   // THE `min` IN garageGround HAS NO ROW, and the reason is written here so
   // nobody adds one and watches it survive: the faces of a 2 storey garage
   // arrive ground storey first, so "lowest" and "first seen" give the same
@@ -411,6 +417,30 @@ const leftEdgeAt = (target, reach) => {
 for (const id of ['E1', 'E2', 'E3', 'E4']) {
   check(`${id}: no ink above the tallest ridge`,
     inkIn(views[id], { uLo: -99, uHi: 99, eLo: WING_A_RIDGE + 0.2, eHi: 99 }) === 0);
+}
+
+// ── THE INSIDE CORNER'S FOOTING: THE OUTSIDE EDGE ONLY (jb, 15 Nov 2026) ──
+//
+// "the footing should only show the ext 'edge' of the footing", circling the
+// riser on the wrong side of a jog's corner line, "and i added a purple line
+// where the top of the footing could show too". The L's inside corner is a
+// jog seen from E1 (u -24.18) and E4 (u -2.15): the wing that sticks out
+// turns its footing round the return wall and out 6" past its outside face
+// -- top and riser drawn; the stepped-back face's 6" runs in under the wing
+// -- nothing drawn there.
+{
+  const FTG_TOP = -9.27, FTG_BOT = -9.92;
+  [['E1', -24.18, 0.5], ['E4', -2.15, -0.5]].forEach(([id, corner, outward]) => {
+    const v = views[id];
+    const out = corner + outward, inside = corner - outward;
+    check(`${id}: the jog's footing top runs from the corner out to its outside edge`,
+      hasLine(v, corner, FTG_TOP, out, FTG_TOP, 0.05), `corner u ${corner}, edge u ${out}`);
+    check(`${id}: the jog's footing riser stands at its outside edge`,
+      hasLine(v, out, FTG_TOP, out, FTG_BOT, 0.05), `edge u ${out}`);
+    const inner = inkIn(v, { uLo: inside - 0.05, uHi: inside + 0.05, eLo: FTG_BOT + 0.05, eHi: FTG_TOP - 0.05 });
+    check(`${id}: no interior footing riser on the stepped-back side of the jog`,
+      inner < 0.05, `${inner.toFixed(2)} ft of ink at u ${inside}`);
+  });
 }
 
 
