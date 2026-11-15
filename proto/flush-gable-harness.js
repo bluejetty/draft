@@ -63,7 +63,7 @@ const MUTATIONS = [
   ['a file without jogOf: the small piece is not found by its JOINT', 'cut-view.js',
     c => c.replace('          if (partner == null) {\n            facesByRoof.forEach((_, other) => {', '          if (partner == null) { return;\n            facesByRoof.forEach((_, other) => {')],
   ['the small piece is not tucked back over the jog-out', 'geometry-2d.js',
-    c => c.replace('        if (backBy > 1e-3) {', '        if (false) {')],
+    c => c.replace('        } else if (backBy > 1e-3) {', '        } else if (false) {')],
   ['an arc running on along a JOINT is kept whole (the tucked piece cannot be faced)', 'geometry-2d.js',
     c => c.replace('    if (notched) return arcsOffSolidEdges(notched, solidEdgesOf(roof));', '    if (notched) return notched;')
       .replace('      return arcsOffSolidEdges(roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts })),\n        solidEdgesOf(roof));',
