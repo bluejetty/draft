@@ -1198,7 +1198,9 @@ if (!window.DraftDrawingFormat) {
             const loop = (Array.isArray(cut?.points) ? cut.points : []).map(point).filter(Boolean);
             if (loop.length < 3) return null;
             const hoodOf = String(cut?.hoodOf ?? '').trim();
-            return { points: loop, ...(hoodOf ? { hoodOf } : {}) };
+            // `jog`: a small gable's tail cut out of the hip it runs back
+            // over (geometry-2d jogTailOf); MODEL reads it again on open.
+            return { points: loop, ...(hoodOf ? { hoodOf } : {}), ...(cut?.jog === true ? { jog: true } : {}) };
           }).filter(Boolean);
           return cuts.length ? { cuts } : {};
         })()),

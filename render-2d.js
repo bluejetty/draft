@@ -476,8 +476,38 @@ if (!window.DraftRender2D) {
       : [])
       // AND WHAT IS CUT OUT OF IT where a higher roof's walls stop it
       // (geometry-2d's cutRoofFaces): the same hole, drawn the same way.
-      .concat((Array.isArray(roof.cuts) ? roof.cuts : [])
+      .concat((Array.isArray(roof.cuts) ? roof.cuts : []).filter(cut => !cut?.jog)
         .map(cut => (cut.points || []).map(pt => toS(pt))).filter(loop => loop.length >= 3));
+    // ── A SMALL GABLE'S TAIL IS A HOLE WITH NO EDGE OF ITS OWN ───────────
+    //
+    // jb, 15 Nov 2026: the triangle where a small gable runs back over the
+    // hip it meets (geometry-2d jogTailOf, `jog: true`) "can be removed".
+    // Taken out of this sheet's wash, but not stroked: its two sides are the
+    // valleys the small piece already draws as guides, and its base is this
+    // roof's own eave running on under the small gable -- left out of the
+    // footprint stroke below, solid or dotted.
+    const jogLoops = (Array.isArray(roof.cuts) ? roof.cuts : []).filter(cut => cut?.jog)
+      .map(cut => (cut.points || []).map(pt => ({ x: Number(pt.x), z: Number(pt.z) })))
+      .filter(loop => loop.length >= 3 && loop.every(pt => Number.isFinite(pt.x) && Number.isFinite(pt.z)));
+    const jogHoles = jogLoops.map(loop => loop.map(pt => toS(pt)));
+    // The stretch [t0, t1] of footprint edge i lying along a jog loop's edge.
+    const jogSpans = roof.points.map((a, i) => {
+      const b = roof.points[(i + 1) % roof.points.length];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-12) return [];
+      const len = Math.sqrt(len2);
+      const spans = [];
+      jogLoops.forEach(loop => loop.forEach((p, j) => {
+        const q = loop[(j + 1) % loop.length];
+        const off = pt => Math.abs(dx * (pt.z - a.z) - dz * (pt.x - a.x)) / len;
+        if (off(p) > 1e-3 || off(q) > 1e-3) return;
+        const t = pt => ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / len2;
+        const t0 = Math.max(0, Math.min(t(p), t(q))), t1 = Math.min(1, Math.max(t(p), t(q)));
+        if (t1 - t0 > 1e-6) spans.push([t0, t1]);
+      }));
+      return spans;
+    });
     ctx.save();
     // ── AND NOTHING OF IT INSIDE A HIGHER STOREY'S WALLS ─────────────────
     //
@@ -501,7 +531,7 @@ if (!window.DraftRender2D) {
     ctx.beginPath();
     pts.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
     ctx.closePath();
-    holes.forEach(hole => {
+    [...holes, ...jogHoles].forEach(hole => {
       hole.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
       ctx.closePath();
     });
@@ -545,8 +575,9 @@ if (!window.DraftRender2D) {
       ...((Array.isArray(welds) && welds.length === pts.length && Array.isArray(welds[index])) ? welds[index] : []),
       ...((hiddenOk && Array.isArray(hidden[index])) ? hidden[index] : []),
       ...joints[index],
+      ...jogSpans[index],
     ]);
-    const welded = omitted.some(list => list.length);
+    const welded = omitted.some(list => list.length) || jogHoles.length > 0;
     if (!welded) {
       ctx.stroke();
     } else {
@@ -599,7 +630,11 @@ if (!window.DraftRender2D) {
       ctx.beginPath();
       for (let index = 0; index < pts.length; index++) {
         const a = pts[index], b = pts[(index + 1) % pts.length];
-        (hidden[index] || []).forEach(([t0, t1]) => {
+        // Less what lies along a small gable's tail: not this sheet's edge.
+        const dotted = (hidden[index] || []).flatMap(([h0, h1]) => jogSpans[index].reduce((parts, [c0, c1]) =>
+          parts.flatMap(([u0, u1]) => [[u0, Math.min(u1, c0)], [Math.max(u0, c1), u1]].filter(([v0, v1]) => v1 - v0 > 1e-6)),
+        [[Math.min(h0, h1), Math.max(h0, h1)]]));
+        dotted.forEach(([t0, t1]) => {
           ctx.moveTo(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0);
           ctx.lineTo(a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1);
         });

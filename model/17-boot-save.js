@@ -585,6 +585,10 @@
       delete roof.footprint;
       trimmed += 1;
     });
+    // THE SMALL GABLE'S TAIL OUT OF THE HIP (jb, 15 Nov 2026; geometry-2d
+    // refreshJogCuts): a file cut before the rule gets it, and a valley
+    // dragged since takes the cut with it.
+    if (G.refreshJogCuts) trimmed += G.refreshJogCuts(drawing.roofs || []);
     ['floors', 'shapes', 'outlines'].forEach(key => (drawing[key] || []).forEach(item => {
       if (!Array.isArray(item?.points) || item.points.length < 4) return;
       // A LOOP WITH ARCS KEEPS EVERY CORNER (jb, 11 Nov): a circle's four

@@ -1525,14 +1525,78 @@ if (!window.DraftGeometry2D) {
       else delete out.edgeHeelIn;
       return out;
     };
+    const bigRec = make(split.big, split.bigKinds, split.bigFrom);
+    const smallRec = make(split.small, split.smallKinds, split.smallFrom);
+    // THE HIP GIVES UP WHAT THE SMALL GABLE COVERS (jb, 15 Nov 2026: "the
+    // purple triangle cut from large hip roof"). See jogTailOf.
+    const tail = mode === 'gableBump' ? jogTailOf(smallRec) : null;
+    if (tail) bigRec.cuts = [{ points: tail, jog: true }];
     return {
       mode,
       three: split.three.slice(),
-      big: make(split.big, split.bigKinds, split.bigFrom),
-      small: make(split.small, split.smallKinds, split.smallFrom),
+      big: bigRec,
+      small: smallRec,
       bigFrom: split.bigFrom.slice(),
       smallFrom: split.smallFrom.slice(),
     };
+  };
+  // ── THE SMALL GABLE'S TAIL, CUT OUT OF THE HIP UNDER IT ──────────────
+  //
+  // jb, 15 Nov 2026, the stepped end hipped with a small gable over the part
+  // in front ('gableBump'): on the ROOF plan the triangle where the small
+  // gable runs back over the hip to its valleys read as an extra roof laid on
+  // top ("that extra roof can be removed ... the purple triangle cut from
+  // large hip roof"), and in the elevations the hip's front eave, which runs
+  // on under the small gable, showed across its gable wall. The tail is the
+  // run of the small piece's JOINT edges closed back on itself: the eave line
+  // across and the two valleys. It goes on the big roof as a `cuts` loop
+  // (`jog: true`), which keeps every plane where it was and only takes paper
+  // away (cutRoofFaces) -- notching the outline instead re-solves the hip.
+  const jogTailOf = small => {
+    const pts = Array.isArray(small?.points) ? small.points : [];
+    const kinds = Array.isArray(small?.edges) ? small.edges : [];
+    const n = pts.length;
+    if (n < 4 || kinds.length !== n) return null;
+    const isJoint = k => kinds[((k % n) + n) % n] === 'joint';
+    let first = -1;
+    for (let k = 0; k < n; k++) if (isJoint(k) && !isJoint(k - 1)) { first = k; break; }
+    if (first < 0) return null;
+    const loop = [pts[first]];
+    for (let k = first; isJoint(k) && loop.length <= n; k++) loop.push(pts[(k + 1) % n]);
+    if (loop.length < 3) return null;
+    const area2 = loop.reduce((sum, p, i) => {
+      const q = loop[(i + 1) % loop.length];
+      return sum + p.x * q.z - q.x * p.z;
+    }, 0);
+    if (Math.abs(area2) < 1e-3) return null;
+    // Convex only: a cut loop is taken out a half-plane at a time.
+    const sign = Math.sign(area2);
+    const convex = loop.every((p, i) => {
+      const q = loop[(i + 1) % loop.length], r = loop[(i + 2) % loop.length];
+      return ((q.x - p.x) * (r.z - q.z) - (q.z - p.z) * (r.x - q.x)) * sign >= -1e-9;
+    });
+    return convex ? loop.map(p => ({ x: p.x, z: p.z })) : null;
+  };
+  // Every big roof's jog cut, read again off its small piece: on open and on
+  // save (MODEL's trimSlivers), so a file cut before this rule gets it and a
+  // dragged valley takes the cut with it. Answers how many roofs changed.
+  const refreshJogCuts = roofs => {
+    const list = Array.isArray(roofs) ? roofs : [];
+    let changed = 0;
+    list.forEach(big => {
+      if (!big || !Array.isArray(big.points)) return;
+      const smalls = list.filter(r => r && r.jogOf != null && String(r.jogOf) === String(big.id));
+      const tails = smalls.map(jogTailOf).filter(Boolean).map(points => ({ points, jog: true }));
+      const kept = (Array.isArray(big.cuts) ? big.cuts : []).filter(c => !c?.jog);
+      const was = JSON.stringify((Array.isArray(big.cuts) ? big.cuts : []).filter(c => c?.jog)
+        .map(c => (c.points || []).map(p => [+(+p.x).toFixed(4), +(+p.z).toFixed(4)])));
+      const now = JSON.stringify(tails.map(c => c.points.map(p => [+(+p.x).toFixed(4), +(+p.z).toFixed(4)])));
+      if (was === now) return;
+      const cuts = [...kept, ...tails];
+      if (cuts.length) big.cuts = cuts; else delete big.cuts;
+      changed += 1;
+    });
+    return changed;
   };
   const stepVirtual = roof => {
     const pts = roof.points || [];
@@ -2253,9 +2317,23 @@ const minusConvex = (poly, hole) => {
 // on across it. `seams[i]` marks edge i (points[i] -> points[i + 1]) so a
 // painter that strokes face edges can leave them out; the cut's own edges,
 // where the sheet really stops, are not seams.
-const seamsOf = (points, holes) => points.map((p, i) => {
+// AND NOT ONE ON THE ROOF'S OWN OUTLINE (jb, 15 Nov 2026): the small
+// gable's tail cut out of a hip (jogTailOf) has its base on the hip's eave
+// line, and the eave beyond the cut runs on along that same line -- it is
+// still the sheet's edge, not a seam, and took its fascia band with it.
+const onOutline = (p, q, outline) => (Array.isArray(outline) ? outline : []).some((a, j) => {
+  const b = outline[(j + 1) % outline.length];
+  const len = Math.hypot(b.x - a.x, b.z - a.z);
+  if (len < 1e-9) return false;
+  const off = pt => Math.abs((b.x - a.x) * (pt.z - a.z) - (b.z - a.z) * (pt.x - a.x)) / len;
+  if (off(p) > 1e-6 || off(q) > 1e-6) return false;
+  const t = pt => ((pt.x - a.x) * (b.x - a.x) + (pt.z - a.z) * (b.z - a.z)) / (len * len);
+  return [t(p), t(q)].every(v => v > -1e-6 && v < 1 + 1e-6);
+});
+const seamsOf = (points, holes, outline = null) => points.map((p, i) => {
   const q = points[(i + 1) % points.length];
   const mid = { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 };
+  if (outline && onOutline(p, q, outline)) return false;
   return holes.some(hole => hole.some((a, j) => {
     const b = hole[(j + 1) % hole.length];
     const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
@@ -2274,7 +2352,7 @@ const cutRoofFaces = (faces, roof) => {
   return faces.flatMap(face => holes
     .reduce((polys, hole) => polys.flatMap(poly => minusConvex(poly, hole)), [face.points])
     .map(points => splitAtCorners(points, holes))
-    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, seamHoles) })));
+    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, seamHoles, Array.isArray(roof?.points) ? roof.points : null) })));
 };
 // A piece's edge along a hole's line can run past the hole's corner -- part
 // of it the cut, part a seam. Putting the corner in as a vertex makes each
@@ -5064,6 +5142,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     gableJogKinds,
     gableJogSplit,
     gableJogPieces,
+    jogTailOf,
+    refreshJogCuts,
     ROOF_GABLE_JOG_FT,
     ROOF_JOG_FT,
     ROOF_SEAM_JOG_FT,
