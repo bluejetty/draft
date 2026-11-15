@@ -65,10 +65,17 @@ const CHECKS = [
   // jb, 14 Nov 2026: one gable beside the step takes the foot and the eave
   // beyond it along -- the gable runs flush across the stepped end
   // (proto/flush-gable-harness.js has the whole of it).
-  { label: 'a step with one gable beside it carries the gable past the step onto the piece beyond',
-    fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'gable', 'eave', 'eave', 'eave', 'eave'])), 'ggeeeg'] },
+  // jb, 15 Nov 2026: "sometimes i'd like only one to be hip and the other
+  // to be gable" -- that run past is now GABLE END's and the autoroof's
+  // (`runPast`); a press on one piece leaves the other alone.
+  { label: 'GABLE END: a step with one gable beside it carries the gable past the step onto the piece beyond',
+    fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'gable', 'eave', 'eave', 'eave', 'eave'], { runPast: true })), 'ggeeeg'] },
+  { label: 'a press: a step with one gable beside it leaves the step and the piece beyond alone',
+    fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'gable', 'eave', 'eave', 'eave', 'eave'])), 'egeeee'] },
   { label: 'a step with eaves both sides stays an eave',
     fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'eave', 'eave', 'gable', 'eave', 'eave'])), 'eeegee'] },
+  { label: 'GABLE END: a step with eaves both sides stays an eave',
+    fn: G => [K(G.gableJogKinds(STEPPED, ['eave', 'eave', 'eave', 'gable', 'eave', 'eave'], { runPast: true })), 'eeegee'] },
   { label: 'a notch\'s bottom between two gables stays an eave',
     fn: G => [K(G.gableJogKinds(NOTCHED, NOTCH_KINDS)), 'eeegeg' + 'ee'] },
   { label: 'a step past the limit keeps its eave',
@@ -129,6 +136,8 @@ const MUTATIONS = [
     s => s.replace('        if (!squareToBoth || !sameWay) continue;', '        if (!squareToBoth) continue;')],
   ['a step beside one gable keeps its eave (both sides had to be solid)',
     s => s.replace('        if (!before && !after) continue;', '        if (!before || !after) continue;')],
+  ['a press on one piece runs past the step',
+    s => s.replace('        if (!runPast && (!before || !after)) continue;\n', '')],
   ['a step with no gable beside it is a gable',
     s => s.replace('        if (!before && !after) continue;', '')],
   ['the ring is solved as it stands, step and all',

@@ -22,6 +22,13 @@
 // underside (cut-view cornerTopAt, the rule the clipped gable's 45 corner
 // set): PR #1010's cap at the plate is undone, and this pins the climb.
 //
+// jb, 15 Nov 2026, the next morning: "when i switch the hip to gable it
+// changes BOTH hips to gables, sometimes i'd like only one to be hip and the
+// other to be gable". So a press now changes the piece pressed and no more
+// (model/15 jogEndPress cuts the roof into the pieces that say so); running
+// on past the step is what GABLE END and the autoroof ask for (`runPast`).
+// The flush roof below is the one GABLE END / ONE FLUSH GABLE make.
+//
 // Run: node proto/flush-gable-harness.js            (checks)
 //      node proto/flush-gable-harness.js --mutate   (checks + mutation table)
 const path = require('path');
@@ -30,8 +37,10 @@ const H = require('./harness-env.js');
 const ROOT = path.join(__dirname, '..');
 
 const MUTATIONS = [
-  ['a step beside one gable keeps its eave (both sides had to be solid)', 'geometry-2d.js',
+  ['GABLE END / the autoroof: a step beside one gable keeps its eave', 'geometry-2d.js',
     c => c.replace('        if (!before && !after) continue;', '        if (!before || !after) continue;')],
+  ['a press on one piece runs on past the step (both pieces go gable)', 'geometry-2d.js',
+    c => c.replace('        if (!runPast && (!before || !after)) continue;\n', '')],
   ['the eave beyond the step keeps its kind; only the foot goes gable', 'geometry-2d.js',
     c => c.replace("        if (!before) out[(i + n - 1) % n] = 'gable';\n        if (!after) out[(i + 1) % n] = 'gable';\n", '')],
   ['the peak is no station: the wall top runs flat under the apex', 'cut-view.js',
@@ -54,13 +63,21 @@ const MUTATIONS = [
   ['a file without jogOf: the small piece is not found by its JOINT', 'cut-view.js',
     c => c.replace('          if (partner == null) {\n            facesByRoof.forEach((_, other) => {', '          if (partner == null) { return;\n            facesByRoof.forEach((_, other) => {')],
   ['the small piece is not tucked back over the jog-out', 'geometry-2d.js',
-    c => c.replace('        if (backBy > 1e-3) {', '        if (false) {')],
+    c => c.replace('        } else if (backBy > 1e-3) {', '        } else if (false) {')],
   ['an arc running on along a JOINT is kept whole (the tucked piece cannot be faced)', 'geometry-2d.js',
     c => c.replace('    if (notched) return arcsOffSolidEdges(notched, solidEdgesOf(roof));', '    if (notched) return notched;')
       .replace('      return arcsOffSolidEdges(roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts })),\n        solidEdgesOf(roof));',
         '      return roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts }));')],
   ['the gable wall over a lower roof is not told apart', 'geometry-2d.js',
     c => c.replace('      if (!rings.some(ring => ringInside(mid, ring))) continue;', '      continue;')],
+  ['the part in front pressed alone is cut as two gables (no hipped piece)', 'geometry-2d.js',
+    c => c.replace("        if (mode === 'hipBump') {", '        if (false) {')],
+  ['the small gable runs no further back than the stepped-back line (no valleys)', 'geometry-2d.js',
+    c => c.replace("          small = [A, B, C, apex, farIn];", '          small = [A, B, C, farIn];')
+      .replace("          smallKinds = [K[at(i - 1)], 'eave', 'joint', 'joint', K[at(i - 2)]];", "          smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];")
+      .replace("          smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, -1, edgeIdx[at(i - 2)]];", '          smallFrom = [edgeIdx[at(i - 1)], edgeIdx[at(i)], -1, edgeIdx[at(i - 2)]];')],
+  ['a press anywhere finds any step', 'geometry-2d.js',
+    c => c.replace('    const wanted = three => (index == null || three.includes(index)) && Boolean(modeOf(three));', '    const wanted = three => Boolean(modeOf(three));')],
   ['a reopened file drops jogOf', 'drawing-format.js',
     c => c.replace("          ? { jogOf: String(roof.jogOf).trim() } : {}),", '          ? {} : {}),')],
 ];
@@ -106,21 +123,28 @@ const K = kinds => kinds.map(k => k[0]).join('');
 const pts = ring => ring.map(([x, z]) => ({ x, y: 0, z }));
 
 // ── THE KINDS ──────────────────────────────────────────────────────────
-check('one gable, the foot and the parallel eave beyond it go with it: flush across',
-  K(G.gableJogKinds(pts(ringOf(1)), LONG)) === K(FLUSH), K(G.gableJogKinds(pts(ringOf(1)), LONG)));
-check('the short piece pressed instead: the same flush gable',
-  K(G.gableJogKinds(pts(ringOf(1)), SHORT)) === K(FLUSH), K(G.gableJogKinds(pts(ringOf(1)), SHORT)));
+const PAST = { runPast: true };
+check('GABLE END: one gable, the foot and the parallel eave beyond it go with it: flush across',
+  K(G.gableJogKinds(pts(ringOf(1)), LONG, PAST)) === K(FLUSH), K(G.gableJogKinds(pts(ringOf(1)), LONG, PAST)));
+check('GABLE END on the short piece instead: the same flush gable',
+  K(G.gableJogKinds(pts(ringOf(1)), SHORT, PAST)) === K(FLUSH), K(G.gableJogKinds(pts(ringOf(1)), SHORT, PAST)));
+check('a press on one piece (jb, 15 Nov): that piece only, the step and the other piece keep their eaves',
+  K(G.gableJogKinds(pts(ringOf(1)), LONG)) === K(LONG) && K(G.gableJogKinds(pts(ringOf(1)), SHORT)) === K(SHORT),
+  `${K(G.gableJogKinds(pts(ringOf(1)), LONG))} ${K(G.gableJogKinds(pts(ringOf(1)), SHORT))}`);
+check('both pieces gable: the foot between them still goes gable',
+  K(G.gableJogKinds(pts(ringOf(1)), ['gable', 'eave', 'gable', 'eave', 'eave', 'eave'])) === K(FLUSH),
+  K(G.gableJogKinds(pts(ringOf(1)), ['gable', 'eave', 'gable', 'eave', 'eave', 'eave'])));
 check('no gable at all: the step rule touches nothing',
   K(G.gableJogKinds(pts(ringOf(1)), LONG.map(() => 'eave'))) === 'eeeeee', K(G.gableJogKinds(pts(ringOf(1)), LONG.map(() => 'eave'))));
 check('a step past the limit (8 ft) is a wing end: the gable stops at it',
-  K(G.gableJogKinds(pts(ringOf(8)), LONG)) === K(LONG), K(G.gableJogKinds(pts(ringOf(8)), LONG)));
+  K(G.gableJogKinds(pts(ringOf(8)), LONG, PAST)) === K(LONG), K(G.gableJogKinds(pts(ringOf(8)), LONG, PAST)));
 check('a sloped edge beyond the step is the roof\'s own business: untouched',
-  K(G.gableJogKinds(pts(ringOf(1)), ['gable', 'eave', 'sloped', 'eave', 'eave', 'eave'])) === 'geseee',
-  K(G.gableJogKinds(pts(ringOf(1)), ['gable', 'eave', 'sloped', 'eave', 'eave', 'eave'])));
+  K(G.gableJogKinds(pts(ringOf(1)), ['gable', 'eave', 'sloped', 'eave', 'eave', 'eave'], PAST)) === 'geseee',
+  K(G.gableJogKinds(pts(ringOf(1)), ['gable', 'eave', 'sloped', 'eave', 'eave', 'eave'], PAST)));
 
 // ── THE SOLVER: one ridge out to the front, nothing off the foot ───────
 {
-  const arcs = G.roofSkeleton(ROOF(LONG, 1));
+  const arcs = G.roofSkeleton(ROOF(FLUSH, 1));
   const ridge = arcs.filter(s => Math.abs(s.a.x - 9.75) < 0.01 && Math.abs(s.b.x - 9.75) < 0.01);
   const front = Math.max(...ridge.flatMap(s => [s.a.z, s.b.z]));
   check('the ridge sits mid-house (x 9.75) and runs out to the front gable (z 2)',
@@ -150,7 +174,7 @@ const fmt = xs => xs.map(key).join(' | ') || 'none';
 const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
   && Math.abs(x.a.u - u) < 0.01 && Math.abs(x.b.u - u) < 0.01 && Math.max(x.a.e, x.b.e) > PLATE + 0.1);
 {
-  const e1 = paint(house(LONG), 'E1');
+  const e1 = paint(house(FLUSH), 'E1');
   // The rake's underside at the step: the rake board's foot line (its
   // apex) less a third a foot over the 3.25 ft from the ridge.
   const corner = inkPlumbAt(e1, 13);
@@ -167,26 +191,10 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
     rakes.length >= 2 && rakes.every(x => onRake(x.a) && onRake(x.b))
       && Math.min(...rakes.flatMap(x => [x.a.u, x.b.u])) < -1.9 && Math.max(...rakes.flatMap(x => [x.a.u, x.b.u])) > 21.4,
     `apex ${apexE.toFixed(2)}; ${fmt(rakes)}`);
-  // The record as saved by an older page (one gable) and the healed one
-  // (three) paint alike: the drawing's roofs come healed (drawing-format.js
-  // reads every record through gableJogKinds; model/17 heals the file too).
-  const raw = new Set(e1.map(key)), healed = new Set(paint(house(FLUSH), 'E1').map(key));
-  const onlyRaw = [...raw].filter(k => !healed.has(k)), onlyHealed = [...healed].filter(k => !raw.has(k));
-  check('E1: the one-gable record paints stroke for stroke as the healed three-gable record',
-    !onlyRaw.length && !onlyHealed.length,
-    `only raw: ${onlyRaw.slice(0, 5).join(' | ') || 'none'}; only healed: ${onlyHealed.slice(0, 5).join(' | ') || 'none'}`);
-  check('E1: the short piece pressed instead paints the same',
-    (() => { const s = new Set(paint(house(SHORT), 'E1').map(key)); return s.size === raw.size && [...s].every(k => raw.has(k)); })(),
-    'differs');
 }
 // ── A DEEPER STEP, 5 ft, still inside the limit ────────────────────────
 {
-  const raw = new Set(paint(house(LONG, 5), 'E1').map(key)), healed = new Set(paint(house(FLUSH, 5), 'E1').map(key));
-  const onlyRaw = [...raw].filter(k => !healed.has(k)), onlyHealed = [...healed].filter(k => !raw.has(k));
-  check('E1 of a 5 ft step: the one-gable record paints as the healed one (the stepped piece climbs its rake too)',
-    !onlyRaw.length && !onlyHealed.length,
-    `only raw: ${onlyRaw.slice(0, 5).join(' | ') || 'none'}; only healed: ${onlyHealed.slice(0, 5).join(' | ') || 'none'}`);
-  const e1 = paint(house(LONG, 5), 'E1');
+  const e1 = paint(house(FLUSH, 5), 'E1');
   check('E1 of a 5 ft step: the corner at u 13 climbs into the gable too', inkPlumbAt(e1, 13).length > 0, fmt(inkPlumbAt(e1, 13)));
 }
 
@@ -279,11 +287,11 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
 // splitJogGable); E1 shows two peaks, the small one in front and lower.
 {
   const both = [ringOf(1).map(([x, z]) => ({ x, y: 0, z }))].map(pts => pts)[0];
-  [['as drawn', both, LONG], ['wound the other way', both.slice().reverse(), LONG.slice(0, 5).reverse().concat(LONG[5])]]
+  [['as drawn', both, FLUSH], ['wound the other way', both.slice().reverse(), FLUSH.slice(0, 5).reverse().concat(FLUSH[5])]]
     .forEach(([how, pts, kinds]) => {
       // Reversed: edge k of the reversed ring is old edge n-2-k.
       const n = pts.length;
-      const k2 = how === 'as drawn' ? kinds : pts.map((_, k) => LONG[((n - 2 - k) % n + n) % n]);
+      const k2 = how === 'as drawn' ? kinds : pts.map((_, k) => FLUSH[((n - 2 - k) % n + n) % n]);
       const split = G.gableJogSplit(pts, k2);
       const box = ring => ring.map(p => `${p.x},${p.z}`).sort().join(' ');
       check(`two gables (${how}): the big roof stops on the stepped-back line, the small one is the part that sticks out`,
@@ -293,8 +301,8 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
           && split.bigKinds.filter(k => k === 'gable').length === 1,
         split ? `${box(split.big)} | ${box(split.small)} ${split.smallKinds}` : 'no split');
     });
-  const pieces = G.gableJogPieces(ROOF(LONG, 1));
-  const two = { ...house(LONG), roofs: [{ ...pieces.big, id: 'roof-1' }, { ...pieces.small, id: 'roof-2', jogOf: 'roof-1' }] };
+  const pieces = G.gableJogPieces(ROOF(FLUSH, 1));
+  const two = { ...house(FLUSH), roofs: [{ ...pieces.big, id: 'roof-1' }, { ...pieces.small, id: 'roof-2', jogOf: 'roof-1' }] };
   const e1 = paint(two, 'E1');
   const heavy = e1.filter(x => x.w === 2.25 && Math.abs(x.a.u - x.b.u) > 0.3 && Math.abs(x.a.e - x.b.e) > 0.3);
   const apexAt = u => heavy.some(x => [x.a, x.b].some(p => Math.abs(p.u - u) < 0.05));
@@ -362,6 +370,54 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
       b1 && b1.jogOf === 'roof-1' && b0 && b0.flushOf && b0.flushOf.points.length === 6,
       `jogOf ${b1 && b1.jogOf}, flushOf ${b0 && b0.flushOf ? b0.flushOf.points.length + ' points' : 'none'}`);
   } else check('drawing-format reachable', false, Object.keys(win).filter(k => /Format/.test(k)).join());
+}
+
+// ── ONE PIECE AT A TIME (jb, 15 Nov 2026) ──────────────────────────────
+//
+// "sometimes i'd like only one to be hip and the other to be gable". Only
+// the stepped-back piece a gable: "the hip should end at the 'gable wall'
+// that goes across for the large gable" -- the big gable across as for two
+// gables, the part in front a small roof hipped at its front corners and
+// stopped by a JOINT on the big gable's wall line. Only the part that
+// sticks out a gable: "othe way around needs a valley" -- the end hipped
+// across the stepped-back line, a small gable over the part in front whose
+// ridge runs back into it, two JOINTs (valleys) meeting at its end.
+{
+  const box = ring => ring.map(p => `${p.x},${p.z}`).sort().join(' ');
+  const hipBump = G.gableJogPieces(ROOF(SHORT, 1));
+  check('stepped-back piece only: the big gable across the house, the part in front a hipped piece back to the big gable wall',
+    !!hipBump && hipBump.mode === 'hipBump'
+      && box(hipBump.big.points) === box([{ x: -2, z: 1 }, { x: 21.5, z: 1 }, { x: 21.5, z: -43.5 }, { x: -2, z: -43.5 }])
+      && hipBump.big.edges.filter(k => k === 'gable').length === 1
+      && box(hipBump.small.points) === box([{ x: -2, z: 2 }, { x: 15, z: 2 }, { x: 15, z: -1 }, { x: -2, z: -1 }])
+      && hipBump.small.edges.slice().sort().join() === 'eave,eave,eave,joint',
+    hipBump ? `${hipBump.mode}: ${box(hipBump.big.points)} | ${box(hipBump.small.points)} ${hipBump.small.edges}` : 'no split');
+  const gableBump = G.gableJogPieces(ROOF(LONG, 1));
+  check('part in front only: the end hipped across the stepped-back line, a small gable running back to a valley end half its width in',
+    !!gableBump && gableBump.mode === 'gableBump'
+      && box(gableBump.big.points) === box([{ x: -2, z: 1 }, { x: 21.5, z: 1 }, { x: 21.5, z: -43.5 }, { x: -2, z: -43.5 }])
+      && !gableBump.big.edges.includes('gable')
+      && box(gableBump.small.points) === box([{ x: -2, z: 2 }, { x: 15, z: 2 }, { x: 15, z: 1 }, { x: 6.5, z: -7.5 }, { x: -2, z: 1 }])
+      && gableBump.small.edges.slice().sort().join() === 'eave,eave,gable,joint,joint',
+    gableBump ? `${gableBump.mode}: ${box(gableBump.big.points)} | ${box(gableBump.small.points)} ${gableBump.small.edges}` : 'no split');
+  check('a press names its step: an edge off the step finds no pieces', G.gableJogPieces(ROOF(LONG, 1), { index: 4 }) === null,
+    'found');
+  if (gableBump) {
+    const arcs = G.roofSkeleton({ ...gableBump.small, id: 'roof-2' });
+    const ridge = arcs.filter(a => Math.abs(a.a.x - 6.5) < 0.01 && Math.abs(a.b.x - 6.5) < 0.01);
+    const zs = ridge.flatMap(a => [a.a.z, a.b.z]);
+    check('the small gable\'s ridge runs from its gable (z 2) back to where the valleys meet (z -7.5)',
+      ridge.length > 0 && Math.abs(Math.max(...zs) - 2) < 0.01 && Math.abs(Math.min(...zs) + 7.5) < 0.01,
+      arcs.map(a => `${a.a.x},${a.a.z}->${a.b.x},${a.b.z}`).join(' | '));
+    const saved = { ...house(LONG), roofs: [{ ...gableBump.big, id: 'roof-1' }, { ...gableBump.small, id: 'roof-2', jogOf: 'roof-1' }] };
+    const e1 = paint(saved, 'E1');
+    const heavy = e1.filter(x => x.w === 2.25 && Math.abs(x.a.u - x.b.u) > 0.3 && Math.abs(x.a.e - x.b.e) > 0.3);
+    const top = Math.max(...heavy.flatMap(x => [x.a.e, x.b.e]));
+    const peakU = heavy.flatMap(x => [x.a, x.b]).filter(p => Math.abs(p.e - top) < 0.01).map(p => p.u);
+    check('E1: the small gable peaks over the part in front (u 6.5); the hipped end shows no rake',
+      peakU.length > 0 && peakU.every(u => Math.abs(u - 6.5) < 0.05) && heavy.every(x => Math.max(x.a.u, x.b.u) <= 15.05),
+      `peak at ${peakU.map(u => u.toFixed(2)).join()}: ${fmt(heavy)}`);
+  }
 }
 
 const failed = CHECKS.filter(c => !c.ok);
