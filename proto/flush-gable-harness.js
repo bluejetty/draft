@@ -47,6 +47,13 @@ const MUTATIONS = [
     c => c.replace("const smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];", "const smallKinds = [K[at(i - 1)], 'eave', 'eave', K[at(i - 2)]];")],
   ['a rake\'s foot is drawn the whole run, through what stands in front', 'cut-view.js',
     c => c.replace("const footShows = t => { const q = at(t); return !hidden(q.p, q.e, q.u); };", "const footShows = () => true;")],
+  ['the wall that sticks out climbs to the big rake over the small gable', 'cut-view.js',
+    c => c.replace('      if (jog) top = Math.max(top, jog.top);', '      if (false) top = Math.max(top, jog.top);')
+      .replace("const jogFront = jog ? new Set([String(jog.skip)]) : null;", 'const jogFront = null;')],
+  ['a file without jogOf: the small piece is not found by its JOINT', 'cut-view.js',
+    c => c.replace('          if (partner == null) {\n            const j = (i + 2) % 4;', '          if (partner == null) { return;\n            const j = (i + 2) % 4;')],
+  ['a reopened file drops jogOf', 'drawing-format.js',
+    c => c.replace("          ? { jogOf: String(roof.jogOf).trim() } : {}),", '          ? {} : {}),')],
 ];
 
 if (MUTATE) {
@@ -294,6 +301,27 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
   const lowEnd = Math.min(...bigFoot.flatMap(x => [x.a.u, x.b.u]));
   check('two gables, E1: the big rake\'s heavy foot stops at the small gable\'s rake board (u ~7.15), not through it to the peak',
     bigFoot.length > 0 && lowEnd > 7.0, `low end u ${lowEnd.toFixed(2)}`);
+  // jb, 15 Nov: "front has the line that extends up from lower roof to
+  // upper roof which should be just white". The wall that sticks out carries
+  // the small gable: its step corner stops under the small rake (17.93 at
+  // u 13), not up the big gable's face to the big rake (20.08). Also when
+  // the file has lost the small piece's `jogOf` (found by its JOINT).
+  const smallUnder = 17.93;   // the small rake's underside at u 13, read off the paint
+  [['named', two], ['unnamed', { ...two, roofs: two.roofs.map(({ jogOf: _j, ...r }) => r) }]].forEach(([how, saved]) => {
+    const corner = inkPlumbAt(paint(saved, 'E1'), 13);
+    const cTop = Math.max(...corner.flatMap(x => [x.a.e, x.b.e]));
+    check(`two gables, E1 (${how}): the step corner stops under the small rake, no line up the big gable`,
+      corner.length > 0 && cTop < 18.2, `corner top ${cTop.toFixed(2)} (small rake ~${smallUnder.toFixed(2)}): ${fmt(corner)}`);
+  });
+  // A reopened file keeps the pair: drawing-format keeps `jogOf` and `flushOf`.
+  const F = win.DraftDrawingFormat;
+  if (F && typeof F.roofs === 'function') {
+    const flat = { ...ROOF(FLUSH, 1) };
+    const [b0, b1] = F.roofs([{ ...two.roofs[0], flushOf: flat }, two.roofs[1]], new Set([3, 5, 7]));
+    check('two gables: a reopened file keeps jogOf on the small piece and flushOf on the big one',
+      b1 && b1.jogOf === 'roof-1' && b0 && b0.flushOf && b0.flushOf.points.length === 6,
+      `jogOf ${b1 && b1.jogOf}, flushOf ${b0 && b0.flushOf ? b0.flushOf.points.length + ' points' : 'none'}`);
+  } else check('drawing-format reachable', false, Object.keys(win).filter(k => /Format/.test(k)).join());
 }
 
 const failed = CHECKS.filter(c => !c.ok);

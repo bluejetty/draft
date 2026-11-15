@@ -5021,6 +5021,9 @@ if (!window.DraftCutView) {
       if (!facesByRoof) return top;
       if (carriesStoreyAbove(pt, plateTop, wall, wallDir)) return top;
       top = heelTopAt(pt, plateTop, wallDir, wall);
+      const jog = jogGableTopAt(pt, plateTop, wallDir);
+      const jogFront = jog ? new Set([String(jog.skip)]) : null;
+      if (jog) top = Math.max(top, jog.top);
       facesByRoof.forEach((roofFaces, roof) => {
         const base = roofBaseElev(roof, stack, env);
         if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
@@ -5045,9 +5048,78 @@ if (!window.DraftCutView) {
         if (!nearGable) return;
         const rise = sectionRoofHeightAt(pt, roof, roofFaces);
         if (rise == null) return;
+        if (jogFront && jogFront.has(String(roof.id))) return;   // the small gable carries this wall
         top = Math.max(top, base + rise);   // wall stops under the fascia
       });
       return top;
+    };
+    // ── THE WALL UNDER THE SMALL OF TWO GABLES (jb, 15 Nov 2026) ──────────
+    //
+    // "front has the line that extends up from lower roof to upper roof which
+    // should be just white". A stepped end split into two gables (geometry-2d
+    // gableJogPieces) leaves the small piece over the eave ring's part that
+    // sticks out -- in plan, in front of the wall that sticks out, which
+    // stands under the big roof's gable overhang. Read as before, that wall
+    // climbed to the big rake and its step corner drew a line up the big
+    // gable's face. It is the small gable's wall: it stops under the small
+    // rake, read along the small piece's ridge-wise line (a gable piece's
+    // rise holds all the way along the normal to its gable edge). Only the
+    // wall a gable overhang off the small gable counts; the stepped-back wall,
+    // a step further in, stays the big roof's.
+    const ROOF_JOG_PIECE_FT = 6;   // geometry-2d's ROOF_GABLE_JOG_FT
+    const distToLine = (p, a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z;
+      return Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / (Math.hypot(dx, dz) || 1);
+    };
+    const jogGableTopAt = (pt, plateTop, wallDir) => {
+      if (!facesByRoof || !wallDir) return null;
+      let best = null, skip = null;
+      facesByRoof.forEach((roofFaces, roof) => {
+        const pts = roof.points || [];
+        if (!roof.jogOf && !(pts.length === 4 && (roof.edges || []).includes('joint'))) return;
+        const base = roofBaseElev(roof, stack, env);
+        if (Math.abs(base - plateTop) > 0.6) return;
+        pts.forEach((a, i) => {
+          if (edgeKindOf(roof, i) !== 'gable') return;
+          const b = pts[(i + 1) % pts.length];
+          const gx = b.x - a.x, gz = b.z - a.z;
+          const gLen = Math.hypot(gx, gz) || 1;
+          if (Math.abs(wallDir.x * gz - wallDir.z * gx) / gLen > 0.2) return;
+          const along = ((pt.x - a.x) * gx + (pt.z - a.z) * gz) / gLen;
+          if (along < -1e-6 || along > gLen + 1e-6) return;
+          // Inward normal and the piece's depth from its gable edge.
+          let nx = -gz / gLen, nz = gx / gLen;
+          const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+          const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+          if ((cx - a.x) * nx + (cz - a.z) * nz < 0) { nx = -nx; nz = -nz; }
+          const depth = Math.max(...pts.map(p => (p.x - a.x) * nx + (p.z - a.z) * nz));
+          // The partner: the big roof named, or -- a file written before the
+          // name was kept -- the roof whose gable runs along this piece's
+          // JOINT, the edge opposite its gable, a step (6 ft or less) back.
+          let partner = roof.jogOf != null ? String(roof.jogOf) : null;
+          if (partner == null) {
+            const j = (i + 2) % 4;
+            if (roof.edges[j] !== 'joint' || depth > ROOF_JOG_PIECE_FT) return;
+            const c = pts[j], d = pts[(j + 1) % 4];
+            facesByRoof.forEach((_, other) => {
+              if (other === roof || partner != null) return;
+              const op = other.points || [];
+              if (op.some((e, k) => edgeKindOf(other, k) === 'gable'
+                && [c, d].every(p => distToLine(p, e, op[(k + 1) % op.length]) < 0.05))) partner = String(other.id);
+            });
+            if (partner == null) return;
+          }
+          const over = Array.isArray(roof.edgeOverhang) && Number.isFinite(Number(roof.edgeOverhang[i]))
+            ? Number(roof.edgeOverhang[i]) : (Number(roof.overhang) || 0);
+          const off = (pt.x - a.x) * nx + (pt.z - a.z) * nz;
+          if (off < depth - 1e-6 || off > over + depth / 2 + 1e-6 || off < over - depth / 2 - 1e-6) return;
+          const q = { x: a.x + gx / gLen * along + nx * depth / 2, z: a.z + gz / gLen * along + nz * depth / 2 };
+          const rise = sectionRoofHeightAt(q, roof, roofFaces);
+          if (rise == null) return;
+          if (best == null || base + rise > best) { best = base + rise; skip = partner; }
+        });
+      });
+      return best == null ? null : { top: best, skip };
     };
     // A wall standing BEHIND a nearer roof is not visible through it. Walls
     // hide each other by the painter's algorithm — far first, each filled
