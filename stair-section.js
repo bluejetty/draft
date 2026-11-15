@@ -37,10 +37,51 @@ if (!window.DraftStairSection) {
 
   // Turned shapes draw UNFOLDED along the walk line: a flat landing adds its
   // depth to the developed run; winders unfold to the straight length.
+  //
+  // THE DESCENT UNFOLDED (stairSequence): every stretch of treads and every
+  // flat landing in walking order -- an L's one landing, a U's two (jb, 14
+  // Nov 2026) with any middle flight between them. `segs` are the tread
+  // stretches, `flats` the landings ({ u0, u1, e }), `flights` what each
+  // riser run is: a stretch of treads and the riser down off its end.
+  const stairUnfold = (layout, split) => {
+    const riseStep = layout.riserIn / 12;
+    const runStep = treadRunIn() / 12;
+    const seq = SG().stairSequence ? SG().stairSequence(split) : null;
+    const hasFlat = !!(seq && seq.some(item => item.flatFt));
+    if (!hasFlat) {
+      return { segs: [{ u0: 0, treads: layout.treads }], flats: [],
+        flights: [{ u0: 0, e0: 0, risers: layout.risers }], runFt: layout.runFt };
+    }
+    const segs = [], flats = [], flights = [];
+    let u = 0, e = 0, open = { u0: 0, e0: 0, treads: 0 };
+    seq.forEach(item => {
+      if (item.treads) {
+        segs.push({ u0: u, treads: item.treads });
+        open.treads += item.treads;
+        u += item.treads * runStep;
+        return;
+      }
+      // A flat ends the flight in hand: its treads and the riser down onto it.
+      flights.push({ u0: open.u0, e0: open.e0, risers: open.treads + 1 });
+      e -= (open.treads + 1) * riseStep;
+      flats.push({ u0: u, u1: u + item.flatFt, e });
+      u += item.flatFt;
+      open = { u0: u, e0: e, treads: 0 };
+    });
+    flights.push({ u0: open.u0, e0: open.e0, risers: open.treads + 1 });
+    return { segs, flats, flights, runFt: u };
+  };
+  // The turn in words for a pane's caption.
+  const turnWord = split => {
+    const one = n => (n ? `${n} WINDERS` : 'FLAT');
+    if (split.shape === 'L') return split.winders ? `${split.winders} WINDERS` : 'LANDING';
+    if (split.merged) return 'LANDING';
+    return `UPPER ${one(split.winders)} · LOWER ${one(split.lowerWinders)}`
+      + (split.midRisers ? ` · ${split.midRisers} STEP${split.midRisers === 1 ? '' : 'S'} BETWEEN` : '');
+  };
   const devRun = (stair, layout) => {
     const split = SG().stairShapeSplit(stair, layout);
-    if (!split || split.winders) return { runFt: layout.runFt, split };
-    return { runFt: (split.t1 + split.t2) * treadRunIn() / 12 + split.landFt, split };
+    return { runFt: stairUnfold(layout, split).runFt, split };
   };
 
   const paneRects = (w, h, mode = 'split') => {
@@ -168,18 +209,12 @@ if (!window.DraftStairSection) {
   // stair (or winders, which unfold straight), two around the flat landing
   // for an L or U. `landU` is where the last riser meets the floor below.
   const stairFlights = (layout, split) => {
-    const riseStep = layout.riserIn / 12;
     const runStep = treadRunIn() / 12;
-    const flat = split && !split.winders ? split : null;
-    const flights = flat
-      ? [
-        { u0: 0, e0: 0, risers: flat.t1 + 1 },
-        { u0: flat.t1 * runStep + flat.landFt, e0: -(flat.t1 + 1) * riseStep, risers: layout.risers - flat.t1 - 1 },
-      ]
-      : [{ u0: 0, e0: 0, risers: layout.risers }];
+    const { flights, flats } = stairUnfold(layout, split);
+    const flat = flats.length ? split : null;
     const last = flights[flights.length - 1];
     const landU = last.u0 + last.risers * runStep - STAIR_RISER_FACE_IN / 12;
-    return { flat, flights, landU };
+    return { flat, flats, flights, landU };
   };
 
   // Where a flight's rail ends: the face of its last riser, 36" over the
@@ -194,7 +229,7 @@ if (!window.DraftStairSection) {
     ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
     const split = dev.split;
     const shapeNote = split
-      ? ` · ${split.shape} SHAPE UNFOLDED${split.winders ? ` (${split.winders} WINDERS)` : ' (LANDING)'}`
+      ? ` · ${split.shape} SHAPE UNFOLDED (${turnWord(split)})`
       : '';
     env.header(ctx, rect,
       `STAIR SECTION — ${layout.risers}R @ ${env.inchesOnly(layout.riserIn)} · TREADS FULL 2x12 · RISERS 3/4" PLY FACE @ ${env.inchesOnly(STAIR_RISER_FACE_IN)}${shapeNote}`);
@@ -204,7 +239,7 @@ if (!window.DraftStairSection) {
     const fadeLine = 'rgba(89,128,166,0.55)';
     const noteFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
 
-    const { flat, flights, landU } = stairFlights(layout, split);
+    const { flat, flats, flights, landU } = stairFlights(layout, split);
 
     // Faded upper floor band, cut at the opening edge (u = 0).
     const floorFt = env.floorFt(stair.levelId);
@@ -221,31 +256,31 @@ if (!window.DraftStairSection) {
 
     // The mid-flight landing on a turned stair: a level structural band
     // between the two flights, labelled with its clear size rule.
-    if (flat) {
-      const uL0 = flights[1].u0 - flat.landFt;
-      const eL = flights[1].e0;
-      const x = uToX(uL0), w = flat.landFt * pxPerFt;
+    // A U's two landings each draw their band, the upper and the lower.
+    flats.forEach((band, i) => {
+      const x = uToX(band.u0), w = (band.u1 - band.u0) * pxPerFt;
       ctx.fillStyle = 'rgba(93,74,138,0.12)';
       ctx.strokeStyle = STAIR_COLOR;
       ctx.lineWidth = 1.25;
-      ctx.fillRect(x, yOf(eL), w, (8 / 12) * pxPerFt);
-      ctx.strokeRect(x, yOf(eL), w, (8 / 12) * pxPerFt);
+      ctx.fillRect(x, yOf(band.e), w, (8 / 12) * pxPerFt);
+      ctx.strokeRect(x, yOf(band.e), w, (8 / 12) * pxPerFt);
       ctx.fillStyle = 'rgba(29,31,32,0.7)';
       ctx.font = noteFont;
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillText(`LANDING — 36" CLEAR${flat.shape === 'U' ? ' · RUNS 4.5" APART' : ''}`, x + w / 2, yOf(eL) - 3);
-    }
+      const name = flats.length > 1 ? (i === 0 ? 'UPPER LANDING' : 'LOWER LANDING') : 'LANDING';
+      const apart = flat.shape === 'U' && flat.merged ? ' · RUNS 4.5" APART' : '';
+      ctx.fillText(`${name} — 36" CLEAR${apart}`, x + w / 2, yOf(band.e) - 3);
+    });
 
     // The handrail, one constant 36" above the nosing line: sloped along
     // each flight, LEVEL across the landing, connected through the turn.
     if (stair.rail && stair.rail !== 'none') {
       const railFt = 3;
       const railPts = [{ u: 0, e: railFt }];
-      if (flat) {
-        const eL = flights[1].e0;
-        railPts.push({ u: flights[1].u0 - flat.landFt, e: eL + railFt });
-        railPts.push({ u: flights[1].u0, e: eL + railFt });
-      }
+      flats.forEach(band => {
+        railPts.push({ u: band.u0, e: band.e + railFt });
+        railPts.push({ u: band.u1, e: band.e + railFt });
+      });
       railPts.push({ u: landU, e: -layout.riseFt + railFt });
       ctx.strokeStyle = STAIR_COLOR;
       ctx.lineWidth = 2.5;
@@ -317,7 +352,7 @@ if (!window.DraftStairSection) {
     ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
     const split = dev.split;
     const shapeNote = split
-      ? ` · ${split.shape} SHAPE UNFOLDED${split.winders ? ` (${split.winders} WINDERS)` : ''}`
+      ? ` · ${split.shape} SHAPE UNFOLDED (${turnWord(split)})`
       : '';
     env.header(ctx, rect, `STAIR PLAN — DN ${layout.risers}R TO THE RIGHT · ${env.ftIn(stair.widthFt)} WIDE${shapeNote}`);
     const runStep = treadRunIn() / 12;
@@ -369,13 +404,7 @@ if (!window.DraftStairSection) {
     // arrow. Unfolded, the tread segments to draw: either the whole run, or
     // the two runs around the flat landing band.
     const half = (stair.widthFt / 2) * pxPerFt;
-    const flat = split && !split.winders ? split : null;
-    const segs = flat
-      ? [
-        { u0: 0, treads: flat.t1 },
-        { u0: flat.t1 * runStep + flat.landFt, treads: flat.t2 },
-      ]
-      : [{ u0: 0, treads: layout.treads }];
+    const { segs, flats } = stairUnfold(layout, split);
     const x0 = uToX(0), x1 = uToX(dev.runFt);
     ctx.strokeStyle = STAIR_COLOR;
     ctx.fillStyle = STAIR_COLOR;
@@ -394,12 +423,12 @@ if (!window.DraftStairSection) {
     });
     ctx.stroke();
     // The flat landing band, labelled with its clear-size rule.
-    if (flat) {
-      const lx0 = uToX(flat.t1 * runStep), lx1 = uToX(flat.t1 * runStep + flat.landFt);
+    flats.forEach((band, i) => {
+      const lx0 = uToX(band.u0), lx1 = uToX(band.u1);
       ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('LANDING', (lx0 + lx1) / 2, vMid + half / 2);
-    }
+      ctx.fillText(flats.length > 1 ? (i === 0 ? 'UPPER' : 'LOWER') : 'LANDING', (lx0 + lx1) / 2, vMid + half / 2);
+    });
     if (stair.rail && stair.rail !== 'none') {
       const inset = Math.min(half - 1, 0.25 * pxPerFt);
       const sides = stair.rail === 'both' ? [-1, 1] : [stair.rail === 'right' ? 1 : -1];
@@ -490,6 +519,7 @@ if (!window.DraftStairSection) {
     STAIR_OPENING_NOSING_MIN_IN,
     devRun,
     stairFlights,
+    stairUnfold,
     notchRootE,
     flightRailEnd,
     drawFlight,

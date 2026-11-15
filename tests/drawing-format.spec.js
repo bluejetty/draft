@@ -80,13 +80,14 @@ test('cuts keep their level, normalise direction and drop duplicates', async ({ 
   expect(cuts[1]).toMatchObject({ id: 2, levelId: null });
 });
 
-test('stairs default to straight and only an L keeps winders', async ({ page }) => {
+test('stairs default to straight; a turned stair keeps its winders, a U its two landings', async ({ page }) => {
   const stairs = await page.evaluate(() => window.DraftDrawingFormat.stairs([
     // A pre-shape record (no shape/turn/winders) stays a straight stair.
     { id: 1, start: { x: 0, z: 0 }, end: { x: 5, z: 0 }, levelId: 3, view: 'plan', riseFt: 9, risers: 14 },
     { id: 2, start: { x: 0, z: 0 }, end: { x: 5, z: 0 }, levelId: 3, view: 'plan', riseFt: 9, risers: 14, shape: 'L', turn: 'left', winders: 2 },
-    // Winders never survive on a U — its landing must stay flat here.
-    { id: 3, start: { x: 0, z: 0 }, end: { x: 5, z: 0 }, levelId: 3, view: 'plan', riseFt: 9, risers: 14, shape: 'U', winders: 3 },
+    // A U has TWO landings (jb, 14 Nov 2026), each flat or 2 or 3 winders,
+    // with the risers between them -- all three kept.
+    { id: 3, start: { x: 0, z: 0 }, end: { x: 5, z: 0 }, levelId: 3, view: 'plan', riseFt: 9, risers: 14, shape: 'U', winders: 3, lowerWinders: 2, midRisers: 2 },
     // Junk shape and winder counts normalise to the safe defaults.
     { id: 4, start: { x: 0, z: 0 }, end: { x: 5, z: 0 }, levelId: 3, view: 'plan', riseFt: 9, risers: 14, shape: 'S', turn: 'up', winders: 5 },
   ], new Set([3])));
@@ -94,8 +95,9 @@ test('stairs default to straight and only an L keeps winders', async ({ page }) 
   expect(stairs).toHaveLength(4);
   expect(stairs[0]).toMatchObject({ id: 1, shape: 'straight', turn: 'right', winders: 0 });
   expect(stairs[1]).toMatchObject({ id: 2, shape: 'L', turn: 'left', winders: 2 });
-  expect(stairs[2]).toMatchObject({ id: 3, shape: 'U', winders: 0 });
+  expect(stairs[2]).toMatchObject({ id: 3, shape: 'U', winders: 3, lowerWinders: 2, midRisers: 2 });
   expect(stairs[3]).toMatchObject({ id: 4, shape: 'straight', turn: 'right', winders: 0 });
+  expect(stairs[3].lowerWinders, 'a second landing is a U\'s only').toBeUndefined();
 });
 
 test('background levels exclude the active level and cap at two', async ({ page }) => {

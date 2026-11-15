@@ -1350,7 +1350,13 @@ if (!window.DraftDrawingFormat) {
         rail: oneOf(stair?.rail, ['left', 'right', 'both', 'none'], 'left'),
         shape,
         turn: oneOf(stair?.turn, ['left', 'right'], 'right'),
-        winders: shape === 'L' ? oneOf(Number(stair?.winders), [0, 2, 3], 0) : 0,
+        // A U HAS TWO LANDINGS (jb, 14 Nov 2026): `winders` is the upper
+        // (an L's only one), `lowerWinders` the lower, and `midRisers` the
+        // risers between them (0 = level). Written only when set.
+        winders: shape === 'straight' ? 0 : oneOf(Number(stair?.winders), [0, 2, 3], 0),
+        ...(shape === 'U' && [2, 3].includes(Number(stair?.lowerWinders)) ? { lowerWinders: Number(stair.lowerWinders) } : {}),
+        ...(shape === 'U' && Number.isInteger(Number(stair?.midRisers)) && Number(stair?.midRisers) > 0
+          ? { midRisers: Number(stair.midRisers) } : {}),
         auto: stair?.auto === true,
         ...(Number.isInteger(splitTreads) && splitTreads > 0 ? { splitTreads } : {}),
         ...(Number.isInteger(riserCount) && riserCount > 0 ? { riserCount } : {}),
@@ -1531,6 +1537,26 @@ if (!window.DraftDrawingFormat) {
         // else -- and a note drawn before the choice existed -- is the arrow.
         const end = tip && m.end === 'line' ? { end: 'line' } : {};
         return { id, cut, kind: 'note', at, text, ...(tip ? { tip } : {}), ...end };
+      }
+      // A SHAPE AND A DIMENSION drawn over the view (jb, 14 Nov 2026: "allow
+      // the AREA / SHAPE and dimension commands to work on those pages too so
+      // i can draw overtop to fix small problems quickly"). A shape is a
+      // closed ring with the plan shape's hatch and linetype; a dimension is
+      // the two points it measures (`a`, `b`) and the two ends of its line
+      // (`la`, `lb`), so it prints where it was put at any scale.
+      if (m?.kind === 'shape') {
+        const points = (Array.isArray(m.points) ? m.points : []).map(pt).filter(Boolean);
+        if (points.length < 3) return null;
+        seen.add(id);
+        return { id, cut, kind: 'shape', points,
+          ...(SHAPE_HATCH_IDS.includes(String(m.hatch ?? '')) ? { hatch: String(m.hatch) } : {}),
+          ...(SHAPE_STYLE_IDS.includes(String(m.style ?? '')) ? { style: String(m.style) } : {}) };
+      }
+      if (m?.kind === 'dim') {
+        const a = pt(m.a), b = pt(m.b), la = pt(m.la), lb = pt(m.lb);
+        if (!a || !b || !la || !lb || Math.hypot(lb.u - la.u, lb.e - la.e) < 0.01) return null;
+        seen.add(id);
+        return { id, cut, kind: 'dim', a, b, la, lb };
       }
       return null;
     }).filter(Boolean);

@@ -2275,7 +2275,10 @@
         // AND PRINTSCREEN IS ALREADY RIGHT because this reads the live
         // `skin`: inDaylight swaps it to day for the length of the shoot, so
         // a drafter working at night still hands a client a white drawing.
-        window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
+        // WHAT THE PAINTER DRAWS IS RECORDED for the snap (elev-snap.js):
+        // the view keeps no records of its own to catch.
+        const inkRec = window.DraftElevSnap ? window.DraftElevSnap.recorder(ctx, cssW, cssH) : null;
+        window.DraftCutView.drawCutView(cutEnv(), inkRec ? inkRec.ctx : ctx, cssW, cssH, cut,
           // AND A TENTH OF THE DRAWING OF AIR ROUND IT (Movie, 23 Oct: "make
           // sure it zooms out to show the entire building in addition to
           // the ELEVATION marks on the side ... about 10% extra cushion").
@@ -2297,11 +2300,16 @@
             ...(elevPinned(cut) ? { frame: elevPin } : {}),
             selectedMark: elevSelected,
             selectColor: skin['draw-selected'],
+            markScreen: true,
             markPreview: (activeTool === 'line' && elevLineStart && elevCursor)
               ? { kind: 'line', a: elevLineStart, b: elevCursor }
               : (activeTool === 'annotation' && elevPointerTip && elevCursor)
                 ? { kind: 'note', at: elevCursor, tip: elevPointerTip, text: '', end: noteEnd }
-                : null });
+                : typeof elevPreview === 'function' ? elevPreview() : null });
+        elevInk = inkRec && elevFrame ? { segs: inkRec.segments(), frame: { ...elevFrame }, feet: null } : null;
+        // THE CATCH, the plan's orange ring (a crossing yellow, a point on a
+        // line neon), over everything the view drew.
+        if (typeof paintElevSnap === 'function') paintElevSnap();
 
         // THE MASK CLIMBS BOTTOM TO TOP, dotted underground first, footing to
         // ridge -- the order a house is actually built in, which is why the

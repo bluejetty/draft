@@ -337,7 +337,13 @@ test.describe('MODEL.html tier 1', () => {
       // missing. The roof patterns stay off: nothing on this page asks.
       './finish-patterns.js',
       './formatters.js',
-      './cut-view.js', './drawing-format.js', './render-2d.js',
+      './cut-view.js',
+      // elev-snap.js (jb, 14 Nov 2026: "node snap on the corners
+      // intersections etc" on the sections and elevations): the recording
+      // canvas the cut view paints through, so a hand drawing over it can
+      // catch the corners it drew. Nothing else on the page holds them.
+      './elev-snap.js',
+      './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
       // fixture-kinds.js joined with the FIXTURE tool, and by this list's own
       // rule it is the kind of entry it should grow by: it DELETES a

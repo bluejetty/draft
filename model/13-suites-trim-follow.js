@@ -159,13 +159,33 @@
   const elevMarkAt = (cx, cy) => {
     const cut = activeCut();
     if (!cut || !elevFrame) return null;
-    let best = null, bestD = 8;
+    let best = null, bestD = 8, insideShape = null;
     (drawing.elevationMarks || []).filter(m => m.cut === cut.name).forEach(m => {
       let d = Infinity;
-      if (m.kind === 'line') {
-        const a = elevPx(m.a), b = elevPx(m.b);
-        d = window.DraftGeometry2D.pointToSegment({ x: cx, z: cy },
+      const segD = (p, q) => {
+        const a = elevPx(p), b = elevPx(q);
+        return window.DraftGeometry2D.pointToSegment({ x: cx, z: cy },
           { start: { x: a.x, z: a.y }, end: { x: b.x, z: b.y } }).d;
+      };
+      if (m.kind === 'line') {
+        d = segD(m.a, m.b);
+      } else if (m.kind === 'dim') {
+        d = Math.min(segD(m.la, m.lb), segD(m.a, m.la), segD(m.b, m.lb));
+      } else if (m.kind === 'shape') {
+        // ITS EDGE TAKES THE PRESS FIRST; inside it, only when nothing drawn
+        // over it is nearer -- a mask lies under the fix painted on top.
+        const pts = m.points || [];
+        pts.forEach((p, i) => { d = Math.min(d, segD(p, pts[(i + 1) % pts.length])); });
+        {
+          const at = elevAt(cx, cy);
+          let inside = false;
+          for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+            const pi = pts[i], pj = pts[j];
+            if ((pi.e > at.e) !== (pj.e > at.e)
+              && at.u < (pj.u - pi.u) * (at.e - pi.e) / (pj.e - pi.e) + pi.u) inside = !inside;
+          }
+          if (inside) insideShape = m;
+        }
       } else {
         const t = elevPx(m.at);
         const w = Math.max(30, String(m.text || '').length * 7);
@@ -178,38 +198,238 @@
       }
       if (d < bestD) { bestD = d; best = m; }
     });
-    return best;
+    return best || insideShape;
   };
+  // ── THE SNAP ON A VIEW (jb, 14 Nov 2026) ────────────────────────────
+  //
+  // "on the sections and elevations can we have 'node snap' on the corners
+  // intersections etc". The view keeps no records, so the catch reads what
+  // the painter drew (elev-snap.js, recorded on every paint of the view) and
+  // the drafter's own marks from their records: a NODE (an end or corner)
+  // first, then a CROSSING of two drawn lines, then a point ON one. Reaches
+  // are the plan's one rule (reachFt), in this view's pixels; Ctrl held and
+  // SNAP off catch nothing. Hatch -- siding courses, stone, shingles -- is
+  // not caught (jb's plan, 14 Nov).
+  const elevReachFt = kind => {
+    if (!elevFrame || !(elevFrame.pxPerFt > 0) || !snapLive()) return -1;
+    const ft = (SNAP_REACH_IN[kind] || SNAP_REACH_IN.node) / 12 * snapStrength();
+    const px = Math.min(SNAP_CEILING_PX, Math.max(SNAP_FLOOR_PX, ft * elevFrame.pxPerFt));
+    return px / elevFrame.pxPerFt;
+  };
+  const elevMarkPieces = () => {
+    const cut = activeCut();
+    const segs = [], nodes = [];
+    (drawing?.elevationMarks || []).filter(m => cut && m.cut === cut.name).forEach(m => {
+      if (m.kind === 'line') { segs.push({ a: m.a, b: m.b }); nodes.push(m.a, m.b); }
+      if (m.kind === 'shape') {
+        m.points.forEach((p, i) => { segs.push({ a: p, b: m.points[(i + 1) % m.points.length] }); nodes.push(p); });
+      }
+      if (m.kind === 'dim') { segs.push({ a: m.la, b: m.lb }); nodes.push(m.a, m.b, m.la, m.lb); }
+      if (m.kind === 'note' && m.tip) nodes.push(m.tip);
+    });
+    // AND WHAT IS IN HAND: the corners already pressed catch the next one.
+    elevShapePts.forEach(p => nodes.push(p));
+    elevDimPts.forEach(p => nodes.push(p));
+    if (elevLineStart) nodes.push(elevLineStart);
+    return { segs, nodes };
+  };
+  const elevInkFeet = () => {
+    if (!elevInk) return [];
+    if (!elevInk.feet) elevInk.feet = window.DraftElevSnap.segmentsInFeet(elevInk.frame, elevInk.segs);
+    return elevInk.feet;
+  };
+  // `square` is the point the T-square holds the hand to, when it does: a
+  // node or crossing still wins over it, a point on a line does not.
+  const elevCatch = (raw, square) => {
+    if (!raw || !window.DraftElevSnap) return null;
+    const own = elevMarkPieces();
+    return window.DraftElevSnap.catchAt(elevInkFeet().concat(own.segs), own.nodes, raw,
+      { node: elevReachFt('node'), corner: elevReachFt('corner'), line: square ? -1 : elevReachFt('line') });
+  };
+  // THE POINT A PRESS TAKES: what the hand has caught, else the square.
+  const elevPoint = (raw, from) => {
+    const square = from && (activeTool === 'line' || activeTool === 'shape') && tsquareLive();
+    const lit = elevCatch(raw, square);
+    elevSnapLit = lit;
+    if (lit) return { ...lit.at };
+    return square ? squared(from, raw) : raw;
+  };
+  const elevDrawTool = () => ['line', 'shape', 'dimension', 'annotation'].includes(activeTool);
+  const paintElevSnap = () => {
+    if (!elevSnapLit || !elevFrame || !elevDrawTool()) return;
+    const tier = elevSnapLit.kind === 'node' ? 'orange' : elevSnapLit.kind === 'corner' ? 'yellow' : 'neon';
+    const c = DONUT[tier] || DONUT.orange;
+    const p = elevPx(elevSnapLit.at);
+    ctx.save();
+    ctx.shadowColor = c.glow;
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = c.ink;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = c.ink;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // For the specs: what the hand has, in the view's feet.
+    canvas.dataset.elevSnap = JSON.stringify({ kind: elevSnapLit.kind,
+      at: [Number(elevSnapLit.at.u.toFixed(4)), Number(elevSnapLit.at.e.toFixed(4))] });
+  };
+
+  // ── A DIMENSION STRING ON THE VIEW ──────────────────────────────────
+  //
+  // The plan's gesture: points pressed one after another (snapped), ENTER,
+  // Space, a right click or a double-click ends the string, and the next
+  // press says where the string stands. HORIZ measures across the view,
+  // VERT up and down it (the heights a drafter checks on an elevation), DIAG
+  // along the first point to the last. The points are taken in order ALONG
+  // the string whatever order they were pressed, as on the plan.
+  const elevDimString = (points, at) => {
+    if (points.length < 2 || !at) return [];
+    let dir = dimMode === 'h' ? { u: 1, e: 0 } : dimMode === 'v' ? { u: 0, e: 1 } : null;
+    if (!dir) {
+      const a = points[0], b = points[points.length - 1];
+      const len = Math.hypot(b.u - a.u, b.e - a.e);
+      if (!(len > 1e-6)) return [];
+      dir = { u: (b.u - a.u) / len, e: (b.e - a.e) / len };
+    }
+    const n = { u: -dir.e, e: dir.u };
+    const o = points[0];
+    const off = (at.u - o.u) * n.u + (at.e - o.e) * n.e;
+    const q = points.map(p => {
+      const along = (p.u - o.u) * dir.u + (p.e - o.e) * dir.e;
+      return { u: o.u + dir.u * along + n.u * off, e: o.e + dir.e * along + n.e * off, from: p, along };
+    }).sort((p1, p2) => p1.along - p2.along);
+    const out = [];
+    for (let i = 0; i + 1 < q.length; i += 1) {
+      const a = q[i], b = q[i + 1];
+      if (Math.hypot(b.u - a.u, b.e - a.e) < 0.01) continue;
+      out.push({ kind: 'dim', a: { u: a.from.u, e: a.from.e }, b: { u: b.from.u, e: b.from.e },
+        la: { u: a.u, e: a.e }, lb: { u: b.u, e: b.e } });
+    }
+    return out;
+  };
+  // WHAT THE VIEW SHOWS OF THE GESTURE IN HAND (read by the paint).
+  const elevPreview = () => {
+    if (!drawing || !activeCut() || !elevCursor) return null;
+    if (activeTool === 'shape' && elevShapePts.length) {
+      return { kind: 'shape', points: [...elevShapePts, elevCursor] };
+    }
+    if (activeTool === 'dimension' && elevDimPts.length) {
+      if (elevDimPlacing) return elevDimString(elevDimPts, elevCursor);
+      const pts = [...elevDimPts, elevCursor];
+      return pts.slice(1).map((p, i) => ({ kind: 'line', a: pts[i], b: p }));
+    }
+    return null;
+  };
+  // ENTER, SPACE, A RIGHT CLICK OR A DOUBLE-CLICK on a view: the line run
+  // ends, the shape closes, the string's points are done. True if it did.
+  const elevFinish = () => {
+    if (!drawing || !activeCut()) return false;
+    if (activeTool === 'line' && elevLineStart) {
+      elevLineStart = null;
+      elevSnapLit = null;
+      sayOnStrip('LINE on the elevation — press where it starts.');
+      return true;
+    }
+    if (activeTool === 'shape' && elevShapePts.length) {
+      elevCloseShape();
+      return true;
+    }
+    if (activeTool === 'dimension' && elevDimPts.length && !elevDimPlacing) {
+      if (elevDimPts.length < 2) { sayOnStrip('DIMENSION — one more point first.'); return true; }
+      elevDimPlacing = true;
+      sayOnStrip('DIMENSION — press where the string stands.');
+      return true;
+    }
+    return false;
+  };
+  const elevCloseShape = () => {
+    const pts = elevShapePts;
+    elevShapePts = [];
+    elevSnapLit = null;
+    if (pts.length < 3) { sayOnStrip('SHAPE — three corners or more; nothing made.'); return; }
+    const mark = { id: newMarkId(), cut: activeCut().name, kind: 'shape',
+      points: pts.map(p => ({ u: p.u, e: p.e })), ...elevShapeDefaults() };
+    addElevMark(mark);
+    sayOnStrip('SHAPE made — SELECT it for its HATCH (WHITE masks what is under it) and LINETYPE.');
+  };
+
   const elevPress = (e, rect) => {
     const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-    const here = elevAt(cx, cy);
-    if (!here) return false;
+    const raw = elevAt(cx, cy);
+    if (!raw) return false;
     const cut = activeCut();
     if (activeTool === 'line') {
+      const here = elevPoint(raw, elevLineStart);
       if (!elevLineStart) {
         elevLineStart = here;
         elevCursor = here;
-        sayOnStrip('LINE on the elevation — press where it ends. Escape to finish.');
+        sayOnStrip('LINE on the elevation — press where it ends. ENTER or right click to finish.');
         paint();
         return true;
       }
-      const end = squared(elevLineStart, here);
-      if (Math.hypot(end.u - elevLineStart.u, end.e - elevLineStart.e) < 0.05) return true;
+      if (Math.hypot(here.u - elevLineStart.u, here.e - elevLineStart.e) < 0.05) return true;
       addElevMark({ id: newMarkId(), cut: cut.name, kind: 'line',
-        a: { ...elevLineStart }, b: end });
-      elevLineStart = end;
+        a: { ...elevLineStart }, b: here });
+      elevLineStart = here;
+      paint();
+      return true;
+    }
+    if (activeTool === 'shape') {
+      const here = elevPoint(raw, elevShapePts[elevShapePts.length - 1] || null);
+      const first = elevShapePts[0];
+      // BACK ON THE FIRST CORNER closes it, as on the plan.
+      if (first && elevShapePts.length >= 3
+        && Math.hypot(here.u - first.u, here.e - first.e) * elevFrame.pxPerFt <= 8) {
+        elevCloseShape();
+        paint();
+        return true;
+      }
+      const last = elevShapePts[elevShapePts.length - 1];
+      if (last && Math.hypot(here.u - last.u, here.e - last.e) < 0.02) return true;
+      elevShapePts.push(here);
+      elevCursor = here;
+      sayOnStrip(elevShapePts.length < 3
+        ? 'SHAPE on the elevation — press the next corner.'
+        : 'SHAPE — next corner, or ENTER / right click / the first corner to close it.');
+      paint();
+      return true;
+    }
+    if (activeTool === 'dimension') {
+      if (elevDimPlacing) {
+        const pieces = elevDimString(elevDimPts, raw);
+        elevDimPts = [];
+        elevDimPlacing = false;
+        elevSnapLit = null;
+        pieces.forEach(piece => addElevMark({ id: newMarkId(), cut: cut.name, ...piece }));
+        sayOnStrip(pieces.length ? `DIMENSION — ${pieces.length} placed. Press the next string's first point.`
+          : 'DIMENSION — nothing to measure along that way.');
+        paint();
+        return true;
+      }
+      const here = elevPoint(raw, null);
+      const last = elevDimPts[elevDimPts.length - 1];
+      if (last && Math.hypot(here.u - last.u, here.e - last.e) < 0.01) return true;
+      elevDimPts.push(here);
+      elevCursor = here;
+      sayOnStrip(elevDimPts.length < 2 ? 'DIMENSION — press the next point.'
+        : 'DIMENSION — the next point, or ENTER / right click to end the string.');
       paint();
       return true;
     }
     if (activeTool === 'annotation') {
-      elevNotePress = { at: here, x: e.clientX, y: e.clientY };
+      elevNotePress = { at: elevPoint(raw, null), x: e.clientX, y: e.clientY };
       return true;
     }
     if (activeTool === RESTING_TOOL) {
       const hit = elevMarkAt(cx, cy);
-      if (!hit) { if (elevSelected) { elevSelected = null; paint(); } return false; }
+      if (!hit) {
+        if (elevSelected) { elevSelected = null; showElevMarkProps(); paint(); }
+        return false;
+      }
       elevSelected = hit.id;
-      sayOnStrip(hit.kind === 'line' ? 'Line held — Delete removes it.' : 'Note held — Delete removes it.');
+      sayOnStrip({ line: 'Line', note: 'Note', shape: 'Shape', dim: 'Dimension' }[hit.kind]
+        + ' held — Delete removes it.');
+      showElevMarkProps();
       paint();
       return true;
     }
@@ -217,10 +437,26 @@
   };
   const elevMove = e => {
     const rect = canvas.getBoundingClientRect();
-    const here = elevAt(e.clientX - rect.left, e.clientY - rect.top);
-    if (!here) return;
-    elevCursor = elevLineStart ? squared(elevLineStart, here) : here;
+    const raw = elevAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (!raw) return;
+    if (activeTool === 'line') elevCursor = elevPoint(raw, elevLineStart);
+    else if (activeTool === 'shape') elevCursor = elevPoint(raw, elevShapePts[elevShapePts.length - 1] || null);
+    else if (activeTool === 'dimension') {
+      if (elevDimPlacing) { elevSnapLit = null; elevCursor = raw; } else elevCursor = elevPoint(raw, null);
+    } else if (activeTool === 'annotation') elevCursor = elevPoint(raw, null);
+    else { elevSnapLit = null; elevCursor = raw; }
+    if (!elevSnapLit) delete canvas.dataset.elevSnap;
     paint();
+  };
+  // THE PANEL FOR A HELD SHAPE: its HATCH and LINETYPE (model/15).
+  const showElevMarkProps = () => {
+    const m = elevSelected && (drawing?.elevationMarks || []).find(x => x.id === elevSelected);
+    if (m && m.kind === 'shape' && typeof elevShapePropsNode === 'function' && window.ModelProps) {
+      window.ModelProps.set('SHAPE', elevShapePropsNode(m));
+      selectionPanelUp = true;
+      return;
+    }
+    if (typeof showSelectionProps === 'function') showSelectionProps();
   };
   const elevNoteLift = e => {
     const press = elevNotePress;
@@ -294,14 +530,21 @@
     const [item] = list.splice(index, 1);
     undoStack.push({ kind: 'remove-item', list, index, item });
     markDirty();
+    showElevMarkProps();
     paint();
   };
   toolListeners.push(next => {
     elevLineStart = null;
     elevNotePress = null;
     elevPointerTip = null;
+    elevShapePts = [];
+    elevDimPts = [];
+    elevDimPlacing = false;
+    elevSnapLit = null;
     if (drawing && activeCut()) {
       if (next === 'line') sayOnStrip('LINE on the elevation — press where it starts.');
+      if (next === 'shape') sayOnStrip('SHAPE on the elevation — press the first corner. Corners catch the drawing\'s nodes.');
+      if (next === 'dimension') sayOnStrip('DIMENSION on the elevation — press the points (HORIZ / VERT / DIAG), ENTER, then where the string stands.');
       if (next === 'annotation') sayOnStrip('NOTE — tap where the text goes, or press on the thing and drag to the text for a pointer. POINTER in the panel: tap the thing, then the text.');
     }
   });

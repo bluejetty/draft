@@ -2592,7 +2592,9 @@
       const run1 = split.t1 * runStep;
       const run2 = split.t2 * runStep;
       const L = split.landFt;
-      const landSlots = split.winders || 1;
+      // The slots the turn eats: a flat landing one, winders their count, a
+      // U's two landings and any middle flight between them (stairShapeSplit).
+      const landSlots = split.landTreads;
       const past = Math.max(0, slots - split.t1 - landSlots);
       const r2c = Math.min(inchUp(past * runStep), run2);
       if (split.shape === 'L') {
@@ -2606,8 +2608,10 @@
              { u: u2b, v: v1 }, { u: u2b, v: v1 + r2c }, { u: u2a, v: v1 + r2c },
              { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }];
       } else {
-        const vTop = w + SG.STAIR_U_GAP_IN / 12 + w / 2;
-        const vLow = w / 2 + SG.STAIR_U_GAP_IN / 12;
+        // Run 2 stands split.offFt across (a width and the space between
+        // the flights -- 4.5", or a middle flight's run).
+        const vTop = split.offFt + w / 2;
+        const vLow = split.offFt - w / 2;
         uv = r2c <= 0
           ? [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
              { u: run1, v: vTop }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }]
