@@ -2445,6 +2445,13 @@ if (!window.DraftDrawingFormat) {
     attachedGarage: Object.freeze({ garageFoundation: Object.freeze(['gradebeam', 'frostwall']) }),
   });
   const SECTION_TABLE_CHOICE_FIELDS = Object.freeze(Object.keys(SECTION_TABLE_CHOICES));
+  // AN EAVE MAY BE NOTHING (jb, 15 Nov: "please make it possible for 0
+  // overhang"): a typed 0 overhang is kept, not read back as "not typed".
+  const ZERO_OK_FIELDS = new Set(['roofOverhangFt', 'roofSideOverhangFt']);
+  const nonNegative = (value, fallback) => {
+    const parsed = value == null || value === '' ? null : num(value);
+    return parsed !== null && parsed >= 0 ? parsed : fallback;
+  };
   const sectionTable = raw => {
     const stored = raw && typeof raw.rows === 'object' && raw.rows ? raw.rows : {};
     return {
@@ -2452,7 +2459,8 @@ if (!window.DraftDrawingFormat) {
         const row = stored[type] && typeof stored[type] === 'object' ? stored[type] : {};
         return [type, {
           ...Object.fromEntries(SECTION_TABLE_FIELDS
-            .map(field => [field, positive(row[field], null)])),
+            .map(field => [field, ZERO_OK_FIELDS.has(field)
+              ? nonNegative(row[field], null) : positive(row[field], null)])),
           ...Object.fromEntries(SECTION_TABLE_CHOICE_FIELDS
             .map(field => [field, oneOf(row[field],
               SECTION_TABLE_CHOICES_BY_TYPE[type]?.[field] || SECTION_TABLE_CHOICES[field],

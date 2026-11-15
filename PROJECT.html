@@ -1048,6 +1048,12 @@
       const assemblyDefaults = levelId => defaultLevelAssembly(levelRole(levelId));
       const positive = (value, fallback) =>
         Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
+      // AN EAVE MAY BE NOTHING (jb, 15 Nov: "please make it possible for 0
+      // overhang"). 0 is a real roof -- fascia flush on the wall -- so an
+      // overhang reads 0 as a number, never as "missing, use 2 ft".
+      const nonNegative = (value, fallback) =>
+        value != null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0
+          ? Number(value) : fallback;
       const normaliseAssembly = (raw, levelId) => normaliseLevelAssembly(raw, levelRole(levelId));
 
       // ── Load the drawing ────────────────────────────────────────────────
@@ -1156,7 +1162,7 @@
       // turn "derive" into a typed-in coincidence.
       let roofHeelOverrideIn = Number.isFinite(Number(drawing?.roofHeelIn))
         && drawing?.roofHeelIn != null ? Number(drawing.roofHeelIn) : null;
-      let roofOverhang = positive(drawing?.roofOverhang, 2);
+      let roofOverhang = nonNegative(drawing?.roofOverhang, 2);
       // THE SIDE EAVE, AND IT DEFAULTS TO NOTHING RATHER THAN TO TWO FEET.
       // Movie, 13 Oct: "make the MAIN OVERHANG (2'0) default, and then
       // underneath it also have SIDE OVERHANG ... when they change that the
@@ -1167,7 +1173,7 @@
       // drawing written before this is untouched -- while a 2 typed in here by
       // default would be a number nobody chose, and would stop following the
       // main eave the moment somebody changed THAT.
-      let roofSideOverhang = positive(drawing?.roofSideOverhang, null);
+      let roofSideOverhang = nonNegative(drawing?.roofSideOverhang, null);
       let activeWallType = WALL_TYPE_VIEW[drawing?.activeWallType] ? drawing.activeWallType : 'stud_2x6';
       // A page-owned key of its own, not a section-table cell: the table's
       // HOUSE row is `live: true` and reads the drawing's ASSEMBLY, and how
@@ -2121,7 +2127,7 @@
                 // would read as a decision to stop overriding. A `put` row
                 // refuses the same way -- it answers false and the repaint
                 // puts the stored number back.
-                if (parsed != null && parsed > 0) {
+                if (parsed != null && (parsed > 0 || unit[row.unit].zero)) {
                   const saved = row.put ? row.put(parsed) : writeField(row, parsed);
                   if (saved) save(saved);
                 }
@@ -2322,7 +2328,7 @@
           readText: () => inchWord(ROOF_FASCIA_IN) },
         { side: 'left', key: 'roofOverhang', name: 'Overhang', anchor: false,
           get: () => splitOr('roofOverhangFt', roofOverhang),
-          unit: 'ftin', typed: true,
+          unit: 'overhang', typed: true,
           put: value => (writeCell(bilevelRowId(), 'roofOverhangFt', value),
             'Bilevel overhang saved.') },
         // THE SIDE EAVE, UNDER THE MAIN ONE (Movie, 13 Oct), and on this card
@@ -2336,7 +2342,7 @@
           // whatever the main overhang row is showing.
           get: () => splitOr('roofSideOverhangFt',
             splitOr('roofOverhangFt', roofOverhang)),
-          unit: 'ftin', typed: true,
+          unit: 'overhang', typed: true,
           put: value => (writeCell(bilevelRowId(), 'roofSideOverhangFt', value),
             'Bilevel side overhang saved.') },
         { side: 'left', key: 'roofHeel', name: 'Roof heel', anchor: false,
@@ -2369,7 +2375,7 @@
         { side: 'left', key: 'garageOverhang', name: 'overhang', anchor: false,
           shown: () => bilevelBuild().garage,
           get: () => cellValue('attachedGarage', 'roofOverhangFt').value,
-          unit: 'ftin', typed: true,
+          unit: 'overhang', typed: true,
           put: value => (writeCell('attachedGarage', 'roofOverhangFt', value),
             'Garage overhang saved.') },
         // The garage's side eave on this card too, reading its own main
@@ -2382,7 +2388,7 @@
           // card's garage row for why cellValue is the wrong reader here.
           get: () => sectionTable.rows.attachedGarage?.roofSideOverhangFt
             ?? cellValue('attachedGarage', 'roofOverhangFt').value,
-          unit: 'ftin', typed: true,
+          unit: 'overhang', typed: true,
           put: value => (writeCell('attachedGarage', 'roofSideOverhangFt', value),
             'Garage side overhang saved.') },
         { side: 'left', key: 'garageHeel', name: 'roof heel', anchor: false,
@@ -2605,6 +2611,8 @@
       // reads it at table-build time -- which is before it exists.
       const BILEVEL_UNIT = {
         ftin: { show: ft => ftIn(ft), parse: text => parseFtIn(text) },
+        // An eave is feet-and-inches too, but 0 is a real answer for it.
+        overhang: { show: ft => ftIn(ft), parse: text => parseOverhang(text), zero: true },
         in: { show: inches => inchesOnly(inches), parse: text => parseInches(text) },
         // A PITCH IS NEITHER: it is a rise over a twelve, so it is typed and
         // shown as the plain number band 1's own pitch box uses.
@@ -2891,7 +2899,7 @@
         // emptying it puts that back rather than writing a 2 nobody chose.
         { side: 'right', key: 'sideOverhang', name: 'SIDE OVERHANG', anchor: false,
           get: v => v.roof.sideOverhangFt ?? v.roof.overhangFt,
-          unit: 'ftin', typed: true,
+          unit: 'overhang', typed: true,
           put: value => (writeCell('detachedGarage', 'roofSideOverhangFt', value),
             'Detached garage side overhang saved.') },
         { side: 'right', head: 'GARAGE' },
@@ -3045,6 +3053,11 @@
         const parsed = fmt.parseArchitecturalLength(text);
         return parsed.ok && parsed.inches > 0 ? parsed.inches / 12 : null;
       };
+      // AN OVERHANG TAKES 0 (a flush eave) and nothing past 6 ft.
+      const parseOverhang = text => {
+        const parsed = fmt.parseArchitecturalLength(text);
+        return parsed.ok && parsed.inches >= 0 && parsed.inches <= 72 ? parsed.inches / 12 : null;
+      };
       const parseInches = text => {
         const parsed = fmt.parseAssemblyInches(text);
         return parsed.ok && parsed.inches > 0 ? parsed.inches : null;
@@ -3074,8 +3087,8 @@
         name: 'overhang',
         get: () => ftIn(roofOverhang),
         set: text => {
-          const value = parseFtIn(text);
-          if (value != null && value <= 6) { roofOverhang = value; return true; }
+          const value = parseOverhang(text);
+          if (value != null) { roofOverhang = value; return true; }
           return false;
         },
       });
@@ -3103,8 +3116,8 @@
         get: () => ftIn(roofSideOverhang ?? roofOverhang),
         set: text => {
           if (!String(text).trim()) { roofSideOverhang = null; return true; }
-          const value = parseFtIn(text);
-          if (value != null && value <= 6) { roofSideOverhang = value; return true; }
+          const value = parseOverhang(text);
+          if (value != null) { roofSideOverhang = value; return true; }
           return false;
         },
       });
@@ -4228,7 +4241,7 @@
       addGarage('garageFascia', 'Garage fascia depth',
         () => inchesOnly(ROOF_FASCIA_IN), () => false, undefined, true);
       garageCell('garageOverhang', 'Garage overhang', 'roofOverhangFt', ftIn,
-        text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
+        text => parseOverhang(text), true);
       // AND ITS SIDE EAVE -- Movie, 13 Oct: "add that for all the ROOFs not
       // just the bilevels also bungalow and the garages too". Not through
       // `garageCell`, because this cell is the one on the card that is EMPTY
@@ -4248,8 +4261,8 @@
             writeCell('attachedGarage', 'roofSideOverhangFt', null);
             return true;
           }
-          const value = parseFtIn(text);
-          if (value == null || value > 6) return false;
+          const value = parseOverhang(text);
+          if (value == null) return false;
           writeCell('attachedGarage', 'roofSideOverhangFt', value);
           return true;
         }, undefined, true);

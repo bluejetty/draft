@@ -195,3 +195,65 @@ test('the garage side eave follows the GARAGE main eave, not the house-s',
     const after = await stored(page);
     expect(after.roofSideOverhang, 'the garage-s cell moved the house-s number').toBe(4);
   });
+
+// ── A ZERO EAVE (jb, 15 Nov: "the overhang i can't change to 0") ─────────
+//
+// 0 is a real roof -- fascia flush on the wall -- not "nothing typed". The
+// box took it as a refusal and snapped back to 2'-0", and a stored 0 read as
+// missing on the way back in.
+test('OVERHANG and SIDE OVERHANG take 0, keep it, and the BONE cuts a flush eave',
+  async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', e => errors.push(String(e)));
+    await openProject(page, empty());
+    await page.locator('.type-card[data-type="bungalow"]').click();
+    await page.locator('[data-family-entry="bungalow"]').click();
+    // SIDE FIRST, while the main eave still shows 2'-0", so the 0 is a change.
+    const side = page.locator('[data-detail-input="side overhang"]');
+    await side.fill(`0'-0"`);
+    await side.press('Enter');
+    await expect.poll(async () => (await stored(page)).roofSideOverhang).toBe(0);
+    await expect(side).toHaveValue(`0'-0"`);
+    const main = page.locator('[data-detail-input="overhang"]');
+    await main.fill('0');
+    await main.press('Enter');
+    await expect.poll(async () => (await stored(page)).roofOverhang).toBe(0);
+    await expect(main).toHaveValue(`0'-0"`);
+
+    // A RELOAD KEEPS IT -- a stored 0 is a number, not a gap for the 2 ft default.
+    await page.reload();
+    await page.locator('.type-card[data-type="bungalow"]').click();
+    await page.locator('[data-family-entry="bungalow"]').click();
+    await expect(page.locator('[data-detail-input="overhang"]')).toHaveValue(`0'-0"`);
+    const read = await page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      return window.DraftLevelAssembly.projectRoofFor(JSON.parse(await file.text()), 'house');
+    }, BUCKET);
+    expect(read.overhangFt).toBe(0);
+    expect(read.sideOverhangFt).toBe(0);
+
+    const built = await buildFromBone(page);
+    const house = built.outlines.find(o => !o.garage);
+    const roof = built.roofs.find(r => r.follows === 'house');
+    expect(roof.overhang).toBe(0);
+    expect(leftReach(roof, house)).toBeCloseTo(0, 3);
+    // AND THE OTHER VIEWS DRAW IT: PROJECT's section and the elevations.
+    await page.goto('/PROJECT.html');
+    await expect(page.locator('[data-detail-input="overhang"]')).toHaveValue(`0'-0"`);
+    expect(errors, 'a 0 eave threw somewhere').toEqual([]);
+  });
+
+test('the garage overhang takes 0 and keeps it on the section table', async ({ page }) => {
+  await openProject(page, empty());
+  await page.locator('.type-card[data-type="bungalow"]').click();
+  await page.locator('[data-family-entry="bungalow-garage"]').click();
+  const box = page.locator('[data-detail-input="garageOverhang"]');
+  await box.fill('0');
+  await box.press('Enter');
+  await expect.poll(async () => (await stored(page))
+    .sectionTable?.rows?.attachedGarage?.roofOverhangFt).toBe(0);
+  await page.reload();
+  await page.locator('.type-card[data-type="bungalow"]').click();
+  await page.locator('[data-family-entry="bungalow-garage"]').click();
+  await expect(page.locator('[data-detail-input="garageOverhang"]')).toHaveValue(`0'-0"`);
+});
