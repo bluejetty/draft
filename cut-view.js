@@ -5098,10 +5098,11 @@ if (!window.DraftCutView) {
         // end's stepped-back wall ends where the small gable's valley comes
         // down, and read there it climbed to the small piece's surface -- a
         // sliver of wall up into its rake once the hip's tail was cut away.
-        // A point on a JOINT is the roof next door's business. (The record's
-        // own kind: edgeKindOf reads a JOINT with no roof edge along it as a
-        // gable, and the hip meets these valleys across its face.)
-        if (pts.some((a, i) => roof.edges?.[i] === 'joint'
+        // A point on such a JOINT is the roof next door's business. Only a
+        // valley no roof EDGE runs along (edgeKindOf reads it as a gable):
+        // the hip meets it across its face. A joint between busted pieces is
+        // shared edge to edge, and a gable wall's peak stands on it.
+        if (pts.some((a, i) => roof.edges?.[i] === 'joint' && edgeKindOf(roof, i) !== 'joint'
           && distToSegment(pt, a, pts[(i + 1) % pts.length]) < 0.05)) return;
         const rise = sectionRoofHeightAt(pt, roof, roofFaces);
         if (rise == null) return;
