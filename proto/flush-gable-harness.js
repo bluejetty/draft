@@ -489,9 +489,11 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
     check('E1 with the tail cut: the hip\'s band runs on right of the small gable, and not under it',
       cutBand.length >= 2 && cutThrough.length === 0, `band at ${cutBand.map(e => e.toFixed(2)).join()}: ${fmt(cutThrough)}`);
     const plain = paint(saved, 'E1');
-    const sliver = plain.filter(x => x.ink !== '#fff' && [x.a, x.b].some(p => p.u > 13.05 && p.u < 13.6 && p.e > PLATE + 0.1)
-      && [x.a, x.b].some(p => p.e > PLATE + 0.1 && p.e < PLATE + 1.2) && Math.min(x.a.e, x.b.e) < PLATE + 1.2
-      && Math.max(x.a.u, x.b.u) < 14);
+    // The sliver: a slant from up the rake at the corner (u 13) down to the
+    // plate half a foot on.
+    const sliver = plain.filter(x => x.ink !== '#fff'
+      && Math.min(x.a.u, x.b.u) > 12.95 && Math.max(x.a.u, x.b.u) < 13.7 && Math.abs(x.a.u - x.b.u) > 0.05
+      && Math.max(x.a.e, x.b.e) > PLATE + 0.3 && Math.min(x.a.e, x.b.e) < PLATE + 0.1);
     check('E1 with the tail cut: no sliver of wall climbs the small rake where its valley comes down',
       sliver.length === 0, fmt(sliver));
   }
