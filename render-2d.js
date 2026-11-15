@@ -647,10 +647,16 @@ if (!window.DraftRender2D) {
     const world = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
     // An older file has no per-edge array, and it takes the ORIGINAL uniform
     // call -- same reason as the stroke above: what was right stays untouched.
-    const wallRing = !hasGable || !insets.some(value => value > 0) ? null
+    const wallWorld = !hasGable || !insets.some(value => value > 0) ? null
       : (perEdge
         ? env.offsetOutlineVariable(world, perEdge.map(value => -value))
-        : env.offsetOutline(world, -overhangFt)).map(pt => toS(pt));
+        : env.offsetOutline(world, -overhangFt));
+    const wallRing = wallWorld ? wallWorld.map(pt => toS(pt)) : null;
+    // WHERE THE GABLE WALL STANDS OVER A LOWER ROOF it is a hidden wall,
+    // grey and dashed (jb, 15 Nov 2026): the big gable over the small one's
+    // tuck on a stepped end. geometry-2d gableWallOverSpans.
+    const wallOver = (wallWorld && env.roofWallOver && !referenceColor)
+      ? env.roofWallOver(roof, wallWorld) : null;
     const count = pts.length;
     for (let index = 0; index < count; index++) {
       const a = pts[index], b = pts[(index + 1) % count];
@@ -665,10 +671,26 @@ if (!window.DraftRender2D) {
       // into the house at z=22 and poke a 2 ft stub past the house's corner.
       if (isGable && wallRing && insets[index] > 0) {
         const wa = wallRing[index], wb = wallRing[(index + 1) % count];
+        const over = Array.isArray(wallOver) && Array.isArray(wallOver[index]) ? wallOver[index] : [];
+        const at = t => ({ x: wa.x + (wb.x - wa.x) * t, y: wa.y + (wb.y - wa.y) * t });
+        // The solid stretches: the line less what stands over another roof.
+        const solid = [];
+        let from = 0;
+        over.forEach(([t0, t1]) => { if (t0 > from) solid.push([from, t0]); from = Math.max(from, t1); });
+        if (from < 1) solid.push([from, 1]);
         ctx.beginPath();
-        ctx.moveTo(wa.x, wa.y); ctx.lineTo(wb.x, wb.y);
+        solid.forEach(([t0, t1]) => { const p = at(t0), q = at(t1); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); });
         ctx.lineWidth = referenceColor ? 1 : 1.25;
         ctx.stroke();
+        if (over.length) {
+          ctx.save();
+          ctx.strokeStyle = (env.colors && env.colors.roofHiddenWall) || 'rgba(128,128,128,0.9)';
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath();
+          over.forEach(([t0, t1]) => { const p = at(t0), q = at(t1); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); });
+          ctx.stroke();
+          ctx.restore();
+        }
       }
       if (options.tagging && !referenceColor) {
         ctx.font = '10px system-ui, sans-serif';

@@ -1599,6 +1599,8 @@
     // AND WHAT RUNS UNDER A HIGHER ROOF IS DOTTED (Movie, 16 Oct: "show it
     // as dotted line (under the upper roof overhang)").
     roofHidden: roof => window.DraftGeometry2D.roofHiddenSpans(roof, roofs()),
+    // AND A GABLE WALL STANDING OVER A LOWER ROOF IS A HIDDEN WALL (jb, 15 Nov).
+    roofWallOver: (roof, wallRing) => window.DraftGeometry2D.gableWallOverSpans(roof, roofs(), wallRing),
     // MODEL.dc.html also consults layer visibility and print flags here; this
     // page has neither yet, so an opening is shown whenever it is real.
     surfaceOpeningsFor: (hostType, hostId) => (drawing?.surfaceOpenings || [])

@@ -433,6 +433,7 @@ if (!window.DraftLayoutPlan) {
       cutRoofSegment: geo.cutRoofSegment,
       roofWelds: roof => geo.roofWeldSpans(roof, roofs),
       roofHidden: roof => geo.roofHiddenSpans(roof, roofs),
+      roofWallOver: (roof, wallRing) => geo.gableWallOverSpans(roof, roofs, wallRing),
       surfaceOpeningsFor: (hostType, hostId) => openings.filter(opening =>
         opening.hostType === hostType && opening.hostId === hostId
         && Array.isArray(opening.points) && opening.points.length >= 3),
@@ -1736,6 +1737,7 @@ if (!window.DraftLayoutPlan) {
         // a roof cannot be welded to one that is not on the drawing.
         roofWelds: roof => geo.roofWeldSpans(roof, of('roofs')),
         roofHidden: roof => geo.roofHiddenSpans(roof, of('roofs')),
+        roofWallOver: (roof, wallRing) => geo.gableWallOverSpans(roof, of('roofs'), wallRing),
         surfaceOpeningsFor,
       },
       // SHAPES PRINT (jb, 6 Nov: "shapes like your tree don't print on

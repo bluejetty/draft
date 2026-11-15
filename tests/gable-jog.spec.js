@@ -97,8 +97,13 @@ test('GABLE on one piece of a stepped end makes two gables: the big one on the s
   const small = roofs.find(r => r.id !== 'roof-1');
   expect(ring(big).sort(), 'the big roof stops on the stepped-back line').toEqual([[-31, -17], [-31, 17], [32, -17], [32, 17]].sort());
   expect(big.edges.filter(k => k === 'gable').length, 'one gable, across the whole house').toBe(1);
-  expect(ring(small).sort(), 'the small one is the piece that sticks out').toEqual([[-32, -17], [-32, 7], [-31, -17], [-31, 7]].sort());
-  expect(small.edges.slice().sort(), 'its front a gable, its sides eaves, its back a JOINT').toEqual(['eave', 'eave', 'gable', 'joint']);
+  // The piece that sticks out, and from its peak (z -5) to the step side it
+  // runs on back over the jog-out to the big gable's wall (x -29), under the
+  // big roof's overhang (jb, 15 Nov: "should cover overtop of the jog out
+  // and go to the larger gable wall").
+  expect(ring(small).sort(), 'the small one: the piece that sticks out, tucked back to the big gable wall past its peak')
+    .toEqual([[-32, -17], [-32, 7], [-29, 7], [-29, -5], [-31, -5], [-31, -17]].sort());
+  expect(small.edges.slice().sort(), 'its front a gable, its sides eaves, its back JOINTs').toEqual(['eave', 'eave', 'gable', 'joint', 'joint', 'joint']);
   expect(small.jogOf).toBe('roof-1');
   expect(big.flushOf && big.flushOf.points.length, 'the flush roof kept for ONE FLUSH GABLE').toBe(6);
   const groups = (await h.savedDrawing(page)).groups;

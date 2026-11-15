@@ -627,7 +627,7 @@ const MUTATIONS = [
   // THE NOTCHED ROOF HANDED BACK TO THE WAVEFRONT, which bends his ridge off
   // along the strip's south wall.
   ['a notched roof with gables at its inside corners goes to the wavefront',
-    s => s.replace('    if (notched) return notched;', '    if (false) return notched;')],
+    s => s.replace('    if (notched) return arcsOffSolidEdges(notched, solidEdgesOf(roof));', '    if (false) return notched;')],
   // An eave that can only be reached round the strip still claims the roof
   // past it: the east plane leaks north and drains into the strip's wall.
   ['an eave counts where the roof cannot reach it',

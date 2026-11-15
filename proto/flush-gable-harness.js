@@ -44,14 +44,23 @@ const MUTATIONS = [
   ['a step in the roofline is joined station to station', 'cut-view.js',
     c => c.replace('        if (!coarse && prev && prev.elev != null', '        if (false && prev && prev.elev != null')],
   ['the small gable has no JOINT at its back (it raises a plane off it)', 'geometry-2d.js',
-    c => c.replace("const smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];", "const smallKinds = [K[at(i - 1)], 'eave', 'eave', K[at(i - 2)]];")],
+    c => c.replace("let smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];", "let smallKinds = [K[at(i - 1)], 'eave', 'eave', K[at(i - 2)]];")
+      .replace("smallKinds = [K[at(i - 1)], 'eave', 'joint', 'joint', 'joint', K[at(i - 2)]];", "smallKinds = [K[at(i - 1)], 'eave', 'eave', 'eave', 'eave', K[at(i - 2)]];")],
   ['a rake\'s foot is drawn the whole run, through what stands in front', 'cut-view.js',
     c => c.replace("const footShows = t => { const q = at(t); return !hidden(q.p, q.e, q.u); };", "const footShows = () => true;")],
   ['the wall that sticks out climbs to the big rake over the small gable', 'cut-view.js',
     c => c.replace('      if (jog) top = Math.max(top, jog.top);', '      if (false) top = Math.max(top, jog.top);')
       .replace("const jogFront = jog ? new Set([String(jog.skip)]) : null;", 'const jogFront = null;')],
   ['a file without jogOf: the small piece is not found by its JOINT', 'cut-view.js',
-    c => c.replace('          if (partner == null) {\n            const j = (i + 2) % 4;', '          if (partner == null) { return;\n            const j = (i + 2) % 4;')],
+    c => c.replace('          if (partner == null) {\n            facesByRoof.forEach((_, other) => {', '          if (partner == null) { return;\n            facesByRoof.forEach((_, other) => {')],
+  ['the small piece is not tucked back over the jog-out', 'geometry-2d.js',
+    c => c.replace('        if (backBy > 1e-3) {', '        if (false) {')],
+  ['an arc running on along a JOINT is kept whole (the tucked piece cannot be faced)', 'geometry-2d.js',
+    c => c.replace('    if (notched) return arcsOffSolidEdges(notched, solidEdgesOf(roof));', '    if (notched) return notched;')
+      .replace('      return arcsOffSolidEdges(roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts })),\n        solidEdgesOf(roof));',
+        '      return roofSkeleton(stepped.roof).flatMap(seg => cutRoofSegment(seg, { cuts: stepped.cuts }));')],
+  ['the gable wall over a lower roof is not told apart', 'geometry-2d.js',
+    c => c.replace('      if (!rings.some(ring => ringInside(mid, ring))) continue;', '      continue;')],
   ['a reopened file drops jogOf', 'drawing-format.js',
     c => c.replace("          ? { jogOf: String(roof.jogOf).trim() } : {}),", '          ? {} : {}),')],
 ];
@@ -313,6 +322,37 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
     check(`two gables, E1 (${how}): the step corner stops under the small rake, no line up the big gable`,
       corner.length > 0 && cTop < 18.2, `corner top ${cTop.toFixed(2)} (small rake ~${smallUnder.toFixed(2)}): ${fmt(corner)}`);
   });
+  // jb, 15 Nov: "should cover overtop of the jog out and go to the larger
+  // gable wall". From its peak (x 6.5) to the step side the small piece runs
+  // on back to the big gable's wall line (z -1); the other half stops at the
+  // big roof's edge (z 1), where its plane is the big roof's own.
+  {
+    const sm = pieces.small;
+    const box = ring => ring.map(p => `${p.x},${p.z}`).sort().join(' ');
+    check('two gables: the small piece runs back over the jog-out to the big gable wall from its peak',
+      box(sm.points) === box([{ x: -2, z: 2 }, { x: 15, z: 2 }, { x: 15, z: -1 }, { x: 6.5, z: -1 }, { x: 6.5, z: 1 }, { x: -2, z: 1 }])
+        && sm.edges.slice().sort().join() === 'eave,eave,gable,joint,joint,joint',
+      `${box(sm.points)} ${sm.edges}`);
+    const area = pts => Math.abs(pts.reduce((a, p, i) => { const q = pts[(i + 1) % pts.length]; return a + p.x * q.z - q.x * p.z; }, 0)) / 2;
+    const arcs = G.roofSkeleton(sm);
+    const faces = G.roofFaces(sm, arcs);
+    const covered = faces.reduce((a, f) => a + area(f.points), 0);
+    check('two gables: the tucked piece solves -- its ridge stops at the big roof\'s edge, two planes cover it',
+      faces.length === 2 && Math.abs(covered - area(sm.points)) < 1e-6
+        && arcs.length === 1 && Math.min(arcs[0].a.z, arcs[0].b.z) > 0.99,
+      `${faces.length} faces, ${covered.toFixed(2)} of ${area(sm.points).toFixed(2)}; arcs ${arcs.map(x => `${x.a.x},${x.a.z}->${x.b.x},${x.b.z}`).join(' ')}`);
+    // ROOF plan (jb, 15 Nov: "show the back gable wall on the roof plan maybe
+    // grey or dotted"): the big gable's wall line over the tuck is a hidden wall.
+    const big = pieces.big;
+    const wallRing = G.offsetOutlineVariable(big.points.map(p => ({ x: p.x, z: p.z })), big.edgeOverhang.map(v => -v));
+    const spans = G.gableWallOverSpans(big, [big, sm], wallRing);
+    const g = big.edges.indexOf('gable');
+    const wa = wallRing[g], wb = wallRing[(g + 1) % wallRing.length];
+    const xs = (spans[g] || []).map(([t0, t1]) => [wa.x + (wb.x - wa.x) * t0, wa.x + (wb.x - wa.x) * t1].sort((p, q) => p - q));
+    check('ROOF plan: the big gable wall line is hidden (dashed) where it stands over the tuck, x 6.5 to 15, solid elsewhere',
+      xs.length === 1 && Math.abs(xs[0][0] - 6.5) < 1e-3 && Math.abs(xs[0][1] - 15) < 1e-3,
+      JSON.stringify(xs));
+  }
   // A reopened file keeps the pair: drawing-format keeps `jogOf` and `flushOf`.
   const F = win.DraftDrawingFormat;
   if (F && typeof F.roofs === 'function') {
