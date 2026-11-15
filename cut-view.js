@@ -1393,8 +1393,13 @@ if (!window.DraftCutView) {
     }
     return out;
   }
+  // THE SURFACE STARTS ONE STANDARD BOARD UP, WHATEVER BOARD IS HUNG (jb,
+  // 15 Nov 2026: "when the size increases add to the bottom (not to the
+  // top)"). A deeper fascia no longer lifts the roof: the eave stays where
+  // the 5 1/2" board puts it and the board hangs further down past the
+  // plate -- every painter draws the board as eave minus roofFasciaFt.
   function roofEaveElev(roof, stack, env) {
-    return roofBaseElev(roof, stack, env) + roofFasciaFt(roof);
+    return roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
   }
 
   // ── A PILE OUT IN THE OPEN CARRIES A POST ──────────────────────────────
@@ -2358,7 +2363,7 @@ if (!window.DraftCutView) {
           const profile = geo().roofProfile(
             roof, geo().roofFaces(roof, geo().roofSkeleton(roof)),
             cut.startPt, cut.endPt, axis)
-            .map(pt => ({ u: pt.u, rise: base + roofFasciaFt(roof) + pt.rise }));
+            .map(pt => ({ u: pt.u, rise: base + ROOF_FASCIA_IN / 12 + pt.rise }));
           if (profile.length < 2) return;
           profiles.push(profile);
           roofChords.push({
@@ -2908,7 +2913,7 @@ if (!window.DraftCutView) {
         // An end is an EAVE when the surface lands on the fascia top there;
         // the bearing wall stands the overhang inside it, and the heel's two
         // faces rise from the plate and the bottom chord to the underside.
-        const eaveAt = pt => Math.abs(pt.rise - (chord.elev + chord.fascia)) < 0.05;
+        const eaveAt = pt => Math.abs(pt.rise - (chord.elev + ROOF_FASCIA_IN / 12)) < 0.05;
         const first = prof[0], last = prof[prof.length - 1];
         const span = last.u - first.u;
         const hasHeel = chord.overhang > 0.05
@@ -3661,9 +3666,13 @@ if (!window.DraftCutView) {
           facesByRoof.forEach((faces, roof) => {
             const rise = sectionRoofHeightAt({ x: px, z: pz }, roof, faces);
             if (rise == null) return;
-            const { base, eave } = bearingByRoof.get(roof);
+            const { eave } = bearingByRoof.get(roof);
             const elev = eave + rise;
-            if (tallest === null || elev > tallest.elev) tallest = { elev, base, fascia: eave - base };
+            // The board hangs from the eave down by this roof's own depth
+            // (jb, 15 Nov 2026: a deeper fascia grows DOWN), so its foot
+            // can sit under the bearing plate.
+            const board = roofFasciaFt(roof);
+            if (tallest === null || elev > tallest.elev) tallest = { elev, base: eave - board, fascia: board };
           });
           return tallest;
         };
@@ -6617,8 +6626,10 @@ if (!window.DraftCutView) {
     const roofFills = [];
     if (facesByRoof) {
       facesByRoof.forEach((roofFaces, roof) => {
-        const base = roofBaseElev(roof, stack, env);
         const eaveTop = roofEaveElev(roof, stack, env);
+        // The board's foot: this roof's own depth under the eave, which
+        // runs below the bearing plate on a board deeper than standard.
+        const base = eaveTop - roofFasciaFt(roof);
         const pitch = roof.pitch || 4;
         const lifts = heelLiftsFt(roof);
         roofFaces.forEach(face => {
