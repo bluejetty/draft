@@ -2460,6 +2460,47 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   }
 }
 
+// ── A SHAPE AND A DIMENSION OVER AN ELEVATION (jb, 14 Nov 2026) ─────────
+// "allow the AREA / SHAPE and dimension commands to work on those pages too
+// so i can draw overtop to fix small problems quickly". Both are kept in the
+// view's own feet with the lines and notes, and print where they were drawn.
+{
+  const F = win.DraftDrawingFormat;
+  const raw = [
+    { id: 's1', cut: 'E2', kind: 'shape', points: [{ u: 1, e: 1 }, { u: 6, e: 1 }, { u: 6, e: 4 }, { u: 1, e: 4 }],
+      hatch: 'grey', style: 'dashed' },
+    { id: 's2', cut: 'E2', kind: 'shape', points: [{ u: 1, e: 1 }, { u: 6, e: 1 }] },
+    { id: 's3', cut: 'E2', kind: 'shape', points: [{ u: 0, e: 0 }, { u: 2, e: 0 }, { u: 2, e: 2 }], hatch: 'plaid' },
+    { id: 'd1', cut: 'E2', kind: 'dim', a: { u: 10, e: 0 }, b: { u: 10, e: 8 }, la: { u: 12, e: 0 }, lb: { u: 12, e: 8 } },
+    { id: 'd2', cut: 'E2', kind: 'dim', a: { u: 10, e: 0 }, b: { u: 10, e: 8 }, la: { u: 12, e: 0 } },
+  ];
+  const kept = F.elevationMarks(raw);
+  check('view shapes/dims: the format keeps a shape of 3+ corners and a whole dimension',
+    kept.map(m => m.id).join(',') === 's1,s3,d1', kept.map(m => m.id).join(','));
+  check('view shapes/dims: a shape keeps a hatch and linetype it knows, drops one it does not',
+    kept[0].hatch === 'grey' && kept[0].style === 'dashed' && kept[1].hatch === undefined);
+  const mEnv = buildEnv(win, { ...saved, elevationMarks: raw });
+  const e2cut = standardElevationCuts(mEnv).find(c => c.id === 'E2');
+  if (e2cut) {
+    const view = paintElevation(win, mEnv, e2cut);
+    const segs = segmentsOf(view);
+    const on = (p, u, e) => Math.hypot(p.u - u, p.e - e) < 0.05;
+    const has = (u0, e0, u1, e1) => segs.some(({ a, b }) =>
+      (on(a, u0, e0) && on(b, u1, e1)) || (on(a, u1, e1) && on(b, u0, e0)));
+    check('view shapes/dims: the shape prints its edges where they were drawn',
+      has(1, 1, 6, 1) && has(6, 4, 1, 4));
+    check('view shapes/dims: the dimension line runs between its ends', has(12, 0, 12, 8));
+    check('view shapes/dims: an extension line leaves the measured point',
+      segs.some(({ a, b }) => Math.abs(a.e - b.e) < 0.05 && Math.abs(a.e) < 0.05
+        && Math.min(a.u, b.u) > 10 && Math.min(a.u, b.u) < 10.6 && Math.max(a.u, b.u) > 12));
+    const figure = view.texts.find(t => /^8(\.00)?'(-0")?$/.test(String(t.text)));
+    check('view shapes/dims: the figure reads the length', !!figure,
+      view.texts.map(t => t.text).filter(t => /'/.test(t)).slice(0, 12).join(' / '));
+  } else {
+    check('view shapes/dims: the fixture has an E2 to draw on', false);
+  }
+}
+
 // ── E3 OF A MOD BILEVEL: THE ROOM'S CORNER, ONE LINE, GROUND TO ROOF ─────
 //
 // Movie, 10 Oct, marking his E3 in blue and orange: "blue where line should

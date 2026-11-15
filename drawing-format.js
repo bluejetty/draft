@@ -1532,6 +1532,26 @@ if (!window.DraftDrawingFormat) {
         const end = tip && m.end === 'line' ? { end: 'line' } : {};
         return { id, cut, kind: 'note', at, text, ...(tip ? { tip } : {}), ...end };
       }
+      // A SHAPE AND A DIMENSION drawn over the view (jb, 14 Nov 2026: "allow
+      // the AREA / SHAPE and dimension commands to work on those pages too so
+      // i can draw overtop to fix small problems quickly"). A shape is a
+      // closed ring with the plan shape's hatch and linetype; a dimension is
+      // the two points it measures (`a`, `b`) and the two ends of its line
+      // (`la`, `lb`), so it prints where it was put at any scale.
+      if (m?.kind === 'shape') {
+        const points = (Array.isArray(m.points) ? m.points : []).map(pt).filter(Boolean);
+        if (points.length < 3) return null;
+        seen.add(id);
+        return { id, cut, kind: 'shape', points,
+          ...(SHAPE_HATCH_IDS.includes(String(m.hatch ?? '')) ? { hatch: String(m.hatch) } : {}),
+          ...(SHAPE_STYLE_IDS.includes(String(m.style ?? '')) ? { style: String(m.style) } : {}) };
+      }
+      if (m?.kind === 'dim') {
+        const a = pt(m.a), b = pt(m.b), la = pt(m.la), lb = pt(m.lb);
+        if (!a || !b || !la || !lb || Math.hypot(lb.u - la.u, lb.e - la.e) < 0.01) return null;
+        seen.add(id);
+        return { id, cut, kind: 'dim', a, b, la, lb };
+      }
       return null;
     }).filter(Boolean);
   };

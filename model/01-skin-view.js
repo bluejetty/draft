@@ -115,6 +115,15 @@
   let elevLineStart = null;  // { u, e } -- a line half drawn
   let elevCursor = null;     // { u, e } -- the pointer, for the line's preview
   let elevSelected = null;   // the id of the mark Select is holding
+  // SHAPE AND DIMENSION ON THE VIEW, and the snap (jb, 14 Nov 2026). The
+  // corners of a shape in hand; a dimension string's points, and whether
+  // they are done and the next press places the string; what the hand has
+  // caught; and what the painter drew last, for the snap to read.
+  let elevShapePts = [];
+  let elevDimPts = [];
+  let elevDimPlacing = false;
+  let elevSnapLit = null;    // { kind, at: { u, e } }
+  let elevInk = null;        // { segs: px pieces, frame, feet: cache }
   let elevNotePress = null;  // { at, x, y } -- a note press not yet lifted
   // THE POINTER (Movie, 6 Oct): "when i put in ANNOTATION TEXT - can i have an
   // option for a POINTER ARROW? I will want to adjust the types of 'ARROWS' on

@@ -2096,10 +2096,21 @@ if (!window.DraftCutView) {
     const marks = (env && typeof env.elevationMarks === 'function'
       ? env.elevationMarks(cut.name) : null) || [];
     const selected = opts && opts.selectedMark;
-    const live = opts && opts.markPreview;
-    const all = live ? marks.concat([live]) : marks;
+    // ONE PREVIEW OR SEVERAL: a dimension string in hand is a row of them.
+    const live = opts && opts.markPreview ? [].concat(opts.markPreview).filter(Boolean) : [];
+    // SHAPES FIRST, so a white one masks the building and the lines, dims
+    // and notes drawn over it still show (jb, 14 Nov: "draw overtop to fix
+    // small problems").
+    const all = marks.concat(live).map((m, i) => ({ m, i }))
+      .sort((p, q) => ((p.m.kind === 'shape' ? 0 : 1) - (q.m.kind === 'shape' ? 0 : 1)) || p.i - q.i)
+      .map(p => p.m);
     if (!all.length) return;
     const ink = C.line;
+    // THE SNAP READS THE BUILDING'S INK, NOT THESE (elev-snap.js): the
+    // drafter's own marks are caught from their records, and the one in hand
+    // must never catch itself.
+    const wasOff = ctx.snapRecordOff;
+    ctx.snapRecordOff = true;
     // THE NOTE'S OWN SIZE, which follows the drawing's scale rather than the
     // paper: a note on a section drawn at 3 px to the foot would be unreadable
     // at 9. Renamed off `textPx` when that name became the paper-scale helper
@@ -2111,12 +2122,21 @@ if (!window.DraftCutView) {
       ctx.strokeStyle = hot ? ((opts && opts.selectColor) || '#2f6fd6') : ink;
       ctx.fillStyle = ctx.strokeStyle;
       ctx.lineWidth = hot ? 2 : 1.25;
-      ctx.setLineDash(m === live ? [5, 4] : []);
+      const isLive = live.includes(m);
+      ctx.setLineDash(isLive ? [5, 4] : []);
       if (m.kind === 'line' && m.a && m.b) {
         ctx.beginPath();
         ctx.moveTo(X(m.a.u), Y(m.a.e));
         ctx.lineTo(X(m.b.u), Y(m.b.e));
         ctx.stroke();
+        return;
+      }
+      if (m.kind === 'shape' && Array.isArray(m.points) && m.points.length >= 2) {
+        paintElevShape(ctx, m, X, Y, ctx.strokeStyle, isLive, C.ground, Boolean(opts && opts.markScreen) || hot);
+        return;
+      }
+      if (m.kind === 'dim' && m.a && m.b && m.la && m.lb) {
+        paintElevDim(env, ctx, m, X, Y, notePx, C);
         return;
       }
       if (m.kind !== 'note' || !m.at) return;
@@ -2147,6 +2167,108 @@ if (!window.DraftCutView) {
         ctx.fillText(text, tx, ty);
       }
     });
+    ctx.restore();
+    ctx.snapRecordOff = wasOff;
+  }
+
+  // A SHAPE OVER THE VIEW: the plan's own shape painter, handed the view's
+  // feet as if they were a plan's (u across, e up the sheet), so the hatch
+  // list, the WHITE mask and the four linetypes are the plan's exactly.
+  // A shape with no linetype draws SOLID here: on an elevation it is a fix
+  // to the drawing, not an area guide.
+  // WHITE IS THE PAPER: a mask, so on a NIGHT screen it is the night ground
+  // and not a white box; on a sheet the ground is the paper's white anyway.
+  // AND A MASK HAS NO EDGE ON PAPER: it is there to hide a wrong line, and
+  // an outline round it would draw four new ones. On MODEL (`screen`) its
+  // edge shows faint and dashed, so it can be found and picked.
+  function paintElevShape(ctx, m, X, Y, color, preview, paper, screen) {
+    const R = typeof window !== 'undefined' ? window.DraftRender2D : null;
+    const mask = m.hatch === 'white';
+    const shape = { points: m.points.map(p => ({ x: p.u, z: p.e })),
+      // NONE is no fill here, not the plan's faint wash: a line over the
+      // building should not tint what it rings.
+      hatch: !m.hatch || mask ? 'transparent' : m.hatch, style: m.style || 'solid' };
+    const toS = p => ({ x: X(p.x), y: Y(p.z) });
+    if (mask && !preview && shape.points.length >= 3) {
+      ctx.save();
+      ctx.fillStyle = paper || '#ffffff';
+      ctx.beginPath();
+      shape.points.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.z)) : ctx.moveTo(X(p.x), Y(p.z))));
+      ctx.closePath();
+      ctx.fill();
+      if (screen) {
+        ctx.globalAlpha = 0.45;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+    if (R && typeof R.drawShape2D === 'function' && !preview) {
+      R.drawShape2D(ctx, toS, shape, {}, { shapeColor: color, isPrinting: true,
+        outlineAreaSqFt: () => 0, areaLabel: null });
+      return;
+    }
+    ctx.beginPath();
+    shape.points.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.z)) : ctx.moveTo(X(p.x), Y(p.z))));
+    if (shape.points.length >= 3) ctx.closePath();
+    ctx.stroke();
+  }
+
+  // A DIMENSION OVER THE VIEW, the plan's look: extension lines standing a
+  // small gap off what they measure and running a touch past the line, an
+  // arrowhead at each end, the figure on a knocked-out plate along the line.
+  function paintElevDim(env, ctx, m, X, Y, notePx, C) {
+    const fa = { x: X(m.a.u), y: Y(m.a.e) }, fb = { x: X(m.b.u), y: Y(m.b.e) };
+    const da = { x: X(m.la.u), y: Y(m.la.e) }, db = { x: X(m.lb.u), y: Y(m.lb.e) };
+    const len = Math.hypot(db.x - da.x, db.y - da.y);
+    if (len < 1) return;
+    const gap = 3, past = 3;
+    const ext = (f, d) => {
+      const l = Math.hypot(d.x - f.x, d.y - f.y);
+      if (l <= gap) return;
+      const ux = (d.x - f.x) / l, uy = (d.y - f.y) / l;
+      ctx.beginPath();
+      ctx.moveTo(f.x + ux * gap, f.y + uy * gap);
+      ctx.lineTo(d.x + ux * past, d.y + uy * past);
+      ctx.stroke();
+    };
+    ctx.lineWidth = Math.min(ctx.lineWidth, 1);
+    ext(fa, da); ext(fb, db);
+    ctx.beginPath(); ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y); ctx.stroke();
+    const ang = Math.atan2(db.y - da.y, db.x - da.x);
+    const arrow = (p, a) => {
+      const size = 5;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + size * Math.cos(a + 2.65), p.y + size * Math.sin(a + 2.65));
+      ctx.lineTo(p.x + size * Math.cos(a - 2.65), p.y + size * Math.sin(a - 2.65));
+      ctx.closePath(); ctx.fill();
+    };
+    ctx.setLineDash([]);
+    arrow(da, ang + Math.PI);
+    arrow(db, ang);
+    const feet = Math.hypot(m.lb.u - m.la.u, m.lb.e - m.la.e);
+    const F = typeof window !== 'undefined' ? window.DraftFormatters : null;
+    const label = env && env.units === 'metric' && F && F.formatMetres
+      ? F.formatMetres(feet) : (env && env.ftIn ? env.ftIn(feet) : feet.toFixed(2));
+    ctx.save();
+    ctx.translate((da.x + db.x) / 2, (da.y + db.y) / 2);
+    // Read from the bottom or the right of the sheet, never upside down.
+    let turn = ang;
+    if (turn > Math.PI / 2) turn -= Math.PI;
+    if (turn <= -Math.PI / 2) turn += Math.PI;
+    ctx.rotate(turn);
+    ctx.font = `600 ${textPx(Math.max(9, notePx * 0.85))}px 'Barlow Condensed', system-ui, sans-serif`;
+    const tw = ctx.measureText(label).width;
+    const th = textPx(Math.max(9, notePx * 0.85));
+    ctx.fillStyle = C.ground;
+    ctx.fillRect(-tw / 2 - 2, -th / 2 - 1, tw + 4, th + 2);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 0);
     ctx.restore();
   }
 

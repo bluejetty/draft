@@ -1328,6 +1328,77 @@
     return box;
   };
 
+  // ── A SHAPE DRAWN OVER AN ELEVATION OR SECTION (jb, 14 Nov 2026) ─────
+  //
+  // The plan shape's HATCH and LINETYPE, nothing else: a room label, an area
+  // and a flooring are things a plan says. WHITE is the mask -- the paper
+  // laid over a wrong line so the right one can be drawn on top -- and has
+  // no edge on the sheet. A pick here is the next shape's, as on the plan.
+  // No linetype picked draws SOLID on a view (cut-view.js paintElevShape).
+  const elevShapeDefaults = () => ({
+    ...(shapeDefaults.hatch ? { hatch: shapeDefaults.hatch } : {}),
+    ...(shapeDefaults.style ? { style: shapeDefaults.style } : {}),
+  });
+  const writeElevShapeProps = (mark, patch) => {
+    const edits = [{ item: mark, before: { ...mark } }];
+    Object.entries(patch).forEach(([key, value]) => {
+      if (value == null) delete mark[key]; else mark[key] = value;
+    });
+    undoStack.push({ kind: 'props', edits });
+    shapeDefaults = { ...shapeDefaults,
+      ...('hatch' in patch ? { hatch: patch.hatch ?? null } : {}),
+      ...('style' in patch ? { style: patch.style ?? null } : {}) };
+    keepShapeDefaults();
+    markDirty();
+    showElevMarkProps();
+    paint();
+  };
+  const elevShapePropsNode = mark => {
+    const R = window.DraftRender2D, LS = window.DraftLineStyles;
+    const box = document.createElement('div');
+    box.dataset.elevShapeProps = '';
+    const title = text => {
+      const t = document.createElement('div');
+      t.className = 'props-title';
+      t.textContent = text;
+      return t;
+    };
+    const chip = (data, text, pressed, onClick) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sel-chip';
+      Object.entries(data).forEach(([k, v]) => { b.dataset[k] = v; });
+      b.textContent = text;
+      b.setAttribute('aria-pressed', String(pressed === true));
+      b.classList.toggle('lit', pressed === true);
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    if (R?.shapeHatches) {
+      box.append(title('HATCH'));
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      const now = R.shapeHatchOf(mark.hatch) ? mark.hatch : null;
+      [{ id: null, label: 'NONE' }, ...R.shapeHatches()].forEach(h => {
+        row.append(chip({ shapeHatch: h.id || 'none' }, h.id === 'white' ? 'WHITE (MASK)' : h.label, now === h.id,
+          () => writeElevShapeProps(mark, { hatch: h.id })));
+      });
+      box.append(row);
+    }
+    if (LS?.STYLES) {
+      box.append(title('LINETYPE'));
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      const now = LS.styleOf(mark.style) ? mark.style : 'solid';
+      LS.STYLES.forEach(st => {
+        row.append(chip({ shapeStyle: st.id }, st.name, now === st.id,
+          () => writeElevShapeProps(mark, { style: st.id })));
+      });
+      box.append(row);
+    }
+    return box;
+  };
+
   // ── A LINE'S WEIGHT, COLOUR AND STYLE (Movie, 19 Oct) ─────────────────
   //
   // "for the LINE -- it need some PROPERTIES that can change too. put in 5
@@ -2977,7 +3048,8 @@
   // drafter need not go back to PROPERTIES between strings.
   let dimPop = null;
   const syncDimPop = () => {
-    const up = activeTool === 'dimension' && !activeCut();
+    // ON A VIEW TOO (jb, 14 Nov 2026): HORIZ / VERT / DIAG measure there.
+    const up = activeTool === 'dimension';
     if (up && !dimPop) {
       dimPop = document.createElement('div');
       dimPop.id = 'dim-pop';

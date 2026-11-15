@@ -172,6 +172,7 @@
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || cutStart || beamStart || elevLineStart
+      || elevShapePts.length || elevDimPts.length
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
       || stretchState.a || stairHand.at || draftCommandsBusy());
     if (typeof lineArcCancel === 'function') lineArcCancel();
@@ -190,6 +191,10 @@
     elevLineStart = null;
     elevNotePress = null;
     elevPointerTip = null;
+    elevShapePts = [];
+    elevDimPts = [];
+    elevDimPlacing = false;
+    elevSnapLit = null;
     planNotePress = null;
     planPointerTip = null;
     outlineCorners = [];
@@ -968,7 +973,14 @@
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e => {
-    if (drawing && activeCut() && (elevLineStart || elevPointerTip)) elevMove(e);
+    // ON A VIEW, a drawing tool follows the hand: the line or shape in
+    // hand, the string, and the snap's ring before the first press.
+    // A HOVER WITH NO BUTTON DOWN IS ALL THE VIEW'S: the plan's hover below
+    // would only paint the same view again.
+    if (drawing && activeCut() && (elevLineStart || elevPointerTip || elevDrawTool())) {
+      elevMove(e);
+      if (!e.buttons && e.pointerType !== 'touch') return;
+    }
     if (e.pointerType === 'touch' && touchPts.has(e.pointerId)) {
       touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (twoPan && touchPts.size >= 2) {
