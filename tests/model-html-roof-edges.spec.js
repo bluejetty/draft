@@ -222,7 +222,10 @@ test('CROSS GABLE on an eave: centred where clicked on the wall line, its ridge 
 // ROOFS IN AN ASSEMBLY (Movie, 18 Oct): "ASSEMBLY roof peices that are
 // similar so i can adjust the EAVE and PITCH for the grouped roofs seperately
 // but be able to edit the properties of all as one within the ASSEMBLY".
-test('a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS ROOF alone', async ({ page }) => {
+// MAIN ROOF AND THE SPECIAL CASE (jb, 15 Nov 2026): the APPLY TO chips
+// became two sections -- MAIN ROOF for every piece without its own value,
+// THIS PIECE (SPECIAL CASE) for the one picked.
+test('a roof in an ASSEMBLY: MAIN ROOF reaches every piece, THIS PIECE keeps its own until put back', async ({ page }) => {
   await h.openModel(page, { webgl: false });
   const f = drawing();
   const SMALL = [[100, -8], [130, -8], [130, 20], [100, 20]];
@@ -241,7 +244,9 @@ test('a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS
   await page.waitForTimeout(200);
   const { at } = await h.planFrame(page);
   await click(page, at, 30, 15);
-  await expect(page.locator('[data-prop-row="apply to"] [data-prop-value="assembly"]')).toHaveText('MAIN ROOFS (2 ROOFS)');
+  await expect(page.locator('[data-roof-section="main"]')).toHaveText('MAIN ROOF \u2014 MAIN ROOFS (2 PIECES)');
+  await expect(page.locator('[data-roof-section="special"]')).toHaveText('THIS PIECE (SPECIAL CASE)');
+  await expect(page.locator('[data-roof-own-field="pitch"]')).toHaveValue('');
   await page.locator('[data-roof-field="pitch"]').fill('5');
   await page.locator('[data-roof-field="pitch"]').press('Enter');
   await type(page, 'overhang, all edges', '2');
@@ -249,11 +254,32 @@ test('a roof in an ASSEMBLY: PITCH and ALL EDGES reach every roof in it, or THIS
   expect(d.roofs.map(r => r.pitch)).toEqual([5, 5]);
   expect(d.roofs[1].points.map(p => [p.x, p.z]), 'the other roof\'s eaves came in too')
     .toEqual([[106, -2], [124, -2], [124, 14], [106, 14]]);
-  await page.locator('[data-prop-row="apply to"] [data-prop-value="one"]').click();
-  await page.locator('[data-roof-field="pitch"]').fill('6');
-  await page.locator('[data-roof-field="pitch"]').press('Enter');
+  // A SPECIAL CASE on the piece picked: only it takes the pitch...
+  await page.locator('[data-roof-own-field="pitch"]').fill('6');
+  await page.locator('[data-roof-own-field="pitch"]').press('Enter');
   d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
   expect(d.roofs.map(r => r.pitch)).toEqual([6, 5]);
+  expect(d.roofs[0].own).toEqual(['pitch']);
+  // ...and a MAIN change passes it by.
+  await page.locator('[data-roof-field="pitch"]').fill('7');
+  await page.locator('[data-roof-field="pitch"]').press('Enter');
+  await expect(page.locator('[data-prop-row="pitch"] .props-title')).toHaveText('PITCH (1 SPECIAL)');
+  d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.pitch)).toEqual([6, 7]);
+  // A special FASCIA too: the piece's own board, the other on MAIN.
+  await page.locator('[data-roof-own-field="fascia"]').fill('10');
+  await page.locator('[data-roof-own-field="fascia"]').press('Enter');
+  d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.fascia ?? 5.5)).toEqual([10, 5.5]);
+  // The x puts the pitch back on MAIN.
+  await page.locator('[data-roof-own-clear="pitch"]').click();
+  d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.pitch)).toEqual([7, 7]);
+  expect(d.roofs[0].own).toEqual(['fascia']);
+  // And UNDO brings the special case back.
+  await page.keyboard.press('Control+z');
+  d = (await page.locator('#save').click(), await h.waitForSaved(page), await h.savedDrawing(page));
+  expect(d.roofs.map(r => r.pitch)).toEqual([6, 7]);
 });
 
 // AND ON THE SITE PLAN (Movie, 18 Oct: "i'd like to be able to select the

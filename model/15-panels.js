@@ -2136,10 +2136,75 @@
   // A ROOF IN AN ASSEMBLY WITH OTHER ROOFS (Movie, 18 Oct): "ASSEMBLY roof
   // peices that are similar so i can adjust the EAVE and PITCH for the
   // grouped roofs seperately but be able to edit the properties of all as one
-  // within the ASSEMBLY". So PITCH and OVERHANG, ALL EDGES reach every roof
-  // in its assembly -- unless THIS ROOF is chosen; an edge is always this
-  // roof's own.
-  let roofScopeOne = false;
+  // within the ASSEMBLY".
+  //
+  // ── MAIN ROOF AND THE SPECIAL CASE (jb, 15 Nov 2026) ──────────────────
+  //
+  // "would it be possible for a connected together roof (not busted) be be
+  // able to control the 'fascia on each roof area seperatly (and the other
+  // stuff too) and then also have a 'MAIN ROOF section which would be what
+  // it would be if that roof doesn't have a 'special' selection chosen". The
+  // APPLY TO chips (the whole assembly, or THIS ROOF) became two sections:
+  // MAIN ROOF reaches every piece that has not been given its own value,
+  // and THIS PIECE (SPECIAL CASE) holds a piece's own. A piece lists the
+  // settings it keeps for itself in `own`; the assembly keeps the MAIN
+  // values in `roofMain`, so a MAIN change made while every piece is
+  // special still lands on the next one put back to MAIN. Every piece still
+  // carries its values in its own record, so nothing that paints a roof
+  // has to know about either.
+  const ROOF_OWN_KEYS = ['pitch', 'fascia', 'overhang'];
+  const roofOwns = (roof, key) => Array.isArray(roof?.own) && roof.own.includes(key);
+  const setRoofOwn = (roof, key, on) => {
+    const list = (Array.isArray(roof.own) ? roof.own : []).filter(k => k !== key && [...ROOF_OWN_KEYS, 'fasciaFinish'].includes(k));
+    if (on) list.push(key);
+    if (list.length) roof.own = list; else delete roof.own;
+  };
+  // ALL EDGES BUT THE JOINTS: a JOINT is the line a piece shares with the
+  // piece next door, and an overhang there would pull the two apart.
+  const roofOutsideEdge = (roof, i) => roofEdgeKind(roof.edges?.[i]) !== 'joint';
+  const roofOverhangOf = roof => {
+    const list = roofOverhangs(roof).filter((_, i) => roofOutsideEdge(roof, i));
+    return list.length && list.every(v => Math.abs(v - list[0]) < 1e-9) ? list[0] : null;
+  };
+  const ROOF_SETTING = {
+    pitch: {
+      read: roof => Number(roof.pitch) || 0,
+      write: (roof, v) => { roof.pitch = v; roof.follows = 'none'; return null; },
+    },
+    fascia: {
+      read: roof => window.DraftDrawingFormat.roofFasciaIn(roof.fascia),
+      write: (roof, v) => { roof.fascia = v; roof.follows = 'none'; return null; },
+    },
+    overhang: {
+      read: roofOverhangOf,
+      write: (roof, v) => setRoofOverhangs(roof,
+        roofOverhangs(roof).map((now, i) => (roofOutsideEdge(roof, i) ? v : now))),
+    },
+  };
+  // What MAIN says: the assembly's own word, else any piece that follows it,
+  // else the first piece.
+  const roofMainValue = (group, kin, key) => {
+    const kept = group?.roofMain?.[key];
+    if (kept != null && Number.isFinite(Number(kept))) return Number(kept);
+    const follower = kin.find(roof => !roofOwns(roof, key)) || kin[0];
+    return follower ? ROOF_SETTING[key].read(follower) : null;
+  };
+  // A MAIN change: every piece that follows MAIN takes it, and the assembly
+  // keeps it. One UNDO, and nothing if any piece refuses.
+  const setRoofMain = (group, kin, key, v) => editRoofs([group, ...kin.filter(roof => !roofOwns(roof, key))], item => {
+    if (item === group) { group.roofMain = { ...(group.roofMain || {}), [key]: v }; return null; }
+    return ROOF_SETTING[key].write(item, v);
+  });
+  // A piece's own value, or (v null) back to MAIN.
+  const setRoofSpecial = (group, kin, roof, key, v) => editRoofs([roof], item => {
+    if (v == null) {
+      setRoofOwn(item, key, false);
+      const main = roofMainValue(group, kin, key);
+      return main == null ? null : ROOF_SETTING[key].write(item, main);
+    }
+    setRoofOwn(item, key, true);
+    return ROOF_SETTING[key].write(item, v);
+  });
   // THE STOREYS A ROOF CAN SIT ON: the floors with walls on them, lowest
   // first -- not the foundation, the roof or the site.
   const roofStoreys = () => {
@@ -2230,12 +2295,11 @@
       syncAssembly();
     } });
     roofEdgeIdx = null;
-    roofScopeOne = false;
     setSelection(made.map(item => ({ type: 'roof', item })));
     markDirty();
     paint();
     sayOnStrip(`ROOF busted into ${made.length} pieces, held as one assembly. `
-      + 'Pick a piece and THIS ROOF for its own pitch or overhang; UNDO joins the roof back.');
+      + 'Pick a piece: MAIN ROOF sets them all, THIS PIECE (SPECIAL CASE) its own; UNDO joins the roof back.');
     return made;
   };
   // ── A STEPPED GABLE END: TWO GABLES, OR ONE FLUSH ──────────────────────
@@ -2412,17 +2476,128 @@
     if (!G.gableJogPieces({ ...roof, edges: kinds }, { index })) return false;
     return Boolean(splitJogGable(roof, kinds, index));
   };
+  // THE TWO SECTIONS. MAIN ROOF's fields are the same boxes (same hooks) a
+  // lone roof shows; THIS PIECE's read MAIN until a value is typed, and an
+  // emptied box or its x puts the piece back on MAIN.
+  const roofSectionHead = (text, key) => {
+    const head = document.createElement('div');
+    head.className = 'props-title';
+    head.dataset.roofSection = key;
+    head.style.marginTop = '8px';
+    head.style.paddingTop = '4px';
+    head.style.borderTop = '1px solid currentColor';
+    head.style.fontWeight = '600';
+    head.textContent = text;
+    return head;
+  };
+  const roofMainNode = (group, kin, lone, again) => {
+    const wrap = document.createElement('div');
+    const F = window.DraftFormatters;
+    const FMT = window.DraftDrawingFormat;
+    const say = refusal => { if (refusal) sayOnStrip(refusal); };
+    const specials = key => kin.filter(roof => roofOwns(roof, key)).length;
+    const tail = key => (specials(key) ? ` (${specials(key)} SPECIAL)` : '');
+    wrap.append(roofSectionHead(`MAIN ROOF \u2014 ${group.name} (${kin.length} PIECES)`, 'main'));
+    const mainPitch = roofMainValue(group, kin, 'pitch');
+    const pitchRow = numberField('PITCH', mainPitch, 0, 24, 0.5, v => {
+      if (v !== null) say(setRoofMain(group, kin, 'pitch', v));
+      again();
+      return roofMainValue(group, kin, 'pitch');
+    });
+    pitchRow.firstChild.textContent += tail('pitch');
+    const fasciaRow = numberField('FASCIA, IN', roofMainValue(group, kin, 'fascia'),
+      FMT.ROOF_FASCIA_MIN_IN, FMT.ROOF_FASCIA_MAX_IN, 0.25, v => {
+        if (v !== null) say(setRoofMain(group, kin, 'fascia', v));
+        again();
+        return roofMainValue(group, kin, 'fascia');
+      });
+    fasciaRow.firstChild.textContent += tail('fascia');
+    const overRow = propField('OVERHANG, ALL EDGES', roofMainValue(group, kin, 'overhang'),
+      ft => setRoofMain(group, kin, 'overhang', ft), again);
+    overRow.firstChild.textContent += tail('overhang');
+    wrap.append(pitchRow, fasciaRow, overRow);
+    if (!lone) return wrap;
+    wrap.append(roofSectionHead('THIS PIECE (SPECIAL CASE)', 'special'));
+    const showOf = {
+      pitch: v => String(v),
+      fascia: v => String(v),
+      overhang: v => (v == null ? '' : F.formatArchitecturalInches(v * 12)),
+    };
+    const parseOf = {
+      pitch: text => {
+        const v = Number(text);
+        return Number.isFinite(v) && v >= 0 && v <= 24 ? { v } : { error: 'A pitch runs from 0 to 24.' };
+      },
+      fascia: text => {
+        const v = Number(text);
+        return Number.isFinite(v) && v >= FMT.ROOF_FASCIA_MIN_IN && v <= FMT.ROOF_FASCIA_MAX_IN ? { v }
+          : { error: `A fascia runs from ${FMT.ROOF_FASCIA_MIN_IN}" to ${FMT.ROOF_FASCIA_MAX_IN}".` };
+      },
+      overhang: text => {
+        const parsed = F.parseArchitecturalLength(text);
+        return parsed.ok ? { v: parsed.inches / 12 } : { error: parsed.error };
+      },
+    };
+    [['pitch', 'PITCH'], ['fascia', 'FASCIA, IN'], ['overhang', 'OVERHANG, ALL EDGES']].forEach(([key, label]) => {
+      const row = document.createElement('div');
+      row.dataset.propRow = `special ${label.toLowerCase()}`;
+      const name = document.createElement('div');
+      name.className = 'props-title';
+      name.textContent = label;
+      const line = document.createElement('div');
+      line.style.display = 'flex';
+      line.style.gap = '4px';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'prop-field';
+      input.dataset.roofOwnField = key;
+      input.setAttribute('aria-label', `${label}, this piece`);
+      const own = roofOwns(lone, key);
+      input.value = own ? showOf[key](ROOF_SETTING[key].read(lone)) : '';
+      input.placeholder = 'MAIN';
+      const apply = () => {
+        const text = input.value.trim();
+        if (!text || /^main$/i.test(text)) {
+          if (own) say(setRoofSpecial(group, kin, lone, key, null));
+          again();
+          return;
+        }
+        if (own && text === showOf[key](ROOF_SETTING[key].read(lone))) return;
+        const got = parseOf[key](text);
+        if (got.error) { sayOnStrip(got.error); again(); return; }
+        say(setRoofSpecial(group, kin, lone, key, got.v));
+        again();
+      };
+      input.addEventListener('change', apply);
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+      });
+      line.append(input);
+      if (own) {
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'sel-chip';
+        back.dataset.roofOwnClear = key;
+        back.textContent = '\u2715';
+        back.title = 'Back to MAIN ROOF';
+        back.addEventListener('click', () => { say(setRoofSpecial(group, kin, lone, key, null)); again(); });
+        line.append(back);
+      }
+      row.append(name, line);
+      wrap.append(row);
+    });
+    return wrap;
+  };
   const roofPropsNode = picked => {
     const box = document.createElement('div');
     const again = () => { if (selection.every(e => e.type === 'roof')) showSelectionProps(); };
     const lone = picked.length === 1 ? picked[0] : null;
-    const owner = lone ? groupOf({ type: 'roof', item: lone }) : null;
+    // ONE JOINED ROOF: every roof picked rides the same assembly, and it
+    // holds more than one roof. Then the panel is MAIN ROOF + SPECIAL CASE.
+    const owner = picked.length ? groupOf({ type: 'roof', item: picked[0] }) : null;
     const kin = owner ? itemsOfGroup(owner).filter(e => e.type === 'roof').map(e => e.item) : [];
-    if (kin.length > 1) {
-      box.append(propRow('APPLY TO', [['assembly', `${owner.name} (${kin.length} ROOFS)`], ['one', 'THIS ROOF']],
-        roofScopeOne ? 'one' : 'assembly', id => { roofScopeOne = id === 'one'; again(); }));
-    }
-    const items = kin.length > 1 && !roofScopeOne ? kin : picked;
+    const joined = kin.length > 1 && picked.every(roof => kin.includes(roof));
+    const items = joined ? kin : picked;
     {
       const G = window.DraftGeometry2D;
       const canBust = G?.roofPieces ? picked.some(roof => G.roofPieces(roof).length >= 2) : false;
@@ -2460,29 +2635,33 @@
         box.append(jog);
       }
     }
-    box.append(numberField('PITCH', lone ? lone.pitch : items[0].pitch, 0, 24, 0.5, v => {
-      if (v !== null) {
-        const refusal = editRoofs(items, roof => { roof.pitch = v; roof.follows = 'none'; return null; });
-        if (refusal) sayOnStrip(refusal);
-      }
-      again();
-      return items[0].pitch;
-    }));
-    // THE BOARD'S DEPTH, PER ROOF (jb, 13 Nov 2026, off the 1412 Empress
-    // drawings: a 10" fascia on the front gable, the standard 5 1/2" on the
-    // rest -- "i will need to add a OBJ / PROP where i can change the fascia
-    // height of the induvidual roof peices"). Inches; the elevations and
-    // sections hang this board under the eaves and rakes, and the heel grows
-    // with it. Like PITCH, a typed board frees the roof from the PROJECT page.
-    box.append(numberField('FASCIA, IN', window.DraftDrawingFormat.roofFasciaIn(items[0].fascia),
-      window.DraftDrawingFormat.ROOF_FASCIA_MIN_IN, window.DraftDrawingFormat.ROOF_FASCIA_MAX_IN, 0.25, v => {
-      if (v !== null) {
-        const refusal = editRoofs(items, roof => { roof.fascia = v; roof.follows = 'none'; return null; });
-        if (refusal) sayOnStrip(refusal);
-      }
-      again();
-      return window.DraftDrawingFormat.roofFasciaIn(items[0].fascia);
-    }));
+    if (joined) box.append(roofMainNode(owner, kin, lone, again));
+    else {
+      box.append(numberField('PITCH', lone ? lone.pitch : items[0].pitch, 0, 24, 0.5, v => {
+        if (v !== null) {
+          const refusal = editRoofs(items, roof => { roof.pitch = v; roof.follows = 'none'; return null; });
+          if (refusal) sayOnStrip(refusal);
+        }
+        again();
+        return items[0].pitch;
+      }));
+      // THE BOARD'S DEPTH, PER ROOF (jb, 13 Nov 2026, off the 1412 Empress
+      // drawings: a 10" fascia on the front gable, the standard 5 1/2" on the
+      // rest -- "i will need to add a OBJ / PROP where i can change the fascia
+      // height of the induvidual roof peices"). Inches; the elevations and
+      // sections hang this board under the eaves and rakes -- a deeper one
+      // reaches further DOWN, the roof stays put (jb, 15 Nov). Like PITCH, a
+      // typed board frees the roof from the PROJECT page.
+      box.append(numberField('FASCIA, IN', window.DraftDrawingFormat.roofFasciaIn(items[0].fascia),
+        window.DraftDrawingFormat.ROOF_FASCIA_MIN_IN, window.DraftDrawingFormat.ROOF_FASCIA_MAX_IN, 0.25, v => {
+        if (v !== null) {
+          const refusal = editRoofs(items, roof => { roof.fascia = v; roof.follows = 'none'; return null; });
+          if (refusal) sayOnStrip(refusal);
+        }
+        again();
+        return window.DraftDrawingFormat.roofFasciaIn(items[0].fascia);
+      }));
+    }
     // SITS ON (Movie, 27 Oct: "cut the roof how it is now and drop it down to
     // match the one beside it" -- "we shouldn't drop it automatically but
     // allow the user to drop it somehow, in the properties menu maybe").
@@ -2508,10 +2687,12 @@
     }
     // EVERY EDGE AT ONCE, which is where a drafter starts -- 8' all round --
     // before picking out the edges that differ.
-    const all = items.flatMap(roofOverhangs);
-    const agree = all.every(v => Math.abs(v - all[0]) < 1e-9);
-    box.append(propField('OVERHANG, ALL EDGES', agree ? all[0] : null,
-      ft => editRoofs(items, roof => setRoofOverhangs(roof, roof.points.map(() => ft))), again));
+    if (!joined) {
+      const all = items.flatMap(roofOverhangs);
+      const agree = all.every(v => Math.abs(v - all[0]) < 1e-9);
+      box.append(propField('OVERHANG, ALL EDGES', agree ? all[0] : null,
+        ft => editRoofs(items, roof => setRoofOverhangs(roof, roof.points.map(() => ft))), again));
+    }
     if (lone) {
       const count = lone.points.length;
       if (roofEdgeIdx != null && roofEdgeIdx >= count) roofEdgeIdx = null;

@@ -421,8 +421,15 @@
                a wall flush under a fascia in the same finish draws no line
                between them, and the comparison is by these ids. -->
           <div class="prop" style="margin-top:6px">
-            <label for="fascia-finish">Fascia</label>
+            <label for="fascia-finish" id="fascia-finish-label">Fascia</label>
             <select id="fascia-finish"></select>
+          </div>
+          <!-- A PIECE OF A JOINED ROOF (jb, 15 Nov 2026): the select above is
+               the MAIN ROOF's fascia, this one the piece's SPECIAL CASE --
+               MAIN until a finish is chosen. -->
+          <div class="prop" style="margin-top:6px" id="fascia-own-row" hidden>
+            <label for="fascia-finish-own">Fascia, this piece (special case)</label>
+            <select id="fascia-finish-own"></select>
           </div>
           <p class="empty" id="roof-weight"></p>
         </div>
@@ -681,6 +688,21 @@
           .map(id => `<option value="${id}">${cornerLabel(id)}</option>`).join('');
       document.getElementById('fascia-finish').innerHTML = WT.FASCIA_FINISHES
         .map(f => `<option value="${f.id}">${f.label}</option>`).join('');
+      document.getElementById('fascia-finish-own').innerHTML = '<option value="">MAIN</option>'
+        + WT.FASCIA_FINISHES.map(f => `<option value="${f.id}">${f.label}</option>`).join('');
+      // THE ROOF PICKED AND THE PIECES IT IS JOINED TO: the roofs of the one
+      // assembly holding it, when that holds more than one.
+      const ownsFinish = r => Array.isArray(r?.own) && r.own.includes('fasciaFinish');
+      const roofKin = roof => {
+        if (!roof) return [];
+        const group = (drawing?.groups || []).find(g => (g.members || [])
+          .some(m => m.type === 'roof' && String(m.id) === String(roof.id)));
+        if (!group) return [];
+        const ids = new Set(group.members.filter(m => m.type === 'roof').map(m => String(m.id)));
+        const kin = (drawing?.roofs || []).filter(r => ids.has(String(r.id)));
+        return kin.length > 1 ? kin : [];
+      };
+      const mainFinishOf = kin => WT.fasciaFinishIdOf(kin.find(r => !ownsFinish(r)) || kin[0]);
 
       const paintRoofProps = () => {
         const roof = storedRoof();
@@ -689,7 +711,11 @@
         const roofing = RT.roofingById(roof.roofing);
         document.getElementById('roofing').value = roofing.id;
         document.getElementById('gable-corner').value = roof.gableCorner || '';
-        document.getElementById('fascia-finish').value = WT.fasciaFinishIdOf(roof);
+        const kin = roofKin(roof);
+        document.getElementById('fascia-finish-label').textContent = kin.length ? 'Fascia, main roof' : 'Fascia';
+        document.getElementById('fascia-own-row').hidden = !kin.length;
+        document.getElementById('fascia-finish').value = kin.length ? mainFinishOf(kin) : WT.fasciaFinishIdOf(roof);
+        document.getElementById('fascia-finish-own').value = ownsFinish(roof) ? WT.fasciaFinishIdOf(roof) : '';
         // THE WEIGHT, SAID OUT LOUD where the choice is made. It is the one
         // number on that table with a consequence -- a tile roof is four times
         // an asphalt one, which is a truss somebody designs rather than buys
@@ -701,13 +727,15 @@
             ? ' \u2014 heavy; the framing wants checking.' : '.');
       };
 
-      const writeRoof = patch => {
+      const patchRoof = (roof, patch) => Object.entries(patch).forEach(([key, value]) => {
+        if (value === null) delete roof[key];
+        else roof[key] = value;
+      });
+      // `patchFor(roof)` for every roof in `list` (default: the one picked).
+      const writeRoof = (patch, list = null, patchFor = null) => {
         const roof = storedRoof();
         if (!roof) return;
-        Object.entries(patch).forEach(([key, value]) => {
-          if (value === null) delete roof[key];
-          else roof[key] = value;
-        });
+        (list || [roof]).forEach(r => patchRoof(r, patchFor ? patchFor(r) : patch));
         // THROUGH THE NORMALISER, WITH BOTH VOCABULARIES. Without them the two
         // keys are dropped on the way past and the rail appears to do nothing
         // -- the trap this page already fell into once with the wall finishes,
@@ -730,9 +758,25 @@
         writeRoof({ gableCorner: event.target.value || null }));
       // PFM IS STORED AS NOTHING, the record rule: a roof nobody has touched
       // carries no key and reads as PFM.
-      document.getElementById('fascia-finish').addEventListener('change', event =>
-        writeRoof({ fasciaFinish: event.target.value === WT.DEFAULT_FASCIA_FINISH_ID
-          ? null : event.target.value }));
+      const finishWord = id => (id === WT.DEFAULT_FASCIA_FINISH_ID ? null : id);
+      document.getElementById('fascia-finish').addEventListener('change', event => {
+        const kin = roofKin(storedRoof());
+        // ON A JOINED ROOF THIS IS THE MAIN ROOF'S: every piece without a
+        // special case of its own takes it.
+        if (kin.length) writeRoof({ fasciaFinish: finishWord(event.target.value) }, kin.filter(r => !ownsFinish(r)));
+        else writeRoof({ fasciaFinish: finishWord(event.target.value) });
+      });
+      document.getElementById('fascia-finish-own').addEventListener('change', event => {
+        const roof = storedRoof();
+        const kin = roofKin(roof);
+        if (!roof || !kin.length) return;
+        const own = (Array.isArray(roof.own) ? roof.own : []).filter(k => k !== 'fasciaFinish');
+        const id = event.target.value;
+        // MAIN puts the piece back on the main roof's finish.
+        const main = mainFinishOf(kin.filter(r => r !== roof).length ? kin.filter(r => r !== roof) : kin);
+        writeRoof(id ? { fasciaFinish: finishWord(id), own: [...own, 'fasciaFinish'] }
+          : { fasciaFinish: finishWord(main), own: own.length ? own : null });
+      });
 
       // ── THE BAND BEING ADJUSTED ────────────────────────────────
       //

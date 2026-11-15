@@ -202,3 +202,31 @@ test('the seam rule at the floor: one skin over and under a floor band has no pl
     two.walls.forEach(w => { if (w.levelId === 5) w.finish = 'siding_h'; });
     expect(plateLine(paintE1(two)), 'siding over stucco: the plate line is drawn').toBe(true);
   });
+
+// A JOINED ROOF (jb, 15 Nov 2026): the FASCIA select is the MAIN ROOF's, and
+// a piece can take a SPECIAL CASE of its own under it, MAIN putting it back.
+test('a joined roof: FASCIA is the main roof\'s, a piece keeps its own special case', async ({ page }) => {
+  const saved = JSON.parse(JSON.stringify(REPRO));
+  const ids = saved.roofs.slice(0, 2).map(r => String(r.id));
+  saved.groups = [...(saved.groups || []), { id: 'group-77', name: 'ROOF PIECES 1', fixed: false,
+    stretchBehavior: 'item-geometry', members: ids.map(id => ({ type: 'roof', id })) }];
+  await openPage(page, saved);
+  const pick = id => page.locator(`#roof-list [data-roof="${id}"]`).click();
+  await pick(ids[0]);
+  await expect(page.locator('#fascia-own-row')).toBeVisible();
+  await expect(page.locator('#fascia-finish-label')).toHaveText('Fascia, main roof');
+  await page.locator('#fascia-finish').selectOption('stucco');
+  await expect.poll(async () => (await storedRoofs(page)).filter(r => ids.includes(r.id)).map(r => r.fasciaFinish))
+    .toEqual(['stucco', 'stucco']);
+  await page.locator('#fascia-finish-own').selectOption('pfm');
+  await expect.poll(async () => (await storedRoofs(page)).filter(r => ids.includes(r.id)).map(r => r.fasciaFinish))
+    .toEqual([null, 'stucco']);
+  // MAIN passes the special piece by...
+  await page.locator('#fascia-finish').selectOption('siding_h');
+  await expect.poll(async () => (await storedRoofs(page)).filter(r => ids.includes(r.id)).map(r => r.fasciaFinish))
+    .toEqual([null, 'siding_h']);
+  // ...and MAIN on the piece puts it back.
+  await page.locator('#fascia-finish-own').selectOption('');
+  await expect.poll(async () => (await storedRoofs(page)).filter(r => ids.includes(r.id)).map(r => r.fasciaFinish))
+    .toEqual(['siding_h', 'siding_h']);
+});
