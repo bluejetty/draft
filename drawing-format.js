@@ -1170,6 +1170,11 @@ if (!window.DraftDrawingFormat) {
         // name the list drops it on the way past.
         ...(typeof roof?.fasciaFinish === 'string' && /^[a-z0-9_-]{1,40}$/i.test(roof.fasciaFinish)
           ? { fasciaFinish: roof.fasciaFinish } : {}),
+        // THE SETTINGS A PIECE KEEPS FOR ITSELF (jb, 15 Nov 2026: MAIN ROOF
+        // and the SPECIAL CASE, model/15). Absent, the piece follows its
+        // assembly's MAIN ROOF; the values themselves are on the record.
+        ...(Array.isArray(roof?.own) && roof.own.some(k => ['pitch', 'fascia', 'overhang', 'fasciaFinish'].includes(k))
+          ? { own: [...new Set(roof.own.filter(k => ['pitch', 'fascia', 'overhang', 'fasciaFinish'].includes(k)))] } : {}),
         // TWO GABLES ON A STEPPED END (jb, 15 Nov 2026; model/15
         // splitJogGable): the small piece names its big one (`jogOf`), and
         // the big one keeps the flush roof it was cut from (`flushOf`) for
