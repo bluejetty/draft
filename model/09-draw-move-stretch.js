@@ -1442,6 +1442,9 @@
     // A HOLOGRAM IS TAKEN BY ITS CORNERS -- on SITE, its lot's (Movie, 28 Oct).
     entries.filter(e => e.type === 'hologram').forEach(({ item }) => hologramCorners(item)
       .forEach(v => pts.push({ x: v.x, z: v.z, node: true })));
+    // A STAIR BY ITS OUTLINE'S CORNERS, any shape (jb, 15 Nov 2026).
+    entries.filter(e => e.type === 'stair').forEach(({ item }) => stairCorners(item)
+      .forEach(v => pts.push({ x: v.x, z: v.z, node: true })));
     const G = window.DraftGeometry2D;
     const ws = entries.filter(e => e.type === 'wall').map(e => e.item);
     if (G?.wallFaceCorners && ws.length) {
@@ -1507,6 +1510,9 @@
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
     return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across, slide,
       stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
+      // ITS OUTLINE AS IT STOOD, for stairSeek: corners and edges onto
+      // nodes, T corners and wall faces (jb, 15 Nov 2026).
+      stairOutlines: entries.filter(e => e.type === 'stair').map(e => stairOutlineOf(e.item)),
       holos: entries.filter(e => e.type === 'hologram').map(e => e.item),
       before: [...points.map(vtx => ({ vtx, x: vtx.x, z: vtx.z,
         ...(vtx.offX !== undefined ? { offX: vtx.offX, offZ: vtx.offZ } : {}) })),
@@ -1969,7 +1975,7 @@
       if (footOn && !d.set.across) { dx = quantiseFeet(dx); dz = quantiseFeet(dz); }
       if (!d.set.across && snapLive()) {
         d.magnet ||= magnetExcluding(d.set.points);
-        const seek = moveSeek(d, dx, dz, axis);
+        const seek = moveSeek(d, dx, dz, axis) || stairSeek(d.set.stairOutlines, dx, dz, d.magnet, axis);
         d.lit = seek?.lit || null;
         if (seek) { dx = seek.dx; dz = seek.dz; }
       }

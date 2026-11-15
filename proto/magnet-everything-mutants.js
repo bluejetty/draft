@@ -37,7 +37,7 @@ const MUTANTS = [
     test: 'a floor traced by hand lands a corner on the outline\'s, and a shape\'s corner on the floor\'s' },
   { file: 'model/09-draw-move-stretch.js',
     name: 'a moved selection seeks nothing',
-    find: '        const seek = moveSeek(d, dx, dz, axis);\n',
+    find: '        const seek = moveSeek(d, dx, dz, axis) || stairSeek(d.set.stairOutlines, dx, dz, d.magnet, axis);\n',
     with: '        const seek = null;\n',
     test: 'MOVE carries a floor onto the outline\'s corner by whichever corner comes nearest' },
   { file: 'model/07-walls-magnet.js',

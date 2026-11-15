@@ -61,6 +61,11 @@ test('held by its corner, brought within reach of a node, it lands on it exactly
   const [cx, cy] = at(8, -5.5);
   await page.mouse.move(cx + 1, cy + 1);
   await page.mouse.down();
+  // Two feet east first, clear of anything: the corner rides in the hand.
+  await page.mouse.move(...at(10, -5.5), { steps: 4 });
+  await page.waitForTimeout(100);
+  const held = await attr(page, 'data-move-grab');
+  expect(held?.[0], 'the corner is carried').toBeCloseTo(10, 1);
   // The hand to an inch short of the line's end, and a hair off its row.
   await page.mouse.move(...at(12 - 1 / 12, -5.5 + 0.5 / 12), { steps: 8 });
   await page.waitForTimeout(100);

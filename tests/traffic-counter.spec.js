@@ -13,8 +13,13 @@ const GC_HOST = 'https://roughdrafter.goatcounter.com';
 const proxyApp = (page, baseURL) =>
   page.route('https://draft.test/**', async route => {
     const url = new URL(route.request().url());
-    const response = await page.request.get(baseURL + url.pathname);
-    await route.fulfill({ response });
+    // A LATE ASSET (a lazy image still loading when the test's last check
+    // passes) is fetched after the test has ended, and that fetch throws
+    // "Test ended" into the route callback -- failing a test that passed
+    // (PR #1022's CI, 15 Nov 2026). Once the test is over nobody wants it.
+    let response;
+    try { response = await page.request.get(baseURL + url.pathname); } catch { return; }
+    await route.fulfill({ response }).catch(() => {});
   });
 
 test('a page load reports a hit and wears the public count', async ({ page, baseURL }) => {

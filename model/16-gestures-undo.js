@@ -1188,14 +1188,22 @@
           // HELD BY A CORNER, that corner lands exactly on a node, a face
           // corner or a line it is brought to -- a point before the faces.
           md.lit = null;
-          if (md.corner && snapLive()) {
-            const held = { x: md.corner.x + dx, z: md.corner.z + dz };
-            md.magnet ||= magnetExcluding(stairCorners({ ...md.stair, start: md.start, end: md.end }));
-            const hit = pointCatch(held, md.magnet);
-            if (hit) {
-              dx += hit.land.x - held.x;
-              dz += hit.land.z - held.z;
-              md.lit = hit;
+          if (snapLive()) {
+            md.outline ||= stairOutlineOf({ ...md.stair, start: md.start, end: md.end });
+            md.magnet ||= magnetExcluding(md.outline.corners);
+            let caught = null;
+            if (md.corner) {
+              const held = { x: md.corner.x + dx, z: md.corner.z + dz };
+              const hit = pointCatch(held, md.magnet);
+              if (hit) caught = { dx: dx + hit.land.x - held.x, dz: dz + hit.land.z - held.z, lit: hit };
+            }
+            // ANY OTHER CORNER, OR AN EDGE, onto a node, a T's corner or a
+            // wall's face (jb, 15 Nov 2026), whatever shape the flight is.
+            caught ||= stairSeek([md.outline], dx, dz, md.magnet);
+            if (caught) {
+              dx = caught.dx;
+              dz = caught.dz;
+              md.lit = caught.lit;
               md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
               md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
             }

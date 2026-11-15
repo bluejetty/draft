@@ -1383,6 +1383,69 @@
     point(magnet.corners, CORNER_REACH, false);
     return best ? { dist: dist + best.gap, lit: best.make(best.gap) } : null;
   };
+  // ── A FLIGHT'S OUTLINE SEEKS (jb, 15 Nov 2026) ─────────────────────────
+  //
+  // "can you make the stair corners NODE snapable so i can position the
+  // corner or edge to a edge wall" -- "or t wall corner". `outlines` are
+  // stairOutlineOf (model/06) as the drag began; (dx, dz) the travel so far.
+  //
+  // ITS CORNERS FIRST: any corner within reach of a node or a face corner
+  // (a T's inside corners are face corners, wallFaceCorners) lands on it
+  // exactly, the nearest by the one snap rule. ELSE ITS EDGES: an outside
+  // edge running parallel to a wall face or a line, beside it, within the
+  // stair face snap's reach slides across onto it; and an edge square to
+  // that one may then slide along it onto a second face, so a flight drops
+  // into a room's corner with both sides on. With the T-square holding an
+  // axis, a corner lines up along that axis only and an edge moves only
+  // when it faces along it. `{ dx, dz, lit }` or null.
+  const STAIR_EDGE_PX = 14;
+  const stairSeek = (outlines, dx, dz, magnet, axis = null) => {
+    if (!magnet || !outlines?.length) return null;
+    let best = null;
+    const points = { nodes: magnet.nodes || [], corners: magnet.corners || [], segs: [] };
+    outlines.forEach(o => o.corners.forEach(c => {
+      const at = { x: c.x + dx, z: c.z + dz };
+      let hit = null;
+      if (axis) hit = axisCatch(at, axis, points);
+      else {
+        const p = strongerPoint(at, points.nodes, points.corners);
+        if (p) {
+          hit = { land: { x: p.v.x, z: p.v.z }, pt: { x: p.v.x, y: 0, z: p.v.z }, corner: p.v, node: p.node,
+            share: catchShare(Math.hypot(p.v.x - at.x, p.v.z - at.z), p.node ? NODE_REACH : CORNER_REACH) };
+        }
+      }
+      if (hit && hit.share < Infinity && (!best || hit.share < best.hit.share)) best = { hit, at };
+    }));
+    if (best) return { dx: dx + best.hit.land.x - best.at.x, dz: dz + best.hit.land.z - best.at.z, lit: best.hit };
+    const reach = STAIR_EDGE_PX / view.scale;
+    const edgeCatch = (ex, ez, keep) => {
+      let found = null;
+      outlines.forEach(o => o.edges.forEach(e => {
+        if (keep && !keep(e)) return;
+        if (axis && Math.abs(Math.abs(axis === 'x' ? e.n.x : e.n.z) - 1) > 1e-3) return;
+        const a = { x: e.a.x + ex, z: e.a.z + ez };
+        (magnet.segs || []).forEach(seg => {
+          const sx = seg.b.x - seg.a.x, sz = seg.b.z - seg.a.z, sl = Math.hypot(sx, sz);
+          if (sl < 1e-6 || Math.abs(e.u.x * sz - e.u.z * sx) / sl > 1e-3) return;
+          const t1 = (seg.a.x - a.x) * e.u.x + (seg.a.z - a.z) * e.u.z;
+          const t2 = (seg.b.x - a.x) * e.u.x + (seg.b.z - a.z) * e.u.z;
+          if (Math.min(Math.max(t1, t2), e.len) - Math.max(Math.min(t1, t2), 0) < 1e-3) return;
+          const gap = (seg.a.x - a.x) * e.n.x + (seg.a.z - a.z) * e.n.z;
+          if (Math.abs(gap) > reach + 1e-9) return;
+          if (!found || Math.abs(gap) < Math.abs(found.gap)) found = { gap, e, seg };
+        });
+      }));
+      return found;
+    };
+    const first = edgeCatch(dx, dz);
+    if (!first) return null;
+    dx += first.e.n.x * first.gap; dz += first.e.n.z * first.gap;
+    const second = axis ? null
+      : edgeCatch(dx, dz, e => Math.abs(e.u.x * first.e.u.x + e.u.z * first.e.u.z) < 1e-3);
+    if (second) { dx += second.e.n.x * second.gap; dz += second.e.n.z * second.gap; }
+    const own = { a: { x: first.e.a.x + dx, z: first.e.a.z + dz }, b: { x: first.e.b.x + dx, z: first.e.b.z + dz } };
+    return { dx, dz, lit: { seg: first.seg, own, pt: { x: (own.a.x + own.b.x) / 2, y: 0, z: (own.a.z + own.b.z) / 2 } } };
+  };
   // Where a dragged point lands: a node first, then a face corner, then a
   // face line. `{ pt, corner }` or `{ pt, seg }`, or null.
   // WITHIN AN INCH OF A LINE IT CROSSES, A DRAGGED END CONNECTS TO IT (Movie,
