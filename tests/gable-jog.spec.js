@@ -74,42 +74,65 @@ const planes = (page, roof) => page.evaluate(r => {
   };
 }, roof);
 
-test('GABLE on one piece of a stepped end runs the gable flush across the step and the piece beyond: the ridge runs out to it, no shed off the foot', async ({ page }) => {
+// TWO GABLES (jb, 15 Nov 2026: "can you make it 2 seperate gables ?"): the
+// press splits the roof into the big gable across the house on the stepped-
+// back line (x = -31) and a small lower gable over the long piece that
+// sticks out (x = -32 .. -31), peaking at its own middle. ONE FLUSH GABLE
+// puts the one gable across back (14 Nov's flush rule, unchanged); TWO
+// GABLES splits it again; UNDO steps back through each.
+const allRoofs = async page => {
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  return (await h.savedDrawing(page)).roofs;
+};
+test('GABLE on one piece of a stepped end makes two gables: the big one on the stepped-back line, a small one over the piece that sticks out', async ({ page }) => {
   const { at } = await open(page);
   await click(page, at, 0, 0);
-  // The long piece of the west end, x = -32. jb, 14 Nov 2026: one press
-  // gables the whole stepped end -- the foot and the short piece at x = -31
-  // go with it (geometry-2d gableJogKinds; proto/flush-gable-harness.js).
   await click(page, at, -31.8, -5);
   await expect(page.locator('[data-roof-edge-label]')).toHaveText('EDGE 2 OF 6');
   await page.locator('[data-prop-row="edge"] [data-prop-value="gable"]').click();
-  let roof = await saved(page);
-  expect(roof.edges, 'one press: the foot and the piece beyond it went gable with it').toEqual(['gable', 'gable', 'eave', 'eave', 'eave', 'gable']);
-  expect(roof.follows).toBe('none');
-  if (process.env.SHOT) {
-    await page.keyboard.press('Escape');
-    await page.screenshot({ path: '/tmp/claude-0/repro/4-chips-plan.png' });
-    await page.goto('/MODEL.html?level=7&left=1&view=cut%3AE2');
-    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-    await page.keyboard.press('0'); await page.waitForTimeout(300);
-    await page.screenshot({ path: '/tmp/claude-0/repro/5-chips-E2.png' });
-    await page.goto('/MODEL.html?level=7&left=1&view=cut%3AE1');
-    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-    await page.keyboard.press('0'); await page.waitForTimeout(300);
-    await page.screenshot({ path: '/tmp/claude-0/repro/6-chips-E1.png' });
-    await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
-    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  }
-  const got = await planes(page, roof);
-  // THE PLAN'S LINES: the ridge out to the gable end and the two hips at the
-  // east end -- no line up the step, no plane off the foot.
+  let roofs = await allRoofs(page);
+  expect(roofs.length, 'two records: the big gable and the small one').toBe(2);
+  const big = roofs.find(r => r.id === 'roof-1');
+  const small = roofs.find(r => r.id !== 'roof-1');
+  expect(ring(big).sort(), 'the big roof stops on the stepped-back line').toEqual([[-31, -17], [-31, 17], [32, -17], [32, 17]].sort());
+  expect(big.edges.filter(k => k === 'gable').length, 'one gable, across the whole house').toBe(1);
+  expect(ring(small).sort(), 'the small one is the piece that sticks out').toEqual([[-32, -17], [-32, 7], [-31, -17], [-31, 7]].sort());
+  expect(small.edges.slice().sort(), 'its front a gable, its sides eaves, its back a JOINT').toEqual(['eave', 'eave', 'gable', 'joint']);
+  expect(small.jogOf).toBe('roof-1');
+  expect(big.flushOf && big.flushOf.points.length, 'the flush roof kept for ONE FLUSH GABLE').toBe(6);
+  const groups = (await h.savedDrawing(page)).groups;
+  expect(groups.some(g => g.members.length === 2 && g.members.every(m => m.type === 'roof')), 'held as one assembly').toBe(true);
+  // The small gable peaks at its own middle (z -5), lower than the big one's.
+  const peaks = await page.evaluate(() => {
+    const G = window.DraftGeometry2D;
+    const [b, s] = drawing.roofs;
+    return { big: G.roofRiseAt(b, { x: -30.9, z: 0 }), small: G.roofRiseAt(s, { x: -31.5, z: -5 }) };
+  });
+  expect(peaks.small, 'the small peak is under the big one').toBeLessThan(peaks.big - 1);
+  // ONE FLUSH GABLE: one roof, gabled flush across the step (the 14 Nov
+  // rule): the ridge runs out to the end, no plane off the foot.
+  await page.locator('[data-roof-jog-gable="flush"]').click();
+  roofs = await allRoofs(page);
+  expect(roofs.length).toBe(1);
+  expect(roofs[0].edges, 'the foot and the piece beyond gable with it').toEqual(['gable', 'gable', 'eave', 'eave', 'eave', 'gable']);
+  const got = await planes(page, roofs[0]);
   expect(got.lines.length, 'ridge and two hips').toBe(3);
   expect(got.ridgeX, 'the ridge runs out to the gable end').toEqual([-32, 15]);
   expect(got.covered, 'the planes cover the ring exactly').toBe(got.ring);
-  // ONE UNDO takes all three back.
+  // TWO GABLES splits it again.
+  await page.locator('[data-roof-jog-gable="two"]').click();
+  expect((await allRoofs(page)).length).toBe(2);
+  // UNDO, UNDO, UNDO: back to two, one, and the plain eaves.
   await page.keyboard.press('Control+z');
-  roof = await saved(page);
-  expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
+  roofs = await allRoofs(page);
+  expect(roofs.length).toBe(1);
+  await page.keyboard.press('Control+z');
+  expect((await allRoofs(page)).length).toBe(2);
+  await page.keyboard.press('Control+z');
+  roofs = await allRoofs(page);
+  expect(roofs.length).toBe(1);
+  expect(roofs[0].edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
 });
 
 test('GABLE END on a stepped end squares across the whole end, not just to the step', async ({ page }) => {

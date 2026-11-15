@@ -43,6 +43,8 @@ const MUTATIONS = [
     c => c.replace('        return u != null && behindWall(pt, u, elev - SEAM_PROBE_FT)', '        return false && behindWall(pt, u, elev - SEAM_PROBE_FT)')],
   ['a step in the roofline is joined station to station', 'cut-view.js',
     c => c.replace('        if (!coarse && prev && prev.elev != null', '        if (false && prev && prev.elev != null')],
+  ['the small gable has no JOINT at its back (it raises a plane off it)', 'geometry-2d.js',
+    c => c.replace("const smallKinds = [K[at(i - 1)], 'eave', 'joint', K[at(i - 2)]];", "const smallKinds = [K[at(i - 1)], 'eave', 'eave', K[at(i - 2)]];")],
 ];
 
 if (MUTATE) {
@@ -249,6 +251,39 @@ const inkPlumbAt = (segs, u) => segs.filter(x => x.ink !== '#fff' && x.w >= 1.2
     });
     check('hand roof E4: the roofline steps down plumb where the big roof stops', slant.length === 0, fmt(slant));
   }
+}
+
+// ── TWO GABLES (jb, 15 Nov 2026: "can you make it 2 seperate gables ?") ───
+//
+// geometry-2d gableJogPieces: the big gable on the stepped-back line across
+// the whole house, a small lower one over the part that sticks out, peaking
+// at its own middle. What a GABLE press on the stepped end now makes (model/15
+// splitJogGable); E1 shows two peaks, the small one in front and lower.
+{
+  const both = [ringOf(1).map(([x, z]) => ({ x, y: 0, z }))].map(pts => pts)[0];
+  [['as drawn', both, LONG], ['wound the other way', both.slice().reverse(), LONG.slice(0, 5).reverse().concat(LONG[5])]]
+    .forEach(([how, pts, kinds]) => {
+      // Reversed: edge k of the reversed ring is old edge n-2-k.
+      const n = pts.length;
+      const k2 = how === 'as drawn' ? kinds : pts.map((_, k) => LONG[((n - 2 - k) % n + n) % n]);
+      const split = G.gableJogSplit(pts, k2);
+      const box = ring => ring.map(p => `${p.x},${p.z}`).sort().join(' ');
+      check(`two gables (${how}): the big roof stops on the stepped-back line, the small one is the part that sticks out`,
+        !!split && box(split.big) === box([{ x: -2, z: 1 }, { x: 21.5, z: 1 }, { x: 21.5, z: -43.5 }, { x: -2, z: -43.5 }])
+          && box(split.small) === box([{ x: -2, z: 2 }, { x: 15, z: 2 }, { x: 15, z: 1 }, { x: -2, z: 1 }])
+          && split.smallKinds.slice().sort().join() === 'eave,eave,gable,joint'
+          && split.bigKinds.filter(k => k === 'gable').length === 1,
+        split ? `${box(split.big)} | ${box(split.small)} ${split.smallKinds}` : 'no split');
+    });
+  const pieces = G.gableJogPieces(ROOF(LONG, 1));
+  const two = { ...house(LONG), roofs: [{ ...pieces.big, id: 'roof-1' }, { ...pieces.small, id: 'roof-2', jogOf: 'roof-1' }] };
+  const e1 = paint(two, 'E1');
+  const heavy = e1.filter(x => x.w === 2.25 && Math.abs(x.a.u - x.b.u) > 0.3 && Math.abs(x.a.e - x.b.e) > 0.3);
+  const apexAt = u => heavy.some(x => [x.a, x.b].some(p => Math.abs(p.u - u) < 0.05));
+  const top = u => Math.max(...heavy.flatMap(x => [x.a, x.b]).filter(p => Math.abs(p.u - u) < 0.05).map(p => p.e));
+  check('two gables, E1: two peaks, the big one mid-house (u 9.75) and the small one over the front piece (u 6.5), lower',
+    apexAt(9.75) && apexAt(6.5) && top(6.5) < top(9.75) - 0.5,
+    `peaks 9.75: ${apexAt(9.75) && top(9.75).toFixed(2)}, 6.5: ${apexAt(6.5) && top(6.5).toFixed(2)}`);
 }
 
 const failed = CHECKS.filter(c => !c.ok);
