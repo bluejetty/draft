@@ -22,7 +22,7 @@ const MUTANTS = [
     test: 'RAISE HEEL on the clicked eave' },
   { file: 'geometry-2d.js',
     name: 'the cut-back strip leaves seams on the plain eaves beside it',
-    find: '    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, seamHoles) })));',
+    find: '    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, seamHoles, Array.isArray(roof?.points) ? roof.points : null) })));',
     with: '    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, holes) })));',
     test: 'the elevations' },
   { file: 'cut-view.js',
