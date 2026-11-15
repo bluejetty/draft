@@ -5064,6 +5064,7 @@ if (!window.DraftCutView) {
       });
       return top;
     };
+    const GABLE_BROUGHT_OUT_FT = 6;   // geometry-2d's ROOF_GABLE_JOG_FT
     const gableTopAt = (pt, plateTop, wallDir, wall) => {
       let top = plateTop;
       if (!facesByRoof) return top;
@@ -5075,11 +5076,21 @@ if (!window.DraftCutView) {
       facesByRoof.forEach((roofFaces, roof) => {
         const base = roofBaseElev(roof, stack, env);
         if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
-        const reach = (Number(roof.overhang) || 0) + 1;
+        const reachOut = (Number(roof.overhang) || 0) + 1;
         const pts = roof.points || [];
+        // A GABLE BROUGHT OUT PAST ITS WALL (jb, 15 Nov 2026): the small
+        // gable over the part in front, its gable edge dragged two feet past
+        // the wall with the roof's overhang still 0. Read off the overhang
+        // alone, the wall under it never climbed, and its plate line drew
+        // straight across the bottom of the gable ("making gable a triangle
+        // shape bottom line on triangle"). A wall standing INSIDE the roof
+        // reaches as far as a step is roofed straight (6 ft); outside it,
+        // the overhang and a foot, as before.
+        const inside = pointInPolygon(pt, pts);
         const nearGable = pts.some((a, i) => {
           if (edgeKindOf(roof, i) !== 'gable') return false;
           const b = pts[(i + 1) % pts.length];
+          const reach = inside ? Math.max(reachOut, GABLE_BROUGHT_OUT_FT) : reachOut;
           const gx = b.x - a.x, gz = b.z - a.z;
           const gLen = Math.hypot(gx, gz) || 1;
           if (wallDir) {
