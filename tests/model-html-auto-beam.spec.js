@@ -334,6 +334,35 @@ test('re-running replaces its own structure and leaves a drafter’s alone',
       .toBe(oneRun);
   });
 
+// A LINE CUT SHORT ON THE WIREFRAME STAYS CUT (jb, 16 Nov: "i only need 2
+// columns and a beam beside the stair opening"). The cut pieces are
+// `auto: false`, the sweep spares them, and the press lays no row of its own
+// over the line a hand piece stands on -- nor that row's posts.
+test('a hand piece on the auto line keeps AUTO BEAM from laying the full row over it',
+  async ({ page }) => {
+    await open(page, empty({
+      outlines: [rect({ wide: 40, deep: 32 })],
+      beams: [{ id: 900, start: { x: -10, y: 0, z: 0 }, end: { x: 0, y: 0, z: 0 },
+        levelId: 1, view: 'foundation', mode: 'flush', auto: false }],
+      columns: [
+        { id: 900, point: { x: -10, y: 0, z: 0 }, levelId: 1, view: 'foundation', footing: 'pad36', auto: false },
+        { id: 901, point: { x: 0, y: 0, z: 0 }, levelId: 1, view: 'foundation', footing: 'pad36', auto: false },
+      ],
+    }));
+    const row = await page.evaluate(() => window.DraftBuildHouse.midSpanBeams(
+      [{ x: -20, z: -16 }, { x: 20, z: -16 }, { x: 20, z: 16 }, { x: -20, z: 16 }]).beams);
+    expect(row.every(b => b.start.z === 0 && b.end.z === 0), 'the auto row runs on z = 0').toBe(true);
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+    const onLine = (saved.beams || []).filter(b => b.levelId === 1 && Math.abs(b.start.z) < 1e-6
+      && Math.abs(b.end.z) < 1e-6);
+    expect(onLine.map(b => b.id), 'only the hand piece is on that line').toEqual([900]);
+    const posts = (saved.columns || []).filter(c => c.levelId === 1 && Math.abs(c.point.z) < 1e-6);
+    expect(posts.map(c => c.id).sort(), 'and only its own posts').toEqual([900, 901]);
+  });
+
 test('one Ctrl+Z takes the beam back, and the bone press takes it with the house',
   async ({ page }) => {
     await open(page, empty({ outlines: [rect({ wide: 40, deep: 32 })] }));
