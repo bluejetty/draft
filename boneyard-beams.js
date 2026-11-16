@@ -17,9 +17,9 @@
 // way MODEL picks them (06-selection-pick.js beamRun). Its columns are the
 // posts of that level standing on its line (columnsOnBeam, 0.25 ft).
 //
-// STACKED LINES MOVE TOGETHER. A line dragged across carries every line on
-// the levels above that stands exactly over it, posts and all, so the main
-// floor's pair stays over the foundation's centre pair. A line dragged on
+// STACKED LINES MOVE TOGETHER under LEVEL LOCK (below). A line dragged
+// across carries the line in the same place on every other level, posts and
+// all, so the main floor's pair stays over the foundation's centre pair. A line dragged on
 // its own level snaps to a line on the level below.
 //
 // Pure: a drawing in, a new drawing and a report out.
@@ -143,6 +143,85 @@ if (!window.DraftBoneyardBeams) {
   const nextId = list => (list || []).reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
   const plain = p => ({ x: p.x, y: 0, z: p.z });
 
+  // ── LEVEL LOCK ────────────────────────────────────────────────────────
+  //
+  // jb, 16 Nov: "LEVEL LOCK COLUMNS & BEAMS so they will be the same all the
+  // way up", then "i'm only talking about manuplating and deleting, deleting
+  // will be all upper layers and the current layer, leave level below. why
+  // you manuplate them (move beams and columns) all levels will need to
+  // match the columns locations so all levels will move", "for COPYING and
+  // pasting to an upper level if they are in the exact location as the
+  // lower levels ... lock them, or if they past 2 layers up draw the laying
+  // in between too (the column need to have support all the way the base of
+  // the foudnation", and "or they LEVEL UNLOCK and edit how they please".
+  //
+  // ON BY DEFAULT and saved with the drawing (`beamLock: false` = UNLOCK).
+  // With it on:
+  //   ADD     -- this level only.
+  //   DELETE  -- this level and every level ABOVE (a cut, a whole line, a
+  //              column); levels below keep theirs.
+  //   MOVE    -- a line dragged across, an end moved, a column slid: the
+  //              same piece on EVERY level, below and above, goes with it.
+  //   PASTE   -- onto a level above at the exact spot, and onto every level
+  //              between that has none there yet, so a column stands on
+  //              columns all the way down.
+  //
+  // LOCKED TOGETHER means in the same place, not a stored link: a line on
+  // the same axis within ON_LINE_FT (3"), a column within 3". So a paste in
+  // the exact spot is locked, and old files and AUTO BEAM's lines lock too
+  // (jb: "after the autobeam is drawn allow the user to edit it as a normal
+  // handdrawn beam").
+  const isLocked = d => !(d && d.beamLock === false);
+  const levelsAbove = (levelId, levelOrder = []) => {
+    const at = levelOrder.indexOf(Number(levelId));
+    return at < 0 ? [] : levelOrder.slice(at + 1);
+  };
+  const lockOn = (d, opts = {}) => (opts.lock === undefined ? isLocked(d) : !!opts.lock);
+  const lockedAbove = (d, levelId, opts = {}) => (lockOn(d, opts) ? levelsAbove(levelId, opts.levelOrder) : []);
+  // Every other level, for a move.
+  const lockedOthers = (d, levelId, opts = {}) => (lockOn(d, opts)
+    ? (opts.levelOrder || []).filter(id => Number(id) !== Number(levelId)) : []);
+  const insideAny = (loops, p) => (loops || []).some(loop => {
+    const pts = loop.points || loop;
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+      const a = pts[i], b = pts[j];
+      if ((a.z > p.z) !== (b.z > p.z) && p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  });
+  // The parts of [lo, hi] along a line inside a level's bone; all of it
+  // when the level has no bone to cut by.
+  const clipToLoops = (loops, line, lo, hi) => {
+    if (!loops || !loops.length) return [[lo, hi]];
+    const at = s => (line.axis === 'x' ? { x: s, z: line.c } : { x: line.c, z: s });
+    const cuts = crossings(loops.map(l => ({ points: l.points || l })), line.axis === 'x' ? 'z' : 'x', line.c)
+      .filter(v => v > lo + TOL && v < hi - TOL);
+    const stops = uniq([lo, hi, ...cuts]);
+    const out = [];
+    for (let i = 1; i < stops.length; i += 1) {
+      const [a, z] = [stops[i - 1], stops[i]];
+      if (z - a < TOL || !insideAny(loops, at((a + z) / 2))) continue;
+      if (out.length && Math.abs(out[out.length - 1][1] - a) < TOL) out[out.length - 1][1] = z;
+      else out.push([a, z]);
+    }
+    return out.filter(([a, z]) => z - a >= 1 - TOL);
+  };
+  // The rows of a level standing on a line (same axis, within 3", reaching
+  // into [lo, hi]).
+  const rowsOver = (d, line, levelId, lo = line.lo, hi = line.hi) => {
+    const rows = [];
+    beamsOf(d, levelId).forEach(b => {
+      const l = lineOf(b);
+      if (!l || l.axis !== line.axis || Math.abs(l.c - line.c) > ON_LINE_FT) return;
+      if (l.hi <= lo + TOL || l.lo >= hi - TOL) return;
+      if (!rows.some(r => r.includes(b))) rows.push(rowOf(d, b));
+    });
+    return rows;
+  };
+  const columnsAt = (d, levelId, p) => columnsOf(d, levelId)
+    .filter(c => Math.hypot(c.point.x - p.x, c.point.z - p.z) <= ON_LINE_FT);
+
   // Posts between a line's ends, no span longer than MAX_SPAN_FT. The ends
   // bear on the walls a line is drawn between, so none stands there.
   const postsBetween = (a, b) => {
@@ -177,7 +256,7 @@ if (!window.DraftBoneyardBeams) {
   //
   // `levelOrder` is the level ids bottom-up (FOUNDATION first). Every line
   // above standing exactly over the row goes with it, with its posts.
-  const moveBeam = (drawing, { beamId, deltaFt, levelOrder = [] }) => {
+  const moveBeam = (drawing, { beamId, deltaFt, levelOrder = [], lock }) => {
     const d = clone(drawing);
     const beam = (d.beams || []).find(b => Number(b.id) === Number(beamId));
     if (!beam) return { ok: false, reason: 'NO_BEAM' };
@@ -185,18 +264,17 @@ if (!window.DraftBoneyardBeams) {
     const line = rowLine(row);
     if (!line) return { ok: false, reason: 'ON_ANGLE' };
     if (Math.abs(deltaFt) < TOL) return { ok: false, reason: 'NO_MOVE' };
+    // LOCKED: the line in the same place on every other level, below and
+    // above, goes with it, each with its own posts. UNLOCKED, it moves alone.
     const moving = [row];
     const seen = new Set(row);
-    let frontier = row;
-    while (frontier.length) {
-      const over = stackedOver(d, frontier, levelOrder).filter(b => !seen.has(b));
-      over.forEach(b => seen.add(b));
-      // Grouped by level so each carries its own posts.
-      const byLevel = new Map();
-      over.forEach(b => byLevel.set(b.levelId, [...(byLevel.get(b.levelId) || []), b]));
-      byLevel.forEach(list => moving.push(list));
-      frontier = over;
-    }
+    lockedOthers(d, beam.levelId, { lock, levelOrder }).forEach(id => {
+      rowsOver(d, line, id).forEach(r => {
+        const fresh = r.filter(b => !seen.has(b));
+        fresh.forEach(b => seen.add(b));
+        if (fresh.length) moving.push(fresh);
+      });
+    });
     const shift = p => {
       if (line.axis === 'x') p.z += deltaFt; else p.x += deltaFt;
       delete p.srcId; delete p.offX; delete p.offZ;
@@ -233,7 +311,7 @@ if (!window.DraftBoneyardBeams) {
   };
 
   // ── DRAG A COLUMN ALONG ITS LINE ──────────────────────────────────────
-  const moveColumn = (drawing, { columnId, to }) => {
+  const moveColumn = (drawing, { columnId, to, lock, levelOrder }) => {
     const d = clone(drawing);
     const col = (d.columns || []).find(c => Number(c.id) === Number(columnId));
     if (!col) return { ok: false, reason: 'NO_COLUMN' };
@@ -247,9 +325,13 @@ if (!window.DraftBoneyardBeams) {
       }
     }
     if (Math.hypot(next.x - col.point.x, next.z - col.point.z) < TOL) return { ok: false, reason: 'NO_MOVE' };
-    col.point.x = next.x; col.point.z = next.z;
-    delete col.point.srcId; delete col.point.offX; delete col.point.offZ;
-    return { ok: true, drawing: d, report: { columnId: col.id, at: next } };
+    // LOCKED: the column in the same place on every other level goes too.
+    const riders = lockedOthers(d, col.levelId, { lock, levelOrder }).flatMap(up => columnsAt(d, up, col.point));
+    [col, ...riders].forEach(c => {
+      c.point.x = next.x; c.point.z = next.z;
+      delete c.point.srcId; delete c.point.offX; delete c.point.offZ;
+    });
+    return { ok: true, drawing: d, report: { columnId: col.id, at: next, others: riders.length } };
   };
 
   // ── ADD A COLUMN ON A LINE ────────────────────────────────────────────
@@ -273,23 +355,38 @@ if (!window.DraftBoneyardBeams) {
   // ── DELETE ────────────────────────────────────────────────────────────
   // A beam goes as its whole row, with the posts that stand on it and on no
   // other line.
-  const deleteBeam = (drawing, { beamId }) => {
+  // LOCKED: what stands over it on the levels above is cut out with it.
+  const cutAbove = (d, levelId, line, lo, hi, opts) => {
+    let n = 0;
+    lockedAbove(d, levelId, opts).forEach(up => {
+      rowsOver(d, line, up, lo, hi).forEach(row => {
+        reshapeRow(d, row, rowLine(row), [[lo, hi]]);
+        n += 1;
+      });
+    });
+    return n;
+  };
+  const deleteBeam = (drawing, { beamId, lock, levelOrder }) => {
     const d = clone(drawing);
     const beam = (d.beams || []).find(b => Number(b.id) === Number(beamId));
     if (!beam) return { ok: false, reason: 'NO_BEAM' };
     const row = rowOf(d, beam);
+    const line = rowLine(row);
     const others = beamsOf(d, beam.levelId).filter(b => !row.includes(b));
     const posts = postsOn(d, row).filter(c => !others.some(b => segDist(c.point, b.start, b.end) <= ON_LINE_FT));
     d.beams = d.beams.filter(b => !row.includes(b));
     d.columns = (d.columns || []).filter(c => !posts.includes(c));
-    return { ok: true, drawing: d, report: { beams: row.length, posts: posts.length } };
+    const above = line ? cutAbove(d, beam.levelId, line, line.lo, line.hi, { lock, levelOrder }) : 0;
+    return { ok: true, drawing: d, report: { beams: row.length, posts: posts.length, above } };
   };
-  const deleteColumn = (drawing, { columnId }) => {
+  const deleteColumn = (drawing, { columnId, lock, levelOrder }) => {
     const d = clone(drawing);
-    const before = (d.columns || []).length;
-    d.columns = (d.columns || []).filter(c => Number(c.id) !== Number(columnId));
-    if (d.columns.length === before) return { ok: false, reason: 'NO_COLUMN' };
-    return { ok: true, drawing: d, report: { columnId } };
+    const col = (d.columns || []).find(c => Number(c.id) === Number(columnId));
+    if (!col) return { ok: false, reason: 'NO_COLUMN' };
+    const gone = [col, ...(col.point ? lockedAbove(d, col.levelId, { lock, levelOrder })
+      .flatMap(up => columnsAt(d, up, col.point)) : [])];
+    d.columns = d.columns.filter(c => !gone.includes(c));
+    return { ok: true, drawing: d, report: { columnId, above: gone.length - 1 } };
   };
 
   // ── ONE SPAN OF A LINE, AND CUTTING IT OUT ────────────────────────────
@@ -384,7 +481,7 @@ if (!window.DraftBoneyardBeams) {
     return { pieces, posts: gone.length };
   };
 
-  const cutSpan = (drawing, { beamId, lo, hi }) => {
+  const cutSpan = (drawing, { beamId, lo, hi, lock, levelOrder }) => {
     const d = clone(drawing);
     const beam = (d.beams || []).find(b => Number(b.id) === Number(beamId));
     if (!beam) return { ok: false, reason: 'NO_BEAM' };
@@ -395,11 +492,12 @@ if (!window.DraftBoneyardBeams) {
     if (z - a < TOL) return { ok: false, reason: 'NO_MOVE' };
     const whole = a <= line.lo + TOL && z >= line.hi - TOL;
     if (whole) {
-      const res = deleteBeam(drawing, { beamId });
+      const res = deleteBeam(drawing, { beamId, lock, levelOrder });
       return res.ok ? { ...res, report: { ...res.report, cutFt: z - a, whole: true, left: 0 } } : res;
     }
     const { pieces, posts } = reshapeRow(d, row, line, [[a, z]]);
-    return { ok: true, drawing: d, report: { cutFt: z - a, posts, left: pieces.length,
+    const above = cutAbove(d, beam.levelId, line, a, z, { lock, levelOrder });
+    return { ok: true, drawing: d, report: { cutFt: z - a, posts, left: pieces.length, above,
       lengths: pieces.map(p => Math.hypot(p.end.x - p.start.x, p.end.z - p.start.z)) } };
   };
 
@@ -461,7 +559,22 @@ if (!window.DraftBoneyardBeams) {
     return { ok: true, at: s, was, kind: onWall ? 'wall' : kind, capped, overhangFt };
   };
 
-  const moveEnd = (drawing, { beamId, which, to }) => {
+  // A row's end at `which` taken to `to` along its line: shorter cuts the
+  // row back (posts past it go), longer reaches the piece holding it out.
+  const endTo = (d, row, line, which, to) => {
+    const was = which === 'lo' ? line.lo : line.hi;
+    const lengthens = which === 'lo' ? to < was : to > was;
+    if (!lengthens) {
+      const cut = which === 'lo' ? [line.lo, to] : [to, line.hi];
+      return { shorter: true, posts: reshapeRow(d, row, line, [cut]).posts };
+    }
+    const holder = row.find(b => Math.abs(along(line, b.start) - was) < TOL || Math.abs(along(line, b.end) - was) < TOL);
+    const k = Math.abs(along(line, holder.start) - was) < TOL ? 'start' : 'end';
+    holder[k] = line.axis === 'x' ? { x: to, y: 0, z: line.c } : { x: line.c, y: 0, z: to };
+    handOver(d, rowOf(d, holder));
+    return { shorter: false, posts: 0 };
+  };
+  const moveEnd = (drawing, { beamId, which, to, lock, levelOrder }) => {
     const d = clone(drawing);
     const beam = (d.beams || []).find(b => Number(b.id) === Number(beamId));
     if (!beam) return { ok: false, reason: 'NO_BEAM' };
@@ -470,18 +583,20 @@ if (!window.DraftBoneyardBeams) {
     if (!line) return { ok: false, reason: 'ON_ANGLE' };
     const was = which === 'lo' ? line.lo : line.hi;
     if (Math.abs(to - was) < TOL) return { ok: false, reason: 'NO_MOVE' };
-    const lengthens = which === 'lo' ? to < was : to > was;
-    if (!lengthens) {
-      const cut = which === 'lo' ? [line.lo, to] : [to, line.hi];
-      const { posts } = reshapeRow(d, row, line, [cut]);
-      return { ok: true, drawing: d, report: { which, from: was, to, deltaFt: Math.abs(to - was), shorter: true, posts } };
-    }
-    // Longer: the piece holding that end reaches out to it.
-    const holder = row.find(b => Math.abs(along(line, b.start) - was) < TOL || Math.abs(along(line, b.end) - was) < TOL);
-    const k = Math.abs(along(line, holder.start) - was) < TOL ? 'start' : 'end';
-    holder[k] = line.axis === 'x' ? { x: to, y: 0, z: line.c } : { x: line.c, y: 0, z: to };
-    handOver(d, rowOf(d, holder));
-    return { ok: true, drawing: d, report: { which, from: was, to, deltaFt: Math.abs(to - was), shorter: false, posts: 0 } };
+    const { shorter, posts } = endTo(d, row, line, which, to);
+    // LOCKED: a line on any other level whose end stands at the same place
+    // (within 3") has that end moved to the same place too.
+    let others = 0;
+    lockedOthers(d, beam.levelId, { lock, levelOrder }).forEach(up => {
+      rowsOver(d, line, up, Math.min(was, to) - ON_LINE_FT, Math.max(was, to) + ON_LINE_FT).forEach(r => {
+        const rl = rowLine(r);
+        if (!rl || Math.abs(rl[which] - was) > ON_LINE_FT) return;
+        if ((which === 'lo' && to >= rl.hi - TOL) || (which === 'hi' && to <= rl.lo + TOL)) return;
+        endTo(d, r, rl, which, to);
+        others += 1;
+      });
+    });
+    return { ok: true, drawing: d, report: { which, from: was, to, deltaFt: Math.abs(to - was), shorter, posts, others } };
   };
 
   // A drawn line's second end: square to the first along the longer run,
@@ -573,6 +688,90 @@ if (!window.DraftBoneyardBeams) {
     }).filter(r => r && r.stops.length > 2);
   };
 
+  // ── COPY AND PASTE, ONTO ANOTHER LEVEL ────────────────────────────────
+  //
+  // `pick` is { type: 'beam' | 'column', id } on the level it was copied
+  // from; it lands on `toLevelId` in exactly the same place -- a line as its
+  // whole row with the posts on it, a column on its own -- less what is
+  // already there. UNDER LEVEL LOCK, pasted UP, every level between gets it
+  // too (cut to that level's walls, `loopsOf(levelId)`), so it stands on
+  // the same piece all the way down to where it was copied from.
+  const pasteTo = (drawing, { pick, toLevelId, lock, levelOrder = [], loopsOf }) => {
+    const d = clone(drawing);
+    d.beams = d.beams || [];
+    d.columns = d.columns || [];
+    const src = pick && (pick.type === 'beam' ? d.beams : d.columns).find(x => Number(x.id) === Number(pick.id));
+    if (!src) return { ok: false, reason: pick && pick.type === 'beam' ? 'NO_BEAM' : 'NO_COLUMN' };
+    const from = Number(src.levelId), to = Number(toLevelId);
+    if (from === to) return { ok: false, reason: 'SAME_LEVEL' };
+    const fi = levelOrder.indexOf(from), ti = levelOrder.indexOf(to);
+    const between = lockOn(d, { lock }) && fi >= 0 && ti > fi + 1 ? levelOrder.slice(fi + 1, ti) : [];
+    const report = { type: pick.type, levels: 0, between: between.length, beams: 0, columns: 0 };
+    const putColumn = (c, id) => {
+      if (columnsAt(d, id, c.point).length) return false;
+      d.columns.push({ ...clone(c), id: nextId(d.columns), levelId: id,
+        view: id === 1 ? 'foundation' : 'floor', auto: false });
+      report.columns += 1;
+      return true;
+    };
+    if (pick.type === 'column') {
+      [...between, to].forEach(id => { if (putColumn(src, id)) report.levels += 1; });
+      return report.columns ? { ok: true, drawing: d, report } : { ok: false, reason: 'ALREADY_THERE' };
+    }
+    const row = rowOf(d, src);
+    const line = rowLine(row);
+    const posts = postsOn(d, row);
+    const putRow = (id, clip) => {
+      let did = false;
+      if (!line) {
+        // On an angle: the piece as it is, unless one is there already.
+        if (beamsOf(d, id).some(b => segDist(src.start, b.start, b.end) < TOL && segDist(src.end, b.start, b.end) < TOL)) return false;
+        d.beams.push({ ...clone(src), id: nextId(d.beams), levelId: id, view: id === 1 ? 'foundation' : 'floor', auto: false });
+        report.beams += 1;
+        did = true;
+      } else {
+        let parts = clip ? clipToLoops(loopsOf ? loopsOf(id) : null, line, line.lo, line.hi) : [[line.lo, line.hi]];
+        rowsOver(d, line, id).forEach(r => {
+          const rl = rowLine(r);
+          parts = parts.flatMap(([p0, p1]) => [[p0, Math.min(p1, rl.lo)], [Math.max(p0, rl.hi), p1]]
+            .filter(([q0, q1]) => q1 - q0 >= 1 - TOL));
+        });
+        const fwd = along(line, src.end) >= along(line, src.start);
+        const P = v => (line.axis === 'x' ? { x: v, y: 0, z: line.c } : { x: line.c, y: 0, z: v });
+        parts.forEach(([p0, p1]) => {
+          d.beams.push({ ...clone(src), id: nextId(d.beams), levelId: id, view: id === 1 ? 'foundation' : 'floor',
+            auto: false, start: P(fwd ? p0 : p1), end: P(fwd ? p1 : p0) });
+          report.beams += 1;
+          did = true;
+        });
+      }
+      posts.forEach(c => {
+        const onIt = beamsOf(d, id).some(b => segDist(c.point, b.start, b.end) <= ON_LINE_FT);
+        if (onIt && putColumn(c, id)) did = true;
+      });
+      return did;
+    };
+    between.forEach(id => { if (putRow(id, true)) report.levels += 1; });
+    if (putRow(to, false)) report.levels += 1;
+    return report.beams || report.columns ? { ok: true, drawing: d, report } : { ok: false, reason: 'ALREADY_THERE' };
+  };
+
+  // ── IS A COLUMN HELD UP? ──────────────────────────────────────────────
+  //
+  // jb, 16 Nov: "if there are unsupported columns when it is LOCKED can we
+  // make them glow red, and for supported columns can we make them glow
+  // green". A column is SUPPORTED when every level under it, down to the
+  // FOUNDATION, has a column in the same place (within 3"); a FOUNDATION
+  // column stands on its footing. The page asks only under LEVEL LOCK.
+  const columnSupport = (d, levelId, levelOrder = []) => {
+    const at = levelOrder.indexOf(Number(levelId));
+    const under = at > 0 ? levelOrder.slice(0, at) : [];
+    return columnsOf(d, levelId).map(c => {
+      const missing = under.filter(id => !columnsAt(d, id, c.point).length);
+      return { id: c.id, supported: !missing.length, missing };
+    });
+  };
+
   window.DraftBoneyardBeams = Object.freeze({
     endStrings, postStrings,
     MAX_SPAN_FT, ON_LINE_FT,
@@ -580,6 +779,7 @@ if (!window.DraftBoneyardBeams) {
     columnNear, beamNear, landing, squareEnd,
     addBeam, moveBeam, moveColumn, addColumn, deleteBeam, deleteColumn,
     spanAt, cutSpan, endLanding, moveEnd, wallsAlong, CANTILEVER_FT,
+    isLocked, levelsAbove, clipToLoops, pasteTo, columnSupport,
   });
 })();
 }

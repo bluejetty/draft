@@ -231,7 +231,10 @@
       + '<button type="button" id="column-add" aria-pressed="false"'
       + ' title="Put a column on a beam line: click the line (C)">COLUMN</button>'
       + '<button type="button" id="beam-delete" disabled'
-      + ' title="Delete the picked beam line or column (Delete)">DELETE</button>');
+      + ' title="Delete the picked beam line or column (Delete)">DELETE</button>'
+      // LEVEL LOCK (jb, 16 Nov): beams and columns the same all the way up.
+      + '<button type="button" id="beam-lock" aria-pressed="true"'
+      + ' title="LEVEL LOCK: a beam or column moved here moves on every level; deleted here goes from every level above (levels below stay); pasted up fills the levels between. Press for LEVEL UNLOCK: this level only">LEVEL LOCK</button>');
   </script>
 
   <script>
@@ -254,6 +257,7 @@
       const beamBtn = document.getElementById('beam-add');
       const columnBtn = document.getElementById('column-add');
       const deleteBtn = document.getElementById('beam-delete');
+      const lockBtn = document.getElementById('beam-lock');
       const say = text => { statusEl.textContent = text; };
       const DRIVE_THRU = './MODEL.html?from=boneyard';
       const toDriveThru = document.getElementById('to-drivethru');
@@ -811,6 +815,29 @@
         return at > 0 ? order[at - 1] : null;
       };
 
+      // A level's beams (dash-dot) and columns (squares), faint, in `ink`.
+      const fadedBeams = (ctx, l, ink) => {
+        const d = preview ? preview.drawing : raw;
+        if (!d) return { beams: 0, columns: 0 };
+        const { beams, columns } = BB.shown(d, l);
+        ctx.save();
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([12, 4, 3, 4]);
+        beams.forEach(b => {
+          const p = toScreen(b.start), q = toScreen(b.end);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+        });
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.5;
+        columns.forEach(c => {
+          const p = toScreen(c.point);
+          ctx.strokeRect(p.x - 4, p.y - 4, 8, 8);
+        });
+        ctx.restore();
+        return { beams: beams.length, columns: columns.length };
+      };
+
       const paint2d = () => {
         const { ctx, w, h } = sized(c2);
         const level = shownPicked();
@@ -848,8 +875,14 @@
           strokeThin(ctx, l.thin, l.color, toScreen);
           if ((l.thin || []).length) thinDrawn.push({ name: l.name, lines: l.thin, to: toScreen });
         });
+        // AND ITS BEAMS AND COLUMNS (jb, 16 Nov: "can we make it so that the
+        // BEAMS and COLUMNS are part of the BG Background lines"), in the
+        // level's colour, so a line here is lined up on a line there.
+        const bgBeams = faded.filter(l => l.kind !== 'roof')
+          .map(l => ({ name: l.name, ...fadedBeams(ctx, l, l.color) }));
         ctx.restore();
         c2.setAttribute('data-faded', JSON.stringify(faded.map(l => l.name)));
+        c2.setAttribute('data-faded-beams', JSON.stringify(bgBeams));
         // THE HOLOGRAMS SENT BEHIND, faded under the bones with the levels.
         const holo2d = [];
         if (level.kind !== 'roof') {
@@ -1037,7 +1070,7 @@
         paint3d();
         paint2d();
       };
-      const paintAll = () => { paint3d(); paint2d(); };
+      const paintAll = () => { syncLock(); paint3d(); paint2d(); };
 
       // ── TURNING: 15 DEGREES A STEP, ONE FRAME PER STEP ──────────────
       const turn = steps => {
@@ -1313,6 +1346,13 @@
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 5]);
         belowBeams.forEach(b => line(b.start, b.end));
+        // Its columns with them, as BG shows them.
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.5;
+        const belowCols = at > 0
+          ? BB.shown(d, { kind: order[at - 1] === 1 ? 'foundation' : 'floor', levelId: order[at - 1] }).columns : [];
+        belowCols.forEach(c => { const p = toScreen(c.point); ctx.strokeRect(p.x - 4, p.y - 4, 8, 8); });
+        c2.setAttribute('data-columns-below', String(belowCols.length));
         ctx.restore();
         const { beams, columns } = BB.shown(d, level);
         const pickedBeam = beamPick && beamPick.type === 'beam'
@@ -1356,6 +1396,24 @@
           c2.setAttribute('data-beam-ends', JSON.stringify({ axis: pickedLine.axis, c: rnd(pickedLine.c),
             lo: rnd(pickedLine.lo), hi: rnd(pickedLine.hi) }));
         } else c2.setAttribute('data-beam-ends', '');
+        // UNDER LEVEL LOCK, A GLOW: green held up all the way down, red not
+        // (jb, 16 Nov). None when unlocked -- "we will leave it to the user".
+        const support = BB.isLocked(d) ? BB.columnSupport(d, BB.levelIdOf(level), order) : [];
+        support.forEach(sp => {
+          const c = columns.find(v => Number(v.id) === Number(sp.id));
+          if (!c) return;
+          const p = toScreen(c.point);
+          ctx.save();
+          const glow = sp.supported ? '#2fbf5a' : '#e0322b';
+          ctx.shadowColor = glow;
+          ctx.shadowBlur = 14;
+          ctx.fillStyle = glow;
+          ctx.globalAlpha = 0.55;
+          ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        });
+        c2.setAttribute('data-column-glow', JSON.stringify(support.map(sp => ({ id: sp.id,
+          glow: sp.supported ? 'green' : 'red' }))));
         columns.forEach(c => {
           const p = toScreen(c.point);
           const on = beamPick && beamPick.type === 'column' && Number(beamPick.id) === Number(c.id);
@@ -1455,10 +1513,39 @@
         NEEDS_COLUMN: 'a beam end that is not on a wall needs a column within 2\'-0" of it — add a COLUMN first',
       };
       const beamWhy = reason => beamWords[reason] || `cannot: ${reason}`;
+      // LEVEL LOCK (boneyard-beams.js): on unless the drawing says UNLOCK.
+      // Each beam call hands over the lock, the levels bottom-up and each
+      // level's bone, for a pasted line to stop at a between level's walls.
+      const locked = () => BB.isLocked(raw);
+      const loopsOf = id => {
+        const l = levels.find(v => v.kind !== 'roof' && BB.levelIdOf(v) === Number(id));
+        return l ? l.loops : null;
+      };
+      const lockOpts = () => ({ lock: locked(), levelOrder: levelOrder(), loopsOf });
+      const aboveWords = n => (n ? ` · and on the level${n === 1 ? '' : 's'} above (LEVEL LOCK)` : '');
+      const othersWords = n => (n ? ` · ${n} on other levels with it (LEVEL LOCK)` : '');
+      // A declaration, so paintAll (above) can call it before this line runs.
+      function syncLock() {
+        const on = BB.isLocked(raw);
+        lockBtn.textContent = on ? 'LEVEL LOCK' : 'LEVEL UNLOCK';
+        lockBtn.setAttribute('aria-pressed', String(on));
+        document.body.setAttribute('data-beam-lock', on ? '1' : '0');
+      }
+      lockBtn.addEventListener('click', queued(async () => {
+        if (!raw) return;
+        if (readOnly()) { say(leaseWords()); return; }
+        const next = { ...raw };
+        if (locked()) next.beamLock = false; else delete next.beamLock;
+        await commit({ ok: true, drawing: next });
+        syncLock();
+        say(locked()
+          ? 'LEVEL LOCK: a beam or column moved moves on every level; deleted, it goes from this level and those above. Green column = held up all the way down, red = not.'
+          : 'LEVEL UNLOCK: beams and columns change on this level only.');
+      }));
       const moveWords = (report, land) => {
         const parts = [`beam line moved ${ft(report.deltaFt)}`];
         if (land && land.snapped != null) parts.push('lined up over the line below');
-        if (report.carried) parts.push(`${report.carried} line${report.carried === 1 ? '' : 's'} above followed`);
+        if (report.carried) parts.push(`${report.carried} line${report.carried === 1 ? '' : 's'} on other levels followed (LEVEL LOCK)`);
         if (report.posts) parts.push(`${report.posts} column${report.posts === 1 ? '' : 's'} with it`);
         return parts.join(' · ');
       };
@@ -1470,7 +1557,7 @@
         if (words) say(words);
       });
       const addBeamLine = (level, sq) => {
-        const result = BB.addBeam(raw, { level, a: sq.a, b: sq.b });
+        const result = BB.addBeam(raw, { level, a: sq.a, b: sq.b, ...lockOpts() });
         if (!result.ok) { say(beamWhy(result.reason)); paint2d(); return; }
         beamPick = { type: 'beam', id: result.report.beamId };
         const posts = result.report.posts;
@@ -1484,23 +1571,53 @@
         if (readOnly()) { say(leaseWords()); return; }
         const span = beamPick.type === 'beam' && beamPick.span;
         const result = beamPick.type === 'beam'
-          ? (span ? BB.cutSpan(raw, { beamId: beamPick.id, lo: span.lo, hi: span.hi })
-            : BB.deleteBeam(raw, { beamId: beamPick.id }))
-          : BB.deleteColumn(raw, { columnId: beamPick.id });
+          ? (span ? BB.cutSpan(raw, { beamId: beamPick.id, lo: span.lo, hi: span.hi, ...lockOpts() })
+            : BB.deleteBeam(raw, { beamId: beamPick.id, ...lockOpts() }))
+          : BB.deleteColumn(raw, { columnId: beamPick.id, ...lockOpts() });
         if (!result.ok) { say(beamWhy(result.reason)); return; }
         const cols = n => `${n} column${n === 1 ? '' : 's'}`;
-        const words = beamPick.type !== 'beam' ? 'column deleted'
+        let words = beamPick.type !== 'beam' ? 'column deleted'
           : span && !result.report.whole
             ? `beam cut: ${ft(result.report.cutFt)} taken out`
               + (result.report.posts ? `, with ${cols(result.report.posts)} in it` : '')
               + ` · ${(result.report.lengths || []).map(ft).join(' + ')} left, ending on its columns`
             : `beam line deleted${result.report.posts ? `, with its ${cols(result.report.posts)}` : ''}`;
+        words += aboveWords(result.report.above);
         beamPick = null;
         endPick = null;
         endMove = null;
         commitBeam(result, words);
       };
       deleteBtn.addEventListener('click', deletePicked);
+
+      // ── COPY AND PASTE ONTO ANOTHER LEVEL ──────────────────────────────
+      // Ctrl+C on a picked line or column, pick another level, Ctrl+V: it
+      // lands in exactly the same place there -- locked to the one it came
+      // from -- and, under LEVEL LOCK, pasted up, on every level between.
+      let clip = null;
+      const copyPicked = () => {
+        if (!beamPick) { say('COPY: pick a beam line or a column first.'); return; }
+        clip = { type: beamPick.type, id: beamPick.id };
+        c2.setAttribute('data-beam-clip', JSON.stringify(clip));
+        say(`${beamPick.type === 'beam' ? 'beam line' : 'column'} copied — pick a level above and press Ctrl+V to paste it in the same place.`);
+      };
+      const pastePicked = () => {
+        const level = beamLevel();
+        if (!clip) { say('PASTE: copy a beam line or column first (Ctrl+C).'); return; }
+        if (!level) { say('PASTE: pick a floor or the FOUNDATION to paste onto.'); return; }
+        if (readOnly()) { say(leaseWords()); return; }
+        const result = BB.pasteTo(raw, { pick: clip, toLevelId: BB.levelIdOf(level), ...lockOpts() });
+        if (!result.ok) {
+          say({ SAME_LEVEL: 'PASTE: that is the level it was copied from — pick another level',
+            ALREADY_THERE: 'PASTE: it is already there on that level' }[result.reason] || beamWhy(result.reason));
+          return;
+        }
+        const r = result.report;
+        beamPick = null;
+        endPick = null;
+        commitBeam(result, `${level.name}: ${r.type === 'beam' ? 'beam line' : 'column'} pasted in the same place`
+          + (r.between ? ` · and on the ${r.between} level${r.between === 1 ? '' : 's'} between, so it stands on it all the way down (LEVEL LOCK)` : ''));
+      };
 
       // ── AN END OF A PICKED LINE ────────────────────────────────────────
       // Which end of the picked line is under the pointer (within 9 px).
@@ -1529,7 +1646,7 @@
         const land = BB.endLanding(raw, { beamId: end.beamId, which: end.which, to,
           walls: BB.wallsAlong(level.loops, line), snapFt: exact != null ? 0 : reachFt(10) });
         if (!land.ok) return { result: null, words: beamWhy(land.reason) };
-        const result = BB.moveEnd(raw, { beamId: end.beamId, which: end.which, to: land.at });
+        const result = BB.moveEnd(raw, { beamId: end.beamId, which: end.which, to: land.at, ...lockOpts() });
         if (!result.ok) return { result: null, words: result.reason === 'NO_MOVE' ? '' : beamWhy(result.reason) };
         const r = result.report;
         const len = line.hi - line.lo + (r.shorter ? -r.deltaFt : r.deltaFt);
@@ -1539,7 +1656,7 @@
         else if (land.overhangFt > 1e-3) parts.push(`${ft(land.overhangFt)} past its last column`);
         if (land.capped && land.kind !== 'column') parts.push(`held at ${ft(BB.CANTILEVER_FT)}, the most a beam cantilevers`);
         if (r.posts) parts.push(`${r.posts} column${r.posts === 1 ? '' : 's'} past it gone`);
-        return { result, words: parts.join(' · ') };
+        return { result, words: parts.join(' · ') + othersWords(r.others) };
       };
       const startEndMove = () => {
         if (readOnly()) { say(leaseWords()); return; }
@@ -1592,7 +1709,7 @@
         }
         if (beamTool === 'column') {
           if (readOnly()) { say(leaseWords()); return true; }
-          const result = BB.addColumn(raw, { level, at, reach: reachFt(10) });
+          const result = BB.addColumn(raw, { level, at, reach: reachFt(10), ...lockOpts() });
           if (!result.ok) { say(beamWhy(result.reason)); return true; }
           beamPick = { type: 'column', id: result.report.columnId };
           commitBeam(result, `${level.name}: column added — click another line, or COLUMN again to stop.`);
@@ -1650,10 +1767,10 @@
           moved: false, result: null, words: '' };
         c2.setPointerCapture(e.pointerId);
         paint2d();
-        say(col ? `${level.name}: column picked — drag it along its line, or DELETE.`
+        say(col ? `${level.name}: column picked — drag it along its line, DELETE, or Ctrl+C to copy it to a level above.`
           : beamPick.span
-            ? `${level.name}: ${ft(beamPick.span.hi - beamPick.span.lo)} of the beam picked, column to column — DELETE cuts it out; click again for the whole line. Drag an end square to shorten it.`
-            : `${level.name}: beam line picked — drag it across, or DELETE. A line on a floor above standing over it goes with it. Click again for one span.`);
+            ? `${level.name}: ${ft(beamPick.span.hi - beamPick.span.lo)} of the beam picked, column to column — DELETE cuts it out; click again for the whole line (Ctrl+C copies it). Drag an end square to shorten it.`
+            : `${level.name}: beam line picked — drag it across, or DELETE. With LEVEL LOCK a line on a floor above standing over it goes with it. Click again for one span.`);
         return true;
       };
       const beamPointerMove = e => {
@@ -1689,11 +1806,11 @@
           const land = BB.landing(raw, { beamId: beamDrag.pick.id, rawDeltaFt,
             snapFt: reachFt(10), levelOrder: levelOrder() });
           result = land.deltaFt ? BB.moveBeam(raw, { beamId: beamDrag.pick.id,
-            deltaFt: land.deltaFt, levelOrder: levelOrder() }) : null;
+            deltaFt: land.deltaFt, ...lockOpts() }) : null;
           beamDrag.words = result && result.ok ? moveWords(result.report, land) : '';
         } else {
-          result = BB.moveColumn(raw, { columnId: beamDrag.pick.id, to: toWorld(px, py) });
-          beamDrag.words = result && result.ok ? 'column moved along its line' : '';
+          result = BB.moveColumn(raw, { columnId: beamDrag.pick.id, to: toWorld(px, py), ...lockOpts() });
+          beamDrag.words = result && result.ok ? 'column moved along its line' + othersWords(result.report.others) : '';
         }
         beamDrag.result = result && result.ok ? result : null;
         preview = beamDrag.result
@@ -1885,6 +2002,8 @@
           return;
         }
         if ((e.key === 'Delete' || e.key === 'Backspace') && beamPick) { e.preventDefault(); deletePicked(); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') { e.preventDefault(); copyPicked(); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') { e.preventDefault(); pastePicked(); return; }
         if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) { setBreaking(!breaking); return; }
         if (e.key.toLowerCase() === 'e' && !e.ctrlKey && !e.metaKey) { setBeamTool(beamTool === 'beam' ? null : 'beam'); return; }
         if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) { setBeamTool(beamTool === 'column' ? null : 'column'); return; }

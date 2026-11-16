@@ -137,13 +137,24 @@ test('a MAIN FL line drawn near a foundation line lands on it, and rides with it
     expect(upPosts.length, 'MAIN FL\'s line kept its columns').toBeGreaterThan(0);
     upPosts.forEach(c => expect(c.point.z, 'on the moved line').toBeCloseTo(z + 2, 3));
 
-    // Dragging MAIN FL's own line leaves the foundation's where it is.
+    // LEVEL LOCK (on by default): dragging MAIN FL's line drags the
+    // foundation's under it too -- every level moves (jb, 16 Nov).
     await level(page, 'MAIN FL');
-    await dragWorld(page, { x: mid, z: z + 2 }, { x: mid, z: z + 6 });
+    await dragWorld(page, { x: mid, z: z + 2 }, { x: mid, z: z + 4 });
+    d = await saved(page, ++n);
+    expect(d.beams.find(x => x.id === main.id).start.z).toBeCloseTo(z + 4, 3);
+    expect(d.beams.find(x => x.id === fdnId).start.z,
+      'locked, the line below goes with it').toBeCloseTo(z + 4, 3);
+
+    // LEVEL UNLOCK: MAIN FL's line moves alone.
+    await page.locator('#beam-lock').click();
+    d = await saved(page, ++n);
+    expect(d.beamLock).toBe(false);
+    await dragWorld(page, { x: mid, z: z + 4 }, { x: mid, z: z + 6 });
     d = await saved(page, ++n);
     expect(d.beams.find(x => x.id === main.id).start.z).toBeCloseTo(z + 6, 3);
     expect(d.beams.find(x => x.id === fdnId).start.z,
-      'a line never drags the one below').toBeCloseTo(z + 2, 3);
+      'unlocked, a line never drags the one below').toBeCloseTo(z + 4, 3);
   });
 
 test('DELETE takes a picked MAIN FL line and its columns; UNDO puts them back', async ({ page }) => {
