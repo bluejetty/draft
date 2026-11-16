@@ -326,6 +326,28 @@
     }
   };
 
+  // THE STRIP FOOTING'S OUTLINE ON THE FOUNDATION VIEW (jb, 16 Nov 2026:
+  // "show the dotted line for the footing on the foundation wall ... all 8"
+  // conc walls ... it can connect on the inside and blend we only need the
+  // outline"). footing-outline.js works it out from the concrete every
+  // paint; the sheet (layout-plan) asks the same module.
+  // `data-footing-outline` says how many lines were drawn, for a spec.
+  const paintFootingOutline = () => {
+    const FO = window.DraftFootingOutline;
+    const std = typeof layerStandardOf === 'function' ? layerStandardOf('S-FOOTING') : null;
+    const on = activeViewId() === 'foundation' && FO
+      && !(std && std.visible === false);
+    const segs = on ? FO.footingOutline({
+      walls: drawing?.walls || [], levelId: activeLevelId(),
+      levelAssemblies: drawing?.levelAssemblies,
+    }) : [];
+    canvas.setAttribute('data-footing-outline', String(segs.length));
+    if (!segs.length) return;
+    FO.drawFootingOutline2D(ctx, toS, segs, {
+      ink: skin['draw-wall-edge'] || skin['ink-primary'], alpha: 0.85,
+    });
+  };
+
   // THE DOOR BUCKS ON THE FOUNDATION VIEW (Movie, 16 Oct): "DOOR BUCKS at
   // the man door and each garage door, 2" wider than the door each side ...
   // the slab pours through the buck in the slab's light blue. The inside

@@ -2384,6 +2384,7 @@
         paintLines(); paintWalls();
         // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct).
         paintDoorBucks();
+        paintFootingOutline();
         // Fixtures ride ON the walls, so they go after them and before the
         // annotation -- the slot the bone puts them in (MODEL.dc.html:6993,
         // straight after the wall and opening passes and well before the

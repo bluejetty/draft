@@ -1581,6 +1581,10 @@ if (!window.DraftLayoutPlan) {
           thicknessFt, faceOffsets: geo.wallFaceOffsets, concreteLevelId: levelId,
         }) : [],
       buckEnv: { paperColor, slabFill: 'rgba(89,128,166,0.16)', wallInk: '#1d1f20', belowAlpha: 0.4 },
+      footingOutline: view === 'foundation' && !shell && window.DraftFootingOutline
+        ? window.DraftFootingOutline.footingOutline({
+          walls: of('walls'), levelId, levelAssemblies: saved?.levelAssemblies,
+        }) : [],
       wallEnv: { wallTypes: WALL_TYPES, solid: listing },
       floorEnv: {
         cornerMarks: false,
