@@ -419,6 +419,8 @@ test.describe('MODEL.html tier 1', () => {
       // the door's wall). MODEL paints them on its foundation view and LAYOUT
       // on the FOUNDATION sheet off the same module, so it is declared here.
       './door-bucks.js',
+      // The strip footing's dashed outline on the FOUNDATION view (16 Nov 2026).
+      './footing-outline.js',
       // trim-extend.js answers TRIM's and EXTEND's geometry (Movie, 17 Oct:
       // select the cutting edges, press the piece to take away, or the end to
       // run on); MODEL's two tools are its only readers.

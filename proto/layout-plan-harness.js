@@ -36,7 +36,7 @@ const BASE = ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-forma
   'fixture-kinds.js', 'fixture-geometry.js', 'render-2d.js', 'plan-composition.js'];
 const OPTIONAL = ['layer-views.js', 'cut-view.js', 'build-house.js', 'roof-types.js',
   'profile-manager.js', 'finish-patterns.js', 'roof-patterns.js', 'cut-marks.js',
-  'fen-labels.js', 'electric-symbols.js', 'hologram.js', 'overhead-lines.js', 'door-bucks.js'];
+  'fen-labels.js', 'electric-symbols.js', 'hologram.js', 'overhead-lines.js', 'door-bucks.js', 'footing-outline.js'];
 
 function loadWith(omit = [], source = {}) {
   const warnings = [];

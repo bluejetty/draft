@@ -75,6 +75,7 @@ function loadDraftModules() {
     'overhead-lines.js',
     // AND THE DOOR BUCKS a garage's foundation plan cuts from its doors.
     'door-bucks.js',
+    'footing-outline.js',
     // AND TRIM / EXTEND's crossings, pure, beside the page's tool.
     'trim-extend.js',
     // AND THE SHOELACE. areas.js reads window.DraftGeometry2D, but only at

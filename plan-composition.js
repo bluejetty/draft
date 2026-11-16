@@ -254,6 +254,13 @@ if (!window.DraftPlanComposition) {
     drawnPieces.forEach(wall => { if (off('A-WALL-PATT')) return; onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
     drawnPieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });
 
+    // THE STRIP FOOTING'S OUTLINE (jb, 16 Nov 2026), dashed, worked out by
+    // the caller (footing-outline.js through layout-plan) on S-FOOTING.
+    if (Array.isArray(env.footingOutline) && env.footingOutline.length && shows('S-FOOTING')
+      && !off('S-FOOTING') && window.DraftFootingOutline) {
+      onLayer(ctx, 'S-FOOTING');
+      window.DraftFootingOutline.drawFootingOutline2D(ctx, toS, env.footingOutline, { ink: '#1d1f20' });
+    }
     // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct):
     // worked out by the caller (door-bucks.js through layout-plan), painted
     // here after the walls so the knock-out lands on the hatch.
