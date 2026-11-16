@@ -158,7 +158,10 @@ test('DELETE takes a picked MAIN FL line and its columns; UNDO puts them back', 
   expect(posts).toBeGreaterThan(0);
   await page.locator('#beam-add').click();       // BEAM off
   await expect(page.locator('#beam-add')).toHaveAttribute('aria-pressed', 'false');
-  await tapWorld(page, (b.x0 + b.x1) / 2 + 1, z);  // pick the line
+  await tapWorld(page, (b.x0 + b.x1) / 2 + 1, z);  // one span of the line
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-beam-pick', /"span":\{/);
+  await tapWorld(page, (b.x0 + b.x1) / 2 + 1, z);  // again: the whole line
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-beam-pick', /"span":null/);
   await expect(page.locator('#beam-delete')).toBeEnabled();
   await page.locator('#beam-delete').click();
   d = await saved(page, ++n);
@@ -254,3 +257,95 @@ test('a string across the lines at each end, wall to line to line to wall; post 
     expect(Math.max(...mine), 'no span past 12 ft').toBeLessThanOrEqual(12 + 1e-6);
     expect(c).toBeTruthy();
   });
+
+// SHORTEN A LINE (jb, 16 Nov): "i only need 2 columns and a beam beside the
+// stair opening, and i don't need the part that goes over to the walls on
+// each side", "CUT a beam after a certain column or between columns", "a
+// beam can cantilever up to 2 ft", "grab ... the corner and then M".
+const mainLineWithPosts = async page => {
+  await boneyardOfTwoStorey(page);
+  await level(page, 'MAIN FL');
+  const b = await box(page);
+  // Clear of the auto line's posts, so the only posts on it are its own.
+  const z = Math.round((b.z0 + b.z1) / 2) + 3;
+  let n = await savesNow(page);
+  const had = new Set((await h.savedDrawing(page)).beams.map(x => x.id));
+  await drawLine(page, b, z);
+  const d = await saved(page, ++n);
+  const line = d.beams.find(x => !had.has(x.id));
+  const posts = d.columns.filter(c => c.auto !== true && c.levelId === 3 && Math.abs(c.point.z - z) < 1e-3)
+    .map(c => c.point.x).sort((p, q) => p - q);
+  await page.locator('#beam-add').click();       // BEAM off
+  return { b, z, n, line, posts, had };
+};
+const handLines = (d, z) => d.beams.filter(x => x.auto !== true && x.levelId === 3 && Math.abs(x.start.z - z) < 1e-3)
+  .map(x => [Math.min(x.start.x, x.end.x), Math.max(x.start.x, x.end.x)]).sort((p, q) => p[0] - q[0]);
+
+test('a click picks one span; DELETE cuts it out and the line ends on its columns', async ({ page }) => {
+  let { b, z, n, posts } = await mainLineWithPosts(page);
+  expect(posts.length, 'a line long enough for two posts').toBeGreaterThanOrEqual(2);
+  const [p1] = posts, p2 = posts[posts.length - 1];
+  // The span from the left wall to the first post.
+  await tapWorld(page, (b.x0 + p1) / 2, z);
+  const pick = JSON.parse(await page.locator('#bones2d').getAttribute('data-beam-pick'));
+  expect(pick.span.lo).toBeCloseTo(b.x0, 3);
+  expect(pick.span.hi).toBeCloseTo(p1, 3);
+  await page.screenshot({ path: 'test-results/beam-cut-1-span-picked.png' });
+  await page.locator('#beam-delete').click();
+  let d = await saved(page, ++n);
+  expect(handLines(d, z), 'the line now starts on the first post').toEqual([[expect.closeTo(p1, 3), expect.closeTo(b.x1, 3)]]);
+  // And the span past the last post.
+  await tapWorld(page, (p2 + b.x1) / 2, z);
+  await page.keyboard.press('Delete');
+  d = await saved(page, ++n);
+  expect(handLines(d, z), 'post to post').toEqual([[expect.closeTo(p1, 3), expect.closeTo(p2, 3)]]);
+  const left = d.columns.filter(c => c.auto !== true && c.levelId === 3 && Math.abs(c.point.z - z) < 1e-3);
+  expect(left.length, 'every post stays').toBe(posts.length);
+  await page.screenshot({ path: 'test-results/beam-cut-2-post-to-post.png' });
+  // UNDO puts the span back.
+  await page.locator('#undo').click();
+  d = await saved(page, ++n);
+  expect(handLines(d, z)).toEqual([[expect.closeTo(p1, 3), expect.closeTo(b.x1, 3)]]);
+});
+
+test('a cut between two posts leaves two lines; both posts stay', async ({ page }) => {
+  let { b, z, n, posts } = await mainLineWithPosts(page);
+  const [p1, p2] = posts;
+  await tapWorld(page, (p1 + p2) / 2 + 2, z);
+  await page.locator('#beam-delete').click();
+  const d = await saved(page, ++n);
+  expect(handLines(d, z)).toEqual([[expect.closeTo(b.x0, 3), expect.closeTo(p1, 3)],
+    [expect.closeTo(p2, 3), expect.closeTo(b.x1, 3)]]);
+  expect(d.columns.filter(c => c.auto !== true && c.levelId === 3).length).toBe(posts.length);
+});
+
+test('an end drags in onto a column, M moves it out up to a 2 ft cantilever, typed or pointed', async ({ page }) => {
+  let { b, z, n, posts } = await mainLineWithPosts(page);
+  const p2 = posts[posts.length - 1];
+  await tapWorld(page, (p2 + b.x1) / 2, z);      // pick a span: the end squares show
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-beam-ends', /"hi"/);
+  // Drag the right end in to just shy of the last post: it lands on it.
+  await dragWorld(page, { x: b.x1, z }, { x: p2 + 0.2, z });
+  let d = await saved(page, ++n);
+  expect(handLines(d, z)).toEqual([[expect.closeTo(b.x0, 3), expect.closeTo(p2, 3)]]);
+  // Pick the end, M, type 1'6 and ENTER: a cantilever of 1'-6".
+  await tapWorld(page, (p2 + posts[posts.length - 2]) / 2 + 2, z);
+  await page.mouse.click(...await at(page, { x: p2, z }));
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-beam-end', /"which":"hi"/);
+  await page.keyboard.press('m');
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-beam-end', /"moving":true/);
+  await page.keyboard.type("1'6");
+  await page.keyboard.press('Enter');
+  d = await saved(page, ++n);
+  expect(handLines(d, z)[0][1], 'out 1\'-6"').toBeCloseTo(p2 + 1.5, 3);
+  // M again and point well past: held at 2'-0" past the post.
+  await tapWorld(page, (p2 + posts[posts.length - 2]) / 2 + 2, z);
+  await page.mouse.click(...await at(page, { x: p2 + 1.5, z }));
+  await page.keyboard.press('m');
+  await page.mouse.move(...await at(page, { x: p2 + 5, z }), { steps: 3 });
+  await expect(page.locator('#status')).toContainText('held at');
+  await page.screenshot({ path: 'test-results/beam-cut-3-cantilever-held.png' });
+  await page.mouse.click(...await at(page, { x: p2 + 5, z }));
+  d = await saved(page, ++n);
+  expect(handLines(d, z)[0][1], 'never past 2 ft').toBeCloseTo(p2 + 2, 3);
+});

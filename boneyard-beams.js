@@ -292,6 +292,198 @@ if (!window.DraftBoneyardBeams) {
     return { ok: true, drawing: d, report: { columnId } };
   };
 
+  // ── ONE SPAN OF A LINE, AND CUTTING IT OUT ────────────────────────────
+  //
+  // jb, 16 Nov: "i need to be able to SHORTEN this beam ... i only need 2
+  // columns and a beam beside the stair opening, and i don't need the part
+  // that goes over to the walls on each side", and "how would be good to CUT
+  // a beam after a certain column or between columns". A click on a line
+  // picks the SPAN under it -- from the post (or the line's end) on one side
+  // to the post (or end) on the other -- and DELETE cuts that span out. The
+  // posts at its two ends stay and the line now ends on them.
+  //
+  // The stops along a row: its two ends and every post on it.
+  const stopsOf = (d, row) => {
+    const line = rowLine(row);
+    if (!line) return null;
+    return uniq([line.lo, line.hi, ...postsOn(d, row).map(c => along(line, c.point))
+      .filter(s => s > line.lo + TOL && s < line.hi - TOL)]);
+  };
+  const spanAt = (d, { beamId, at }) => {
+    const beam = (d.beams || []).find(b => Number(b.id) === Number(beamId));
+    if (!beam) return null;
+    const row = rowOf(d, beam);
+    const line = rowLine(row);
+    const stops = line && stopsOf(d, row);
+    if (!stops) return null;
+    const s = Math.max(line.lo, Math.min(line.hi, along(line, at)));
+    for (let i = 1; i < stops.length; i += 1) {
+      if (s <= stops[i] + TOL) return { lo: stops[i - 1], hi: stops[i], axis: line.axis, c: line.c };
+    }
+    return { lo: stops[stops.length - 2], hi: stops[stops.length - 1], axis: line.axis, c: line.c };
+  };
+
+  // A piece of a row between two places along it, keeping the way it runs.
+  const pieceOf = (b, line, lo, hi) => {
+    const fwd = along(line, b.end) >= along(line, b.start);
+    const at = s => (line.axis === 'x' ? { x: s, y: 0, z: line.c } : { x: line.c, y: 0, z: s });
+    const keepEnd = (p, s) => (Math.abs(along(line, p) - s) < TOL ? p : at(s));
+    const [s0, s1] = fwd ? [lo, hi] : [hi, lo];
+    return { ...clone(b), start: keepEnd(b.start, s0), end: keepEnd(b.end, s1) };
+  };
+  // A RESHAPED LINE IS HIS: `auto: false` on every piece of the row and on
+  // its posts, so AUTO BEAM's sweep leaves it alone (and placeAutoBeam lays
+  // no new line on top of a hand one).
+  const handOver = (d, row) => {
+    row.forEach(b => { b.auto = false; });
+    postsOn(d, row).forEach(c => { c.auto = false; });
+  };
+
+  // Every row piece cut to [keepLo, keepHi] pieces: `cut` is a list of
+  // intervals along the line to take away. Posts strictly inside a cut go
+  // (unless another line holds them), and so does a post no piece reaches.
+  const reshapeRow = (d, row, line, cuts) => {
+    const before = postsOn(d, row);
+    const others = beamsOf(d, row[0].levelId).filter(b => !row.includes(b));
+    const onOther = c => others.some(b => segDist(c.point, b.start, b.end) <= ON_LINE_FT);
+    let id = nextId(d.beams);
+    const pieces = [];
+    row.forEach(b => {
+      const l = lineOf(b);
+      let parts = [[l.lo, l.hi]];
+      cuts.forEach(([lo, hi]) => {
+        parts = parts.flatMap(([a, z]) => {
+          if (hi <= a + TOL || lo >= z - TOL) return [[a, z]];
+          return [[a, Math.min(z, lo)], [Math.max(a, hi), z]].filter(([p, q]) => q - p > TOL);
+        });
+      });
+      parts.forEach(([a, z], i) => {
+        const piece = pieceOf(b, line, a, z);
+        if (i > 0) piece.id = id++;
+        // An end that moved is no longer a corner of the outline.
+        [['start', b.start], ['end', b.end]].forEach(([k, was]) => {
+          if (Math.abs(along(line, piece[k]) - along(line, was)) > TOL) {
+            delete piece[k].srcId; delete piece[k].srcIndex; delete piece[k].offX; delete piece[k].offZ;
+          }
+        });
+        pieces.push(piece);
+      });
+    });
+    const inCut = c => cuts.some(([lo, hi]) => {
+      const s = along(line, c.point);
+      return s > lo + TOL && s < hi - TOL;
+    });
+    const reached = c => pieces.some(p => segDist(c.point, p.start, p.end) <= ON_LINE_FT);
+    const gone = before.filter(c => !onOther(c) && (inCut(c) || !reached(c)));
+    d.beams = d.beams.filter(b => !row.includes(b)).concat(pieces);
+    d.columns = (d.columns || []).filter(c => !gone.includes(c));
+    // Every row the pieces now make.
+    const rows = [];
+    pieces.forEach(p => { if (!rows.some(r => r.includes(p))) rows.push(rowOf(d, p)); });
+    rows.forEach(r => handOver(d, r));
+    return { pieces, posts: gone.length };
+  };
+
+  const cutSpan = (drawing, { beamId, lo, hi }) => {
+    const d = clone(drawing);
+    const beam = (d.beams || []).find(b => Number(b.id) === Number(beamId));
+    if (!beam) return { ok: false, reason: 'NO_BEAM' };
+    const row = rowOf(d, beam);
+    const line = rowLine(row);
+    if (!line) return { ok: false, reason: 'ON_ANGLE' };
+    const a = Math.max(line.lo, Math.min(lo, hi)), z = Math.min(line.hi, Math.max(lo, hi));
+    if (z - a < TOL) return { ok: false, reason: 'NO_MOVE' };
+    const whole = a <= line.lo + TOL && z >= line.hi - TOL;
+    if (whole) {
+      const res = deleteBeam(drawing, { beamId });
+      return res.ok ? { ...res, report: { ...res.report, cutFt: z - a, whole: true, left: 0 } } : res;
+    }
+    const { pieces, posts } = reshapeRow(d, row, line, [[a, z]]);
+    return { ok: true, drawing: d, report: { cutFt: z - a, posts, left: pieces.length,
+      lengths: pieces.map(p => Math.hypot(p.end.x - p.start.x, p.end.z - p.start.z)) } };
+  };
+
+  // ── AN END OF A LINE, MOVED ALONG IT ──────────────────────────────────
+  //
+  // jb, 16 Nov: "sometimes a beam can cantilever up to 2 ft so we should
+  // also allow for this", and "similar to grabbing a roof corner, grab the
+  // roof then click on the corner and then M the corner". An end goes in or
+  // out along its own line. A FREE END -- one not on a wall -- stands at
+  // most CANTILEVER_FT past the last post; an end on a wall has no limit.
+  const CANTILEVER_FT = 2;
+  const MIN_FT = 1;
+  // `which` is 'lo' or 'hi' (the row's ends along its axis); `to` a place
+  // along the axis wanted; `walls` the places along the axis where the line
+  // crosses the level's bone; `snapFt` the reach of a snap.
+  const endLanding = (drawing, { beamId, which, to, walls = [], snapFt = 0 }) => {
+    const beam = (drawing.beams || []).find(b => Number(b.id) === Number(beamId));
+    if (!beam) return { ok: false, reason: 'NO_BEAM' };
+    const row = rowOf(drawing, beam);
+    const line = rowLine(row);
+    if (!line) return { ok: false, reason: 'ON_ANGLE' };
+    const posts = postsOn(drawing, row).map(c => along(line, c.point));
+    const other = which === 'lo' ? line.hi : line.lo;
+    const dir = which === 'lo' ? -1 : 1;
+    let s = to, on = null;
+    const near = (list, kind) => list.forEach(v => {
+      const dist = Math.abs(v - to);
+      if (dist <= snapFt && (!on || dist < on.dist)) on = { v, dist, kind };
+    });
+    near(walls, 'wall');
+    near(posts, 'column');
+    s = on ? on.v : Math.round(to / STEP_FT) * STEP_FT;
+    let kind = on ? on.kind : null;
+    // Never past the other end, never shorter than a foot.
+    if ((s - other) * dir < MIN_FT) { s = other + dir * MIN_FT; kind = null; }
+    const onWall = walls.some(w => Math.abs(w - s) < TOL);
+    let capped = false;
+    // The posts that stay: those on the inside of the new end.
+    const insideOf = v => posts.filter(p => (v - p) * dir >= -TOL);
+    const outermost = list => (dir > 0 ? Math.max(...list) : Math.min(...list));
+    if (!onWall) {
+      const inside = insideOf(s);
+      if (!inside.length) {
+        // Cut back past every post: the end goes back out to the nearest
+        // one, since a line has to stand on something.
+        const beyond = posts.filter(p => (p - s) * dir > 0);
+        if (!beyond.length) return { ok: false, reason: 'NEEDS_COLUMN' };
+        s = dir > 0 ? Math.min(...beyond) : Math.max(...beyond);
+        kind = 'column';
+        capped = true;
+      } else {
+        const last = outermost(inside);
+        if ((s - last) * dir > CANTILEVER_FT + TOL) { s = last + dir * CANTILEVER_FT; capped = true; kind = null; }
+      }
+    }
+    const was = which === 'lo' ? line.lo : line.hi;
+    const inside = insideOf(s);
+    const overhangFt = !onWall && inside.length ? Math.max(0, (s - outermost(inside)) * dir) : 0;
+    return { ok: true, at: s, was, kind: onWall ? 'wall' : kind, capped, overhangFt };
+  };
+
+  const moveEnd = (drawing, { beamId, which, to }) => {
+    const d = clone(drawing);
+    const beam = (d.beams || []).find(b => Number(b.id) === Number(beamId));
+    if (!beam) return { ok: false, reason: 'NO_BEAM' };
+    const row = rowOf(d, beam);
+    const line = rowLine(row);
+    if (!line) return { ok: false, reason: 'ON_ANGLE' };
+    const was = which === 'lo' ? line.lo : line.hi;
+    if (Math.abs(to - was) < TOL) return { ok: false, reason: 'NO_MOVE' };
+    const lengthens = which === 'lo' ? to < was : to > was;
+    if (!lengthens) {
+      const cut = which === 'lo' ? [line.lo, to] : [to, line.hi];
+      const { posts } = reshapeRow(d, row, line, [cut]);
+      return { ok: true, drawing: d, report: { which, from: was, to, deltaFt: Math.abs(to - was), shorter: true, posts } };
+    }
+    // Longer: the piece holding that end reaches out to it.
+    const holder = row.find(b => Math.abs(along(line, b.start) - was) < TOL || Math.abs(along(line, b.end) - was) < TOL);
+    const k = Math.abs(along(line, holder.start) - was) < TOL ? 'start' : 'end';
+    holder[k] = line.axis === 'x' ? { x: to, y: 0, z: line.c } : { x: line.c, y: 0, z: to };
+    handOver(d, rowOf(d, holder));
+    return { ok: true, drawing: d, report: { which, from: was, to, deltaFt: Math.abs(to - was), shorter: false, posts: 0 } };
+  };
+
   // A drawn line's second end: square to the first along the longer run,
   // and onto a line of the level below within `snapFt`.
   const squareEnd = (drawing, { level, a, b, snapFt, levelOrder = [] }) => {
@@ -363,6 +555,9 @@ if (!window.DraftBoneyardBeams) {
     return out;
   };
 
+  // Where a line crosses the level's walls, as places along it.
+  const wallsAlong = (loops, line) => uniq(crossings(loops, line.axis === 'x' ? 'z' : 'x', line.c));
+
   // ALONG EACH LINE: its ends and its posts, in order.
   const postStrings = (drawing, level) => {
     const rows = [];
@@ -384,6 +579,7 @@ if (!window.DraftBoneyardBeams) {
     levelIdOf, viewFor, shown, lineOf, rowOf, rowLine, postsOn, postsBetween, stackedOver,
     columnNear, beamNear, landing, squareEnd,
     addBeam, moveBeam, moveColumn, addColumn, deleteBeam, deleteColumn,
+    spanAt, cutSpan, endLanding, moveEnd, wallsAlong, CANTILEVER_FT,
   });
 })();
 }

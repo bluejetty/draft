@@ -325,6 +325,12 @@
       let beamStart = null;
       let beamHover = null;
       let beamDrag = null;
+      // AN END OF A PICKED LINE (jb, 16 Nov: "grab the roof then click on the
+      // corner and then M the corner"): the end picked ({ beamId, which:
+      // 'lo' | 'hi' }), and M's move under way ({ ...end, typed, hover,
+      // result, words }).
+      let endPick = null;
+      let endMove = null;
       // FOUNDATION first, then the floors bottom-up: a level's beams carry
       // the floor above it, and a line moved carries the lines over it.
       const levelOrder = () => [1, ...((stack && stack.floors) || []).slice()
@@ -1246,12 +1252,13 @@
       const syncBeamButtons = () => {
         deleteBtn.disabled = !beamPick;
         c2.setAttribute('data-beam-pick', beamPick ? JSON.stringify(beamPick) : '');
+        c2.setAttribute('data-beam-end', endPick ? JSON.stringify({ ...endPick, moving: !!endMove }) : '');
       };
       const setBeamTool = tool => {
         beamTool = tool;
         beamStart = null;
         beamHover = null;
-        if (tool) { setBreaking(false); beamPick = null; syncBeamButtons(); }
+        if (tool) { setBreaking(false); beamPick = null; endPick = null; endMove = null; syncBeamButtons(); }
         beamBtn.setAttribute('aria-pressed', String(tool === 'beam'));
         columnBtn.setAttribute('aria-pressed', String(tool === 'column'));
         c2.setAttribute('data-beam-tool', tool || '');
@@ -1311,11 +1318,44 @@
         const pickedBeam = beamPick && beamPick.type === 'beam'
           ? beams.find(b => Number(b.id) === Number(beamPick.id)) : null;
         const row = pickedBeam ? BB.rowOf(d, pickedBeam) : [];
+        const span = pickedBeam && beamPick.span;
         ctx.save();
         ctx.lineWidth = 3;
         ctx.setLineDash([14, 4, 3, 4]);
-        beams.forEach(b => { ctx.strokeStyle = row.includes(b) ? mark : beamInk; line(b.start, b.end); });
+        beams.forEach(b => { ctx.strokeStyle = row.includes(b) && !span ? mark : beamInk; line(b.start, b.end); });
+        // ONE SPAN PICKED: only it is lit, post to post.
+        if (span) {
+          const rl = BB.rowLine(row);
+          if (rl) {
+            const P = v => (rl.axis === 'x' ? { x: v, z: rl.c } : { x: rl.c, z: v });
+            ctx.strokeStyle = mark;
+            ctx.lineWidth = 5;
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 0.9;
+            line(P(Math.max(rl.lo, span.lo)), P(Math.min(rl.hi, span.hi)));
+          }
+        }
         ctx.restore();
+        // THE ENDS OF A PICKED LINE, as squares: press one to pick it, then
+        // drag it or press M.
+        const pickedLine = pickedBeam ? BB.rowLine(row) : null;
+        if (pickedLine) {
+          ['lo', 'hi'].forEach(which => {
+            const v = pickedLine[which];
+            const p = toScreen(pickedLine.axis === 'x' ? { x: v, z: pickedLine.c } : { x: pickedLine.c, z: v });
+            const on = endPick && endPick.which === which
+              && row.some(b => Number(b.id) === Number(endPick.beamId));
+            ctx.save();
+            ctx.strokeStyle = mark;
+            ctx.lineWidth = 2;
+            ctx.fillStyle = mark;
+            if (on) ctx.fillRect(p.x - 6, p.y - 6, 12, 12);
+            ctx.strokeRect(p.x - 6, p.y - 6, 12, 12);
+            ctx.restore();
+          });
+          c2.setAttribute('data-beam-ends', JSON.stringify({ axis: pickedLine.axis, c: rnd(pickedLine.c),
+            lo: rnd(pickedLine.lo), hi: rnd(pickedLine.hi) }));
+        } else c2.setAttribute('data-beam-ends', '');
         columns.forEach(c => {
           const p = toScreen(c.point);
           const on = beamPick && beamPick.type === 'column' && Number(beamPick.id) === Number(c.id);
@@ -1412,6 +1452,7 @@
         ON_ANGLE: 'that beam is on an angle — it can be deleted, not dragged',
         NO_BEAM_HERE: 'a column goes on a beam line — click the line',
         NO_MOVE: 'nothing to move',
+        NEEDS_COLUMN: 'a beam end that is not on a wall needs a column within 2\'-0" of it — add a COLUMN first',
       };
       const beamWhy = reason => beamWords[reason] || `cannot: ${reason}`;
       const moveWords = (report, land) => {
@@ -1441,17 +1482,92 @@
       const deletePicked = () => {
         if (!beamPick) return;
         if (readOnly()) { say(leaseWords()); return; }
+        const span = beamPick.type === 'beam' && beamPick.span;
         const result = beamPick.type === 'beam'
-          ? BB.deleteBeam(raw, { beamId: beamPick.id })
+          ? (span ? BB.cutSpan(raw, { beamId: beamPick.id, lo: span.lo, hi: span.hi })
+            : BB.deleteBeam(raw, { beamId: beamPick.id }))
           : BB.deleteColumn(raw, { columnId: beamPick.id });
         if (!result.ok) { say(beamWhy(result.reason)); return; }
-        const words = beamPick.type === 'beam'
-          ? `beam line deleted${result.report.posts ? `, with its ${result.report.posts} column${result.report.posts === 1 ? '' : 's'}` : ''}`
-          : 'column deleted';
+        const cols = n => `${n} column${n === 1 ? '' : 's'}`;
+        const words = beamPick.type !== 'beam' ? 'column deleted'
+          : span && !result.report.whole
+            ? `beam cut: ${ft(result.report.cutFt)} taken out`
+              + (result.report.posts ? `, with ${cols(result.report.posts)} in it` : '')
+              + ` · ${(result.report.lengths || []).map(ft).join(' + ')} left, ending on its columns`
+            : `beam line deleted${result.report.posts ? `, with its ${cols(result.report.posts)}` : ''}`;
         beamPick = null;
+        endPick = null;
+        endMove = null;
         commitBeam(result, words);
       };
       deleteBtn.addEventListener('click', deletePicked);
+
+      // ── AN END OF A PICKED LINE ────────────────────────────────────────
+      // Which end of the picked line is under the pointer (within 9 px).
+      const endUnder = (x, y) => {
+        if (!beamPick || beamPick.type !== 'beam') return null;
+        const beam = (raw.beams || []).find(b => Number(b.id) === Number(beamPick.id));
+        const line = beam && BB.rowLine(BB.rowOf(raw, beam));
+        if (!line) return null;
+        let best = null;
+        ['lo', 'hi'].forEach(which => {
+          const v = line[which];
+          const p = toScreen(line.axis === 'x' ? { x: v, z: line.c } : { x: line.c, z: v });
+          const dist = Math.hypot(p.x - x, p.y - y);
+          if (dist <= 9 && (!best || dist < best.dist)) best = { which, dist };
+        });
+        return best ? { beamId: beam.id, which: best.which } : null;
+      };
+      // An end taken to a place along its line: snapped to a wall, a column
+      // or a whole inch, a free end held to 2'-0" past its last column.
+      const endResult = (end, world, exact = null) => {
+        const beam = (raw.beams || []).find(b => Number(b.id) === Number(end.beamId));
+        const line = beam && BB.rowLine(BB.rowOf(raw, beam));
+        const level = beamLevel();
+        if (!line || !level) return { result: null, words: beamWhy('ON_ANGLE') };
+        const to = exact != null ? exact : (line.axis === 'x' ? world.x : world.z);
+        const land = BB.endLanding(raw, { beamId: end.beamId, which: end.which, to,
+          walls: BB.wallsAlong(level.loops, line), snapFt: exact != null ? 0 : reachFt(10) });
+        if (!land.ok) return { result: null, words: beamWhy(land.reason) };
+        const result = BB.moveEnd(raw, { beamId: end.beamId, which: end.which, to: land.at });
+        if (!result.ok) return { result: null, words: result.reason === 'NO_MOVE' ? '' : beamWhy(result.reason) };
+        const r = result.report;
+        const len = line.hi - line.lo + (r.shorter ? -r.deltaFt : r.deltaFt);
+        const parts = [`beam ${r.shorter ? 'shortened' : 'lengthened'} ${ft(r.deltaFt)} to ${ft(len)}`];
+        if (land.kind === 'wall') parts.push('on the wall');
+        else if (land.kind === 'column') parts.push('on a column');
+        else if (land.overhangFt > 1e-3) parts.push(`${ft(land.overhangFt)} past its last column`);
+        if (land.capped && land.kind !== 'column') parts.push(`held at ${ft(BB.CANTILEVER_FT)}, the most a beam cantilevers`);
+        if (r.posts) parts.push(`${r.posts} column${r.posts === 1 ? '' : 's'} past it gone`);
+        return { result, words: parts.join(' · ') };
+      };
+      const startEndMove = () => {
+        if (readOnly()) { say(leaseWords()); return; }
+        endMove = { ...endPick, typed: '', hover: null, result: null, words: '' };
+        syncBeamButtons();
+        paint2d();
+        say('MOVE END: point where the end goes and click — or type how far (2\'6, 18") and ENTER. ESC stops.');
+      };
+      // A typed distance: in or out by the side the pointer is on (out when
+      // it has not moved), along the line.
+      const endMoveTyped = () => {
+        const parsed = FMT && FMT.parseArchitecturalLength ? FMT.parseArchitecturalLength(endMove.typed) : null;
+        if (!parsed || !parsed.ok) { say(`cannot read "${endMove.typed}" — try 2'6 or 18"`); endMove.typed = ''; return; }
+        const beam = (raw.beams || []).find(b => Number(b.id) === Number(endMove.beamId));
+        const line = beam && BB.rowLine(BB.rowOf(raw, beam));
+        if (!line) return;
+        const was = line[endMove.which];
+        const out = endMove.which === 'lo' ? -1 : 1;
+        let dir = out;
+        if (endMove.hover) {
+          const h = line.axis === 'x' ? endMove.hover.x : endMove.hover.z;
+          if ((h - was) * out < -1e-6) dir = -out;
+        }
+        const r = endResult(endMove, null, was + dir * parsed.inches / 12);
+        endMove = null;
+        preview = null;
+        if (r.result) commitBeam(r.result, r.words); else { say(r.words || 'nothing to move'); syncBeamButtons(); paintAll(); }
+      };
 
       // A press: the tools first, then a post, then a line. Returns true
       // when the press was the beams' and the bone is not to see it.
@@ -1482,6 +1598,29 @@
           commitBeam(result, `${level.name}: column added — click another line, or COLUMN again to stop.`);
           return true;
         }
+        // M UNDER WAY: the press puts the end where the pointer is.
+        if (endMove) {
+          const was = endMove;
+          endMove = null;
+          preview = null;
+          if (was.result) commitBeam(was.result, was.words); else { syncBeamButtons(); paintAll(); }
+          return true;
+        }
+        // AN END OF THE PICKED LINE, before the wall it may sit on: the
+        // square is only there once the line is picked.
+        const end = endUnder(x, y);
+        if (end) {
+          if (readOnly()) { say(leaseWords()); return true; }
+          selected = null;
+          endPick = end;
+          syncBeamButtons();
+          beamDrag = { x, y, pick: { type: 'end', ...end }, moved: false, result: null, words: '' };
+          c2.setPointerCapture(e.pointerId);
+          paint2d();
+          say(`${level.name}: beam end picked — drag it along its line, or press M and point where it goes`
+            + ` (a free end stands at most ${ft(BB.CANTILEVER_FT)} past its last column).`);
+          return true;
+        }
         // A PRESS ON THE BONE IS THE BONE'S: a line ends on a wall, so near
         // its end the wall is what was meant, and the line is picked along
         // its length.
@@ -1489,18 +1628,32 @@
         const col = BB.columnNear(raw, level, at, reachFt(8));
         const beam = col ? null : BB.beamNear(raw, level, at, reachFt(6));
         if (!col && !beam) {
-          if (beamPick) { beamPick = null; syncBeamButtons(); paint2d(); }
+          if (beamPick) { beamPick = null; endPick = null; syncBeamButtons(); paint2d(); }
           return false;
         }
         selected = null;
-        beamPick = col ? { type: 'column', id: col.id } : { type: 'beam', id: beam.id };
+        endPick = null;
+        if (col) beamPick = { type: 'column', id: col.id };
+        else {
+          // ONE SPAN FIRST, THE WHOLE LINE ON A CLICK AGAIN, and back: the
+          // span between the posts (or ends) either side of the press.
+          const sp = BB.spanAt(raw, { beamId: beam.id, at });
+          const span = sp ? { lo: rnd(sp.lo), hi: rnd(sp.hi) } : null;
+          const prev = beamPick && beamPick.type === 'beam'
+            && BB.rowOf(raw, beam).some(b => Number(b.id) === Number(beamPick.id)) ? beamPick : null;
+          const again = prev && prev.span && span
+            && Math.abs(prev.span.lo - span.lo) < 1e-3 && Math.abs(prev.span.hi - span.hi) < 1e-3;
+          beamPick = { type: 'beam', id: beam.id, span: again ? null : span };
+        }
         syncBeamButtons();
         beamDrag = { x, y, pick: beamPick, line: beam ? BB.rowLine(BB.rowOf(raw, beam)) : null,
           moved: false, result: null, words: '' };
         c2.setPointerCapture(e.pointerId);
         paint2d();
         say(col ? `${level.name}: column picked — drag it along its line, or DELETE.`
-          : `${level.name}: beam line picked — drag it across, or DELETE. A line on a floor above standing over it goes with it.`);
+          : beamPick.span
+            ? `${level.name}: ${ft(beamPick.span.hi - beamPick.span.lo)} of the beam picked, column to column — DELETE cuts it out; click again for the whole line. Drag an end square to shorten it.`
+            : `${level.name}: beam line picked — drag it across, or DELETE. A line on a floor above standing over it goes with it. Click again for one span.`);
         return true;
       };
       const beamPointerMove = e => {
@@ -1511,11 +1664,25 @@
           if (level) { beamHover = drawnLine(level, toWorld(px, py)); paint2d(); }
           return true;
         }
+        if (endMove) {
+          endMove.hover = toWorld(px, py);
+          const r = endResult(endMove, endMove.hover);
+          endMove.result = r.result;
+          endMove.words = r.words;
+          preview = r.result ? { drawing: r.result.drawing, levels: BL.boneLevels(r.result.drawing, stack) } : null;
+          say(r.words + (endMove.typed ? ` · typed ${endMove.typed}` : ''));
+          paintAll();
+          return true;
+        }
         if (!beamDrag) return false;
         if (!beamDrag.moved && Math.hypot(px - beamDrag.x, py - beamDrag.y) < 3) return true;
         beamDrag.moved = true;
         let result = null;
-        if (beamDrag.pick.type === 'beam') {
+        if (beamDrag.pick.type === 'end') {
+          const r = endResult(beamDrag.pick, toWorld(px, py));
+          result = r.result;
+          beamDrag.words = r.words;
+        } else if (beamDrag.pick.type === 'beam') {
           const line = beamDrag.line;
           if (!line) { say(beamWhy('ON_ANGLE')); return true; }
           const rawDeltaFt = (line.axis === 'x' ? py - beamDrag.y : px - beamDrag.x) / frame.s;
@@ -1688,8 +1855,28 @@
           paint2d();
           return;
         }
+        if (endMove) {
+          if (e.key === 'Escape') {
+            endMove = null; preview = null; syncBeamButtons(); paintAll();
+            say('MOVE END stopped.');
+            return;
+          }
+          if (e.key === 'Enter' && endMove.typed) { e.preventDefault(); endMoveTyped(); return; }
+          if (e.key === 'Backspace') { e.preventDefault(); endMove.typed = endMove.typed.slice(0, -1); say(`MOVE END: ${endMove.typed || 'type how far'}`); return; }
+          if (/^[0-9'"\-\/ .]$/.test(e.key)) { e.preventDefault(); endMove.typed += e.key; say(`MOVE END: ${endMove.typed} — ENTER`); return; }
+          if (e.key.toLowerCase() === 'm') return;
+        }
+        // M MOVES A PICKED END (jb: "grab the roof then click on the corner
+        // and then M the corner").
+        if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey
+          && beamPick && beamPick.type === 'beam') {
+          if (endPick) startEndMove();
+          else say('M moves an END of the line: click one of its end squares first.');
+          return;
+        }
         if (e.key === 'Escape') {
           setBreaking(false);
+          endPick = null;
           if (beamTool) setBeamTool(null);
           beamPick = null;
           syncBeamButtons();
