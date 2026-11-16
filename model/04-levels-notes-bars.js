@@ -658,12 +658,17 @@
   //   house  -- the BUILD house outline, the master and its copy on every
   //             level, the way a traced OUTLINE closes (commitOutline)
   //   area   -- a SHAPE on the open level
-  // The three loops need the path to come home; LINES does not.
-  const TURTLE_KINDS = ['lines', 'lot', 'house', 'area'];
-  const TURTLE_KIND_NAMES = { lines: 'LINES', lot: 'LOT', house: 'HOUSE OUTLINE', area: 'AREA / SHAPE' };
+  //   walls  -- a string of WALLS on the open level in the WALL TYPE picked
+  //             (jb, 16 Nov 2026: "draw as LINE, WALL, HOUSE, LOT"), one
+  //             WALLS n assembly the way a drawn string of walls is
+  // The three loops need the path to come home; LINES and WALLS do not.
+  const TURTLE_KINDS = ['lines', 'walls', 'lot', 'house', 'area'];
+  const TURTLE_KIND_NAMES = { lines: 'LINES', walls: 'WALLS', lot: 'LOT', house: 'HOUSE OUTLINE', area: 'AREA / SHAPE' };
+  // A STRING KIND: one item per move, a leg each, open or closed.
+  const turtleIsString = kind => kind === 'lines' || kind === 'walls';
   const turtleKindOf = raw => (TURTLE_KINDS.includes(raw) ? raw : 'lines');
   const turtleKind = () => turtleKindOf(turtleCur.record ? turtleCur.record.kind : turtleCur.kind);
-  const turtleIsLoop = kind => kind !== 'lines';
+  const turtleIsLoop = kind => !turtleIsString(kind);
   const turtleRowsOf = raw => (Array.isArray(raw) ? raw : []).slice(0, TURTLE_ROWS_MAX)
     .map(r => ({ dir: String(r?.dir ?? '').slice(0, 24), dist: String(r?.dist ?? '').slice(0, 40) }));
   // FIVE TURTLE PAGES (Movie, 10 Nov: "for TURTLE they can make multiple
@@ -717,11 +722,13 @@
   // THE LIVE ITEMS of a record, in the table's order: a lot's or shape's
   // one loop, a house's copies (the open level's first), a path's lines.
   // An item deleted on the sheet is simply not there.
+  const turtleListOf = kind => (kind === 'lines' ? drawing.lines : kind === 'walls' ? drawing.walls
+    : kind === 'area' ? drawing.shapes : drawing.outlines);
   const turtleLiveItems = rec => {
     if (!rec || !drawing) return [];
     const ids = (rec.itemIds || rec.lineIds || []).map(String);
     const kind = turtleKindOf(rec.kind);
-    const list = kind === 'lines' ? (drawing.lines || []) : kind === 'area' ? (drawing.shapes || []) : (drawing.outlines || []);
+    const list = turtleListOf(kind) || [];
     const found = ids.map(id => list.find(item => String(item.id) === id)).filter(Boolean);
     if (kind !== 'house') return found;
     const onLevel = found.find(copy => Number(copy.levelId) === activeLevelId());
@@ -732,7 +739,7 @@
   // whole on the sheet regenerates where it was moved to.
   const turtleStartOf = (rec, live) => {
     if (!live.length) return rec?.start || null;
-    const first = turtleKindOf(rec.kind) === 'lines' ? live[0].start : live[0].points?.[0];
+    const first = turtleIsString(turtleKindOf(rec.kind)) ? live[0].start : live[0].points?.[0];
     return first ? { x: first.x, z: first.z } : (rec?.start || null);
   };
   // THE CORNERS a loop takes from a walk: every point but the last, which
@@ -749,7 +756,7 @@
   };
   // A ROW'S LINE OR EDGE as it lies, for the "edited on the plan" mark.
   const turtleEdgeOf = (rec, live, k) => {
-    if (turtleKindOf(rec.kind) === 'lines') { const l = live[k]; return l ? { from: l.start, to: l.end } : null; }
+    if (turtleIsString(turtleKindOf(rec.kind))) { const l = live[k]; return l ? { from: l.start, to: l.end } : null; }
     const pts = live[0]?.points || [];
     if (!pts.length || k >= pts.length) return null;
     return { from: pts[k], to: pts[(k + 1) % pts.length] };
@@ -763,7 +770,8 @@
     const w = turtleWalk(start);
     const kind = turtleKind();
     const badAt = new Map(w.bad.map(b => [b.row, b]));
-    const legAt = new Map(w.legs.map(l => [l.row, l]));
+    const legs = turtleLegsOf(w, kind);
+    const legAt = new Map(legs.map(l => [l.row, l]));
     const offFt = 0.01;
     turtleRowsBox.querySelectorAll('[data-turtle-row]').forEach(rowEl => {
       const i = Number(rowEl.dataset.turtleRow);
@@ -773,7 +781,7 @@
       if (bad?.dist) distIn.setAttribute('data-bad', ''); else distIn.removeAttribute('data-bad');
       // THE PLAN DISAGREES with this row: its line was dragged, or is gone.
       const leg = legAt.get(i);
-      const k = w.legs.indexOf(leg);
+      const k = legs.indexOf(leg);
       const edge = leg && rec && live.length ? turtleEdgeOf(rec, live, k) : null;
       const off = leg && rec && (!edge
         || Math.hypot(edge.from.x - leg.from.x, edge.from.z - leg.from.z) > offFt
@@ -788,7 +796,7 @@
       : w.closed ? `CLOSED · ${n} MOVE${n === 1 ? '' : 'S'}`
         : `OPEN · ${n} MOVE${n === 1 ? '' : 'S'} · GAP ${turtleGapText(w.gapFt)}`;
     turtleNameOut.textContent = rec
-      ? (kind === 'lines' ? (groups().find(g => g.id === rec.groupId)?.name || 'TURTLE') : TURTLE_KIND_NAMES[kind])
+      ? (turtleIsString(kind) ? (groups().find(g => g.id === rec.groupId)?.name || 'TURTLE') : TURTLE_KIND_NAMES[kind])
       : 'NEW PATH';
     turtleBox.querySelectorAll('[data-turtle-kind]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.turtleKind === kind)));
     const regen = turtleBox.querySelector('[data-turtle-do="regen"]');
@@ -933,12 +941,36 @@
     layer: 'draft',
     ...lineStyleDefaults(),
   });
+  // A WALL OF THE PATH: the WALL TYPE, side and heights a wall drawn by
+  // hand takes (wallShape / commitWall in model/07), without commitWall's
+  // own undo step -- the draw is one UNDO (turtleSnapshot).
+  const turtleWallRecord = (leg, levelId, view, like = null) => {
+    const shape = like ? { wallType: like.wallType, refLine: like.refLine } : wallShape({ view });
+    return {
+      id: newDrawingItemId('wall'),
+      start: poolVertex({ x: leg.from.x, z: leg.from.z }, levelId, view),
+      end: poolVertex({ x: leg.to.x, z: leg.to.z }, levelId, view),
+      levelId,
+      view,
+      wallType: shape.wallType,
+      baseHeight: like ? like.baseHeight : wallSetting('wallBaseHeight', 0),
+      topHeight: like ? like.topHeight : (suiteStandIn(levelId) ?? wallSetting('wallTopHeight', 8)),
+      refLine: shape.refLine,
+    };
+  };
+  const turtleItemRecord = (kind, leg, levelId, view, like) => (kind === 'walls'
+    ? turtleWallRecord(leg, levelId, view, like) : turtleLineRecord(leg, levelId, view));
+  // A PATH THAT COMES HOME SHARES ITS FIRST CORNER: the last leg ends on the
+  // start itself, not a hair off it, so the walls mitre round the corner.
+  const turtleLegsOf = (w, kind = 'walls') => (kind === 'walls' && w.closed && w.legs.length > 1
+    ? w.legs.map((leg, i) => (i === w.legs.length - 1 ? { ...leg, to: { x: w.points[0].x, z: w.points[0].z } } : leg))
+    : w.legs);
   const turtleSelect = (kind, made) => setSelection(made
     .filter(item => kind !== 'house' || Number(item.levelId) === activeLevelId())
-    .map(item => ({ type: kind === 'lines' ? 'line' : kind === 'area' ? 'shape' : 'outline', item })));
+    .map(item => ({ type: kind === 'lines' ? 'line' : kind === 'walls' ? 'wall' : kind === 'area' ? 'shape' : 'outline', item })));
   // The path's assembly: two or more lines are one TURTLE n, as a drawn
   // string of lines is one LINES n (sealDrawnChain); one line stands alone.
-  const turtleGroupLines = (rec, made) => {
+  const turtleGroupLines = (rec, made, type = 'line') => {
     drawing.groups = drawing.groups || [];
     let group = turtleGroupOf(rec);
     if (made.length < 2) {
@@ -948,12 +980,17 @@
     }
     if (!group) {
       const n = Number(drawing.nextGroupId) > 0 ? Number(drawing.nextGroupId) : groups().length + 1;
-      group = { id: `group-${n}`, name: `TURTLE ${n}`, fixed: true, stretchBehavior: 'rigid', members: [], wallSettings: null };
+      group = { id: `group-${n}`, name: `${type === 'wall' ? 'WALLS' : 'TURTLE'} ${n}`, fixed: true, stretchBehavior: 'rigid', members: [], wallSettings: null };
       drawing.groups.push(group);
       drawing.nextGroupId = n + 1;
       rec.groupId = group.id;
     }
-    group.members = made.map(line => ({ type: 'line', id: line.id }));
+    group.members = made.map(item => ({ type, id: item.id }));
+    // A STRING OF WALLS CARRIES ITS SETTINGS, as sealDrawnChain's does.
+    if (type === 'wall') {
+      const first = made[0];
+      group.wallSettings = { wallType: first.wallType, baseHeight: first.baseHeight, topHeight: first.topHeight, refLine: first.refLine };
+    }
     return group;
   };
   // EVERYTHING A DRAW OR A REGENERATE CAN TOUCH, as it stands, so one UNDO
@@ -961,7 +998,9 @@
   // the records, the corner pool and the lot's size.
   const turtleSnapshot = rec => ({
     lines: (drawing.lines || []).slice(),
-    ends: (drawing.lines || []).map(l => [l, l.start, l.end]),
+    walls: (drawing.walls || []).slice(),
+    fenestrations: (drawing.fenestrations || []).slice(),
+    ends: [...(drawing.lines || []), ...(drawing.walls || [])].map(l => [l, l.start, l.end]),
     outlines: (drawing.outlines || []).slice(),
     masters: (drawing.boneyardOutlines || []).slice(),
     shapes: (drawing.shapes || []).slice(),
@@ -979,6 +1018,8 @@
   });
   const turtleRestore = (snap, rec) => {
     drawing.lines = snap.lines;
+    drawing.walls = snap.walls;
+    drawing.fenestrations = snap.fenestrations;
     snap.ends.forEach(([l, s, e]) => { l.start = s; l.end = e; });
     if (snap.hadOutlines) drawing.outlines = snap.outlines; else delete drawing.outlines;
     if (snap.hadMasters) drawing.boneyardOutlines = snap.masters; else delete drawing.boneyardOutlines;
@@ -998,11 +1039,12 @@
   };
   // THE ITEMS A WALK MAKES, by kind, from nothing.
   const turtleMake = (kind, w, levelId, homeView, rec) => {
-    if (kind === 'lines') {
-      drawing.lines = drawing.lines || [];
-      const made = w.legs.map(leg => turtleLineRecord(leg, levelId, homeView));
-      made.forEach(line => drawing.lines.push(line));
-      turtleGroupLines(rec, made);
+    if (turtleIsString(kind)) {
+      const key = kind === 'walls' ? 'walls' : 'lines';
+      drawing[key] = drawing[key] || [];
+      const made = turtleLegsOf(w, kind).map(leg => turtleItemRecord(kind, leg, levelId, homeView));
+      made.forEach(item => drawing[key].push(item));
+      turtleGroupLines(rec, made, kind === 'walls' ? 'wall' : 'line');
       return made;
     }
     const loop = turtleLoopPoints(w);
@@ -1070,15 +1112,15 @@
     return live;
   };
   const turtleRemove = (kind, items) => {
-    const list = kind === 'lines' ? drawing.lines : kind === 'area' ? drawing.shapes : drawing.outlines;
+    const list = turtleListOf(kind);
     items.forEach(item => { const at = list.indexOf(item); if (at >= 0) list.splice(at, 1); });
     if (kind === 'house') {
       const k = (drawing.boneyardOutlines || []).findIndex(m => String(m.id) === String(items[0]?.masterId));
       if (k >= 0) drawing.boneyardOutlines.splice(k, 1);
     }
   };
-  const turtleSays = (kind, n, w, verb) => sayOnStrip(kind === 'lines'
-    ? `TURTLE: ${n} line${n === 1 ? '' : 's'} ${verb}${w.closed ? ', and the path closes' : `, open by ${turtleGapText(w.gapFt)}`}.`
+  const turtleSays = (kind, n, w, verb) => sayOnStrip(turtleIsString(kind)
+    ? `TURTLE: ${n} ${kind === 'walls' ? 'wall' : 'line'}${n === 1 ? '' : 's'} ${verb}${w.closed ? ', and the path closes' : `, open by ${turtleGapText(w.gapFt)}`}.`
     : `TURTLE: ${TURTLE_KIND_NAMES[kind]} ${verb}, ${n} corners${kind === 'house' ? ' — press the bone to build on it' : ''}.`);
   // A LOOP KIND NEEDS THE PATH HOME; said once, and nothing is drawn.
   const turtleLoopReady = (kind, w) => {
@@ -1113,7 +1155,7 @@
     turtleSelect(kind, made);
     paint();
     turtleRender();
-    turtleSays(kind, kind === 'lines' ? made.length : turtleLoopPoints(w).length, w, 'drawn');
+    turtleSays(kind, turtleIsString(kind) ? made.length : turtleLoopPoints(w).length, w, 'drawn');
     // A HOUSE WALK IS THE TRACED HOUSE (jb, 13 Nov 2026: "use the TURTLE or
     // the manual OUTLINE to build his house outline, and then produce the
     // autohouse at that point"). model/10 traceLanded says what comes next
@@ -1148,31 +1190,40 @@
     if (!turtleLoopReady(kind, w)) return false;
     const snap = turtleSnapshot(rec);
     let kept;
-    if (kind === 'lines') {
+    if (turtleIsString(kind)) {
       const levelId = live[0].levelId, homeView = live[0].view || 'plan';
+      const list = turtleListOf(kind);
+      const legs = turtleLegsOf(w, kind);
       const stale = new Set();
       kept = [];
-      w.legs.forEach((leg, i) => {
+      legs.forEach((leg, i) => {
         let line = live[i];
         if (line) {
           stale.add(line.start); stale.add(line.end);
           line.start = poolVertex({ x: leg.from.x, z: leg.from.z }, levelId, homeView);
           line.end = poolVertex({ x: leg.to.x, z: leg.to.z }, levelId, homeView);
         } else {
-          line = turtleLineRecord(leg, levelId, homeView);
+          // AN ADDED WALL IS LIKE THE ONES IT FOLLOWS, whatever is picked now.
+          line = turtleItemRecord(kind, leg, levelId, homeView, live[0]);
           const after = kept[kept.length - 1];
-          const at = after ? drawing.lines.indexOf(after) + 1 : drawing.lines.length;
-          drawing.lines.splice(at, 0, line);
+          const at = after ? list.indexOf(after) + 1 : list.length;
+          list.splice(at, 0, line);
         }
         kept.push(line);
       });
-      live.slice(w.legs.length).forEach(line => {
+      const dropped = live.slice(legs.length);
+      dropped.forEach(line => {
         stale.add(line.start); stale.add(line.end);
-        const at = drawing.lines.indexOf(line);
-        if (at >= 0) drawing.lines.splice(at, 1);
+        const at = list.indexOf(line);
+        if (at >= 0) list.splice(at, 1);
       });
+      // A WALL TAKEN OUT TAKES ITS DOORS AND WINDOWS (UNDO brings them back).
+      if (kind === 'walls' && dropped.length && Array.isArray(drawing.fenestrations)) {
+        const gone = new Set(dropped.map(wall => String(wall.id)));
+        drawing.fenestrations = drawing.fenestrations.filter(o => !gone.has(String(o.wallId)));
+      }
       retirePoolCorners([...stale]);
-      turtleGroupLines(rec, kept);
+      turtleGroupLines(rec, kept, kind === 'walls' ? 'wall' : 'line');
     } else {
       kept = turtleMove(kind, live, w, rec);
       if (!kept) { turtleRemove(kind, live); kept = turtleMake(kind, w, rec.levelId, rec.view, rec); }
@@ -1185,7 +1236,7 @@
     turtleSelect(kind, kept);
     paint();
     turtleRender();
-    turtleSays(kind, kind === 'lines' ? kept.length : turtleLoopPoints(w).length, w, 'regenerated');
+    turtleSays(kind, turtleIsString(kind) ? kept.length : turtleLoopPoints(w).length, w, 'regenerated');
     return true;
   };
   // THE PRESSED START (model/16 hands the press here while armed): the
@@ -1217,7 +1268,7 @@
   // which are declared after this file runs).
   const turtleFollowSelection = () => {
     if (!drawing || !selection.length) return;
-    const ids = new Set(selection.filter(e => ['line', 'outline', 'shape'].includes(e.type)).map(e => String(e.item?.id)));
+    const ids = new Set(selection.filter(e => ['line', 'wall', 'outline', 'shape'].includes(e.type)).map(e => String(e.item?.id)));
     const rec = turtleRecords().find(r => (r.itemIds || r.lineIds || []).some(id => ids.has(String(id))));
     if (!rec || rec === turtleCur.record) return;
     rec.rows = turtleRowsOf(rec.rows);
