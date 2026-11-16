@@ -304,6 +304,13 @@ if (!window.DraftCutView) {
   // an eave with no overhang is within one wall of the face; the shortest
   // overhang anyone types (a foot) is not.
   const FLUSH_FT = 0.6;
+  // A FLUSH WALL'S HEAD IS UNDER THE BOARD when it reaches the board's foot
+  // and stops at or below its top. It used to have to stop AT the foot, which
+  // is where the board's foot sat while every fascia was 5 1/2" -- but a
+  // deeper board grows DOWN over the wall (jb, 15 Nov), and the wall's head
+  // stays at the roof's underside, a foot or more over the foot. jb, 16 Nov,
+  // an 18" stucco board over a stucco gable: the seam stayed.
+  const underBoard = (head, foot, board) => head > foot - 0.1 && head < foot + board + 0.15;
   // A truss chord in section: 3 1/2" measured ACROSS the member, so the
   // vertical drop under a sloped top chord grows with the pitch.
   const ROOF_CHORD_IN = 3.5;
@@ -8280,7 +8287,7 @@ if (!window.DraftCutView) {
                 const seamlessAt = u => faceGeoms.some(g =>
                   u > g.loU - 0.01 && u < g.hiU + 0.01
                   && Math.abs(g.face.depth - edgeDepth) < FLUSH_FT
-                  && Math.abs(topAtU(g, u) - footE) < 0.1
+                  && underBoard(topAtU(g, u), footE, roofFasciaFt(roof))
                   && sameSkin(skinOf(g.face.wall), fasciaSkin));
                 const lined = [];
                 shownFeet.forEach(f => {
@@ -8325,6 +8332,25 @@ if (!window.DraftCutView) {
                   opts.fasciaBands.push({ roofId: roof.id, u0: r.u0, u1: r.u1,
                     e0: r.e0, e1: r.e1, drop });
                 }
+                // THE RAKE BOARD WEARS ITS FINISH too, the eave's way: on EXT.
+                // FINISH a siding board up a siding gable is the same
+                // surface, and with the seam gone below it a plain band
+                // would still read as a different one.
+                const rakeFP = opts && opts.finishes ? window.DraftFinishPatterns : null;
+                if (rakeFP && finishById) {
+                  const rakeFinish = (window.DraftWallTypes.fasciaFinishById || finishById)(fasciaSkinOf(roof));
+                  const xa = X(r.u0), xb = X(r.u1);
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.moveTo(xa, Y(r.e0)); ctx.lineTo(xb, Y(r.e1));
+                  ctx.lineTo(xb, Y(r.e1 - drop)); ctx.lineTo(xa, Y(r.e0 - drop));
+                  ctx.closePath();
+                  ctx.clip();
+                  rakeFP.drawFinish(ctx, { x0: Math.min(xa, xb), x1: Math.max(xa, xb),
+                    yTop: Y(Math.max(r.e0, r.e1)), yBottom: Y(Math.min(r.e0, r.e1) - drop), pxPerFt },
+                  rakeFinish, C);
+                  ctx.restore();
+                }
                 ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
@@ -8364,7 +8390,37 @@ if (!window.DraftCutView) {
                     if (!foot) { foot = { t0: k > 0 ? edgeT(t, ts[k - 1]) : t, t1: t }; feet.push(foot); }
                     foot.t1 = k < ts.length - 1 && !shows[k + 1] ? edgeT(t, ts[k + 1]) : t;
                   });
+                  // ── THE SEAM RULE UP THE RAKE ──────────────────────────
+                  //
+                  // jb, 16 Nov 2026, E1 of his front gable (roof-64, no
+                  // overhang, an 18" stucco board over a stucco gable wall):
+                  // "they didnt BLEND together, there is still a seam line
+                  // showing where the edge of the fascia is". The eave's foot
+                  // asked the seam rule; the rake's never did. Same test, read
+                  // up the slope: a gable wall whose face stands within one
+                  // wall of the rake's line and whose climbing top meets the
+                  // board's foot, wearing what the board wears, is one
+                  // surface with it -- no line. An overhang stands the board
+                  // off the wall, and the line is its shadow again.
+                  const rakeDepth = ((a.x + b.x) / 2) * dir.x + ((a.z + b.z) / 2) * dir.z;
+                  const rakeSkin = fasciaSkinOf(roof);
+                  const seamlessAt = q => faceGeoms.some(g =>
+                    q.u > g.loU - 0.01 && q.u < g.hiU + 0.01
+                    && Math.abs(g.face.depth - rakeDepth) < FLUSH_FT
+                    && underBoard(topAtU(g, q.u), q.e, drop)
+                    && sameSkin(skinOf(g.face.wall), rakeSkin));
+                  const lined = [];
                   feet.forEach(f => {
+                    const n = Math.max(1, Math.ceil(Math.abs(at(f.t1).u - at(f.t0).u) / 0.25));
+                    let open = null;
+                    for (let k = 0; k < n; k += 1) {
+                      const t0 = f.t0 + (f.t1 - f.t0) * k / n, t1 = f.t0 + (f.t1 - f.t0) * (k + 1) / n;
+                      if (seamlessAt(at((t0 + t1) / 2))) { open = null; continue; }
+                      if (!open) { open = { t0, t1 }; lined.push(open); }
+                      open.t1 = t1;
+                    }
+                  });
+                  lined.forEach(f => {
                     const p0 = at(f.t0), p1 = at(f.t1);
                     if (Math.hypot(p1.u - p0.u, p1.e - p0.e) <= 0.05) return;
                     ctx.beginPath();
