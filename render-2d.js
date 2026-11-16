@@ -1326,8 +1326,14 @@ if (!window.DraftRender2D) {
       // line.
       const flip = tag === 1 || tag === '+';
       // A MARK the engineer typed names the beam instead (Movie, 19 Oct).
+      // A FLUSH beam says its depth when the caller knows the deck it sits
+      // in (build-house beamDepthLabel: the joists' own depth, 16 Nov 2026)
+      // -- handed per beam, or asked of the env (a LAYOUT sheet's).
+      const depthLabel = options.depthLabel != null ? options.depthLabel
+        : (typeof env.beamDepthLabel === 'function' ? env.beamDepthLabel(beam) : null);
       const named = typeof beam.mark === 'string' && beam.mark.trim() ? beam.mark.trim()
-        : (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM');
+        : (beam.mode === 'dropped' ? 'DROPPED BEAM'
+          : (depthLabel ? `${depthLabel} FLUSH BEAM` : 'FLUSH BEAM'));
       // AND A BEAM BESIDE A BAY PAST THE TABLE CARRIES THE MARK TOO, on its
       // other side -- unless the engineer has named the beam already.
       if (options.warn && !(typeof beam.mark === 'string' && beam.mark.trim())) {

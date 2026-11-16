@@ -1296,7 +1296,31 @@ if (!window.DraftBuildHouse) {
   // engineer's answer, and the mark gives way to it.
   const ENGINEERING_MARK = 'BEAM / JOIST SPAN REQUIRES ENGINEERING / ADDITIONAL SUPPORT';
   const OWJ_MAX_SPAN_FT = Math.max(...OWJ_SPANS.map(row => row.spanFt[12]));
+  // A TJI FLOOR IS SIZED OFF ITS SPAN (jb, 16 Nov 2026, TJ-4500: "the floor
+  // spans will be useful"; standing order: size joists from spans without
+  // asking). The depth stays the one PROJECT's JOIST DEPTH box holds -- it
+  // sets the floor's thickness, which the whole stack is built from -- and
+  // the longest bay picks the lightest series that reaches at that depth,
+  // 16" o.c. first and 12" the last resort (joist-spans sizeFor, the way
+  // owjFor reads its own table). One series for the whole deck, because one
+  // floor is ordered as one joist. Past every row the bays that do not reach
+  // carry the engineering mark, as an OWJ deck's do. A typed callout is the
+  // engineer's answer and wins; sawn lumber waits for its tables.
+  const tjiBays = (callout, assembly) => {
+    const JS = window.DraftJoistSpans;
+    if (!JS || typeof assembly?.joistCallout === 'string' && assembly.joistCallout.trim()) return callout;
+    const longest = Math.max(0, ...callout.bays.map(bay => Number(bay.spanFt) || 0));
+    const size = JS.sizeFor({ joistType: assembly.joistType, depthIn: Number(assembly.joistDepthIn), spanFt: longest });
+    if (!size) return callout;
+    // The short form Movie kept (16 Oct: the three-line note struck, the
+    // depth and nothing else) with the series in it now that it is known;
+    // the spacing is said only when it is not the stock 16".
+    const label = `TJI ${size.series} ${inchesLabel(size.depthIn)}${size.ocIn === 16 ? '' : ` @ ${size.ocIn}" O.C.`}`;
+    return { ...callout, label, size,
+      bays: callout.bays.map(bay => (bay.spanFt > size.reachFt + 1e-6 ? { ...bay, warn: ENGINEERING_MARK } : bay)) };
+  };
   const overSpanBays = (callout, assembly) => {
+    if (callout && Array.isArray(callout.bays) && assembly?.joistType === 'tji') return tjiBays(callout, assembly);
     if (!callout || !Array.isArray(callout.bays) || assembly?.joistType !== 'owj') return callout;
     if (typeof assembly.joistCallout === 'string' && assembly.joistCallout.trim()) return callout;
     if (!callout.bays.some(bay => bay.spanFt > OWJ_MAX_SPAN_FT + 1e-6)) return callout;
@@ -1304,10 +1328,50 @@ if (!window.DraftBuildHouse) {
       ? { ...bay, warn: ENGINEERING_MARK } : bay)) };
   };
 
+  // ── A FLUSH BEAM IS AS DEEP AS THE JOISTS IT CATCHES (jb, 16 Nov 2026:
+  // "the beams will be effected by the choice of this") ──────────────────
+  //
+  // A FLUSH beam's top is the joists' top and its bottom the joists' bottom
+  // -- it lives inside the floor -- so its depth IS the deck's joist depth,
+  // and a 14" TJI floor gets 14" flush beams without anybody typing it. A
+  // DROPPED beam hangs under the joists and is sized by its own load, so it
+  // says nothing here (no beam tables yet).
+  //
+  // WHICH DECK. A beam is filed on the level that frames the floor over it
+  // (FOUNDATION's on 'foundation', a storey's on 'floor' -- placeAutoBeam),
+  // so the deck it holds is the storey that frames FROM that level: the
+  // lowest storey above it that is not in its own storey (model framesFrom,
+  // read the other way). Answers the label's depth, '14"', or null.
+  const FOUNDATION_LEVEL = 1;
+  const heldDeckLevelId = (levels, beamLevelId) => {
+    const VIEWS = window.DraftLayerViews, LA = window.DraftLevelAssembly;
+    if (!VIEWS?.floorLevels || !LA?.sameStorey) return null;
+    const ladder = VIEWS.floorLevels(levels || []).map(level => Number(level.id));
+    const framesFrom = id => {
+      const at = ladder.indexOf(id);
+      const below = ladder.slice(0, at).filter(other => !LA.sameStorey(other, id));
+      return below.length ? below[below.length - 1] : FOUNDATION_LEVEL;
+    };
+    const held = ladder.find(id => id !== Number(beamLevelId) && framesFrom(id) === Number(beamLevelId));
+    return held == null ? null : held;
+  };
+  // `deckLevelId` when the caller already knows the deck (a FLOOR LAYOUT
+  // sheet re-files the storey under's beams onto the deck they hold).
+  const beamDepthLabel = (beam, drawing, deckLevelId = null) => {
+    const LA = window.DraftLevelAssembly;
+    if (!beam || beam.mode === 'dropped' || !LA?.levelAssemblyFor) return null;
+    const deck = deckLevelId != null ? deckLevelId : heldDeckLevelId(drawing?.levels, beam.levelId);
+    if (deck == null) return null;
+    const depthIn = Number(LA.levelAssemblyFor(drawing?.levelAssemblies, deck)?.joistDepthIn);
+    return Number.isFinite(depthIn) && depthIn > 0 ? inchesLabel(depthIn) : null;
+  };
+
   window.DraftBuildHouse = Object.freeze({
     ENGINEERING_MARK,
     OWJ_MAX_SPAN_FT,
     overSpanBays,
+    heldDeckLevelId,
+    beamDepthLabel,
     joistBays,
     deckJoistAxis,
     joistCallout,
