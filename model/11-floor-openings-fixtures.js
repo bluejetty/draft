@@ -553,12 +553,29 @@
     const P = window.ModelProps;
     if (!P) return;
     const box = document.createElement('div');
-    box.append(propRow('WALL TYPE', WALL_PANEL_TYPES, wallShape({}).wallType, id => {
+    // THE TYPES THIS DRAWING MADE, and CREATE WALL TYPE (jb, 16 Nov 2026):
+    // a type made here is the one the next wall is drawn in.
+    const WTp = window.DraftWallTypes;
+    const onFdn = typeof activeViewId === 'function' && activeViewId() === 'foundation';
+    const made = (WTp.userWallTypesOf ? WTp.userWallTypesOf(drawing) : [])
+      .filter(type => (type.kind === 'foundation') === onFdn)
+      .map(type => [type.id, type.label]);
+    const useType = id => {
       drawing.activeWallType = id;
       markDirty();
       showWallProps();
       paint();
-    }));
+    };
+    box.append(propRow('WALL TYPE', [...WALL_PANEL_TYPES, ...made, ['create-wall-type', '+ CREATE WALL TYPE']],
+      wallShape({}).wallType, id => {
+        if (id === 'create-wall-type') {
+          if (typeof openWallTypeCard === 'function') {
+            openWallTypeCard({ kind: onFdn ? 'foundation' : 'floor', onMade: type => useType(type.id) });
+          }
+          return;
+        }
+        useType(id);
+      }));
     box.append(propRow('WALL SIDE', WALL_SIDES, wallSideNow(), id => {
       drawing.wallRefLine = id;
       markDirty();

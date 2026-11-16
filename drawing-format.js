@@ -854,6 +854,7 @@ if (!window.DraftDrawingFormat) {
     const n = Number(value);
     return Number.isFinite(n) && n >= 0.5 && n <= 48 ? n : null;
   };
+  const userWallTypeId = id => typeof id === 'string' && /^wt_[a-z0-9_-]{1,40}$/i.test(id);
   const wallOwnOf = wall => {
     const list = Array.isArray(wall?.own) ? [...new Set(wall.own.filter(k => WALL_OWN_KEYS.includes(k)))] : [];
     return list.length ? list : null;
@@ -918,8 +919,16 @@ if (!window.DraftDrawingFormat) {
         // wall, and reads as the default type.
         ...(wall?.wallType === 'custom' && customWidth(wall?.widthIn) != null
           ? { wallType: 'custom', widthIn: customWidth(wall.widthIn) }
+          // A TYPE THE DRAFTER MADE (jb, 16 Nov 2026): kept by its id when
+          // the file carries it, or when the wall still knows its width --
+          // a made type is drawn at that width on a page not handed the type.
+          : userWallTypeId(wall?.wallType)
+              && (types.some(type => type.id === wall.wallType) || customWidth(wall?.widthIn) != null)
+            ? { wallType: wall.wallType, ...(customWidth(wall?.widthIn) != null ? { widthIn: customWidth(wall.widthIn) } : {}) }
           : { wallType: types.some(type => type.id === wall?.wallType) ? wall.wallType
             : (legacy[wall?.wallType] || defaultType) }),
+        // ITS SLICES TURNED ROUND, outside to the other face (a made type).
+        ...(wall?.sliceFlip === true ? { sliceFlip: true } : {}),
         // THE SETTINGS THIS WALL KEEPS FOR ITSELF against its assembly's MAIN
         // WALLS (jb, 15 Nov 2026), as a roof piece keeps its `own`.
         ...(wallOwnOf(wall) ? { own: wallOwnOf(wall) } : {}),

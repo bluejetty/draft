@@ -592,9 +592,120 @@ if (!window.DraftWallTypes) {
     }
     return customCache.get(w);
   };
-  const isCustomWall = wall => (wall?.wallType || '') === CUSTOM_WALL_TYPE_ID;
+  // ── WALL TYPES THE DRAFTER MAKES (jb, 16 Nov 2026) ─────────────────────
+  //
+  // "can i have another button - create wall-type. which will allow the user
+  // to identify the 'slice compoments' of the wall with their thicknesses
+  // showing. allow the user to 'hatch or shade' each slice" -- and "this is
+  // needed for the foundation walls too exactly the same".
+  //
+  // A MADE TYPE IS A ROW LIKE THE TABLE'S: an id, a label, a total and its
+  // layers listed outside to inside. Each layer carries a NAME (DRYWALL,
+  // 2X6 STUDS ...), its inches, and its `fill` -- the three wall fills
+  // (stud / concrete / insulation) or any SHAPE hatch id (render-2d.js
+  // SHAPE_HATCHES). A slice may be 0" thick: a vapour barrier is a line.
+  //
+  // FOUNDATION TYPES SHOW SLICES BY PLAN (jb: "a foundation wall ... that
+  // shows the 8" conc on the foundation plan, but shows the other component
+  // (air space and 2x4 wall with batt insul, VB and gyp finish) but those
+  // parts to not show on foundation, the full wall to show on Basement
+  // Plan"). `fdn` / `bsmt` false hide a slice on that plan; the hidden ones
+  // keep their room, so the concrete stands in the same place on both.
+  //
+  // THE TYPES LIVE IN THE DRAWING FILE (`wallTypes`), so a file opens with
+  // its walls anywhere. This registry is what every painter's wallTypeOf()
+  // reads: each page that opens a drawing hands it over (adoptDrawing),
+  // holograms' source files included.
+  const USER_WALL_TYPE_PREFIX = 'wt_';
+  const USER_WALL_TYPE_KINDS = Object.freeze(['floor', 'foundation']);
+  const USER_SLICE_FILLS = Object.freeze(['stud', 'concrete', 'insulation',
+    'black', 'grey', 'lightgrey', 'white', 'transparent', 'dots',
+    'siding_h', 'siding_v_bb', 'shake', 'ledgestone', 'ashlar', 'roundstone', 'fieldstone', 'brick']);
+  const USER_SLICE_MAX = 24;
+  const isUserWallTypeId = id => typeof id === 'string' && id.startsWith(USER_WALL_TYPE_PREFIX)
+    && /^wt_[a-z0-9_-]{1,40}$/i.test(id);
+  const sliceInches = value => {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 && n <= CUSTOM_WALL_MAX_IN ? Math.round(n * 64) / 64 : null;
+  };
+  const cleanWords = (value, max = 40) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max).toUpperCase();
+  // A type as the file may carry it, made safe, or null. Read once on the
+  // way in, so everything past here can trust the row.
+  const normalizeUserWallType = raw => {
+    if (!raw || !isUserWallTypeId(raw.id)) return null;
+    const layers = (Array.isArray(raw.layers) ? raw.layers : []).slice(0, USER_SLICE_MAX).map(layer => {
+      const inches = sliceInches(layer?.in);
+      if (inches == null) return null;
+      return Object.freeze({
+        in: inches,
+        fill: USER_SLICE_FILLS.includes(layer?.fill) ? layer.fill : 'stud',
+        name: cleanWords(layer?.name),
+        ...(layer?.fdn === false ? { fdn: false } : {}),
+        ...(layer?.bsmt === false ? { bsmt: false } : {}),
+      });
+    }).filter(Boolean);
+    const totalIn = Math.round(layers.reduce((sum, layer) => sum + layer.in, 0) * 64) / 64;
+    if (!layers.length || !(totalIn >= CUSTOM_WALL_MIN_IN) || totalIn > CUSTOM_WALL_MAX_IN) return null;
+    const name = cleanWords(raw.name) || 'MY WALL';
+    return Object.freeze({
+      id: raw.id, user: true, name,
+      kind: USER_WALL_TYPE_KINDS.includes(raw.kind) ? raw.kind : 'floor',
+      label: `${name}  (${inchWords(totalIn)})`,
+      totalIn, layers: Object.freeze(layers),
+    });
+  };
+  // What the file writes back: the plain row, no label (it is derived).
+  const userWallTypeRecord = type => ({
+    id: type.id, name: type.name, kind: type.kind,
+    layers: type.layers.map(layer => ({ name: layer.name, in: layer.in, fill: layer.fill,
+      ...(layer.fdn === false ? { fdn: false } : {}),
+      ...(layer.bsmt === false ? { bsmt: false } : {}) })),
+  });
+  const normalizeUserWallTypes = raw => {
+    const seen = new Set();
+    return (Array.isArray(raw) ? raw : []).map(normalizeUserWallType)
+      .filter(type => type && !seen.has(type.id) && seen.add(type.id));
+  };
+  const userRegistry = new Map();
+  const registerUserWallTypes = raw => {
+    normalizeUserWallTypes(raw).forEach(type => userRegistry.set(type.id, type));
+  };
+  // A DRAWING, AND EVERY FILE SHOWN UNDER IT AS A HOLOGRAM, to any depth the
+  // format keeps (four).
+  const adoptDrawing = (saved, depth = 0) => {
+    if (!saved || typeof saved !== 'object') return;
+    registerUserWallTypes(saved.wallTypes);
+    if (depth < 5 && Array.isArray(saved.holograms)) {
+      saved.holograms.forEach(holo => adoptDrawing(holo?.source, depth + 1));
+    }
+  };
+  const userWallTypeById = id => userRegistry.get(id) || null;
+  // THE TYPES A DRAWING MADE, for its TYPE chips: the file's own list, as
+  // the registry holds them now.
+  const userWallTypesOf = saved => normalizeUserWallTypes(saved?.wallTypes)
+    .map(type => userRegistry.get(type.id) || type);
+  const newUserWallTypeId = () => `${USER_WALL_TYPE_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // WHICH SLICES A PLAN SHOWS: 'fdn' on the FOUNDATION plan, 'bsmt' on the
+  // BASEMENT plan, null (every slice) anywhere else.
+  const sliceShows = (layer, planKind) => !planKind || layer?.[planKind] !== false;
+  const hasSlicesFor = (type, planKind) => (type?.layers || []).some(layer => sliceShows(layer, planKind));
+  const isFoundationWallType = id => FOUNDATION_WALL_TYPE_IDS.includes(id)
+    || userWallTypeById(id)?.kind === 'foundation';
+
+  // A WALL WHOSE TYPE IS NOT A ROW OF THE TABLE -- a CUSTOM WIDTH, or one the
+  // drafter made. Every painter asks this first and then wallTypeOf(), so a
+  // made type draws, mitres and measures wherever a custom one already does.
+  const isCustomWidthWall = wall => (wall?.wallType || '') === CUSTOM_WALL_TYPE_ID;
+  const isCustomWall = wall => isCustomWidthWall(wall) || isUserWallTypeId(wall?.wallType);
   const wallTypeOf = (wall, fallbackId = 'stud_2x6') => {
-    if (isCustomWall(wall)) return customWallType(wall.widthIn);
+    if (isCustomWidthWall(wall)) return customWallType(wall.widthIn);
+    if (isUserWallTypeId(wall?.wallType)) {
+      const made = userWallTypeById(wall.wallType);
+      if (made) return made;
+      // A MADE TYPE THIS PAGE WAS NOT HANDED draws at the width it was
+      // saved at (widthIn rides on the wall for exactly this), never 2x6.
+      if (customWidthIn(wall.widthIn) != null) return customWallType(wall.widthIn);
+    }
     const id = wall?.wallType || fallbackId;
     return WALL_TYPES.find(t => t.id === id)
       || WALL_TYPES.find(t => t.id === LEGACY_WALL_TYPES[id])
@@ -612,7 +723,25 @@ if (!window.DraftWallTypes) {
     customWidthIn,
     customWallType,
     isCustomWall,
+    isCustomWidthWall,
     wallTypeOf,
+    USER_WALL_TYPE_PREFIX,
+    USER_WALL_TYPE_KINDS,
+    USER_SLICE_FILLS,
+    USER_SLICE_MAX,
+    isUserWallTypeId,
+    sliceInches,
+    normalizeUserWallType,
+    normalizeUserWallTypes,
+    userWallTypeRecord,
+    registerUserWallTypes,
+    adoptDrawing,
+    userWallTypeById,
+    userWallTypesOf,
+    newUserWallTypeId,
+    sliceShows,
+    hasSlicesFor,
+    isFoundationWallType,
     wallThicknessFt,
     LEGACY_WALL_TYPES,
     FOUNDATION_WALL_TYPE_IDS,

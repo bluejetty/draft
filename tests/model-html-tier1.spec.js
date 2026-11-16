@@ -653,6 +653,9 @@ test.describe('MODEL.html tier 1', () => {
       // Arcs and circles in the LINE run (jb, 11 Nov): the right-click menu,
       // the foot chips and the arc maths that bends a piece of the run.
       './model/19-line-arcs.js',
+      // CREATE WALL TYPE (jb, 16 Nov): the card that makes a wall type out
+      // of slices, each with its thickness and hatch.
+      './model/20-wall-type-card.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT

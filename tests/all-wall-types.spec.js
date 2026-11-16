@@ -52,7 +52,7 @@ test('a MAIN FL wall offers the concrete and ICF assemblies after the framed one
   const { at } = await open(page, '/MODEL.html?left=1&right=1&level=3');
   await page.mouse.click(...at(0, 0));
   await expect(page.locator('#props-slot')).toBeVisible();
-  expect(await ids(page), 'the whole table, the studs first, CUSTOM WIDTH last').toEqual([...FRAMED, ...STRUCTURAL, 'custom']);
+  expect(await ids(page), 'the whole table, the studs first, CUSTOM WIDTH and CREATE WALL TYPE last').toEqual([...FRAMED, ...STRUCTURAL, 'custom', 'create-wall-type']);
   await chip(page, 'icf').click();
   await page.waitForTimeout(100);
   const d = await saved(page);
@@ -64,7 +64,7 @@ test('a FOUNDATION wall offers the studs after the structural ones, and takes 2x
   const { at } = await open(page, '/MODEL.html?left=1&right=1&level=1&view=foundation');
   await page.mouse.click(...at(0, 0));
   await expect(page.locator('#props-slot')).toBeVisible();
-  expect(await ids(page), 'the whole table, concrete and ICF first, CUSTOM WIDTH last').toEqual([...STRUCTURAL, ...FRAMED, 'custom']);
+  expect(await ids(page), 'the whole table, concrete and ICF first, CUSTOM WIDTH and CREATE WALL TYPE last').toEqual([...STRUCTURAL, ...FRAMED, 'custom', 'create-wall-type']);
   await chip(page, 'stud_2x6').click();
   await page.waitForTimeout(100);
   const d = await saved(page);

@@ -84,6 +84,10 @@
     const levelIds = new Set((parsed.levels || [])
       .map(level => Number(level.id)).concat(shelfIds));
     const WT = window.DraftWallTypes;
+    // THE WALL TYPES THIS FILE MADE (and its holograms' files made), handed
+    // to the registry before a wall is read, so a wall of one keeps it.
+    WT.adoptDrawing(parsed);
+    const madeWallTypes = WT.normalizeUserWallTypes(parsed.wallTypes);
     refusedItems = { walls: [], lines: [], floors: [], dimensions: [],
       beams: [], columns: [], shapes: [], fixtures: [] };
     drawing = {
@@ -107,8 +111,10 @@
       // way: normalised, and absent when it is not one.
       ...(parsed.standalone !== undefined && F.standalone?.(parsed.standalone)
         ? { standalone: F.standalone(parsed.standalone) } : { standalone: undefined }),
+      ...(parsed.wallTypes !== undefined
+        ? { wallTypes: madeWallTypes.map(WT.userWallTypeRecord) } : {}),
       walls: F.walls(parsed.walls, levelIds, {
-        wallTypes: WT.WALL_TYPES,
+        wallTypes: [...WT.WALL_TYPES, ...madeWallTypes],
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
         // THE FINISH VOCABULARY, for the same reason the layer set is passed
         // to F.lines below and with the same trap. This page does not PAINT

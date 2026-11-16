@@ -54,8 +54,13 @@ if (!window.DraftLayoutPlan) {
       .map(wall => {
         const start = intern(wall.start), end = intern(wall.end);
         if (!start || !end || start === end) return null;
-        const custom = wall.wallType === 'custom' && Number(wall.widthIn) > 0;
-        const wallType = custom || WALL_TYPES.some(type => type.id === wall.wallType)
+        // A MADE TYPE (CREATE WALL TYPE, jb 16 Nov 2026) is kept by its id
+        // when this page was handed it, or when the wall knows its width.
+        const WTm = window.DraftWallTypes;
+        const made = !!(WTm?.isUserWallTypeId && WTm.isUserWallTypeId(wall.wallType)
+          && (WTm.userWallTypeById(wall.wallType) || Number(wall.widthIn) > 0));
+        const custom = (wall.wallType === 'custom' || made) && Number(wall.widthIn) > 0;
+        const wallType = custom || made || WALL_TYPES.some(type => type.id === wall.wallType)
           ? wall.wallType
           : (LEGACY_WALL_TYPES[wall.wallType] || 'stud_2x6');
         return {
@@ -81,6 +86,7 @@ if (!window.DraftLayoutPlan) {
           // (LAYOUT's FOUNDATION sheet, 23 Sep) got a blank page.
           view: wall.view || 'plan',
           wallType,
+          ...(made && wall.sliceFlip === true ? { sliceFlip: true } : {}),
           refLine: ['left', 'right', 'center'].includes(wall.refLine) ? wall.refLine : 'left',
         };
       })
@@ -1233,12 +1239,20 @@ if (!window.DraftLayoutPlan) {
     const pileMarkOf = column => (window.DraftBuildHouse
       ? window.DraftBuildHouse.pileMark(column.point, pileBodies)
       : String(column.footing || ''));
+    // A MADE FOUNDATION TYPE (jb, 16 Nov 2026) prints its BSMT slices on the
+    // BASEMENT plan at full strength -- "the full wall to show on Basement
+    // Plan" -- so it leaves the faint foundation ghost below to them.
+    const WTp = window.DraftWallTypes;
+    const fullOnBasement = wall => !!(WTp?.isUserWallTypeId && WTp.isUserWallTypeId(wall.wallType)
+      && WTp.hasSlicesFor(WTp.wallTypeOf(wall), 'bsmt'));
     const walls = planWalls(saved, levelId, view)
-      .filter(wall => env.foundationGhost !== true || basementGhostKeeps(saved, wall.id));
+      .filter(wall => env.foundationGhost !== true || (basementGhostKeeps(saved, wall.id) && !fullOnBasement(wall)));
+    const foundationUnder = levelId === BASEMENT_LEVEL_ID && view === 'plan' && env.foundationGhost !== true
+      ? planWalls(saved, levelId, 'foundation').filter(fullOnBasement) : [];
     // A FLOOR LAYOUT HAS FLOORS, NOT WALLS of its own: the deck, its holes,
     // the beams and posts under it and its dimensions.
     const floorLayout = view === 'floor' && hasFloorLayout(saved, levelId);
-    if (!walls.length && !floorLayout) {
+    if (!walls.length && !floorLayout && !foundationUnder.length) {
       // A ROOF LEVEL, OR A STOREY WITH NO WALLS YET: its roofs, then the
       // lines and notes drawn on it (Movie, 6 Nov). drawRoofPlan carries the
       // level's dimensions itself, but only when it finds a roof to draw.
@@ -1527,6 +1541,7 @@ if (!window.DraftLayoutPlan) {
       // `hasLayerViews` only when a view was named is how that survives the
       // move into the shared filter.
       hasLayerViews: view !== null,
+      foundationUnder,
       isPrinting: false,
 
       walls,
