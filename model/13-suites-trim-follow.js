@@ -2027,7 +2027,7 @@
     const at = { x: view.cx, z: view.cz };
     const toWorld = ([x, y]) => ({ x: at.x + (x - cx) * unitFt, z: at.z - (y - cy) * unitFt });
     const { levelId, viewId } = onActiveLevel();
-    const lineView = wallHomeView(viewId);
+    const lineView = lineHomeView(viewId);
     drawing.lines = drawing.lines || [];
     const made = window.DraftDxfReader.piecesToLines(pieces, toWorld).map(seg => ({
       id: newDrawingItemId('line'),

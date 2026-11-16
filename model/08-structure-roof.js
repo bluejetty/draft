@@ -185,7 +185,7 @@
       return { type: 'wall', item: commitWall(from, to, brushOptions('wall')) };
     }
     const { levelId, viewId } = onActiveLevel();
-    const lineView = wallHomeView(viewId);
+    const lineView = lineHomeView(viewId);
     drawing.lines = drawing.lines || [];
     const line = addItem(drawing.lines, {
       id: newDrawingItemId('line'),

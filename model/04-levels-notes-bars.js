@@ -1139,7 +1139,7 @@
     if (!w.legs.length) { sayOnStrip('TURTLE: type a direction and a distance on at least one row first.'); return false; }
     if (!turtleLoopReady(kind, w)) return false;
     const { levelId, viewId } = onActiveLevel();
-    const homeView = record?.view || wallHomeView(viewId);
+    const homeView = record?.view || (kind === 'lines' ? lineHomeView(viewId) : wallHomeView(viewId));
     const level = kind === 'lot' ? SITE_LEVEL_ID : record ? record.levelId : levelId;
     const snap = turtleSnapshot(record);
     const rec = record || { id: `turtle-${Date.now().toString(36)}`, rows: turtleCur.rows };

@@ -2073,6 +2073,13 @@
   // let a foundation wall and a plan wall at the same coordinates share a
   // corner they do not share on the old page.
   const wallHomeView = viewId => (viewId === 'foundation' ? 'foundation' : 'plan');
+  // A LINE IS NOT A WALL (jb, 16 Nov: "i tried to draw a line on the floor
+  // layout, but it drew it on the floor plan instead"). MODEL.dc.html:20941
+  // `_commitLine` files a line under the ACTIVE layer view -- FLOOR LAYOUT,
+  // PLAN, FOUNDATION, ELECTRIC -- and only falls back to 'plan' on a level
+  // with no views. Borrowing the wall rule sent every line drawn on a
+  // layout to the walls plan, where the layout never shows it.
+  const lineHomeView = viewId => viewId || 'plan';
 
   // MODEL.dc.html:3224 `_newDrawingItemId`, and :5982 is why the counter must
   // be BUMPED rather than left to heal itself. The old page's load takes
