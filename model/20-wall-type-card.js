@@ -136,7 +136,7 @@
     document.head.append(style);
   };
 
-  // `options`: { kind, editId, onMade(type) }. onMade is handed the type
+  // `options`: { kind, editId, onMade(type), onDone(type|null) }. onMade is handed the type
   // made or changed, so the press that opened the card puts it on the walls
   // in hand (or makes it the type the WALL tool draws).
   const openWallTypeCard = (options = {}) => {
@@ -307,6 +307,7 @@
         }
         deleteWallType(editing);
         closeCard();
+        if (typeof options.onDone === 'function') options.onDone(null);
       });
       buttons.append(del);
     }
@@ -524,6 +525,7 @@
       keepInMyWallTypes(type);
       closeCard();
       if (typeof options.onMade === 'function') options.onMade(type);
+      if (typeof options.onDone === 'function') options.onDone(type);
       markDirty();
       showSelectionProps();
       paint();
@@ -555,4 +557,44 @@
     markDirty();
     showSelectionProps();
     paint();
+  };
+
+  // ── MADE TYPES STAND OUT, AND EACH ONE EDITS FROM ITS OWN CHIP ───────────
+  //
+  // jb, 16 Nov 2026: "for the wall types can we [have] a way to EDIT the
+  // 'user created' wall types. (maybe make their cards blue tinge, rather
+  // than just grey to make obvious to the user)". EDIT TYPE under MADE TYPE
+  // only showed while the walls in hand were already of that type, and the
+  // WALL tool's panel had no way in at all. So every chip of a made type, on
+  // every TYPE row (WALL tool, a picked wall, MAIN WALLS, SPECIAL CASE),
+  // wears a blue tinge and carries a ✎ beside it that opens its card;
+  // a right-click on the chip opens it too. `after` runs once the card has
+  // saved or deleted, for a panel that showSelectionProps does not redraw.
+  const dressMadeTypeChips = (row, after) => {
+    const WT = window.DraftWallTypes;
+    if (!row || !WT?.isUserWallTypeId) return row;
+    row.querySelectorAll('button[data-prop-value]').forEach(chip => {
+      const id = chip.dataset.propValue;
+      if (!WT.isUserWallTypeId(id) || chip.dataset.madeType != null) return;
+      chip.dataset.madeType = '';
+      chip.classList.add('made-type');
+      chip.title = 'A wall type made in this drawing · right-click or ✎ to edit it';
+      const type = WT.userWallTypeById(id);
+      const open = () => openWallTypeCard({ editId: id, kind: type?.kind, onDone: after });
+      chip.addEventListener('contextmenu', event => { event.preventDefault(); open(); });
+      const pen = document.createElement('button');
+      pen.type = 'button';
+      pen.className = 'sel-chip made-type made-type-edit';
+      pen.dataset.madeTypeEdit = id;
+      pen.textContent = '✎';
+      pen.title = `Edit ${type?.name || 'this wall type'}`;
+      pen.setAttribute('aria-label', `Edit wall type ${type?.name || ''}`.trim());
+      pen.addEventListener('click', event => { event.stopPropagation(); open(); });
+      // The chip and its ✎ wrap together, never one line apart.
+      const pair = document.createElement('span');
+      pair.className = 'made-type-pair';
+      chip.replaceWith(pair);
+      pair.append(chip, pen);
+    });
+    return row;
   };

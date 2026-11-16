@@ -151,6 +151,50 @@ test('EDIT TYPE changes every wall of it; FLIP SLICES turns them round; DELETE T
   expect(wall(d, 'n')).toMatchObject({ wallType: 'custom', widthIn: 7.125 });
 });
 
+// jb, 16 Nov 2026: "a way to EDIT the 'user created' wall types (maybe make
+// their cards blue tinge, rather than just grey to make obvious to the user)".
+test('a made type\'s chip is tinted blue and edits from its own pencil, on a picked wall of ANOTHER type and on the WALL tool, right-click too', async ({ page }) => {
+  const type = { id: 'wt_test1', name: 'TEST', kind: 'floor',
+    layers: [{ name: 'BRICK', in: 4, fill: 'brick' }, { name: 'STUD', in: 3.5, fill: 'insulation' }] };
+  const { at } = await open(page, '/MODEL.html?left=1&right=1&level=3', { wallTypes: [type] });
+  // A 2x6 wall picked: the made chip is there, blue, with its pencil.
+  await page.mouse.click(...at(18, 5));
+  const row = page.locator(`${slot} [data-prop-row="type"]`);
+  const chip = row.locator('[data-prop-value="wt_test1"]');
+  await expect(chip).toHaveAttribute('data-made-type', '');
+  await expect(row.locator('[data-prop-value="stud_2x6"]')).not.toHaveAttribute('data-made-type', '');
+  const tint = await chip.evaluate(el => getComputedStyle(el).backgroundColor);
+  const grey = await row.locator('[data-prop-value="stud_2x4"]').evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(tint, 'not the table chips\' grey').not.toBe(grey);
+  const [r, , b] = tint.match(/[\d.]+/g).map(Number);
+  expect(b, 'a blue tinge').toBeGreaterThan(r);
+  await shot(page, '6-made-type-blue-with-pencil', slot);
+  // The pencil opens the type's card without putting it on the wall.
+  await row.locator('[data-made-type-edit="wt_test1"]').click();
+  await expect(page.locator(`${card} h3`)).toContainText('EDIT WALL TYPE — TEST');
+  await page.locator(`${card} [data-wall-type-name]`).fill('TEST TWO');
+  await page.locator(`${card} [data-wall-type-save]`).click();
+  let d = await saved(page);
+  expect(d.wallTypes[0].name).toBe('TEST TWO');
+  expect(wall(d, 'loose').wallType, 'the picked wall kept its type').toBe('stud_2x6');
+  await expect(chip).toContainText('TEST TWO');
+  // A right-click on the chip opens it too.
+  await chip.click({ button: 'right' });
+  await expect(page.locator(`${card} h3`)).toContainText('TEST TWO');
+  await page.locator(`${card} [data-wall-type-cancel]`).click();
+  // The WALL tool's panel: same tint, same pencil, and the panel follows the edit.
+  await page.keyboard.press('Escape');
+  await h.armWall(page);
+  const toolRow = page.locator('[data-prop-row="wall type"]');
+  await expect(toolRow.locator('[data-prop-value="wt_test1"]')).toHaveAttribute('data-made-type', '');
+  await toolRow.locator('[data-made-type-edit="wt_test1"]').click();
+  await page.locator(`${card} [data-wall-type-name]`).fill('TEST 3');
+  await page.locator(`${card} [data-wall-type-save]`).click();
+  await expect(toolRow.locator('[data-prop-value="wt_test1"]')).toContainText('TEST 3');
+  d = await saved(page);
+  expect(d.activeWallType ?? null, 'editing is not picking').not.toBe('wt_test1');
+});
+
 test('a wall whose type the file lost keeps its width, drawn as a plain wall, and keeps the type for when it comes back', async ({ page }) => {
   const { at } = await open(page);
   await page.evaluate(() => {
