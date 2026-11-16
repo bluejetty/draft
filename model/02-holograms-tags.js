@@ -399,6 +399,13 @@
     // iterates, and a redundant guard on "the drawing mitres the way it looks"
     // is worth its two words.
     const shown = walls();
+    // A MADE FOUNDATION TYPE'S BASEMENT SLICES, under the basement's own
+    // walls and mitred among themselves (their corners pool on FOUNDATION).
+    const fdnUnder = basementFoundationWalls();
+    if (fdnUnder.length) {
+      const fdnJoins = G.wallJoins(fdnUnder);
+      fdnUnder.forEach(wall => R.drawWallSeg2D(ctx, toS, wall, false, fdnJoins, 'both', wallEnv()));
+    }
     // MELDED, where a wall ends on another's middle or two walls cross: the
     // painter is handed the walls cut at those points so the T and the X join
     // like corners do (geometry-2d's meldPieces). Drawing only -- `shown`

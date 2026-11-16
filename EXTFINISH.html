@@ -476,6 +476,8 @@
         let parsed = null;
         try { parsed = JSON.parse(await file.text()); } catch { return null; }
         const envelope = FORMAT.checkEnvelope(parsed);
+        // The wall types this file made, for its walls' widths and slices.
+        if (envelope.ok) window.DraftWallTypes?.adoptDrawing?.(parsed);
         return envelope.ok ? parsed : null;
       };
 

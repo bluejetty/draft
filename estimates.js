@@ -47,8 +47,9 @@ if (!window.DraftEstimates) {
     const RT = window.DraftRoofTypes;
     const levels = F.levels(saved?.levels);
     const levelIds = new Set(levels.map(level => level.id));
+    if (WT?.adoptDrawing) WT.adoptDrawing(saved);
     const walls = F.walls(saved?.walls, levelIds, {
-      wallTypes: WT ? WT.WALL_TYPES : [],
+      wallTypes: WT ? [...WT.WALL_TYPES, ...(WT.userWallTypesOf ? WT.userWallTypesOf(saved) : [])] : [],
       legacyWallTypes: WT ? WT.LEGACY_WALL_TYPES || {} : {},
       finishIds: WT ? WT.EXTERIOR_FINISHES.map(f => f.id) : [],
       legacyFinishes: WT ? WT.LEGACY_FINISH_IDS || {} : {},

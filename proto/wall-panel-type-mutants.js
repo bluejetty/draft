@@ -11,8 +11,8 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPECS = ['tests/model-wall-justify.spec.js', 'tests/model-html-draw-delete.spec.js'];
 const MUTANTS = [
   { file: "model/11-floor-openings-fixtures.js", name: "the WALL panel has no type row", spec: 'tests/model-wall-justify.spec.js',
-    find: "    box.append(propRow('WALL TYPE', WALL_PANEL_TYPES, wallShape({}).wallType, id => {\n      drawing.activeWallType = id;",
-    with: "    box.append(propRow('WALL TYPE', WALL_PANEL_TYPES, wallShape({}).wallType, id => {\n      void id;",
+    find: "    const useType = id => {\n      drawing.activeWallType = id;",
+    with: "    const useType = id => {\n      void id;",
     test: "the WALL panel offers the six types" },
   { file: "model/07-walls-magnet.js", name: "ICF picked on a floor plan draws a stud wall", spec: 'tests/model-wall-justify.spec.js',
     find: "    if (viewId !== 'foundation' && WALL_PANEL_TYPES.some(([id]) => id === active)) return active;\n",

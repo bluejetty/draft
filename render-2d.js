@@ -185,11 +185,30 @@ if (!window.DraftRender2D) {
       });
     };
 
+    // ── THE SLICES THIS PLAN SHOWS (jb, 16 Nov 2026) ──────────────────────
+    // A made type lists its layers outside to inside; `sliceFlip` turns them
+    // round on a wall drawn the other way. A foundation type hides slices
+    // per plan (env.slicePlan 'fdn' on FOUNDATION, 'bsmt' on BASEMENT): the
+    // hidden ones keep their room, so what shows stands where it always does.
+    const WTs = window.DraftWallTypes;
+    const ordered = seg.sliceFlip === true && wtDef.user ? [...wtDef.layers].reverse() : wtDef.layers;
+    const slicePlan = env.slicePlan || null;
+    const sliceOn = layer => !slicePlan || !WTs?.sliceShows || WTs.sliceShows(layer, slicePlan);
+    const bands = [];
+    ordered.reduce((at, layer) => {
+      bands.push({ layer, from: at, to: at + layer.in / 12, on: sliceOn(layer) });
+      return at + layer.in / 12;
+    }, startOff);
+    const shownBands = bands.filter(band => band.on);
+    if (!shownBands.length) return;
+    const shownFrom = shownBands[0].from, shownTo = shownBands[shownBands.length - 1].to;
+
     // Draw each layer fill
     let offset = startOff;
-    wtDef.layers.forEach(layer => {
+    ordered.forEach(layer => {
       const layerFt = layer.in / 12;
       const nextOff = offset + layerFt;
+      if (!sliceOn(layer)) { offset = nextOff; return; }
 
       const p0 = toS(joinPoint(seg.start, offset).point), p1 = toS(joinPoint(seg.end,   offset).point);
       const p2 = toS(joinPoint(seg.end,   nextOff).point),p3 = toS(joinPoint(seg.start, nextOff).point);
@@ -201,9 +220,19 @@ if (!window.DraftRender2D) {
         ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
         ctx.closePath();
 
+        const madeHatch = !solidWalls && !['stud', 'concrete', 'insulation'].includes(layer.fill)
+          ? shapeHatchOf(layer.fill) : null;
         if (solidWalls) {
           ctx.fillStyle = wallEdge;
           ctx.fill();
+        } else if (madeHatch) {
+          // A MADE SLICE'S HATCH OR SHADE: a SHAPE hatch, painted the way a
+          // shape paints it, inside the slice.
+          const quad = [p0, p1, p2, p3];
+          ctx.fillStyle = madeHatch.fill || (preview ? wallFillPrev : wallFill);
+          ctx.fill();
+          if (madeHatch.dots) dotScreen(ctx, quad);
+          if (madeHatch.finish) finishScreen(ctx, toS, quad, madeHatch.finish);
         } else if (layer.fill === 'stud') {
           ctx.fillStyle = preview ? wallFillPrev : wallFill;
           ctx.fill();
@@ -331,12 +360,11 @@ if (!window.DraftRender2D) {
     // Boundary lines (all layer edges + end caps)
     ctx.strokeStyle = preview ? wallEdgePrev : wallEdge;
     ctx.lineWidth   = preview ? 1 : 1.5;
-    let bOff = startOff;
-    wtDef.layers.forEach((layer, i) => {
-      const bNext = bOff + layer.in / 12;
-      if (i === 0) strokeFace(bOff);
-      strokeFace(bNext);
-      bOff = bNext;
+    // A face between two slices is drawn when either side of it shows.
+    bands.forEach((band, i) => {
+      if (!band.on) return;
+      if (i === 0 || !bands[i - 1].on) strokeFace(band.from);
+      strokeFace(band.to);
     });
     // End caps stop at a shared vertex. The mitered layer boundaries above
     // continue through the join and form the architectural corner instead.
@@ -349,9 +377,9 @@ if (!window.DraftRender2D) {
         });
         return;
       }
-      const isJoined = joinPoint(pt, startOff).resolved && joinPoint(pt, endOff).resolved;
+      const isJoined = joinPoint(pt, shownFrom).resolved && joinPoint(pt, shownTo).resolved;
       if (isJoined) return;
-      const a = toS(wp(pt, startOff)), b = toS(wp(pt, endOff));
+      const a = toS(wp(pt, shownFrom)), b = toS(wp(pt, shownTo));
       ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
     });
 

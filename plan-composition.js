@@ -226,6 +226,23 @@ if (!window.DraftPlanComposition) {
     }
     const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
     const joins = env.wallJoins ? env.wallJoins(pieces) : null;
+    // ── A MADE WALL TYPE'S SLICES, BY PLAN (jb, 16 Nov 2026) ──────────────
+    // FOUNDATION shows a foundation type's FDN slices; BASEMENT its BSMT
+    // slices, and draws the foundation walls of one under its own walls.
+    const WTs = window.DraftWallTypes;
+    const slicePlan = Number(levelId) === 1 && hasLayerViews
+      ? (viewId === 'foundation' ? 'fdn' : viewId === 'plan' ? 'bsmt' : null) : null;
+    if (env.wallEnv && slicePlan) env = { ...env, wallEnv: { ...env.wallEnv, slicePlan } };
+    const fdnUnder = slicePlan === 'bsmt' && WTs?.isUserWallTypeId
+      ? list(env.foundationUnder || env.walls).filter(wall => wall.levelId === levelId && wall.view === 'foundation'
+        && WTs.isUserWallTypeId(wall.wallType) && WTs.hasSlicesFor(WTs.wallTypeOf(wall), 'bsmt')
+        && !off(wallLayer(wall)))
+      : [];
+    if (fdnUnder.length) {
+      const fdnJoins = env.wallJoins ? env.wallJoins(fdnUnder) : null;
+      fdnUnder.forEach(wall => { if (off('A-WALL-PATT')) return; onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, fdnJoins, 'fill', env.wallEnv); });
+      fdnUnder.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, fdnJoins, 'stroke', env.wallEnv); });
+    }
     // The fill pass is the wall's hatch -- its own layer, so an engineer can
     // switch the pattern off and keep the wall.
     // A WALL SWITCHED OFF goes with its hatch; the openings and fixtures it

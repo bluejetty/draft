@@ -127,6 +127,7 @@
       try {
         const file = await window.SharedFileStore.loadSharedFile(BUCKET);
         if (file) { drawing = JSON.parse(await file.text()); fileName = file.name || fileName; }
+        window.DraftWallTypes?.adoptDrawing?.(drawing);
       } catch { drawing = null; }
       if (!drawing) drawing = { version: format.VERSION };
       const readOnly = !window.SharedFileStore;

@@ -1805,6 +1805,8 @@ class Component extends PageLogic {
         ? await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET)
         : null;
       if (file) saved = JSON.parse(await file.text());
+      // The wall types this file made, for its walls' widths and slices.
+      window.DraftWallTypes?.adoptDrawing?.(saved);
     } catch (error) {
       console.warn('Unable to load the saved model drawing:', error);
       saved = null;

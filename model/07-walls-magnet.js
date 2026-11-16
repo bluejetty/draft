@@ -2034,12 +2034,17 @@
   // ICF, a floor with the studs. Only the DEFAULT still follows the context
   // (contextWallType): a wall drawn with nothing picked is still 8" concrete
   // in the foundation and 2x6 on a floor.
+  // AND THE TYPES THIS DRAWING MADE (CREATE WALL TYPE, jb 16 Nov 2026),
+  // after the table's own kind: a made foundation type with the foundation
+  // ones, a made floor type with the studs.
   const contextWallTypes = viewId => {
     const WT = window.DraftWallTypes;
-    if (viewId == null) return WT.WALL_TYPES;
-    const isFdn = id => WT.FOUNDATION_WALL_TYPE_IDS.includes(id);
-    const own = WT.WALL_TYPES.filter(t => isFdn(t.id) === (viewId === 'foundation'));
-    const rest = WT.WALL_TYPES.filter(t => !own.includes(t));
+    const made = WT.userWallTypesOf ? WT.userWallTypesOf(drawing) : [];
+    const all = [...WT.WALL_TYPES, ...made];
+    if (viewId == null) return all;
+    const isFdn = id => (WT.isFoundationWallType ? WT.isFoundationWallType(id) : WT.FOUNDATION_WALL_TYPE_IDS.includes(id));
+    const own = all.filter(t => isFdn(t.id) === (viewId === 'foundation'));
+    const rest = all.filter(t => !own.includes(t));
     return [...own, ...rest];
   };
   const contextWallType = viewId => {
@@ -2050,7 +2055,7 @@
     // in studs. The other kind is reached by picking it: on a selected wall
     // (contextWallTypes), or on the WALL panel for ICF on a floor (below).
     const WT = window.DraftWallTypes;
-    const isFdn = id => WT.FOUNDATION_WALL_TYPE_IDS.includes(id);
+    const isFdn = id => (WT.isFoundationWallType ? WT.isFoundationWallType(id) : WT.FOUNDATION_WALL_TYPE_IDS.includes(id));
     const choices = contextWallTypes(viewId)
       .filter(t => viewId == null || isFdn(t.id) === (viewId === 'foundation'));
     const active = wallSetting('activeWallType', null);

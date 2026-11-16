@@ -571,6 +571,26 @@
   };
   const walls = () => (drawing?.walls || [])
     .filter(w => { const f = onActiveLevel(); return f.byLevel(w) && f.onPlan(w) && (!ghostKeep || ghostKeep(w)); });
+  // ── WHICH SLICES OF A MADE WALL TYPE THIS PLAN SHOWS (jb, 16 Nov 2026) ──
+  // FOUNDATION shows a foundation type's FDN slices, BASEMENT its BSMT
+  // slices; every other plan every slice.
+  const slicePlanNow = () => {
+    const f = onActiveLevel();
+    if (Number(f.levelId) !== 1) return null;
+    return f.viewId === 'foundation' ? 'fdn' : f.viewId === 'plan' ? 'bsmt' : null;
+  };
+  // AND THE FOUNDATION WALLS THE BASEMENT PLAN DRAWS: a wall drawn once on
+  // FOUNDATION in a made foundation type shows its BSMT slices here too --
+  // "the full wall to show on Basement Plan" -- so the lining is never drawn
+  // twice. Built-in types stay on their own plan, as they always have.
+  const basementFoundationWalls = () => {
+    const WT = window.DraftWallTypes;
+    const f = onActiveLevel();
+    if (!WT?.isUserWallTypeId || Number(f.levelId) !== 1 || f.viewId !== 'plan') return [];
+    return (drawing?.walls || []).filter(w => f.byLevel(w) && w.view === 'foundation'
+      && WT.isUserWallTypeId(w.wallType) && WT.hasSlicesFor(WT.wallTypeOf(w), 'bsmt')
+      && (!ghostKeep || ghostKeep(w)));
+  };
   const lines = () => (drawing?.lines || [])
     .filter(l => { const f = onActiveLevel(); return f.byLevel(l) && f.onPlan(l); });
   const floors = () => (drawing?.floors || [])
@@ -2096,6 +2116,7 @@
   // so committed-looking is the honest placeholder; loud would be wrong.
   const wallEnv = () => ({
     ...paintEnv(),
+    slicePlan: slicePlanNow(),
     colors: {
       wall: skin['draw-wall'],
       wallPreview: skin['draw-wall'],

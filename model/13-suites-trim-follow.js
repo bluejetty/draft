@@ -3187,6 +3187,8 @@
     const registeredAt = suiteRegistration(holo);
     if (registeredAt) { holo.x = registeredAt.x; holo.z = registeredAt.z; }
     if (!Array.isArray(drawing.holograms)) drawing.holograms = [];
+    // ITS FILE'S MADE WALL TYPES, so its walls draw their slices here too.
+    if (window.DraftWallTypes?.adoptDrawing) window.DraftWallTypes.adoptDrawing(holo.source);
     addItem(drawing.holograms, holo);
     // ── AND IT ARRIVES IN HAND ────────────────────────────────────────────
     //
