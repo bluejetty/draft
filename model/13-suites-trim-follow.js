@@ -2525,7 +2525,8 @@
     const target = gridDatum();
     const floor = suiteFloors(holo)[0];
     if (!target || !floor) return null;
-    const thicknessFt = w => (WT?.WALL_TYPES.find(t => t.id === w.wallType)?.totalIn || 0) / 12;
+    const thicknessFt = w => (WT?.isCustomWall(w) ? WT.wallTypeOf(w).totalIn
+      : (WT?.WALL_TYPES.find(t => t.id === w.wallType)?.totalIn || 0)) / 12;
     const walls = (holo.source.walls || []).filter(w => w && Number(w.levelId) === Number(floor.id))
       .map(w => ({ ...w, levelId: 3 }));
     const own = CM.siteDatum(walls, { turn: holo.source.planTurn || 0, thicknessFt });

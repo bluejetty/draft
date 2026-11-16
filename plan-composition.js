@@ -135,7 +135,9 @@ if (!window.DraftPlanComposition) {
   // interior one, anything heavier -- 2x6, ICF, concrete -- an exterior one,
   // which is how this app builds a house.
   const wallLayer = wall => {
-    const type = (window.DraftWallTypes?.WALL_TYPES || []).find(t => t.id === wall.wallType);
+    const WTc = window.DraftWallTypes;
+    const type = WTc?.isCustomWall(wall) ? WTc.wallTypeOf(wall)
+      : (WTc?.WALL_TYPES || []).find(t => t.id === wall.wallType);
     return type && type.totalIn <= 4.5 ? 'A-WALL-INT' : 'A-WALL-EXT';
   };
 

@@ -90,7 +90,8 @@ if (!window.DraftFixtureGeometry) {
     const ux = dx / len, uz = dz / len;
     const nx = -uz, nz = ux;
     const TYPES = wallTypes();
-    const def = TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || TYPES[1];
+    const custom = window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : null;
+    const def = custom || TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || TYPES[1];
     const totalFt = def.totalIn / 12;
     const refLine = wall.refLine || 'center';
     const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;

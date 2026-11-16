@@ -40,7 +40,9 @@
   // approximating: an opening cut half an inch too deep leaves a hairline of
   // wall across the hole and reads as a rendering artefact.
   const openingThicknessFt = () => wall => {
-    const types = window.DraftWallTypes.WALL_TYPES;
+    const WT = window.DraftWallTypes;
+    if (WT.isCustomWall(wall)) return WT.wallThicknessFt(wall);
+    const types = WT.WALL_TYPES;
     const def = types.find(type => type.id === (wall?.wallType || 'stud_2x6'))
       || types[1];
     return def.totalIn / 12;
@@ -889,7 +891,8 @@
       const at = { x: wall.start.x + dx * t, z: wall.start.z + dz * t };
       let inward = { x: -along.z, z: along.x };
       if ((centre.x - at.x) * inward.x + (centre.z - at.z) * inward.z < 0) inward = { x: -inward.x, z: -inward.z };
-      const totalIn = (WT?.WALL_TYPES || []).find(type => type.id === wall.wallType)?.totalIn;
+      const totalIn = WT?.isCustomWall(wall) ? WT.wallTypeOf(wall).totalIn
+        : (WT?.WALL_TYPES || []).find(type => type.id === wall.wallType)?.totalIn;
       return [{ id: f.id, at, along, inward, widthFt: f.width, overhead: f.garage === true,
         insetFt: (Number.isFinite(totalIn) ? totalIn : 5.5) / 12 }];
     });

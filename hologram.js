@@ -230,6 +230,7 @@
 
   // ── OUTLINES, IN THE HOLOGRAM'S OWN FEET ──────────────────────────────────
   const wallThicknessFt = wall => {
+    if (window.DraftWallTypes.isCustomWall(wall)) return window.DraftWallTypes.wallThicknessFt(wall);
     const types = window.DraftWallTypes.WALL_TYPES;
     return ((types.find(type => type.id === (wall?.wallType || 'stud_2x6')) || types[1]).totalIn / 12);
   };
@@ -451,7 +452,8 @@
   const registered = (nodes, walls, levelId, turn) => {
     const CM = window.DraftCutMarks, WT = window.DraftWallTypes;
     if (!CM?.siteDatum) return nodes;
-    const thicknessFt = w => (WT?.WALL_TYPES.find(t => t.id === w.wallType)?.totalIn || 0) / 12;
+    const thicknessFt = w => (WT?.isCustomWall(w) ? WT.wallTypeOf(w).totalIn
+      : (WT?.WALL_TYPES.find(t => t.id === w.wallType)?.totalIn || 0)) / 12;
     const own = (walls || []).filter(w => Number(w?.levelId) === Number(levelId)).map(w => ({ ...w, levelId: 3 }));
     const datum = CM.siteDatum(own, { turn, thicknessFt });
     if (!datum) return nodes;
