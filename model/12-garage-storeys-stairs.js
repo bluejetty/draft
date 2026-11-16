@@ -2255,6 +2255,27 @@
         if (corner && corner.srcId) { pt.srcId = corner.srcId; relinkVertex(pt); }
         return pt;
       };
+      // A HAND LINE ALREADY ON THIS LINE WINS (jb, 16 Nov: a beam cut short
+      // on the WIREFRAME, beside the stairs). The sweep above leaves a line
+      // he reshaped, `auto: false`, and laying the full wall-to-wall row
+      // over it again would draw the beam he cut away back on top of it --
+      // so a row whose line a hand line stands on is not laid, nor its posts.
+      const handLines = (drawing.beams || []).filter(b => b.auto !== true && !b.stairId
+        && Number(b.levelId) === Number(levelId) && b.view === view && b.start && b.end);
+      const onLineOf = (a, b, p, tol = 0.25) => {
+        const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+        if (len < 1e-9) return false;
+        return Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / len <= tol;
+      };
+      const handHas = beam => handLines.some(h => onLineOf(h.start, h.end, beam.start)
+        && onLineOf(h.start, h.end, beam.end));
+      const skippedRows = plan.beams.filter(handHas);
+      plan.beams = plan.beams.filter(beam => !skippedRows.includes(beam));
+      plan.columns = plan.columns.filter(column => !skippedRows.some(beam => {
+        const dx = beam.end.x - beam.start.x, dz = beam.end.z - beam.start.z, L2 = dx * dx + dz * dz;
+        const t = L2 > 1e-9 ? Math.max(0, Math.min(1, ((column.x - beam.start.x) * dx + (column.z - beam.start.z) * dz) / L2)) : 0;
+        return Math.hypot(beam.start.x + dx * t - column.x, beam.start.z + dz * t - column.z) <= 0.25;
+      }));
       plan.beams.forEach(beam => {
         const record = {
           id: beamId++,
