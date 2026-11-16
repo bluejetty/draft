@@ -190,6 +190,59 @@ test('the seam rule at the eave: no foot line where a flush wall wears the fasci
     expect(footAcross(over, HOUSE_FOOT_E, -10, 10), '2 ft overhang: the house foot line').toBe(true);
   });
 
+// ── THE SEAM RULE UP THE RAKE, AND UNDER A DEEP BOARD ──────────────────
+//
+// jb, 16 Nov 2026, proto/repro-jb-rake-stub.draft: a front gable piece
+// (roof-64, 18" stucco fascia, 2 ft past the gable wall) with a 12" wall stub
+// (wall-69) run out to the roof's edge, its end flush under the rake's low
+// corner, stucco: "they didnt BLEND together, there is still a seam line
+// showing where the edge of the fascia is". E4 looks at that gable; the stub's
+// end is u 12.5..13.5, the rake runs u 13 -> 6.5.
+const RAKE_STUB = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '..', 'proto', 'repro-jb-rake-stub.draft'), 'utf8'));
+const paintE4 = saved => {
+  const win = H.loadDraftModules();
+  const env = H.buildEnv(win, saved);
+  const cut = H.standardElevationCuts(env).find(c => c.id === 'E4');
+  return H.paintElevation(win, env, cut);
+};
+// The rake's foot: sloped heavy ink, as [uLo, uHi].
+const rakeFeet = view => {
+  const out = [];
+  view.strokes.filter(s => Math.abs(s.w - FOOT_W) < 1e-9).forEach(s => s.pts.forEach((p, i) => {
+    if (!i || p.move) return;
+    const q = s.pts[i - 1];
+    if (Math.abs(p.e - q.e) > 0.2) out.push([Math.min(p.u, q.u), Math.max(p.u, q.u)]);
+  }));
+  return out;
+};
+const footOver = (view, u0, u1) => rakeFeet(view).some(([a, b]) => a < u1 - 0.05 && b > u0 + 0.05);
+
+test('the seam rule up the rake: no foot line over a flush wall end in the fascia\'s finish', () => {
+  const same = paintE4(RAKE_STUB);
+  expect(footOver(same, 12.55, 12.95), 'stucco board over a stucco stub end: no foot line').toBe(false);
+  // THE GABLE WALL 2 FT BEHIND THE BOARD is not flush: that foot is the
+  // board's shadow and stays.
+  expect(footOver(same, 7, 12), 'the gable wall 2 ft back: the foot line stays').toBe(true);
+
+  const pfm = JSON.parse(JSON.stringify(RAKE_STUB));
+  pfm.roofs.forEach(r => { delete r.fasciaFinish; });
+  expect(footOver(paintE4(pfm), 12.55, 12.95), 'PFM over a stucco stub: the foot line stays').toBe(true);
+
+  const siding = JSON.parse(JSON.stringify(RAKE_STUB));
+  siding.walls.forEach(w => { if (w.id === 'wall-69') w.finish = 'siding_h'; });
+  expect(footOver(paintE4(siding), 12.55, 12.95), 'stucco over a siding stub: the foot line stays').toBe(true);
+});
+
+test('the seam rule under a deep board: an 18" fascia grows down over a flush wall and still blends', () => {
+  const deep = paintE1(flushCopy(c => c.roofs.forEach(r => { r.fasciaFinish = 'stucco'; r.fascia = 18; })));
+  const footE = HOUSE_FOOT_E - (18 - 5.5) / 12;
+  expect(levelInkAt(deep, footE).filter(([, , w]) => Math.abs(w - FOOT_W) < 1e-9),
+    '18" stucco over stucco: no house foot line').toEqual([]);
+  const pfm = paintE1(flushCopy(c => c.roofs.forEach(r => { r.fascia = 18; })));
+  expect(footAcross(pfm, footE, -8, 8), '18" PFM over stucco: the house foot line').toBe(true);
+});
+
 test('the seam rule at the floor: one skin over and under a floor band has no plate line, two skins keep it',
   () => {
     const PLATE_E = 8.094;   // MAIN's wall top, under the 2ND FL floor band
