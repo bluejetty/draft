@@ -1005,6 +1005,13 @@
   .made-type-pair { display:inline-flex; gap:1px; flex:0 1 auto; min-width:0; }
   .made-type-pair > .sel-chip.made-type:first-child { border-top-right-radius:0; border-bottom-right-radius:0; }
   .sel-chip.made-type-edit { flex:none; padding:5px 5px; border-top-left-radius:0; border-bottom-left-radius:0; }
+  /* REGULAR WALLS / FOUNDATION WALLS: the two groups of a wall TYPE row,
+     each under a small quiet head (jb, 16 Nov 2026). */
+  .wall-type-group-head { margin:6px 0 2px; font-family: var(--font-ui); font-size:8px;
+    font-weight:600; letter-spacing:0.08em; color: var(--ink-quiet); }
+  [data-wall-type-groups] > .chip-row + .wall-type-group-head { margin-top:8px; }
+  [data-wall-type-groups] > .wall-type-group-head:first-child { margin-top:2px; }
+  [data-wall-type-groups] > .chip-row:last-child:not([data-wall-type-group-chips]) { margin-top:8px; }
   .sel-help { margin-top:5px; font-family: var(--font-ui); font-size:9px;
     line-height:1.25; color: var(--ink-quiet); }
   /* The old page's warning red (#b04050, :23622), and it means one thing: a

@@ -13,16 +13,20 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/all-wall-types.spec.js';
 
 const MUTANTS = [
+  // jb, 16 Nov 2026: REGULAR WALLS first, FOUNDATION WALLS after, on every
+  // plan (no longer the context's own kind first).
   { file: 'model/07-walls-magnet.js',
-    name: 'a context offers only its own kind again',
-    find: "    return [...own, ...rest];\n",
-    with: "    return own;\n",
+    name: 'a context offers only the regular walls again',
+    find: "    return [...all.filter(t => !isFdn(t.id)), ...all.filter(t => isFdn(t.id))];\n",
+    with: "    return all.filter(t => !isFdn(t.id));\n",
     test: 'a MAIN FL wall offers the concrete and ICF assemblies after the framed ones, and takes ICF' },
-  { file: 'model/07-walls-magnet.js',
-    name: 'the other kind leads the list',
-    find: "    return [...own, ...rest];\n",
-    with: "    return [...rest, ...own];\n",
-    test: 'a FOUNDATION wall offers the studs after the structural ones, and takes 2x6' },
+  // The TYPE row draws the two groups itself (model/15 groupWallTypeRow),
+  // so the order that reaches the drafter is set there.
+  { file: 'model/15-panels.js',
+    name: 'the foundation walls lead the list',
+    find: "    nodes.push(...group('regular', 'REGULAR WALLS', regular), ...group('foundation', 'FOUNDATION WALLS', fdn));\n",
+    with: "    nodes.push(...group('foundation', 'FOUNDATION WALLS', fdn), ...group('regular', 'REGULAR WALLS', regular));\n",
+    test: 'a FOUNDATION wall offers the regular walls first, then the structural ones, and takes 2x6' },
 ];
 
 const run = name => {

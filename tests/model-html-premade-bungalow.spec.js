@@ -150,8 +150,10 @@ test('1 STOREY builds the bungalow off the window bone', async ({ page }) => {
   // The studs go on the storey and the concrete goes on FOUNDATION, which is
   // MODEL.dc.html's _buildHouse calling _buildHouseWalls once per level with
   // the level and the view as arguments.
+  // jb, 16 Nov 2026: the house's 8" concrete is now the stock 8" CONC + 2X6
+  // BSMT (the pour with the basement's lining); the garage keeps plain 8".
   expect(wallsBy(saved), 'studs on the storey, concrete on FOUNDATION')
-    .toEqual({ 'L3/plan/stud_2x6': 4, 'L1/foundation/concrete_8': 4 });
+    .toEqual({ 'L3/plan/stud_2x6': 4, 'L1/foundation/wt_stock_conc8_bsmt': 4 });
 
   // 1 STOREY ON ITS OWN CARRIES NO GARAGE. Without this the plain tile could
   // hand over the tile beside it and nothing here would notice.
@@ -208,7 +210,7 @@ test('1 STOREY + GARAGE raises both bodies, and the garage is an ATTACHED one',
       .toEqual({
         'L3/plan/stud_2x6': 4,
         'L3/plan/stud_2x6/garage': 4,
-        'L1/foundation/concrete_8': 4,
+        'L1/foundation/wt_stock_conc8_bsmt': 4,
         'L1/foundation/concrete_8/garage': 4,
       });
   });
@@ -575,7 +577,8 @@ test('it comes with its foundation — walls, slab and footings',
       // The type comes from the page's own foundation choices, never the
       // stud default -- the two lists are DISJOINT, so this is not a near
       // miss but a wall of the wrong kind.
-      expect(wall.wallType).toBe('concrete_8');
+      // jb, 16 Nov 2026: the stock 8" CONC + 2X6 BSMT.
+      expect(wall.wallType).toBe('wt_stock_conc8_bsmt');
     }
 
     // THE SLAB, poured to the level's own thickness, on the FOUNDATION set.

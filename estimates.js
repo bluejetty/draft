@@ -49,7 +49,7 @@ if (!window.DraftEstimates) {
     const levelIds = new Set(levels.map(level => level.id));
     if (WT?.adoptDrawing) WT.adoptDrawing(saved);
     const walls = F.walls(saved?.walls, levelIds, {
-      wallTypes: WT ? [...WT.WALL_TYPES, ...(WT.userWallTypesOf ? WT.userWallTypesOf(saved) : [])] : [],
+      wallTypes: WT ? [...WT.WALL_TYPES, ...(WT.STOCK_WALL_TYPES || []), ...(WT.userWallTypesOf ? WT.userWallTypesOf(saved) : [])] : [],
       legacyWallTypes: WT ? WT.LEGACY_WALL_TYPES || {} : {},
       finishIds: WT ? WT.EXTERIOR_FINISHES.map(f => f.id) : [],
       legacyFinishes: WT ? WT.LEGACY_FINISH_IDS || {} : {},

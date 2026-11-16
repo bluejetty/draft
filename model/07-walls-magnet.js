@@ -2030,22 +2030,25 @@
   // and the framed ones apart; a suite drawn in 2x6 on MAIN FL has to meet
   // an ICF shell of the same type to click onto it, and a walk-out
   // basement's framed wall is a basement wall. So every context offers the
-  // whole table, ITS OWN KIND FIRST: the foundation leads with concrete and
-  // ICF, a floor with the studs. Only the DEFAULT still follows the context
+  // whole table (since 16 Nov 2026 regular walls first everywhere, see
+  // below; it used to be ITS OWN KIND FIRST). Only the DEFAULT still follows the context
   // (contextWallType): a wall drawn with nothing picked is still 8" concrete
   // in the foundation and 2x6 on a floor.
   // AND THE TYPES THIS DRAWING MADE (CREATE WALL TYPE, jb 16 Nov 2026),
   // after the table's own kind: a made foundation type with the foundation
   // ones, a made floor type with the studs.
+  // REGULAR WALLS FIRST, FOUNDATION WALLS AFTER, on every plan (jb, 16 Nov
+  // 2026: "seperate the REGULAR WALLS from the FOUNDATION WALLS in the wall
+  // selection part, list the reg wall first and then the foundation walls
+  // later"). The TYPE rows draw the two as their own groups
+  // (groupWallTypeRow, model/15). The stock sliced types sit with the
+  // foundation ones.
   const contextWallTypes = viewId => {
     const WT = window.DraftWallTypes;
     const made = WT.userWallTypesOf ? WT.userWallTypesOf(drawing) : [];
-    const all = [...WT.WALL_TYPES, ...made];
-    if (viewId == null) return all;
+    const all = [...WT.WALL_TYPES, ...(WT.STOCK_WALL_TYPES || []), ...made];
     const isFdn = id => (WT.isFoundationWallType ? WT.isFoundationWallType(id) : WT.FOUNDATION_WALL_TYPE_IDS.includes(id));
-    const own = all.filter(t => isFdn(t.id) === (viewId === 'foundation'));
-    const rest = all.filter(t => !own.includes(t));
-    return [...own, ...rest];
+    return [...all.filter(t => !isFdn(t.id)), ...all.filter(t => isFdn(t.id))];
   };
   const contextWallType = viewId => {
     // THE DEFAULT IS THE CONTEXT'S OWN KIND, as it always was: the list a

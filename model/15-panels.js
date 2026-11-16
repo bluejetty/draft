@@ -595,7 +595,50 @@
   // straight onto the walls in hand. Made types are chips like the rest.
   const CREATE_WALL_TYPE_CHIP = ['create-wall-type', '+ CREATE WALL TYPE'];
   // Made types wear blue and edit from their own ✎ (model/20, jb 16 Nov).
-  const dressTypeRow = row => (typeof dressMadeTypeChips === 'function' ? dressMadeTypeChips(row) : row);
+  // REGULAR WALLS, THEN FOUNDATION WALLS, each under its own small head
+  // (jb, 16 Nov 2026). A TYPE row's chips are split by kind; chips that are
+  // no wall type (MAIN, CUSTOM WIDTH, CREATE WALL TYPE) keep their place,
+  // MAIN before the groups and the rest after. The chips themselves are the
+  // same buttons, so every reader of [data-prop-value] still finds them.
+  const groupWallTypeRow = row => {
+    const WT = window.DraftWallTypes;
+    const chips = row?.querySelector('.chip-row');
+    if (!chips || !WT) return row;
+    const isType = id => !!(WT.WALL_TYPES.some(t => t.id === id) || (WT.isUserWallTypeId && WT.isUserWallTypeId(id)));
+    const isFdn = id => (WT.isFoundationWallType ? WT.isFoundationWallType(id) : WT.FOUNDATION_WALL_TYPE_IDS.includes(id));
+    const all = [...chips.children];
+    const idOf = el => el.dataset.propValue;
+    const regular = all.filter(el => isType(idOf(el)) && !isFdn(idOf(el)));
+    const fdn = all.filter(el => isType(idOf(el)) && isFdn(idOf(el)));
+    if (!regular.length || !fdn.length) return row;
+    const firstType = all.findIndex(el => isType(idOf(el)));
+    const before = all.slice(0, firstType).filter(el => !isType(idOf(el)));
+    const after = all.slice(firstType).filter(el => !isType(idOf(el)));
+    const group = (key, text, els) => {
+      const head = document.createElement('div');
+      head.className = 'wall-type-group-head';
+      head.dataset.wallTypeGroup = key;
+      head.textContent = text;
+      const line = document.createElement('div');
+      line.className = 'chip-row';
+      line.dataset.wallTypeGroupChips = key;
+      line.append(...els);
+      return [head, line];
+    };
+    const nodes = [];
+    if (before.length) { const line = document.createElement('div'); line.className = 'chip-row'; line.append(...before); nodes.push(line); }
+    nodes.push(...group('regular', 'REGULAR WALLS', regular), ...group('foundation', 'FOUNDATION WALLS', fdn));
+    if (after.length) { const line = document.createElement('div'); line.className = 'chip-row'; line.append(...after); nodes.push(line); }
+    const holder = document.createElement('div');
+    holder.dataset.wallTypeGroups = '';
+    holder.append(...nodes);
+    chips.replaceWith(holder);
+    return row;
+  };
+  const dressTypeRow = row => {
+    groupWallTypeRow(row);
+    return typeof dressMadeTypeChips === 'function' ? dressMadeTypeChips(row) : row;
+  };
   const wallTypeChips = types => [...types.map(type => [type.id, type.label]), CUSTOM_CHIP, CREATE_WALL_TYPE_CHIP];
   const wallTypePatch = (walls, id) => (id === 'custom'
     ? wall => ({ wallType: 'custom', widthIn: window.DraftWallTypes.wallTypeOf(wall).totalIn })
@@ -618,6 +661,9 @@
     const WT = window.DraftWallTypes;
     const id = agreedOn(walls, wall => wall.wallType || '');
     if (!id || !WT.isUserWallTypeId(id)) return null;
+    // A STOCK TYPE (8" CONC + 2X6 BSMT) turns its slices round like a made
+    // one, but is not the drawing's to edit.
+    const stock = !!(WT.isStockWallType && WT.isStockWallType(id));
     const row = document.createElement('div');
     row.dataset.propRow = 'made type';
     const name = document.createElement('div');
@@ -648,7 +694,8 @@
       showSelectionProps();
       paint();
     });
-    chips.append(edit, flip);
+    if (stock) name.textContent = 'SLICES';
+    chips.append(...(stock ? [flip] : [edit, flip]));
     row.append(name, chips);
     return row;
   };
@@ -1034,7 +1081,7 @@
     // view, because the walls are what is being changed; a selection spanning
     // two views agrees on nothing and gets the whole table.
     const view = agreedOn(walls, wall => wall.view || 'plan');
-    const types = view === null ? WT.WALL_TYPES : contextWallTypes(view);
+    const types = contextWallTypes(view);
 
     // ── ONE ASSEMBLY: MAIN WALLS + THIS WALL (SPECIAL CASE) ──────────────
     // jb, 15 Nov 2026 -- the roof's MAIN ROOF / SPECIAL CASE idea, per

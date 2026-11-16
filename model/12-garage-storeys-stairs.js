@@ -291,12 +291,30 @@
   const raiseFoundationUnder = (loop, { garage = false, topHeight } = {}) => {
     const made = { walls: [], items: [] };
     const levelId = FOUNDATION_LEVEL_ID;
+    // THE HOUSE'S 8" CONCRETE IS THE STOCK 8" CONC + 2X6 BSMT (jb, 16 Nov
+    // 2026: "use that new 8\" wall ... as the default for 8\" conc
+    // foundation when the OUTLINE is drawn"): the FOUNDATION plan still
+    // shows the 8" pour, the BASEMENT plan its air space and batt wall too.
+    // Another foundation type picked on the WALL panel is still honoured.
+    const WTs = window.DraftWallTypes;
+    const picked = contextWallType('foundation');
+    const stock = WTs.STOCK_WALL_TYPES?.[0]?.id;
+    const fdnType = picked === 'concrete_8' && stock ? stock : picked;
     const fdn = raiseLoop(loop, levelId, {
       viewId: 'foundation',
-      wallType: contextWallType('foundation'),
+      wallType: fdnType,
       withOutline: false,
       topHeight,
     });
+    // ITS SLICES RUN FROM THE LINE IN: the concrete on the outline (the
+    // outside face), the lining inside. A wall whose body lies on the line's
+    // RIGHT starts its slices at the far face, so it is turned round.
+    if (WTs.isUserWallTypeId && WTs.isUserWallTypeId(fdnType)) {
+      fdn.walls.forEach(wall => {
+        wall.widthIn = WTs.wallTypeOf(wall).totalIn;
+        if (wall.refLine === 'right') wall.sliceFlip = true;
+      });
+    }
     made.walls.push(...fdn.walls);
 
     // THE SLAB, poured to the level's own thickness through floorRecord --
@@ -2523,9 +2541,14 @@
       Number(wall.levelId) === Number(levelId)
       && (wall.view || 'plan') === 'plan' && onOutline(wall)), totalIn('stud_2x6'));
     if (!lowest) return planIn / 12;
-    const fdnIn = thickest((drawing?.walls || []).filter(wall => wall.view === 'foundation'),
-      totalIn('concrete_8'));
-    return Math.max(planIn, fdnIn + totalIn('insulation_6')) / 12;
+    // A STOCK 8" CONC + 2X6 BSMT already carries its lining (jb, 16 Nov
+    // 2026), so it is not lined twice.
+    const fdnWalls = (drawing?.walls || []).filter(wall => wall.view === 'foundation');
+    const lined = fdnWalls.filter(wall => WT.isStockWallType && WT.isStockWallType(wall.wallType));
+    const bare = fdnWalls.filter(wall => !lined.includes(wall));
+    const bareIn = bare.length || !lined.length
+      ? thickest(bare, totalIn('concrete_8')) + totalIn('insulation_6') : 0;
+    return Math.max(planIn, bareIn, thickest(lined, 0)) / 12;
   };
 
   // THE BEAMS CARRYING THIS LEVEL'S FLOOR -- the ones a well must keep clear
@@ -5146,8 +5169,9 @@
     }
     // AND THE FRAMING ROUND THE ENTRY, once the well it frames is cut.
     // The side walls stop at the front foundation wall's inside face.
-    const fdnType = under.walls[0] && window.DraftWallTypes.WALL_TYPES
-      .find(type => type.id === under.walls[0].wallType);
+    // The whole wall, lining and all (8" CONC + 2X6 BSMT): the fill walls
+    // stop at its basement face.
+    const fdnType = under.walls[0] && window.DraftWallTypes.wallTypeOf(under.walls[0]);
     const framed = entryBody
       ? placeBilevelFraming(plan.framing, flights, split,
         fdnType ? { frontFaceFt: fdnType.totalIn / 12 } : {})

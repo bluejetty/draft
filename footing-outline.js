@@ -25,14 +25,32 @@ if (!window.DraftFootingOutline) {
   // The concrete a strip footing sits under. A PT wood foundation stands on
   // gravel, not a poured strip, and a grade beam hung off piles has none.
   const FOOTED_TYPES = ['concrete_8', 'icf', 'icf_13'];
+  // The stock 8" CONC + 2X6 BSMT (wall-types.js) stands on a footing under
+  // its concrete slice; see concreteBandIn.
   const isFooted = wall => wall && (wall.view || 'plan') === 'foundation'
-    && FOOTED_TYPES.includes(String(wall.wallType || ''))
+    && (FOOTED_TYPES.includes(String(wall.wallType || ''))
+      || !!(typeof window !== 'undefined' && window.DraftWallTypes?.isStockWallType?.(wall.wallType)))
     && !(Number(wall.baseHeight) > 0.01);
 
   // The footing's projection past each face, in feet. The OUTSIDE one is a
   // clean 1/2" ("try to keep it to 1/2""), rounded down, and what is left of
   // the footing's width goes to the inside ("adjust to inside a bit"): 8"
   // concrete on 20" is 6" and 6"; 11 1/4" ICF on 24" is 6" out, 6 3/4" in.
+  // THE SLICES A STOCK SLICED TYPE SHOWS ON FOUNDATION, as inches from its
+  // first face (the low offset), its slices turned round by sliceFlip. Null
+  // for every other wall, which bears across its whole width.
+  const concreteBandIn = wall => {
+    const WT = typeof window !== 'undefined' ? window.DraftWallTypes : null;
+    if (!WT?.isStockWallType?.(wall.wallType)) return null;
+    const type = WT.wallTypeOf(wall);
+    const layers = wall.sliceFlip === true ? [...type.layers].reverse() : type.layers;
+    let at = 0, from = null, to = null;
+    layers.forEach(layer => {
+      if (WT.sliceShows(layer, 'fdn')) { if (from == null) from = at; to = at + layer.in; }
+      at += layer.in;
+    });
+    return from == null || !(to > from) ? null : { from, to };
+  };
   const projectionFt = (footingWidthIn, wallIn) => {
     const total = Math.max(0, footingWidthIn - wallIn);
     const out = Math.floor(total / 2 * 2 + 1e-9) / 2;
@@ -241,10 +259,15 @@ if (!window.DraftFootingOutline) {
     if (!mine.length) return [];
     const widthIn = Number(footingWidthIn(levelId)) || 20;
     const frames = mine.map(wall => {
-      const wallIn = Number(wallTotalIn(wall)) || 8;
+      const totalIn = Number(wallTotalIn(wall)) || 8;
+      const band = concreteBandIn(wall);
+      const wallIn = band ? band.to - band.from : totalIn;
       // ICF takes 24" whatever the level says for plain concrete.
       const fIn = String(wall.wallType).startsWith('icf') ? Math.max(widthIn, 24) : widthIn;
-      const f = frameOf(wall, wallIn / 12, faceOffsets);
+      const f = frameOf(wall, totalIn / 12, faceOffsets);
+      // ONLY THE CONCRETE BEARS: the footing centres under the slices the
+      // FOUNDATION plan shows, not under the basement lining beside them.
+      if (f && band) { const lo = f.lo; f.lo = lo + band.from / 12; f.hi = lo + band.to / 12; }
       if (f) f.p = projectionFt(fIn, wallIn);
       return f;
     }).filter(f => f && f.p.in > 0);

@@ -46,7 +46,7 @@ async function saved(page) {
   return h.savedDrawing(page);
 }
 const FRAMED = ['stud_2x4', 'stud_2x6', 'stud_2x8', 'insulation_6', 'guardrail'];
-const STRUCTURAL = ['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn'];
+const STRUCTURAL = ['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn', 'wt_stock_conc8_bsmt'];
 
 test('a MAIN FL wall offers the concrete and ICF assemblies after the framed ones, and takes ICF', async ({ page }) => {
   const { at } = await open(page, '/MODEL.html?left=1&right=1&level=3');
@@ -60,11 +60,13 @@ test('a MAIN FL wall offers the concrete and ICF assemblies after the framed one
   expect(d.walls.find(w => w.id === 'fdn').wallType, 'the foundation wall untouched').toBe('concrete_8');
 });
 
-test('a FOUNDATION wall offers the studs after the structural ones, and takes 2x6', async ({ page }) => {
+// jb, 16 Nov 2026: REGULAR WALLS first, then FOUNDATION WALLS, on every
+// plan -- the foundation no longer leads with its own kind.
+test('a FOUNDATION wall offers the regular walls first, then the structural ones, and takes 2x6', async ({ page }) => {
   const { at } = await open(page, '/MODEL.html?left=1&right=1&level=1&view=foundation');
   await page.mouse.click(...at(0, 0));
   await expect(page.locator('#props-slot')).toBeVisible();
-  expect(await ids(page), 'the whole table, concrete and ICF first, CUSTOM WIDTH and CREATE WALL TYPE last').toEqual([...STRUCTURAL, ...FRAMED, 'custom', 'create-wall-type']);
+  expect(await ids(page), 'the whole table, the regular walls first, CUSTOM WIDTH and CREATE WALL TYPE last').toEqual([...FRAMED, ...STRUCTURAL, 'custom', 'create-wall-type']);
   await chip(page, 'stud_2x6').click();
   await page.waitForTimeout(100);
   const d = await saved(page);
