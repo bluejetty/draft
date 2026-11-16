@@ -1263,7 +1263,11 @@
     const onView = stair => !views.length || stair.view === viewId;
     const shown = SG.stairsShownOn(hereId, (drawing?.stairs || []).filter(onView), levels.floors);
     const roles = new Map(shown.map(entry => [entry.stair, entry.role]));
+    // A DN FLIGHT AND AN UP FLIGHT STACKED HERE meet at a Z break (jb, 16
+    // Nov 2026): the DN one's top, the UP one's foot.
+    const breaks = typeof SG.stairBreaksOn === 'function' ? SG.stairBreaksOn(shown, levels) : new Map();
     R.drawStairs2D(ctx, toS, {
+      breakFor: stair => breaks.get(stair) || null,
       layer: STAIR_LAYER_STANDARD,
       isPrinting: false,
       stairs: shown.map(entry => entry.stair),
@@ -1285,7 +1289,10 @@
     // double-click on it can change the width ("allow the user to change that
     // number on the plan").
     stairWidthMarks = [];
-    shown.filter(entry => entry.role !== 'below').forEach(({ stair }) => {
+    // A broken UP flight's top is the part not drawn, so its width mark,
+    // which sits there, goes with it; the DN flight's mark says the width.
+    shown.filter(entry => entry.role !== 'below'
+      && !(entry.role === 'lands' && breaks.has(entry.stair))).forEach(({ stair }) => {
       const layout = SG.stairCurrentLayout(stair, levels);
       const run = SG.stairPlanParts(stair, layout).runs[0];
       if (!run) return;

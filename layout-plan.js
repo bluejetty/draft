@@ -1432,6 +1432,9 @@ if (!window.DraftLayoutPlan) {
         (stair.view || 'plan') === (view || 'plan')), stairLevels.floors)
         .map(entry => [entry.stair, entry.role])
       : []);
+    const stairBreaks = stairLevels && typeof stairs.stairBreaksOn === 'function'
+      ? stairs.stairBreaksOn([...stairRoles].map(([stair, role]) => ({ stair, role })), stairLevels)
+      : new Map();
 
     // ── THE GATE GETS ITS HANDLE ────────────────────────────────────────
     //
@@ -1617,6 +1620,9 @@ if (!window.DraftLayoutPlan) {
         partsFor: (stair, layout) => stairs.stairPlanParts(stair, layout),
         formatInchesOnly: fmt.formatInchesOnly,
         roleFor: stair => (stairRoles.get(stair) || 'own'),
+        // THE Z BREAK where a DN flight and an UP flight stack (jb, 16 Nov
+        // 2026) -- the same answer MODEL gives.
+        breakFor: stair => (stairBreaks.get(stair) || null),
       } : null,
       stairs: of('stairs'),
       // WHICH STAIRS THIS SHEET SHOWS, AND HOW (Movie, 16 Oct; stair-geometry

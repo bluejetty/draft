@@ -2929,6 +2929,44 @@ if (!window.DraftRender2D) {
   // ghost takes (layout-plan GHOST_BELOW_ALPHA is 0.3; a stair is finer).
   const STAIR_BELOW_ALPHA = 0.45;
 
+  // A screen segment cut to a polygon: the pieces inside it, or with
+  // `invert` the pieces outside. Crossings with every edge split the
+  // segment; each piece is kept by where its midpoint falls.
+  function clipSegToRegion2D(ax, ay, bx, by, poly, invert) {
+    const dx = bx - ax, dy = by - ay;
+    const ts = [0, 1];
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length];
+      const ex = q.x - p.x, ey = q.y - p.y;
+      const den = dx * ey - dy * ex;
+      if (Math.abs(den) < 1e-12) continue;
+      const t = ((p.x - ax) * ey - (p.y - ay) * ex) / den;
+      const s = ((p.x - ax) * dy - (p.y - ay) * dx) / den;
+      if (t > 0 && t < 1 && s >= 0 && s <= 1) ts.push(t);
+    }
+    ts.sort((m, n) => m - n);
+    const inside = (x, y) => {
+      let hit = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const out = [];
+    for (let i = 0; i + 1 < ts.length; i++) {
+      const t0 = ts[i], t1 = ts[i + 1];
+      if (t1 - t0 < 1e-9) continue;
+      const tm = (t0 + t1) / 2;
+      if (inside(ax + dx * tm, ay + dy * tm) === !!invert) continue;
+      const p = { x: ax + dx * t0, y: ay + dy * t0 }, q = { x: ax + dx * t1, y: ay + dy * t1 };
+      const prev = out[out.length - 1];
+      if (prev && Math.abs(prev[1].x - p.x) < 1e-9 && Math.abs(prev[1].y - p.y) < 1e-9) prev[1] = q;
+      else out.push([p, q]);
+    }
+    return out;
+  }
+
   function drawStairs2D(ctx, toS, env) {
     const std = env.layer;
     if (!std.visible || (env.isPrinting && !std.printable)) return;
@@ -2950,6 +2988,25 @@ if (!window.DraftRender2D) {
       // 'below' is a stair entirely under this floor -- drawn lighter, with
       // no walk line and no tag, which belong to the floors it serves.
       const role = typeof env.roleFor === 'function' ? (env.roleFor(stair) || 'own') : 'own';
+      // THE BREAK (jb, 16 Nov 2026; stair-geometry stairBreaksOn): a flight
+      // DN stacked under a flight UP shows only its top to the Z, the one UP
+      // only its foot from it. Clipped here, line by line, rather than with
+      // a canvas clip -- the DXF and PDF writers clip to a box at most.
+      const brk = typeof env.breakFor === 'function' ? env.breakFor(stair) : null;
+      const region = brk ? brk.region.map(pt) : null;
+      const line = (ax, ay, bx, by) => {
+        if (!region) { ctx.moveTo(ax, ay); ctx.lineTo(bx, by); return; }
+        clipSegToRegion2D(ax, ay, bx, by, region, brk.invert).forEach(([p, q]) => {
+          ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
+        });
+      };
+      const path = (points, closed) => {
+        const n = points.length;
+        for (let i = 0; i + 1 < n + (closed ? 1 : 0); i++) {
+          const p = points[i], q = points[(i + 1) % n];
+          line(p.x, p.y, q.x, q.y);
+        }
+      };
       ctx.save();
       if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;
       ctx.strokeStyle = env.stairColor;
@@ -2968,8 +3025,8 @@ if (!window.DraftRender2D) {
         ctx.lineWidth = 1.5;
         // Stringers
         ctx.beginPath();
-        ctx.moveTo(a.x - px * half, a.y - py * half); ctx.lineTo(b.x - px * half, b.y - py * half);
-        ctx.moveTo(a.x + px * half, a.y + py * half); ctx.lineTo(b.x + px * half, b.y + py * half);
+        line(a.x - px * half, a.y - py * half, b.x - px * half, b.y - py * half);
+        line(a.x + px * half, a.y + py * half, b.x + px * half, b.y + py * half);
         ctx.stroke();
         // Tread lines at every run increment, top nosing included
         ctx.lineWidth = 1;
@@ -2977,8 +3034,7 @@ if (!window.DraftRender2D) {
         for (let i = 0; i <= run.treads; i++) {
           const t = (i * env.treadRunIn / 12) * pxPerFt;
           const cx = a.x + ux * t, cy = a.y + uy * t;
-          ctx.moveTo(cx - px * half, cy - py * half);
-          ctx.lineTo(cx + px * half, cy + py * half);
+          line(cx - px * half, cy - py * half, cx + px * half, cy + py * half);
         }
         ctx.stroke();
       });
@@ -2988,9 +3044,7 @@ if (!window.DraftRender2D) {
       if (parts.rails && parts.rails.length) {
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        parts.rails.forEach(path => {
-          path.map(pt).forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-        });
+        parts.rails.forEach(rail => path(rail.map(pt), false));
         ctx.stroke();
       }
       // Landing square, with winder division lines fanning from the inside
@@ -3003,27 +3057,34 @@ if (!window.DraftRender2D) {
         const poly = landing.poly.map(pt);
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        poly.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-        ctx.closePath();
+        path(poly, true);
         ctx.stroke();
         ctx.lineWidth = 1;
-        (landing.winderLines || []).forEach(line => {
-          const a = pt(line[0]), b = pt(line[1]);
-          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        (landing.winderLines || []).forEach(wl => {
+          const a = pt(wl[0]), b = pt(wl[1]);
+          ctx.beginPath(); line(a.x, a.y, b.x, b.y); ctx.stroke();
         });
       });
       // The U gap line: the rail or wall the 4.5" between the runs is for.
       if (parts.gap) {
         const a = pt(parts.gap[0]), b = pt(parts.gap[1]);
         ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.beginPath(); line(a.x, a.y, b.x, b.y); ctx.stroke();
+      }
+      // The Z itself, once for the pair.
+      if (brk && brk.drawLine && role !== 'below') {
+        const z = brk.line.map(pt);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        z.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.stroke();
       }
       // A STAIR UNDER THIS FLOOR CARRIES NO WALK LINE AND NO TAG.
       if (role === 'below') { ctx.restore(); return; }
       // Walk-line arrow with the DN label and riser count -- downhill on the
       // floor the stair leaves, and UP, the arrow turned round, on the floor
       // it lands on.
-      const walk = parts.walk.map(pt);
+      const walk = (brk && brk.walk && brk.walk.length >= 2 ? brk.walk : parts.walk).map(pt);
       ctx.lineWidth = 1;
       ctx.beginPath();
       walk.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
@@ -4290,6 +4351,7 @@ if (!window.DraftRender2D) {
     drawGrid2D,
     drawOrigin2D,
     drawStairs2D,
+    clipSegToRegion2D,
     drawFloor2D,
     drawBoneyardMark2D,
     drawDimension2D,
