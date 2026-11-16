@@ -144,7 +144,8 @@
     if (!WT?.normalizeUserWallType || !drawing) return;
     wallTypeCardStyle();
     if (wallTypeCardEl) wallTypeCardEl.remove();
-    const editing = options.editId ? WT.userWallTypeById(options.editId) : null;
+    const editing = options.editId && !(WT.isStockWallType && WT.isStockWallType(options.editId))
+      ? WT.userWallTypeById(options.editId) : null;
     const state = {
       id: editing ? editing.id : null,
       name: editing ? editing.name : '',
@@ -575,7 +576,9 @@
     if (!row || !WT?.isUserWallTypeId) return row;
     row.querySelectorAll('button[data-prop-value]').forEach(chip => {
       const id = chip.dataset.propValue;
-      if (!WT.isUserWallTypeId(id) || chip.dataset.madeType != null) return;
+      // A STOCK type (wall-types.js STOCK_WALL_TYPES) is built in: grey, no ✎.
+      if (!WT.isUserWallTypeId(id) || chip.dataset.madeType != null
+        || (WT.isStockWallType && WT.isStockWallType(id))) return;
       chip.dataset.madeType = '';
       chip.classList.add('made-type');
       chip.title = 'A wall type made in this drawing · right-click or ✎ to edit it';

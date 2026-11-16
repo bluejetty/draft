@@ -128,6 +128,9 @@ if (!window.DraftProjectReload) {
       if (!rings.some(ring => geo.edgeOnLoop(wall.start, wall.end, ring))) return null;
       const asm = L.levelAssemblyFor(table, wall.levelId);
       if (viewOf(wall) === 'foundation') {
+        // 8" CONCRETE ON PROJECT KEEPS THE STOCK 8" CONC + 2X6 BSMT: it is
+        // that pour with the basement's lining (jb, 16 Nov 2026).
+        if (asm.wallType === 'concrete_8' && window.DraftWallTypes?.isStockWallType?.(wall.wallType)) return null;
         return foundationIds().includes(asm.wallType) ? asm.wallType : null;
       }
       return exteriorIds().includes(asm.wallType) ? asm.wallType : activeType;

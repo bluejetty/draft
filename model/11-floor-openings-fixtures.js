@@ -547,7 +547,10 @@
   // drawing"). Sticky, and the drawing's, like the side: every wall drawn
   // after takes it.
   var WALL_PANEL_TYPES = [['stud_2x4', '2X4'], ['stud_2x6', '2X6'], ['stud_2x8', '2X8'],
-    ['icf', '11 1/4" ICF (6" CORE)'], ['icf_13', '13 1/4" ICF (8" CORE)'], ['concrete_8', '8" CONC']];
+    ['icf', '11 1/4" ICF (6" CORE)'], ['icf_13', '13 1/4" ICF (8" CORE)'], ['concrete_8', '8" CONC'],
+    // jb, 16 Nov 2026: 8" concrete on the FOUNDATION plan, plus a 1/2" air
+    // space and 2x6 batt wall on the BASEMENT plan (wall-types.js STOCK).
+    ['wt_stock_conc8_bsmt', '8" CONC + 2X6 BSMT']];
   const wallSideNow = () => wallShape({}).refLine;
   const showWallProps = () => {
     const P = window.ModelProps;
@@ -566,7 +569,12 @@
       showWallProps();
       paint();
     };
-    const typeRow = propRow('WALL TYPE', [...WALL_PANEL_TYPES, ...made, ['create-wall-type', '+ CREATE WALL TYPE']],
+    // REGULAR WALLS FIRST, then FOUNDATION WALLS (jb, 16 Nov 2026): a made
+    // type joins its own group.
+    const isFdnId = id => (WTp.isFoundationWallType ? WTp.isFoundationWallType(id) : WTp.FOUNDATION_WALL_TYPE_IDS.includes(id));
+    const offered = [...WALL_PANEL_TYPES, ...made];
+    const typeRow = propRow('WALL TYPE', [...offered.filter(([id]) => !isFdnId(id)),
+      ...offered.filter(([id]) => isFdnId(id)), ['create-wall-type', '+ CREATE WALL TYPE']],
       wallShape({}).wallType, id => {
         if (id === 'create-wall-type') {
           if (typeof openWallTypeCard === 'function') {
@@ -576,6 +584,7 @@
         }
         useType(id);
       });
+    if (typeof groupWallTypeRow === 'function') groupWallTypeRow(typeRow);
     // Made types wear blue and edit from their own ✎ (model/20).
     if (typeof dressMadeTypeChips === 'function') dressMadeTypeChips(typeRow, () => { if (wallPanelUp) showWallProps(); });
     box.append(typeRow);

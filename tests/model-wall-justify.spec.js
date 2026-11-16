@@ -162,8 +162,9 @@ test('the WALL panel offers the six types, 2X6 lit; a pick is the next wall\'s t
     await open(page, house('drafting'));
     await h.armWall(page);
     await expect(typeRow(page).locator('[data-prop-value]')).toHaveText(
-      // and, since 16 Nov 2026, CREATE WALL TYPE at the end (jb).
-      ['2X4', '2X6', '2X8', '11 1/4" ICF (6" CORE)', '13 1/4" ICF (8" CORE)', '8" CONC', '+ CREATE WALL TYPE']);
+      // and, since 16 Nov 2026, CREATE WALL TYPE at the end (jb), and the
+      // stock 8" CONC + 2X6 BSMT with the foundation walls.
+      ['2X4', '2X6', '2X8', '11 1/4" ICF (6" CORE)', '13 1/4" ICF (8" CORE)', '8" CONC', '8" CONC + 2X6 BSMT', '+ CREATE WALL TYPE']);
     await expect(typeRow(page).locator('[data-prop-value="stud_2x6"]')).toHaveAttribute('aria-pressed', 'true');
     await typeRow(page).locator('[data-prop-value="stud_2x8"]').click();
     await drawRun(page, 2, 2, 8, 2);

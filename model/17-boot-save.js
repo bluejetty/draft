@@ -114,7 +114,7 @@
       ...(parsed.wallTypes !== undefined
         ? { wallTypes: madeWallTypes.map(WT.userWallTypeRecord) } : {}),
       walls: F.walls(parsed.walls, levelIds, {
-        wallTypes: [...WT.WALL_TYPES, ...madeWallTypes],
+        wallTypes: [...WT.WALL_TYPES, ...(WT.STOCK_WALL_TYPES || []), ...madeWallTypes],
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
         // THE FINISH VOCABULARY, for the same reason the layer set is passed
         // to F.lines below and with the same trap. This page does not PAINT
