@@ -109,7 +109,7 @@ const row = (id, key) => (by(id).rows.find(r => r.key === key) || {});
 const spec = win.DraftSpecMaster.sections().map(s => s.id);
 same('every spec section is a section here, in the spec\'s order', out.sections.map(s => s.id).join(','), spec.join(','));
 same('a section with nothing to count has no rows', by('3-A').rows.length, 0);
-same('the counted sections are the five', out.counted.join(','), '7-B,8-A,8-B,9-A,9-B');
+same('the counted sections are the six (6-C: the made wall types, 16 Nov 2026)', out.counted.join(','), '6-C,7-B,8-A,8-B,9-A,9-B');
 
 // ── 9-A: the floors the room shapes lay ────────────────────────────────────
 near('tile: the WC, 48 sq ft net', row('9-A', '9-A:tile').net, 48);
