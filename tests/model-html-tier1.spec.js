@@ -443,6 +443,12 @@ test.describe('MODEL.html tier 1', () => {
       // derivations, and NEITHER is called from here. That is not a reason to
       // refuse it: the cost of a script is the request, and the alternative to
       // paying it is a twin of the half that IS called.
+      //
+      // joist-spans.js stands just ahead of it (16 Nov 2026, jb with TJ-4500
+      // open): the TJI floor span tables and the JOIST DEPTH picks, data and
+      // two lookups, no dependency of its own. build-house reads it to name
+      // the series a TJI deck's longest bay needs.
+      './joist-spans.js',
       './build-house.js',
       // fen-labels.js is the words on a window or a door -- `36 X 42` for a
       // window, `D36` for a door -- and it is the DELETES-A-
