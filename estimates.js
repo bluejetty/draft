@@ -245,8 +245,11 @@ if (!window.DraftEstimates) {
         wallType: g.type.id });
       const net = round1(Math.max(0, g.gross - g.openings));
       g.type.layers.forEach((layer, i) => {
-        const thick = inches(Number(layer.in) || 0);
-        rows.push({ key: `6-C:${g.type.id}:${i}`, label: `${name} · ${String(layer.name || `SLICE ${i + 1}`).toUpperCase()} ${thick}`,
+        // The thickness after the name, unless the name already says it
+        // (8" CONC) or there is none (a VB).
+        const word = String(layer.name || `SLICE ${i + 1}`).toUpperCase();
+        const thick = Number(layer.in) > 0 && !word.startsWith(inches(Number(layer.in))) ? ` ${inches(Number(layer.in))}` : '';
+        rows.push({ key: `6-C:${g.type.id}:${i}`, label: `${name} · ${word}${thick}`,
           unit: 'SQ FT', waste: 0, net, qty: net, slice: i, wallType: g.type.id,
           detail: `gross ${round1(g.gross)} · less openings ${round1(g.openings)}` });
       });
