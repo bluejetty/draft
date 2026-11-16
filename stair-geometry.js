@@ -437,7 +437,161 @@ if (!window.DraftStairGeometry) {
     .map(stair => ({ stair, role: stairRoleOn(stair, levelId, floors) }))
     .filter(entry => entry.role);
 
+  // ── THE BREAK LINE WHERE A STAIR DOWN AND A STAIR UP STACK (jb, 16 Nov) ─
+  //
+  // "on the main floor where the downstairs and 2nd floor stairs both show we
+  // should only show the TOP section of the basement stairs and the BOTTOM of
+  // the upstairs flight, and seperate them [with] a Z". The drafting
+  // convention: a floor between two stacked flights shows the flight going
+  // DN from it only from its top to a break line, and the flight coming UP to
+  // it only from its foot to that same line -- the Z-jogged diagonal across
+  // the treads where the plan's cut plane slices the flight above.
+  //
+  // A PAIR IS AN 'own' STAIR (DN from here) AND A 'lands' STAIR (UP from
+  // here) WHOSE PLAN FOOTPRINTS OVERLAP -- the stack lock's test. A stair with
+  // no partner draws whole, as it always has.
+  //
+  // THE BREAK SITS ACROSS THE MIDDLE OF THE DN FLIGHT'S LONGEST RUN, and the
+  // UP flight takes the same spot when its own run crosses it (stacked
+  // flights share one line); otherwise the middle of its own longest run.
+  // The Z is point-symmetric about its centre, so a flight running the other
+  // way over the same spot draws the very same line.
+  const STAIR_BREAK_PAD_FT = 0.15;   // past the stringer, inside the U's 4.5"
+  const STAIR_BREAK_END_PAD_FT = 0.5; // past a run's ends, for its last tread
+  const stairRunFrame = (run, stair) => {
+    const d = run.dir;
+    const p = { x: -d.z, z: d.x };
+    const w = Number(run.widthFt) || stair.widthFt;
+    const at = (u, v) => ({ x: run.start.x + d.x * u + p.x * v, z: run.start.z + d.z * u + p.z * v });
+    const local = q => ({
+      u: (q.x - run.start.x) * d.x + (q.z - run.start.z) * d.z,
+      v: (q.x - run.start.x) * p.x + (q.z - run.start.z) * p.z,
+    });
+    return { d, p, w, at, local };
+  };
+  const stairFootprintRings = (parts, stair) => {
+    const rings = [];
+    [...parts.runs, ...(parts.middle ? [parts.middle] : [])].forEach(run => {
+      const { w, at } = stairRunFrame(run, stair);
+      if (!(run.lenFt > 0)) return;
+      rings.push([at(0, -w / 2), at(run.lenFt, -w / 2), at(run.lenFt, w / 2), at(0, w / 2)]);
+    });
+    const landings = parts.landings && parts.landings.length ? parts.landings : parts.landing ? [parts.landing] : [];
+    landings.forEach(landing => { if (landing.poly && landing.poly.length >= 3) rings.push(landing.poly); });
+    return rings;
+  };
+  const ringsOverlap = (a, b) => {
+    // Separating axes, as the stack lock asks it: rings that only touch are
+    // two flights end to end, not a stack.
+    const EPS = 1e-4;
+    for (const ring of [a, b]) {
+      for (let i = 0; i < ring.length; i++) {
+        const p = ring[i], q = ring[(i + 1) % ring.length];
+        const nx = -(q.z - p.z), nz = q.x - p.x;
+        const len = Math.hypot(nx, nz);
+        if (len < 1e-9) continue;
+        const proj = r => r.map(v => (v.x * nx + v.z * nz) / len);
+        const pa = proj(a), pb = proj(b);
+        if (Math.max(...pa) <= Math.min(...pb) + EPS || Math.max(...pb) <= Math.min(...pa) + EPS) return false;
+      }
+    }
+    return true;
+  };
+  const longestRunIndex = parts => parts.runs.reduce((best, run, i) =>
+    (run.lenFt > parts.runs[best].lenFt + 1e-9 ? i : best), 0);
+  // One stair's break: which run, where, the Z, the side kept, the walk line
+  // cut short at the break. `keep` 'top' is the start side (the flight's top
+  // walking down), 'bottom' the far side.
+  const stairBreakFor = (stair, parts, runIndex, centreU, keep) => {
+    const runs = parts.runs;
+    const run = runs[runIndex];
+    const { w, at } = stairRunFrame(run, stair);
+    const len = run.lenFt;
+    const c = Math.max(0, Math.min(len, centreU));
+    const W = w / 2 + STAIR_BREAK_PAD_FT;
+    // The slant: the Z's ends stand 0.6 of the half width up and down the
+    // run from its centre -- kept inside the run on a short one.
+    const k = Math.max(0, Math.min(W * 0.6, c * 0.8, (len - c) * 0.8));
+    const j = 0.35;   // the jog, as a share of the slant
+    const P0 = at(c + k, -W), A = at(c - k * j, -W * 0.1), B = at(c + k * j, W * 0.1), P3 = at(c - k, W);
+    const u0 = -STAIR_BREAK_END_PAD_FT, u1 = len + STAIR_BREAK_END_PAD_FT;
+    const top = [at(u0, -W), P0, A, B, P3, at(u0, W)];
+    const bottom = [P0, at(u1, -W), at(u1, W), P3, B, A];
+    const last = runs.length - 1;
+    // THE REGION IS ONE SIMPLE POLYGON, kept inside or kept outside: the run
+    // cut is the first or the last, so one side of the Z holds that run's
+    // piece and nothing else of the stair.
+    let region, invert;
+    if (keep === 'top') { if (runIndex === 0) { region = top; invert = false; } else { region = bottom; invert = true; } }
+    else if (runIndex === last) { region = bottom; invert = false; } else { region = top; invert = true; }
+    // The walk line stops short of the jog, on its own side.
+    const walk = parts.walk || [];
+    let cutWalk;
+    if (keep === 'top') {
+      const stop = at(Math.max(Math.min(c, 0.25), c - k * j - 0.35), 0);
+      cutWalk = runIndex === 0 ? [walk[0], stop] : [...walk.slice(0, -1), stop];
+    } else {
+      const from = at(Math.min(Math.max(c, len - 0.25), c + k * j + 0.35), 0);
+      cutWalk = runIndex === last ? [from, walk[walk.length - 1]] : [from, ...walk.slice(1)];
+    }
+    return { keep, runIndex, centre: at(c, 0), region, invert, line: [P0, A, B, P3], walk: cutWalk, drawLine: true };
+  };
+  // Every break on a plan: a Map from stair to its break, for the stairs
+  // stairsShownOn gave this level.
+  const stairBreaksOn = (shown, levels) => {
+    const out = new Map();
+    const entries = (Array.isArray(shown) ? shown : []).filter(e => e && e.stair && e.stair.start && e.stair.end);
+    const partsOf = new Map();
+    const parts = stair => {
+      if (!partsOf.has(stair)) {
+        let got = null;
+        try { got = stairPlanParts(stair, stairCurrentLayout(stair, levels)); } catch (_) { got = null; }
+        partsOf.set(stair, got && got.runs && got.runs.length ? got : null);
+      }
+      return partsOf.get(stair);
+    };
+    const downs = entries.filter(e => e.role === 'own');
+    const ups = entries.filter(e => e.role === 'lands');
+    downs.forEach(({ stair: dn }) => {
+      const dnParts = parts(dn);
+      if (!dnParts || out.has(dn)) return;
+      const dnRings = stairFootprintRings(dnParts, dn);
+      const mate = ups.find(({ stair: up }) => !out.has(up) && parts(up)
+        && dnRings.some(ra => stairFootprintRings(parts(up), up).some(rb => ringsOverlap(ra, rb))));
+      if (!mate) return;
+      const up = mate.stair;
+      const upParts = parts(up);
+      const dnIdx = longestRunIndex(dnParts);
+      const dnBreak = stairBreakFor(dn, dnParts, dnIdx, dnParts.runs[dnIdx].lenFt / 2, 'top');
+      // The UP flight takes the DN flight's spot when one of its runs, square
+      // to the same line, crosses it.
+      const dnDir = dnParts.runs[dnIdx].dir;
+      let upIdx = -1, upU = 0;
+      upParts.runs.forEach((run, i) => {
+        if (upIdx >= 0) return;
+        const frame = stairRunFrame(run, up);
+        const q = frame.local(dnBreak.centre);
+        const square = Math.abs(run.dir.x * dnDir.x + run.dir.z * dnDir.z) > 0.99;
+        if (square && q.u > 0 && q.u < run.lenFt && Math.abs(q.v) <= frame.w / 2 + 1e-6) { upIdx = i; upU = q.u; }
+      });
+      const shared = upIdx >= 0;
+      if (!shared) { upIdx = longestRunIndex(upParts); upU = upParts.runs[upIdx].lenFt / 2; }
+      const upBreak = stairBreakFor(up, upParts, upIdx, upU, 'bottom');
+      // One Z on the paper when the two lines are one.
+      const same = shared && upBreak.line.every((p, i) =>
+        Math.hypot(p.x - dnBreak.line[i].x, p.z - dnBreak.line[i].z) < 0.05
+        || Math.hypot(p.x - dnBreak.line[3 - i].x, p.z - dnBreak.line[3 - i].z) < 0.05);
+      if (same) upBreak.drawLine = false;
+      out.set(dn, dnBreak);
+      out.set(up, upBreak);
+    });
+    return out;
+  };
+
   window.DraftStairGeometry = Object.freeze({
+    stairBreaksOn,
+    stairBreakFor,
+    stairFootprintRings,
     stairLandingLevelId,
     stairRoleOn,
     stairsShownOn,
