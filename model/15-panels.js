@@ -592,6 +592,8 @@
   // opens the card (model/20-wall-type-card.js), and the type it makes goes
   // straight onto the walls in hand. Made types are chips like the rest.
   const CREATE_WALL_TYPE_CHIP = ['create-wall-type', '+ CREATE WALL TYPE'];
+  // Made types wear blue and edit from their own ✎ (model/20, jb 16 Nov).
+  const dressTypeRow = row => (typeof dressMadeTypeChips === 'function' ? dressMadeTypeChips(row) : row);
   const wallTypeChips = types => [...types.map(type => [type.id, type.label]), CUSTOM_CHIP, CREATE_WALL_TYPE_CHIP];
   const wallTypePatch = (walls, id) => (id === 'custom'
     ? wall => ({ wallType: 'custom', widthIn: window.DraftWallTypes.wallTypeOf(wall).totalIn })
@@ -623,9 +625,9 @@
     chips.className = 'chip-row';
     const edit = document.createElement('button');
     edit.type = 'button';
-    edit.className = 'sel-chip';
+    edit.className = 'sel-chip made-type';
     edit.dataset.wallTypeEdit = id;
-    edit.textContent = 'EDIT TYPE';
+    edit.textContent = `EDIT ${WT.userWallTypeById(id)?.name || 'TYPE'}`;
     edit.addEventListener('click', () => {
       if (typeof openWallTypeCard === 'function') openWallTypeCard({ editId: id, kind: wallTypeKindFor(walls) });
     });
@@ -836,10 +838,10 @@
 
     wrap.append(wallSectionHead(`MAIN WALLS — ${group.name || 'ASSEMBLY'} (${kin.length} WALLS)`, 'main'));
     const mainType = mains.wallType;
-    wrap.append(titled(propRow('TYPE', wallTypeChips(types), mainType?.wallType ?? null,
+    wrap.append(titled(dressTypeRow(propRow('TYPE', wallTypeChips(types), mainType?.wallType ?? null,
       id => (id === CREATE_WALL_TYPE_CHIP[0]
         ? pressCreateWallType(wallTypeKindFor(kin), type => say(setWallMain(group, kin, 'wallType', typeValue(type.id, mainType))))
-        : say(setWallMain(group, kin, 'wallType', typeValue(id, mainType))))), `TYPE${tail('wallType')}`));
+        : say(setWallMain(group, kin, 'wallType', typeValue(id, mainType)))))), `TYPE${tail('wallType')}`));
     const mainMade = WT.isUserWallTypeId(mainType?.wallType)
       ? madeTypeRow(kin.filter(wall => wall.wallType === mainType.wallType)) : null;
     if (mainMade) wrap.append(mainMade);
@@ -883,7 +885,7 @@
         say(setWallSpecial(group, kin, lone, 'wallType', v));
       });
     typeRow.dataset.propRow = 'special type';
-    wrap.append(typeRow);
+    wrap.append(dressTypeRow(typeRow));
     const loneMade = ownsType ? madeTypeRow([lone]) : null;
     if (loneMade) { loneMade.dataset.propRow = 'special made type'; wrap.append(loneMade); }
     if (ownsType && loneType.wallType === 'custom') {
@@ -974,11 +976,11 @@
       return box;
     }
 
-    box.append(propRow('TYPE', wallTypeChips(types),
+    box.append(dressTypeRow(propRow('TYPE', wallTypeChips(types),
       agreedOn(walls, wall => wall.wallType || 'stud_2x6'),
       id => (id === CREATE_WALL_TYPE_CHIP[0]
         ? pressCreateWallType(wallTypeKindFor(walls), type => applyToWalls(walls, wallTypePatch(walls, type.id)))
-        : applyToWalls(walls, wallTypePatch(walls, id)))));
+        : applyToWalls(walls, wallTypePatch(walls, id))))));
     const made = madeTypeRow(walls);
     if (made) box.append(made);
     // CUSTOM WIDTH: the width box, only while every wall in hand is one.

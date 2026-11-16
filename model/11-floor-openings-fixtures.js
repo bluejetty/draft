@@ -566,7 +566,7 @@
       showWallProps();
       paint();
     };
-    box.append(propRow('WALL TYPE', [...WALL_PANEL_TYPES, ...made, ['create-wall-type', '+ CREATE WALL TYPE']],
+    const typeRow = propRow('WALL TYPE', [...WALL_PANEL_TYPES, ...made, ['create-wall-type', '+ CREATE WALL TYPE']],
       wallShape({}).wallType, id => {
         if (id === 'create-wall-type') {
           if (typeof openWallTypeCard === 'function') {
@@ -575,7 +575,10 @@
           return;
         }
         useType(id);
-      }));
+      });
+    // Made types wear blue and edit from their own ✎ (model/20).
+    if (typeof dressMadeTypeChips === 'function') dressMadeTypeChips(typeRow, () => { if (wallPanelUp) showWallProps(); });
+    box.append(typeRow);
     box.append(propRow('WALL SIDE', WALL_SIDES, wallSideNow(), id => {
       drawing.wallRefLine = id;
       markDirty();
