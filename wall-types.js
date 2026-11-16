@@ -714,6 +714,29 @@ if (!window.DraftWallTypes) {
   };
   const wallThicknessFt = wall => wallTypeOf(wall).totalIn / 12;
 
+  // ── OFFSET FROM LINE (jb, 16 Nov 2026) ──────────────────────────────────
+  // "have spot where the user can displace the wall from the line ... i will
+  // use 8" for mine": a basement's insulated stud wall traced along the
+  // foundation line but standing 8" inside it, clear of the concrete, so the
+  // two walls never overlap. `offsetFt` on the wall moves its whole body off
+  // its stored line, AWAY from the line on the side the body already sits
+  // (WALL SIDE); a negative offset moves it the other way. A CENTERLINE wall
+  // moves the way a LEFT-referenced ('left') body lies. The stored line stays
+  // where it was drawn, so corners still join at their shared points and the
+  // faces mitre as before, each pushed by its own wall's offset.
+  //
+  // `wallLineShiftFt` IS THE ONE NUMBER every face calculation adds to its
+  // start offset (geometry-2d wallFaceOffsets, render-2d, fixture-geometry,
+  // cut-marks, trim-extend, cut-view), signed along the wall's own normal
+  // (-dz, dx)/len.
+  const WALL_OFFSET_MAX_FT = 20;
+  const wallOffsetFt = wall => {
+    const v = Number(wall?.offsetFt);
+    if (!Number.isFinite(v) || Math.abs(v) < 1e-9) return 0;
+    return Math.max(-WALL_OFFSET_MAX_FT, Math.min(WALL_OFFSET_MAX_FT, v));
+  };
+  const wallLineShiftFt = wall => (wall?.refLine === 'right' ? -1 : 1) * wallOffsetFt(wall);
+
   window.DraftWallTypes = Object.freeze({
     WALL_TYPES,
     CUSTOM_WALL_TYPE_ID,
@@ -743,6 +766,9 @@ if (!window.DraftWallTypes) {
     hasSlicesFor,
     isFoundationWallType,
     wallThicknessFt,
+    WALL_OFFSET_MAX_FT,
+    wallOffsetFt,
+    wallLineShiftFt,
     LEGACY_WALL_TYPES,
     FOUNDATION_WALL_TYPE_IDS,
     EXTERIOR_WALL_TYPE_IDS,

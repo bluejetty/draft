@@ -559,6 +559,8 @@
     walls.forEach(wall => {
       const own = typeof patchOrFn === 'function' ? patchOrFn(wall) : patchOrFn;
       Object.assign(wall, own);
+      // OFFSET 0 is no key at all (wall-types.js wallOffsetFt).
+      if (own.offsetFt !== undefined && !Number(own.offsetFt)) delete wall.offsetFt;
       if (own.wallType !== undefined) patch.wallType = own.wallType;
       // A CUSTOM WIDTH GOES WITH ITS TYPE: a wall set back to a table type
       // keeps no width of its own (a made type brings its own, own.widthIn).
@@ -574,7 +576,7 @@
       if (patch.wallType !== undefined) substitutedWallTypes.delete(wall.id);
     });
     // A FACE MOVED: the flights locked to it follow, and say so.
-    if (patch.wallType !== undefined || patch.refLine !== undefined) showStairFitNote(followStairLocks());
+    if (patch.wallType !== undefined || patch.refLine !== undefined || patch.offsetFt !== undefined) showStairFitNote(followStairLocks());
     markDirty();
     showSelectionProps();
     paint();
@@ -699,6 +701,72 @@
     return row;
   };
 
+  // ── OFFSET FROM LINE (jb, 16 Nov 2026) ────────────────────────────────
+  //
+  // "have spot where the user can displace the wall from the line and change
+  // it i will use 8" for mine", then "place the OFFSET text box in the OBJ
+  // PROP of the WALL", with MAIN and SPECIAL CASE like the rest. The wall's
+  // body stands this far off its drawn line, away from the line on the side
+  // WALL SIDE puts it (wall-types.js wallLineShiftFt): a basement's insulated
+  // stud wall traced along the foundation line sits 8" inside it instead of
+  // on top of the concrete. A negative offset goes the other way.
+  //
+  // A BARE NUMBER IS INCHES, as in the WIDTH box beside it: an offset is an
+  // inch-scale distance, and 8 meaning 8 FEET would throw a wall across the
+  // basement. Feet still read with a foot mark (1'-4"), metres with m/mm.
+  const parseWallOffset = text => {
+    const F = window.DraftFormatters;
+    const WT = window.DraftWallTypes;
+    let raw = String(text || '').trim();
+    if (!raw) return { inches: 0 };
+    if (!/['"a-z]/i.test(raw)) raw += '"';
+    const parsed = F.parseArchitecturalLength(raw);
+    if (!parsed.ok) return { error: parsed.error };
+    const inches = Math.round(parsed.inches * 16) / 16;
+    if (Math.abs(inches) > WT.WALL_OFFSET_MAX_FT * 12) {
+      return { error: `An offset is at most ${WT.WALL_OFFSET_MAX_FT}'-0" off the line.` };
+    }
+    return { inches };
+  };
+  const offsetText = feet => window.DraftFormatters.formatInchesOnly((Number(feet) || 0) * 12);
+  // The OFFSET box. `feetNow` null = the walls in hand disagree. `commit`
+  // takes feet and returns a refusal or null.
+  const wallOffsetField = (label, feetNow, commit) => {
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'prop-field';
+    input.dataset.wallOffsetField = '';
+    input.setAttribute('aria-label', label);
+    input.title = 'How far the wall stands off its drawn line, toward its WALL SIDE. 8 = 8". Negative goes the other way.';
+    const shown = () => (feetNow == null ? '' : offsetText(feetNow));
+    input.value = shown();
+    if (feetNow == null) input.placeholder = '\u2014';
+    const apply = () => {
+      if (input.value.trim() === shown()) return;
+      if (feetNow == null && !input.value.trim()) return;
+      const got = parseWallOffset(input.value);
+      if (got.error) { sayOnStrip(got.error); input.value = shown(); return; }
+      const refusal = commit(got.inches / 12);
+      if (refusal) sayOnStrip(refusal);
+      showSelectionProps();
+    };
+    input.addEventListener('blur', apply);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+    });
+    row.append(name, input);
+    return row;
+  };
+  // offsetFt 0 is no key at all, so a wall off no line saves as it always did.
+  const writeOffset = (wall, feet) => {
+    if (Math.abs(Number(feet) || 0) > 1e-9) wall.offsetFt = Number(feet); else delete wall.offsetFt;
+  };
+
   // ── MAIN WALLS AND THE SPECIAL CASE (jb, 15 Nov 2026) ─────────────────
   //
   // "for the WALL - OBJ / PROP can we add a MAIN, and SPECIAL CASES, same
@@ -718,7 +786,7 @@
   // A WALL THAT ALREADY DIFFERS FROM MAIN IS SPECIAL without an `own` -- an
   // assembly Y'd from walls of two heights must not flatten one of them the
   // first time MAIN is touched.
-  const WALL_OWN_KEYS = ['wallType', 'baseHeight', 'topHeight'];
+  const WALL_OWN_KEYS = ['wallType', 'baseHeight', 'topHeight', 'offsetFt'];
   const wallValue = (wall, key) => (key === 'wallType'
     ? { wallType: wall.wallType || 'stud_2x6',
       ...(window.DraftWallTypes.isCustomWall(wall) ? { widthIn: window.DraftWallTypes.wallTypeOf(wall).totalIn } : {}) }
@@ -758,7 +826,8 @@
       else delete wall.widthIn;
       if (!window.DraftWallTypes.isUserWallTypeId(v.wallType)) delete wall.sliceFlip;
       substitutedWallTypes.delete(wall.id);
-    } else wall[key] = v;
+    } else if (key === 'offsetFt') writeOffset(wall, v);
+    else wall[key] = v;
   };
   // One UNDO, and nothing at all if any wall would end with its top at or
   // under its base.
@@ -853,10 +922,12 @@
       wrap.append(titled(propField(label, mains[key],
         feet => setWallMain(group, kin, key, feet), showSelectionProps), `${label}${tail(key)}`));
     });
+    wrap.append(titled(wallOffsetField('OFFSET', mains.offsetFt,
+      feet => setWallMain(group, kin, 'offsetFt', feet)), `OFFSET${tail('offsetFt')}`));
     if (!lone) {
       const note = document.createElement('div');
       note.className = 'sel-help';
-      note.textContent = 'Click one wall of the assembly to give it its own TYPE, BASE or TOP (SPECIAL CASE).';
+      note.textContent = 'Click one wall of the assembly to give it its own TYPE, BASE, TOP or OFFSET (SPECIAL CASE).';
       wrap.append(note);
       return wrap;
     }
@@ -894,8 +965,12 @@
       width.dataset.propRow = 'special width';
       wrap.append(width);
     }
-    [['baseHeight', 'BASE'], ['topHeight', 'TOP']].forEach(([key, label]) => {
+    [['baseHeight', 'BASE'], ['topHeight', 'TOP'], ['offsetFt', 'OFFSET']].forEach(([key, label]) => {
       const own = wallOwns(lone, key, mains[key]);
+      // OFFSET reads a bare number as inches (parseWallOffset); BASE and TOP
+      // as feet, as every height box does.
+      const isOffset = key === 'offsetFt';
+      const fmt = feet => (isOffset ? offsetText(feet) : ftIn(feet));
       const row = document.createElement('div');
       row.dataset.propRow = `special ${label.toLowerCase()}`;
       const name = document.createElement('div');
@@ -909,8 +984,8 @@
       input.className = 'prop-field';
       input.dataset.wallOwnField = key;
       input.setAttribute('aria-label', `${label}, this wall`);
-      input.value = own ? ftIn(Number(lone[key]) || 0) : '';
-      input.placeholder = `MAIN (${ftIn(mains[key] ?? 0)})`;
+      input.value = own ? fmt(Number(lone[key]) || 0) : '';
+      input.placeholder = `MAIN (${fmt(mains[key] ?? 0)})`;
       const apply = () => {
         const text = input.value.trim();
         if (!text || /^main$/i.test(text)) {
@@ -918,8 +993,10 @@
           else showSelectionProps();
           return;
         }
-        if (own && text === ftIn(Number(lone[key]) || 0)) return;
-        const parsed = F.parseArchitecturalLength(text);
+        if (own && text === fmt(Number(lone[key]) || 0)) return;
+        const parsed = isOffset
+          ? (got => (got.error ? { ok: false, error: got.error } : { ok: true, inches: got.inches }))(parseWallOffset(text))
+          : F.parseArchitecturalLength(text);
         if (!parsed.ok) { sayOnStrip(parsed.error); showSelectionProps(); return; }
         say(setWallSpecial(group, kin, lone, key, parsed.inches / 12));
       };
@@ -994,6 +1071,10 @@
     box.append(propRow('WALL SIDE', REF_LINES,
       agreedOn(walls, wall => wall.refLine || 'center'),
       id => applyToWalls(walls, { refLine: id })));
+    box.append(wallOffsetField('OFFSET', agreedOn(walls, wall => window.DraftWallTypes.wallOffsetFt(wall)), feet => {
+      applyToWalls(walls, { offsetFt: feet });
+      return null;
+    }));
 
     // A WALL STANDS ON ITS BASE. Refused per wall rather than against the
     // agreed pair, because a selection whose tops differ has no agreed pair

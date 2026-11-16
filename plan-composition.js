@@ -224,7 +224,10 @@ if (!window.DraftPlanComposition) {
         tileColor: /^#[0-9a-f]{6}$/i.test(ink || '') ? `${ink}55` : ink,
       });
     }
-    const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
+    const melded = env.meldPieces ? env.meldPieces(walls) : walls;
+    // Walls set OFF their line join only walls of the same offset (geometry-2d offsetApart).
+    const pieces = window.DraftGeometry2D && window.DraftGeometry2D.offsetApart
+      ? window.DraftGeometry2D.offsetApart(melded) : melded;
     const joins = env.wallJoins ? env.wallJoins(pieces) : null;
     // ── A MADE WALL TYPE'S SLICES, BY PLAN (jb, 16 Nov 2026) ──────────────
     // FOUNDATION shows a foundation type's FDN slices; BASEMENT its BSMT

@@ -94,7 +94,8 @@ if (!window.DraftFixtureGeometry) {
     const def = custom || TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || TYPES[1];
     const totalFt = def.totalIn / 12;
     const refLine = wall.refLine || 'center';
-    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    const startOff = (refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2)
+      + window.DraftWallTypes.wallLineShiftFt(wall);
     return {
       ux, uz, nx, nz, len, totalFt, startOff, endOff: startOff + totalFt,
       at: (along, across) => ({

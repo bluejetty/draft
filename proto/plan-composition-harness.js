@@ -440,8 +440,8 @@ const CHECKS = [
 
 const MUTATIONS = [
   ['the WC tile is laid over the walls instead of under them',
-    s => s.replace(`    const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
-    const joins`, `    const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
+    s => s.replace(`      ? window.DraftGeometry2D.offsetApart(melded) : melded;
+    const joins`, `      ? window.DraftGeometry2D.offsetApart(melded) : melded;
     pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, null, 'fill', env.wallEnv));
     const joins`)],
   ['the WC tile reads every level\'s fixtures',

@@ -3923,6 +3923,39 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // with every end within a hair of another (same body) handed ONE point,
   // so the corner mitres; the records are not touched.
   const SAME_END_FT = 0.005;
+  // WALLS SET OFF THEIR LINE DO NOT JOIN WALLS ON IT (OFFSET, jb 16 Nov
+  // 2026). A basement's insulated wall traced on the foundation line and
+  // pushed 8" in shares its corner points with the concrete, but its body is
+  // nowhere near the concrete's: classified together, the four walls at a
+  // corner make a cross and every end runs square to the line. So before the
+  // joins are classified, a wall whose offset (wall-types.js
+  // wallLineShiftFt) differs from the first wall at a corner point is given
+  // its own copy of that point, shared only with walls of the same offset.
+  // Walls of one offset still mitre among themselves.
+  function offsetApart(walls) {
+    const WT = typeof window !== 'undefined' ? window.DraftWallTypes : null;
+    if (!WT || !WT.wallLineShiftFt) return walls;
+    const keyOf = w => Math.round(WT.wallOffsetFt(w) * 1920) / 1920;
+    if (!(walls || []).some(w => w && keyOf(w))) return walls;
+    const firstKey = new Map(); // point object -> offset of its first wall
+    const copies = new Map();   // point object -> Map(offset -> copy)
+    const own = (pt, k) => {
+      if (!pt) return pt;
+      if (!firstKey.has(pt)) { firstKey.set(pt, k); return pt; }
+      if (firstKey.get(pt) === k) return pt;
+      if (!copies.has(pt)) copies.set(pt, new Map());
+      const byKey = copies.get(pt);
+      if (!byKey.has(k)) byKey.set(k, { ...pt });
+      return byKey.get(k);
+    };
+    return walls.map(w => {
+      if (!w || !w.start || !w.end) return w;
+      const k = keyOf(w);
+      const start = own(w.start, k), end = own(w.end, k);
+      return start === w.start && end === w.end ? w : { ...w, start, end, meldOf: w.meldOf || w };
+    });
+  }
+
   function sharedEnds(walls) {
     const seen = [];
     const canon = (pt, body) => {
@@ -4729,7 +4762,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // two defaults and which one this is.
   const wallFaceOffsets = (wall, totalFt) => {
     const refLine = (wall && wall.refLine) || 'center';
-    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    const startOff = (refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2)
+      + (typeof window !== 'undefined' && window.DraftWallTypes && window.DraftWallTypes.wallLineShiftFt
+        ? window.DraftWallTypes.wallLineShiftFt(wall) : 0);
     return { startOff, endOff: startOff + totalFt };
   };
 
@@ -4804,7 +4839,10 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
             const px = f.n.x * of - g.n.x * og, pz = f.n.z * of - g.n.z * og;
             const s = (g.u.x * pz - g.u.z * px) / cross;
             const p = { x: v.x + f.n.x * of + f.u.x * s, z: v.z + f.n.z * of + f.u.z * s };
-            if (Math.hypot(p.x - v.x, p.z - v.z) <= (f.t + g.t) * 1.5) add(p);
+            // A wall set OFF its line (OFFSET) has faces further out than
+            // its thickness, so the reach grows with its farthest face.
+            const reachOf = w => Math.max(w.t, ...w.offs.map(Math.abs));
+            if (Math.hypot(p.x - v.x, p.z - v.z) <= (reachOf(f) + reachOf(g)) * 1.5) add(p);
           }));
         });
       });
@@ -5173,6 +5211,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     profileEnvelope,
     wallJoins,
     meldPieces,
+    offsetApart,
     sharedEnds,
     outlineSegment,
     outlineSegmentCount,

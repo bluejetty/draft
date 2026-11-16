@@ -311,7 +311,15 @@
     const flippedWalls = entries.filter(e => e.type === 'wall').map(e => e.item);
     const wallIds = new Set(flippedWalls.map(w => String(w.id)));
     flippedWalls.forEach(w => {
-      if (w.refLine !== 'left' && w.refLine !== 'right') return;
+      // A CENTERLINE wall set OFF its line (offsetFt) has no side to swap,
+      // so its offset turns round instead: the mirror keeps the body where
+      // the mirror image puts it.
+      if (w.refLine !== 'left' && w.refLine !== 'right') {
+        if (!window.DraftWallTypes.wallOffsetFt(w)) return;
+        edits.push({ item: w, before: { ...w } });
+        w.offsetFt = -window.DraftWallTypes.wallOffsetFt(w);
+        return;
+      }
       edits.push({ item: w, before: { ...w } });
       w.refLine = w.refLine === 'left' ? 'right' : 'left';
     });

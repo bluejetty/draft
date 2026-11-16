@@ -36,7 +36,8 @@
   const faceOffsets = (cutter, thicknessFt) => {
     const t = Math.max(0, Number(thicknessFt) || 0);
     const ref = cutter.refLine || 'center';
-    const lo = ref === 'left' ? 0 : ref === 'right' ? -t : -t / 2;
+    const lo = (ref === 'left' ? 0 : ref === 'right' ? -t : -t / 2)
+      + (t > 0 ? (typeof window !== 'undefined' && window.DraftWallTypes && window.DraftWallTypes.wallLineShiftFt ? window.DraftWallTypes.wallLineShiftFt(cutter) : 0) : 0);
     return [lo, lo + t];
   };
 

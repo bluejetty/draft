@@ -103,7 +103,7 @@
     let best = null, bestD = thresh;
     walls().forEach(wall => {
       if (!wall.start || !wall.end || wall === skip) return;
-      const { d } = G.pointToSegment(worldPt, wall);
+      const d = wallPickD(worldPt, wall);
       if (d < bestD) { bestD = d; best = wall; }
     });
     return best;
@@ -159,13 +159,30 @@
   // click. Of two at the same distance, the LATER record first: it is
   // painted last, so it is the one on top of the picture -- and TO FRONT
   // moves a record to the end of its list for exactly this reason.
+  // HOW FAR A PRESS IS FROM A WALL: its drawn line, or -- for a wall set
+  // OFF its line (OFFSET, jb 16 Nov 2026; wall-types.js wallLineShiftFt) --
+  // its body too, which stands away from that line. A line has no offset
+  // and measures to itself as before.
+  const wallPickD = (worldPt, wall) => {
+    const G = window.DraftGeometry2D;
+    const d = G.pointToSegment(worldPt, wall).d;
+    const shift = window.DraftWallTypes.wallLineShiftFt(wall);
+    if (!shift) return d;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z, len = Math.hypot(dx, dz);
+    if (len < 1e-6) return d;
+    const { startOff, endOff } = G.wallFaceOffsets(wall, window.DraftWallTypes.wallThicknessFt(wall));
+    const mid = (startOff + endOff) / 2, nx = -dz / len, nz = dx / len;
+    const body = { start: { x: wall.start.x + nx * mid, z: wall.start.z + nz * mid },
+      end: { x: wall.end.x + nx * mid, z: wall.end.z + nz * mid } };
+    return Math.min(d, Math.max(0, G.pointToSegment(worldPt, body).d - Math.abs(endOff - startOff) / 2));
+  };
   const segsAt = (list, worldPt) => {
     const G = window.DraftGeometry2D;
     const thresh = SELECT_GRAB_PX / view.scale;
     const near = [];
     list.forEach((item, i) => {
       if (!item.start || !item.end) return;
-      const { d } = G.pointToSegment(worldPt, item);
+      const d = wallPickD(worldPt, item);
       if (d < thresh) near.push({ item, d, i });
     });
     return near.sort((a, b) => (Math.abs(a.d - b.d) < 1e-6 ? b.i - a.i : a.d - b.d)).map(n => n.item);
