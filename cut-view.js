@@ -1841,6 +1841,25 @@ if (!window.DraftCutView) {
       if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
       if ((wall.view || 'plan') === 'foundation') {
         const type = (window.DraftWallTypes && window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : WALL_TYPES.find(w => w.id === wall.wallType));
+        // ── A FOUNDATION WALL SEEN END ON SHOWS ITS END TOO ──────────────
+        //
+        // jb, 16 Nov 2026, on E1 of the stepped-front house with the
+        // foundation walls run out past the front at the jog: "the front
+        // edge of the FOUNDATION wall isn't showing (like the upper walls
+        // earlier)". The same sliver drop as the storeys below had, one
+        // list over: a concrete wall running straight at the viewer gave a
+        // face of no width, dropped by the `hi - lo` filter at the painter,
+        // and with it the strip of its free end standing proud of the face
+        // it leaves. Same answer as a storey wall's (endCapOf): where the
+        // near end is free, that end is the face, across the concrete's
+        // two faces, keeping the wall's record so a finish pick still lands
+        // on the wall.
+        let fdnWall = wall, f1 = p1, f2 = p2, fdnDepth = (p1.d + p2.d) / 2;
+        if (Math.abs(p2.u - p1.u) < 0.5) {
+          const cap = endCapOf(wall, p1, p2);
+          if (!cap) return;
+          fdnWall = cap.wall; f1 = cap.a; f2 = cap.b; fdnDepth = cap.depth;
+        }
         fdnFaces.push({
           // ── THE WALL RECORD COMES WITH IT ─────────────────────────────
           //
@@ -1855,10 +1874,10 @@ if (!window.DraftCutView) {
           // list: it carried the GEOMETRY and dropped the record, so nothing
           // downstream could ask what the concrete wears or say what it
           // should. `faces` above has carried its `wall` from the start.
-          wall,
-          lo: Math.max(Math.min(p1.u, p2.u), uMin),
-          hi: Math.min(Math.max(p1.u, p2.u), uMax),
-          depth: (p1.d + p2.d) / 2,
+          wall: fdnWall,
+          lo: Math.max(Math.min(f1.u, f2.u), uMin),
+          hi: Math.min(Math.max(f1.u, f2.u), uMax),
+          depth: fdnDepth,
           top: wall.topHeight, base: wall.baseHeight,
           wallIn: type ? type.totalIn : 8,
           bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
