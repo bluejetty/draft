@@ -1923,7 +1923,9 @@
       });
     });
     undoStack.push({ kind: 'props', edits });
-    lineDefaults = { ...lineDefaults, ...patch };
+    // Arrow ends belong to the lines picked, never the next line drawn.
+    const { arrows: _arrows, ...lasting } = patch;
+    lineDefaults = { ...lineDefaults, ...lasting };
     keepLineDefaults();
     markDirty();
     paint();
@@ -2016,6 +2018,47 @@
         styles.append(chip);
       });
       box.append(styles);
+      // ARROWS (jb, 16 Nov: "put ARROWS on each one of the lines or just
+      // one of the ends"). START is the end the line was drawn FROM (its
+      // first click), END the end it was drawn TO -- never left or right,
+      // which turn round with the line. Each chip shows its own line.
+      if (LS.ARROWS) {
+        const arrowsNow = (() => {
+          const first = LS.arrowsId(lines[0].arrows);
+          return lines.every(l => LS.arrowsId(l.arrows) === first) ? first : undefined;
+        })();
+        box.append(title('ARROWS'));
+        const arrows = document.createElement('div');
+        arrows.className = 'chip-row';
+        const GLYPH = { none: '\u2014\u2014', start: '\u25c0\u2014', end: '\u2014\u25b6', both: '\u25c0\u25b6' };
+        const TIP = {
+          none: 'No arrowheads',
+          start: 'Arrowhead on the START end: the end you clicked first',
+          end: 'Arrowhead on the END end: the end you clicked last',
+          both: 'Arrowheads on both ends',
+        };
+        LS.ARROWS.forEach(a => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'sel-chip';
+          chip.dataset.lineArrows = a.id;
+          chip.title = TIP[a.id];
+          chip.setAttribute('aria-pressed', String(arrowsNow === a.id));
+          chip.classList.toggle('lit', arrowsNow === a.id);
+          chip.textContent = `${GLYPH[a.id]} ${a.name}`;
+          chip.addEventListener('click', () => {
+            writeLineStyle(lines, { arrows: a.id === 'none' ? null : a.id });
+            showSelectionProps();
+          });
+          arrows.append(chip);
+        });
+        box.append(arrows);
+        const hint = document.createElement('div');
+        hint.className = 'props-title';
+        hint.dataset.lineArrowsHint = '';
+        hint.textContent = 'START = THE END YOU CLICKED FIRST. END = THE END YOU CLICKED LAST.';
+        box.append(hint);
+      }
       // COLOUR: the full spectrum, and SKIN to hand the line back to the
       // page's own ink.
       box.append(title('COLOUR'));

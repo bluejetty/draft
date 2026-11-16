@@ -561,6 +561,12 @@ if (!window.DraftPlanComposition) {
         ctx.lineTo(b.x, b.y);
       }
       ctx.stroke();
+      // ARROW ENDS (jb, 16 Nov), the same heads the Model Space draws,
+      // scaled with the print's ink.
+      if (seg.arrows && R && R.drawLineArrows2D) {
+        ctx.fillStyle = ctx.strokeStyle;
+        R.drawLineArrows2D(ctx, toS, seg, { inkScale });
+      }
     });
     ctx.restore();
   };

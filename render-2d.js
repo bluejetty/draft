@@ -3620,6 +3620,42 @@ if (!window.DraftRender2D) {
   }
 
 
+  // ARROW ENDS ON A DRAWN LINE (jb, 16 Nov: "put ARROWS on each one of the
+  // lines or just one of the ends"). `line.arrows` is 'start' (the end the
+  // line was drawn FROM), 'end' (the end it was drawn TO) or 'both'. A filled
+  // head, solid whatever the line's dash, pointing out along the line --
+  // along the arc's own tangent on a bent line. The caller has set
+  // fillStyle; the line's stroke is left as it was. A small filled mark is
+  // what the DXF recorder keeps as a SOLID, so SAVE DXF carries the heads.
+  function drawLineArrows2D(ctx, toS, line, options = {}) {
+    const which = String(line?.arrows ?? '');
+    if (!['start', 'end', 'both'].includes(which) || !line.start || !line.end) return;
+    const LS = typeof window !== 'undefined' ? window.DraftLineStyles : null;
+    const G = typeof window !== 'undefined' ? window.DraftGeometry2D : null;
+    const inkScale = Number.isFinite(options.inkScale) && options.inkScale > 0 ? options.inkScale : 1;
+    const head = LS && LS.arrowHeadPx ? LS.arrowHeadPx(line, { inkScale }) : 11 * inkScale;
+    const bent = line.bulge && G && G.pointOnLineSeg;
+    // The screen direction the line arrives at `tip` from: a hair back
+    // along the arc on a bent line, the other end on a straight one.
+    const head2D = (tip, from) => {
+      const dx = tip.x - from.x, dy = tip.y - from.y;
+      if (Math.hypot(dx, dy) < 1e-9) return;
+      const angle = Math.atan2(dy, dx);
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(tip.x - head * Math.cos(angle - 0.3), tip.y - head * Math.sin(angle - 0.3));
+      ctx.lineTo(tip.x - head * Math.cos(angle + 0.3), tip.y - head * Math.sin(angle + 0.3));
+      ctx.closePath();
+      ctx.fill();
+    };
+    const a = toS(line.start), b = toS(line.end);
+    ctx.save();
+    if (ctx.setLineDash) ctx.setLineDash([]);
+    if (which === 'start' || which === 'both') head2D(a, bent ? toS(G.pointOnLineSeg(line, 0.002)) : b);
+    if (which === 'end' || which === 'both') head2D(b, bent ? toS(G.pointOnLineSeg(line, 0.998)) : a);
+    ctx.restore();
+  }
+
   // ─── A leader note ────────────────────────────────────────────────────────
   // The text block, its leader to the anchor, an optional arrowhead, and an
   // optional filled / outlined box with a bullnose radius. The block grows
@@ -4297,6 +4333,7 @@ if (!window.DraftRender2D) {
     drawOutlines2D,
     strokeSegPath2D,
     traceSegTo2D,
+    drawLineArrows2D,
     labelAlongLine2D,
     viewerLeftIsLow,
     sinkBowlSpans,
