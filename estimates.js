@@ -23,7 +23,7 @@ if (!window.DraftEstimates) {
   // else in the spec is a heading here with nothing under it, so the page
   // reads top to bottom as the specification does.
   const COUNTED = Object.freeze({
-    '7-B': 'roofing', '8-A': 'doors', '8-B': 'windows', '9-A': 'flooring', '9-B': 'exterior',
+    '6-C': 'walltypes', '7-B': 'roofing', '8-A': 'doors', '8-B': 'windows', '9-A': 'flooring', '9-B': 'exterior',
   });
   const EXTERIOR_MIN_IN = 5.4;      // MODEL.html's own rule when no outline says which walls are the shell's
   const ON_OUTLINE_FT = 0.6;
@@ -203,6 +203,57 @@ if (!window.DraftEstimates) {
     return rows;
   };
 
+  // ── 6-C WALL CONSTRUCTION: the wall types the user made, slice by slice ──
+  // (jb, 16 Nov: CREATE WALL TYPE -- "per-type lines with length plus SF per
+  // slice"). One line per made type, its walls' length in lineal feet, then a
+  // line per slice: the wall face it covers, length x height less the
+  // openings, so the gyp, the batt and the sheathing each read their own
+  // area. A slice's square feet are the same for every slice of a type; the
+  // lines are separate so each takes its own price. The built-in types are
+  // not counted here (they are the spec's text, not a takeoff yet).
+  const wallHeightOf = (saved, wall) => {
+    const LA = window.DraftLevelAssembly;
+    const own = Number(wall.topHeight) - Number(wall.baseHeight);
+    return Number.isFinite(own) && own > 0 ? own
+      : (LA ? LA.levelAssemblyFor(saved?.levelAssemblies, wall.levelId).wallHeightFt : 0);
+  };
+  const madeWallTypeRows = (saved, d) => {
+    const WT = window.DraftWallTypes;
+    if (!WT?.isUserWallTypeId || !WT.userWallTypeById) return [];
+    const FM = window.DraftFormatters;
+    const inches = v => (FM?.formatInchesOnly ? FM.formatInchesOnly(v) : `${v}"`);
+    const groups = new Map();
+    d.walls.forEach(wall => {
+      if (!WT.isUserWallTypeId(wall.wallType)) return;
+      const type = WT.userWallTypeById(wall.wallType);
+      if (!type) return;
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (!(len > 0)) return;
+      const gross = len * wallHeightOf(saved, wall);
+      const openings = d.fenestrations.filter(o => String(o.wallId) === String(wall.id))
+        .reduce((sum, o) => sum + openingArea(o), 0);
+      if (!groups.has(type.id)) groups.set(type.id, { type, len: 0, gross: 0, openings: 0, walls: 0 });
+      const g = groups.get(type.id);
+      g.len += len; g.gross += gross; g.openings += Math.min(openings, gross); g.walls += 1;
+    });
+    const rows = [];
+    groups.forEach(g => {
+      const name = String(g.type.name || g.type.label || g.type.id).toUpperCase();
+      const len = round1(g.len);
+      rows.push({ key: `6-C:${g.type.id}`, label: `${name} WALL`, unit: 'LF', waste: 0, net: len, qty: len,
+        detail: `${g.walls} wall${g.walls === 1 ? '' : 's'} · ${inches(g.type.totalIn)} thick · ${g.type.layers.length} slice${g.type.layers.length === 1 ? '' : 's'}`,
+        wallType: g.type.id });
+      const net = round1(Math.max(0, g.gross - g.openings));
+      g.type.layers.forEach((layer, i) => {
+        const thick = inches(Number(layer.in) || 0);
+        rows.push({ key: `6-C:${g.type.id}:${i}`, label: `${name} · ${String(layer.name || `SLICE ${i + 1}`).toUpperCase()} ${thick}`,
+          unit: 'SQ FT', waste: 0, net, qty: net, slice: i, wallType: g.type.id,
+          detail: `gross ${round1(g.gross)} · less openings ${round1(g.openings)}` });
+      });
+    });
+    return rows;
+  };
+
   // ── 8-A DOORS, 8-B WINDOWS: counted by size ─────────────────────────────
   // THE GROUPING LIVES IN schedules.js NOW (jb, 9 Nov: "will you put the
   // window schedules in the ESTIMATES section? ... and doors"): the DOOR and
@@ -238,6 +289,7 @@ if (!window.DraftEstimates) {
     const master = window.DraftSpecMaster;
     const d = read(saved);
     const built = {
+      walltypes: madeWallTypeRows(saved, d),
       roofing: roofingRows(d, settings),
       doors: doorRows(d),
       windows: windowRows(d),

@@ -34,7 +34,7 @@ const MUTATIONS = [
   ['an ICF foundation keeps the 20\" footing', 'wall-section.js',
     c => c.replace("        footingWidthIn: fdn.footingWidthIn ?? (fdnIsIcf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN),", "        footingWidthIn: fdn.footingWidthIn ?? DEFAULT_FOOTING_WIDTH_IN,")],
   ['a grade beam is drawn at the wall type\'s thickness', 'wall-section.js',
-    c => c.replace("        thicknessIn: gradeBeam ? PP.GRADE_BEAM_THICKNESS_IN : wallType(fdnWallType).totalIn,", "        thicknessIn: wallType(fdnWallType).totalIn,")],
+    c => c.replace("        thicknessIn: gradeBeam ? PP.GRADE_BEAM_THICKNESS_IN\n", "        thicknessIn: false ? PP.GRADE_BEAM_THICKNESS_IN\n")],
   ['the pitch callout is the office default whatever the file says', 'wall-section.js',
     c => c.replace("`${roof.pitch}:12`", "'4:12'")],
   ['a ladder is lettered as a sill plate', 'wall-section.js',
