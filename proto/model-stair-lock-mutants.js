@@ -30,7 +30,7 @@ const MUTANTS = [
     with: "            if (lock) md.stair.lock = lock;\n",
     test: "dragged well clear, nothing snaps and the lock lets go" },
   { file: "model/15-panels.js", name: "a thicker wall moves nothing",
-    find: "    if (patch.wallType !== undefined || patch.refLine !== undefined) showStairFitNote(followStairLocks());\n",
+    find: "    if (patch.wallType !== undefined || patch.refLine !== undefined || patch.offsetFt !== undefined) showStairFitNote(followStairLocks());\n",
     with: "",
     test: "a thicker foundation wall moves the locked side in, the far side stays, and a pop-up gives the new width" },
   { file: "model/06-selection-pick.js", name: "the whole flight moves, keeping its width",

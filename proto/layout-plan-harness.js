@@ -1146,7 +1146,7 @@ const MUTATIONS = [
   ['a floor map keeps words for floors',
     'drawing-format.js', c => c.replace('            else if (Number.isInteger(Number(to))) map[from] = Number(to);', '            else map[from] = to;')],
   ['a mirrored wall keeps its face line',
-    'hologram.js', c => c.replace("moved.walls = moved.walls.map(w => (w && other[w.refLine] ? { ...w, refLine: other[w.refLine] } : w));", '')],
+    'hologram.js', c => c.replace("moved.walls = moved.walls.map(w => (w && other[w.refLine] ? { ...w, refLine: other[w.refLine] }\n        : w && Number(w.offsetFt) ? { ...w, offsetFt: -Number(w.offsetFt) } : w));", '')],
   ['a mirrored fixture faces the wrong way',
     'hologram.js', c => c.replace("moved.fixtures = moved.fixtures.map(f => (f && Number.isFinite(f.side) ? { ...f, side: -f.side } : f));", '')],
   ['a mirrored door swings the wrong way',

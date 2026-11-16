@@ -22,7 +22,7 @@ const MUTANTS = [
   // corner cut, TRACK's cross lines from the free ends' face points still
   // meet at the outside corner and the press lands there anyway.
   { file: "geometry-2d.js", name: "the crossings are cut short of the outside corner",
-    find: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= (f.t + g.t) * 1.5) add(p);\n",
+    find: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= (reachOf(f) + reachOf(g)) * 1.5) add(p);\n",
     with: "            if (Math.hypot(p.x - v.x, p.z - v.z) <= Math.max(f.t, g.t) * 0.5) add(p);\n",
     test: "and the inside corner, and a free end's face" },
   { file: "geometry-2d.js", name: "a free end gives no face points",

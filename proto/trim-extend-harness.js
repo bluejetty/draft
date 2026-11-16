@@ -42,8 +42,8 @@ const MUTATIONS = [
     c => c.replace("      if (end === 'start' && sp.hi < -EPS && (!best || sp.hi > best.t)) best = { t: sp.hi, cutter: sp.cutter };",
       "      if (end === 'start' && sp.hi < -EPS && (!best || sp.hi < best.t)) best = { t: sp.hi, cutter: sp.cutter };")],
   ['a left-face wall\'s body is taken on the wrong side of its line', 'trim-extend.js',
-    c => c.replace("    const lo = ref === 'left' ? 0 : ref === 'right' ? -t : -t / 2;",
-      "    const lo = ref === 'left' ? -t : ref === 'right' ? 0 : -t / 2;")],
+    c => c.replace("    const lo = (ref === 'left' ? 0 : ref === 'right' ? -t : -t / 2)",
+      "    const lo = (ref === 'left' ? -t : ref === 'right' ? 0 : -t / 2)")],
 ];
 
 if (MUTATE) {
