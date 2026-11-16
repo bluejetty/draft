@@ -1051,6 +1051,15 @@ if (!window.DraftProjectPage) {
       const faceToY = y + level.wallHeightFt - (transitionAt(index + 1) ? SILL_FT : 0);
       line(0, faceFromY, 0, faceToY, 2);                  // exterior face
       line(levelWallFt, faceFromY, levelWallFt, faceToY, 1.5); // interior face
+      // A MADE WALL TYPE (CREATE WALL TYPE, jb 16 Nov 2026): a line between
+      // each of its slices, outside (x = 0) to inside.
+      if (Array.isArray(level.slices)) {
+        let at = 0;
+        level.slices.slice(0, -1).forEach(slice => {
+          at += slice.in / 12;
+          if (at > 0 && at < levelWallFt) line(at, faceFromY, at, faceToY, 0.75);
+        });
+      }
       // The inner end of a level that stops short: the framing the balcony
       // ends against, and the wall the ceiling drops down.
       //
@@ -1317,6 +1326,25 @@ if (!window.DraftProjectPage) {
     // a poured foundation, the beam's on a grade beam.
     rect(bandFt, fdnBot, cut - bandFt, slabFt, 1);
     anchors.slab = { x: cut * 0.62, y: fdnBot + slabFt + 0.5 };
+    // A MADE FOUNDATION TYPE'S POUR SLICES (a line between each), and its
+    // LINING -- the BASEMENT slices -- standing on the slab inside the pour,
+    // up to the underside of the floor (CREATE WALL TYPE, jb 16 Nov 2026).
+    if (!gradeBeam && Array.isArray(fdn.slices)) {
+      let at = 0;
+      fdn.slices.slice(0, -1).forEach(slice => {
+        at += slice.in / 12;
+        if (at > 0 && at < fdnFt) line(at, fdnBot, at, concTopFt, 0.75);
+      });
+    }
+    if (!gradeBeam && Array.isArray(fdn.lining) && fdn.lining.length) {
+      const liningBot = fdnBot + slabFt;
+      let at = fdnFt;
+      fdn.lining.forEach((slice, k) => {
+        at += slice.in / 12;
+        line(at, liningBot, at, fdnTop, k === fdn.lining.length - 1 ? 1.5 : 0.75);
+      });
+      line(fdnFt, fdnTop, at, fdnTop, 0.75);
+    }
 
     // THE FLIGHTS, DIAGRAMMATIC. Movie, 16 Sep: "show a stair dropping down
     // (doesn't need to be to scale just so they understand what is there and

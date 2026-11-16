@@ -1333,6 +1333,9 @@ if (!window.DraftCutView) {
       crossings.push({
         wall, u: px * axis.x + pz * axis.z + uShift,
         width,
+        // WHICH WAY THE WALL'S SLICES RUN ALONG THE CUT: +1 when its first
+        // (outside) slice is at the low end of the band.
+        sliceSign: axisDotN < 0 ? -1 : 1,
         alongWall: t * wallLen,
         garage: garageFor(wall),
       });
@@ -1816,7 +1819,7 @@ if (!window.DraftCutView) {
       if (touches) return null;
       const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (!(len > 1e-6)) return null;
-      const type = WALL_TYPES.find(w => w.id === wall.wallType);
+      const type = (window.DraftWallTypes && window.DraftWallTypes.isCustomWall(wall) ? window.DraftWallTypes.wallTypeOf(wall) : WALL_TYPES.find(w => w.id === wall.wallType));
       const total = (type ? type.totalIn : 6.5) / 12;
       const { startOff, endOff } = geo().wallFaceOffsets(wall, total);
       const n = { x: -(wall.end.z - wall.start.z) / len, z: (wall.end.x - wall.start.x) / len };
@@ -2581,6 +2584,7 @@ if (!window.DraftCutView) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       const x = X(c.u - c.width / 2), wid = c.width * pxPerFt;
       ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
+      sectionSlices(ctx, X, Y, pxPerFt, c, top, base, C);
       ctx.strokeRect(x, Y(top), wid, (top - base) * pxPerFt);
       // ── AND THE TOP THE BUCK CAME OUT OF, DRAWN LIGHT ────────────────
       //
@@ -3469,6 +3473,57 @@ if (!window.DraftCutView) {
   // IT STILL DERIVES ITS OWN when called without one: this function is
   // exported, and a caller reaching for it directly gets paper rather than a
   // crash.
+  // ── A MADE WALL TYPE'S SLICES IN SECTION (jb, 16 Nov 2026) ───────────────
+  // A wall of a type made on the CREATE WALL TYPE card is cut through every
+  // slice: each gets its shade (concrete, batt, a grey, white ...) and a line
+  // between it and the next, across the band from `topFt` down to `bottomFt`.
+  // Sections show the WHOLE wall, whatever the slices say about plans.
+  const SECTION_SLICE_SHADES = Object.freeze({
+    black: '#000000', grey: '#808080', lightgrey: '#c8c8c8', white: '#ffffff', insulation: '#cde4f8',
+  });
+  function sectionSlices(ctx, X, Y, pxPerFt, crossing, topFt, bottomFt, C) {
+    const WT = window.DraftWallTypes;
+    const wall = crossing?.wall;
+    if (!WT?.isUserWallTypeId || !wall || !WT.isUserWallTypeId(wall.wallType)) return;
+    const type = WT.wallTypeOf(wall);
+    if (!type?.layers?.length || !(type.totalIn > 0) || !(topFt > bottomFt)) return;
+    const layers = wall.sliceFlip === true && type.user ? [...type.layers].reverse() : type.layers;
+    const scale = crossing.width / (type.totalIn / 12);
+    const lo = crossing.u - crossing.width / 2, hi = crossing.u + crossing.width / 2;
+    const sign = crossing.sliceSign === -1 ? -1 : 1;
+    const yTop = Y(topFt), h = (topFt - bottomFt) * pxPerFt;
+    let acc = 0;
+    const faces = [];
+    ctx.save();
+    layers.forEach((layer, index) => {
+      const run = (layer.in / 12) * scale;
+      const a = sign > 0 ? lo + acc : hi - acc - run;
+      const b = a + run;
+      acc += run;
+      if (index < layers.length - 1) faces.push(sign > 0 ? b : a);
+      if (!(run > 0)) return;
+      const x0 = X(a), w = (b - a) * pxPerFt;
+      const shade = layer.fill === 'concrete' ? weight(C.concrete, 0.5) : SECTION_SLICE_SHADES[layer.fill];
+      if (shade) { ctx.fillStyle = shade; ctx.fillRect(x0, yTop, w, h); }
+      if (layer.fill === 'insulation' || layer.fill === 'concrete') {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x0, yTop, w, h); ctx.clip();
+        ctx.strokeStyle = layer.fill === 'insulation' ? 'rgba(70,130,200,0.5)' : weight(C.ink, 0.35);
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        const step = layer.fill === 'insulation' ? 6 : 5;
+        for (let k = -h; k < w + h; k += step) { ctx.moveTo(x0 + k, yTop + h); ctx.lineTo(x0 + k + h, yTop); }
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+    ctx.strokeStyle = C.line; ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    faces.forEach(f => { ctx.moveTo(X(f), yTop); ctx.lineTo(X(f), yTop + h); });
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawSectionWall(env, ctx, X, Y, pxPerFt, crossing, level, opts, inks, fdn) {
     const C = inks || inksFor(opts);
     const ink = a => weight(C.ink, a);
@@ -3508,6 +3563,7 @@ if (!window.DraftCutView) {
     ctx.fillStyle = ink(0.12);
     if (!opening) {
       ctx.fillRect(x, Y(top), wid, (top - bottom) * pxPerFt);
+      sectionSlices(ctx, X, Y, pxPerFt, crossing, top, bottom, C);
       ctx.strokeRect(x, Y(top), wid, (top - bottom) * pxPerFt);
       return;
     }
@@ -3539,9 +3595,11 @@ if (!window.DraftCutView) {
     const gapTop = Math.min(bottom + headFt, top);
     // Above the head (header + plates) and, for windows, below the sill.
     ctx.fillRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
+    sectionSlices(ctx, X, Y, pxPerFt, crossing, top, gapTop, C);
     ctx.strokeRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
     if (gapBottom > bottom) {
       ctx.fillRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
+      sectionSlices(ctx, X, Y, pxPerFt, crossing, gapBottom, bottom, C);
       ctx.strokeRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
     }
     ctx.fillStyle = C.face; ctx.lineWidth = 1;

@@ -45,7 +45,23 @@ if (!window.DraftWallSection) {
     const WT = window.DraftWallTypes;
     const PP = window.DraftProjectPage;
     if (!format || !LA || !WT || !PP) return null;
-    const wallType = id => WT.WALL_TYPES.find(type => type.id === id) || null;
+    // A MADE TYPE (CREATE WALL TYPE, jb 16 Nov 2026) answers too.
+    const wallType = id => (WT.isUserWallTypeId && WT.isUserWallTypeId(id) ? WT.userWallTypeById(id)
+      : WT.WALL_TYPES.find(type => type.id === id)) || null;
+    // THE MADE TYPE THE DRAWN WALLS OF A LEVEL ARE MOSTLY BUILT IN, if any:
+    // the section shows the wall the drafter drew, slice by slice.
+    const madeTypeOn = (levelId, view, kind) => {
+      if (!WT.isUserWallTypeId) return null;
+      const count = new Map();
+      (Array.isArray(saved.walls) ? saved.walls : []).forEach(wall => {
+        if (Number(wall?.levelId) !== levelId || (wall.view || 'plan') !== view) return;
+        const type = WT.isUserWallTypeId(wall.wallType) ? WT.userWallTypeById(wall.wallType) : null;
+        if (type && type.kind === kind) count.set(type.id, (count.get(type.id) || 0) + 1);
+      });
+      const best = [...count.entries()].sort((a, b) => b[1] - a[1])[0];
+      return best ? WT.userWallTypeById(best[0]) : null;
+    };
+    const slicesOf = layers => layers.map(layer => ({ in: layer.in, name: layer.name || '' }));
     const levels = format.levels(saved.levels);
     // PROJECT: floorLevels = levels not FOUNDATION / ROOF / SITE, by elev.
     const floorLevels = levels.filter(level => ![1, 7, 8].includes(level.id))
@@ -60,12 +76,16 @@ if (!window.DraftWallSection) {
     const activeWallType = wallType(saved.activeWallType) ? saved.activeWallType : 'stud_2x6';
     // PROJECT: floorWallType -- a floor's own override, else the house's.
     const floorWallType = levelId => {
+      const made = madeTypeOn(levelId, 'plan', 'floor');
+      if (made) return made.id;
       const override = assembly(levelId).wallType;
       return WT.EXTERIOR_WALL_TYPE_IDS.includes(override) && wallType(override) ? override : activeWallType;
     };
     // PROJECT: fdnWallType -- the FOUNDATION assembly's choice, else the
     // drawn foundation walls, else 8" concrete.
+    const fdnMade = madeTypeOn(1, 'foundation', 'foundation');
     const fdnWallType = (() => {
+      if (fdnMade) return fdnMade.id;
       const choice = assembly(1).wallType;
       if (WT.FOUNDATION_WALL_TYPE_IDS.includes(choice) && wallType(choice)) return choice;
       const wall = (Array.isArray(saved.walls) ? saved.walls : []).find(candidate =>
@@ -75,6 +95,10 @@ if (!window.DraftWallSection) {
     })();
     const gradeBeam = assembly(1).foundationKind === 'gradebeam';
     const fdnIsIcf = !gradeBeam && fdnWallType.startsWith('icf');
+    // A MADE FOUNDATION TYPE: the pour is its FDN slices; the rest (its
+    // BASEMENT lining) stands inside it on the slab.
+    const fdnPour = fdnMade && !gradeBeam ? fdnMade.layers.filter(layer => layer.fdn !== false) : null;
+    const fdnLining = fdnMade && !gradeBeam ? fdnMade.layers.filter(layer => layer.fdn === false) : null;
     const attachmentIn = positive(saved.foundationAttachmentIn, PP.SILL_PLATE_IN);
     const attachment = fdnIsIcf ? 'sill' : (saved.foundationAttachment === 'ladder' ? 'ladder' : 'sill');
     const ladderIn = PP.ladderDepthIn(saved.foundationLadderIn);
@@ -101,13 +125,16 @@ if (!window.DraftWallSection) {
         const asm = assembly(level.id);
         return { id: level.id, name: level.name, wallHeightFt: asm.wallHeightFt,
           joistDepthIn: asm.joistDepthIn, sheathingIn: asm.sheathingIn, framing: asm.framing,
-          wallIn: wallType(floorWallType(level.id)).totalIn, wallType: floorWallType(level.id) };
+          wallIn: wallType(floorWallType(level.id)).totalIn, wallType: floorWallType(level.id),
+          ...(wallType(floorWallType(level.id))?.user ? { slices: slicesOf(wallType(floorWallType(level.id)).layers) } : {}) };
       }),
       foundation: {
         // PROJECT: housePourFt -- the stored height is the bearing line,
         // plate included; the section draws the plate as its own band.
         wallHeightFt: fdn.wallHeightFt - attachmentIn / 12,
-        thicknessIn: gradeBeam ? PP.GRADE_BEAM_THICKNESS_IN : wallType(fdnWallType).totalIn,
+        thicknessIn: gradeBeam ? PP.GRADE_BEAM_THICKNESS_IN
+          : fdnPour ? fdnPour.reduce((sum, layer) => sum + layer.in, 0) : wallType(fdnWallType).totalIn,
+        ...(fdnPour ? { slices: slicesOf(fdnPour), lining: slicesOf(fdnLining) } : {}),
         wallType: gradeBeam ? 'gradebeam' : fdnWallType,
         slabIn: fdn.slabThicknessIn,
         footingWidthIn: fdn.footingWidthIn ?? (fdnIsIcf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN),
@@ -131,6 +158,9 @@ if (!window.DraftWallSection) {
   const lumber = depthIn => ({ 3.5: '2x4', 5.5: '2x6', 7.25: '2x8', 9.25: '2x10', 11.25: '2x12' })[depthIn] || `${inches(depthIn)}`;
   const wallWord = (typeId, totalIn) => {
     if (typeId === 'gradebeam') return 'GRADE BEAM';
+    const WT = window.DraftWallTypes;
+    const made = WT?.isUserWallTypeId && WT.isUserWallTypeId(typeId) ? WT.userWallTypeById(typeId) : null;
+    if (made) return made.name;
     if (/^stud_/.test(typeId)) return `${lumber(totalIn)} STUDS @ 16" O.C.`;
     if (/^icf/.test(typeId)) return `${inches(totalIn)} ICF`;
     if (typeId === 'concrete_8') return '8" CONC. WALL';
@@ -144,6 +174,12 @@ if (!window.DraftWallSection) {
       if (!anchor || !text) return;
       labels.push({ x: anchor.x + dx, y: anchor.y + dy, text, align });
     };
+    // A COLUMN OF LINES centred on an anchor, 0.6 ft apart (a made wall
+    // type's name, height and slices); a slice with no thickness (a VB) is
+    // named alone.
+    const block = (anchor, texts) => texts.forEach((text, k) =>
+      put(anchor, text, 'left', 0, 0.6 * ((texts.length - 1) / 2 - k)));
+    const sliceWord = slice => (slice.in > 0 ? `${inches(slice.in)} ${slice.name}` : slice.name).trim();
     const { roof, foundation: fdn } = values;
     // THE PITCH OVER THE EAVE, where the eave detail sees it too.
     put({ x: -roof.overhangFt / 2, y: anchors.fascia.y + roof.fasciaIn / 24 + (roof.overhangFt / 2) * (roof.pitch / 12) + 0.55 }, `${roof.pitch}:12`);
@@ -154,8 +190,15 @@ if (!window.DraftWallSection) {
     values.floors.forEach((level, index) => {
       // TWO LINES ON THE WALL -- what it is, then how tall -- so neither
       // runs out through the break line at 1/4".
-      put(anchors[`wallHeight-${level.id}`], wallWord(level.wallType, level.wallIn), 'left', 0, 0.45);
-      put(anchors[`wallHeight-${level.id}`], `${ftIn(level.wallHeightFt)} WALL`, 'left', 0, -0.45);
+      if (level.slices?.length) {
+        // A MADE TYPE: its name, its height, then its slices outside to
+        // inside, one block centred on the wall.
+        block(anchors[`wallHeight-${level.id}`], [wallWord(level.wallType, level.wallIn),
+          `${ftIn(level.wallHeightFt)} WALL`, ...level.slices.map(sliceWord)]);
+      } else {
+        put(anchors[`wallHeight-${level.id}`], wallWord(level.wallType, level.wallIn), 'left', 0, 0.45);
+        put(anchors[`wallHeight-${level.id}`], `${ftIn(level.wallHeightFt)} WALL`, 'left', 0, -0.45);
+      }
       // THE FLOOR, in the band: joists on the band, sheathing just over it.
       const floor = anchors[`floor-${level.id}`];
       if (floor) {
@@ -168,8 +211,16 @@ if (!window.DraftWallSection) {
       put(anchors.attachment, fdn.attachment === 'ladder'
         ? `${inches(fdn.ladderIn)} PT LADDER` : `${inches(fdn.attachmentIn)} SILL PLATE`, 'left', fdn.thicknessIn / 24 + 0.9, -0.3);
     }
-    put(anchors.fdnHeight, wallWord(fdn.wallType, fdn.thicknessIn), 'left', 0, 0.45);
-    put(anchors.fdnHeight, `${ftIn(fdn.wallHeightFt)} HIGH`, 'left', 0, -0.45);
+    if (fdn.slices) {
+      // A MADE FOUNDATION TYPE: its name and height, its pour slices when
+      // there are more than one, and its LINING -- the BASEMENT slices
+      // standing inside the pour -- in one block.
+      block(anchors.fdnHeight, [wallWord(fdn.wallType, fdn.thicknessIn), `${ftIn(fdn.wallHeightFt)} HIGH`,
+        ...(fdn.slices.length > 1 ? fdn.slices.map(sliceWord) : []), ...(fdn.lining || []).map(sliceWord)]);
+    } else {
+      put(anchors.fdnHeight, wallWord(fdn.wallType, fdn.thicknessIn), 'left', 0, 0.45);
+      put(anchors.fdnHeight, `${ftIn(fdn.wallHeightFt)} HIGH`, 'left', 0, -0.45);
+    }
     if (anchors.footingWidth) put(anchors.footingWidth, `${inches(fdn.footingWidthIn)} x ${inches(fdn.footingDepthIn)} CONC. FOOTING`);
     put(anchors.housePile, 'PILE', 'center');
     put(anchors.houseVoidForm, 'VOID FORM', 'center', 0, -0.45);

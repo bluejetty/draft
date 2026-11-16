@@ -35,6 +35,9 @@ if (!window.DraftCutViewEnv) {
   // `levels` is format.levels(saved.levels) -- the caller has it already,
   // because it is what drives its own level rail.
   function buildCutViewEnv(saved, levels) {
+    // The file's made wall types (CREATE WALL TYPE), so a section cuts them
+    // at their own thickness and slices.
+    if (saved && window.DraftWallTypes?.adoptDrawing) window.DraftWallTypes.adoptDrawing(saved);
     if (!saved) return null;
     const { normaliseLevelAssembly, levelRole, levelFloorFt, DEFAULT_WALL_TOP_FT }
       = window.DraftLevelAssembly;
@@ -57,7 +60,11 @@ if (!window.DraftCutViewEnv) {
         view: wall?.view || 'plan',
         ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
         wallType: wall?.wallType,
-        ...(wall?.wallType === 'custom' && Number(wall?.widthIn) > 0 ? { widthIn: Number(wall.widthIn) } : {}),
+        // A MADE TYPE (CREATE WALL TYPE) keeps its width too, for a file
+        // whose type list is gone, and which way its slices run.
+        ...((wall?.wallType === 'custom' || /^wt_/.test(String(wall?.wallType || ''))) && Number(wall?.widthIn) > 0
+          ? { widthIn: Number(wall.widthIn) } : {}),
+        ...(wall?.sliceFlip === true ? { sliceFlip: true } : {}),
         baseHeight: num(wall?.baseHeight) ?? 0,
         // HUNG UNDER A ROOF (`hoodOf`, boneyard-edit.js roofHood): a wall that
         // stands on the storey below's ceiling, with no floor of its own under it.
