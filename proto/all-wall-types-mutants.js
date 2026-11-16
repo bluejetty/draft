@@ -20,10 +20,12 @@ const MUTANTS = [
     find: "    return [...all.filter(t => !isFdn(t.id)), ...all.filter(t => isFdn(t.id))];\n",
     with: "    return all.filter(t => !isFdn(t.id));\n",
     test: 'a MAIN FL wall offers the concrete and ICF assemblies after the framed ones, and takes ICF' },
-  { file: 'model/07-walls-magnet.js',
+  // The TYPE row draws the two groups itself (model/15 groupWallTypeRow),
+  // so the order that reaches the drafter is set there.
+  { file: 'model/15-panels.js',
     name: 'the foundation walls lead the list',
-    find: "    return [...all.filter(t => !isFdn(t.id)), ...all.filter(t => isFdn(t.id))];\n",
-    with: "    return [...all.filter(t => isFdn(t.id)), ...all.filter(t => !isFdn(t.id))];\n",
+    find: "    nodes.push(...group('regular', 'REGULAR WALLS', regular), ...group('foundation', 'FOUNDATION WALLS', fdn));\n",
+    with: "    nodes.push(...group('foundation', 'FOUNDATION WALLS', fdn), ...group('regular', 'REGULAR WALLS', regular));\n",
     test: 'a FOUNDATION wall offers the regular walls first, then the structural ones, and takes 2x6' },
 ];
 
