@@ -839,6 +839,8 @@ if (!window.DraftDrawingFormat) {
       if (line?.style != null && LS.styleOf(line.style)) out.style = String(line.style);
       const color = LS.colorHex(line?.color);
       if (color) out.color = color;
+      // ARROW ENDS (jb, 16 Nov): written only when there are some.
+      if (LS.arrowsId && LS.arrowsId(line?.arrows) !== 'none') out.arrows = LS.arrowsId(line.arrows);
       return out;
     }
     // WITHOUT THE TABLE (a harness that loads this file alone): the raw
@@ -846,6 +848,7 @@ if (!window.DraftDrawingFormat) {
     if (Number.isInteger(Number(line?.weight)) && Number(line.weight) >= 1 && Number(line.weight) <= 6) out.weight = Number(line.weight);
     if (['solid', 'dashed', 'dotdash', 'dotted'].includes(line?.style)) out.style = line.style;
     if (/^#[0-9a-f]{6}$/i.test(String(line?.color ?? ''))) out.color = String(line.color).toLowerCase();
+    if (['start', 'end', 'both'].includes(line?.arrows)) out.arrows = line.arrows;
     return out;
   };
 

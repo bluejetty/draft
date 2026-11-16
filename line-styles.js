@@ -31,6 +31,24 @@
     Object.freeze({ id: 'dotdash', name: 'DOT DASH', dash: Object.freeze([12, 5, 2, 5]), dxf: 'CENTER' }),
     Object.freeze({ id: 'dotted', name: 'DOTTED', dash: Object.freeze([2, 4]), dxf: 'DOT' }),
   ]);
+  // ARROW ENDS (jb, 16 Nov: "put ARROWS on each one of the lines or just
+  // one of the ends"). START is the end the line was drawn FROM (its first
+  // click), END the end it was drawn TO; no `arrows` key is no arrows, which
+  // is every line drawn before today.
+  const ARROWS = Object.freeze([
+    Object.freeze({ id: 'none', name: 'NONE' }),
+    Object.freeze({ id: 'start', name: 'START' }),
+    Object.freeze({ id: 'end', name: 'END' }),
+    Object.freeze({ id: 'both', name: 'BOTH' }),
+  ]);
+  const arrowsId = raw => (['start', 'end', 'both'].includes(String(raw ?? '')) ? String(raw) : 'none');
+  // The arrowhead's length in screen px for a stroke of `lineWidth`: a
+  // note's 9 px head, grown with the weight so a BOLD line's head still
+  // reads as a head and not a blunt end.
+  const arrowHeadPx = (line, { inkScale = 1 } = {}) => {
+    const w = weightOf(line?.weight) || weightOf(DEFAULT_WEIGHT);
+    return (9 + 2 * w.px) * inkScale;
+  };
   const DEFAULT_WEIGHT = 2;
   const DEFAULT_STYLE = 'solid';
   const weightOf = id => WEIGHTS.find(w => w.id === Number(id)) || null;
@@ -69,5 +87,6 @@
   window.DraftLineStyles = Object.freeze({
     WEIGHTS, STYLES, DEFAULT_WEIGHT, DEFAULT_STYLE,
     weightOf, styleOf, weightId, styleId, colorHex, strokeFor, dxfLinetypeForDash,
+    ARROWS, arrowsId, arrowHeadPx,
   });
 })();

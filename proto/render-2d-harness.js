@@ -372,6 +372,35 @@ suite('traceSegTo2D', 'a straight segment is a lineTo, a bent one an arc, on the
   expect('it does not stroke -- the caller owns the path', count(ctx, 'stroke'), 0);
 });
 
+// ── drawLineArrows2D: arrow ends on a drawn LINE (jb, 16 Nov) ──
+suite('drawLineArrows2D', 'START heads the first-click end, END the last, BOTH both, none none', R => {
+  const seg = extra => ({ start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, ...extra });
+  const tips = arrows => {
+    const ctx = recordingCtx();
+    R.drawLineArrows2D(ctx, toS, seg({ arrows }));
+    return calls(ctx, 'moveTo').map(a => JSON.stringify(a));
+  };
+  expect('no key: no heads', tips(undefined).length, 0);
+  expect('START: one head at the start', tips('start').join(';'), '[400,300]');
+  expect('END: one head at the end', tips('end').join(';'), '[500,300]');
+  expect('BOTH: both', tips('both').join(';'), '[400,300];[500,300]');
+  const ctx = recordingCtx();
+  R.drawLineArrows2D(ctx, toS, seg({ arrows: 'end' }));
+  expect('a head is filled', count(ctx, 'fill'), 1);
+  // FINE: 9 + 2 = 11 px back along the line, splayed 0.3 rad.
+  const back = calls(ctx, 'lineTo')[0];
+  expect('the head points back down the line', Math.round(back[0]), Math.round(500 - 11 * Math.cos(0.3)));
+});
+suite('drawLineArrows2D', 'on a bent line the head lies along the arc, not the chord', R => {
+  // A half circle bulging to the left of travel: at the end it arrives
+  // heading straight back across the chord, so the head opens sideways.
+  const ctx = recordingCtx();
+  R.drawLineArrows2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, bulge: 10, arrows: 'end' });
+  const [a, b] = calls(ctx, 'lineTo');
+  const midX = (a[0] + b[0]) / 2;
+  expect('the head\'s base sits square to the chord at the tip', Math.abs(midX - 500) < 2, true);
+});
+
 // ── drawGrid2D: the datum rule and the zoom ladder ──
 suite('drawGrid2D', 'no datum, no grid', R => {
   const ctx = recordingCtx();

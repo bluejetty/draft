@@ -1539,10 +1539,15 @@
       ctx.setLineDash(ink.dash);
       if (line.bulge) {
         R.strokeSegPath2D(ctx, toS, line, { controlPoint: G.lineControlPoint });
-        return;
+      } else {
+        const a = toS(line.start), b = toS(line.end);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
-      const a = toS(line.start), b = toS(line.end);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      // ARROW ENDS (jb, 16 Nov), in the line's own colour.
+      if (line.arrows && R.drawLineArrows2D) {
+        ctx.fillStyle = ctx.strokeStyle;
+        R.drawLineArrows2D(ctx, toS, line);
+      }
     });
     ctx.restore();
   };
