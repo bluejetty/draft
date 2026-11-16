@@ -151,6 +151,25 @@ test('EDIT TYPE changes every wall of it; FLIP SLICES turns them round; DELETE T
   expect(wall(d, 'n')).toMatchObject({ wallType: 'custom', widthIn: 7.125 });
 });
 
+test('a wall whose type the file lost keeps its width, drawn as a plain wall, and keeps the type for when it comes back', async ({ page }) => {
+  const { at } = await open(page);
+  await page.evaluate(() => {
+    const w = drawing.walls.find(x => x.id === 'loose');
+    w.wallType = 'wt_gone1'; w.widthIn = 9.25;
+  });
+  let d = await saved(page);
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  const got = await page.evaluate(() => {
+    const w = drawing.walls.find(x => x.id === 'loose');
+    return { type: w.wallType, inches: window.DraftWallTypes.wallThicknessFt(w) * 12 };
+  });
+  expect(got.type).toBe('wt_gone1');
+  expect(got.inches).toBeCloseTo(9.25, 4);
+  d = await saved(page);
+  expect(wall(d, 'loose')).toMatchObject({ wallType: 'wt_gone1', widthIn: 9.25 });
+});
+
 test('a FOUNDATION type: the FOUNDATION plan draws only its FDN slices, the BASEMENT plan the whole wall', async ({ page }) => {
   const { at } = await open(page, '/MODEL.html?left=1&right=1&level=1&view=foundation');
   await page.mouse.click(...at(10, 0));
