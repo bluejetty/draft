@@ -173,7 +173,7 @@
   // style the panel last set, like any line drawn; ONE undo step.
   const lineArcCircle = (centre, r) => {
     const { levelId, viewId } = onActiveLevel();
-    const lineView = wallHomeView(viewId);
+    const lineView = lineHomeView(viewId);
     drawing.lines = drawing.lines || [];
     const west = poolVertex({ x: centre.x - r, z: centre.z }, levelId, lineView);
     const east = poolVertex({ x: centre.x + r, z: centre.z }, levelId, lineView);
@@ -618,7 +618,7 @@
     const pts = shape?.points || [];
     if (pts.length < 3) return null;
     const { viewId } = onActiveLevel();
-    const lineView = wallHomeView(viewId);
+    const lineView = lineHomeView(viewId);
     const levelId = shape.levelId;
     drawing.lines = drawing.lines || [];
     const vtx = pts.map(p => poolVertex({ x: p.x, z: p.z }, levelId, lineView));
