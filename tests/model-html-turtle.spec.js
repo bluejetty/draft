@@ -344,6 +344,66 @@ test('AREA makes a shape on this level; DRAW AS HOUSE with no type goes to PROJE
   expect(file.turtlePages[1].kind).toBe('house');
 });
 
+// DRAW AS WALL (jb, 16 Nov 2026: "can we add WALL (draw as WALL) as a
+// choice .. draw as LINE, WALL, HOUSE, LOT"): the moves as walls in the WALL
+// TYPE picked, one WALLS assembly, open or closed, REGENERATE in place.
+const pageWalls = page => page.evaluate(() => (drawing.walls || []).map(w => ({
+  id: w.id, levelId: w.levelId, view: w.view, wallType: w.wallType,
+  start: [+w.start.x.toFixed(3), +w.start.z.toFixed(3)], end: [+w.end.x.toFixed(3), +w.end.z.toFixed(3)] })));
+test('DRAW AS WALL draws the moves as walls in the picked WALL TYPE, one WALLS assembly; REGENERATE moves the same walls', async ({ page }) => {
+  await open(page, drawing({ activeWallType: 'stud_2x4' }));
+  await openTurtle(page);
+  // The chips read LINE, WALL, HOUSE, LOT, AREA, left to right.
+  await expect(page.locator('[data-turtle-kind]')).toHaveText(['LINE', 'WALL', 'HOUSE', 'LOT', 'AREA']);
+  // An OPEN path is fine for walls, as for lines.
+  await typeRows(page, [['E', '20'], ['N', '10']]);
+  await kind(page, 'walls').click();
+  await expect(kind(page, 'walls')).toHaveAttribute('aria-pressed', 'true');
+  await act(page, 'target').click();
+  let walls = await pageWalls(page);
+  expect(walls.map(w => [w.start, w.end])).toEqual([[[0, 0], [20, 0]], [[20, 0], [20, -10]]]);
+  expect(walls.every(w => w.levelId === 3 && w.view === 'plan' && w.wallType === 'stud_2x4')).toBe(true);
+  // The two walls share the corner they meet at, so they mitre.
+  expect(await page.evaluate(() => drawing.walls[0].end === drawing.walls[1].start)).toBe(true);
+  const groups = await pageGroups(page);
+  expect(groups).toHaveLength(1);
+  expect(groups[0].name).toMatch(/^WALLS \d+$/);
+  expect(groups[0].members).toEqual(walls.map(w => `wall:${w.id}`));
+  expect(await page.evaluate(() => drawing.groups[0].wallSettings.wallType)).toBe('stud_2x4');
+  expect(await page.evaluate(() => selection.map(e => e.type))).toEqual(['wall', 'wall']);
+  await expect(page.locator('#strip-message')).toContainText('2 walls drawn, open by');
+  expect(await pageLines(page)).toHaveLength(0);
+  // Two more rows close it: REGENERATE keeps the two walls, adds two, and
+  // the last one ends on the first corner itself.
+  await typeRows(page, [['E', '20'], ['N', '10'], ['W', '20'], ['S', '10']]);
+  await act(page, 'regen').click();
+  const four = await pageWalls(page);
+  expect(four.slice(0, 2).map(w => w.id)).toEqual(walls.map(w => w.id));
+  expect(four).toHaveLength(4);
+  expect(four.every(w => w.wallType === 'stud_2x4')).toBe(true);
+  expect(await page.evaluate(() => drawing.walls[3].end === drawing.walls[0].start)).toBe(true);
+  await expect(status(page)).toContainText('CLOSED');
+  await expect(page.locator('#strip-message')).toContainText('4 walls regenerated, and the path closes');
+  // Bigger numbers move the same four walls.
+  await distAt(page, 0).fill('30');
+  await distAt(page, 2).fill('30');
+  await act(page, 'regen').click();
+  walls = await pageWalls(page);
+  expect(walls.map(w => w.id)).toEqual(four.map(w => w.id));
+  expect(walls[1].start).toEqual([30, 0]);
+  const file = await saved(page);
+  expect(file.turtles[0].kind).toBe('walls');
+  expect(file.turtles[0].itemIds).toEqual(walls.map(w => w.id));
+  // One UNDO per press: the last regenerate, then the first, then the draw.
+  await page.keyboard.press('Control+z');
+  expect((await pageWalls(page))[1].start).toEqual([20, 0]);
+  await page.keyboard.press('Control+z');
+  expect(await pageWalls(page)).toHaveLength(2);
+  await page.keyboard.press('Control+z');
+  expect(await pageWalls(page)).toHaveLength(0);
+  expect(await pageGroups(page)).toHaveLength(0);
+});
+
 // FIVE PAGES ON EVERY TAB (Movie, 10 Nov: "the number should apply for
 // notes, and then also for CALC ... and for TURTLE they can make multiple
 // outlines / site plan etc"), all of it in the .draft ("keep it all in the

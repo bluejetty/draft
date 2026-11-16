@@ -850,7 +850,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // lot, an outline or a shape on the sheet -- the same records the
             // LINE, OUTLINE and SHAPE tools make, so no absence row moves;
             // tests/model-html-turtle.spec.js drives them.
-            'TURTLE', 'LINES', 'LOT', 'HOUSE', 'AREA',
+            'TURTLE', 'LINE', 'WALL', 'HOUSE', 'LOT', 'AREA',
             'DRAW AT TARGET', 'DRAW AT POINT', 'REGENERATE', 'NEW PATH', 'FROM NOTES', 'CLEAR',
             '+', '\u00D7',
             // AND ITS CALC TAB (Movie, 18 Oct: "can we add a construction

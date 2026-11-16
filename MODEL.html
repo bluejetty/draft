@@ -431,11 +431,13 @@
       <div class="turtle-rows" data-turtle-rows></div>
       <!-- DRAW AS (Movie, 10 Nov): a string of lines, the SITE PLAN's lot,
            the BUILD house outline, or an AREA / SHAPE. The loops need the
-           path to come home. -->
+           path to come home. WALL (jb, 16 Nov 2026: "draw as LINE, WALL,
+           HOUSE, LOT"): a string of walls in the WALL TYPE picked. -->
       <div class="turtle-as" role="radiogroup" aria-label="Draw as"><span>DRAW AS</span>
-        <button type="button" data-turtle-kind="lines" aria-pressed="true" title="A string of lines on this level, one assembly">LINES</button>
-        <button type="button" data-turtle-kind="lot" aria-pressed="false" title="The SITE PLAN's lot line (replaces the lot the file has)">LOT</button>
+        <button type="button" data-turtle-kind="lines" aria-pressed="true" title="A string of lines on this level, one assembly">LINE</button>
+        <button type="button" data-turtle-kind="walls" aria-pressed="false" title="A string of walls on this level in the WALL TYPE picked, one assembly; open or closed">WALL</button>
         <button type="button" data-turtle-kind="house" aria-pressed="false" title="The house OUTLINE the bone builds on, on every level">HOUSE</button>
+        <button type="button" data-turtle-kind="lot" aria-pressed="false" title="The SITE PLAN's lot line (replaces the lot the file has)">LOT</button>
         <button type="button" data-turtle-kind="area" aria-pressed="false" title="An AREA / SHAPE on this level">AREA</button></div>
       <div class="turtle-keys">
         <button type="button" data-turtle-do="target" title="Draw the path starting at the gold registration target">DRAW AT TARGET</button>
