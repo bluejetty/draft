@@ -2123,6 +2123,41 @@ suite('drawStairs2D', 'a run draws two stringers and one tread line per tread, n
   expect('the run is stroked', count(ctx, 'stroke') >= 2, true);
 });
 
+// ── clipSegToRegion2D: the stair break's line-by-line cut (jb, 16 Nov 2026) ──
+const CLIP_SQUARE = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
+const clipXs = segs => JSON.stringify(segs.map(([p, q]) => [Math.round(p.x * 100) / 100, Math.round(q.x * 100) / 100]));
+suite('clipSegToRegion2D', 'inside keeps the piece in the polygon, invert the pieces outside', R => {
+  expect('inside', clipXs(R.clipSegToRegion2D(-5, 5, 15, 5, CLIP_SQUARE, false)), '[[0,10]]');
+  expect('outside', clipXs(R.clipSegToRegion2D(-5, 5, 15, 5, CLIP_SQUARE, true)), '[[-5,0],[10,15]]');
+  expect('a segment clear of it, kept whole outside', clipXs(R.clipSegToRegion2D(-5, 20, 15, 20, CLIP_SQUARE, true)), '[[-5,15]]');
+  expect('and dropped inside', clipXs(R.clipSegToRegion2D(-5, 20, 15, 20, CLIP_SQUARE, false)), '[]');
+});
+
+suite('drawStairs2D', 'a break clips the treads to its side and draws the Z once', R => {
+  // Region: the first half of the 10 ft run (x 0..5), z band wide of the stair.
+  const region = [{ x: -1, z: -3 }, { x: 5, z: -3 }, { x: 5, z: 3 }, { x: -1, z: 3 }];
+  const line = [{ x: 5, z: -2 }, { x: 4.8, z: -0.2 }, { x: 5.2, z: 0.2 }, { x: 5, z: 2 }];
+  const run = { start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt: 10, treads: 11 };
+  const xsOf = brk => {
+    const ctx = recordingCtx();
+    R.drawStairs2D(ctx, toS, stairsEnv({ treadRunIn: 12, breakFor: () => brk }, { runs: [run] }));
+    return ctx;
+  };
+  const whole = xsOf(null);
+  const kept = xsOf({ region, invert: false, line, walk: [{ x: 0.5, z: 0 }, { x: 4, z: 0 }], drawLine: true });
+  const other = xsOf({ region, invert: true, line, walk: [{ x: 6, z: 0 }, { x: 9.5, z: 0 }], drawLine: false });
+  const maxX = ctx => Math.max(...calls(ctx, 'lineTo').map(c => c[0]));
+  const minX = ctx => Math.min(...calls(ctx, 'moveTo').map(c => c[0]));
+  expect('whole, the treads reach the far end', maxX(whole) >= toS({ x: 10, y: 0, z: 0 }).x - 0.5, true);
+  expect('kept inside, nothing past the break but the Z', maxX(kept) <= toS({ x: 5.2, y: 0, z: 0 }).x + 0.5, true);
+  expect('kept outside, nothing before the break', minX(other) >= toS({ x: 4.8, y: 0, z: 0 }).x - 0.5, true);
+  expect('the Z is drawn where drawLine says', count(kept, 'lineTo') > count(other, 'lineTo') - 20, true);
+  const zIn = ctx => calls(ctx, 'lineTo').some(c => Math.abs(c[0] - toS({ x: 4.8, y: 0, z: -0.2 }).x) < 0.01
+    && Math.abs(c[1] - toS({ x: 4.8, y: 0, z: -0.2 }).y) < 0.01);
+  expect('the Z jog is on the DN side\'s paint', zIn(kept), true);
+  expect('and not again on the UP side\'s', zIn(other), false);
+});
+
 // A THRESHOLD refusal needs its control more than a plain `=== 0` does, not
 // less: `0 < 6` is true for a deleted painter too, so the assertion is
 // satisfied by the painter doing nothing at all.
