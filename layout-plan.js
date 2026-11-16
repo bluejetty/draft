@@ -1667,6 +1667,12 @@ if (!window.DraftLayoutPlan) {
         beamColor: '#7a4a21',
         columnColor: '#1d1f20',
         labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
+        // A FLUSH beam's tag carries the joist depth of the deck it sits in
+        // (build-house beamDepthLabel, 16 Nov 2026). On a FLOOR LAYOUT the
+        // storey under's beams are re-filed onto this level, which is the
+        // deck they hold.
+        beamDepthLabel: beam => (window.DraftBuildHouse?.beamDepthLabel
+          ? window.DraftBuildHouse.beamDepthLabel(beam, saved, under ? levelId : null) : null),
       }),
       beams: under ? borrowed('beams', () => true) : only(of('beams')),
       // THE BEAM IN THE FLOOR SYSTEM OVER THIS PLAN (Movie, 16 Oct, the

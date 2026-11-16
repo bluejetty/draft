@@ -64,6 +64,7 @@
   <script src="./drawing-format.js"></script>
   <script src="./geometry-2d.js"></script>
   <script src="./level-assembly.js"></script>
+  <script src="./joist-spans.js"></script>
   <script src="./traced-plans.js"></script>
   <script src="./garage-roofs.js"></script>
   <script src="./project-reload.js"></script>
@@ -537,6 +538,22 @@
     button.sched-value:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 12%, transparent); }
     button.sched-value[aria-pressed="true"] { background:color-mix(in srgb, var(--accent) 22%, transparent); box-shadow:0 0 0 1px var(--accent) inset; }
     button.sched-value:disabled { cursor:default; border-color:var(--edge-panel); color:var(--ink-quiet); }
+    /* THE JOIST PICKS (16 Nov 2026): the JOIST DEPTH box keeps its typing,
+       a ▾ beside it opens joist-spans.js PICKS, and the reach line spans
+       the row under both. */
+    .sched-row:has(.joist-pick-box) { grid-template-columns:minmax(0,1fr) 76px; }
+    .joist-pick-cell { display:flex; flex-direction:column; gap:3px; min-width:0; }
+    .joist-pick-box { display:flex; align-items:stretch; gap:2px; min-width:0; }
+    .joist-pick-box > input.sched-value { flex:1 1 auto; min-width:0; width:auto; }
+    .joist-pick-open { flex:0 0 16px; padding:0; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-primary); font-size:10px; line-height:1; cursor:pointer; }
+    .joist-pick-open:hover:not(:disabled) { border-color:var(--accent); }
+    .joist-pick-open:disabled { cursor:default; color:var(--ink-quiet); }
+    .joist-reach { font-size:10px; letter-spacing:.03em; color:var(--ink-quiet); text-align:left; white-space:nowrap; overflow:visible; }
+    .joist-pick-menu { position:fixed; z-index:60; min-width:132px; max-height:70vh; overflow:auto; padding:3px; background:var(--surface-page); border:1px solid var(--accent); display:flex; flex-direction:column; }
+    .joist-pick-head { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.08em; color:var(--ink-quiet); padding:4px 6px 2px; }
+    .joist-pick { text-align:left; border:0; background:transparent; color:var(--ink-primary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; padding:3px 8px; cursor:pointer; }
+    .joist-pick:hover, .joist-pick:focus-visible { background:color-mix(in srgb, var(--accent) 14%, transparent); }
+    .joist-pick[aria-current="true"] { box-shadow:0 0 0 1px var(--accent) inset; font-weight:600; }
     .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 58px; gap:7px; align-items:center; padding:3px 4px; border-bottom:1px solid color-mix(in srgb, var(--edge-panel) 50%, transparent); }
     .sched-row:last-child { border-bottom:0; }
     .sched-row[hidden] { display:none; }
@@ -3219,9 +3236,16 @@
             return false;
           },
         });
+        // TYPED, AND PICKED TOO (jb, 16 Nov 2026, TJ-4500 open: "allow the
+        // user to enter a number as it is now, but also offer all these
+        // floor thicknesses"). The ▾ beside the box (joistPicks) offers
+        // joist-spans.js PICKS; a pick writes the depth AND the joist type,
+        // so the section and callouts say TJI or 2x10 with it. A typed
+        // number keeps whatever type is already set.
         addInput(`floor-${level.id}`, `${level.name} JST`, {
           name: `floor-${level.id}`,
           levelId: level.id,
+          joistPicks: true,
           get: () => inchesOnly(assembly(level.id).joistDepthIn),
           set: text => {
             const value = parseInches(text);
@@ -3511,6 +3535,123 @@
 
       const nameOf = control => dropHeadWord(
         typeof control.name === 'function' ? control.name() : control.name, 'Garage');
+
+      // ── THE JOIST PICKS (jb, 16 Nov 2026, TJ-4500) ─────────────────────
+      //
+      // The JOIST DEPTH box stays a box you type in. Beside it a ▾ opens the
+      // list joist-spans.js PICKS keeps -- every TJI depth TJ-4500 makes, then
+      // the sawn sizes -- and a pick writes the depth and the joist type
+      // together. Under the row, one line says how far that depth reaches at
+      // 16" o.c., lightest series to strongest, off the same table MODEL's
+      // floor-layout callouts size the joists from.
+      const JS = window.DraftJoistSpans;
+      const joistReachLines = [];
+      let joistPickMenu = null;
+      const closeJoistPicks = () => {
+        if (!joistPickMenu) return;
+        joistPickMenu.remove();
+        joistPickMenu = null;
+        document.removeEventListener('pointerdown', joistPickAway, true);
+        document.removeEventListener('keydown', joistPickEscape, true);
+      };
+      const joistPickAway = e => {
+        if (joistPickMenu && !joistPickMenu.contains(e.target)
+          && !e.target.closest?.('[data-joist-pick-open]')) closeJoistPicks();
+      };
+      const joistPickEscape = e => { if (e.key === 'Escape') closeJoistPicks(); };
+      const openJoistPicks = (control, button) => {
+        closeJoistPicks();
+        if (!JS) return;
+        const asm = assembly(control.levelId);
+        const menu = document.createElement('div');
+        menu.className = 'joist-pick-menu';
+        menu.dataset.joistPickMenu = String(control.levelId);
+        menu.setAttribute('role', 'menu');
+        let family = null;
+        JS.PICKS.forEach(pick => {
+          if (pick.family !== family) {
+            family = pick.family;
+            const head = document.createElement('div');
+            head.className = 'joist-pick-head';
+            head.textContent = JS.FAMILY_LABEL[family] || family.toUpperCase();
+            menu.appendChild(head);
+          }
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'joist-pick';
+          item.setAttribute('role', 'menuitem');
+          item.dataset.joistPick = `${pick.joistType}:${pick.depthIn}`;
+          item.textContent = pick.label;
+          const lit = asm.joistType === pick.joistType && Math.abs(asm.joistDepthIn - pick.depthIn) < 1e-6;
+          if (lit) item.setAttribute('aria-current', 'true');
+          item.addEventListener('click', () => {
+            setAssembly(control.levelId, 'joistType', pick.joistType);
+            setAssembly(control.levelId, 'joistDepthIn', pick.depthIn);
+            closeJoistPicks();
+            save(`${pick.label} joists saved.`);
+            repaint();
+          });
+          menu.appendChild(item);
+        });
+        document.body.appendChild(menu);
+        const at = button.getBoundingClientRect();
+        const width = menu.offsetWidth;
+        menu.style.left = `${Math.max(4, Math.min(window.innerWidth - width - 4, at.right - width))}px`;
+        const below = at.bottom + 2;
+        menu.style.top = `${below + menu.offsetHeight > window.innerHeight - 4
+          ? Math.max(4, at.top - menu.offsetHeight - 2) : below}px`;
+        joistPickMenu = menu;
+        document.addEventListener('pointerdown', joistPickAway, true);
+        document.addEventListener('keydown', joistPickEscape, true);
+      };
+      const joistPickBox = (control, input) => {
+        const cell = document.createElement('span');
+        cell.className = 'joist-pick-cell';
+        const box = document.createElement('span');
+        box.className = 'joist-pick-box';
+        cell.appendChild(box);
+        box.appendChild(input);
+        const open = document.createElement('button');
+        open.type = 'button';
+        open.className = 'joist-pick-open';
+        open.dataset.joistPickOpen = String(control.levelId);
+        open.textContent = '▾';
+        open.title = 'Pick a joist: TJI depths, sawn lumber';
+        open.setAttribute('aria-label', `${control.tag} picks`);
+        open.disabled = readOnly;
+        open.addEventListener('click', () => {
+          if (joistPickMenu && joistPickMenu.dataset.joistPickMenu === String(control.levelId)) closeJoistPicks();
+          else openJoistPicks(control, open);
+        });
+        box.appendChild(open);
+        joistReachLine(control, cell);
+        return cell;
+      };
+      const joistReachText = levelId => {
+        const asm = assembly(levelId);
+        const type = JOIST_TYPES.find(t => t.id === asm.joistType);
+        const name = type ? type.label : 'JOIST';
+        if (!JS || !JS.familyOf(asm.joistType)) return '';
+        const reach = JS.reachAt({ joistType: asm.joistType, depthIn: asm.joistDepthIn, ocIn: 16 });
+        if (!reach) {
+          return JS.familyOf(asm.joistType) === 'sawn'
+            ? `${name}: no span table yet`
+            : `${inchesOnly(asm.joistDepthIn)} ${name}: not a TJ-4500 depth`;
+        }
+        const { lightest: lo, strongest: hi } = reach;
+        return lo.series === hi.series
+          ? `${name} ${lo.series} @ 16": ${ftIn(lo.reachFt)}`
+          : `${name} @ 16": ${ftIn(lo.reachFt)} (${lo.series}) to ${ftIn(hi.reachFt)} (${hi.series})`;
+      };
+      const joistReachLine = (control, row) => {
+        const line = document.createElement('span');
+        line.className = 'joist-reach';
+        line.dataset.joistReach = String(control.levelId);
+        row.appendChild(line);
+        const sync = () => { line.textContent = joistReachText(control.levelId); line.hidden = !line.textContent; };
+        joistReachLines.push(sync);
+        sync();
+      };
 
       const schedRow = (host, key, name, valueEl) => {
         const row = document.createElement('div');
@@ -4076,7 +4217,10 @@
             // repaint skips the focused box, so a rejected edit snaps back here
             input.value = control.get();
           });
-          link(schedRow(houseSched, control.key, fullName(control), input), tag);
+          // A row stays exactly a name and a value (project-sched-pairs): the
+          // ▾ and the reach line live inside the value cell.
+          const valueEl = control.joistPicks ? joistPickBox(control, input) : input;
+          link(schedRow(houseSched, control.key, fullName(control), valueEl), tag);
           controlEls.set(control.key, { control, el: input, tag, host: wrap });
         } else {
           // DERIVED, so it is shown and never typed. Movie: "derived values
@@ -4754,6 +4898,7 @@
       };
 
       const repaint = () => {
+        joistReachLines.forEach(sync => sync());
         fitSectionToScheds();
         fillDoorHeadNotice();
         // Built first, painted second: the two sections have to agree on a

@@ -90,7 +90,9 @@ const spyTags = page => page.evaluate(() => {
   window.__tape = [];
   const fillText = proto.fillText;
   proto.fillText = function (text, x, y, ...rest) {
-    if (/^(FLUSH|DROPPED) BEAM/.test(String(text))) {
+    // A flush beam in a known deck reads 'ENGD LVL FLUSH BEAM' since 16 Nov
+    // 2026 (jb; build-house beamDepthLabel finds the deck).
+    if (/^(ENGD LVL )?(FLUSH|DROPPED) BEAM/.test(String(text))) {
       window.__tape.push({ op: 'tag', canvas: this.canvas && this.canvas.id, text, y, baseline: this.textBaseline });
     }
     return fillText.call(this, text, x, y, ...rest);
@@ -194,7 +196,7 @@ test('the FLUSH BEAM note goes on the side opposite the string, once per beam li
   // The string sits north of the beam (z 21, away from the well), so the
   // note goes SOUTH: written at +offset in the beam's frame, hung from its
   // top. And the two pieces of the one line share one note.
-  expect(tags.map(t => t.text), 'one note for the two pieces').toEqual(['FLUSH BEAM']);
+  expect(tags.map(t => t.text), 'one note for the two pieces').toEqual(['ENGD LVL FLUSH BEAM']);
   expect(tags[0].y, 'on the other side of the beam from the string').toBeGreaterThan(0);
   expect(tags[0].baseline).toBe('top');
   await saveNow(page);
@@ -229,6 +231,6 @@ test('the FLUSH BEAM note goes on the side opposite the string, once per beam li
   await page.locator(`[data-layout-sheet="${sheet}"]`).click();
   await page.waitForTimeout(400);
   const onSheet = await lastPaintTags(page);
-  expect(onSheet.map(t => t.text), 'one note on the sheet too').toEqual(['FLUSH BEAM']);
+  expect(onSheet.map(t => t.text), 'one note on the sheet too').toEqual(['ENGD LVL FLUSH BEAM']);
   expect(onSheet[0].y, 'and on the same side of the beam').toBeGreaterThan(0);
 });

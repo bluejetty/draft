@@ -42,8 +42,12 @@ if (!window.DraftLevelAssembly) {
   // Framed floor joist choices offered by the FLOOR JOISTS box. OWJ depth is
   // entered by hand since open-web joists come in many depths.
   const JOIST_TYPES = Object.freeze([
+    // Dressed sizes, 1 1/2" wide: jb, 16 Nov 2026, "the 2x12 should be
+    // 1.5x11 1/4" (it read 11 1/2" until then) -- "once you put on 3/4"
+    // sheathing makes it 12" even".
+    Object.freeze({ id: 'conv_2x8', label: '2x8', depthIn: 7 + 1 / 4 }),
     Object.freeze({ id: 'conv_2x10', label: '2x10', depthIn: 9 + 1 / 4 }),
-    Object.freeze({ id: 'conv_2x12', label: '2x12', depthIn: 11 + 1 / 2 }),
+    Object.freeze({ id: 'conv_2x12', label: '2x12', depthIn: 11 + 1 / 4 }),
     Object.freeze({ id: 'tji', label: 'TJI', depthIn: 11 + 7 / 8 }),
     Object.freeze({ id: 'owj', label: 'OWJ', depthIn: null }),
   ]);

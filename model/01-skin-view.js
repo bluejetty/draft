@@ -1721,7 +1721,8 @@
     const tags = R.beamTagSides(beams(), dimensions());
     const marked = beamsPastTheTable();
     beams().forEach(beam => R.drawBeam2D(ctx, toS, beam,
-      { tag: tags.get(beam.id), warn: marked.has(beam) ? B?.ENGINEERING_MARK : null }, env));
+      { tag: tags.get(beam.id), warn: marked.has(beam) ? B?.ENGINEERING_MARK : null,
+        depthLabel: B?.beamDepthLabel ? B.beamDepthLabel(beam, drawing) : null }, env));
     // ── THE PADS GO DOWN FIRST, UNDER EVERYTHING THEY CARRY ─────────────────
     //
     // Movie, 25 Sep: "we have beam and columns, but no footing, we will need
@@ -1876,7 +1877,9 @@
     if (!aboveBeams.length) return;
     const env = paintEnv();
     const tags = R.beamTagSides(aboveBeams, (drawing?.dimensions || []).filter(mine));
-    aboveBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { above: true, tag: tags.get(beam.id) }, env));
+    const B0 = window.DraftBuildHouse;
+    aboveBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { above: true, tag: tags.get(beam.id),
+      depthLabel: B0?.beamDepthLabel ? B0.beamDepthLabel(beam, drawing) : null }, env));
     // AND THE POSTS UNDER IT, at full weight: they stand on this floor and
     // are cut by the plan, the same rows the LAYOUT walls plan borrows
     // (layout-plan planPosts). Not the piles, which are the garage's.
@@ -1924,7 +1927,8 @@
     const mine = item => framed && Number(item.levelId) === Number(from) && item.view === view;
     const belowBeams = (drawing?.beams || []).filter(mine);
     const tags = R.beamTagSides(belowBeams, (drawing?.dimensions || []).filter(mine));
-    belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true, tag: tags.get(beam.id) }, env));
+    belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true, tag: tags.get(beam.id),
+      depthLabel: B?.beamDepthLabel ? B.beamDepthLabel(beam, drawing) : null }, env));
     paintJoistCallouts(belowBeams, env);
     if (!framed) return;
     // The posts with it, and NOT the piles: a pile is concrete in the ground
