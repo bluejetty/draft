@@ -410,12 +410,29 @@
     // painter is handed the walls cut at those points so the T and the X join
     // like corners do (geometry-2d's meldPieces). Drawing only -- `shown`
     // stays the real walls for the openings below and for everything else.
-    const pieces = G.meldPieces ? G.meldPieces(G.sharedEnds ? G.sharedEnds(shown) : shown) : shown;
+    const melded = G.meldPieces ? G.meldPieces(G.sharedEnds ? G.sharedEnds(shown) : shown) : shown;
+    const pieces = G.offsetApart ? G.offsetApart(melded) : melded;
     const joins = G.wallJoins(pieces);
     pieces.forEach(wall => {
       if (!wall.start || !wall.end) return;
       R.drawWallSeg2D(ctx, toS, wall, false, joins, 'both', wallEnv());
     });
+    // THE DRAWN LINE OF A WALL SET OFF IT (OFFSET, jb 16 Nov 2026): a thin
+    // dash where the line was traced, so the drafter still sees what the
+    // wall is measured from. MODEL only -- sheets print the wall, not this.
+    const offWalls = shown.filter(wall => wall.start && wall.end && window.DraftWallTypes.wallOffsetFt(wall));
+    if (offWalls.length) {
+      ctx.save();
+      ctx.strokeStyle = skin['accent'] || '#e8a33d';
+      ctx.globalAlpha = 0.8;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      offWalls.forEach(wall => {
+        const a = toS(wall.start), b = toS(wall.end);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
+      ctx.restore();
+    }
 
     // ── AND THE OPENINGS IN THEM ─────────────────────────────────────────
     //

@@ -271,7 +271,7 @@ if (!window.DraftCutMarks) {
       const nx = -dz / len, nz = dx / len;
       const t = Math.max(0, Number(thicknessFt ? thicknessFt(wall) : 0) || 0);
       const ref = wall.refLine || 'left';
-      const a = ref === 'left' ? 0 : ref === 'right' ? -t : -t / 2;
+      const a = (ref === 'left' ? 0 : ref === 'right' ? -t : -t / 2) + (window.DraftWallTypes && window.DraftWallTypes.wallLineShiftFt ? window.DraftWallTypes.wallLineShiftFt(wall) : 0);
       [wall.start, wall.end].forEach(p => [a, a + t].forEach(o =>
         pts.push({ x: p.x + nx * o, z: p.z + nz * o })));
     });

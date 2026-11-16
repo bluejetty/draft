@@ -87,6 +87,7 @@ if (!window.DraftLayoutPlan) {
           view: wall.view || 'plan',
           wallType,
           ...(made && wall.sliceFlip === true ? { sliceFlip: true } : {}),
+          ...(Number(wall.offsetFt) ? { offsetFt: Number(wall.offsetFt) } : {}),
           refLine: ['left', 'right', 'center'].includes(wall.refLine) ? wall.refLine : 'left',
         };
       })

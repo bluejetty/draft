@@ -37,7 +37,8 @@ if (!window.DraftRender2D) {
     // 'right'  → drawn line = exterior right face; wall body fills to the left (−perp)
     // 'center' → drawn line = centreline; fills symmetrically on both sides
     const refLine  = seg.refLine || 'center';
-    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -half;
+    // OFFSET FROM LINE (wall-types.js wallLineShiftFt) pushes the body off it.
+    const startOff = (refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -half) + (window.DraftWallTypes && window.DraftWallTypes.wallLineShiftFt ? window.DraftWallTypes.wallLineShiftFt(seg) : 0);
     const endOff   = startOff + totalFt;
 
     const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
@@ -54,7 +55,7 @@ if (!window.DraftRender2D) {
       const total = def.totalIn / 12;
       const mid = total / 2;
       const ref = wall.refLine || 'center';
-      const first = ref === 'left' ? 0 : ref === 'right' ? -total : -mid;
+      const first = (ref === 'left' ? 0 : ref === 'right' ? -total : -mid) + (window.DraftWallTypes && window.DraftWallTypes.wallLineShiftFt ? window.DraftWallTypes.wallLineShiftFt(wall) : 0);
       return { total, first, last: first + total };
     };
     // `flip` IS FOR TWO WALLS THAT BOTH START, OR BOTH END, AT THE CORNER

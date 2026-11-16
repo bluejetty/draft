@@ -1015,7 +1015,8 @@
     if (holo?.flip !== true || !moved || typeof moved !== 'object' || Array.isArray(moved)) return moved;
     const other = { left: 'right', right: 'left' };
     if (Array.isArray(moved.walls)) {
-      moved.walls = moved.walls.map(w => (w && other[w.refLine] ? { ...w, refLine: other[w.refLine] } : w));
+      moved.walls = moved.walls.map(w => (w && other[w.refLine] ? { ...w, refLine: other[w.refLine] }
+        : w && Number(w.offsetFt) ? { ...w, offsetFt: -Number(w.offsetFt) } : w));
     }
     if (Array.isArray(moved.fixtures)) {
       moved.fixtures = moved.fixtures.map(f => (f && Number.isFinite(f.side) ? { ...f, side: -f.side } : f));

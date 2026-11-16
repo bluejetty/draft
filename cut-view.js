@@ -1326,8 +1326,8 @@ if (!window.DraftCutView) {
       const nx = -(d.z - c.z) / (wallLen || 1), nz = (d.x - c.x) / (wallLen || 1);
       const axisDotN = axis.x * nx + axis.z * nz;
       const ref = wall.refLine || 'center';
-      const acrossMid = ref === 'left' ? totalFt / 2
-        : ref === 'right' ? -totalFt / 2 : 0;
+      const acrossMid = (ref === 'left' ? totalFt / 2
+        : ref === 'right' ? -totalFt / 2 : 0) + (window.DraftWallTypes && window.DraftWallTypes.wallLineShiftFt ? window.DraftWallTypes.wallLineShiftFt(wall) : 0);
       const uShift = acrossMid / ((axisDotN < 0 ? -1 : 1)
         * Math.max(Math.abs(axisDotN), 0.35));
       crossings.push({
@@ -1827,7 +1827,7 @@ if (!window.DraftCutView) {
       const start = at(startOff), end = at(endOff);
       const a = proj(start), b = proj(end);
       if (Math.abs(b.u - a.u) < 0.05) return null;
-      return { wall: { ...wall, start, end, refLine: 'center', endCapOf: wall.id }, a, b, depth: nearP.d };
+      return { wall: { ...wall, start, end, refLine: 'center', offsetFt: 0, endCapOf: wall.id }, a, b, depth: nearP.d };
     };
     env.walls().forEach(wall => {
       const p1 = proj(wall.start), p2 = proj(wall.end);
