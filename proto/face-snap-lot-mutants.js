@@ -30,8 +30,12 @@ const MUTANTS = [
     with: "          return;\n        }\n        others.forEach",
     test: "and the inside corner, and a free end's face" },
   { file: "model/07-walls-magnet.js", name: "ROOF PLAN offers no wall tops",
-    find: "    const segs = (own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls\n",
-    with: "    const segs = (own.length ? own : (false && G.roofPlanWalls\n",
+    find: "    const segs = (own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls\n"
+      + "      ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],\n"
+      + "        floors: drawing.floors || [], levels: drawing.levels || [] }) : [])).concat(bgWalls());\n",
+    with: "    const segs = (own.length ? own : (false && G.roofPlanWalls\n"
+      + "      ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],\n"
+      + "        floors: drawing.floors || [], levels: drawing.levels || [] }) : [])).concat(bgWalls());\n",
     test: "on ROOF PLAN, the outside corner of the wall tops drawn there" },
   { file: "model/10-tracking-garage.js", name: "the lot boxes read whole feet only",
     find: "    const parsed = window.DraftFormatters.parseArchitecturalLength(value);\n    return parsed.ok ? parsed.inches / 12 : NaN;\n",
