@@ -2498,6 +2498,8 @@
         // drift, and the drafter believes the one he can see"* -- and a band
         // drawn to the cursor while the wall commits a foot away is that
         // failure in its worst form: the drafter aims by the line.
+        // A TURTLE TRACE'S GUIDE, and the traced start while DRAW AT POINT is armed (04).
+        paintTurtleTrace(toS);
         if (drawStart) {
           const run = runInHand();
           const R = window.DraftRender2D;

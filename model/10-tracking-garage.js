@@ -696,6 +696,8 @@
     // raise their walls -- a loaded brush must not change what the bone
     // builds. Empty brush, empty options, and the drafter's stored defaults
     // answer exactly as they did.
+    // A TURTLE TRACE writes the piece as a row and draws nothing (04).
+    if (turtleTracing()) { drawStart = turtleTraceTake(drawStart, end); stripRefresh(); paint(); return; }
     const made = commitDrawn(drawStart, end);
     // CHAINING, the old page's habit: the next wall starts where this one
     // ended, so a room is four taps and not eight. The pooled END object is
@@ -746,7 +748,11 @@
   // THE FIRST CORNER IS A NODE ONCE THE LOOP CAN CLOSE ON IT -- three corners
   // down. Below three a press near it is a corner placed there, the rule every
   // loop tool keeps, and a node there would pull the hand onto it.
-  const traceHome = () => { const c = traceCorners(); return c.length >= 3 ? [c[0]] : []; };
+  const traceHome = () => {
+    // A TURTLE TRACE'S FIRST CORNER too, once two moves are down (04).
+    if (turtleTracing()) { const p = turtleTrace.points; return p.length >= 3 ? [p[0]] : []; }
+    const c = traceCorners(); return c.length >= 3 ? [c[0]] : [];
+  };
   // ── THE ORANGE TRACKING RAYS ───────────────────────────────────────────
   //
   // Movie, 1 Oct: *"at this point when i'm drawing a wall past the first point
@@ -788,6 +794,8 @@
     // from every corner too, as the house outline always has (Movie, 21 Oct).
     const trace = traceCorners();
     if (trace.length) return trace;
+    // A TURTLE TRACE tracks from every corner pressed, as a loop does.
+    if (turtleTracing() && turtleTrace.points.length) return turtleTrace.points;
     // A DRAGGED END TRACKS FROM THE CORNERS IT COULD LINE UP WITH (Movie, 22
     // Oct: "i'd like the interior corners to have mini-node style magnetic
     // link / cross lines"): the faces' corners of every wall the end is not

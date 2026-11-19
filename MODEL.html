@@ -418,6 +418,12 @@
           </svg>
         </span>
         <span class="turtle-status" data-turtle-status aria-live="polite">NO MOVES YET</span>
+        <!-- TRACE (jb, 19 Nov 2026: "make a list of turtle commands
+             (backwards) ... after the CLOSED 5 MOVES, before the dropbox,
+             put a link for TRACE"): the MODEL screen takes the presses, and
+             each move clicked round the building is written as a row. -->
+        <button type="button" class="turtle-trace" data-turtle-do="trace" aria-pressed="false"
+          title="Click round a building on the sheet; each move is written into this table. Back on the first point closes it; ENTER, SPACE or a right click ends an open path; ESC stops; BACKSPACE takes back the last move">TRACE</button>
         <span class="turtle-name" data-turtle-name></span>
       </div>
       <!-- ONE PASTE SPOT (jb, 11 Nov: "copy the entire command like in that
@@ -1142,6 +1148,18 @@
       <button type="button" data-shelf-close-save>SAVE SHELF FIRST</button>
       <button type="button" data-shelf-close-discard>CLOSE WITHOUT SAVING</button>
       <button type="button" data-shelf-close-cancel>CANCEL</button>
+    </div>
+  </div>
+</div>
+<!-- TRACE ON A TABLE THAT HAS MOVES (jb, 19 Nov 2026): the traced moves
+     take the table's place, or go on after the last row. -->
+<div id="turtle-trace-ask" data-turtle-trace-ask hidden role="dialog" aria-label="Trace over the turtle table">
+  <div class="promote-card">
+    <p><b>THE TURTLE TABLE HAS <span data-turtle-trace-count></span> MOVES.</b><br>Trace a new path in their place, or add the traced moves after the last one?</p>
+    <div class="promote-row">
+      <button type="button" data-turtle-trace-replace>REPLACE</button>
+      <button type="button" data-turtle-trace-add>ADD TO THE END</button>
+      <button type="button" data-turtle-trace-cancel>CANCEL</button>
     </div>
   </div>
 </div>

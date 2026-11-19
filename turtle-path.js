@@ -168,7 +168,35 @@ if (!window.DraftTurtlePath) {
     return rows;
   };
 
-  const api = Object.freeze({ COMPASS, CLOSE_FT, parseDirection, compassWordOf, parseDistance, walk, rowsFromText });
+  // A MOVE WRITTEN BACK AS A ROW, for TRACE (jb, 19 Nov 2026: "make a list
+  // of turtle commands (backwards) ... trace the outline of the building and
+  // as i make each move the TURTLE records it"). The direction is a compass
+  // word when the move lands on one of the 16 points, else a survey bearing
+  // to a hundredth of a degree (N 30.25 E); the distance is decimal feet to
+  // two places, as his notes have them, or metres with the m on METRIC.
+  // Every row written reads back through parseDirection / parseDistance.
+  const M_PER_FT = 0.3048;
+  const hundredths = n => Math.round(n * 100) / 100;
+  const directionText = deg => {
+    const d = norm(hundredths(norm(deg))) % 360;
+    const word = compassWordOf(d);
+    if (word) return word;
+    const fmt = a => String(hundredths(a));
+    if (d < 180) return `N ${fmt(Math.abs(90 - d))} ${d < 90 ? 'E' : 'W'}`;
+    return `S ${fmt(Math.abs(270 - d))} ${d > 270 ? 'E' : 'W'}`;
+  };
+  const rowOfMove = (from, to, opts = {}) => {
+    const dx = Number(to?.x) - Number(from?.x), dz = Number(to?.z) - Number(from?.z);
+    const ft = Math.hypot(dx, dz);
+    if (!(ft >= 0.005)) return null;
+    // North is -z, so the plan's z is turned over to count anticlockwise.
+    const deg = Math.atan2(-dz, dx) * 180 / Math.PI;
+    const dist = opts.metric === true ? `${(ft * M_PER_FT).toFixed(2)}m` : ft.toFixed(2);
+    return { dir: directionText(deg), dist };
+  };
+
+  const api = Object.freeze({ COMPASS, CLOSE_FT, parseDirection, compassWordOf, parseDistance, walk, rowsFromText,
+    directionText, rowOfMove });
   if (typeof window !== 'undefined') window.DraftTurtlePath = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

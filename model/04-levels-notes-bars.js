@@ -693,6 +693,10 @@
   let turtleCur = turtlePages[turtlePage];
   const turtleSetCur = cur => { turtleCur = cur; turtlePages[turtlePage] = cur; };
   let turtlePickArmed = false;
+  // TRACE IN HAND (jb, 19 Nov 2026): the corners clicked so far, and the row
+  // the traced moves start at (0 on REPLACE, after the last on ADD).
+  let turtleTrace = null;
+  const turtleTracing = () => turtleTrace !== null;
   const turtleRecords = () => (Array.isArray(drawing?.turtles) ? drawing.turtles : []);
   const turtleOntoDrawing = () => {
     if (!drawing) return;
@@ -792,7 +796,8 @@
     if (w.closed) turtleBox.setAttribute('data-closed', ''); else turtleBox.removeAttribute('data-closed');
     turtleSyncChip(w.closed);
     const n = w.legs.length;
-    turtleStatus.textContent = !n ? 'NO MOVES YET'
+    turtleStatus.textContent = turtleTrace ? `TRACING · ${n} MOVE${n === 1 ? '' : 'S'}`
+      : !n ? 'NO MOVES YET'
       : w.closed ? `CLOSED · ${n} MOVE${n === 1 ? '' : 'S'}`
         : `OPEN · ${n} MOVE${n === 1 ? '' : 'S'} · GAP ${turtleGapText(w.gapFt)}`;
     turtleNameOut.textContent = rec
@@ -1248,6 +1253,8 @@
     let best = null, bestD = reach;
     const take = p => { if (!p) return; const d = Math.hypot(p.x - at.x, p.z - at.z); if (d < bestD) { bestD = d; best = { x: p.x, z: p.z }; } };
     take(gridDatum());
+    // THE TRACED START, so a traced path drawn back lands where it was traced.
+    take(turtleCur.traceStart);
     [...walls(), ...lines()].forEach(seg => { take(seg.start); take(seg.end); });
     [...outlines(), ...floors(), ...shapes()].forEach(loop => (loop.points || []).forEach(take));
     turtleDraw(best || { x: at.x, z: at.z });
@@ -1255,7 +1262,10 @@
   const turtleArmPick = () => {
     turtlePickArmed = true;
     turtleBox.querySelector('[data-turtle-do="point"]')?.setAttribute('data-armed', '');
-    sayOnStrip('TURTLE: press the start point on the sheet (Esc to put it down).');
+    sayOnStrip(turtleCur.traceStart
+      ? 'TURTLE: press the start point on the sheet; the ringed traced start lands it where it was traced (Esc to put it down).'
+      : 'TURTLE: press the start point on the sheet (Esc to put it down).');
+    paint();
   };
   const turtleDisarmPick = () => {
     if (!turtlePickArmed) return;
@@ -1263,6 +1273,148 @@
     turtleBox.querySelector('[data-turtle-do="point"]')?.removeAttribute('data-armed');
   };
   window.addEventListener('keydown', e => { if (e.key === 'Escape') turtleDisarmPick(); }, true);
+
+  // ── TRACE: THE TABLE WRITTEN BACKWARDS ──────────────────────────────────
+  //
+  // jb, 19 Nov 2026: "i'd like to be able to make a list of turtle commands
+  // (backwards) rather than typing in ... put a link for TRACE, and then when
+  // the user presses it then i'd go to the model screen and trace the
+  // outline of the building and as i make each move the TURTLE records it in
+  // the turtle table". His answers to the plan:
+  //   - the presses are the LINE tool's, so every snap it has (nodes, wall
+  //     ends, T-SQUARE, 1 FT, cross lines, a typed LENGTH) works the same;
+  //     only, nothing is drawn: model/10 drawPress and model/14's typed
+  //     length hand each piece here instead of to commitDrawn;
+  //   - a row is a compass word on the 16 points, else a bearing N 30.25 E;
+  //     decimal feet to two places, metres on METRIC (turtle-path rowOfMove);
+  //   - back on the first point closes it, the lamp lights and the trace
+  //     ends; ENTER / SPACE / right click / double-click end an open one
+  //     (model/14 finishInHand, endDrawRun); ESC stops and keeps the rows;
+  //     BACKSPACE takes back the last move;
+  //   - on a table holding moves, a card asks REPLACE or ADD TO THE END;
+  //   - only a dashed guide shows while tracing (paintTurtleTrace).
+  const turtleTraceAsk = document.getElementById('turtle-trace-ask');
+  const turtleTraceKey = turtleBox.querySelector('[data-turtle-do="trace"]');
+  const turtleMetric = () => drawing?.units === 'metric';
+  let turtleTraceHooked = false;
+  const turtleTraceBegin = mode => {
+    if (!drawing) return;
+    if (turtleTraceAsk) turtleTraceAsk.hidden = true;
+    turtleDisarmPick();
+    if (typeof activeCut === 'function' && activeCut()) { sayOnStrip('TURTLE TRACE works on a plan; go to a plan level first.'); return; }
+    // A FRESH TABLE, or these rows to add to, never a drawn path's own rows:
+    // its lines stay what they are until REGENERATE is pressed on them.
+    turtleSetCur({ rows: mode === 'add' ? turtleRowsOf(turtleCur.rows) : [], kind: turtleKind(), record: null });
+    // ANOTHER TOOL ARMED PUTS THE TRACE DOWN, rows kept (the register is
+    // declared in model/09, after this file runs, so it is joined here).
+    if (!turtleTraceHooked) {
+      turtleTraceHooked = true;
+      toolListeners.push(next => { if (turtleTrace && next !== 'line') turtleTraceEnd('tool'); });
+    }
+    if (typeof setLineArcMode === 'function') setLineArcMode('straight');
+    turtleTrace = { base: turtleCur.rows.length, points: [] };
+    setTool('line');
+    if (activeTool !== 'line') { turtleTrace = null; sayOnStrip('TURTLE TRACE needs the LINE tool, and it is not on this board.'); return; }
+    turtleTraceKey?.setAttribute('aria-pressed', 'true');
+    turtleKeep();
+    turtleRender();
+    sayOnStrip('TURTLE TRACE: press the first corner, then each corner round the building. Back on the first closes it; ENTER ends; BACKSPACE takes one back.');
+  };
+  const turtleTraceEnd = why => {
+    if (!turtleTrace) return;
+    const n = turtleCur.rows.length - turtleTrace.base;
+    turtleTrace = null;
+    turtleTraceKey?.setAttribute('aria-pressed', 'false');
+    drawStart = null;
+    if (activeTool === 'line') setTool(RESTING_TOOL);
+    turtleKeep();
+    turtleRender();
+    if (why === 'closed') sayOnStrip(`TURTLE TRACE: back on the first corner, ${n} moves written. DRAW AS and DRAW AT POINT take it from here.`);
+    else sayOnStrip(`TURTLE TRACE: stopped, ${n} move${n === 1 ? '' : 's'} written.`);
+    paint();
+  };
+  // ONE PIECE OF THE RUN, from model/10 drawPress or the typed LENGTH. Gives
+  // back where the run goes on from, or null once the trace has ended.
+  const turtleTraceTake = (from, to) => {
+    const pts = turtleTrace.points;
+    if (!pts.length) {
+      pts.push({ x: from.x, z: from.z });
+      turtleCur.traceStart = { x: from.x, z: from.z };
+    }
+    const home = pts[0];
+    const closes = pts.length >= 3 && Math.hypot(to.x - home.x, to.z - home.z) < 1e-3;
+    const T = window.DraftTurtlePath;
+    let row;
+    if (closes) {
+      // THE CLOSING MOVE IS MEASURED FROM WHERE THE ROWS SO FAR LAND, not
+      // from the last corner, so the rounding of the rows before it cannot
+      // leave the table open by a hair: the table itself comes home.
+      const w = T.walk(turtleCur.rows.slice(turtleTrace.base), home, { calc: window.DraftCalc, metric: turtleMetric() });
+      row = T.rowOfMove(w.points[w.points.length - 1], home, { metric: turtleMetric() });
+    } else row = T.rowOfMove(from, to, { metric: turtleMetric() });
+    if (!row) {
+      if (closes) { turtleTraceEnd('closed'); return null; }
+      return { x: from.x, y: 0, z: from.z };
+    }
+    if (turtleCur.rows.length >= TURTLE_ROWS_MAX) { sayOnStrip(`TURTLE TRACE: the table holds ${TURTLE_ROWS_MAX} moves.`); turtleTraceEnd('full'); return null; }
+    turtleCur.rows.push(row);
+    pts.push({ x: to.x, z: to.z });
+    turtleKeep();
+    turtleRender();
+    if (closes) { turtleTraceEnd('closed'); return null; }
+    sayOnStrip(`TURTLE TRACE: ${row.dir} ${row.dist} written. Next corner, or ENTER to end.`);
+    return { x: to.x, y: 0, z: to.z };
+  };
+  // BACKSPACE: the last move comes off the table and the run goes back to
+  // the corner before it; with none left, the first corner is let go.
+  const turtleTraceBack = () => {
+    const pts = turtleTrace.points;
+    if (pts.length >= 2 && turtleCur.rows.length > turtleTrace.base) {
+      turtleCur.rows.pop();
+      pts.pop();
+      const last = pts[pts.length - 1];
+      drawStart = { x: last.x, y: 0, z: last.z };
+      turtleKeep();
+      turtleRender();
+      sayOnStrip(`TURTLE TRACE: last move taken back, ${turtleCur.rows.length - turtleTrace.base} left.`);
+    } else {
+      pts.length = 0;
+      drawStart = null;
+      sayOnStrip('TURTLE TRACE: press the first corner.');
+    }
+    stripRefresh();
+    paint();
+  };
+  window.addEventListener('keydown', e => {
+    if (!turtleTrace) return;
+    if (e.key === 'Escape') { turtleTraceEnd('esc'); return; }
+    if (e.key !== 'Backspace' || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    turtleTraceBack();
+  }, true);
+  // THE GUIDE: the corners pressed so far as a dashed path, the first one
+  // ringed (it closes the trace); and while DRAW AT POINT is armed after a
+  // trace, the traced start ringed, where a press lands the path on it.
+  const paintTurtleTrace = toS => {
+    const pts = turtleTrace?.points || [];
+    const ring = (p, r) => { const q = toS(p); ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.stroke(); };
+    ctx.save();
+    ctx.strokeStyle = skin['accent'];
+    ctx.lineWidth = 2;
+    if (pts.length >= 2) {
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath();
+      pts.forEach((p, i) => { const q = toS(p); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (pts.length) ring(pts[0], 8);
+    if (!turtleTrace && turtlePickArmed && turtleCur.traceStart) ring(turtleCur.traceStart, 8);
+    ctx.restore();
+  };
   // THE SELECTION BRINGS ITS TABLE UP: any line of a turtle path picked
   // shows that path's rows (model/18 hooks this on the selection watchers,
   // which are declared after this file runs).
@@ -1328,6 +1480,16 @@
       if (turtlePickArmed) { turtleDisarmPick(); return; }
       if (turtleCur.record && turtleLiveItems(turtleCur.record).length) turtleSetCur({ rows: turtleRowsOf(turtleCur.rows), kind: turtleKind(), record: null });
       turtleArmPick();
+    } else if (what === 'trace') {
+      if (turtleTrace) { turtleTraceEnd('key'); return; }
+      const n = turtleCur.rows.length;
+      if (n && turtleTraceAsk) {
+        turtleTraceAsk.querySelector('[data-turtle-trace-count]').textContent = String(n);
+        turtleTraceAsk.hidden = false;
+        setTimeout(() => turtleTraceAsk.querySelector('[data-turtle-trace-replace]')?.focus(), 0);
+        return;
+      }
+      turtleTraceBegin('replace');
     } else if (what === 'regen') { turtleDisarmPick(); turtleRegenerate(); }
     else if (what === 'new') turtleNewPath();
     else if (what === 'notes') {
@@ -1344,6 +1506,11 @@
       turtleRender({ focusRow: 0 });
     }
   }));
+  if (turtleTraceAsk) {
+    turtleTraceAsk.querySelector('[data-turtle-trace-replace]').addEventListener('click', () => turtleTraceBegin('replace'));
+    turtleTraceAsk.querySelector('[data-turtle-trace-add]').addEventListener('click', () => turtleTraceBegin('add'));
+    turtleTraceAsk.querySelector('[data-turtle-trace-cancel]').addEventListener('click', () => { turtleTraceAsk.hidden = true; });
+  }
   // THE STRIP LAMP PRESSED opens the pad on TURTLE (the chip is built by
   // shell-bars.js, so the press is heard on the document).
   document.addEventListener('click', e => {

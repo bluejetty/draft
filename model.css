@@ -1223,10 +1223,15 @@
   .turtle { flex:1; min-height:0; display:flex; flex-direction:column; gap:4px; padding:6px;
     color: var(--pad-ink); font-family: var(--font-ui); }
   .turtle[hidden] { display:none; }
-  .turtle-head { display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700; letter-spacing:0.08em; }
+  .turtle-head { display:flex; flex-wrap:wrap; align-items:center; gap:2px 6px; font-size:10px; font-weight:700; letter-spacing:0.08em; }
   .turtle-lamp { display:inline-flex; color:#1b1b1b; }
-  .turtle-status { flex:1; }
-  .turtle-name { opacity:0.7; font-weight:600; }
+  .turtle-status { flex:none; }
+  .turtle-name { opacity:0.7; font-weight:600; margin-left:auto; white-space:nowrap; }
+  /* TRACE, a link after the status (jb, 19 Nov 2026); lit while tracing. */
+  .turtle-trace { font: inherit; letter-spacing:0.08em; padding:0 2px; border:none; background:none; cursor:pointer;
+    color: var(--pad-ink); text-decoration:underline; text-underline-offset:2px; }
+  .turtle-trace:hover { opacity:0.75; }
+  .turtle-trace[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); text-decoration:none; border-radius:2px; }
   .turtle[data-closed] .turtle-lamp { color:#18b24a; filter: drop-shadow(0 0 3px rgba(24,178,74,0.9)); }
   .turtle[data-closed] .turtle-status { color:#128a38; }
   .turtle-paste { width:100%; box-sizing:border-box; resize:none; font-family: var(--font-ui); font-size:11px;
@@ -1536,8 +1541,8 @@
   #beam-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #beam-ask[hidden] { display:none; }
   #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
-  #shelf-suite, #shelf-close { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
-  #shelf-suite[hidden], #shelf-close[hidden] { display:none; }
+  #shelf-suite, #shelf-close, #turtle-trace-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
+  #shelf-suite[hidden], #shelf-close[hidden], #turtle-trace-ask[hidden] { display:none; }
   /* THE X THAT CLOSES A SHELF (Movie, 23 Oct): top right of its square
      above the bone, and at the right end of its row in the LEVELS pane. A
      span, not a button -- it sits inside the square's and the row's own
