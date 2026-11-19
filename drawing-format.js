@@ -1419,6 +1419,14 @@ if (!window.DraftDrawingFormat) {
         // of a straight flight lies on, so a thicker wall moves that side and
         // narrows the flight. Written only when present.
         ...stairLockOf(stair?.lock),
+        // THE BASEMENT FLIGHT BESIDE AN EXTERIOR WALL (jb, 19 Nov 2026):
+        // REDUCE BASEMENT on/off, the inches taken off, and the side of the
+        // run's frame the wall is on. Written only when set.
+        ...(typeof stair?.extWall === 'boolean' ? { extWall: stair.extWall } : {}),
+        ...(Number.isFinite(Number(stair?.extWallCutIn)) && stair?.extWallCutIn != null
+          && Number(stair.extWallCutIn) >= 0 && Number(stair.extWallCutIn) <= 24
+          ? { extWallCutIn: Number(stair.extWallCutIn) } : {}),
+        ...(['left', 'right'].includes(stair?.extWallSide) ? { extWallSide: stair.extWallSide } : {}),
         layer: 'A-STR',
       };
     }).filter(Boolean);

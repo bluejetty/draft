@@ -280,11 +280,15 @@ test('the flight above takes its extra width on the wall side', async ({ page })
   const lower = runs.find(s => Number(s.levelId) === MAIN_FL);
   const upper = runs.find(s => Number(s.levelId) === 5);
   expect(lower && upper, 'a flight on each floor').toBeTruthy();
-  expect(r(upper.widthFt), 'the upper flight is the wider one').toBe(3.5);
+  // 3'-8" over 3'-0" (jb, 19 Nov 2026: the 14" foundation allowance less the
+  // 6" upper wall), and the basement flight's REDUCE BASEMENT switch is on.
+  expect(r(upper.widthFt), 'the upper flight is the wider one').toBe(r(3 + 8 / 12));
   expect(r(lower.widthFt)).toBe(3);
+  expect(lower.extWall).toBe(true);
+  expect(lower.extWallCutIn).toBe(8);
   // THE INSIDE EDGES LINE UP, which is the whole of "line it up on and leave
-  // the extra inch on the exterior wall side": the flight above grew 6", and
-  // all 6" went toward the wall rather than 3" of it into the room.
+  // the extra inch on the exterior wall side": the flight above grew 8", and
+  // all 8" went toward the wall rather than 4" of it into the room.
   const grew = (upper.widthFt - lower.widthFt) / 2;
   const house = boxOf((d.outlines || [])
     .find(o => Number(o.levelId) === MAIN_FL && !o.garage).points);

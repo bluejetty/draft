@@ -3260,13 +3260,24 @@
       ? planStairs.find(stair => Number(stair.levelId) === Number(floors[idx - 1].id))
       : null;
     // RULE B: a basement descent running beside an exterior wall widens every
-    // stacked flight above it to 3'-6", so the basement run keeps its true
-    // 3'-0" clear past the thicker foundation wall.
+    // stacked flight above it by the cut -- 3'-8" over a 3'-0" basement run
+    // (jb, 19 Nov 2026: 14" foundation allowance less the 6" upper wall) --
+    // and the basement flight's REDUCE BASEMENT switch is turned on, so a
+    // width typed on the flight above later carries down to it.
     const lowestStair = floors.length
       ? planStairs.find(stair => Number(stair.levelId) === Number(floors[0].id))
       : null;
-    const widen = lowestStair ? stairWallAdjacent(lowestStair) : false;
-    const widthFt = idx > 0 && widen ? Math.max(3.5, stairWidthFt) : stairWidthFt;
+    const widen = lowestStair
+      ? (lowestStair.extWall === true || (lowestStair.extWall == null && stairWallAdjacent(lowestStair)))
+      : false;
+    if (idx > 0 && widen && lowestStair.extWall == null) {
+      lowestStair.extWall = true;
+      lowestStair.extWallCutIn = STAIR_EXT_WALL_CUT_IN;
+      lowestStair.extWallSide = stairNearWallSide(lowestStair);
+    }
+    const cutFt = widen ? (Number(lowestStair.extWallCutIn) >= 0
+      ? Number(lowestStair.extWallCutIn) : STAIR_EXT_WALL_CUT_IN) / 12 : 0;
+    const widthFt = idx > 0 && widen ? (Number(lowestStair.widthFt) || stairWidthFt) + cutFt : stairWidthFt;
     let stackNote = '';
     if (below) {
       const stacked = buildStackedStair(below, levelId, layout, widthFt, id);
@@ -3945,8 +3956,129 @@
       }
       st.widthFt = want / 12;
       return null;
-    }) && (sayOnStrip(`STAIR ${want}" wide -- its well cut again. UNDO puts it back.`), true);
+    }) && (followBasementCut(stair),
+      sayOnStrip(`STAIR ${want}" wide -- its well cut again. UNDO puts it back.`), true);
   };
+  // ── THE BASEMENT FLIGHT BESIDE AN EXTERIOR WALL (jb, 19 Nov 2026) ────
+  //
+  // "if they are placed beside the exterior wall, the downstairs flight will
+  // need to be adjusted ... 14\" complete with int. for 8\" conc. wall ... the
+  // upper ext wall is 5.5\" ... lets give them 6\" ... so basically if the
+  // upstairs are 3'8\" wide, on the side next to the ext wall, 8\" reduced for
+  // basement width 3'0\"", and "on the INTERIOR stairs the widths can be the
+  // same ... one switch for reducing (maybe allow manual input to change the
+  // distance too) and another switch for the side the stairs are on ext".
+  //
+  // THREE FIELDS ON THE BASEMENT FLIGHT (the one filed on the lowest floor,
+  // going down to the basement): `extWall` the switch, `extWallCutIn` the
+  // inches taken off (8 = 14" foundation allowance less the 6" upper wall),
+  // `extWallSide` which side of its frame the wall is on ('left' = the
+  // frame's +n side). The width comes off THAT side only: the inside edge
+  // stays lined up with the flight above.
+  const STAIR_EXT_WALL_CUT_IN = 8;
+  const stairBasementFlightOf = stair => {
+    const floors = stairFloorLevels();
+    if (!stair || !floors.length) return null;
+    const low = Number(floors[0].id);
+    if (Number(stair.levelId) === low) return stair;
+    return stairStackOf(stair).find(st => Number(st.levelId) === low) || null;
+  };
+  const stairUpperFlightOf = base => {
+    const floors = stairFloorLevels();
+    if (!base || floors.length < 2) return null;
+    return stairStackOf(base).find(st => Number(st.levelId) === Number(floors[1].id)) || null;
+  };
+  const stairRunFrame = stair => {
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return null;
+    const u = { x: dx / len, z: dz / len };
+    return { u, n: { x: -u.z, z: u.x },
+      c: { x: (stair.start.x + stair.end.x) / 2, z: (stair.start.z + stair.end.z) / 2 } };
+  };
+  // THE SIDE BY THE COMPASS, never left or right: the plan's top is NORTH
+  // (smaller z), as the auto dimension rows read it.
+  const stairSideCompass = (stair, side) => {
+    const f = stairRunFrame(stair);
+    if (!f) return side === 'right' ? 'RIGHT' : 'LEFT';
+    const k = side === 'right' ? -1 : 1;
+    const x = f.n.x * k, z = f.n.z * k;
+    return Math.abs(x) >= Math.abs(z) ? (x > 0 ? 'E' : 'W') : (z > 0 ? 'S' : 'N');
+  };
+  // The side nearest the exterior house line, for a switch turned on with
+  // no side chosen yet.
+  const stairNearWallSide = stair => {
+    const f = stairRunFrame(stair);
+    const [near] = stairSideStrips(stair);
+    if (!f || !near) return 'left';
+    return near.dir.x * f.n.x + near.dir.z * f.n.z >= 0 ? 'left' : 'right';
+  };
+  // WRITES THE CUT INTO A BASEMENT FLIGHT: its width and where its centre
+  // stands, from the flight above when there is one (inside edges lined up),
+  // else from its own full width (what it was before any cut). `want` is
+  // { on, cutIn, side }; anything left out keeps what the record holds.
+  // Returns null, or why not -- editStair's contract.
+  const stairApplyExtWall = (st, want = {}) => {
+    const f = stairRunFrame(st);
+    if (!f) return 'STAIR -- no run to measure across.';
+    const wasOn = st.extWall === true;
+    const wasCut = Number(st.extWallCutIn) >= 0 ? Number(st.extWallCutIn) : STAIR_EXT_WALL_CUT_IN;
+    const wasSide = st.extWallSide === 'right' ? 'right' : 'left';
+    const on = want.on ?? wasOn;
+    const cutIn = want.cutIn ?? wasCut;
+    const side = want.side ?? (st.extWallSide ? wasSide : stairNearWallSide(st));
+    if (!(cutIn >= 0) || cutIn > 24) return 'REDUCE BASEMENT -- 0" to 24".';
+    const w = Number(st.widthFt) || 3;
+    // THE FULL FLIGHT, measured across this flight's frame (centre at 0).
+    let fullC = wasOn ? (wasSide === 'left' ? 1 : -1) * wasCut / 24 : 0;
+    let fullW = w + (wasOn ? wasCut / 12 : 0);
+    const up = stairUpperFlightOf(st);
+    const uf = up && stairRunFrame(up);
+    if (uf && (up.shape || 'straight') === 'straight' && (st.shape || 'straight') === 'straight'
+      && Math.abs(uf.u.x * f.n.x + uf.u.z * f.n.z) < 1e-3) {
+      fullC = (uf.c.x - f.c.x) * f.n.x + (uf.c.z - f.c.z) * f.n.z;
+      fullW = Number(up.widthFt) || fullW;
+    }
+    const k = side === 'left' ? 1 : -1;
+    const W = fullW - (on ? cutIn / 12 : 0);
+    if (W < 1.5) return `REDUCE BASEMENT -- the basement flight would be only ${Math.round(W * 12)}" wide.`;
+    const m = fullC - k * fullW / 2 + k * W / 2;
+    st.start = { ...st.start, x: st.start.x + f.n.x * m, z: st.start.z + f.n.z * m };
+    st.end = { ...st.end, x: st.end.x + f.n.x * m, z: st.end.z + f.n.z * m };
+    st.widthFt = W;
+    st.extWall = on;
+    st.extWallCutIn = cutIn;
+    st.extWallSide = side;
+    return null;
+  };
+  // THE PANEL'S DOOR: the stair picked may be any flight of the stack; the
+  // switch belongs to its basement flight.
+  const setStairExtWall = (stair, want) => {
+    const base = stairBasementFlightOf(stair);
+    if (!base) {
+      sayOnStrip('REDUCE BASEMENT -- this stair has no flight going down to the basement.');
+      return false;
+    }
+    const done = editStair(base, st => stairApplyExtWall(st, want));
+    if (done) {
+      const F = window.DraftFormatters;
+      sayOnStrip(base.extWall
+        ? `BASEMENT FLIGHT ${F.formatArchitecturalInches(base.widthFt * 12)} wide -- ${base.extWallCutIn}" off the ${stairSideCompass(base, base.extWallSide)} side (exterior wall). UNDO puts it back.`
+        : `BASEMENT FLIGHT ${F.formatArchitecturalInches(base.widthFt * 12)} wide -- the same as the flight above. UNDO puts it back.`);
+    }
+    return done;
+  };
+  // AN UPPER FLIGHT'S WIDTH CHANGED: a reduced basement flight under it
+  // follows, still the cut narrower. Folded into the width's own UNDO.
+  const followBasementCut = stair => {
+    const base = stairBasementFlightOf(stair);
+    if (!base || base === stair || base.extWall !== true) return;
+    const was = undoStack.length;
+    if (!editStair(base, st => stairApplyExtWall(st, {}))) return;
+    const steps = undoStack.splice(was - 1, 2);
+    undoStack.push({ kind: 'batch', steps });
+  };
+
   // ONE RISER MORE OR LESS: the rise is the floor's, so each riser takes its
   // share -- more risers, each lower and the flight a tread longer; fewer,
   // each higher. Never outside the minimum and the maximum.

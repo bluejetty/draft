@@ -2389,6 +2389,48 @@
     box.append(width, risers, propRow('RAIL', [['left', 'LEFT'], ['right', 'RIGHT'], ['both', 'BOTH'], ['none', 'NONE']],
       stair.rail || 'left', id => { editStair(stair, st => { st.rail = id; return null; }); redraw(); }));
 
+    // ── THE BASEMENT FLIGHT BESIDE AN EXTERIOR WALL (jb, 19 Nov 2026) ──────
+    //
+    // "one switch for reducing (maybe allow manual input to change the
+    // distance too) and another switch for the side the stairs are on ext".
+    // Shown on any flight of a stack that goes down to the basement; both
+    // switches write to that basement flight. The side is named by the
+    // compass, never left or right.
+    const base = stairBasementFlightOf(stair);
+    if (base) {
+      const on = base.extWall === true;
+      const cutIn = Number(base.extWallCutIn) >= 0 ? Number(base.extWallCutIn) : STAIR_EXT_WALL_CUT_IN;
+      const reduce = propRow('REDUCE BASEMENT (EXT. WALL)', [['on', 'ON'], ['off', 'OFF']], on ? 'on' : 'off',
+        id => { setStairExtWall(stair, { on: id === 'on' }); redraw(); });
+      reduce.dataset.propRow = 'reduce basement';
+      const cut = document.createElement('input');
+      cut.type = 'number';
+      cut.dataset.stairExtCut = '';
+      cut.min = '0';
+      cut.max = '24';
+      cut.step = '0.5';
+      cut.value = String(cutIn);
+      cut.title = 'Inches the basement flight is narrower, off the exterior wall side (14" foundation less 6" upper wall = 8")';
+      cut.style.width = '52px';
+      cut.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') cut.blur(); });
+      cut.addEventListener('change', () => {
+        const v = Math.round(Number(cut.value) * 8) / 8;
+        if (!(v >= 0 && v <= 24)) { sayOnStrip('REDUCE BASEMENT -- 0" to 24".'); redraw(); return; }
+        setStairExtWall(stair, { on: true, cutIn: v });
+        redraw();
+      });
+      const inch = document.createElement('span');
+      inch.textContent = '" LESS';
+      const chips = reduce.querySelector('.chip-row') || reduce;
+      chips.append(cut, inch);
+      const sideName = side => ({ N: 'NORTH', S: 'SOUTH', E: 'EAST', W: 'WEST' })[stairSideCompass(base, side)] || side.toUpperCase();
+      const sideNow = base.extWallSide === 'right' ? 'right' : base.extWallSide === 'left' ? 'left' : stairNearWallSide(base);
+      const sideRow = propRow('EXT. WALL SIDE', [['left', sideName('left')], ['right', sideName('right')]], sideNow,
+        id => { setStairExtWall(stair, { side: id }); redraw(); });
+      sideRow.dataset.propRow = 'ext wall side';
+      box.append(reduce, sideRow);
+    }
+
     // THE FLIGHT AS IT IS, in the painter's own words (drawStairs2D writes
     // `DN — {risers}R @ {riser}`), so the panel and the plan cannot disagree.
     // SHORT, and the length is load-bearing -- see the BEAM panel's note.
