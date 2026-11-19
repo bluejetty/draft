@@ -162,6 +162,10 @@ test('the card reaches the file, and each edit is one UNDO', async ({ page }) =>
   const d = await saved(page);
   expect(d.boneyardShelves[0].detail).toEqual({ category: 'WINDOW WELLS', kind: 'special',
     tags: ['basement', 'egress'], note: 'Egress windows only', frameW: 2.5, frameH: 4, scale: 1.5 });
+  // ONE UNDO STEP PER EDIT -- category, kind, frame, scale, tags, note --
+  // on the page's own stack, not the saved versions'.
+  expect(await page.evaluate(() => undoStack.filter(step => step.kind === 'props'
+    && step.edits.some(e => e.item === drawing.boneyardShelves[0])).length)).toBe(6);
   // ONE UNDO PUTS THE NOTE BACK, AND ONLY THE NOTE.
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press('Control+z');
