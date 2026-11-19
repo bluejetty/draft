@@ -266,3 +266,23 @@ test('the layout reader keeps a viewport\'s SHOW LAYERS list (it used to drop it
     new Set([1]), new Set()).viewports[0].layersOff);
   expect(kept).toEqual(['A-ANNO-DIMS']);
 });
+
+test('a window from another file prints and goes into the DXF with its note', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  await openSiteFile(page);
+  await page.click('[data-add-pick="window:F1:1"]');
+  const at = await sheetToClient(page, 10, 5);
+  await withLayoutSave(page, () => page.mouse.click(at.x, at.y));
+  const out = await page.evaluate(() => {
+    const L = window.__layoutPage;
+    const { canvas } = L._printSheetCanvas(1, 72);
+    const d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let red = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 180 && d[i + 1] < 90 && d[i + 2] < 90) red += 1;
+    const texts = L._sheetDxfEntities(1).filter(e => e.type === 'text').map(e => e.text);
+    return { red, texts };
+  });
+  expect(out.red).toBeGreaterThan(20);
+  expect(out.texts.join(' ')).toContain('LEGAL LAND DESCRIPTION');
+  expect(out.texts.join(' ')).toContain('SITE PLAN');
+});
