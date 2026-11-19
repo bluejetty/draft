@@ -435,6 +435,10 @@
     const LV = window.DraftLayerViews;
     const activeId = activeLevelId();
     levelsPanel.innerHTML = '';
+    // A DETAILS LIBRARY LISTS ITS DETAILS, not levels (jb, 19 Nov 2026: "it
+    // won't need all the LEVELS / LAYERS because the DETAILS are just 2D
+    // small drawing with notes"): model/21-details-library.js.
+    if (drawing?.standalone === 'details' && typeof buildDetailsPanel === 'function') { buildDetailsPanel(levelsPanel); return; }
     if (!levels.length) return;
 
     // A STANDALONE SITE PLAN LISTS SITE AND NOTHING ELSE (Movie, 6 Nov:
@@ -1011,7 +1015,10 @@
       if (b) b.hidden = !boneyardActive;
     });
     const list = drawing ? shelves() : [];
-    strip.hidden = !list.length;
+    // NOT ON A DETAILS LIBRARY: its shelves are its details, listed with
+    // their cards on the LEVELS / LAYERS pane, and SAVE SHELF's suite and
+    // hologram kinds mean nothing there.
+    strip.hidden = !list.length || drawing?.standalone === 'details';
     const tab = strip.querySelector('#shelf-tab');
     tab.textContent = `SHELVES ${shelfStripOpen ? '\u25BE' : '\u25B4'}`;
     tab.title = shelfStripOpen ? 'Put the shelf previews away' : 'Show the shelf previews';
@@ -1359,6 +1366,9 @@
   let sealDrawnChain = () => {};
 
   const goToLevel = id => {
+    // A DETAILS LIBRARY HAS NO LEVEL TO GO TO: whatever asked (a key, a
+    // stale link) lands back in the detail being drawn.
+    if (drawing?.standalone === 'details') { goToBoneyard(); return; }
     // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the
     // card stays lit while the plan shows MAIN FL, and the two readouts the
     // drafter has disagree about where he is.
@@ -1537,6 +1547,9 @@
     // A STANDALONE SITE PLAN SEATS THAT ONE CARD (Movie, 6 Nov: "no other
     // layers offered") -- no elevations, no roof, no storeys, no sections.
     if (drawing?.standalone === 'site') return seats;
+    // A DETAILS LIBRARY SEATS NOTHING: it has no plan, elevation or section
+    // to preview, and its details are listed on the LEVELS / LAYERS pane.
+    if (drawing?.standalone === 'details') return [];
     ['E1', 'E2', 'E3', 'E4'].forEach(id => seats.push({ kind: 'cut', name: id }));
     planSeat(byId(ROOF_LEVEL_ID), null, 'ROOF PLAN');
     // ── A HALF FLOOR TAKES NO SEAT OF ITS OWN (Movie, 14 Oct) ──────────────

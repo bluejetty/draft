@@ -1009,7 +1009,10 @@
       // STILL ASKED, THOUGH THE ANSWER IS NOW ALWAYS YES. The roster is the
       // one place that decides, and a keypad that stopped asking would be the
       // day a tool is taken away again and the keys do not hear about it.
-      const usable = roster.availableOn(tool.id);
+      // A DETAILS LIBRARY OFFERS THE DRAFTING KEYS ONLY (jb, 19 Nov 2026):
+      // down and still in its place, the rule this walk has always kept.
+      const refused = typeof detailsToolRefused === 'function' && detailsToolRefused(tool.id);
+      const usable = roster.availableOn(tool.id) && !refused;
       btn.disabled = !usable;
       // The title is the whole name, because the face is 40px and
       // FENESTRATION does not fit on it at a readable size.
@@ -1019,6 +1022,7 @@
       const key = roster.keyFor(tool.id, roster.bindings());
       btn.title = window.DraftToolIcons ? window.DraftToolIcons.title(tool.name, key, tool.id) : tool.name;
     });
+    if (typeof syncDetailsKeys === 'function') syncDetailsKeys();
   }
 
   // The register tells the column, never the other way round. Any future
@@ -1325,6 +1329,12 @@
   let toolBeforeSelect = null;
   const toolName = id => window.DraftToolRoster?.TOOLS.find(t => t.id === id)?.name || id;
   function pressToolKey(id, fromBar = false) {
+    // NOT IN A DETAILS LIBRARY: the BUILD keys and the house's own drafting
+    // (CUT, ROOM TAG) say why and arm nothing (model/21-details-library.js).
+    if (typeof detailsToolRefused === 'function' && detailsToolRefused(id)) {
+      sayOnStrip(`${toolName(id).toUpperCase()} is not in a DETAILS LIBRARY \u2014 details are drawn with the DRAW / EDIT keys.`);
+      return;
+    }
     if (id === RESTING_TOOL) {
       if (selectPicking) { setSelectPicking(false); return; }
       if (!fromBar && activeTool === RESTING_TOOL && toolBeforeSelect

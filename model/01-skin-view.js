@@ -1225,7 +1225,11 @@
     // to the house below instead of at the page's own default, which is a
     // different view on every page that starts empty.
     const sitePlan = activeLevelId() === SITE_LEVEL_ID && !thumbTarget && !shootingPaper;
-    if (!pts.length && !sitePlan) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
+    // A DETAIL IS ITS FRAME (model/21-details-library.js): the fit frames
+    // the frame and whatever is drawn round it, empty or not.
+    const detailCorners = !thumbTarget && !shootingPaper && typeof detailFramePoints === 'function'
+      ? detailFramePoints() : [];
+    if (!pts.length && !sitePlan && !detailCorners.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
 
     // ── THE ELEVATION MARKS ARE PART OF WHAT IS ON THE SHEET ───────────
     //
@@ -1244,7 +1248,7 @@
     // to make room for four bubbles. The marks are folded in here, where the
     // main view is what is being framed, and the two callers that borrow fit()
     // to make a picture say so already.
-    const framed = pts.slice();
+    const framed = pts.concat(detailCorners);
     if (!thumbTarget && !shootingPaper) {
       // ── THE SITE PLAN IS THE LOT, NOT THE HOUSE ────────────────────────
       //

@@ -660,6 +660,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // Each is a goToLevel plus a flag; neither authors an entity, so
             // no absence row moves.
             'DRAW STANDALONE SITE PLAN', 'CLASSIC DRAFTING',
+            // AND THE THIRD OF THAT STACK (jb, 19 Nov 2026): DRAW DETAILS
+            // LIBRARY drops the board and stands the drafter in a shelf with
+            // a mark on the file. A goToBoneyard plus a flag and a card;
+            // it authors no entity, so no absence row moves.
+            'DRAW DETAILS LIBRARY',
             'copy', 'paste',
             // THE STOREY ARROWS (Movie, 12 Oct: "id like UP and DOWN arrows
             // and when they are pressed the LEVEL goes either to the next one

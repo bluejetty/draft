@@ -2356,6 +2356,9 @@
       } else if (drawing) {
         paintedForRails = null;
         paintGrid();
+        // A DETAIL'S FRAME, under everything drawn in it
+        // (model/21-details-library.js; a DETAILS LIBRARY file only).
+        if (typeof paintDetailFrame === 'function') paintDetailFrame();
         // "Underlays sit beneath everything drawn: over the grid, under
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
         // image that painted over the walls would be worse than none.

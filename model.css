@@ -1914,3 +1914,28 @@
 #underlay-menu button:disabled { opacity:0.35; cursor:default; }
 #underlay-menu button:disabled:hover { border-color:transparent; color: var(--ink-primary); }
 #underlay-menu .line-menu-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }
+
+  /* ── THE DETAILS LIBRARY (model/21-details-library.js, jb 19 Nov 2026) ──
+     The details listed in place of the levels, then the card of the one
+     being drawn. */
+  .dl-library { font-family: var(--font-ui); font-size:8px; letter-spacing:0.06em;
+    color: var(--ink-quiet); padding:0 6px 4px; }
+  .dl-row { display:flex; gap:6px; align-items:baseline; padding-left:6px; }
+  .dl-row .dl-num { min-width:12px; font-weight:700; }
+  .dl-row .dl-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dl-row .dl-cat { font-size:8px; opacity:0.75; }
+  .dl-card { margin-top:8px; padding:6px; border:1px solid var(--rule); display:flex;
+    flex-direction:column; gap:5px; }
+  .dl-card-title { font-size:9px; }
+  .dl-field { display:flex; flex-direction:column; gap:2px; font-family: var(--font-ui); }
+  .dl-label { font-size:8px; letter-spacing:0.06em; color: var(--ink-quiet); }
+  .dl-field input, .dl-field select, .dl-field textarea { font-family: var(--font-ui); font-size:10px;
+    background: var(--surface-page, transparent); color: var(--ink); border:1px solid var(--rule);
+    padding:2px 4px; min-width:0; }
+  .dl-field textarea { resize:vertical; }
+  .dl-chips { display:flex; gap:4px; }
+  .dl-chip[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .dl-frame { display:flex; gap:4px; align-items:center; font-family: var(--font-ui); font-size:9px; }
+  .dl-frame input { width:0; flex:1; }
+  .dl-save { margin-top:2px; padding:4px 6px; color: var(--ink); }
+  .dl-status { font-family: var(--font-ui); font-size:8px; letter-spacing:0.04em; color: var(--ink-quiet); }
