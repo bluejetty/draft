@@ -206,3 +206,34 @@ test('Ctrl+C and Ctrl+V copy a stair: a new whole-number id, beside the first, i
   expect(Math.abs(b.start.x - a.start.x), 'a stair\'s width and a foot to the side').toBeGreaterThan(3.5);
   expect(d.surfaceOpenings.filter(o => o.stairId === b.id), 'the copy\'s own well').toHaveLength(1);
 });
+
+// THE T-SQUARE HOLDS THE RUN (jb, 19 Nov: "when i'm placing the stairs the
+// T-Square isn't locking"). With it lit, a slanted second press squares to
+// the axis nearer the hand, as a wall's run does; with it off, the flight
+// runs the way the hand points.
+test('T-SQUARE lit: a slanted aim runs the flight square; off, it runs on the slant', async ({ page }) => {
+  await open(page, house());
+  const { at } = await h.planFrame(page);
+  const chip = page.locator('[data-mode-tsquare]');
+  // LIT, whatever the test page's prefs left it.
+  if (!/\blit\b/.test(await chip.getAttribute('class'))) await chip.click();
+  await expect(chip).toHaveClass(/lit/);
+  await armStair(page);
+  await card(page).locator('[data-stair-shape="L"]').click();
+  await press(page, at, -6, -10);
+  await press(page, at, -3.3, 4);
+  await expect(strip(page)).toContainText('STAIR placed');
+  await saveNow(page);
+  let st = (await savedFile(page)).stairs[0];
+  expect(r2(st.end.x), 'squared to the start: straight down the plan').toBe(-6);
+  expect(st.end.z).toBeGreaterThan(st.start.z);
+
+  // THE TOOL STAYS UP for the next stair.
+  await chip.click();
+  await expect(chip).not.toHaveClass(/lit/);
+  await press(page, at, 8, -10);
+  await press(page, at, 11.3, 4);
+  await saveNow(page);
+  st = (await savedFile(page)).stairs[1];
+  expect(st.end.x - st.start.x, 'T-SQUARE off: on the slant').toBeGreaterThan(0.3);
+});
