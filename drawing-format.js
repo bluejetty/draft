@@ -2655,7 +2655,10 @@ if (!window.DraftDrawingFormat) {
       const name = String(src?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'OTHER FILE';
       const copiedAt = typeof src?.copiedAt === 'string' && !Number.isNaN(Date.parse(src.copiedAt))
         ? src.copiedAt.slice(0, 40) : null;
-      return { id, name, ...(copiedAt ? { copiedAt } : {}), drawing };
+      // A DETAILS LIBRARY KEPT IN THIS BROWSER (jb's DETAILS plan, step 4):
+      // brought in from the browser's store, not off the disk, so RELOAD
+      // reads it again from there by its name.
+      return { id, name, ...(copiedAt ? { copiedAt } : {}), ...(src?.library === true ? { library: true } : {}), drawing };
     }).filter(Boolean).slice(0, LAYOUT_SOURCE_LIMIT);
   };
   // What a window from that file may point at: its levels and shelves, and
@@ -2668,7 +2671,10 @@ if (!window.DraftDrawingFormat) {
       .forEach(shelf => levelIds.add(-shelf.id));
     const cutIds = new Set(cuts(drawing.cuts, new Set(levels(drawing.levels).map(level => level.id)))
       .map(cut => cut.id));
-    return { levelIds, cutIds };
+    // AND ITS DETAILS: a details library's shelves that carry a card.
+    const detailShelfIds = new Set(standalone(drawing.standalone) === 'details'
+      ? boneyardShelves(drawing.boneyardShelves).filter(shelf => shelf.detail).map(shelf => shelf.id) : []);
+    return { levelIds, cutIds, detailShelfIds };
   };
   const layout = (raw, hostLevelIds, hostCutIds = new Set()) => {
     const seen = new Set();
@@ -2683,7 +2689,7 @@ if (!window.DraftDrawingFormat) {
       const levelIds = refs ? refs.levelIds : hostLevelIds;
       const cutIds = refs ? refs.cutIds : hostCutIds;
       const id = Number(viewport?.id);
-      const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation', 'schedule', 'detail'], viewport?.kind == null ? 'plan' : null);
+      const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation', 'schedule', 'detail', 'libdetail'], viewport?.kind == null ? 'plan' : null);
       const pif = positive(viewport?.pif, null);
       const xIn = num(viewport?.xIn);
       const yIn = num(viewport?.yIn);
@@ -2758,6 +2764,14 @@ if (!window.DraftDrawingFormat) {
         if (table == null) return null;
         seen.add(id);
         return { ...base, table };
+      }
+      // A DETAIL FROM A DETAILS LIBRARY (jb's DETAILS plan, step 4): always
+      // from another file, the library, and named by its shelf there.
+      if (kind === 'libdetail') {
+        const shelfId = Number(viewport?.shelfId);
+        if (!refs || !Number.isInteger(shelfId) || !refs.detailShelfIds.has(shelfId)) return null;
+        seen.add(id);
+        return { ...base, shelfId };
       }
       if (kind === 'detail') {
         const detail = oneOf(viewport?.detail, LAYOUT_DETAIL_IDS, null);
