@@ -1359,11 +1359,13 @@
   let sealDrawnChain = () => {};
 
   const goToLevel = id => {
+    // A stair opened from OBJ / PROP is let go: the STAIR view shows the last
+    // one placed again.
+    workspaceStairId = null;
     // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the
     // card stays lit while the plan shows MAIN FL, and the two readouts the
     // drafter has disagree about where he is.
     boneyardActive = false;
-    workspaceStairId = null;
     params.set('level', String(id));
     // THE VIEW IS KEPT WHERE THE NEW LEVEL HAS IT, dropped where it does not.
     // MAIN FL and 2ND FL share the same four views, so a drafter comparing
