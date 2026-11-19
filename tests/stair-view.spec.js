@@ -150,11 +150,16 @@ test('stringers run to the landing underside; the top riser is the 1 1/2" backin
     SS.drawFlight(onto, { u0: 0, e0: 0, risers: 5, ontoLanding: true }, layout, uToX, yOf, SS.PANE_INKS || {});
     const off = pen();
     SS.drawFlight(off, { u0: 0, e0: 0, risers: 5, offLanding: true }, layout, uToX, yOf, SS.PANE_INKS || {});
+    const offB = pen();
+    SS.drawFlight(offB, { u0: 0, e0: 0, risers: 5, offLanding: true }, layout, uToX, yOf, {},
+      { topBacking: { depthFt: 8 / 12 } });
     const top = pen();
     SS.drawFlight(top, { u0: 0, e0: 0, risers: 5 }, layout, uToX, yOf, {}, { topBacking: { depthFt: 1 } });
     return {
       riseIn,
       ontoLowest: Math.max(...onto.pts.map(p => p[1])),
+      ontoEnd: onto.pts.filter(p => Math.abs(p[0] - (5 * 10 - 11 - 0.75)) < 0.01).map(p => +p[1].toFixed(3)),
+      offBoxes: offB.boxes.filter(b => b.x < -0.01).map(b => ({ x: +b.x.toFixed(3), w: +b.w.toFixed(3), y: +b.y.toFixed(3), h: +b.h.toFixed(3) })),
       offTopUnderLanding: off.pts.filter(p => Math.abs(p[1] - 8) < 0.01).map(p => p[0]),
       topBoxes: top.boxes.filter(b => b.x < -0.01).map(b => ({ x: +b.x.toFixed(3), w: +b.w.toFixed(3), y: +b.y.toFixed(3), h: +b.h.toFixed(3) })),
     };
@@ -164,6 +169,15 @@ test('stringers run to the landing underside; the top riser is the 1 1/2" backin
   // Off a landing: the underside climbs back under the landing to its 8"
   // underside, well behind the first riser's face (-1").
   expect(Math.min(...got.offTopUnderLanding)).toBeLessThan(-5);
+  // jb, 19 Nov (green circles): the stringer foot stands back under the last
+  // riser, at the landing's end, from its top to its underside...
+  expect(got.ontoEnd).toEqual(expect.arrayContaining([+(5 * got.riseIn).toFixed(3), +(5 * got.riseIn + 8).toFixed(3)]));
+  // ...and a flight off a landing starts from the landing's own backing and
+  // nosing, 8" deep, as the top flight starts from the floor's.
+  expect(got.offBoxes).toEqual(expect.arrayContaining([
+    expect.objectContaining({ x: -2, w: 1.5, y: 0, h: 8 }),
+    expect.objectContaining({ x: -0.5, w: 0.5, y: 0 }),
+  ]));
   // The top: backing from the opening edge (-2") to -1/2", a foot deep;
   // the nosing from -1/2" to the nosing line.
   expect(got.topBoxes).toEqual(expect.arrayContaining([
