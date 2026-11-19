@@ -4831,6 +4831,8 @@ class Component extends PageLogic {
       addingViewport: false,
       auto: false,
     }, () => { this._persistLayout(); this._draw(); });
+    // "SITE.draft is open. Pick..." has been answered.
+    if (view.source != null) this._sourceNote('');
   }
 
   _setPaper(key) {
