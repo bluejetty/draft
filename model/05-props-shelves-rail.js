@@ -1369,6 +1369,9 @@
     // A DETAILS LIBRARY HAS NO LEVEL TO GO TO: whatever asked (a key, a
     // stale link) lands back in the detail being drawn.
     if (drawing?.standalone === 'details') { goToBoneyard(); return; }
+    // A stair opened from OBJ / PROP is let go: the STAIR view shows the last
+    // one placed again.
+    workspaceStairId = null;
     // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the
     // card stays lit while the plan shows MAIN FL, and the two readouts the
     // drafter has disagree about where he is.
@@ -1445,6 +1448,7 @@
   // what is looked at and nothing that is saved: a query parameter and a
   // repaint, with `drawing` untouched and markDirty uncalled.
   const goToView = viewId => {
+    workspaceStairId = null;
     params.set('view', viewId);
     syncUrl();
     // No buildChrome(): the level did not change, so the cards are still

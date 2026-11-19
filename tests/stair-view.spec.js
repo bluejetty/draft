@@ -95,7 +95,11 @@ test('section over plan: both panes drawn with the opening edge aligned', async 
 
   // The opening-edge marks start at the same x in both panes — the shared
   // horizontal scale keeps the nosings lined up between section and plan.
-  expect(Math.abs(sectionMarks.minX - planMarks.minX)).toBeLessThanOrEqual(2);
+  // Read above the floor below: its line runs the pane's whole width now
+  // (jb, 19 Nov: "draw the slab all the way").
+  const sectionEdge = await regionColor(page, EMPHASIS, box.x, box.y, box.x + box.width, box.y + (midY - box.y) * 0.6);
+  expect(sectionEdge.count).toBeGreaterThan(0);
+  expect(Math.abs(sectionEdge.minX - planMarks.minX)).toBeLessThanOrEqual(2);
 });
 
 test('clicking a pane fills the screen with it; clicking again splits back', async ({ page }) => {
@@ -118,4 +122,52 @@ test('clicking a pane fills the screen with it; clicking again splits back', asy
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(200);
   expect((await topQuarter()).count).toBeGreaterThan(0);
+});
+
+// jb, 19 Nov, on his GIMP markup of the STAIR SECTION: "lengthen the stringers
+// lik i show (don't cut them off)", "1/2" nosing then 1.5" backing to the
+// stair opening edge". Read off drawFlight's own path with a recording pen.
+test('stringers run to the landing underside; the top riser is the 1 1/2" backing under a 1/2" nosing', async ({ page }) => {
+  await h.openModel(page);
+  const got = await page.evaluate(() => {
+    const SS = window.DraftStairSection;
+    const SG = window.DraftStairGeometry;
+    const layout = SG.stairLayout(9);
+    const pen = () => {
+      const pts = [], boxes = [];
+      let fill = null;
+      return { pts, boxes,
+        beginPath() {}, closePath() {}, fill() {}, stroke() {},
+        moveTo(x, y) { pts.push([x, y]); }, lineTo(x, y) { pts.push([x, y]); },
+        fillRect(x, y, w, h) { boxes.push({ fill, x, y, w, h }); }, strokeRect() {},
+        set fillStyle(v) { fill = v; }, get fillStyle() { return fill; },
+        strokeStyle: '', lineWidth: 1 };
+    };
+    // 1 px = 1 inch, y = -elevation, so the numbers read in inches.
+    const uToX = u => u * 12, yOf = e => -e * 12;
+    const riseIn = layout.riserIn;
+    const onto = pen();
+    SS.drawFlight(onto, { u0: 0, e0: 0, risers: 5, ontoLanding: true }, layout, uToX, yOf, SS.PANE_INKS || {});
+    const off = pen();
+    SS.drawFlight(off, { u0: 0, e0: 0, risers: 5, offLanding: true }, layout, uToX, yOf, SS.PANE_INKS || {});
+    const top = pen();
+    SS.drawFlight(top, { u0: 0, e0: 0, risers: 5 }, layout, uToX, yOf, {}, { topBacking: { depthFt: 1 } });
+    return {
+      riseIn,
+      ontoLowest: Math.max(...onto.pts.map(p => p[1])),
+      offTopUnderLanding: off.pts.filter(p => Math.abs(p[1] - 8) < 0.01).map(p => p[0]),
+      topBoxes: top.boxes.filter(b => b.x < -0.01).map(b => ({ x: +b.x.toFixed(3), w: +b.w.toFixed(3), y: +b.y.toFixed(3), h: +b.h.toFixed(3) })),
+    };
+  });
+  // Onto a landing: the stringer foot reaches the landing's 8" underside.
+  expect(got.ontoLowest).toBeCloseTo(5 * got.riseIn + 8, 3);
+  // Off a landing: the underside climbs back under the landing to its 8"
+  // underside, well behind the first riser's face (-1").
+  expect(Math.min(...got.offTopUnderLanding)).toBeLessThan(-5);
+  // The top: backing from the opening edge (-2") to -1/2", a foot deep;
+  // the nosing from -1/2" to the nosing line.
+  expect(got.topBoxes).toEqual(expect.arrayContaining([
+    expect.objectContaining({ x: -2, w: 1.5, y: 0, h: 12 }),
+    expect.objectContaining({ x: -0.5, w: 0.5, y: 0 }),
+  ]));
 });

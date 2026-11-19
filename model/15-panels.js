@@ -3679,6 +3679,28 @@
       S.drawWorkspace(c, w, h, stair, { ...stairWorkspaceEnv(i === 0 ? 'plan' : 'section'), compact: true });
     });
   };
+  // A PRESS ON A STAIR'S SECTION OPENS IT LARGE (jb, 19 Nov): the level's
+  // STAIR view, that stair, section pane filling the canvas. A press on the
+  // big section returns to the split, as it always has.
+  const openStairSection = stair => {
+    if (!stair) return false;
+    const levelId = Number(stair.levelId);
+    const views = window.DraftLayerViews.layerViewsForLevelId(levelId);
+    if (!views.some(view => view.id === 'stair')) return false;
+    if (Number(activeLevelId()) !== levelId) goToLevel(levelId);
+    goToView('stair');
+    workspaceStairId = stair.id;
+    stairPane = 'section';
+    // The window is put away so the big section is not under it; the tab
+    // stays, to bring it back.
+    setObjOpen(false);
+    paint();
+    return true;
+  };
+  objWin?.querySelector('[data-objprop-view="front"]')?.addEventListener('click', () => {
+    if (objWin.dataset.objpropKind !== 'stair') return;
+    openStairSection(objStair());
+  });
   const renderObjProp = () => {
     if (!objWin || !objOpen) return;
     const items = objPieces();
@@ -3688,6 +3710,8 @@
     objWin.dataset.objpropKind = stair ? 'stair' : 'fixture';
     const caps = stair ? ['PLAN', 'SECTION'] : ['TOP', 'FRONT', 'LEFT', 'RIGHT'];
     objWin.querySelectorAll('figcaption').forEach((cap, i) => { if (caps[i]) cap.textContent = caps[i]; });
+    const sectionBox = objWin.querySelector('[data-objprop-view="front"]');
+    if (sectionBox) sectionBox.title = stair ? 'CLICK TO OPEN THIS STAIR SECTION LARGE' : '';
     if (stair) {
       const stairViews = objWin.querySelector('.objprop-views');
       if (stairViews) stairViews.hidden = false;

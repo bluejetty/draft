@@ -2139,11 +2139,18 @@
   // stair-section.js, the same code MODEL.dc.html draws it with.
   let stairPane = 'split';
   const stairWorkspaceOn = () => Boolean(drawing) && !activeCut() && activeViewId() === 'stair';
+  // A STAIR OPENED FROM OBJ / PROP (jb, 19 Nov: "when a user clicks on a
+  // staircase and the click over on the section of the stairs can it open
+  // that stair section large"): the workspace shows THAT stair, not the last
+  // one placed, until he picks another level or view by hand.
+  let workspaceStairId = null;
   const workspaceStair = () => {
     const levelId = Number(activeLevelId());
     const list = (drawing?.stairs || []).filter(st => Number(st.levelId) === levelId
       && (st.view || 'plan') === 'plan');
-    return list.length ? list[list.length - 1] : null;
+    const held = workspaceStairId == null ? null
+      : list.find(st => String(st.id) === String(workspaceStairId));
+    return held || (list.length ? list[list.length - 1] : null);
   };
   // CLEAR OF THE FURNITURE: the rails either side, the house strip below,
   // and the instrument strip across the top, which the canvas runs under.

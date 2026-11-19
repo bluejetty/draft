@@ -1914,6 +1914,9 @@
 #underlay-menu button:disabled { opacity:0.35; cursor:default; }
 #underlay-menu button:disabled:hover { border-color:transparent; color: var(--ink-primary); }
 #underlay-menu .line-menu-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }
+  /* A stair's SECTION box opens that stair's section large (jb, 19 Nov). */
+  #objprop[data-objprop-kind="stair"] [data-objprop-view="front"] { cursor:zoom-in; }
+  #objprop[data-objprop-kind="stair"] figure:nth-child(2):hover { border-color: var(--accent); }
 
   /* ── THE DETAILS LIBRARY (model/21-details-library.js, jb 19 Nov 2026) ──
      The details listed in place of the levels, then the card of the one

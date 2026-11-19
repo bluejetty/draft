@@ -140,6 +140,44 @@ test('a click on a stair opens OBJ / PROP on it: PLAN and SECTION up top, the lo
   await expect(win(page).locator('[data-stair-risers="less"]')).toBeVisible();
 });
 
+// A PRESS ON THE SECTION OPENS IT LARGE (jb, 19 Nov: "when a user clicks on
+// a staircase and the click over on the section of the stairs can it open
+// that stair section large"): the level's STAIR view, THAT stair even when
+// another was placed after it, the section pane filling the canvas.
+test('a press on the SECTION box opens that stair\'s section large on the STAIR view', async ({ page }) => {
+  const at = await stairPicked(page);
+  // A SECOND STAIR, placed after the first, so "the last one placed" would
+  // be the wrong answer.
+  await page.locator('[data-tool-key="stair"]').click();
+  await page.waitForTimeout(150);
+  await press(page, at, 12, -8);
+  await press(page, at, 12, 4);
+  await page.keyboard.press('s');
+  await page.waitForTimeout(100);
+  await press(page, at, 0, -4);
+  await expect(win(page)).toHaveAttribute('data-objprop-kind', 'stair');
+  const picked = await page.evaluate(() => selection[0].item.id);
+  const ids = await page.evaluate(() => drawing.stairs.map(st => st.id));
+  expect(ids.length).toBe(2);
+  expect(picked, 'the first stair is the one picked').toBe(ids[0]);
+  await expect(win(page).locator('[data-objprop-view="front"]')).toHaveAttribute('title', /OPEN THIS STAIR SECTION/);
+  await win(page).locator('[data-objprop-view="front"]').click();
+  await page.waitForTimeout(200);
+  await expect(page).toHaveURL(/view=stair/);
+  expect(await page.evaluate(() => Number(activeLevelId()))).toBe(MAIN_FL);
+  await expect(page.locator('#plan')).toHaveAttribute('data-stair-pane', 'section');
+  expect(await page.evaluate(() => workspaceStair().id), 'the picked stair, not the last placed').toBe(ids[0]);
+  await expect(win(page), 'OBJ / PROP put away off the big section').toBeHidden();
+  // A press on the big section returns to the split, as before.
+  const box = await page.locator('#plan').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(150);
+  await expect(page.locator('#plan')).toHaveAttribute('data-stair-pane', 'split');
+  // Back to the walls and into STAIR by hand: the last placed, as before.
+  await page.evaluate(() => { goToView('plan'); goToView('stair'); });
+  expect(await page.evaluate(() => workspaceStair().id)).toBe(ids[1]);
+});
+
 test('RISERS +: one more riser, each lower, the flight a tread longer, kept on save; UNDO takes it back', async ({ page }) => {
   await stairPicked(page);
   const before = await stairOf(page);

@@ -34,6 +34,10 @@ if (!window.DraftStairSection) {
   // it -- the floor the hole must not take away. MODEL.dc.html keeps the same
   // two numbers (STAIR_NOSING_IN, STAIR_NOSING_BACKING_IN) for the cut itself.
   const STAIR_OPENING_NOSING_MIN_IN = 1.5 + 0.5;
+  const STAIR_TOP_NOSING_IN = 0.5;
+  const STAIR_TOP_BACKING_IN = STAIR_OPENING_NOSING_MIN_IN - STAIR_TOP_NOSING_IN;
+  // A flat landing's structural band, as the panes draw it.
+  const STAIR_LANDING_BAND_IN = 8;
 
   // Turned shapes draw UNFOLDED along the walk line: a flat landing adds its
   // depth to the developed run; winders unfold to the straight length.
@@ -62,13 +66,15 @@ if (!window.DraftStairSection) {
         return;
       }
       // A flat ends the flight in hand: its treads and the riser down onto it.
-      flights.push({ u0: open.u0, e0: open.e0, risers: open.treads + 1 });
+      flights.push({ u0: open.u0, e0: open.e0, risers: open.treads + 1, ontoLanding: true,
+        ...(open.offLanding ? { offLanding: true } : {}) });
       e -= (open.treads + 1) * riseStep;
       flats.push({ u0: u, u1: u + item.flatFt, e });
       u += item.flatFt;
-      open = { u0: u, e0: e, treads: 0 };
+      open = { u0: u, e0: e, treads: 0, offLanding: true };
     });
-    flights.push({ u0: open.u0, e0: open.e0, risers: open.treads + 1 });
+    flights.push({ u0: open.u0, e0: open.e0, risers: open.treads + 1,
+      ...(open.offLanding ? { offLanding: true } : {}) });
     return { segs, flats, flights, runFt: u };
   };
   // The turn in words for a pane's caption.
@@ -144,7 +150,16 @@ if (!window.DraftStairSection) {
   const PANE_INKS = Object.freeze({
     line: STAIR_COLOR, stringer: 'rgba(93,74,138,0.12)', tread: '#e8e2f2', riser: '#ddd5ec',
   });
-  const drawFlight = (ctx, flight, layout, uToX, yOf, inks) => {
+  // `opts.topBacking` (the STAIR SECTION page's top flight): the top riser is
+  // the 1 1/2" backing on the opening's header, its face 1/2" behind the top
+  // nosing (jb, 19 Nov: "1/2" nosing then 1.5" backing to the stair opening
+  // edge"), down the floor's depth `opts.topBacking.depthFt`.
+  //
+  // THE STRINGER IS NOT CUT OFF at a landing (jb, 19 Nov, "lengthen the
+  // stringers ... don't cut them off"): a flight down ONTO a landing runs its
+  // underside on until it meets the landing's underside, and a flight OFF a
+  // landing runs its underside back up under the landing to meet it there.
+  const drawFlight = (ctx, flight, layout, uToX, yOf, inks, opts = {}) => {
     const riseStep = layout.riserIn / 12;
     const runStep = treadRunIn() / 12;
     const treadThk = STAIR_TREAD_THICK_IN / 12;
@@ -162,8 +177,14 @@ if (!window.DraftStairSection) {
     };
     // Riser j face within this flight, 11" back from the nosing of the
     // tread it stands on, in stair u.
-    const faceU = j => flight.u0 + j * runStep - STAIR_RISER_FACE_IN / 12;
+    const backing = opts.topBacking || null;
+    const backFaceU = flight.u0 - STAIR_TOP_NOSING_IN / 12;
+    const faceU = j => (backing && j === 1 ? backFaceU : flight.u0 + j * runStep - STAIR_RISER_FACE_IN / 12);
     const elevAt = j => flight.e0 - j * riseStep;
+    const bandFt = STAIR_LANDING_BAND_IN / 12;
+    // Where the underside line (its throat plumb under the notch roots)
+    // reaches elevation e.
+    const undersideU = e => flight.u0 - STAIR_RISER_FACE_IN / 12 + (flight.e0 - e - drop) / slope;
     // Cut stringer: sawtooth at the finished profile (the boards draw over
     // it), a plumb cut against the top edge, and a level cut at the bottom.
     ctx.beginPath();
@@ -175,9 +196,25 @@ if (!window.DraftStairSection) {
     }
     const flightRise = flight.risers * riseStep;
     const rootE = u => notchRootE(flight, layout, u);
-    const uBottom = flight.u0 - STAIR_RISER_FACE_IN / 12 + (flightRise - drop) / slope;
-    ctx.lineTo(uToX(uBottom), yOf(flight.e0 - flightRise));
-    ctx.lineTo(uToX(faceU(1)), yOf(rootE(faceU(1)) - drop));
+    const footE = flight.e0 - flightRise;
+    if (flight.ontoLanding) {
+      // Plumb down the landing's nosing face to its underside, then level
+      // out to where the underside line meets it.
+      const cutE = footE - bandFt;
+      ctx.lineTo(uToX(faceU(flight.risers)), yOf(cutE));
+      ctx.lineTo(uToX(Math.max(faceU(flight.risers), undersideU(cutE))), yOf(cutE));
+    } else {
+      ctx.lineTo(uToX(undersideU(footE)), yOf(footE));
+    }
+    if (flight.offLanding) {
+      // Up under the landing to its underside, and level back to the
+      // first riser's face.
+      const cutE = flight.e0 - bandFt;
+      ctx.lineTo(uToX(Math.min(faceU(1), undersideU(cutE))), yOf(cutE));
+      ctx.lineTo(uToX(faceU(1)), yOf(cutE));
+    } else {
+      ctx.lineTo(uToX(faceU(1)), yOf(rootE(faceU(1)) - drop));
+    }
     ctx.closePath();
     ctx.fillStyle = inks.stringer;
     ctx.strokeStyle = inks.line;
@@ -189,14 +226,23 @@ if (!window.DraftStairSection) {
     ctx.fillStyle = inks.tread;
     for (let k = 1; k < flight.risers; k++) {
       const nose = flight.u0 + k * runStep;
-      box(nose - boardW, nose, elevAt(k), elevAt(k) - treadThk);
+      // The top tread butts the backing rather than running behind it.
+      const back = backing && k === 1 ? Math.max(nose - boardW, backFaceU) : nose - boardW;
+      box(back, nose, elevAt(k), elevAt(k) - treadThk);
     }
     // Risers: 3/4" ply standing on the tread below (or the landing), closing
     // up to the underside of the tread above — the horizontal joint bears on
     // top of the tread, carpenter style.
     ctx.fillStyle = inks.riser;
-    for (let j = 1; j <= flight.risers; j++) {
+    for (let j = backing ? 2 : 1; j <= flight.risers; j++) {
       box(faceU(j) - riserThk, faceU(j), elevAt(j - 1) - treadThk, elevAt(j));
+    }
+    if (backing) {
+      // The backing, from the opening edge to its face, the floor's depth;
+      // the 1/2" nosing over it, a tread's thickness.
+      ctx.fillStyle = inks.tread;
+      box(-STAIR_OPENING_NOSING_MIN_IN / 12 + flight.u0, backFaceU, flight.e0, flight.e0 - backing.depthFt);
+      box(backFaceU, flight.u0, flight.e0, flight.e0 - treadThk);
     }
   };
 
@@ -241,18 +287,22 @@ if (!window.DraftStairSection) {
 
     const { flat, flats, flights, landU } = stairFlights(layout, split);
 
-    // Faded upper floor band, cut at the opening edge (u = 0).
+    // Faded upper floor band, cut at the opening edge: the 2" between it and
+    // the top nosing is the backing and the nosing, drawn with the flight.
     const floorFt = env.floorFt(stair.levelId);
+    const xEdge = uToX(-STAIR_OPENING_NOSING_MIN_IN / 12);
     ctx.fillStyle = fadeFill;
     ctx.strokeStyle = fadeLine;
     ctx.lineWidth = 1;
-    ctx.fillRect(rect.x, yOf(0), uToX(0) - rect.x, floorFt * pxPerFt);
-    ctx.strokeRect(rect.x - 2, yOf(0), uToX(0) - rect.x + 2, floorFt * pxPerFt);
-    // Faded landing band under the run-out.
-    ctx.fillRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU), (8 / 12) * pxPerFt);
-    ctx.strokeRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU) + 2, (8 / 12) * pxPerFt);
+    ctx.fillRect(rect.x, yOf(0), xEdge - rect.x, floorFt * pxPerFt);
+    ctx.strokeRect(rect.x - 2, yOf(0), xEdge - rect.x + 2, floorFt * pxPerFt);
+    // The floor it lands on, ALL THE WAY ACROSS (jb, 19 Nov: "draw the slab
+    // all the way"): under the whole stair, not only the run-out.
+    ctx.fillRect(rect.x, yOf(-layout.riseFt), rect.w, (8 / 12) * pxPerFt);
+    ctx.strokeRect(rect.x - 2, yOf(-layout.riseFt), rect.w + 4, (8 / 12) * pxPerFt);
 
-    flights.forEach(flight => drawFlight(ctx, flight, layout, uToX, yOf, PANE_INKS));
+    flights.forEach((flight, i) => drawFlight(ctx, flight, layout, uToX, yOf, PANE_INKS,
+      i === 0 ? { topBacking: { depthFt: floorFt } } : {}));
 
     // The mid-flight landing on a turned stair: a level structural band
     // between the two flights, labelled with its clear size rule.
@@ -312,7 +362,7 @@ if (!window.DraftStairSection) {
     ctx.moveTo(uToX(openU), yOf(0)); ctx.lineTo(uToX(openU), yOf(-floorFt));
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(uToX(landU), yOf(-layout.riseFt)); ctx.lineTo(rect.x + rect.w, yOf(-layout.riseFt));
+    ctx.moveTo(rect.x, yOf(-layout.riseFt)); ctx.lineTo(rect.x + rect.w, yOf(-layout.riseFt));
     ctx.stroke();
     // The build-up itself, between the cut and the nosing: a thin tick at the
     // floor line so the 2" reads as a thing rather than as slack.
@@ -325,7 +375,7 @@ if (!window.DraftStairSection) {
     ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
     ctx.fillText('EDGE OF STAIR OPENING', uToX(openU) - 4, yOf(0) - 3);
     ctx.textAlign = 'left';
-    ctx.fillText(`${env.inchesOnly(STAIR_OPENING_NOSING_MIN_IN)} MIN NOSING + BACKING`,
+    ctx.fillText(`${env.inchesOnly(STAIR_TOP_NOSING_IN)} NOSING + ${env.inchesOnly(STAIR_TOP_BACKING_IN)} BACKING`,
       uToX(0) + 4, yOf(0) - 3);
     ctx.textAlign = 'left';
     if (descent) ctx.fillText(`LANDS ON ${descent.landing.toUpperCase()}`, uToX(dev.runFt) + 8, yOf(-layout.riseFt) - 3);
