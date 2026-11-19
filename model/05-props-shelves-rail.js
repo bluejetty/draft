@@ -1363,6 +1363,7 @@
     // card stays lit while the plan shows MAIN FL, and the two readouts the
     // drafter has disagree about where he is.
     boneyardActive = false;
+    workspaceStairId = null;
     params.set('level', String(id));
     // THE VIEW IS KEPT WHERE THE NEW LEVEL HAS IT, dropped where it does not.
     // MAIN FL and 2ND FL share the same four views, so a drafter comparing
@@ -1435,6 +1436,7 @@
   // what is looked at and nothing that is saved: a query parameter and a
   // repaint, with `drawing` untouched and markDirty uncalled.
   const goToView = viewId => {
+    workspaceStairId = null;
     params.set('view', viewId);
     syncUrl();
     // No buildChrome(): the level did not change, so the cards are still
