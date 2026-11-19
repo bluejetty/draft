@@ -1140,7 +1140,9 @@
   // not in the paste stays behind.
   // A ROOM TAG IS NOT CARRIED EITHER: its id is a whole number the format
   // insists on, and a paste re-ids with a string.
-  // A NOTE's id is a whole number for the same reason.
+  // A NOTE COPIES NOW (jb, 19 Nov: "i'm trying to COPY and PASTE the
+  // annotation. when i press COPY, no PASTE button appears"): its id is a
+  // whole number like a dimension's, so the paste gives it the next one up.
   // A DIMENSION IS CARRIED NOW (Movie, 20 Oct: "i'd also like to be able to
   // copy and paste and existing dimension line a little further outward or
   // inward so i can delete some of the dimensions on it for new dimension
@@ -1153,7 +1155,7 @@
   // and paste it on that story, and the properties change if he does it").
   // Where it lands is pasteHeld's: on the ROOF plan it is the top roof, on a
   // storey it is that storey's lower roof (SITS ON the storey under it).
-  const NOT_COPIED = new Set(['roomtag', 'note']);
+  const NOT_COPIED = new Set(['roomtag']);
 
   // DELETE A POINT, NOT THE LINE (Movie, 20 Oct): "rather than the dimension
   // line disappearing only that 'point' will no longer be measured and the
@@ -1401,6 +1403,12 @@
       .filter(entry => entry.type === 'wall'
         || (SELECTION_LISTS[entry.type] && !NOT_COPIED.has(entry.type)))
       .map(entry => ({ type: entry.type, raw: JSON.parse(JSON.stringify(entry.item)) }));
+    // NOTHING TAKEN SAYS SO, rather than a COPY that looks pressed and a
+    // PASTE that never comes.
+    if (!held.length) {
+      sayOnStrip('NOTHING COPIED -- a ROOM TAG does not copy; place a new one with the TAG tool.');
+      return 0;
+    }
     const posts = held.filter(h => h.type === 'column').length;
     if (held.some(h => h.type === 'beam')) {
       sayOnStrip(`COPIED the beam row${posts ? ` and its ${posts} post${posts === 1 ? '' : 's'} with their pads` : ''}. PASTE, then MOVE it where the new row goes.`);
@@ -1507,6 +1515,13 @@
         copy.start = { ...copy.start, x: copy.start.x + out.x, z: copy.start.z + out.z };
         copy.end = { ...copy.end, x: copy.end.x + out.x, z: copy.end.z + out.z };
       }
+      // A PASTED NOTE: a whole-number id after the highest (the format reads
+      // no other), where the first one stood -- PASTE, then MOVE it, as with
+      // a line -- and on the plan the paste is made on.
+      if (type === 'note') {
+        copy.id = (drawing.notes || []).reduce((top, n) => Math.max(top, Number(n.id) || 0), 0) + 1;
+        if (!copy.view) copy.view = 'plan';
+      }
       // A STAIR'S COPY: a whole-number id (the format reads no other), on the
       // floor it came down from, the drafter's rather than AUTO STAIR's, and
       // one stair's width and a foot to its right -- laid on the original its
@@ -1522,7 +1537,7 @@
         copy.start = { ...copy.start, x: copy.start.x + side.x, z: copy.start.z + side.z };
         copy.end = { ...copy.end, x: copy.end.x + side.x, z: copy.end.z + side.z };
       }
-      ['start', 'end', 'point', 'anchor'].forEach(field => {
+      ['start', 'end', 'point', 'anchor', 'text'].forEach(field => {
         if (!copy[field] || typeof copy[field] !== 'object') return;
         const { srcId: _s, offX: _ox, offZ: _oz, ...pt } = copy[field];
         copy[field] = { ...pt };
