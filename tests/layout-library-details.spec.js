@@ -180,16 +180,17 @@ test('a detail comes in at its own scale, framed on its frame, with its bubble, 
   }, { x: at.x, y: at.y + 2, s: at.zoom * 0.5 });
   expect(bubbleInk, 'the bubble under the frame').toBeGreaterThan(30);
   if (process.env.DRAFT_SHOT) await page.screenshot({ path: process.env.DRAFT_SHOT });
-  // THE MENU NAMES ITS DOOR HOME.
-  const mid = await sheetToClient(page, frame.xIn + frame.wIn / 2, frame.yIn + frame.hIn / 2);
-  await page.mouse.click(mid.x, mid.y, { button: 'right' });
-  await expect(page.locator('[data-context-item="reload-from-library"]').first()).toBeVisible();
-  await page.keyboard.press('Escape');
   // IT IS IN THE FILE.
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.waitForTimeout(300);
   expect(await inkOf(page, 'red')).toBeGreaterThan(200);
+  // AND STILL A LIBRARY'S DETAIL after the reload: its menu reads the
+  // library again, not a file off the disk.
+  const mid = await sheetToClient(page, frame.xIn + frame.wIn / 2, frame.yIn + frame.hIn / 2);
+  await page.mouse.click(mid.x, mid.y, { button: 'right' });
+  await expect(page.locator('[data-context-item="reload-from-library"]')).toBeVisible();
+  await expect(page.locator('[data-context-item="reload-from-file"]')).toHaveCount(0);
 });
 
 test('RELOAD FROM LIBRARY brings the newer library in, keeping place and scale', async ({ page }) => {
