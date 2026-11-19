@@ -91,7 +91,9 @@ test('the tile stands left of DETACHED GARAGE, half a card high, with CLASSIC DR
   // THE HALF UNDER IT, named an hour after he kept it empty: "just a blank
   // drafting for just free drafting (no autohouse)" -- "shorter lets go
   // CLASSIC".
-  await expect(stack.locator('[data-build-entry]')).toHaveText(['DRAW STANDALONE SITE PLAN', 'CLASSIC DRAFTING']);
+  // AND THE DETAILS LIBRARY UNDER BOTH (jb, 19 Nov 2026), the stack's third.
+  await expect(stack.locator('[data-build-entry]'))
+    .toHaveText(['DRAW STANDALONE SITE PLAN', 'CLASSIC DRAFTING', 'DRAW DETAILS LIBRARY']);
 
   const tileBox = await tile.boundingBox();
   const garage = await page.locator('[data-build-family="detachedGarage"]').boundingBox();
@@ -101,11 +103,11 @@ test('the tile stands left of DETACHED GARAGE, half a card high, with CLASSIC DR
   expect(tileBox.x + tileBox.width, 'left of DETACHED GARAGE').toBeLessThan(garage.x + 1);
   await expect(page.locator('#build-families > *').first(), 'first on the shelf')
     .toHaveAttribute('data-build-stack', 'sitePlan');
-  // HALF SIZE, LIKE THE SUITE PAIR: within a line's worth of the
-  // RESIDENTIAL SUITE tile's height (its two-line label makes it a few px
-  // taller than its empty half), and no more than ~55% of the card beside it.
-  expect(Math.abs(tileBox.height - suite.height), 'the SUITE tile\'s height').toBeLessThan(8);
-  expect(tileBox.height, 'half the card').toBeLessThan(garage.height * 0.56);
+  // A PART OF THE CARD, NOT A CARD: half of it while the stack held two,
+  // a third since DRAW DETAILS LIBRARY joined it (19 Nov 2026), and never
+  // taller than the RESIDENTIAL SUITE half beside it.
+  expect(tileBox.height, 'no taller than the SUITE tile').toBeLessThan(suite.height + 8);
+  expect(tileBox.height, 'part of the card').toBeLessThan(garage.height * 0.56);
   // AND CLASSIC DRAFTING IS BELOW IT, not beside it: the tile sits in the
   // card's top half.
   expect(tileBox.y, 'the tile is the top half').toBeLessThan(garage.y + garage.height / 2);

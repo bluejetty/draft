@@ -1769,7 +1769,10 @@ if (!window.DraftDrawingFormat) {
       const id = Number(shelf?.id);
       if (!safeId(id) || id < 1 || seen.has(id)) return null;
       seen.add(id);
-      return { id, name: String(shelf?.name || `SHELF ${id}`).toUpperCase() };
+      // A DETAIL'S CARD RIDES ON ITS SHELF (DETAILS LIBRARY files), kept
+      // through every writer that rebuilds the list from this reader.
+      return { id, name: String(shelf?.name || `SHELF ${id}`).toUpperCase(),
+        ...(shelf?.detail && typeof shelf.detail === 'object' ? { detail: detailCard(shelf.detail) } : {}) };
     }).filter(Boolean);
     return shelves.length ? shelves : [{ id: 1, name: 'SHELF 1' }];
   };
@@ -2202,8 +2205,61 @@ if (!window.DraftDrawingFormat) {
   // the drive-thru's house tiles locked. Null for every other drawing, and
   // a word this list does not hold reads as null rather than hiding every
   // level behind a typo.
-  const STANDALONE_KINDS = Object.freeze(['site', 'classic']);
+  //
+  // 'details' is the DETAILS LIBRARY (jb, 19 Nov 2026: "a 'special file'
+  // like the site plan it will only contain the DETAIL DRAWINGS, which are
+  // all 2D small square or rectangle drawings ... it won't need all the
+  // LEVELS / LAYERS"). Its shelves are its details, each with a card
+  // (detailCard below); no level, no BUILD key and no autohouse is offered.
+  const STANDALONE_KINDS = Object.freeze(['site', 'classic', 'details']);
   const standalone = raw => oneOf(raw, STANDALONE_KINDS, null);
+
+  // ── A DETAIL'S CARD ──────────────────────────────────────────────────────
+  //
+  // On a DETAILS LIBRARY file every shelf is one detail, and the shelf
+  // carries what the library sorts it by (jb, 19 Nov 2026: "i'd like a
+  // database type organization system so that they can be arranged
+  // easily"). His answers the same afternoon set the defaults: categories
+  // "FOUNDATION, FRAMING, and SITE ... that's probably enough for starters",
+  // and a 4' x 4' frame at 1" = 1'-0" ("i think that is good").
+  //
+  // THE FRAME IS IN REAL FEET, centred on the shelf's origin: what is inside
+  // it is the detail and is what prints. THE SCALE is inches of paper per
+  // foot (1 = 1" = 1'-0"), one of the sheet scales a detail is drawn at.
+  // A CATEGORY the drafter made with + CATEGORY is kept as he typed it
+  // (upper case), so the three are a starting list, not a fence.
+  const DETAIL_CATEGORIES = Object.freeze(['FOUNDATION', 'FRAMING', 'SITE']);
+  const DETAIL_SCALES = Object.freeze([3, 1.5, 1, 0.75, 0.5]);
+  const DETAIL_FRAME_MIN_FT = 0.5;
+  const DETAIL_FRAME_MAX_FT = 40;
+  const DETAIL_DEFAULTS = Object.freeze({
+    category: 'FOUNDATION', kind: 'typ', tags: Object.freeze([]), note: '',
+    frameW: 4, frameH: 4, scale: 1,
+  });
+  const detailFrameFt = (raw, fallback) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return Math.min(DETAIL_FRAME_MAX_FT, Math.max(DETAIL_FRAME_MIN_FT, Math.round(n * 48) / 48));
+  };
+  const detailCard = raw => {
+    const card = raw && typeof raw === 'object' ? raw : {};
+    const category = String(card.category || '').trim().toUpperCase().slice(0, 40)
+      || DETAIL_DEFAULTS.category;
+    const tags = (Array.isArray(card.tags) ? card.tags : String(card.tags || '').split(','))
+      .map(tag => String(tag || '').trim().toLowerCase().slice(0, 40)).filter(Boolean)
+      .filter((tag, i, all) => all.indexOf(tag) === i).slice(0, 20);
+    return {
+      category,
+      kind: oneOf(card.kind, ['typ', 'special'], DETAIL_DEFAULTS.kind),
+      tags,
+      note: String(card.note || '').slice(0, 2000),
+      frameW: detailFrameFt(card.frameW, DETAIL_DEFAULTS.frameW),
+      frameH: detailFrameFt(card.frameH, DETAIL_DEFAULTS.frameH),
+      scale: DETAIL_SCALES.includes(Number(card.scale)) ? Number(card.scale) : DETAIL_DEFAULTS.scale,
+      ...(card.favourite === true ? { favourite: true } : {}),
+      ...(typeof card.changed === 'string' && card.changed ? { changed: card.changed.slice(0, 40) } : {}),
+    };
+  };
 
   // THE FIRST AUTO-DIMENSION OFFSET — the gap between the plan and the closest
   // auto string. Ruled by Commander Devin, 6 Sep, on Skipper's proposal.
@@ -2880,6 +2936,10 @@ if (!window.DraftDrawingFormat) {
     isGenericHologramFile,
     STANDALONE_KINDS,
     standalone,
+    DETAIL_CATEGORIES,
+    DETAIL_SCALES,
+    DETAIL_DEFAULTS,
+    detailCard,
     BUILD_TYPES,
     CASEMENT_TYPES,
     DOOR_TYPES,
