@@ -1111,9 +1111,12 @@ if (!window.DraftRender2D) {
       const area = arced && G.loopAreaSqFt ? G.loopAreaSqFt(points) : env.outlineAreaSqFt(points);
       const detail = [type?.label, areaOn && env.areaLabel ? env.areaLabel(area) : null]
         .filter(Boolean).join(' · ');
+      // On a sheet the lettering holds its printed size (jb, 19 Nov), by the
+      // sheet's `inkScale` as the dimensions do; 1 at print and on MODEL.
+      const ink = Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1;
       const lines = [
-        ...(name ? [{ text: name, font: "700 12px 'Barlow Condensed', system-ui, sans-serif", high: 16 }] : []),
-        ...(detail ? [{ text: detail, font: "600 11px 'Barlow Condensed', system-ui, sans-serif", high: 15 }] : []),
+        ...(name ? [{ text: name, font: `700 ${12 * ink}px 'Barlow Condensed', system-ui, sans-serif`, high: 16 * ink }] : []),
+        ...(detail ? [{ text: detail, font: `600 ${11 * ink}px 'Barlow Condensed', system-ui, sans-serif`, high: 15 * ink }] : []),
       ];
       if (lines.length) {
         const cx = flatPoints.reduce((sum, pt) => sum + pt.x, 0) / flatPoints.length;
@@ -1126,7 +1129,7 @@ if (!window.DraftRender2D) {
           ctx.font = line.font;
           const textWidth = ctx.measureText(line.text).width;
           ctx.fillStyle = 'rgba(255,255,255,0.92)';
-          ctx.fillRect(cx - textWidth / 2 - 3, y, textWidth + 6, line.high);
+          ctx.fillRect(cx - textWidth / 2 - 3 * ink, y, textWidth + 6 * ink, line.high);
           ctx.fillStyle = env.shapeColor;
           ctx.fillText(line.text, cx, y + line.high / 2);
           y += line.high;
@@ -1665,7 +1668,10 @@ if (!window.DraftRender2D) {
     const label = String(tag.name || '') + (env.suffixFor ? env.suffixFor(tag) : '');
     const lines = roomTagLines(tag, env);
     const world = Number(tag.heightFt) > 0 && Number(pxPerFt) > 0;
-    const namePx = world ? Number(tag.heightFt) * pxPerFt * NOTE_EM_PER_CAP : TAG_NAME_PX;
+    // A SCREEN tag on a sheet holds its printed size, as a SCREEN note does
+    // (jb, 19 Nov): the sheet's `inkScale`, 1 at print and on MODEL.
+    const ink = env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1;
+    const namePx = world ? Number(tag.heightFt) * pxPerFt * NOTE_EM_PER_CAP : TAG_NAME_PX * ink;
     const k = namePx / TAG_NAME_PX;
     const subPx = TAG_SUB_PX * k, nameH = TAG_NAME_H * k, subH = TAG_SUB_H * k;
     ctx.save();
@@ -1725,7 +1731,7 @@ if (!window.DraftRender2D) {
         ctx.arc(leader.to.x, leader.to.y, 1.5 * k, 0, Math.PI * 2);
         ctx.fill();
       } else if (end === 'arrow') {
-        const head = Math.max(6, m.namePx * 0.6) * k;
+        const head = Math.max(6 * k, m.namePx * 0.6);
         const a = Math.atan2(leader.to.y - leader.from.y, leader.to.x - leader.from.x);
         ctx.beginPath();
         ctx.moveTo(leader.to.x, leader.to.y);
@@ -3787,20 +3793,28 @@ if (!window.DraftRender2D) {
       default: return [text.x >= anchor.x ? col.l : col.r, row.m];
     }
   };
-  function noteBoxScreen2D(ctx, anchor, text, note, pxPerFt) {
+  //
+  // A SCREEN NOTE ON A SHEET IS LOCKED TO ITS PRINTED SIZE (jb, 19 Nov: "when
+  // i zoom in and out the annotation and rm size text changes size. it should
+  // be locked to the size it will print"). `inkScale` is the sheet's zoom over
+  // its print zoom, as the dimensions take it: 1 at print, PDF and DXF and on
+  // MODEL (which passes none), so a SCREEN note prints at the 12px it always
+  // did and the desk view grows and shrinks it with the paper.
+  function noteBoxScreen2D(ctx, anchor, text, note, pxPerFt, inkScale) {
+    const k = Number.isFinite(inkScale) && inkScale > 0 ? inkScale : 1;
     const world = Number(note.heightFt) > 0 && Number(pxPerFt) > 0;
-    const fontPx = world ? Number(note.heightFt) * pxPerFt * NOTE_EM_PER_CAP : NOTE_SCREEN_PX;
+    const fontPx = world ? Number(note.heightFt) * pxPerFt * NOTE_EM_PER_CAP : NOTE_SCREEN_PX * k;
     // A DXF note set by its baseline keeps the file's bare block.
     const dxf = !NOTE_NODES.includes(note.node) && typeof note.baseline === 'string' && world;
-    const lineH = world ? fontPx * 1.2 : NOTE_LINE_H;
-    const padX = dxf ? 0 : world ? fontPx * 0.4 : NOTE_PAD_X;
-    const padY = dxf ? 0 : world ? fontPx * 0.25 : 4;
+    const lineH = world ? fontPx * 1.2 : NOTE_LINE_H * k;
+    const padX = dxf ? 0 : world ? fontPx * 0.4 : NOTE_PAD_X * k;
+    const padY = dxf ? 0 : world ? fontPx * 0.25 : 4 * k;
     const lines = noteLines(note);
     ctx.save();
     ctx.font = noteFontCss(note, fontPx);
     const widths = lines.map(line => ctx.measureText(line).width);
     ctx.restore();
-    const width = Math.max(world ? 0 : 24, ...widths) + padX * 2;
+    const width = Math.max(world ? 0 : 24 * k, ...widths) + padX * 2;
     const height = lines.length * lineH + padY * 2;
     const align = ['center', 'right'].includes(note.align) ? note.align : 'left';
     let x0, y0;
@@ -3837,14 +3851,15 @@ if (!window.DraftRender2D) {
   function drawNoteScreen2D(ctx, anchor, text, note, options = {}, env) {
     const preview = options.preview === true;
     const alpha = preview ? 0.6 : 1;
-    const box = noteBoxScreen2D(ctx, anchor, text, note, options.pxPerFt);
+    const k = env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1;
+    const box = noteBoxScreen2D(ctx, anchor, text, note, options.pxPerFt, k);
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = env.color;
     ctx.fillStyle = env.color;
     const ink = noteLeaderInk(note, env);
     ctx.lineWidth = ink.lineWidth;
-    const head = box.world ? Math.max(6, box.fontPx * 0.75) : 9;
+    const head = box.world ? Math.max(6, box.fontPx * 0.75) : 9 * k;
     // THE LEADER, from the text point (the node) to the anchor.
     if (note.end !== 'none') {
       ctx.setLineDash(preview ? [5, 4] : ink.dash);
@@ -3864,7 +3879,7 @@ if (!window.DraftRender2D) {
       ctx.fill();
     } else if (note.end === 'dot') {
       ctx.beginPath();
-      ctx.arc(anchor.x, anchor.y, Math.max(2, head / 3), 0, Math.PI * 2);
+      ctx.arc(anchor.x, anchor.y, Math.max(2 * k, head / 3), 0, Math.PI * 2);
       ctx.fill();
     }
     // THE BLOCK, turned about its text point. An unturned block is drawn
@@ -3872,7 +3887,7 @@ if (!window.DraftRender2D) {
     // the painter draws, to the pixel.
     let x0 = box.x0, y0 = box.y0;
     if (box.angle) { ctx.translate(text.x, text.y); ctx.rotate(box.angle); } else { x0 += text.x; y0 += text.y; }
-    ctx.lineWidth = 1 * (env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1);
+    ctx.lineWidth = 1 * k;
     const { boxW, boxH, lineH, padX, padY, lines } = box;
     if (note.fill || note.outline) {
       const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
