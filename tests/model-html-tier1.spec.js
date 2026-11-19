@@ -419,6 +419,9 @@ test.describe('MODEL.html tier 1', () => {
       // the door's wall). MODEL paints them on its foundation view and LAYOUT
       // on the FOUNDATION sheet off the same module, so it is declared here.
       './door-bucks.js',
+      // beam-pockets.js cuts the BEAM POCKETS where a basement beam's ends
+      // sit in the concrete (jb, 19 Nov 2026), MODEL and LAYOUT alike.
+      './beam-pockets.js',
       // The strip footing's dashed outline on the FOUNDATION view (16 Nov 2026).
       './footing-outline.js',
       // trim-extend.js answers TRIM's and EXTEND's geometry (Movie, 17 Oct:

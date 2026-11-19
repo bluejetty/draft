@@ -2238,6 +2238,7 @@
   var paintFrame = 0;
   const paint = () => {
     paintFrame += 1;
+    clearBeamSpanTags();
     if (syncDragLength) syncDragLength();
     // REGISTRATION's box, outside the timed paint body: it is DOM, not ink.
     paintRegistration();
@@ -2391,6 +2392,7 @@
         paintLines(); paintWalls();
         // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct).
         paintDoorBucks();
+        paintBeamPockets();
         paintFootingOutline();
         // Fixtures ride ON the walls, so they go after them and before the
         // annotation -- the slot the bone puts them in (MODEL.dc.html:6993,

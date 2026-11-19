@@ -625,6 +625,10 @@
       drawPress(at);
       return;
     }
+    // A FLUSH / DROPPED TAG TAKES THE PRESS (jb, 19 Nov 2026): it flips its
+    // span (flipBeamSpanAt, model/08) ahead of the pick, the box and the pan.
+    if (activeTool === RESTING_TOOL && !e.shiftKey
+      && flipBeamSpanAt(e.clientX - rect.left, e.clientY - rect.top)) return;
     // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
     // body tests too. Otherwise a box begun on a selected wall would grab that
     // wall instead, and the drafter would drag the building across the sheet

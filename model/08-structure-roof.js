@@ -1664,3 +1664,86 @@
     return gone;
   };
 
+
+  // ── FLUSH OR DROPPED, ONE SPAN AT A TIME (jb, 19 Nov 2026) ─────────────
+  //
+  // "put flush or dropped on each section between columns and allow user to
+  // click on flush or dropped to change it". A Select press on a span's tag
+  // (beamSpanTagHits, painted by model/01) flips THAT span: the piece it lies
+  // on is cut at the span's two stops when it runs past them, the span takes
+  // the other mode, and touching pieces of the row that now agree are joined
+  // again -- so a flip and a flip back leave one piece, as it was. The row and
+  // its posts go auto: false (the line is his now, as a reshaped one is:
+  // boneyard-beams handOver), so AUTO BEAM leaves it alone. One UNDO.
+  const SPAN_JOIN_KEYS = ['mode', 'mark', 'stairId', 'layer', 'levelId', 'view'];
+  const flipBeamSpanAt = (sx, sy) => {
+    const R = window.DraftRender2D;
+    if (!drawing || !R?.spanTagAt || !filterAllows('beam')) return false;
+    const hit = R.spanTagAt(beamSpanTagHits, sx, sy);
+    if (!hit) return false;
+    const { beam, from, to } = hit.span;
+    const list = drawing.beams || [];
+    if (!list.includes(beam)) return false;
+    const now = hit.span.mode === 'dropped' ? 'flush' : 'dropped';
+    const listBefore = [...list];
+    const edits = [];
+    const touch = item => {
+      if (!edits.some(edit => edit.item === item)) edits.push({ item, before: JSON.parse(JSON.stringify(item)) });
+    };
+    const len = Math.hypot(beam.end.x - beam.start.x, beam.end.z - beam.start.z);
+    const ux = (beam.end.x - beam.start.x) / len, uz = (beam.end.z - beam.start.z) / len;
+    const base = { x: beam.start.x, y: beam.start.y || 0, z: beam.start.z };
+    const at = t => ({ x: base.x + ux * t, y: base.y, z: base.z + uz * t });
+    const CUT_TOL = 0.01;
+    touch(beam);
+    let nextId = newStructureId(list);
+    const extra = [];
+    const piece = (a, b) => ({ ...JSON.parse(JSON.stringify(beam)), id: nextId++, start: at(a), end: at(b) });
+    if (from > CUT_TOL) extra.push(piece(0, from));
+    if (to < len - CUT_TOL) extra.push(piece(to, len));
+    // THE RECORD ITSELF BECOMES THE SPAN, so the selection and every painter
+    // holding it still hold the piece that was pressed.
+    beam.start = at(from);
+    beam.end = at(to);
+    beam.mode = now;
+    list.splice(list.indexOf(beam) + 1, 0, ...extra);
+    // JOIN WHAT NOW AGREES: walk the row along the line and run touching
+    // pieces of the same kind together.
+    const row = beamRun(beam);
+    const o = { x: beam.start.x, z: beam.start.z };
+    const s = p => (p.x - o.x) * ux + (p.z - o.z) * uz;
+    const sorted = row.map(b => ({ b, lo: Math.min(s(b.start), s(b.end)), hi: Math.max(s(b.start), s(b.end)) }))
+      .sort((a, b2) => a.lo - b2.lo);
+    const same = (a, b) => SPAN_JOIN_KEYS.every(key => String(a[key] ?? '') === String(b[key] ?? ''));
+    for (let i = 1; i < sorted.length; i += 1) {
+      const prev = sorted[i - 1], cur = sorted[i];
+      if (Math.abs(cur.lo - prev.hi) > CUT_TOL || !same(prev.b, cur.b)) continue;
+      // Keep whichever record is the pressed one; the other goes.
+      const keep = cur.b === beam ? cur : prev;
+      const gone = keep === cur ? prev : cur;
+      touch(keep.b);
+      const fwd = s(keep.b.end) >= s(keep.b.start);
+      const lo = prev.lo, hi = cur.hi;
+      const p = t => ({ x: o.x + ux * t, y: keep.b.start.y || 0, z: o.z + uz * t });
+      keep.b.start = p(fwd ? lo : hi);
+      keep.b.end = p(fwd ? hi : lo);
+      const idx = list.indexOf(gone.b);
+      if (idx >= 0) list.splice(idx, 1);
+      keep.lo = lo; keep.hi = hi;
+      sorted.splice(i - 1, 2, keep);
+      i -= 1;
+    }
+    // HIS LINE NOW: the row and its posts leave AUTO BEAM's sweep.
+    beamRun(beam).forEach(b => { if (b.auto !== false) { touch(b); b.auto = false; } });
+    columnsOnBeam(beam).concat(...beamRun(beam).map(b => columnsOnBeam(b)))
+      .forEach(c => { if (c.auto === true) { touch(c); c.auto = false; } });
+    undoStack.push({ kind: 'batch', steps: [
+      { kind: 'reorder', lists: [{ list, before: listBefore }] },
+      { kind: 'props', edits },
+    ] });
+    markDirty();
+    setSelection(selection.filter(entry => entry.type !== 'beam' || list.includes(entry.item)));
+    sayOnStrip(`That span is ${now === 'dropped' ? 'DROPPED' : 'FLUSH'} now. Click its tag again for ${now === 'dropped' ? 'FLUSH' : 'DROPPED'}, or UNDO.`);
+    paint();
+    return true;
+  };
