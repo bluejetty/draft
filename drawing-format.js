@@ -2554,9 +2554,70 @@ if (!window.DraftDrawingFormat) {
   // to go stale -- only an unknown name is refused, like an unknown kind.
   const LAYOUT_SCHEDULE_TABLES = ['door', 'window'];
   const LAYOUT_DETAIL_IDS = ['wallsection', 'eave', 'floor', 'footing'];
-  const layout = (raw, levelIds, cutIds = new Set()) => {
+  // WINDOWS FROM ANOTHER FILE (jb, 19 Nov 2026: "i'd like to draw the SITE
+  // PLAN in a seperate file and then bring it into the construction plan with
+  // the house", "need to bring in LAYOUT WINDOWS from other DRAFT files",
+  // "select file, and then select layout", "level / layout"). A COPY of the
+  // other drawing rides in the layout record, one per file brought in, and a
+  // viewport naming it by `source` paints that drawing instead of this one.
+  // A copy and not a link: a web page cannot read a file on the drafter's
+  // disk again by itself, so RELOAD FROM FILE on the viewport's menu is how
+  // the copy is brought up to date. The other file's packed tracing pictures
+  // (`underlayFiles`) never come along.
+  const LAYOUT_SOURCE_LIMIT = 24;
+  const layoutSourceId = value => {
+    const id = String(value ?? '').trim();
+    return /^[A-Za-z0-9_-]{1,24}$/.test(id) ? id : null;
+  };
+  const layoutSourceDrawing = raw => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const { layout: own, underlayFiles: _pictures, ...rest } = raw;
+    if (!checkEnvelope(rest).ok) return null;
+    // ITS OWN SHEETS COME ALONG, so its windows can be offered; the files
+    // ITS windows show do not, or every copy would carry copies.
+    if (own && typeof own === 'object' && !Array.isArray(own)) {
+      const { sources: _nested, ...sheets } = own;
+      return { ...rest, layout: sheets };
+    }
+    return rest;
+  };
+  const layoutSources = raw => {
     const seen = new Set();
+    return (Array.isArray(raw) ? raw : []).map(src => {
+      const id = layoutSourceId(src?.id);
+      const drawing = layoutSourceDrawing(src?.drawing);
+      if (!id || seen.has(id) || !drawing) return null;
+      seen.add(id);
+      const name = String(src?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'OTHER FILE';
+      const copiedAt = typeof src?.copiedAt === 'string' && !Number.isNaN(Date.parse(src.copiedAt))
+        ? src.copiedAt.slice(0, 40) : null;
+      return { id, name, ...(copiedAt ? { copiedAt } : {}), drawing };
+    }).filter(Boolean).slice(0, LAYOUT_SOURCE_LIMIT);
+  };
+  // What a window from that file may point at: its levels and shelves, and
+  // its cuts -- the same two sets this reader is handed for the drawing's own.
+  const layoutSourceRefs = drawing => {
+    const levelIds = new Set(levels(drawing.levels).map(level => level.id));
+    const walls = Array.isArray(drawing.walls) ? drawing.walls : [];
+    boneyardShelves(drawing.boneyardShelves)
+      .filter(shelf => walls.some(wall => wall?.levelId === -shelf.id))
+      .forEach(shelf => levelIds.add(-shelf.id));
+    const cutIds = new Set(cuts(drawing.cuts, new Set(levels(drawing.levels).map(level => level.id)))
+      .map(cut => cut.id));
+    return { levelIds, cutIds };
+  };
+  const layout = (raw, hostLevelIds, hostCutIds = new Set()) => {
+    const seen = new Set();
+    const sources = layoutSources(raw?.sources);
+    const refsBySource = new Map(sources.map(src => [src.id, layoutSourceRefs(src.drawing)]));
     const viewports = (Array.isArray(raw?.viewports) ? raw.viewports : []).map(viewport => {
+      // A WINDOW FROM ANOTHER FILE is checked against that file, and one
+      // whose file is not in the record is dropped like a gone level.
+      const sourceId = viewport?.source == null ? null : layoutSourceId(viewport.source);
+      if (viewport?.source != null && (!sourceId || !refsBySource.has(sourceId))) return null;
+      const refs = sourceId ? refsBySource.get(sourceId) : null;
+      const levelIds = refs ? refs.levelIds : hostLevelIds;
+      const cutIds = refs ? refs.cutIds : hostCutIds;
       const id = Number(viewport?.id);
       const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation', 'schedule', 'detail'], viewport?.kind == null ? 'plan' : null);
       const pif = positive(viewport?.pif, null);
@@ -2589,8 +2650,14 @@ if (!window.DraftDrawingFormat) {
       // drawing, and the same three elevations.
       const hologram = Object.fromEntries(['existing', 'demo', 'new']
         .filter(key => viewport?.hologram?.[key] === false).map(key => [key, false]));
+      // ITS OWN LAYERS SWITCHED OFF (PR #979), kept here since a window
+      // brought in from another file comes with the ones its file had off.
+      const layersOff = [...new Set((Array.isArray(viewport?.layersOff) ? viewport.layersOff : [])
+        .map(v => String(v ?? '').trim()).filter(v => v && v.length <= 64))];
       const base = { id, kind, pif, xIn, yIn, sheet, ...(crop ? { crop } : {}),
-        ...(Object.keys(hologram).length ? { hologram } : {}) };
+        ...(Object.keys(hologram).length ? { hologram } : {}),
+        ...(layersOff.length ? { layersOff } : {}),
+        ...(sourceId ? { source: sourceId } : {}) };
       if (kind === 'plan') {
         const viewportLevelId = levelId(viewport?.levelId, levelIds);
         if (viewportLevelId == null) return null;
@@ -2662,6 +2729,13 @@ if (!window.DraftDrawingFormat) {
       } } : {}),
       auto: raw?.auto === true,
       viewports,
+      // Only the files a window still shows: one whose last window was
+      // deleted goes with the next save rather than riding in every save.
+      ...(() => {
+        const used = new Set(viewports.map(viewport => viewport.source).filter(Boolean));
+        const kept = sources.filter(src => used.has(src.id));
+        return kept.length ? { sources: kept } : {};
+      })(),
       // THE SHEETS THEMSELVES, by title (Movie, 1 Oct). Sheet N is
       // sheets[N-1]. Until now a sheet existed only because a viewport sat
       // on it, so the set could not hold a named sheet with nothing drawn on
@@ -2870,6 +2944,8 @@ if (!window.DraftDrawingFormat) {
     specs,
     estimates,
     layout,
+    layoutSources,
+    layoutSourceDrawing,
     tour,
     roofIntent,
     buildType,

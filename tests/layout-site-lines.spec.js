@@ -86,7 +86,8 @@ test('+ ADD VIEWPORT offers every level with nothing drawn, and a SITE PLAN plac
   await page.locator('[data-layout-add-viewport]').click();
   // AND THE SCHEDULES AND DETAILS since 9 Nov (jb), offered like every
   // other view whether or not anything is drawn yet.
-  await expect(page.locator('.lay-add-head')).toHaveText(['PLANS', 'FLOOR LAYOUTS', 'ELEVATIONS', 'SCHEDULES', 'DETAILS']);
+  await expect(page.locator('.lay-add-head')).toHaveText(['PLANS', 'FLOOR LAYOUTS', 'ELEVATIONS', 'SCHEDULES', 'DETAILS',
+    'FROM ANOTHER FILE']);
   await expect(page.locator('[data-add-pick]')).toHaveText(['SITE PLAN', 'ROOF PLAN', '2ND FL PLAN', 'MAIN FL PLAN',
     'FOUNDATION PLAN', 'BASEMENT PLAN', '2ND FL FLOOR LAYOUT', 'MAIN FL FLOOR LAYOUT',
     'ELEVATION E1', 'ELEVATION E2', 'ELEVATION E3', 'ELEVATION E4',

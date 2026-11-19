@@ -166,7 +166,8 @@
   };
   const dimLayoutPif = levelId => {
     const pifs = (drawing?.layout?.viewports || [])
-      .filter(v => v && v.kind === 'plan' && Number(v.levelId) === Number(levelId) && v.pif > 0)
+      // A window from another file (v.source) shows that file's level, not this one.
+      .filter(v => v && v.kind === 'plan' && v.source == null && Number(v.levelId) === Number(levelId) && v.pif > 0)
       .map(v => v.pif);
     return pifs.length ? Math.max(...pifs) : null;
   };
