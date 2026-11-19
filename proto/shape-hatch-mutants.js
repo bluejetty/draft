@@ -59,7 +59,7 @@ const MUTANTS = [
     test: 'the label and the area read on the sheet' },
   { file: 'render-2d.js',
     name: 'the label is never written',
-    find: "        ...(name ? [{ text: name, font: \"700 12px 'Barlow Condensed', system-ui, sans-serif\", high: 16 }] : []),\n",
+    find: "        ...(name ? [{ text: name, font: `700 ${12 * ink}px 'Barlow Condensed', system-ui, sans-serif`, high: 16 * ink }] : []),\n",
     with: "",
     test: 'the label and the area read on the sheet' },
   { file: 'model/01-skin-view.js',
