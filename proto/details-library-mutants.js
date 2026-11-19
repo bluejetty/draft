@@ -106,8 +106,8 @@ const MUTANTS = [
   // ── THE DETAILS BOARD (step 3) ──
   { file: 'model/21-details-library.js',
     name: 'a library opens on its board',
-    find: "    boneyardActive = true;\n    boardOpen = true;",
-    with: "    boneyardActive = true;",
+    find: "    boardOpen = isDetailsFile();",
+    with: "    boardOpen = false;",
     test: 'opens on its board' },
   { file: 'model/21-details-library.js',
     name: 'a thumbnail is painted by the plan\'s painters',

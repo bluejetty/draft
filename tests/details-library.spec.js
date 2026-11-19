@@ -321,6 +321,8 @@ test('a card dragged onto another takes its place, the order is saved, and one U
   await expect(boardNames(page)).toHaveText(['WINDOW WELL', 'TYP. STRIP FOOTING', 'TYP. EAVE']);
   // THE NUMBERS FOLLOW THE ORDER: the library's order is the bubbles' order.
   await expect(board(page).locator('[data-board-card] .db-num')).toHaveText(['1', '2', '3']);
+  // ONE STEP ON THE PAGE'S OWN STACK, not the saved versions'.
+  expect(await page.evaluate(() => undoStack.filter(step => step.kind === 'reorder').length)).toBe(1);
   expect((await saved(page)).boneyardShelves.map(s => s.id)).toEqual([3, 1, 2]);
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press('Control+z');
