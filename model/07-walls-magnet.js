@@ -1513,7 +1513,9 @@
   // A wall's or a line's own end, as opposed to a face corner.
   const isOwnNode = v => [...walls(), ...lines()].some(seg => [seg.start, seg.end]
     .some(e => e && Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6))
-    || loopCorners().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6);
+    || loopCorners().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6)
+    // A POST'S CENTRE IS THE PLAN'S OWN NODE, orange like a wall's end.
+    || columnSnapPoints().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6);
   // Worked out once per drawing change, level and hologram placing, not on
   // every move of the mouse: a plan of twenty suites is a lot of walls.
   let holoSnapCache = { key: null, list: [] };
@@ -1576,6 +1578,13 @@
     bgWalls().forEach(w => [w.start, w.end].forEach(v => {
       if (v && !out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     }));
+    // AND EVERY COLUMN'S CENTRE (jb, 19 Nov 2026: "make the column node a
+    // snappoint for the walls (also lines shapes etc)") -- each post this
+    // plan draws, and on the FOUNDATION view its pad's corners
+    // (model/01 columnSnapPoints).
+    columnSnapPoints().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     // AND ON THE SITE, THE REGISTRATION TARGET and the roof drawn over it
     // (Movie, 26 Oct: "the roof plan doesn't seem to have NODE SNAPS working
     // - i really would like the REGISTRATION TARGET to have a node snap so i
