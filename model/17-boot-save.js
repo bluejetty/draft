@@ -281,6 +281,9 @@
     // A DETAILS LIBRARY OPENS IN ITS DETAIL (jb, 19 Nov 2026), never on a
     // level: its shelves are its details (model/21-details-library.js).
     if (drawing.standalone === 'details') boneyardActive = true;
+    // AND ON ITS DETAILS BOARD (jb's plan, step 3): a library opened is a
+    // library to find a detail in. Any other file puts the board away.
+    if (typeof settleDetailsBoardOnOpen === 'function') settleDetailsBoardOnOpen();
     // AND A SITE-PLAN-ONLY FILE OPENS ON SITE PLAN (jb, 11 Nov), whatever
     // `?level=` the house file he came from left in the URL. Here, before
     // the fit and the first paint that every door runs next, so the frame

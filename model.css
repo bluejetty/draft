@@ -1939,3 +1939,69 @@
   .dl-frame input { width:0; flex:1; }
   .dl-save { margin-top:2px; padding:4px 6px; color: var(--ink); }
   .dl-status { font-family: var(--font-ui); font-size:8px; letter-spacing:0.04em; color: var(--ink-quiet); }
+
+  /* ── THE DETAILS BOARD (model/21-details-library.js, step 3) ──
+     Over the drawing area: categories down the LEFT, search and buttons
+     across the top, the cards filling the rest (jb's plan mockup). */
+  #details-board { position:fixed; z-index:9; display:flex; gap:10px; box-sizing:border-box;
+    padding:10px; background: var(--surface-chip); border:1px solid var(--edge-panel);
+    border-radius:4px; font-family: var(--font-ui); color: var(--ink-primary); }
+  #details-board[hidden] { display:none; }
+  #details-board .db-rail { width:150px; flex:none; display:flex; flex-direction:column; gap:3px;
+    overflow-y:auto; border-right:1px solid var(--edge-panel); padding-right:8px; }
+  #details-board .db-rail-title { font-size:9px; letter-spacing:0.08em; color: var(--ink-quiet); margin-bottom:2px; }
+  #details-board .db-cat { display:flex; justify-content:space-between; gap:6px; text-align:left;
+    background:none; border:1px solid transparent; border-radius:3px; color: var(--ink-primary);
+    font-family: var(--font-ui); font-weight:600; font-size:11px; letter-spacing:0.04em; padding:5px 6px; cursor:pointer; }
+  #details-board .db-cat:hover { border-color: var(--accent); }
+  #details-board .db-cat[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #000); }
+  #details-board .db-cat[data-drop-on] { border-color: var(--accent); border-style:dashed; }
+  #details-board .db-count { opacity:0.7; font-weight:400; }
+  #details-board .db-add-category { margin-top:4px; background:none; border:1px dashed var(--edge-panel);
+    color: var(--ink-quiet); font-family: var(--font-ui); font-size:10px; padding:5px 6px; cursor:pointer; }
+  #details-board .db-rail input { font-family: var(--font-ui); font-size:11px; padding:4px 6px;
+    background: var(--surface-page); color: var(--ink-primary); border:1px solid var(--accent); }
+  #details-board .db-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+  #details-board .db-top { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  #details-board .db-title { font-size:11px; letter-spacing:0.06em; margin-right:auto; }
+  #details-board .db-title span { color: var(--ink-quiet); }
+  #details-board .db-top input[type="search"], #details-board .db-top select { font-family: var(--font-ui);
+    font-size:11px; padding:4px 6px; background: var(--surface-page); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); border-radius:3px; }
+  #details-board .db-top input[type="search"] { width:190px; }
+  #details-board .db-btn { padding:4px 8px; }
+  #details-board .db-grid { flex:1; overflow-y:auto; display:grid; align-content:start; gap:10px;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  #details-board .db-card { display:flex; flex-direction:column; border:1px solid var(--edge-panel);
+    border-radius:4px; background: var(--surface-page); cursor:pointer; overflow:hidden; }
+  #details-board .db-card:hover { border-color: var(--ink-quiet); }
+  #details-board .db-card[data-picked] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  #details-board .db-card[data-dragging] { opacity:0.4; }
+  #details-board .db-card[data-drop-side="before"] { box-shadow: -4px 0 0 0 var(--accent); }
+  #details-board .db-card[data-drop-side="after"] { box-shadow: 4px 0 0 0 var(--accent); }
+  #details-board .db-thumb { width:100%; aspect-ratio: 360 / 280; display:block; }
+  #details-board .db-meta { padding:6px 8px 8px; border-top:1px solid var(--edge-panel); display:flex;
+    flex-direction:column; gap:2px; }
+  #details-board .db-line { display:flex; gap:6px; align-items:center; }
+  #details-board .db-num { font-weight:700; font-size:12px; min-width:14px; }
+  #details-board .db-name { flex:1; min-width:0; font-weight:600; font-size:12px; letter-spacing:0.03em;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #details-board .db-name input { width:100%; font-family: var(--font-ui); font-size:12px; }
+  #details-board .db-star { background:none; border:none; color: var(--accent); font-size:15px; cursor:pointer; padding:0 2px; }
+  #details-board .db-sub, #details-board .db-tags { font-size:9px; letter-spacing:0.04em; color: var(--ink-quiet); }
+  #details-board .db-tags { font-style:italic; }
+  #details-board .db-empty { grid-column:1 / -1; padding:30px; text-align:center; color: var(--ink-quiet); font-size:12px; }
+  #details-board .db-foot { font-size:9px; letter-spacing:0.06em; color: var(--ink-quiet); }
+  #details-board-menu { position:fixed; z-index:41; min-width:160px; max-height:70vh; overflow-y:auto; padding:4px;
+    box-sizing:border-box; background: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:4px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
+  #details-board-menu[hidden] { display:none; }
+  #details-board-menu button { display:block; width:100%; text-align:left; border:1px solid transparent;
+    background:none; color: var(--ink-primary); cursor:pointer; padding:5px 10px; font-family: var(--font-ui);
+    font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; border-radius:3px; }
+  #details-board-menu button:hover { border-color: var(--accent); color: var(--accent); }
+  #details-board-menu button:disabled { opacity:0.35; cursor:default; }
+  #details-board-menu button[data-armed] { color:#e5484d; }
+  #details-board-menu .db-menu-label { font-family: var(--font-ui); font-size:9px; letter-spacing:0.08em;
+    color: var(--ink-quiet); padding:3px 10px; }
+  #details-board-menu .line-menu-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }

@@ -9,9 +9,10 @@
 // database type organization system so that they can be arranged easily.
 // id like to draw each detail in a seperate 'SHELF' ... it won't need all
 // the LEVELS / LAYERS because the DETAILS are just 2D small drawing with
-// notes". The plan he approved the same day ("go for it") is step 2 of five:
-// this file kind and the DETAIL window. The DETAILS BOARD, details on LAYOUT
-// sheets and MAKE DETAIL from a section come after it.
+// notes". The plan he approved the same day ("go for it") is five steps:
+// step 2 is this file kind and the DETAIL window, step 3 the DETAILS BOARD
+// (the second half of this file). Details on LAYOUT sheets and MAKE DETAIL
+// from a section come after it.
 //
 // WHAT A DETAILS LIBRARY IS, in this page's own terms:
 //
@@ -86,8 +87,10 @@
   // rename already use: the shelf record is put back in place.
   const writeCard = (patch, say = null) => {
     const now = activeDetail();
-    if (!now) return;
-    const shelf = storedShelf(now.shelf.id);
+    if (now) writeCardOf(now.shelf.id, patch, say);
+  };
+  const writeCardOf = (shelfId, patch, say = null) => {
+    const shelf = storedShelf(shelfId);
     if (!shelf) return;
     const before = { ...shelf, ...(shelf.detail ? { detail: { ...shelf.detail } } : {}) };
     const next = window.DraftDrawingFormat.detailCard({ ...detailCardOf(shelf), ...patch });
@@ -251,9 +254,9 @@
   // ── THE PANE: THE DETAILS, AND THE CARD OF THE ONE BEING DRAWN ────────────
   //
   // In place of the LEVELS / LAYERS list (model/05 buildLevelsPanel hands
-  // over here on a details file). The DETAILS BOARD -- thumbnails, search,
-  // favourites, drag to sort -- is step 3; until then this list is the way
-  // between details.
+  // over here on a details file). The DETAILS BOARD below is where details
+  // are found and arranged; this list is the quick way between them while
+  // drawing, and its BOARD button goes back to the board.
   const el = (tag, props = {}, ...kids) => {
     const node = document.createElement(tag);
     Object.entries(props).forEach(([key, value]) => {
@@ -270,6 +273,9 @@
     const activeId = activeShelfId();
     const head = el('div', { className: 'lv-head' },
       el('div', { className: 'lv-head-title', textContent: 'Details' }),
+      el('button', { type: 'button', className: 'lv-add', textContent: 'BOARD',
+        title: 'Back to the DETAILS BOARD: every detail as a card', data: { openBoard: '' },
+        onclick: event => { event.stopPropagation(); openDetailsBoard(); } }),
       el('button', { type: 'button', className: 'lv-add', textContent: '+ DETAIL',
         title: 'Add a detail: a new framed detail window', data: { addDetail: '' },
         onclick: event => { event.stopPropagation(); addDetail(); } }));
@@ -300,6 +306,7 @@
       panel.append(row);
     });
 
+    syncDetailsBoard();
     const now = activeDetail();
     if (!now) return;
     const { card, shelf } = now;
@@ -379,10 +386,466 @@
     });
   };
 
+  // ══ THE DETAILS BOARD (step 3 of jb's plan, 19 Nov 2026) ══════════════════
+  //
+  // "i'd like a database type organization system so that they can be
+  // arranged easily": every detail of the library as a card, over the
+  // drawing area, in place of the plan. The plan's mockup is followed: the
+  // CATEGORIES down the LEFT of the board, search and buttons across the
+  // top, the cards filling the rest, the picked one outlined in the accent.
+  //
+  //   - A CARD is a detail's thumbnail (its frame and what is drawn in it,
+  //     by the plan's own painters), its number, name, category, TYP. or
+  //     SPECIAL, scale and tags, and a star for FAVOURITES.
+  //   - CLICK picks a card; DOUBLE-CLICK opens its DETAIL window. The window's
+  //     BOARD button comes back to the same category, search and scroll.
+  //   - SORT is by hand: drag a card onto another and the library's order is
+  //     saved (the order of the shelves, so the bubble numbers follow it). A
+  //     card dropped on a category on the left moves to that category. NAME
+  //     and LAST CHANGED only show the cards in another order.
+  //   - RIGHT-CLICK a card: OPEN, RENAME, FAVOURITE, TYP. / SPECIAL, MOVE TO a
+  //     category, DELETE (pressed twice).
+  //   - + CATEGORY adds one to the rail, kept in the file even while empty.
+  //
+  // Every edit is the file's, and every one but DELETE is one UNDO.
+  const DB_ALL = 'ALL';
+  const DB_FAVOURITES = 'FAVOURITES';
+  const DB_SORTS = [['hand', 'BY HAND'], ['name', 'NAME'], ['changed', 'LAST CHANGED']];
+  let boardOpen = false;
+  let boardNode = null;
+  let boardMenu = null;
+  // WHERE THE DRAFTER WAS ON THE BOARD, so BOARD from a detail comes back to
+  // it: the category, the search, TYP. / SPECIAL, the sort, the scroll and
+  // the picked card.
+  const boardView = { category: DB_ALL, search: '', kind: 'all', sort: 'hand', scroll: 0, picked: null };
+  let boardDrag = null;
+
+  const boardCategories = () => {
+    const F = window.DraftDrawingFormat;
+    const own = Array.isArray(drawing?.detailCategories) ? drawing.detailCategories : [];
+    return [...new Set([...F.DETAIL_CATEGORIES, ...own.map(c => String(c || '').trim().toUpperCase()).filter(Boolean),
+      ...shelves().map(sh => detailCardOf(sh).category)])];
+  };
+  // THE CARDS THE BOARD SHOWS, with each one's place in the library (the
+  // bubble's number), filtered and ordered the way the board is set.
+  const boardCards = () => {
+    const q = boardView.search.trim().toLowerCase();
+    const rows = shelves().map((shelf, i) => ({ shelf, card: detailCardOf(shelf), number: i + 1 }));
+    const shown = rows.filter(({ shelf, card }) => {
+      if (boardView.category === DB_FAVOURITES && !card.favourite) return false;
+      if (boardView.category !== DB_ALL && boardView.category !== DB_FAVOURITES
+        && card.category !== boardView.category) return false;
+      if (boardView.kind !== 'all' && card.kind !== boardView.kind) return false;
+      if (!q) return true;
+      const words = [shelf.name, card.category, card.note, ...card.tags].join(' ').toLowerCase();
+      return q.split(/\s+/).every(w => words.includes(w));
+    });
+    if (boardView.sort === 'name') shown.sort((a, b) => String(a.shelf.name).localeCompare(String(b.shelf.name)));
+    if (boardView.sort === 'changed') shown.sort((a, b) => String(b.card.changed || '').localeCompare(String(a.card.changed || '')));
+    return shown;
+  };
+
+  // A DETAIL IN MINIATURE, by the painters that draw it full size -- the
+  // swap paintPlanThumb (model/05) makes, framed on the detail's frame
+  // rather than on what is drawn, so an empty detail is an empty frame.
+  const paintDetailThumb = (screen, shelf) => {
+    const card = detailCardOf(shelf);
+    const savedCtx = ctx, savedW = cssW, savedH = cssH, savedDpr = dpr;
+    const savedView = { cx: view.cx, cz: view.cz, scale: view.scale };
+    try {
+      thumbTarget = { levelId: -Number(shelf.id), viewId: null };
+      ctx = screen.getContext('2d');
+      dpr = 2; cssW = screen.width / dpr; cssH = screen.height / dpr;
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+      view.cx = 0; view.cz = 0;
+      view.scale = Math.min((cssW - 12) / card.frameW, (cssH - 12) / card.frameH);
+      paintShapes(); paintLines(); paintNotes(); paintDimensions();
+      const r = detailFrameRect(card);
+      const a = toS({ x: r.x0, z: r.z0 });
+      const b = toS({ x: r.x1, z: r.z1 });
+      ctx.strokeStyle = skin['draw-selected'] || skin['draw-note'] || '#888';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+      ctx.restore();
+    } finally {
+      ctx = savedCtx; cssW = savedW; cssH = savedH; dpr = savedDpr;
+      view.cx = savedView.cx; view.cz = savedView.cz; view.scale = savedView.scale;
+      thumbTarget = null;
+    }
+  };
+
+  // THE BOARD COVERS THE DRAWING AREA and nothing else: between the left
+  // tabs and the right pane, under the top bar and over the foot lane.
+  const placeBoard = () => {
+    if (!boardNode || boardNode.hidden) return;
+    const box = canvas.getBoundingClientRect();
+    const rect = sel => {
+      const node = document.querySelector(sel);
+      if (!node || node.hidden) return null;
+      const r = node.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 ? r : null;
+    };
+    const top = Math.max(box.top, (rect('#save')?.bottom || 0) + 10);
+    // THE RAILS AND THEIR TABS, open or shut, on whichever side they stand.
+    let left = box.left + 8, right = box.right - 8;
+    const mid = box.left + box.width / 2;
+    document.querySelectorAll('#left-rail, #right-rail, .rail-tab').forEach(node => {
+      if (node.hidden || node.closest('[hidden]')) return;
+      const r = node.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) return;
+      if (r.right < mid) left = Math.max(left, r.right + 8);
+      else if (r.left > mid) right = Math.min(right, r.left - 8);
+    });
+    const strip = rect('#house-strip');
+    const bottom = Math.min(box.bottom, strip ? strip.top : box.bottom) - 8;
+    Object.assign(boardNode.style, { left: `${left}px`, top: `${top}px`,
+      width: `${Math.max(240, right - left)}px`, height: `${Math.max(200, bottom - top)}px` });
+  };
+
+  const closeBoardMenu = () => { if (boardMenu) boardMenu.hidden = true; };
+  const openBoardMenu = (shelfId, x, y) => {
+    const shelf = shelves().find(sh => Number(sh.id) === Number(shelfId));
+    if (!shelf) return;
+    const card = detailCardOf(shelf);
+    if (!boardMenu) {
+      boardMenu = el('div', { id: 'details-board-menu', data: { boardMenu: '' } });
+      boardMenu.hidden = true;
+      document.body.append(boardMenu);
+      document.addEventListener('pointerdown', event => {
+        if (boardMenu && !boardMenu.hidden && !boardMenu.contains(event.target)) closeBoardMenu();
+      }, true);
+    }
+    const item = (label, key, act, extra = {}) => el('button', { type: 'button', textContent: label,
+      data: { boardAct: key }, ...extra,
+      onclick: event => { event.stopPropagation(); act(event.currentTarget); } });
+    boardMenu.textContent = '';
+    boardMenu.append(
+      item('OPEN', 'open', () => { closeBoardMenu(); openDetailFromBoard(shelf.id); }),
+      item('RENAME', 'rename', () => {
+        closeBoardMenu();
+        const name = boardNode?.querySelector(`[data-board-card="${shelf.id}"] .db-name`);
+        if (name) renameShelf(name, Number(shelf.id));
+      }),
+      item(card.favourite ? 'UNFAVOURITE' : 'FAVOURITE', 'favourite', () => {
+        closeBoardMenu();
+        writeCardOf(shelf.id, { favourite: !card.favourite },
+          `${shelf.name} ${card.favourite ? 'is no longer a favourite' : 'is a favourite'}.`);
+      }),
+      item(card.kind === 'typ' ? 'MAKE SPECIAL' : 'MAKE TYP.', 'kind', () => {
+        closeBoardMenu();
+        const kind = card.kind === 'typ' ? 'special' : 'typ';
+        writeCardOf(shelf.id, { kind }, `${shelf.name} is ${kind === 'typ' ? 'TYP.' : 'SPECIAL'} now.`);
+      }),
+      el('div', { className: 'line-menu-rule' }),
+      el('div', { className: 'db-menu-label', textContent: 'MOVE TO' }),
+      ...boardCategories().map(c => item(c, `move:${c}`, () => {
+        closeBoardMenu();
+        writeCardOf(shelf.id, { category: c }, `${shelf.name} moved to ${c}.`);
+      }, { disabled: c === card.category })),
+      el('div', { className: 'line-menu-rule' }),
+      // DELETE TAKES TWO PRESSES: closing a shelf takes its drawing with it
+      // and the history with it (closeShelf, model/05), so it is not an
+      // UNDO away.
+      item('DELETE', 'delete', btn => {
+        if (btn.dataset.armed !== undefined) {
+          closeBoardMenu();
+          if (boardView.picked === Number(shelf.id)) boardView.picked = null;
+          closeShelf(Number(shelf.id));
+          boneyardActive = true;
+          syncDetailsBoard();
+          return;
+        }
+        btn.dataset.armed = '';
+        btn.textContent = 'DELETE? PRESS AGAIN';
+      }));
+    boardMenu.hidden = false;
+    const r = boardMenu.getBoundingClientRect();
+    boardMenu.style.left = `${Math.min(x, window.innerWidth - r.width - 6)}px`;
+    boardMenu.style.top = `${Math.min(y, window.innerHeight - r.height - 6)}px`;
+  };
+
+  // A CARD DRAGGED ONTO A CARD takes its place in the library, before it or
+  // after it by which half it lands on. One UNDO, as TO FRONT / TO BACK is.
+  const moveDetail = (fromId, toId, after) => {
+    if (Number(fromId) === Number(toId) || !drawing) return false;
+    drawing.boneyardShelves = shelves();
+    const list = drawing.boneyardShelves;
+    const before = list.slice();
+    const from = list.findIndex(sh => Number(sh.id) === Number(fromId));
+    if (from < 0) return false;
+    const [moving] = list.splice(from, 1);
+    let to = list.findIndex(sh => Number(sh.id) === Number(toId));
+    if (to < 0) { list.splice(from, 0, moving); return false; }
+    if (after) to += 1;
+    list.splice(to, 0, moving);
+    undoStack.push({ kind: 'reorder', lists: [{ list, before }] });
+    markDirty();
+    sayOnStrip(`${moving.name} is detail ${to + 1} now.`);
+    buildChrome();
+    paint();
+    return true;
+  };
+
+  const openDetailFromBoard = shelfId => {
+    boardView.picked = Number(shelfId);
+    closeDetailsBoard();
+    enterDetail(shelfId);
+  };
+
+  const addCategory = () => {
+    const rail = boardNode?.querySelector('[data-board-rail]');
+    if (!rail || rail.querySelector('[data-board-new-category]')) return;
+    const box = el('input', { type: 'text', placeholder: 'NEW CATEGORY', data: { boardNewCategory: '' } });
+    rail.querySelector('[data-board-add-category]')?.before(box);
+    box.focus();
+    let done = false;
+    const finish = keep => {
+      if (done) return;
+      done = true;
+      const name = box.value.trim().toUpperCase().slice(0, 40);
+      if (keep && name && !boardCategories().includes(name)) {
+        drawing.detailCategories = [...(Array.isArray(drawing.detailCategories) ? drawing.detailCategories : []), name];
+        boardView.category = name;
+        markDirty();
+        sayOnStrip(`${name} added. Drag a card onto it, or MOVE TO on a card's menu.`);
+      }
+      syncDetailsBoard();
+    };
+    box.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Enter') finish(true);
+      if (event.key === 'Escape') finish(false);
+    });
+    box.addEventListener('blur', () => finish(true));
+  };
+
+  const buildBoard = () => {
+    if (!boardNode) {
+      boardNode = el('section', { id: 'details-board', data: { detailsBoard: '' } });
+      boardNode.hidden = true;
+      document.body.append(boardNode);
+      window.addEventListener('resize', placeBoard);
+    }
+    const keepScroll = boardNode.querySelector('[data-board-grid]')?.scrollTop;
+    if (keepScroll != null) boardView.scroll = keepScroll;
+    boardNode.textContent = '';
+    const all = shelves();
+    const cats = boardCategories();
+    if (![DB_ALL, DB_FAVOURITES, ...cats].includes(boardView.category)) boardView.category = DB_ALL;
+
+    // THE RAIL: ALL, FAVOURITES, then each category, with how many each holds.
+    const count = c => all.filter(sh => {
+      const card = detailCardOf(sh);
+      return c === DB_ALL || (c === DB_FAVOURITES ? card.favourite : card.category === c);
+    }).length;
+    const railButton = c => {
+      const btn = el('button', { type: 'button', className: 'db-cat', data: { boardCategory: c },
+        'aria-pressed': String(boardView.category === c),
+        onclick: () => { boardView.category = c; boardView.scroll = 0; syncDetailsBoard(); } },
+      el('span', { textContent: c === DB_FAVOURITES ? '★ FAVOURITES' : c }),
+      el('span', { className: 'db-count', textContent: String(count(c)) }));
+      // A CARD DROPPED ON A CATEGORY MOVES TO IT (not on ALL or FAVOURITES,
+      // which are not categories a card has).
+      if (c !== DB_ALL && c !== DB_FAVOURITES) {
+        btn.addEventListener('dragover', event => { if (boardDrag != null) { event.preventDefault(); btn.dataset.dropOn = ''; } });
+        btn.addEventListener('dragleave', () => { delete btn.dataset.dropOn; });
+        btn.addEventListener('drop', event => {
+          event.preventDefault();
+          delete btn.dataset.dropOn;
+          const id = boardDrag;
+          boardDrag = null;
+          const shelf = all.find(sh => Number(sh.id) === Number(id));
+          if (shelf) writeCardOf(id, { category: c }, `${shelf.name} moved to ${c}.`);
+        });
+      }
+      return btn;
+    };
+    const rail = el('div', { className: 'db-rail', data: { boardRail: '' } },
+      el('div', { className: 'db-rail-title', textContent: 'CATEGORIES' }),
+      railButton(DB_ALL), railButton(DB_FAVOURITES),
+      el('div', { className: 'line-menu-rule' }),
+      cats.map(railButton),
+      el('button', { type: 'button', className: 'db-add-category', textContent: '+ CATEGORY',
+        data: { boardAddCategory: '' }, onclick: addCategory }));
+
+    // THE TOP: the library's name, search, TYP. / SPECIAL, sort, + DETAIL, SAVE.
+    const search = el('input', { type: 'search', value: boardView.search, placeholder: 'SEARCH NAME, TAG, NOTE',
+      data: { boardSearch: '' } });
+    search.addEventListener('input', () => {
+      boardView.search = search.value;
+      fillGrid();
+    });
+    search.addEventListener('keydown', event => event.stopPropagation());
+    const kinds = el('div', { className: 'dl-chips' }, [['all', 'ALL'], ['typ', 'TYP.'], ['special', 'SPECIAL']]
+      .map(([kind, label]) => el('button', { type: 'button', className: 'lv-add dl-chip', textContent: label,
+        data: { boardKind: kind }, 'aria-pressed': String(boardView.kind === kind),
+        onclick: () => { boardView.kind = kind; syncDetailsBoard(); } })));
+    const sort = el('select', { data: { boardSort: '' }, title: 'BY HAND is the library\'s own order: drag a card to change it' },
+      DB_SORTS.map(([key, label]) => el('option', { value: key, textContent: `SORT: ${label}`, selected: boardView.sort === key })));
+    sort.addEventListener('change', () => { boardView.sort = sort.value; syncDetailsBoard(); });
+    const top = el('div', { className: 'db-top' },
+      el('div', { className: 'db-title' }, el('strong', { textContent: 'DETAILS BOARD' }),
+        el('span', { textContent: ` LIBRARY: ${libraryName()}` })),
+      search, kinds, sort,
+      el('button', { type: 'button', className: 'lv-add db-btn', textContent: '+ DETAIL', data: { boardAdd: '' },
+        title: 'A new framed detail in the category on view',
+        onclick: () => {
+          const c = boardView.category;
+          addDetail();
+          if (c !== DB_ALL && c !== DB_FAVOURITES) writeCard({ category: c });
+          closeDetailsBoard();
+        } }),
+      el('button', { type: 'button', className: 'lv-add db-btn', textContent: 'SAVE LIBRARY', data: { boardSave: '' },
+        title: 'Save the drawing in this browser and keep a copy of the library for house files (free)',
+        onclick: () => { saveLibrary(); } }));
+    const grid = el('div', { className: 'db-grid', data: { boardGrid: '' } });
+    const foot = el('div', { className: 'db-foot', data: { boardFoot: '' } });
+    boardNode.append(rail, el('div', { className: 'db-main' }, top, grid, foot));
+
+    const fillGrid = () => {
+      grid.textContent = '';
+      const shown = boardCards();
+      foot.textContent = `${all.length} DETAIL${all.length === 1 ? '' : 'S'} · ${shown.length} SHOWN`
+        + ' · DOUBLE-CLICK TO OPEN · DRAG TO SORT · RIGHT-CLICK FOR MORE';
+      if (!shown.length) {
+        grid.append(el('div', { className: 'db-empty', textContent: all.length
+          ? 'No detail matches. Clear the search or pick ALL.' : 'No details yet. + DETAIL starts one.' }));
+        return;
+      }
+      shown.forEach(({ shelf, card, number }) => {
+        const id = Number(shelf.id);
+        const screen = el('canvas', { className: 'db-thumb', width: 360, height: 280 });
+        const star = el('button', { type: 'button', className: 'db-star', textContent: card.favourite ? '★' : '☆',
+          data: { boardFavourite: String(id) }, 'aria-pressed': String(!!card.favourite),
+          title: card.favourite ? 'A favourite: press to take it off' : 'Make it a favourite',
+          onclick: event => {
+            event.stopPropagation();
+            writeCardOf(id, { favourite: !card.favourite });
+          } });
+        const node = el('div', { className: 'db-card', data: { boardCard: String(id) }, draggable: true, tabIndex: 0,
+          title: `${shelf.name}${card.note ? ` — ${card.note}` : ''}` },
+        screen,
+        el('div', { className: 'db-meta' },
+          el('div', { className: 'db-line' }, el('span', { className: 'db-num', textContent: String(number) }),
+            el('span', { className: 'db-name', textContent: shelf.name || `DETAIL ${id}` }), star),
+          el('div', { className: 'db-sub', textContent:
+            `${card.category} · ${card.kind === 'typ' ? 'TYP.' : 'SPECIAL'} · ${scaleLabel(card.scale)}` }),
+          card.tags.length ? el('div', { className: 'db-tags', textContent: card.tags.join(', ') }) : ''));
+        if (boardView.picked === id) node.dataset.picked = '';
+        node.addEventListener('click', () => {
+          boardView.picked = id;
+          grid.querySelectorAll('[data-picked]').forEach(n => delete n.dataset.picked);
+          node.dataset.picked = '';
+        });
+        node.addEventListener('dblclick', event => {
+          if (event.target.closest('input, .db-star')) return;
+          openDetailFromBoard(id);
+        });
+        node.addEventListener('keydown', event => {
+          if (event.key === 'Enter' && !event.target.closest('input')) { event.stopPropagation(); openDetailFromBoard(id); }
+        });
+        node.addEventListener('contextmenu', event => {
+          event.preventDefault();
+          boardView.picked = id;
+          openBoardMenu(id, event.clientX, event.clientY);
+        });
+        node.addEventListener('dragstart', event => {
+          boardDrag = id;
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', String(id));
+          node.dataset.dragging = '';
+        });
+        node.addEventListener('dragend', () => { boardDrag = null; delete node.dataset.dragging; });
+        node.addEventListener('dragover', event => {
+          if (boardDrag == null || boardDrag === id) return;
+          event.preventDefault();
+          const r = node.getBoundingClientRect();
+          node.dataset.dropSide = event.clientX > r.left + r.width / 2 ? 'after' : 'before';
+        });
+        node.addEventListener('dragleave', () => { delete node.dataset.dropSide; });
+        node.addEventListener('drop', event => {
+          event.preventDefault();
+          const after = node.dataset.dropSide === 'after';
+          delete node.dataset.dropSide;
+          const from = boardDrag;
+          boardDrag = null;
+          if (from == null) return;
+          // BY HAND ONLY: under NAME or LAST CHANGED the cards are not in
+          // the library's order, so a drop there would land somewhere the
+          // drafter cannot see.
+          if (boardView.sort !== 'hand') {
+            sayOnStrip('Cards drag into place under SORT: BY HAND only.');
+            return;
+          }
+          moveDetail(from, id, after);
+        });
+        grid.append(node);
+        try { paintDetailThumb(screen, shelf); } catch (error) { console.warn('draft: detail thumbnail failed', error); }
+      });
+      grid.scrollTop = boardView.scroll;
+    };
+    fillGrid();
+  };
+
+  const saveLibrary = async () => {
+    const ok = await save();
+    if (!ok) return false;
+    try {
+      const stored = await storeLibrary();
+      sayOnStrip(`The library is saved — into ${stored} in this browser. SAVE AS keeps a copy on the computer.`);
+    } catch (error) {
+      console.warn('draft: details library copy failed', error);
+      sayOnStrip(`Saved in the drawing, but the library copy failed: ${error?.message || error}`);
+    }
+    syncDetailsBoard();
+    return true;
+  };
+
+  // THE ONE PLACE THE BOARD IS SHOWN OR PUT AWAY, called from every rebuild
+  // (buildDetailsPanel) so it never shows a card the file no longer has.
+  const syncDetailsBoard = () => {
+    const show = boardOpen && isDetailsFile();
+    if (!show) {
+      if (boardNode && !boardNode.hidden) {
+        const grid = boardNode.querySelector('[data-board-grid]');
+        if (grid) boardView.scroll = grid.scrollTop;
+        boardNode.hidden = true;
+      }
+      closeBoardMenu();
+      return;
+    }
+    buildBoard();
+    boardNode.hidden = false;
+    placeBoard();
+    const grid = boardNode.querySelector('[data-board-grid]');
+    if (grid) grid.scrollTop = boardView.scroll;
+  };
+  const openDetailsBoard = () => {
+    if (!isDetailsFile()) return;
+    boardOpen = true;
+    // A HALF-DRAWN LINE DOES NOT WAIT UNDER THE BOARD.
+    drawStart = null;
+    syncDetailsBoard();
+  };
+  const closeDetailsBoard = () => {
+    boardOpen = false;
+    syncDetailsBoard();
+  };
+  // A FILE OPENED (model/17 adoptFile): a library opens on its board, any
+  // other file puts the board away.
+  const settleDetailsBoardOnOpen = () => {
+    boardOpen = isDetailsFile();
+    if (!boardOpen) syncDetailsBoard();
+  };
+
   // THIS PART LOADS AFTER THE BOOT HAS STARTED: a details file already up
   // when it arrives is drawn again now that its painters exist.
   if (isDetailsFile()) {
     boneyardActive = true;
+    boardOpen = true;
     refreshToolAvailability();
     buildChrome();
     fit(false, 0.8);
