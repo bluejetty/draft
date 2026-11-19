@@ -2379,7 +2379,7 @@
         if (showOwn) {
         paintBackgrounds();
         paintHalfLevelGhostFloors();
-        paintFloors(); paintRoofs(); paintShapes(); paintStructure();
+        paintFloors(); paintDeckEdges(); paintRoofs(); paintShapes(); paintStructure();
         // THE BEAM UNDER THIS FLOOR, after the structure ON it and before the
         // openings above, which is the order they stack in the building.
         paintBeamsBelow();

@@ -1986,7 +1986,11 @@ if (!window.DraftCutView) {
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
     const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
     let uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
-    (env.roofs() || []).forEach(roof => (roof.points || []).forEach(pt => {
+    // AND EVERY DECK (jb, 19 Nov 2026): a deck off the house's end stands
+    // further out than the marks' 2 ft, and its band drew cut off at the
+    // window's edge the way a long eave did.
+    const decks = env.floors && env.walls ? geo().deckFloors(env.floors(), env.walls()) : [];
+    [...(env.roofs() || []), ...decks].forEach(item => (item.points || []).forEach(pt => {
       const u = pt.x * axis.x + pt.z * axis.z;
       if (Number.isFinite(u)) { uMin = Math.min(uMin, u); uMax = Math.max(uMax, u); }
     }));
@@ -7288,10 +7292,56 @@ if (!window.DraftCutView) {
     });
     faceGeoms.filter(geom => !faceHidden(geom) && !onLevel.has(geom))
       .forEach(geom => wallItems.push({ depth: geom.face.depth, go: () => paintFace(geom) }));
+    // ── A DECK IS A FLOOR OUT PAST THE WALLS, SEEN EDGE ON (jb, 19 Nov 2026) ──
+    //
+    // jb: "i'm drawing in decks but they aren't showing on the elevations".
+    // A deck is a FLOOR drawn on a storey's FLOOR LAYOUT that stands out past
+    // that storey's walls (geometry-2d deckFloors). From outside, what shows
+    // of it is its edge: the rim joist / fascia, from the top of the floor
+    // down by the floor's own thickness, across the deck's whole width as
+    // this side sees it. No railing and no posts are drawn here -- the model
+    // has no railing, and a post is a pile placed under the deck, which the
+    // post pass below already stands up to the deck's underside.
+    //
+    // IN THE PAINTER'S SORT, at the deck's NEAREST edge: a deck in front of a
+    // wall laps over the foot of that wall, and a deck round the back is
+    // painted first and the house goes down over it. A deck flush with a
+    // face sorts after it (stable sort, listed last) -- it is beside the
+    // wall, in front of nothing, and only its own strip is painted.
+    const deckBands = [];
+    geo().deckFloors(env.floors ? env.floors() : [], env.walls ? env.walls() : [])
+      .forEach(floor => {
+        const level = stack.floors.find(l => Number(l.id) === Number(floor.levelId));
+        if (!level) return;
+        const ps = floor.points.map(proj);
+        const lo = Math.max(Math.min(...ps.map(p => p.u)), uMin);
+        const hi = Math.min(Math.max(...ps.map(p => p.u)), uMax);
+        if (!(hi - lo >= 0.25)) return;
+        const thick = Number(floor.thickness) > 0 ? Number(floor.thickness)
+          : (level.floorTop - level.floorBottom);
+        const band = { id: floor.id || null, lo, hi, top: level.floorTop, bottom: level.floorTop - thick,
+          depth: Math.max(...ps.map(p => p.d)) };
+        deckBands.push(band);
+      });
+    const paintDeckBand = band => {
+      const x0 = X(band.lo), x1 = X(band.hi);
+      const yT = Y(band.top), yB = Y(band.bottom);
+      ctx.fillStyle = C.face;
+      ctx.fillRect(x0, yT, x1 - x0, yB - yT);
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+      ctx.setLineDash([]);
+      ctx.strokeRect(x0, yT, x1 - x0, yB - yT);
+    };
     [
       ...wallItems,
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
+      ...deckBands.map(band => ({ depth: band.depth, deck: true, go: () => paintDeckBand(band) })),
     ].sort((a, b) => a.depth - b.depth).forEach(item => item.go());
+    if (ctx.canvas && ctx.canvas.setAttribute) {
+      ctx.canvas.setAttribute('data-decks', JSON.stringify(deckBands.map(b => ({
+        id: b.id, lo: Number(b.lo.toFixed(3)), hi: Number(b.hi.toFixed(3)),
+        top: Number(b.top.toFixed(4)), bottom: Number(b.bottom.toFixed(4)) }))));
+    }
 
     // ── EACH DORMER'S GABLE WALL, ITS BASE LINE AND ITS RAKE BOARDS ─────
     //

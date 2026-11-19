@@ -5153,6 +5153,43 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return out;
   };
 
+  // ── A DECK IS A FLOOR THAT STANDS OUT PAST THE HOUSE (jb, 19 Nov 2026) ──
+  //
+  // jb: "i'm drawing in decks but they aren't showing on the elevations" --
+  // drawn with the FLOOR tool on the FLOOR LAYOUT, off the house's ends. The
+  // model has no deck kind; a deck IS a floor, and what makes it one is that
+  // it lies outside the walls of its own storey. So: a storey floor (not a
+  // FOUNDATION slab, not a garage's) with a corner more than DECK_OUT_FT
+  // clear of every room its level's walls enclose. The house's own floor sits
+  // on the wall line, a few inches out at most, and never counts. A level
+  // with no closed walls has no house to stand out past, and answers none.
+  const DECK_OUT_FT = 1;
+  const deckFloors = (floors, walls) => {
+    const loopsBy = new Map();
+    const loopsOf = id => {
+      if (!loopsBy.has(id)) {
+        const own = (walls || []).filter(w => w && Number(w.levelId) === id
+          && (w.view || 'plan') === 'plan' && w.start && w.end);
+        loopsBy.set(id, own.length ? roomLoops(own).map(loop => loop.points) : []);
+      }
+      return loopsBy.get(id);
+    };
+    const edgeDist = (p, pts) => pts.reduce((best, a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
+      const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+      return Math.min(best, Math.hypot(p.x - (a.x + t * dx), p.z - (a.z + t * dz)));
+    }, Infinity);
+    const clear = (p, loops) => loops.every(pts => !ringInside(p, pts) && edgeDist(p, pts) > DECK_OUT_FT);
+    return (floors || []).filter(f => {
+      if (!f || f.view === 'foundation' || f.garage === true) return false;
+      const pts = Array.isArray(f.points) ? f.points : [];
+      if (pts.length < 3) return false;
+      const loops = loopsOf(Number(f.levelId));
+      return loops.length > 0 && pts.some(p => clear(p, loops));
+    });
+  };
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -5170,6 +5207,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     uncoveredRegions,
     nearestIntersection,
     roomLoops,
+    deckFloors,
+    DECK_OUT_FT,
     offsetOutline,
     offsetOutlineVariable,
     gableOverhangFt,
