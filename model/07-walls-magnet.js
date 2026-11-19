@@ -818,6 +818,21 @@
   // corners of this level's walls, and on ROOF PLAN the corners of the wall
   // tops drawn there. Worked out once per drawing change and level, not on
   // every move of the mouse.
+  // A WALL'S FACE CORNERS WEAR THEIR OWN COLOUR (jb, 19 Nov 2026: "can we
+  // make the interior wall corners NODES the orange type maybe or maybe make
+  // a special color for the interior nodes"): every corner a wall's face
+  // lines make -- inside, outside, a T's, a free end's -- is remembered
+  // here, so the paint (model/10, tierOf) rings it TEAL, not the yellow a
+  // crossing of two runs keeps. Same pull as before: a corner's 1 1/2".
+  const WALL_FACE_CORNERS = new WeakSet();
+  const wallCornersOf = segs => {
+    const list = window.DraftGeometry2D.wallFaceCorners(segs, openingThicknessFt());
+    list.forEach(v => WALL_FACE_CORNERS.add(v));
+    return list;
+  };
+  // Or a point standing where one is (a wall's end on its own outside face).
+  const isWallFaceCorner = v => !!v && typeof v === 'object' && (WALL_FACE_CORNERS.has(v)
+    || (Number.isFinite(v.x) && wallFaceNodes().some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)));
   let faceCornerCache = { key: null, list: [] };
   const wallFaceNodes = () => {
     const G = window.DraftGeometry2D;
@@ -830,7 +845,7 @@
     const segs = (own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls
       ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],
         floors: drawing.floors || [], levels: drawing.levels || [] }) : [])).concat(bgWalls());
-    faceCornerCache = { key, list: G.wallFaceCorners(segs, openingThicknessFt()) };
+    faceCornerCache = { key, list: wallCornersOf(segs) };
     return faceCornerCache.list;
   };
   // ── THE MAGNET: FACE CORNERS PULL HARDEST, THEN THE FACE LINES ─────────
@@ -876,9 +891,9 @@
     // like the top ceiling wall doesn't snap"): the faces of the walls the
     // roofs rest on, as wallFaceNodes already gives their corners.
     const own = walls();
-    const segs = own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls
+    const segs = (own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls
       ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],
-        floors: drawing.floors || [], levels: drawing.levels || [] }) : []);
+        floors: drawing.floors || [], levels: drawing.levels || [] }) : [])).concat(basementGhostWalls());
     faceLineCache = { key, list: G.wallFaceLines(segs, openingThicknessFt()) };
     return faceLineCache.list;
   };
@@ -1061,9 +1076,10 @@
     const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));
     const stillRuns = [...still, ...stillOthers];
     return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),
-      corners: [...G.wallFaceCorners(still, openingThicknessFt()),
+      corners: [...wallCornersOf(still), ...wallCornersOf(bgWalls()),
         ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],
-      segs: [...G.wallFaceLines(still, openingThicknessFt()), ...bodySegs(stillOthers)] };
+      segs: [...G.wallFaceLines(still, openingThicknessFt()), ...G.wallFaceLines(basementGhostWalls(), openingThicknessFt()),
+        ...bodySegs(stillOthers)] };
   };
   // A DRAGGED WALL answers to every wall it is not joined to: its own ends'
   // neighbours travel with it, so their faces are not where they were.
@@ -1076,9 +1092,10 @@
     const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));
     const stillRuns = [...still, ...stillOthers];
     return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),
-      corners: [...G.wallFaceCorners(still, openingThicknessFt()),
+      corners: [...wallCornersOf(still), ...wallCornersOf(bgWalls()),
         ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],
-      segs: [...G.wallFaceLines(still, openingThicknessFt()), ...bodySegs(stillOthers)] };
+      segs: [...G.wallFaceLines(still, openingThicknessFt()), ...G.wallFaceLines(basementGhostWalls(), openingThicknessFt()),
+        ...bodySegs(stillOthers)] };
   };
   // ── A MOVED SELECTION OR ROOF SEEKS BY EVERY POINT IT CARRIES ────────
   //
@@ -1129,10 +1146,11 @@
     const topFaces = tops.length && G.lineCrossings
       ? G.wallFaceLines(tops, openingThicknessFt()).map(f => ({ start: f.a, end: f.b })) : [];
     return { nodes: [...nodeEnds({ faces: false }).filter(stillPt), ...topEnds],
-      corners: [...G.wallFaceCorners(stillWalls, openingThicknessFt()),
+      corners: [...wallCornersOf(stillWalls), ...wallCornersOf(bgWalls()),
         ...(G.lineCrossings ? G.lineCrossings([...stillWalls, ...stillOthers]) : []),
         ...(topFaces.length ? G.lineCrossings([...stillOthers, ...topFaces]) : [])],
-      segs: [...G.wallFaceLines(stillWalls, openingThicknessFt()), ...bodySegs(stillOthers)] };
+      segs: [...G.wallFaceLines(stillWalls, openingThicknessFt()), ...G.wallFaceLines(basementGhostWalls(), openingThicknessFt()),
+        ...bodySegs(stillOthers)] };
   };
   const pointsSeek = (before, dx, dz, magnet) => {
     let best = null;

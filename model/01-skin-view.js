@@ -545,7 +545,23 @@
   }
   // THE WALLS BEHIND, for the snaps: their ends and their face corners.
   function bgWalls() {
-    return bgEntries().flatMap(entry => withBg(entry, () => walls()));
+    return bgEntries().flatMap(entry => withBg(entry, () => walls())).concat(basementGhostWalls());
+  }
+  // AND ON THE BASEMENT PLAN, THE FOUNDATION WALLS IT GHOSTS (jb, 19 Nov
+  // 2026, drawing a basement wall along the foundation's inside face: "can
+  // we make the interior wall corners NODES ... for lines area etc too floor
+  // and room tags"). paintBasementFoundationGhost draws the house's
+  // foundation walls faded under the basement's own; they were paint only,
+  // so neither their ends, their face corners nor their faces caught
+  // anything here. The same walls it paints -- off the FOUNDATION view, no
+  // garage -- now pull as the BG layers' walls do. Never picked: snaps only.
+  function basementGhostWalls() {
+    if (!drawing || ghostLevelId != null || ghostViewId != null) return [];
+    if (Number(activeLevelId()) !== FOUNDATION_LEVEL_ID || activeViewId() !== 'plan') return [];
+    const was = ghostKeep;
+    ghostViewId = 'foundation';
+    ghostKeep = item => item.body !== 'garage';
+    try { return walls(); } finally { ghostViewId = null; ghostKeep = was; }
   }
   const onActiveLevel = () => {
     const LV = window.DraftLayerViews;
