@@ -656,22 +656,33 @@ const structEnv = over => ({
 });
 const SPAN = { id: 1, start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, mode: 'flush' };
 
-suite('drawBeam2D', 'a flush beam is a solid line in the skin colour', R => {
+suite('drawBeam2D', 'a flush beam is a dash-dot line in the skin colour', R => {
   const ctx = recordingCtx();
   R.drawBeam2D(ctx, toS, SPAN, {}, structEnv());
   expect('stroked in the skin colour', sets(ctx, 'strokeStyle').includes(SENTINEL_BEAM), true);
   expect('and no old-page brown survives',
     sets(ctx, 'strokeStyle').map(String).some(v => v.includes('7a4a21')), false);
-  expect('the dash list is empty for a flush beam',
-    JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[]]');
+  // jb, 19 Nov 2026: "make the beam dash-dot", flush or dropped alike.
+  expect('a flush beam is dash-dot',
+    JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[28,9,3,9]]');
   expect('it says which kind it is', calls(ctx, 'fillText')[0][0], 'FLUSH BEAM');
 });
 
-suite('drawBeam2D', 'a dropped beam is dashed, and says so', R => {
+suite('drawBeam2D', 'a dropped beam is dash-dot too, and says so', R => {
   const ctx = recordingCtx();
   R.drawBeam2D(ctx, toS, { ...SPAN, mode: 'dropped' }, {}, structEnv());
-  expect('dashed', JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[8,5]]');
+  expect('dash-dot', JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[28,9,3,9]]');
   expect('and labelled DROPPED', calls(ctx, 'fillText')[0][0], 'DROPPED BEAM');
+});
+
+suite('drawBeam2D', 'with span tags the name leaves FLUSH / DROPPED to the spans', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, { ...SPAN, mode: 'dropped' }, { spanTags: true, depthLabel: '14"' }, structEnv());
+  expect('named as the LVL', calls(ctx, 'fillText')[0][0], 'ENGD LVL BEAM');
+  const tags = recordingCtx();
+  const hits = R.drawBeamSpanTags2D(tags, toS, R.beamSpans([{ ...SPAN, id: 9, mode: 'dropped' }], []), {}, structEnv());
+  expect('one tag on the one span', calls(tags, 'fillText').map(c => c[0]).join(','), 'DROPPED');
+  expect('and a place to click it', hits.length, 1);
 });
 
 suite('drawBeam2D', 'a printing pass draws the beam and drops the label', R => {
@@ -725,16 +736,17 @@ suite('drawBeam2D', 'a beam on this plan is at full weight and says nothing abou
 // THE LITERALS ARE PINNED HERE ON PURPOSE: the module keeps them to itself
 // (it exports painters, not numbers), so the only way a reader learns what
 // "dash-dot" and "lighter" mean on paper is this check.
-const OVERHEAD_DASH_DOT = [10, 4, 2, 4];
+const OVERHEAD_DASH_DOT = [20, 7, 3, 7];
 const OVERHEAD_DASH = [6, 4];
 const OVERHEAD_ALPHA = 0.5;
 const UPPER_DEPTH_FT = 1;
-suite('drawBeam2D', 'a beam above is dash-dot, lighter and thinner, and says ABOVE', R => {
+suite('drawBeam2D', 'a beam above is dash-dot, lighter, at the beam weight, and says ABOVE', R => {
   const ctx = recordingCtx();
   R.drawBeam2D(ctx, toS, SPAN, { above: true }, structEnv());
   expect('dash-dot', JSON.stringify(calls(ctx, 'setLineDash')[0]), JSON.stringify([OVERHEAD_DASH_DOT]));
   expect('lighter', sets(ctx, 'globalAlpha').pop(), OVERHEAD_ALPHA);
-  expect('thinner than a beam on this plan', sets(ctx, 'lineWidth')[0] < 3, true);
+  // jb, 19 Nov 2026: bolder -- the foundation plan's 3px, everywhere.
+  expect('at the 3px a beam on its plan has', sets(ctx, 'lineWidth')[0], 3);
   expect('labelled ABOVE', calls(ctx, 'fillText')[0][0], 'FLUSH BEAM ABOVE');
   const dropped = recordingCtx();
   R.drawBeam2D(dropped, toS, { ...SPAN, mode: 'dropped' }, { above: true }, structEnv());
@@ -970,6 +982,46 @@ suite('drawBeam2D', 'a piece told to say nothing draws the beam and no tag', R =
 const BUCK = { id: 'buck:1', centre: { x: 10, z: 20 }, along: { x: 1, z: 0 }, across: { x: 0, z: 1 },
   halfLen: 8 + 2 / 12, startOff: 0, endOff: 8 / 12, insideFace: 'end' };
 const buckEnv = (over = {}) => ({ paperColor: '#fffffe', slabFill: '#aabbcc', wallInk: '#010203', belowAlpha: 0.4, ...over });
+// ── FLUSH / DROPPED PER SPAN, AND THE BEAM POCKETS (jb, 19 Nov 2026) ──────
+suite('beamSpans', 'a beam is cut into spans at the columns on it', R => {
+  const spans = R.beamSpans([SPAN], [{ point: { x: 4, z: 0 } }, { point: { x: 7, z: 0.1 } }, { point: { x: 5, z: 3 } }]);
+  expect('three spans, the post off the line ignored', spans.map(s => `${s.start.x}-${s.end.x}`).join(','), '0-4,4-7,7-10');
+  expect('each carries its piece and mode', spans.every(s => s.beam === SPAN && s.mode === 'flush'), true);
+  expect('a dropped piece makes dropped spans', R.beamSpans([{ ...SPAN, mode: 'dropped' }], [])[0].mode, 'dropped');
+});
+suite('drawBeamSpanTags2D', 'each span says FLUSH or DROPPED, opposite the name', R => {
+  const ctx = recordingCtx();
+  const spans = R.beamSpans([SPAN, { ...SPAN, id: 2, start: { x: 10, z: 0 }, end: { x: 20, z: 0 }, mode: 'dropped' }], []);
+  const hits = R.drawBeamSpanTags2D(ctx, toS, spans, { tags: new Map([[1, -1]]) }, structEnv());
+  expect('one tag a span', calls(ctx, 'fillText').map(c => c[0]).join(','), 'FLUSH,DROPPED');
+  expect('under the line, the name being over it', calls(ctx, 'fillText')[0][2] > 0, true);
+  expect('a place to click each', hits.length, 2);
+  const flipped = recordingCtx();
+  R.drawBeamSpanTags2D(flipped, toS, spans, { tags: new Map([[1, 1]]) }, structEnv());
+  expect('over the line when the name is under it', calls(flipped, 'fillText')[0][2] < 0, true);
+  const printing = recordingCtx();
+  R.drawBeamSpanTags2D(printing, toS, spans, {}, structEnv({ isPrinting: true }));
+  expect('a printing pass writes none', count(printing, 'fillText'), 0);
+});
+suite('spanTagAt', 'a click on a tag finds its span, a click beside it nothing', R => {
+  const ctx = recordingCtx();
+  const hits = R.drawBeamSpanTags2D(ctx, toS, R.beamSpans([SPAN], [{ point: { x: 5, z: 0 } }]), {}, structEnv());
+  const second = hits[1];
+  const on = R.spanTagAt(hits, second.cx, second.cy + (second.y0 + second.y1) / 2);
+  expect('the second span', on && on.span.start.x, 5);
+  expect('nothing far off', R.spanTagAt(hits, second.cx, second.cy + 60), null);
+});
+suite('drawBeamPockets2D', 'a pocket knocks out the concrete and draws its three cut edges', R => {
+  const ctx = recordingCtx();
+  const pocket = { corners: [{ x: 0.667, z: -0.333 }, { x: 0.333, z: -0.333 }, { x: 0.333, z: 0.333 }, { x: 0.667, z: 0.333 }] };
+  R.drawBeamPockets2D(ctx, toS, [pocket], buckEnv());
+  expect('paper then slab', sets(ctx, 'fillStyle').slice(0, 2).join(','), '#fffffe,#aabbcc');
+  expect('three edges, one stroke, open to the basement', calls(ctx, 'lineTo').length, 3 + 3);
+  expect('in the wall\'s ink', sets(ctx, 'strokeStyle').pop(), '#010203');
+  const none = recordingCtx();
+  R.drawBeamPockets2D(none, toS, [], buckEnv());
+  expect('no pockets, no ink', count(none, 'stroke'), 0);
+});
 suite('drawDoorBucks2D', 'the hatch is knocked out to the paper and the slab poured through', R => {
   const ctx = recordingCtx();
   R.drawDoorBucks2D(ctx, toS, [BUCK], buckEnv());
@@ -4307,9 +4359,11 @@ function coverage() {
   let missed = 0;
   // STRUCTURE'S FOUR. Each breaks one half of a pair that a reader cannot tell
   // apart from the outside: the two beam modes, and the two column footings.
+  // Since 19 Nov 2026 the LINE is the same for both (dash-dot); the mode is
+  // the span tag's to say, so the mutation is a span that says FLUSH always.
   const beamModeIgnored = src => src.replace(
-    "(beam.mode === 'dropped' ? [8, 5] : [])",
-    '[]');
+    "const text = span.mode === 'dropped' ? 'DROPPED' : 'FLUSH';",
+    "const text = 'FLUSH';");
   const dropBeamEnvColour = src => src.replace(
     /ctx\.strokeStyle = env\.beamColor;/, "ctx.strokeStyle = '#7a4a21';");
   // The three rules of labelAlongLine2D, deleted one at a time: flat text,
@@ -4368,8 +4422,8 @@ function coverage() {
       src => src.replace('    if (above) ctx.globalAlpha = OVERHEAD_ALPHA;\n', '')],
     ['drawBeam2D draws a beam above solid',
       src => src.replace('ctx.setLineDash(above ? [...OVERHEAD_DASH_DOT] : ', 'ctx.setLineDash(false ? [...OVERHEAD_DASH_DOT] : ')],
-    ['drawBeam2D draws a beam above at full width',
-      src => src.replace('ctx.lineWidth = above ? 1.5 : 3;', 'ctx.lineWidth = 3;')],
+    ['drawBeam2D draws a beam above thin again',
+      src => src.replace('ctx.lineWidth = above ? BEAM_ABOVE_WIDTH : BEAM_WIDTH;', 'ctx.lineWidth = above ? 1.5 : BEAM_WIDTH;')],
     ['drawBeam2D does not say a beam above is above',
       src => src.replace("above ? ' ABOVE' : ''", "''")],
     ['drawUpperCabinets2D draws the uppers as deep as the base',
@@ -4475,7 +4529,7 @@ function coverage() {
     ['drawWallSeg2D env colours', dropWallEnvColours],
     ['drawWallSeg2D colour fallbacks', dropWallColourFallback],
     ['drawWallSeg2D dots take the body colour', wallDotsTakeTheFill],
-    ['drawBeam2D dropped and flush draw the same', beamModeIgnored],
+    ['drawBeamSpanTags2D dropped and flush say the same', beamModeIgnored],
     ['drawBeam2D back on the old page brown', dropBeamEnvColour],
     ['labelAlongLine2D rotation (labels flat across the line again)', labelNotTurned],
     ['labelAlongLine2D read-direction flip (labels upside down)', labelNotFlipped],

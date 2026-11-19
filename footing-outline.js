@@ -302,6 +302,6 @@ if (!window.DraftFootingOutline) {
     ctx.restore();
   };
 
-  window.DraftFootingOutline = Object.freeze({ footingOutline, drawFootingOutline2D, projectionFt, isFooted });
+  window.DraftFootingOutline = Object.freeze({ footingOutline, drawFootingOutline2D, projectionFt, isFooted, concreteBandIn });
 })();
 }

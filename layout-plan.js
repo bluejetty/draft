@@ -1588,6 +1588,13 @@ if (!window.DraftLayoutPlan) {
           walls: of('walls'), fenestrations: fensOf(),
           thicknessFt, faceOffsets: geo.wallFaceOffsets, concreteLevelId: levelId,
         }) : [],
+      // THE BEAM POCKETS (jb, 19 Nov 2026; beam-pockets.js): where a
+      // basement beam's ends sit in the concrete, not on a bilevel.
+      beamPockets: view === 'foundation' && !shell && window.DraftBeamPockets
+        ? window.DraftBeamPockets.beamPockets({
+          walls: of('walls'), beams: of('beams'), levelId, buildType: saved?.buildType ?? null,
+          thicknessFt, faceOffsets: geo.wallFaceOffsets,
+        }) : [],
       buckEnv: { paperColor, slabFill: 'rgba(89,128,166,0.16)', wallInk: '#1d1f20', belowAlpha: 0.4 },
       footingOutline: view === 'foundation' && !shell && window.DraftFootingOutline
         ? window.DraftFootingOutline.footingOutline({

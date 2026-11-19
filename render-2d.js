@@ -1284,8 +1284,16 @@ if (!window.DraftRender2D) {
   // overhangs and uppers dashed." One alpha for everything over the cut, two
   // dash patterns: dash-dot for a beam, dashed for the rest.
   const OVERHEAD_ALPHA = 0.5;
-  const OVERHEAD_DASH_DOT = Object.freeze([10, 4, 2, 4]);
+  // jb, 19 Nov 2026: "it should be bolder with longer dashes and thicker
+  // dots ... maybe squared off dots". A dot as long as the line is wide,
+  // with butt caps, is a square.
+  const BEAM_ABOVE_WIDTH = 3;
+  const OVERHEAD_DASH_DOT = Object.freeze([20, 7, BEAM_ABOVE_WIDTH, 7]);
   const OVERHEAD_DASH = Object.freeze([6, 4]);
+  // jb, 19 Nov 2026: "the thickness of the line is nice on the foundation
+  // plan" -- the 3px a beam on its own plan always had, now everywhere.
+  const BEAM_WIDTH = 3;
+  const BEAM_DASH_DOT = Object.freeze([28, 9, BEAM_WIDTH, 9]);
   // THE DOOR BUCKS ON A GARAGE'S FOUNDATION PLAN (Movie, 16 Oct): each one a
   // door's width plus 2" a side across the concrete, read off door-bucks.js.
   // The concrete's hatch is knocked out to the paper (env.paperColor), the
@@ -1338,8 +1346,13 @@ if (!window.DraftRender2D) {
     const b = toS(beam.end);
     ctx.save();
     ctx.strokeStyle = env.beamColor;
-    ctx.lineWidth = above ? 1.5 : 3;
-    ctx.setLineDash(above ? [...OVERHEAD_DASH_DOT] : (beam.mode === 'dropped' ? [8, 5] : []));
+    ctx.lineWidth = above ? BEAM_ABOVE_WIDTH : BEAM_WIDTH;
+    ctx.lineCap = 'butt';
+    // EVERY BEAM IS DASH-DOT (jb, 19 Nov 2026: "make the beam dash-dot"),
+    // flush or dropped alike -- the span tags say which (drawBeamSpanTags2D).
+    // Over the cut it keeps the lighter overhead pattern; a beam on its own
+    // plan takes a longer one, sized for the heavier line.
+    ctx.setLineDash(above ? [...OVERHEAD_DASH_DOT] : [...BEAM_DASH_DOT]);
     if (preview) ctx.globalAlpha = 0.72;
     if (below) ctx.globalAlpha = 0.45;
     if (above) ctx.globalAlpha = OVERHEAD_ALPHA;
@@ -1363,11 +1376,19 @@ if (!window.DraftRender2D) {
       // on the floor joists' callout). The caller knows the deck through
       // build-house beamDepthLabel -- handed per beam, or asked of the env
       // (a LAYOUT sheet's); the depth itself is the joists', not printed.
+      // A span-tagged line is named as an LVL in the deck whatever the mode of
+      // the piece carrying the name, so a flip of one span cannot rename it.
+      const asked = options.spanTags === true ? { ...beam, mode: 'flush' } : beam;
       const depthLabel = options.depthLabel != null ? options.depthLabel
-        : (typeof env.beamDepthLabel === 'function' ? env.beamDepthLabel(beam) : null);
+        : (typeof env.beamDepthLabel === 'function' ? env.beamDepthLabel(asked) : null);
+      // WITH SPAN TAGS (options.spanTags, jb 19 Nov 2026) each span between
+      // columns says FLUSH or DROPPED for itself, so the line's name leaves
+      // the word out rather than contradict a span that differs.
+      const spanTagged = options.spanTags === true;
       const named = typeof beam.mark === 'string' && beam.mark.trim() ? beam.mark.trim()
-        : (beam.mode === 'dropped' ? 'DROPPED BEAM'
-          : (depthLabel ? 'ENGD LVL FLUSH BEAM' : 'FLUSH BEAM'));
+        : spanTagged ? (depthLabel ? 'ENGD LVL BEAM' : 'BEAM')
+          : (beam.mode === 'dropped' ? 'DROPPED BEAM'
+            : (depthLabel ? 'ENGD LVL FLUSH BEAM' : 'FLUSH BEAM'));
       // AND A BEAM BESIDE A BAY PAST THE TABLE CARRIES THE MARK TOO, on its
       // other side -- unless the engineer has named the beam already.
       if (options.warn && !(typeof beam.mark === 'string' && beam.mark.trim())) {
@@ -1380,6 +1401,134 @@ if (!window.DraftRender2D) {
           baseline: flip ? 'top' : 'bottom' });
     }
     ctx.restore();
+  }
+
+  // ── FLUSH OR DROPPED, SPAN BY SPAN (jb, 19 Nov 2026) ───────────────────
+  // "put flush or dropped on each section between columns and allow user to
+  // click on flush or dropped to change it". A SPAN is a piece of beam from
+  // one stop to the next, a stop being the piece's own ends and every column
+  // standing on it (within SPAN_COLUMN_ON_FT, the pick's COLUMN_ON_BEAM_FT).
+  // Pure: beams and columns in, spans in plan feet out, each with the piece
+  // it lies on and that piece's mode.
+  const SPAN_COLUMN_ON_FT = 0.25;
+  const SPAN_MIN_FT = 0.25;
+  function beamSpans(beams, columns) {
+    const out = [];
+    const posts = (Array.isArray(columns) ? columns : []).filter(c => c?.point);
+    (Array.isArray(beams) ? beams : []).forEach(beam => {
+      if (!beam?.start || !beam?.end) return;
+      const dx = beam.end.x - beam.start.x, dz = beam.end.z - beam.start.z;
+      const len = Math.hypot(dx, dz);
+      if (len < SPAN_MIN_FT) return;
+      const ux = dx / len, uz = dz / len;
+      const stops = [0, len];
+      posts.forEach(c => {
+        const px = c.point.x - beam.start.x, pz = c.point.z - beam.start.z;
+        const t = px * ux + pz * uz;
+        const off = Math.abs(px * -uz + pz * ux);
+        if (off <= SPAN_COLUMN_ON_FT && t > SPAN_MIN_FT && t < len - SPAN_MIN_FT) stops.push(t);
+      });
+      stops.sort((a, b) => a - b);
+      const at = t => ({ x: beam.start.x + ux * t, y: beam.start.y || 0, z: beam.start.z + uz * t });
+      for (let i = 1; i < stops.length; i += 1) {
+        if (stops[i] - stops[i - 1] < SPAN_MIN_FT) continue;
+        out.push({ beam, from: stops[i - 1], to: stops[i], start: at(stops[i - 1]), end: at(stops[i]),
+          mode: beam.mode === 'dropped' ? 'dropped' : 'flush' });
+      }
+    });
+    return out;
+  }
+
+  // THE SPAN TAGS, each at its span's middle on the side of the line AWAY
+  // from the line's name (beamTagSides' `tags`: the name's side for the
+  // piece that carries it; every piece of that line takes the same side).
+  // Answers what it drew in screen px, for the page's click: { span, cx, cy,
+  // angle, halfW, y0, y1 } in the text's own turned frame.
+  function drawBeamSpanTags2D(ctx, toS, spans, options = {}, env = {}) {
+    const list = Array.isArray(spans) ? spans : [];
+    const tags = options.tags instanceof Map ? options.tags : new Map();
+    const { above = false, below = false } = options;
+    const hits = [];
+    if (!list.length || env.isPrinting) return hits;
+    // The name's side per line: a piece whose tag is +1 / -1 says it for
+    // every piece collinear with it.
+    const lineKey = beam => {
+      const along = Math.abs(beam.end.x - beam.start.x) >= Math.abs(beam.end.z - beam.start.z) ? 'x' : 'z';
+      const across = along === 'x' ? 'z' : 'x';
+      return { along, fixed: (beam.start[across] + beam.end[across]) / 2 };
+    };
+    const named = [];
+    tags.forEach((side, id) => {
+      if (side !== 1 && side !== -1 && side !== '+' && side !== '-') return;
+      const beam = list.find(span => span.beam.id === id)?.beam;
+      if (beam) named.push({ ...lineKey(beam), flip: side === 1 || side === '+' });
+    });
+    const fontPx = 9;
+    ctx.save();
+    if (env.labelFont) ctx.font = env.labelFont;
+    // Over the cut lighter, under this floor lighter still: the line's own.
+    ctx.globalAlpha = above ? OVERHEAD_ALPHA : (below ? 0.45 : ctx.globalAlpha);
+    list.forEach(span => {
+      const key = lineKey(span.beam);
+      const name = named.find(n => n.along === key.along && Math.abs(n.fixed - key.fixed) <= 0.5);
+      const flip = name ? name.flip : false;
+      const a = toS(span.start), b = toS(span.end);
+      const text = span.mode === 'dropped' ? 'DROPPED' : 'FLUSH';
+      // Opposite the name: the name sits at -offset 5 (or +5 flipped).
+      const offset = flip ? 5 : -5;
+      const placed = labelAlongLine2D(ctx, a, b, text, { color: env.beamColor, offset,
+        baseline: flip ? 'bottom' : 'top' });
+      if (!placed) return;
+      const halfW = ctx.measureText(text).width / 2 + 3;
+      const y0 = flip ? -offset - fontPx - 3 : -offset - 3;
+      const y1 = flip ? -offset + 3 : -offset + fontPx + 3;
+      hits.push({ span, text, cx: placed.cx, cy: placed.cy, angle: placed.angle, halfW, y0, y1 });
+    });
+    ctx.restore();
+    return hits;
+  }
+  // The span tag under a screen point, or null.
+  function spanTagAt(hits, sx, sy) {
+    let best = null, bestD = Infinity;
+    (Array.isArray(hits) ? hits : []).forEach(hit => {
+      const dx = sx - hit.cx, dy = sy - hit.cy;
+      const c = Math.cos(-hit.angle), s = Math.sin(-hit.angle);
+      const lx = dx * c - dy * s, ly = dx * s + dy * c;
+      if (Math.abs(lx) > hit.halfW || ly < hit.y0 || ly > hit.y1) return;
+      const d = Math.hypot(lx, ly - (hit.y0 + hit.y1) / 2);
+      if (d < bestD) { bestD = d; best = hit; }
+    });
+    return best;
+  }
+
+  // ── BEAM POCKETS (jb, 19 Nov 2026) ─────────────────────────────────────
+  // "we need BEAM POCKETS at each end where it sits in the conc wall. make
+  // them 4" in the conc and 8" wide on the plan." Worked out by
+  // beam-pockets.js; painted here as a notch knocked out of the concrete's
+  // hatch to the paper, its three cut edges in the wall's ink.
+  function drawBeamPockets2D(ctx, toS, pockets, env = {}) {
+    if (!Array.isArray(pockets) || !pockets.length) return;
+    const ink = env.wallInk || '#1d1f20';
+    pockets.forEach(pocket => {
+      const c = (pocket.corners || []).map(p => toS({ x: p.x, y: 0, z: p.z }));
+      if (c.length !== 4) return;
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      c.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath();
+      // Paper first, then the slab poured into the notch, as a buck takes it.
+      [env.paperColor, env.slabFill].filter(Boolean).forEach(fill => { ctx.fillStyle = fill; ctx.fill(); });
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1;
+      // corners: [face lo, back lo, back hi, face hi] -- the face side is
+      // open to the basement, so only the two sides and the back are drawn.
+      ctx.beginPath();
+      ctx.moveTo(c[0].x, c[0].y); ctx.lineTo(c[1].x, c[1].y);
+      ctx.lineTo(c[2].x, c[2].y); ctx.lineTo(c[3].x, c[3].y);
+      ctx.stroke();
+      ctx.restore();
+    });
   }
 
   // THE UPPER CABINETS OVER A KITCHEN PIECE, dashed and lighter (the overhead
@@ -4430,6 +4579,10 @@ if (!window.DraftRender2D) {
     drawDoorBucks2D,
     drawJoistSpans2D,
     beamTagSides,
+    beamSpans,
+    drawBeamSpanTags2D,
+    spanTagAt,
+    drawBeamPockets2D,
     drawColumn2D,
     drawPadGroup2D,
     drawOpeningAbove2D,

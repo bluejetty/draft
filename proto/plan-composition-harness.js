@@ -526,13 +526,13 @@ const MUTATIONS = [
   // and the joist callouts now follow the columns, so the move is anchored
   // on the loop as it stands and lands before the callouts.
   ['columns are drawn before the beams they carry',
-    s => s.replace(`      beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env.structureEnv); });
+    s => s.replace(`      beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id), spanTags }, env.structureEnv); });
       pick(env.columns).forEach(column => {`,
     `      pick(env.columns).forEach(column => {`).replace(`        }, env.structureEnv);
       });
       // THE JOIST CALLOUTS`, `        }, env.structureEnv);
       });
-      beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env.structureEnv); });
+      beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id), spanTags }, env.structureEnv); });
       // THE JOIST CALLOUTS`)],
 ];
 

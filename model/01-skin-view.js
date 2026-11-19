@@ -1744,6 +1744,26 @@
     });
     return out;
   };
+  // ── THE SPAN TAGS ON SCREEN (jb, 19 Nov 2026) ─────────────────────────
+  // "put flush or dropped on each section between columns and allow user to
+  // click on flush or dropped to change it". Each beam pass below paints a
+  // FLUSH / DROPPED tag per span (render-2d drawBeamSpanTags2D) and files
+  // where it drew it here; paint() empties the list first, and a Select
+  // click on one flips that span (flipBeamSpanAt, model/08).
+  let beamSpanTagHits = [];
+  const clearBeamSpanTags = () => { beamSpanTagHits = []; canvas.setAttribute('data-beam-span-tags', '0'); };
+  const paintBeamSpanTags = (list, columnList, tags, options, env) => {
+    const R = window.DraftRender2D;
+    if (!R.beamSpans || !R.drawBeamSpanTags2D) return;
+    const hits = R.drawBeamSpanTags2D(ctx, toS, R.beamSpans(list, columnList), { tags, ...options }, env);
+    beamSpanTagHits.push(...hits);
+    canvas.setAttribute('data-beam-span-tags', String(beamSpanTagHits.length));
+  };
+  // A span-tagged line is named as the deck's LVL whatever its pieces' modes.
+  const flushDepthLabel = beam => {
+    const B = window.DraftBuildHouse;
+    return B?.beamDepthLabel ? B.beamDepthLabel({ ...beam, mode: 'flush' }, drawing) : null;
+  };
   const paintStructure = () => {
     const R = window.DraftRender2D;
     const env = paintEnv();
@@ -1755,7 +1775,8 @@
     const marked = beamsPastTheTable();
     beams().forEach(beam => R.drawBeam2D(ctx, toS, beam,
       { tag: tags.get(beam.id), warn: marked.has(beam) ? B?.ENGINEERING_MARK : null,
-        depthLabel: B?.beamDepthLabel ? B.beamDepthLabel(beam, drawing) : null }, env));
+        spanTags: true, depthLabel: flushDepthLabel(beam) }, env));
+    paintBeamSpanTags(beams(), columns(), tags, {}, env);
     // ── THE PADS GO DOWN FIRST, UNDER EVERYTHING THEY CARRY ─────────────────
     //
     // Movie, 25 Sep: "we have beam and columns, but no footing, we will need
@@ -1912,7 +1933,8 @@
     const tags = R.beamTagSides(aboveBeams, (drawing?.dimensions || []).filter(mine));
     const B0 = window.DraftBuildHouse;
     aboveBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { above: true, tag: tags.get(beam.id),
-      depthLabel: B0?.beamDepthLabel ? B0.beamDepthLabel(beam, drawing) : null }, env));
+      spanTags: true, depthLabel: B0 ? flushDepthLabel(beam) : null }, env));
+    paintBeamSpanTags(aboveBeams, (drawing?.columns || []).filter(mine), tags, { above: true }, env);
     // AND THE POSTS UNDER IT, at full weight: they stand on this floor and
     // are cut by the plan, the same rows the LAYOUT walls plan borrows
     // (layout-plan planPosts). Not the piles, which are the garage's.
@@ -1961,7 +1983,8 @@
     const belowBeams = (drawing?.beams || []).filter(mine);
     const tags = R.beamTagSides(belowBeams, (drawing?.dimensions || []).filter(mine));
     belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true, tag: tags.get(beam.id),
-      depthLabel: B?.beamDepthLabel ? B.beamDepthLabel(beam, drawing) : null }, env));
+      spanTags: true, depthLabel: B ? flushDepthLabel(beam) : null }, env));
+    paintBeamSpanTags(belowBeams, (drawing?.columns || []).filter(mine), tags, { below: true }, env);
     paintJoistCallouts(belowBeams, env);
     if (!framed) return;
     // The posts with it, and NOT the piles: a pile is concrete in the ground
