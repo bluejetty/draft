@@ -545,7 +545,23 @@
   }
   // THE WALLS BEHIND, for the snaps: their ends and their face corners.
   function bgWalls() {
-    return bgEntries().flatMap(entry => withBg(entry, () => walls()));
+    return bgEntries().flatMap(entry => withBg(entry, () => walls())).concat(basementGhostWalls());
+  }
+  // AND ON THE BASEMENT PLAN, THE FOUNDATION WALLS IT GHOSTS (jb, 19 Nov
+  // 2026, drawing a basement wall along the foundation's inside face: "can
+  // we make the interior wall corners NODES ... for lines area etc too floor
+  // and room tags"). paintBasementFoundationGhost draws the house's
+  // foundation walls faded under the basement's own; they were paint only,
+  // so neither their ends, their face corners nor their faces caught
+  // anything here. The same walls it paints -- off the FOUNDATION view, no
+  // garage -- now pull as the BG layers' walls do. Never picked: snaps only.
+  function basementGhostWalls() {
+    if (!drawing || ghostLevelId != null || ghostViewId != null) return [];
+    if (Number(activeLevelId()) !== FOUNDATION_LEVEL_ID || activeViewId() !== 'plan') return [];
+    const was = ghostKeep;
+    ghostViewId = 'foundation';
+    ghostKeep = item => item.body !== 'garage';
+    try { return walls(); } finally { ghostViewId = null; ghostKeep = was; }
   }
   const onActiveLevel = () => {
     const LV = window.DraftLayerViews;
@@ -1209,7 +1225,11 @@
     // to the house below instead of at the page's own default, which is a
     // different view on every page that starts empty.
     const sitePlan = activeLevelId() === SITE_LEVEL_ID && !thumbTarget && !shootingPaper;
-    if (!pts.length && !sitePlan) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
+    // A DETAIL IS ITS FRAME (model/21-details-library.js): the fit frames
+    // the frame and whatever is drawn round it, empty or not.
+    const detailCorners = !thumbTarget && !shootingPaper && typeof detailFramePoints === 'function'
+      ? detailFramePoints() : [];
+    if (!pts.length && !sitePlan && !detailCorners.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
 
     // ── THE ELEVATION MARKS ARE PART OF WHAT IS ON THE SHEET ───────────
     //
@@ -1228,7 +1248,7 @@
     // to make room for four bubbles. The marks are folded in here, where the
     // main view is what is being framed, and the two callers that borrow fit()
     // to make a picture say so already.
-    const framed = pts.slice();
+    const framed = pts.concat(detailCorners);
     if (!thumbTarget && !shootingPaper) {
       // ── THE SITE PLAN IS THE LOT, NOT THE HOUSE ────────────────────────
       //
@@ -1744,6 +1764,26 @@
     });
     return out;
   };
+  // ── THE SPAN TAGS ON SCREEN (jb, 19 Nov 2026) ─────────────────────────
+  // "put flush or dropped on each section between columns and allow user to
+  // click on flush or dropped to change it". Each beam pass below paints a
+  // FLUSH / DROPPED tag per span (render-2d drawBeamSpanTags2D) and files
+  // where it drew it here; paint() empties the list first, and a Select
+  // click on one flips that span (flipBeamSpanAt, model/08).
+  let beamSpanTagHits = [];
+  const clearBeamSpanTags = () => { beamSpanTagHits = []; canvas.setAttribute('data-beam-span-tags', '0'); };
+  const paintBeamSpanTags = (list, columnList, tags, options, env) => {
+    const R = window.DraftRender2D;
+    if (!R.beamSpans || !R.drawBeamSpanTags2D) return;
+    const hits = R.drawBeamSpanTags2D(ctx, toS, R.beamSpans(list, columnList), { tags, ...options }, env);
+    beamSpanTagHits.push(...hits);
+    canvas.setAttribute('data-beam-span-tags', String(beamSpanTagHits.length));
+  };
+  // A span-tagged line is named as the deck's LVL whatever its pieces' modes.
+  const flushDepthLabel = beam => {
+    const B = window.DraftBuildHouse;
+    return B?.beamDepthLabel ? B.beamDepthLabel({ ...beam, mode: 'flush' }, drawing) : null;
+  };
   const paintStructure = () => {
     const R = window.DraftRender2D;
     const env = paintEnv();
@@ -1755,7 +1795,8 @@
     const marked = beamsPastTheTable();
     beams().forEach(beam => R.drawBeam2D(ctx, toS, beam,
       { tag: tags.get(beam.id), warn: marked.has(beam) ? B?.ENGINEERING_MARK : null,
-        depthLabel: B?.beamDepthLabel ? B.beamDepthLabel(beam, drawing) : null }, env));
+        spanTags: true, depthLabel: flushDepthLabel(beam) }, env));
+    paintBeamSpanTags(beams(), columns(), tags, {}, env);
     // ── THE PADS GO DOWN FIRST, UNDER EVERYTHING THEY CARRY ─────────────────
     //
     // Movie, 25 Sep: "we have beam and columns, but no footing, we will need
@@ -1912,7 +1953,8 @@
     const tags = R.beamTagSides(aboveBeams, (drawing?.dimensions || []).filter(mine));
     const B0 = window.DraftBuildHouse;
     aboveBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { above: true, tag: tags.get(beam.id),
-      depthLabel: B0?.beamDepthLabel ? B0.beamDepthLabel(beam, drawing) : null }, env));
+      spanTags: true, depthLabel: B0 ? flushDepthLabel(beam) : null }, env));
+    paintBeamSpanTags(aboveBeams, (drawing?.columns || []).filter(mine), tags, { above: true }, env);
     // AND THE POSTS UNDER IT, at full weight: they stand on this floor and
     // are cut by the plan, the same rows the LAYOUT walls plan borrows
     // (layout-plan planPosts). Not the piles, which are the garage's.
@@ -1961,7 +2003,8 @@
     const belowBeams = (drawing?.beams || []).filter(mine);
     const tags = R.beamTagSides(belowBeams, (drawing?.dimensions || []).filter(mine));
     belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true, tag: tags.get(beam.id),
-      depthLabel: B?.beamDepthLabel ? B.beamDepthLabel(beam, drawing) : null }, env));
+      spanTags: true, depthLabel: B ? flushDepthLabel(beam) : null }, env));
+    paintBeamSpanTags(belowBeams, (drawing?.columns || []).filter(mine), tags, { below: true }, env);
     paintJoistCallouts(belowBeams, env);
     if (!framed) return;
     // The posts with it, and NOT the piles: a pile is concrete in the ground

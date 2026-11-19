@@ -95,7 +95,10 @@ const inkAt = (page, x, z) => page.evaluate(([wx, wz]) => {
   }
   return best;
 }, [x, z]);
-const tierOf = ink => (ink.b > 120 ? 'none'
+// TEAL (0,184,156) is a wall's face corner (jb, 19 Nov 2026): low red,
+// green over blue.
+const tierOf = ink => (ink.r < 60 && ink.g > 150 && ink.b > 120 && ink.g > ink.b ? 'teal'
+  : ink.b > 120 ? 'none'
   : ink.g < 200 ? 'orange' : ink.r > 235 && ink.b < 60 ? 'yellow' : 'neon');
 
 // THE ONE SNAP RULE (Movie, 26 Oct): each catches from its own reach in
@@ -127,18 +130,19 @@ test('a node reaches 2", a crossing that acts like one 1 1/2"; a press lands on 
   expect([r3(line.start.x), r3(line.start.z)]).toEqual([5, 0]);
 });
 
-test('the node glows orange, the corner yellow, the face neon', async ({ page }) => {
+test('the node glows orange, the face corner teal, the crossing yellow, the face neon', async ({ page }) => {
   await open(page, FIXTURE);
   const { at } = await zoomTo(page, 52);
   await armLine(page);
   await hoverPx(page, at, NODE, 2, 0);
   expect(await magnet(page)).toMatchObject({ kind: 'node' });
   expect(tierOf(await inkAt(page, NODE.x, NODE.z))).toBe('orange');
-  // The outside corner of the L, a face corner: yellow.
+  // The outside corner of the L, a face corner: teal, its own colour (jb,
+  // 19 Nov 2026: "maybe make a special color for the interior nodes").
   const OUT = { x: 10 + HALF, z: -HALF };
   await hoverPx(page, at, OUT, 2, -2);
-  expect(await magnet(page)).toMatchObject({ kind: 'corner' });
-  expect(tierOf(await inkAt(page, OUT.x, OUT.z))).toBe('yellow');
+  expect(await magnet(page)).toMatchObject({ kind: 'corner', wall: true });
+  expect(tierOf(await inkAt(page, OUT.x, OUT.z))).toBe('teal');
   // The crossing: yellow too.
   await hoverPx(page, at, CROSS, 3, 0);
   expect(await magnet(page)).toMatchObject({ kind: 'corner' });

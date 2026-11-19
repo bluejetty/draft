@@ -33,27 +33,27 @@ const MUTANTS = [
     name: 'a corner glows neon, not yellow',
     find: "    yellow: { ink: '#ffe600', glow: 'rgba(255, 230, 0, 0.95)' },\n",
     with: "    yellow: { ink: TRACK_LIT, glow: TRACK_GLOW },\n",
-    test: 'the node glows orange, the corner yellow, the face neon' },
+    test: 'the node glows orange, the face corner teal, the crossing yellow, the face neon' },
   { file: 'model/07-walls-magnet.js',
     name: 'a drag sees no crossings',
     find: "    const still = walls().filter(w => !touches(w.start) && !touches(w.end));\n"
       + "    const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));\n"
       + "    const stillRuns = [...still, ...stillOthers];\n"
       + "    return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),\n"
-      + "      corners: [...G.wallFaceCorners(still, openingThicknessFt()),\n"
+      + "      corners: [...wallCornersOf(still), ...wallCornersOf(bgWalls()),\n"
       + "        ...(G.lineCrossings ? G.lineCrossings(stillRuns) : [])],\n",
     with: "    const still = walls().filter(w => !touches(w.start) && !touches(w.end));\n"
       + "    const stillOthers = [...lines(), ...loopEdges()].filter(l => !touches(l.start) && !touches(l.end));\n"
       + "    const stillRuns = [...still, ...stillOthers];\n"
       + "    return { nodes: nodeEnds({ faces: false }).filter(v => !touches(v)),\n"
-      + "      corners: [...G.wallFaceCorners(still, openingThicknessFt()),\n"
+      + "      corners: [...wallCornersOf(still), ...wallCornersOf(bgWalls()),\n"
       + "      ],\n",
     test: 'a dragged node lands on a crossing, and takes the yellow' },
   { file: 'geometry-2d.js',
     name: 'a T-junction counts as a crossing',
     find: '        if (!hit || hit.t < 0.001 || hit.t > 0.999 || hit.u < 0.001 || hit.u > 0.999) continue;\n',
     with: '        if (!hit) continue;\n',
-    test: 'the node glows orange, the corner yellow, the face neon' },
+    test: 'the node glows orange, the face corner teal, the crossing yellow, the face neon' },
 ];
 
 const run = name => {

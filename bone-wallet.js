@@ -53,7 +53,7 @@ if (!window.DraftBoneWallet) {
   // to the downloads folder. Above DRIP_CAP, so the free drip alone never
   // reaches it: a DXF waits on a bought wallet (the server ledger, #52).
   const COSTS = Object.freeze({
-    buildHouse: 1, saveToComputer: 1, emailBackup: 1, printPackage: 2, savePdf: 5, saveDxf: 15,
+    buildHouse: 1, saveToComputer: 1, saveZip: 5, emailBackup: 1, printPackage: 2, savePdf: 5, saveDxf: 15,
   });
   const STORAGE_KEY = 'draft-bone-wallet';
 

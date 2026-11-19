@@ -1777,7 +1777,10 @@ if (!window.DraftDrawingFormat) {
       const id = Number(shelf?.id);
       if (!safeId(id) || id < 1 || seen.has(id)) return null;
       seen.add(id);
-      return { id, name: String(shelf?.name || `SHELF ${id}`).toUpperCase() };
+      // A DETAIL'S CARD RIDES ON ITS SHELF (DETAILS LIBRARY files), kept
+      // through every writer that rebuilds the list from this reader.
+      return { id, name: String(shelf?.name || `SHELF ${id}`).toUpperCase(),
+        ...(shelf?.detail && typeof shelf.detail === 'object' ? { detail: detailCard(shelf.detail) } : {}) };
     }).filter(Boolean);
     return shelves.length ? shelves : [{ id: 1, name: 'SHELF 1' }];
   };
@@ -2210,8 +2213,61 @@ if (!window.DraftDrawingFormat) {
   // the drive-thru's house tiles locked. Null for every other drawing, and
   // a word this list does not hold reads as null rather than hiding every
   // level behind a typo.
-  const STANDALONE_KINDS = Object.freeze(['site', 'classic']);
+  //
+  // 'details' is the DETAILS LIBRARY (jb, 19 Nov 2026: "a 'special file'
+  // like the site plan it will only contain the DETAIL DRAWINGS, which are
+  // all 2D small square or rectangle drawings ... it won't need all the
+  // LEVELS / LAYERS"). Its shelves are its details, each with a card
+  // (detailCard below); no level, no BUILD key and no autohouse is offered.
+  const STANDALONE_KINDS = Object.freeze(['site', 'classic', 'details']);
   const standalone = raw => oneOf(raw, STANDALONE_KINDS, null);
+
+  // ── A DETAIL'S CARD ──────────────────────────────────────────────────────
+  //
+  // On a DETAILS LIBRARY file every shelf is one detail, and the shelf
+  // carries what the library sorts it by (jb, 19 Nov 2026: "i'd like a
+  // database type organization system so that they can be arranged
+  // easily"). His answers the same afternoon set the defaults: categories
+  // "FOUNDATION, FRAMING, and SITE ... that's probably enough for starters",
+  // and a 4' x 4' frame at 1" = 1'-0" ("i think that is good").
+  //
+  // THE FRAME IS IN REAL FEET, centred on the shelf's origin: what is inside
+  // it is the detail and is what prints. THE SCALE is inches of paper per
+  // foot (1 = 1" = 1'-0"), one of the sheet scales a detail is drawn at.
+  // A CATEGORY the drafter made with + CATEGORY is kept as he typed it
+  // (upper case), so the three are a starting list, not a fence.
+  const DETAIL_CATEGORIES = Object.freeze(['FOUNDATION', 'FRAMING', 'SITE']);
+  const DETAIL_SCALES = Object.freeze([3, 1.5, 1, 0.75, 0.5]);
+  const DETAIL_FRAME_MIN_FT = 0.5;
+  const DETAIL_FRAME_MAX_FT = 40;
+  const DETAIL_DEFAULTS = Object.freeze({
+    category: 'FOUNDATION', kind: 'typ', tags: Object.freeze([]), note: '',
+    frameW: 4, frameH: 4, scale: 1,
+  });
+  const detailFrameFt = (raw, fallback) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return Math.min(DETAIL_FRAME_MAX_FT, Math.max(DETAIL_FRAME_MIN_FT, Math.round(n * 48) / 48));
+  };
+  const detailCard = raw => {
+    const card = raw && typeof raw === 'object' ? raw : {};
+    const category = String(card.category || '').trim().toUpperCase().slice(0, 40)
+      || DETAIL_DEFAULTS.category;
+    const tags = (Array.isArray(card.tags) ? card.tags : String(card.tags || '').split(','))
+      .map(tag => String(tag || '').trim().toLowerCase().slice(0, 40)).filter(Boolean)
+      .filter((tag, i, all) => all.indexOf(tag) === i).slice(0, 20);
+    return {
+      category,
+      kind: oneOf(card.kind, ['typ', 'special'], DETAIL_DEFAULTS.kind),
+      tags,
+      note: String(card.note || '').slice(0, 2000),
+      frameW: detailFrameFt(card.frameW, DETAIL_DEFAULTS.frameW),
+      frameH: detailFrameFt(card.frameH, DETAIL_DEFAULTS.frameH),
+      scale: DETAIL_SCALES.includes(Number(card.scale)) ? Number(card.scale) : DETAIL_DEFAULTS.scale,
+      ...(card.favourite === true ? { favourite: true } : {}),
+      ...(typeof card.changed === 'string' && card.changed ? { changed: card.changed.slice(0, 40) } : {}),
+    };
+  };
 
   // THE FIRST AUTO-DIMENSION OFFSET — the gap between the plan and the closest
   // auto string. Ruled by Commander Devin, 6 Sep, on Skipper's proposal.
@@ -2562,9 +2618,70 @@ if (!window.DraftDrawingFormat) {
   // to go stale -- only an unknown name is refused, like an unknown kind.
   const LAYOUT_SCHEDULE_TABLES = ['door', 'window'];
   const LAYOUT_DETAIL_IDS = ['wallsection', 'eave', 'floor', 'footing'];
-  const layout = (raw, levelIds, cutIds = new Set()) => {
+  // WINDOWS FROM ANOTHER FILE (jb, 19 Nov 2026: "i'd like to draw the SITE
+  // PLAN in a seperate file and then bring it into the construction plan with
+  // the house", "need to bring in LAYOUT WINDOWS from other DRAFT files",
+  // "select file, and then select layout", "level / layout"). A COPY of the
+  // other drawing rides in the layout record, one per file brought in, and a
+  // viewport naming it by `source` paints that drawing instead of this one.
+  // A copy and not a link: a web page cannot read a file on the drafter's
+  // disk again by itself, so RELOAD FROM FILE on the viewport's menu is how
+  // the copy is brought up to date. The other file's packed tracing pictures
+  // (`underlayFiles`) never come along.
+  const LAYOUT_SOURCE_LIMIT = 24;
+  const layoutSourceId = value => {
+    const id = String(value ?? '').trim();
+    return /^[A-Za-z0-9_-]{1,24}$/.test(id) ? id : null;
+  };
+  const layoutSourceDrawing = raw => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const { layout: own, underlayFiles: _pictures, ...rest } = raw;
+    if (!checkEnvelope(rest).ok) return null;
+    // ITS OWN SHEETS COME ALONG, so its windows can be offered; the files
+    // ITS windows show do not, or every copy would carry copies.
+    if (own && typeof own === 'object' && !Array.isArray(own)) {
+      const { sources: _nested, ...sheets } = own;
+      return { ...rest, layout: sheets };
+    }
+    return rest;
+  };
+  const layoutSources = raw => {
     const seen = new Set();
+    return (Array.isArray(raw) ? raw : []).map(src => {
+      const id = layoutSourceId(src?.id);
+      const drawing = layoutSourceDrawing(src?.drawing);
+      if (!id || seen.has(id) || !drawing) return null;
+      seen.add(id);
+      const name = String(src?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'OTHER FILE';
+      const copiedAt = typeof src?.copiedAt === 'string' && !Number.isNaN(Date.parse(src.copiedAt))
+        ? src.copiedAt.slice(0, 40) : null;
+      return { id, name, ...(copiedAt ? { copiedAt } : {}), drawing };
+    }).filter(Boolean).slice(0, LAYOUT_SOURCE_LIMIT);
+  };
+  // What a window from that file may point at: its levels and shelves, and
+  // its cuts -- the same two sets this reader is handed for the drawing's own.
+  const layoutSourceRefs = drawing => {
+    const levelIds = new Set(levels(drawing.levels).map(level => level.id));
+    const walls = Array.isArray(drawing.walls) ? drawing.walls : [];
+    boneyardShelves(drawing.boneyardShelves)
+      .filter(shelf => walls.some(wall => wall?.levelId === -shelf.id))
+      .forEach(shelf => levelIds.add(-shelf.id));
+    const cutIds = new Set(cuts(drawing.cuts, new Set(levels(drawing.levels).map(level => level.id)))
+      .map(cut => cut.id));
+    return { levelIds, cutIds };
+  };
+  const layout = (raw, hostLevelIds, hostCutIds = new Set()) => {
+    const seen = new Set();
+    const sources = layoutSources(raw?.sources);
+    const refsBySource = new Map(sources.map(src => [src.id, layoutSourceRefs(src.drawing)]));
     const viewports = (Array.isArray(raw?.viewports) ? raw.viewports : []).map(viewport => {
+      // A WINDOW FROM ANOTHER FILE is checked against that file, and one
+      // whose file is not in the record is dropped like a gone level.
+      const sourceId = viewport?.source == null ? null : layoutSourceId(viewport.source);
+      if (viewport?.source != null && (!sourceId || !refsBySource.has(sourceId))) return null;
+      const refs = sourceId ? refsBySource.get(sourceId) : null;
+      const levelIds = refs ? refs.levelIds : hostLevelIds;
+      const cutIds = refs ? refs.cutIds : hostCutIds;
       const id = Number(viewport?.id);
       const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation', 'schedule', 'detail'], viewport?.kind == null ? 'plan' : null);
       const pif = positive(viewport?.pif, null);
@@ -2597,8 +2714,14 @@ if (!window.DraftDrawingFormat) {
       // drawing, and the same three elevations.
       const hologram = Object.fromEntries(['existing', 'demo', 'new']
         .filter(key => viewport?.hologram?.[key] === false).map(key => [key, false]));
+      // ITS OWN LAYERS SWITCHED OFF (PR #979), kept here since a window
+      // brought in from another file comes with the ones its file had off.
+      const layersOff = [...new Set((Array.isArray(viewport?.layersOff) ? viewport.layersOff : [])
+        .map(v => String(v ?? '').trim()).filter(v => v && v.length <= 64))];
       const base = { id, kind, pif, xIn, yIn, sheet, ...(crop ? { crop } : {}),
-        ...(Object.keys(hologram).length ? { hologram } : {}) };
+        ...(Object.keys(hologram).length ? { hologram } : {}),
+        ...(layersOff.length ? { layersOff } : {}),
+        ...(sourceId ? { source: sourceId } : {}) };
       if (kind === 'plan') {
         const viewportLevelId = levelId(viewport?.levelId, levelIds);
         if (viewportLevelId == null) return null;
@@ -2670,6 +2793,13 @@ if (!window.DraftDrawingFormat) {
       } } : {}),
       auto: raw?.auto === true,
       viewports,
+      // Only the files a window still shows: one whose last window was
+      // deleted goes with the next save rather than riding in every save.
+      ...(() => {
+        const used = new Set(viewports.map(viewport => viewport.source).filter(Boolean));
+        const kept = sources.filter(src => used.has(src.id));
+        return kept.length ? { sources: kept } : {};
+      })(),
       // THE SHEETS THEMSELVES, by title (Movie, 1 Oct). Sheet N is
       // sheets[N-1]. Until now a sheet existed only because a viewport sat
       // on it, so the set could not hold a named sheet with nothing drawn on
@@ -2878,6 +3008,8 @@ if (!window.DraftDrawingFormat) {
     specs,
     estimates,
     layout,
+    layoutSources,
+    layoutSourceDrawing,
     tour,
     roofIntent,
     buildType,
@@ -2888,6 +3020,10 @@ if (!window.DraftDrawingFormat) {
     isGenericHologramFile,
     STANDALONE_KINDS,
     standalone,
+    DETAIL_CATEGORIES,
+    DETAIL_SCALES,
+    DETAIL_DEFAULTS,
+    detailCard,
     BUILD_TYPES,
     CASEMENT_TYPES,
     DOOR_TYPES,

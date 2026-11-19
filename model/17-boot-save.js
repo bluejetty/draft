@@ -278,6 +278,9 @@
     syncToolSurfaces();
     // A SUITE OPENS ON THE BONEYARD, where it is drawn (Movie, 20 Oct).
     if (drawing.suiteKind || drawing.shelfKind) boneyardActive = true;
+    // A DETAILS LIBRARY OPENS IN ITS DETAIL (jb, 19 Nov 2026), never on a
+    // level: its shelves are its details (model/21-details-library.js).
+    if (drawing.standalone === 'details') boneyardActive = true;
     // AND A SITE-PLAN-ONLY FILE OPENS ON SITE PLAN (jb, 11 Nov), whatever
     // `?level=` the house file he came from left in the URL. Here, before
     // the fit and the first paint that every door runs next, so the frame
@@ -743,11 +746,60 @@
     return new File([JSON.stringify(parsed)], file.name, { type: 'application/json' });
   };
 
+  // ── SAVE AS ZIP (jb, 19 Nov 2026) ────────────────────────────────────
+  //
+  // "save a zip file that has the main file in the main directory and
+  // subfolders for all the hologram files etc.. logos title blocks anything
+  // added to it". The .draft at the top is complete on its own (holograms
+  // and underlays already ride inside it); the folders are the same things
+  // as files a drafter can open, mail or edit elsewhere, plus the uploaded
+  // logo, which lives in this browser's STANDARDS and nowhere in the
+  // drawing. OPEN takes the zip back (openZipBundle). zip-bundle.js.
+  const zipBundle = async (packed, zipName) => {
+    const Z = window.DraftZipBundle;
+    const baseName = String(zipName || '').replace(/\.(zip|draft|json|model|plan)$/i, '') || 'DRAWING';
+    let parsed = drawing;
+    try { parsed = JSON.parse(packed); } catch { parsed = drawing; }
+    const { entries } = await Z.bundleEntries({
+      baseName,
+      drawingText: packed,
+      drawing: parsed,
+      underlayFile: u => window.SharedFileStore?.loadNamedFile
+        ? window.SharedFileStore.loadNamedFile(u.id, 'underlays') : null,
+      standards: window.DraftProfileManager?.getActive('standards') || null,
+      notes: (() => { try { return notepadAsText(); } catch { return ''; } })(),
+    });
+    return Z.writeZip(entries);
+  };
+  // OPEN OF A ZIP: the .draft at its top, with the logo it names put back
+  // in this browser's standards if they lack it.
+  const openZipBundle = async file => {
+    const Z = window.DraftZipBundle;
+    let bundle;
+    try {
+      bundle = await Z.readBundle(file);
+    } catch (error) {
+      say('That zip did not open', `<p>${escapeHtml(error && error.message || error)}</p>`);
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(await bundle.drawingFile.text());
+      const back = Z.restoreLogos(parsed, bundle.standards, window.DraftProfileManager);
+      if (back.full) {
+        say('The logo did not come in',
+          '<p>This browser already holds 8 company logos. Delete one in STANDARDS and open the zip again to bring its logo in.</p>');
+      }
+    } catch (error) {
+      console.warn('MODEL: the zip\'s logo could not be restored:', error);
+    }
+    return bundle.drawingFile;
+  };
+
   // Returns whether the write landed, because SAVE FIRST in the unsaved guard
   // has to know: a guard that offered to save, failed, and threw the drawing
   // away anyway would be worse than no guard at all.
   let lastLocalSave = null;
-  const save = async ({ download = null, handle = null, overTop = false } = {}) => {
+  const save = async ({ download = null, handle = null, overTop = false, zip = false } = {}) => {
     if (!drawing) return false;
     // A READ-ONLY PAGE DOES NOT ASK. The store would refuse it anyway — that gate
     // is the authority and is tested on its own — but a page that fires a write
@@ -762,7 +814,14 @@
       // give them a copy of a drawing the shared store does not have, named
       // as though it were saved.
       const contents = await writeDrawing({ overTop });
-      if (download) {
+      if (download && zip) {
+        // SAVE AS ZIP: the same .draft SAVE AS writes, at the top of a zip
+        // with its holograms, underlays, logos and notes in folders.
+        const packed = await withUnderlayFiles(contents);
+        const bundle = await zipBundle(packed, download);
+        await downloadDrawing(bundle, download, handle, 'application/zip');
+        lastLocalSave = { name: (handle && handle.name) || download, contents: bundle, zip: true };
+      } else if (download) {
         const packed = await withUnderlayFiles(contents);
         await downloadDrawing(packed, download, handle);
         // THE COPY JUST WRITTEN TO THIS COMPUTER, for SAVE BACKUP FILE TO
@@ -914,7 +973,7 @@
     savedWhereNote.hidden = false;
   };
 
-  const downloadDrawing = async (contents, name, handle = null) => {
+  const downloadDrawing = async (contents, name, handle = null, type = 'application/json') => {
     if (handle) {
       // The drafter picked the folder themselves, so there is nothing to
       // tell them; a stale chip from an earlier download would be a lie.
@@ -924,7 +983,7 @@
       await writable.close();
       return;
     }
-    const file = new File([contents], name, { type: 'application/json' });
+    const file = new File([contents], name, { type });
     const url = URL.createObjectURL(file);
     const link = document.createElement('a');
     link.href = url;
@@ -946,12 +1005,15 @@
   // error would put a scary notice on screen for somebody who simply changed
   // their mind -- so it comes back as the string 'cancelled' and the caller
   // leaves the card alone.
-  const pickSaveTarget = async suggestedName => {
+  const pickSaveTarget = async (suggestedName, { zip = false } = {}) => {
     if (!window.showSaveFilePicker) return null;
     try {
       return lastSaveHandle = await window.showSaveFilePicker({
         suggestedName,
-        types: [{
+        types: [zip ? {
+          description: 'Rough Drafter drawing bundle (zip)',
+          accept: { 'application/zip': ['.zip'] },
+        } : {
           description: 'Rough Drafter drawing',
           accept: { 'application/json': ['.draft', '.json'] },
         }],
@@ -1322,7 +1384,8 @@
       event.target.value = '';
       // A SAVED FILE OPENS ONTO LEVELS / LAYERS (Movie, 10 Oct), so the
       // previews of what was just opened are the first thing in view.
-      if (file && (await adoptAndShow(await unpackUnderlayFiles(file)))) setRail('right', true);
+      const opened = file && (await window.DraftZipBundle?.looksLikeZip(file)) ? await openZipBundle(file) : file;
+      if (opened && (await adoptAndShow(await unpackUnderlayFiles(opened)))) setRail('right', true);
     });
   }
 
@@ -1375,6 +1438,44 @@
   };
 
   document.getElementById('file-save-as').addEventListener('click', openSaveAs);
+
+  // SAVE AS ZIP COSTS 5 BONES (jb, 19 Nov 2026), refused at fewer, taken
+  // once the zip is on the disk, as SAVE AS does.
+  const zipToll = () => Number(window.DraftBoneWallet?.COSTS?.saveZip) || 0;
+  const zipTollLine = saveAsBox ? saveAsBox.querySelector('[data-save-zip-toll]') : null;
+  const paintZipToll = () => {
+    const W = window.DraftBoneWallet;
+    if (!zipTollLine) return;
+    if (!W || !zipToll()) { zipTollLine.textContent = ''; return; }
+    const held = W.read().balance;
+    const broke = held < zipToll();
+    zipTollLine.textContent = broke
+      ? `SAVE AS ZIP costs ${W.bonesWord(zipToll())} and you have ${held}. A free bone drips in every hour.`
+      : `SAVE AS ZIP: the drawing plus folders of its holograms, underlays, logos and notes. Costs ${W.bonesWord(zipToll())} (you have ${held}).`;
+    zipTollLine.dataset.kind = broke ? 'error' : '';
+  };
+  const zipAffordable = () => {
+    const W = window.DraftBoneWallet;
+    return !W || !zipToll() || W.read().balance >= zipToll();
+  };
+  document.getElementById('file-save-as').addEventListener('click', paintZipToll);
+  if (saveAsBox && saveAsBox.querySelector('[data-save-as-zip]')) {
+    saveAsBox.querySelector('[data-save-as-zip]').addEventListener('click', async () => {
+      const typed = saveAsName.value.trim() || generatedFileName();
+      const zipName = `${typed.replace(/\.(zip|draft|json|model|plan)$/i, '')}.zip`;
+      if (!zipAffordable()) { paintZipToll(); return; }
+      const handle = await pickSaveTarget(zipName, { zip: true });
+      if (handle === 'cancelled') return;
+      closeSaveAs();
+      lastLocalSave = null;
+      if ((await save({ download: zipName, handle, zip: true })) && lastLocalSave) {
+        if (window.DraftBoneWallet && zipToll()) {
+          window.DraftBoneWallet.spend(zipToll());
+          window.dispatchEvent(new CustomEvent('draft-bones-changed'));
+        }
+      }
+    });
+  }
   if (saveAsBox) {
     saveAsBox.querySelector('[data-save-as-go]').addEventListener('click', async () => {
       const typed = saveAsName.value.trim() || generatedFileName();

@@ -41,8 +41,12 @@ const MUTANTS = [
     test: 'T-square lit: a roof corner dragged with MOVE goes straight across' },
   { file: 'model/07-walls-magnet.js',
     name: 'the ROOF plan\'s wall tops have no faces to land on, as before',
-    find: "    const segs = own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls\n",
-    with: "    const segs = own.length ? own : (false && G.roofPlanWalls\n",
+    find: "    const segs = (own.length ? own : (activeLevelId() === ROOF_LEVEL_ID && G.roofPlanWalls\n"
+      + "      ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],\n"
+      + "        floors: drawing.floors || [], levels: drawing.levels || [] }) : [])).concat(basementGhostWalls());\n",
+    with: "    const segs = (own.length ? own : (false && G.roofPlanWalls\n"
+      + "      ? G.roofPlanWalls({ walls: drawing.walls || [], outlines: drawing.outlines || [],\n"
+      + "        floors: drawing.floors || [], levels: drawing.levels || [] }) : [])).concat(basementGhostWalls());\n",
     test: 'on the ROOF plan a line drawn beside a wall top lands on its face' },
   { file: 'model/07-walls-magnet.js',
     name: 'a line crossing a wall top makes no corner',

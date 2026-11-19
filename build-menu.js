@@ -100,6 +100,14 @@ if (!window.DraftBuildMenu) {
         Object.freeze({ id: 'site-standalone', label: 'DRAW STANDALONE SITE PLAN', standalone: 'site' }),
         Object.freeze({ id: 'classic-drafting', label: 'CLASSIC DRAFTING', free: true,
           title: 'CLASSIC DRAFTING — the blank sheet, every level and every tool, no house built: draw it yourself' }),
+        // THE DETAILS LIBRARY (jb, 19 Nov 2026: "making a different DRAFT
+        // file option a DETAILS LAYOUT that should all the typical details
+        // ... a 'special file' like the site plan it will only contain the
+        // DETAIL DRAWINGS"). The third half of the same stack, under CLASSIC:
+        // the press writes `standalone: 'details'` and stands the drafter in
+        // DETAIL 1's frame, with no level, no BUILD key and no autohouse.
+        Object.freeze({ id: 'details-library', label: 'DRAW DETAILS LIBRARY', standalone: 'details',
+          title: 'DRAW DETAILS LIBRARY — small 2D details with notes, one per detail window, no house and no levels' }),
       ]),
     }),
     Object.freeze({

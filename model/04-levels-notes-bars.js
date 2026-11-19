@@ -2083,12 +2083,16 @@
   // order one is disabled, with the reason on its title. The CLASSIC
   // DRAFTING tile itself stays live -- pressing it again is harmless -- and
   // nothing else on the board can start an order.
-  const classicLocked = () => drawing?.standalone === 'classic';
+  // A DETAILS LIBRARY IS LOCKED THE SAME WAY (jb, 19 Nov 2026: "it will
+  // only contain the DETAIL DRAWINGS"): a house ordered onto it would bring
+  // back the levels the library has no use for.
+  const classicLocked = () => drawing?.standalone === 'classic' || drawing?.standalone === 'details';
   const CLASSIC_LOCK_TITLE = 'CLASSIC DRAFTING \u2014 no autohouse on this sheet. Press NEW for a sheet that builds one.';
+  const DETAILS_LOCK_TITLE = 'DETAILS LIBRARY \u2014 details only, no autohouse. Press NEW for a sheet that builds one.';
   const lockTile = (button, entry) => {
-    if (!classicLocked() || entry?.free) return;
+    if (!classicLocked() || entry?.free || entry?.standalone === drawing?.standalone) return;
     button.disabled = true;
-    button.title = CLASSIC_LOCK_TITLE;
+    button.title = drawing?.standalone === 'details' ? DETAILS_LOCK_TITLE : CLASSIC_LOCK_TITLE;
   };
   // ── A SITE-PLAN-ONLY FILE HAS ONE LEVEL AND THREE FEWER DOORS ──────────
   //
@@ -2108,6 +2112,9 @@
   // would warn about a view the level never had. Through the same
   // replaceState as goToLevel -- a change of viewpoint, not a navigation.
   const siteOnly = () => drawing?.standalone === 'site';
+  // A DETAILS LIBRARY FILE (jb, 19 Nov 2026): its shelves are its details,
+  // and model/21-details-library.js is what it looks like.
+  const detailsFile = () => drawing?.standalone === 'details';
   const settleSiteOnlyUrl = () => {
     if (!siteOnly() || params.get('level') === String(SITE_LEVEL_ID)) return;
     params.set('level', String(SITE_LEVEL_ID));
@@ -2122,15 +2129,17 @@
   // LAYOUT and the sheet row stay live: the site plan prints.
   const SITE_ONLY_DOORS = ['project', 'boneyard', 'ext-finish'];
   const SITE_ONLY_LOCK_TITLE = 'SITE PLAN ONLY \u2014 this file has no house. Press NEW for a sheet that builds one.';
+  const DETAILS_DOORS_LOCK_TITLE = 'DETAILS LIBRARY \u2014 this file holds details, not a house.';
   const syncSiteOnlyDoors = () => {
-    const locked = siteOnly();
+    const locked = siteOnly() || detailsFile();
+    const lockTitle = detailsFile() ? DETAILS_DOORS_LOCK_TITLE : SITE_ONLY_LOCK_TITLE;
     SITE_ONLY_DOORS.forEach(id => {
       document.querySelectorAll(`#page-row [data-page="${id}"]`).forEach(chip => {
         if (locked) {
           if (!chip.dataset.siteLocked) chip.dataset.siteLockedTitle = chip.title;
           chip.dataset.siteLocked = '';
           chip.setAttribute('aria-disabled', 'true');
-          chip.title = SITE_ONLY_LOCK_TITLE;
+          chip.title = lockTitle;
           chip.tabIndex = -1;
         } else if (chip.dataset.siteLocked !== undefined) {
           chip.title = chip.dataset.siteLockedTitle || chip.title;
@@ -2749,6 +2758,9 @@
     if (drawing.standalone !== want) { drawing.standalone = want; markDirty(); }
     setSign(false);
     syncBuildBar();
+    // THE DETAILS LIBRARY STANDS IN A DETAIL, not on a level
+    // (model/21-details-library.js).
+    if (want === 'details') { if (typeof startDetailsLibrary === 'function') startDetailsLibrary(); return; }
     goToLevel(SITE_LEVEL_ID);
     if (want === 'site') openLotCard();
   };

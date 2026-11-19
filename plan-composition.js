@@ -268,6 +268,12 @@ if (!window.DraftPlanComposition) {
       onLayer(ctx, 'A-WALL-EXT');
       render.drawDoorBucks2D(ctx, toS, env.doorBucks, env.buckEnv || {});
     }
+    // THE BEAM POCKETS, likewise (jb, 19 Nov 2026; beam-pockets.js through
+    // layout-plan): a notch 4" into the concrete, 8" wide, at a beam's end.
+    if (Array.isArray(env.beamPockets) && env.beamPockets.length && typeof render.drawBeamPockets2D === 'function') {
+      onLayer(ctx, 'S-FDN');
+      render.drawBeamPockets2D(ctx, toS, env.beamPockets, env.buckEnv || {});
+    }
 
     drawOpenings(ctx, toS, env, walls, shows, off);
 
@@ -378,13 +384,25 @@ if (!window.DraftPlanComposition) {
       // beamTagSides), read off the dimensions this same pass draws.
       const beamsHere = pick(env.beams).filter(beam => !off(beam.layer || 'S-BEAM'));
       const tags = typeof render.beamTagSides === 'function' ? render.beamTagSides(beamsHere, dimensions) : new Map();
-      beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env.structureEnv); });
+      // FLUSH OR DROPPED ON EACH SPAN between its columns (jb, 19 Nov 2026),
+      // so the line's own name leaves the word out (spanTags).
+      const spanTags = typeof render.drawBeamSpanTags2D === 'function' && typeof render.beamSpans === 'function';
+      const postsHere = pick(env.columns);
+      beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id), spanTags }, env.structureEnv); });
+      if (spanTags && beamsHere.length) {
+        onLayer(ctx, 'S-BEAM');
+        render.drawBeamSpanTags2D(ctx, toS, render.beamSpans(beamsHere, postsHere), { tags }, env.structureEnv);
+      }
       // THE BEAM IN THE FLOOR SYSTEM OVER THIS PLAN (Movie, 16 Oct): dash-dot
       // and lighter, tagged ABOVE. Worked out by the caller (layout-plan
       // beamsAbove); this only paints them.
       const beamsOver = pick(env.beamsAbove).filter(beam => !off(beam.layer || 'S-BEAM'));
       const overTags = typeof render.beamTagSides === 'function' ? render.beamTagSides(beamsOver, dimensions) : new Map();
-      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id) }, env.structureEnv); });
+      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id), spanTags }, env.structureEnv); });
+      if (spanTags && beamsOver.length) {
+        onLayer(ctx, 'S-BEAM');
+        render.drawBeamSpanTags2D(ctx, toS, render.beamSpans(beamsOver, postsHere), { tags: overTags, above: true }, env.structureEnv);
+      }
       pick(env.columns).filter(column => !off(column.layer || 'S-COL-FOOTING')).forEach(column => {
         onLayer(ctx, column.layer || 'S-COL-FOOTING');
         render.drawColumn2D(ctx, toS, column, {

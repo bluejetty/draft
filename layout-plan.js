@@ -322,8 +322,9 @@ if (!window.DraftLayoutPlan) {
     }
     return Math.abs(doubled) / 2;
   };
-  const shapeEnv = saved => ({
+  const shapeEnv = (saved, inkScale) => ({
     shapeColor: SHAPE_COLOR,
+    inkScale,
     isPrinting: true,
     flooringTypes: window.DraftDrawingFormat?.FLOORING_FINISHES || [],
     outlineAreaSqFt: shapeAreaSqFt,
@@ -339,8 +340,11 @@ if (!window.DraftLayoutPlan) {
   // figure MODEL shows under the name (model/01 roomTagEnv), not the
   // painter's SQ FT fallback on a metric drawing. Printing, so no UNDER MIN
   // nag reaches paper.
-  const roomTagEnv = (saved, listing) => ({
+  // `inkScale` locks a SCREEN-size tag to the size it prints, so it zooms
+  // with the paper like the dimensions (jb, 19 Nov).
+  const roomTagEnv = (saved, listing, inkScale) => ({
     color: '#1d1f20',
+    inkScale,
     isPrinting: true,
     areaFor: listing ? (tag => tag.size || '') : (() => ''),
     areaLabel: sqFt => (saved?.units === 'metric'
@@ -1047,9 +1051,9 @@ if (!window.DraftLayoutPlan) {
       walls: [], floors: [], roofs: [], fixtures: [], stairs: [],
       beams: [], columns: [], fenestrations: [],
       roomTags,
-      roomTagEnv: roomTagEnv(saved, false),
+      roomTagEnv: roomTagEnv(saved, false, env.inkScale),
       shapes,
-      shapeEnv: shapeEnv(saved),
+      shapeEnv: shapeEnv(saved, env.inkScale),
       lines,
       notes,
       dimensions: dims,
@@ -1064,7 +1068,7 @@ if (!window.DraftLayoutPlan) {
         atLine: true,
         inkScale: env.inkScale,
       },
-      noteEnv: { color: '#1d1f20', fillColor: env.paperColor || '#ffffff' },
+      noteEnv: { color: '#1d1f20', fillColor: env.paperColor || '#ffffff', inkScale: env.inkScale },
     });
     return true;
   }
@@ -1584,6 +1588,13 @@ if (!window.DraftLayoutPlan) {
           walls: of('walls'), fenestrations: fensOf(),
           thicknessFt, faceOffsets: geo.wallFaceOffsets, concreteLevelId: levelId,
         }) : [],
+      // THE BEAM POCKETS (jb, 19 Nov 2026; beam-pockets.js): where a
+      // basement beam's ends sit in the concrete, not on a bilevel.
+      beamPockets: view === 'foundation' && !shell && window.DraftBeamPockets
+        ? window.DraftBeamPockets.beamPockets({
+          walls: of('walls'), beams: of('beams'), levelId, buildType: saved?.buildType ?? null,
+          thicknessFt, faceOffsets: geo.wallFaceOffsets,
+        }) : [],
       buckEnv: { paperColor, slabFill: 'rgba(89,128,166,0.16)', wallInk: '#1d1f20', belowAlpha: 0.4 },
       footingOutline: view === 'foundation' && !shell && window.DraftFootingOutline
         ? window.DraftFootingOutline.footingOutline({
@@ -1782,7 +1793,7 @@ if (!window.DraftLayoutPlan) {
       // shape traced on a shelf "isn't showing the AREA / SHAPE house
       // outline in the hologram"); its dimensions and notes stay off, a
       // shell draws none, and a NO-DRAFT shape is kept off by the composer.
-      shapeEnv: unless(shapeEnv(saved)),
+      shapeEnv: unless(shapeEnv(saved, env.inkScale)),
       dimensionEnv: hologram ? null : forConstruction({
         label: dimLabel(saved),
         colors: DIMENSION_COLORS,
@@ -1797,9 +1808,9 @@ if (!window.DraftLayoutPlan) {
       // (Movie, 1 Oct: "the 2nd line will be only for REAL ESTATE LAYOUTS -
       // the 1st Line (ROOM TITLE) will be needed for both"). Printing, so no
       // UNDER MIN nag reaches paper.
-      roomTagEnv: unless(roomTagEnv(saved, listing)),
+      roomTagEnv: unless(roomTagEnv(saved, listing, env.inkScale)),
       roomTags: only(of('roomTags')),
-      noteEnv: hologram ? null : unless({ color: '#1d1f20', fillColor: paperColor }),
+      noteEnv: hologram ? null : unless({ color: '#1d1f20', fillColor: paperColor, inkScale: env.inkScale }),
     });
     return true;
   }

@@ -625,6 +625,10 @@
       drawPress(at);
       return;
     }
+    // A FLUSH / DROPPED TAG TAKES THE PRESS (jb, 19 Nov 2026): it flips its
+    // span (flipBeamSpanAt, model/08) ahead of the pick, the box and the pan.
+    if (activeTool === RESTING_TOOL && !e.shiftKey
+      && flipBeamSpanAt(e.clientX - rect.left, e.clientY - rect.top)) return;
     // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
     // body tests too. Otherwise a box begun on a selected wall would grab that
     // wall instead, and the drafter would drag the building across the sheet
@@ -1545,7 +1549,11 @@
       // AND WHEN THE SNAP UNDER THE CURSOR CHANGES, with no run in hand yet:
       // the orange donut has to come and go over a node before the first
       // press, and nothing else repaints there.
-      else if (drawsRun() || activeTool === 'outline' || (typeof draftPickFrom === 'function' && draftPickFrom())) {
+      // AND FLOOR / SHAPE before their first corner (jb, 19 Nov 2026: the
+      // wall corners catch "for lines area etc too floor"): the ring shows
+      // where the first press will land, as a line's does.
+      else if (drawsRun() || activeTool === 'outline' || activeTool === 'floor' || activeTool === 'shape'
+        || (typeof draftPickFrom === 'function' && draftPickFrom())) {
         const snap = drawSnap(at);
         const key = snap.pt ? `${snap.pt.x},${snap.pt.z},${snap.node ? 'n' : snap.bullseye ? 'b' : 'r'}` : '';
         if (key !== lastSnapKey) { lastSnapKey = key; paint(); }

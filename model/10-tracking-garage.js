@@ -845,12 +845,17 @@
   const DONUT = {
     orange: { ink: '#ff9a1f', glow: 'rgba(255, 150, 30, 0.95)' },
     yellow: { ink: '#ffe600', glow: 'rgba(255, 230, 0, 0.95)' },
+    // A WALL'S FACE CORNER, its own colour (jb, 19 Nov 2026: "maybe make a
+    // special color for the interior nodes"): teal, darker than the MOVE
+    // grab's cyan so the two never read alike, and it holds on DAY paper
+    // where the yellow all but vanishes.
+    teal: { ink: '#00b89c', glow: 'rgba(0, 200, 170, 0.95)' },
     neon: { ink: TRACK_LIT, glow: TRACK_GLOW },
     // THE POINT A MOVE WILL TAKE HOLD OF, its own colour, so the selection's
     // circle never reads as a target's.
     grab: { ink: '#22e3ff', glow: 'rgba(34, 227, 255, 0.95)' },
   };
-  const tierOf = lit => (lit?.seg ? 'neon' : lit?.node ? 'orange' : 'yellow');
+  const tierOf = lit => (lit?.seg ? 'neon' : lit?.node ? 'orange' : isWallFaceCorner(lit?.corner) ? 'teal' : 'yellow');
   const paintDonut = (pt, tier = 'orange') => {
     const c = DONUT[tier] || DONUT.orange;
     const p = toS(pt);
@@ -889,12 +894,14 @@
       ctx.shadowBlur = on ? 10 : 0;
       segOn(seg);
     });
-    // THE CORNERS THAT ACT LIKE NODES, in yellow.
+    // THE CORNERS THAT ACT LIKE NODES, in yellow -- a wall's face corner
+    // in teal.
     magnet.corners.forEach(c => {
       if (!near(c)) return;
       const p = toS(c);
-      ctx.fillStyle = DONUT.yellow.ink;
-      ctx.shadowColor = DONUT.yellow.glow;
+      const ink = DONUT[isWallFaceCorner(c) ? 'teal' : 'yellow'];
+      ctx.fillStyle = ink.ink;
+      ctx.shadowColor = ink.glow;
       ctx.shadowBlur = 8;
       ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
     });
@@ -956,6 +963,7 @@
     canvas.setAttribute('data-snap-magnet', JSON.stringify({
       kind: lit.seg ? 'face' : lit.node ? 'node' : 'corner',
       at: [r4(lit.pt.x), r4(lit.pt.z)],
+      ...(!lit.seg && !lit.node && isWallFaceCorner(lit.corner) ? { wall: true } : {}),
       ...(lit.own ? { own: [[r4(lit.own.a.x), r4(lit.own.a.z)], [r4(lit.own.b.x), r4(lit.own.b.z)]] } : {}),
       ...(lit.guide ? { guide: [[r4(lit.guide.from.x), r4(lit.guide.from.z)], [r4(lit.guide.to.x), r4(lit.guide.to.z)]] } : {}) }));
   };
@@ -1123,7 +1131,7 @@
     paintMagnets(cursorWorld, magnet, snap.face ? { seg: snap.face } : null);
     const ownNode = snap.node && isOwnNode(snap.node);
     if (snap.node || snap.bullseye || snap.face) {
-      paintDonut(snap.pt, snap.face ? 'neon' : snap.node && !ownNode ? 'yellow' : 'orange');
+      paintDonut(snap.pt, snap.face ? 'neon' : snap.node && !ownNode ? (isWallFaceCorner(snap.node) ? 'teal' : 'yellow') : 'orange');
       if (snap.node || snap.bullseye) {
         canvas.setAttribute('data-snap-node', JSON.stringify([Number(snap.pt.x.toFixed(4)), Number(snap.pt.z.toFixed(4))]));
       } else canvas.removeAttribute('data-snap-node');

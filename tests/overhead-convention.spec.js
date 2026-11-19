@@ -30,8 +30,9 @@ REPRO.fixtures = [
   { id: 'fx4', wallId: 'wall-2', levelId: 3, view: 'plan', kind: 'island', layer: 'A-FIXT', offset: 9, width: 6, depth: 3, side: 1, standoff: 5.5 },
 ];
 
-// THE TAPE: every stroke with the dash it was made under, per canvas, so a
-// dash-dot (four-part) stroke is the beam above and a [6,4] stroke the
+// THE TAPE: every stroke with the dash it was made under, per canvas, so an
+// overhead dash-dot ([20,7,3,7]) stroke is the beam above -- since 19 Nov
+// 2026 a beam on its own plan is dash-dot too, on the longer [28,9,3,9] and a [6,4] stroke the
 // uppers -- nothing else on a walls plan strokes under either.
 const spy = page => page.evaluate(() => {
   const proto = CanvasRenderingContext2D.prototype;
@@ -55,7 +56,8 @@ const lastPaint = (page, canvasId) => page.evaluate(id => {
   mine.forEach((e, i) => { if (e.op === 'clear') start = i; });
   const strokes = mine.slice(start).filter(e => e.op === 'stroke');
   return {
-    dashDot: strokes.filter(e => e.dash.length === 4).length,
+    dashDot: strokes.filter(e => e.dash.length === 4 && e.dash[0] === 20).length,
+    ownDashDot: strokes.filter(e => e.dash.length === 4 && e.dash[0] === 28).length,
     dashed: strokes.filter(e => e.dash.length === 2 && e.dash[0] === 6 && e.dash[1] === 4).length,
     lighter: strokes.filter(e => Math.abs(e.alpha - 0.5) < 0.01).length,
   };
@@ -84,7 +86,8 @@ test('MODEL: the walls plan draws the beam over it dash-dot and the uppers dashe
   await page.waitForTimeout(300);
   await expect(page.locator('#plan'), 'the floor layout owns that beam and borrows nothing').toHaveAttribute('data-beams-above', '0');
   const floor = await lastPaint(page, 'plan');
-  expect(floor.dashDot, 'no dash-dot on the floor layout').toBe(0);
+  expect(floor.dashDot, 'no overhead dash-dot on the floor layout').toBe(0);
+  expect(floor.ownDashDot, 'its own beam, dash-dot at full weight (jb, 19 Nov 2026)').toBeGreaterThanOrEqual(4);
   expect(floor.dashed, 'and no uppers').toBe(0);
   // THE BASEMENT PLAN borrows FOUNDATION's beam, the one under the main floor.
   await page.goto('/MODEL.html?right=1&level=1');
@@ -129,6 +132,7 @@ test('LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and t
   expect(plan.dashDot % 4, 'four pieces, however many paints').toBe(0);
   expect(plan.dashed, 'the uppers, one dashed run each paint').toBeGreaterThanOrEqual(1);
   const floor = await sheetOf('MAIN FLOOR');
-  expect(floor.dashDot, 'the floor layout draws that beam as its own, solid').toBe(0);
+  expect(floor.dashDot, 'the floor layout draws that beam as its own, not overhead').toBe(0);
+  expect(floor.ownDashDot, 'its own dash-dot (jb, 19 Nov 2026)').toBeGreaterThanOrEqual(4);
   expect(floor.dashed, 'and hangs no uppers').toBe(0);
 });

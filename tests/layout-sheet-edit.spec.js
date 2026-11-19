@@ -205,7 +205,9 @@ test('+ ADD VIEWPORT asks what -- plans, elevations, sections -- then the next p
     // AND THE SCHEDULES AND DETAILS (jb, 9 Nov), under their own heads.
     'DOOR SCHEDULE', 'WINDOW SCHEDULE',
     'TYP. WALL SECTION', 'EAVE DETAIL', 'FLOOR DETAIL', 'FOOTING DETAIL']);
-  await expect(page.locator('.lay-add-head')).toHaveText(['PLANS', 'FLOOR LAYOUTS', 'ELEVATIONS', 'SECTIONS', 'SCHEDULES', 'DETAILS']);
+  await expect(page.locator('.lay-add-head')).toHaveText(['PLANS', 'FLOOR LAYOUTS', 'ELEVATIONS', 'SECTIONS', 'SCHEDULES', 'DETAILS',
+    // and, since 19 Nov (jb), the door to another file's windows and levels.
+    'FROM ANOTHER FILE']);
   // Armed at once, as it always was; the pick only changes what comes in.
   await expect(page.locator('[data-layout-add-viewport]')).toHaveText(/CLICK THE SHEET/i);
   await page.locator('[data-add-pick="elevation:E2"]').click();

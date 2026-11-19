@@ -109,6 +109,7 @@
 <script src="./building-bodies.js"></script>
 <script src="./overhead-lines.js"></script>
 <script src="./door-bucks.js"></script>
+<script src="./beam-pockets.js"></script>
 <script src="./footing-outline.js"></script>
 <script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
@@ -499,6 +500,15 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #lay-add-menu button:hover { border-color: var(--accent); }
   #lay-add-menu button.on { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #lay-add-menu button.wide { grid-column:1 / -1; text-align:left; }
+  #lay-add-menu .lay-add-sub { grid-column:1 / -1; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:10px; letter-spacing:0.06em; color: var(--ink-quiet); margin-top:2px; }
+  #lay-add-menu .lay-add-file { grid-column:1 / -1; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:12px; font-weight:600; color: var(--accent-mark); overflow-wrap:anywhere; }
+  .lay-source-note { margin-top:6px; font-family:'Barlow Condensed', system-ui, sans-serif; font-size:12px;
+    line-height:1.3; color: var(--ink-primary); overflow-wrap:anywhere; }
+  .lay-source-note[hidden] { display:none; }
+  .lay-source-note.bad { color: var(--ink-warn); }
   #lay-deal { display:block; width:100%; margin-top:6px; text-align:center;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
@@ -998,6 +1008,10 @@
            (the PLAN LEVEL floor, as before); the next press on the sheet puts
            it there at the SCALE list's rung, or smaller if it does not fit. -->
       <div id="lay-add-menu" data-add-menu hidden></div>
+      <!-- FROM ANOTHER FILE (jb, 19 Nov 2026): the .draft whose windows or
+           levels come onto these sheets, and RELOAD FROM FILE's pick. -->
+      <input type="file" data-layout-source-file accept=".draft,.json,application/json" hidden />
+      <div class="lay-source-note" data-layout-source-note hidden></div>
       <!-- DEAL SHEETS -- the composer already existed and nothing could ask
            for it. _composeDefaultSet deals the whole set in Movie's order
            (1 Oct): SITE PLAN, ELEVATIONS, ROOF PLAN, 2ND FL PLAN, 2ND FLOOR,
@@ -1615,6 +1629,8 @@ class Component extends PageLogic {
     activeLevelId: null,
     addingViewport: false,       // false, or the view { kind, levelId|elevId|cutId } the next press places
     addMenuOpen: false,
+    addMenuFile: null,           // + ADD VIEWPORT showing another file's list: that file's source id
+    sources: [],                 // other .draft files brought in: { id, name, copiedAt, drawing }
     viewports: [],              // { id, kind, levelId|cutId|elevId, pif, sheet, xIn, yIn } — sheet inches
     sheets: [],                 // [{ title }] — sheet N is sheets[N-1]; empty = titles worked out from viewports
     nextViewportId: 1,
@@ -1845,7 +1861,12 @@ class Component extends PageLogic {
     const cutIds = new Set(this._cuts.map(cut => cut.id));
     const viewLevelIds = new Set([...levelIds, ...this._shelfLevels.map(level => level.id)]);
     const layout = saved?.layout ? format.layout(saved.layout, viewLevelIds, cutIds) : null;
+    // THE OTHER FILES' COPIES, each painted through its own context.
+    this._sourceCtx = new WeakMap();
+    (layout?.sources || []).forEach(src => window.DraftWallTypes?.adoptDrawing?.(src.drawing));
     const patch = {
+      sources: layout?.sources || [],
+      addMenuFile: null,
       viewports: layout ? layout.viewports : [],
       sheets: layout ? layout.sheets : [],
       nextViewportId: layout ? layout.nextViewportId : 1,
@@ -2005,6 +2026,91 @@ class Component extends PageLogic {
   // the whole contract and its own note on why. What stays here is the CACHE,
   // because the identity of the object matters to the painter (see the module)
   // and this page's own invalidation is what knows when the drawing moved.
+  // ── WINDOWS FROM ANOTHER FILE (jb, 19 Nov 2026) ──────────────────────
+  //
+  // "i'd like to draw the SITE PLAN in a seperate file and then bring it
+  // into the construction plan with the house", "need to bring in LAYOUT
+  // WINDOWS from other DRAFT files ... select file, and then select layout",
+  // "level / layout". The other file is a COPY kept in the layout record
+  // (`state.sources`, drawing-format.js layoutSources), and a viewport that
+  // names it by `source` is painted from it.
+  //
+  // ONE PAINTER, TWO DRAWINGS: every measure and paint on this page reads
+  // the drawing through these fields, so a window from another file runs the
+  // very same code with the fields pointed at that file for the length of
+  // the call, and put back after. Each file keeps its own caches.
+  static get SOURCE_CTX_KEYS() {
+    return ['_saved', '_levels', '_shelfLevels', '_cuts', '_standalone', '_planBoundsByLevel',
+      '_cutEnv', '_cutExtentsCache', '_elevCutsCache', '_schedulesCache', '_wallSectionCache'];
+  }
+
+  _sourceById(id) {
+    return id == null ? null : (this.state.sources || []).find(src => src.id === id) || null;
+  }
+
+  _sourceContext(src) {
+    if (!this._sourceCtx) this._sourceCtx = new WeakMap();
+    const key = src?.drawing;
+    if (key && this._sourceCtx.has(key)) return this._sourceCtx.get(key);
+    const format = window.DraftDrawingFormat;
+    const saved = key || null;
+    if (saved) window.DraftWallTypes?.adoptDrawing?.(saved);
+    const levels = saved ? format.levels(saved.levels) : [];
+    const walls = Array.isArray(saved?.walls) ? saved.walls : [];
+    const ctx = {
+      _saved: saved,
+      _levels: levels,
+      _shelfLevels: saved ? format.boneyardShelves(saved.boneyardShelves)
+        .filter(shelf => walls.some(w => w?.levelId === -shelf.id))
+        .map(shelf => ({ id: -shelf.id, name: shelf.name, elev: 0, shelf: true })) : [],
+      _cuts: saved ? format.cuts(saved.cuts, new Set(levels.map(level => level.id))) : [],
+      _standalone: saved && format.standalone ? format.standalone(saved.standalone) : null,
+      _planBoundsByLevel: new Map(),
+      _cutEnv: null,
+      _cutExtentsCache: new Map(),
+      _elevCutsCache: null,
+      _schedulesCache: null,
+      _wallSectionCache: undefined,
+    };
+    if (key) this._sourceCtx.set(key, ctx);
+    return ctx;
+  }
+
+  // Is this viewport (or picked view) from a file other than the one the
+  // fields hold right now?
+  _foreign(view) {
+    return view?.source != null && view.source !== this._activeSourceId;
+  }
+
+  // Runs fn with the page's drawing fields on that file. Synchronous only:
+  // nothing else can run while they are swapped. A window whose file is
+  // missing paints from nothing rather than from this drawing.
+  _inSource(sourceId, fn) {
+    if (sourceId == null || sourceId === this._activeSourceId) return fn();
+    const ctx = this._sourceContext(this._sourceById(sourceId));
+    const keys = Component.SOURCE_CTX_KEYS;
+    const host = {};
+    keys.forEach(k => { host[k] = this[k]; this[k] = ctx[k]; });
+    const was = this._activeSourceId;
+    this._activeSourceId = sourceId;
+    try {
+      return fn();
+    } finally {
+      keys.forEach(k => { ctx[k] = this[k]; this[k] = host[k]; });
+      this._activeSourceId = was;
+    }
+  }
+
+  // What the frame says on the desk, and the readout's date.
+  _sourceStamp(src) {
+    if (!src?.copiedAt) return '';
+    const d = new Date(src.copiedAt);
+    if (Number.isNaN(d.getTime())) return '';
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   _cutViewEnv() {
     if (this._cutEnv) return this._cutEnv;
     this._cutEnv = window.DraftCutViewEnv.buildCutViewEnv(this._saved, this._levels);
@@ -2101,6 +2207,7 @@ class Component extends PageLogic {
   }
 
   _cutForViewport(viewport) {
+    if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._cutForViewport(viewport));
     if (viewport.kind === 'section') return this._cuts.find(cut => cut.id === viewport.cutId) || null;
     if (viewport.kind === 'elevation') {
       return this._standardElevationCuts().find(cut => cut.id === viewport.elevId) || null;
@@ -2111,6 +2218,7 @@ class Component extends PageLogic {
   // Model extents of a section / elevation view, cached per cut: horizontal
   // in the cut's own paper axis, vertical in model elevation feet.
   _cutExtents(viewport) {
+    if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._cutExtents(viewport));
     const key = `${viewport.kind}:${viewport.kind === 'section' ? viewport.cutId : viewport.elevId}`;
     if (!this._cutExtentsCache.has(key)) {
       const cut = this._cutForViewport(viewport);
@@ -2146,6 +2254,7 @@ class Component extends PageLogic {
   // (layout-plan.js), with their figures past that, on every side the frame
   // is centred on -- so the frame grows by that much paper all round.
   _viewFootprintFt(view) {
+    if (this._foreign(view)) return this._inSource(view.source, () => this._viewFootprintFt(view));
     const pad = 2 * this._viewAllowanceFt();
     // A SCHEDULE IS PAPER: its feet are its inches, at SCHEDULE_PIF = 1.
     if (isSchedule(view)) {
@@ -2173,6 +2282,7 @@ class Component extends PageLogic {
   // The rectangle the painter fits its ink to. An elevation paints the drawn
   // box; a section keeps the padded one its own painter reserves.
   _paintExtents(viewport) {
+    if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._paintExtents(viewport));
     const ex = this._cutExtents(viewport);
     if (!ex) return null;
     if (viewport.kind !== 'elevation' || !Number.isFinite(ex.yTopDrawn)) return ex;
@@ -2183,6 +2293,7 @@ class Component extends PageLogic {
   // and sized by the view's model extents at the viewport's own scale -- the
   // frame it would have UNCROPPED, which is where its drawing is laid out.
   _naturalRectIn(viewport) {
+    if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._naturalRectIn(viewport));
     // A SCHEDULE'S FRAME IS THE TABLE, whatever pif the viewport carries:
     // a table has no scale to change.
     if (isSchedule(viewport)) {
@@ -2284,6 +2395,12 @@ class Component extends PageLogic {
       viewports: this.state.viewports,
       sheets: this.state.sheets,
       nextViewportId: this.state.nextViewportId,
+      // THE OTHER FILES a window on the set shows, and only those.
+      ...(() => {
+        const used = new Set(this.state.viewports.map(viewport => viewport.source).filter(Boolean));
+        const kept = (this.state.sources || []).filter(src => used.has(src.id));
+        return kept.length ? { sources: kept } : {};
+      })(),
     };
   }
 
@@ -3232,6 +3349,7 @@ class Component extends PageLogic {
       this._canvas.setAttribute('data-layout-frames', JSON.stringify(this._sheetViewports(sheet).map(viewport => {
         const r = this._viewportRectIn(viewport);
         return { id: viewport.id, kind: viewport.kind, levelId: viewport.levelId ?? null, pif: viewport.pif,
+          ...(viewport.source != null ? { source: viewport.source } : {}),
           xIn: +r.xIn.toFixed(3), yIn: +r.yIn.toFixed(3), wIn: +r.wIn.toFixed(3), hIn: +r.hIn.toFixed(3) };
       })));
     }
@@ -3294,6 +3412,7 @@ class Component extends PageLogic {
   // inches (pif) → screen pixels (sheet zoom + pan); the plan centre sits on
   // the viewport's xIn / yIn.
   _drawViewport(ctx, viewport, view = this.state, opts = {}) {
+    if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._drawViewport(ctx, viewport, view, opts));
     const { zoom, panX, panY } = view;
     const { selectedViewportId } = this.state;
     const rect = this._viewportRectIn(viewport);
@@ -3475,6 +3594,17 @@ class Component extends PageLogic {
       ctx.textBaseline = 'middle';
       ctx.fillText(`${offCount} LAYER${offCount === 1 ? '' : 'S'} OFF`, px.x + 16, px.y + 9);
     }
+    // WHERE IT CAME FROM, on the desk only: a window from another file says
+    // which, and when it was copied, so a stale one can be seen.
+    const src = viewport.source != null ? this._sourceById(viewport.source) : null;
+    if (src) {
+      const stamp = this._sourceStamp(src);
+      ctx.fillStyle = '#5980a6';
+      ctx.font = `600 10px 'Barlow Condensed', sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`FROM ${src.name}${stamp ? `  \u00b7  ${stamp}` : ''}`, px.x + 6, px.y + (offCount ? 23 : 9));
+    }
     const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
     ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
@@ -3487,6 +3617,7 @@ class Component extends PageLogic {
   }
 
   _viewportTitle(viewport) {
+    if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._viewportTitle(viewport));
     if (isSchedule(viewport)) return viewport.table === 'door' ? 'DOOR SCHEDULE' : 'WINDOW SCHEDULE';
     if (isDetail(viewport)) return window.DraftWallSection?.DETAIL_TITLES[viewport.detail] || 'DETAIL';
     if (viewport.kind === 'section') {
@@ -3522,6 +3653,9 @@ class Component extends PageLogic {
   // guessing a destination for it would open the wrong drawing.
   _modelUrlForViewport(viewport) {
     if (!viewport) return null;
+    // A WINDOW FROM ANOTHER FILE has no drawing here to open: that file is
+    // where it is changed, and RELOAD FROM FILE brings the change in.
+    if (viewport.source != null) return null;
     // A DETAIL IS EDITED ON PROJECT (jb, 9 Nov: "so the wall section is
     // basically taken from the PROJECT information right"): that is where
     // its every number lives. A schedule's rows are the Model's openings,
@@ -3614,6 +3748,7 @@ class Component extends PageLogic {
   // A level that has no foundation view has only the one plan, so its own
   // name is the right title and nothing changes for it.
   _planTitle(viewport) {
+    if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._planTitle(viewport));
     const level = [...this._levels, ...(this._shelfLevels || [])].find(l => l.id === viewport.levelId);
     if (!level) return 'PLAN';
     if (level.shelf) return `${level.name} PLAN`;
@@ -4020,14 +4155,21 @@ class Component extends PageLogic {
     const at = list.indexOf(viewport);
     const plan = viewport.kind === 'plan';
     const url = this._modelUrlForViewport(viewport);
+    const src = viewport.source != null ? this._sourceById(viewport.source) : null;
     return [
       { key: 'show-layers', label: 'SHOW LAYERS', on: plan,
         title: plan ? 'Switch this viewport\'s layers on and off' : 'Only a plan viewport has layers to switch',
         run: (x, y) => this._openLayersCard(id, x, y) },
       { rule: true },
       { key: 'edit-in-model', label: 'EDIT IN MODEL SPACE', on: Boolean(url),
-        title: url ? 'Open this drawing in the Model Space to edit it' : 'This viewport has no drawing to open',
+        title: url ? 'Open this drawing in the Model Space to edit it'
+          : src ? `This window comes from ${src.name}: open that file to change it` : 'This viewport has no drawing to open',
         run: () => this._goToModel(id) },
+      // A WINDOW FROM ANOTHER FILE: pick that file again to bring its
+      // changes in (jb, 19 Nov 2026).
+      ...(src ? [{ key: 'reload-from-file', label: 'RELOAD FROM FILE', on: true,
+        title: `Pick ${src.name} again to bring its changes onto every window from it`,
+        run: () => this._askSourceFile(src.id) }] : []),
       { key: 'change-scale', label: 'CHANGE SCALE', on: !isSchedule(viewport),
         title: 'Pick or type a scale for this viewport', run: () => this._openChangeScale(id) },
       { key: 'fit-window', label: 'FIT WINDOW', on: Boolean(viewport.crop),
@@ -4422,12 +4564,18 @@ class Component extends PageLogic {
       .filter(([, list]) => list.length);
   }
 
-  _sameView(a, b) {
-    if (!a || typeof a !== 'object' || !b || a.kind !== b.kind) return false;
-    return a.kind === 'plan' ? a.levelId === b.levelId && (a.view || null) === (b.view || null)
-      : a.kind === 'elevation' ? a.elevId === b.elevId
-        : a.kind === 'schedule' ? a.table === b.table
-          : a.kind === 'detail' ? a.detail === b.detail : a.cutId === b.cutId;
+  // WHAT A PICK IS CALLED on its button: `plan:3`, or `plan:1:foundation`
+  // where the level holds more than one drawing and the pick names which. A
+  // pick from another file leads with that file's id, `F1|plan:8`, and one
+  // of its layout windows is `window:F1:4`.
+  _pickKey(view) {
+    if (!view || typeof view !== 'object') return '';
+    if (view.fromWindow != null) return `window:${view.source}:${view.fromWindow}`;
+    const own = view.kind === 'plan' ? `plan:${view.levelId}${view.view ? `:${view.view}` : ''}`
+      : view.kind === 'elevation' ? `elevation:${view.elevId}`
+        : view.kind === 'schedule' ? `schedule:${view.table}`
+          : view.kind === 'detail' ? `detail:${view.detail}` : `section:${view.cutId}`;
+    return view.source != null ? `${view.source}|${own}` : own;
   }
 
   _paintAddMenu() {
@@ -4436,27 +4584,182 @@ class Component extends PageLogic {
     menu.hidden = !this.state.addMenuOpen;
     if (menu.hidden) return;
     menu.textContent = '';
-    this._addChoices().forEach(([head, list]) => {
+    const head = (text, className = 'lay-add-head') => {
       const title = document.createElement('div');
-      title.className = 'lay-add-head';
-      title.textContent = head;
+      title.className = className;
+      title.textContent = text;
       menu.append(title);
-      list.forEach(({ label, ...view }) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = label;
-        button.title = `${label} -- then click the sheet where it goes`;
-        // `plan:3`, or `plan:1:foundation` where the level holds more than
-        // one drawing and the pick names which.
-        button.dataset.addPick = view.kind === 'plan' ? `plan:${view.levelId}${view.view ? `:${view.view}` : ''}`
-          : view.kind === 'elevation' ? `elevation:${view.elevId}`
-            : view.kind === 'schedule' ? `schedule:${view.table}`
-              : view.kind === 'detail' ? `detail:${view.detail}` : `section:${view.cutId}`;
-        button.className = this._sameView(this.state.addingViewport, view) ? 'on' : '';
-        button.addEventListener('click', () =>
-          this.setState({ addingViewport: view }, () => this._draw()));
-        menu.append(button);
+    };
+    const pick = (label, view, wide = false) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.title = `${label} -- then click the sheet where it goes`;
+      button.dataset.addPick = this._pickKey(view);
+      button.className = `${this._pickKey(this.state.addingViewport) === this._pickKey(view) ? 'on' : ''}${wide ? ' wide' : ''}`.trim();
+      button.addEventListener('click', () =>
+        this.setState({ addingViewport: view }, () => this._draw()));
+      menu.append(button);
+    };
+    const press = (label, title, data, run) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'wide';
+      button.textContent = label;
+      button.title = title;
+      Object.assign(button.dataset, data);
+      button.addEventListener('click', run);
+      menu.append(button);
+    };
+    // ANOTHER FILE'S LIST: its layout windows sheet by sheet, then its
+    // levels and views, the same list this file offers of its own.
+    const src = this._sourceById(this.state.addMenuFile);
+    if (src) {
+      press('◂ BACK TO THIS FILE', 'The views of the drawing open here', { addFileBack: '1' },
+        () => this.setState({ addMenuFile: null, addingViewport: true }, () => this._draw()));
+      head(`FROM ${src.name}`, 'lay-add-file');
+      const windows = this._sourceWindows(src);
+      head('LAYOUT WINDOWS');
+      if (!windows.length) head('That file has no windows on its sheets yet.', 'lay-add-sub');
+      let lastSheet = null;
+      windows.forEach(win => {
+        if (win.sheet !== lastSheet) {
+          lastSheet = win.sheet;
+          head(`SHEET ${win.sheet}${win.sheetTitle ? ` · ${win.sheetTitle}` : ''}`, 'lay-add-sub');
+        }
+        const { label, ...view } = win;
+        pick(label, view, true);
       });
+      head('LEVELS');
+      this._inSource(src.id, () => this._addChoices()).forEach(([group, list]) => {
+        head(group, 'lay-add-sub');
+        list.forEach(({ label, ...view }) => pick(label, { ...view, source: src.id }));
+      });
+      return;
+    }
+    this._addChoices().forEach(([group, list]) => {
+      head(group);
+      list.forEach(({ label, ...view }) => pick(label, view));
+    });
+    // FROM ANOTHER FILE: open one, or go back to one already brought in.
+    head('FROM ANOTHER FILE');
+    press('OPEN A .DRAFT FILE…', 'Pick a .draft file, then one of its layout windows or levels',
+      { addFileOpen: '1' }, () => this._askSourceFile(null));
+    (this.state.sources || []).forEach(other => press(other.name,
+      `Windows and levels from ${other.name}${other.copiedAt ? `, copied ${this._sourceStamp(other)}` : ''}`,
+      { addFile: other.id }, () => this.setState({ addMenuFile: other.id }, () => this._draw())));
+  }
+
+  // THE OTHER FILE'S OWN WINDOWS, as its sheets hold them: each comes with
+  // its scale, its window (crop) and its layers switched off. A window that
+  // itself showed yet another file is not offered: that file did not come.
+  _sourceWindows(src) {
+    const raw = src?.drawing?.layout;
+    if (!raw || typeof raw !== 'object') return [];
+    const format = window.DraftDrawingFormat;
+    return this._inSource(src.id, () => {
+      const levelIds = new Set([...this._levels, ...(this._shelfLevels || [])].map(level => level.id));
+      const cutIds = new Set(this._cuts.map(cut => cut.id));
+      const record = format.layout(raw, levelIds, cutIds);
+      return record.viewports.filter(viewport => viewport.source == null)
+        .sort((a, b) => (a.sheet - b.sheet) || (a.id - b.id))
+        .map(viewport => {
+          const { id, xIn: _x, yIn: _y, sheet, ...view } = viewport;
+          const picked = { ...view, source: src.id, fromWindow: id };
+          const scale = isSchedule(viewport) ? '' : `  ·  ${scaleLabelOf(viewport.pif)}`;
+          return { ...picked, sheet, sheetTitle: record.sheets[sheet - 1]?.title || '',
+            label: `${this._viewportTitle(picked)}${scale}` };
+        });
+    });
+  }
+
+  // The file picker, for a new file (null) or to bring one in again.
+  _askSourceFile(reloadId) {
+    const input = document.querySelector('[data-layout-source-file]');
+    if (!input) return;
+    this._sourceFileFor = reloadId;
+    input.value = '';
+    input.click();
+  }
+
+  _sourceNote(text, bad = false) {
+    const note = document.querySelector('[data-layout-source-note]');
+    if (!note) return;
+    note.textContent = text || '';
+    note.hidden = !text;
+    note.classList.toggle('bad', Boolean(bad));
+  }
+
+  // A .draft off the disk, as a copy fit to keep: its drawing, or why not.
+  async _readSourceFile(file) {
+    const format = window.DraftDrawingFormat;
+    let parsed;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      return { error: `${file.name} is not a drawing this page can read.` };
+    }
+    const check = format.checkEnvelope(parsed);
+    if (!check.ok) {
+      return { error: check.reason === 'version'
+        ? `${file.name} was saved by a newer Draft than this page.`
+        : `${file.name} is not a drawing this page can read.` };
+    }
+    const drawing = format.layoutSourceDrawing(parsed);
+    if (!drawing) return { error: `${file.name} is not a drawing this page can read.` };
+    return { drawing, name: String(file.name || 'OTHER FILE').slice(0, 80) };
+  }
+
+  async _takeSourceFile(file) {
+    const reloadId = this._sourceFileFor;
+    this._sourceFileFor = null;
+    if (!file) return;
+    const read = await this._readSourceFile(file);
+    if (read.error) { this._sourceNote(read.error, true); return; }
+    if (reloadId != null) { this._reloadSource(reloadId, read); return; }
+    // THE SAME FILE TWICE is one copy: its list opens again.
+    const sources = this.state.sources || [];
+    const text = JSON.stringify(read.drawing);
+    const same = sources.find(src => JSON.stringify(src.drawing) === text);
+    if (same) {
+      this._sourceNote('');
+      this.setState({ addMenuFile: same.id, addingViewport: true, addMenuOpen: true }, () => this._draw());
+      return;
+    }
+    const n = 1 + sources.reduce((top, src) => Math.max(top, Number(String(src.id).replace(/^F/, '')) || 0), 0);
+    const src = { id: `F${n}`, name: read.name, copiedAt: new Date().toISOString(), drawing: read.drawing };
+    this._sourceNote(`${read.name} is open. Pick one of its windows or levels, then click the sheet.`);
+    this.setState({ sources: [...sources, src], addMenuFile: src.id, addingViewport: true, addMenuOpen: true },
+      () => this._draw());
+  }
+
+  // RELOAD FROM FILE: the copy swapped for the file as it is now. Every
+  // window from it keeps its place, scale, window and layers; one whose
+  // level or section is not in the file any more comes off, and one UNDO
+  // puts the old copy and that window back.
+  _reloadSource(id, read) {
+    const old = this._sourceById(id);
+    if (!old) return;
+    const format = window.DraftDrawingFormat;
+    const src = { ...old, name: read.name, copiedAt: new Date().toISOString(), drawing: read.drawing };
+    const mine = this.state.viewports.filter(viewport => viewport.source === id);
+    const kept = new Set(format.layout({ viewports: mine, sources: [src] }, new Set(), new Set())
+      .viewports.map(viewport => viewport.id));
+    const gone = mine.filter(viewport => !kept.has(viewport.id));
+    const goneNames = gone.map(viewport => this._viewportTitle(viewport));
+    this.setState({
+      sources: (this.state.sources || []).map(other => (other.id === id ? src : other)),
+      viewports: this.state.viewports.filter(viewport => viewport.source !== id || kept.has(viewport.id)),
+      selectedViewportId: gone.some(viewport => viewport.id === this.state.selectedViewportId)
+        ? null : this.state.selectedViewportId,
+      auto: false,
+    }, () => {
+      this._persistLayout();
+      this._draw();
+      const count = mine.length - gone.length;
+      this._sourceNote(`${src.name} brought in again (${this._sourceStamp(src)}): ${count} window${count === 1 ? '' : 's'} updated.`
+        + (gone.length ? ` Taken off, not in that file any more: ${goneNames.join(', ')}. UNDO puts ${gone.length === 1 ? 'it' : 'them'} back.` : ''),
+        gone.length > 0);
     });
   }
 
@@ -4508,14 +4811,16 @@ class Component extends PageLogic {
       this.setState({ addingViewport: false });
       return;
     }
-    const view = picked || { kind: 'plan', levelId };
+    const { fromWindow, ...view } = picked || { kind: 'plan', levelId };
     const viewport = {
       id: this.state.nextViewportId,
       ...view,
       // A PICKED VIEW TAKES THE SHEET SET'S OWN LADDER: the largest rung of
       // its family that fits the paper, engineer's scales included, so a
       // long building's elevation comes in at 1" = 30' and not off the sheet.
-      pif: picked ? this._pickedPif(view) : this._placementPif(view),
+      // A LAYOUT WINDOW FROM ANOTHER FILE keeps the scale its sheet gave it.
+      pif: fromWindow != null && view.pif > 0 ? view.pif
+        : picked ? this._pickedPif(view) : this._placementPif(view),
       xIn: ptIn.xIn,
       yIn: ptIn.yIn,
       sheet: this.state.activeSheet,
@@ -4527,6 +4832,8 @@ class Component extends PageLogic {
       addingViewport: false,
       auto: false,
     }, () => { this._persistLayout(); this._draw(); });
+    // "SITE.draft is open. Pick..." has been answered.
+    if (view.source != null) this._sourceNote('');
   }
 
   _setPaper(key) {
@@ -5321,7 +5628,9 @@ class Component extends PageLogic {
       const sheet = Number(button.dataset.sheetThumb);
       const canvas = button.querySelector('canvas');
       button.dataset.thumbKey = JSON.stringify([paperKey, orientation, titleblock, this._ownFrame(sheet), this._sheetTitle(sheet),
-        this._sheetViewports(sheet), this._drawingGen, canvas.clientWidth, canvas.clientHeight]);
+        this._sheetViewports(sheet), this._drawingGen,
+        (this.state.sources || []).map(src => `${src.id}@${src.copiedAt || ''}`),
+        canvas.clientWidth, canvas.clientHeight]);
       // RECORDED WHEN PAINTED, not when queued: this runs on every state
       // change, and a queue rebuilt mid-way must still hold whatever the
       // last one had not reached.
@@ -5404,7 +5713,8 @@ class Component extends PageLogic {
       const k = 12 / viewport.pif;
       let map;
       if (viewport.kind === 'plan') {
-        const b = this._planBounds(viewport.levelId);
+        // A window from another file is measured in that file.
+        const b = this._inSource(viewport.source, () => this._planBounds(viewport.levelId));
         if (!b) return;
         const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
         map = ([x, y]) => [(cx + (x / Z - viewport.xIn) / viewport.pif) * 12,
@@ -5777,7 +6087,10 @@ class Component extends PageLogic {
     const viewport = this.state.viewports.find(item => item.id === id);
     const title = viewport ? this._viewportTitle(viewport) : '';
     const url = this._modelUrlForViewport(viewport);
-    document.querySelector('#lay-edit-description').textContent = url
+    const src = viewport?.source != null ? this._sourceById(viewport.source) : null;
+    document.querySelector('#lay-edit-description').textContent = src
+      ? `${title || 'This window'} comes from ${src.name}. Open that file to change it, then RELOAD FROM FILE on this window's right-click menu.`
+      : url
       ? `Open ${title} in ${isDetail(viewport) ? 'PROJECT, where its heights, foundation and roof are set,' : 'the Model Space'} to edit it. The sheet is saved first, and the layout is here when you come back.`
       : `${title || 'This viewport'} has no drawing to open — its cut is no longer in the file.`;
     // THE SCALE LIST, the viewport's own scale picked -- added to the list
@@ -5841,8 +6154,12 @@ class Component extends PageLogic {
     on('[data-layout-add-viewport]', 'click', () => this.setState(
       this.state.addingViewport
         ? { addingViewport: false, addMenuOpen: false }
-        : { addingViewport: true, addMenuOpen: true }, () => this._draw()));
+        : { addingViewport: true, addMenuOpen: true, addMenuFile: null }, () => this._draw()));
     on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());
+    on('[data-layout-source-file]', 'change', e => {
+      const file = e.target.files && e.target.files[0];
+      this._takeSourceFile(file || null);
+    });
     on('[data-layout-dxf]', 'click', () => this._saveDxfSheets());
     // The panel's PRINT and the bone open the same dialog; neither is a
     // second implementation of it.

@@ -75,6 +75,8 @@ function loadDraftModules() {
     'overhead-lines.js',
     // AND THE DOOR BUCKS a garage's foundation plan cuts from its doors.
     'door-bucks.js',
+    // AND THE BEAM POCKETS a basement beam's ends cut in the concrete.
+    'beam-pockets.js',
     'footing-outline.js',
     // AND TRIM / EXTEND's crossings, pure, beside the page's tool.
     'trim-extend.js',

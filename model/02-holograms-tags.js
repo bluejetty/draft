@@ -378,6 +378,33 @@
     });
   };
 
+  // THE BEAM POCKETS ON THE FOUNDATION VIEW (jb, 19 Nov 2026): "for
+  // bungalow (not for bilevel) we need BEAM POCKETS at each end where it
+  // sits in the conc wall. make them 4" "in" the conc and 8" wide on the
+  // plan." beam-pockets.js finds them, render-2d paints them like a buck;
+  // the FOUNDATION sheet asks the same module. `data-beam-pockets` counts.
+  const paintBeamPockets = () => {
+    const BP = window.DraftBeamPockets;
+    const R = window.DraftRender2D;
+    const G = window.DraftGeometry2D;
+    const pocketView = activeViewId() === 'foundation';
+    const pockets = pocketView && BP && R.drawBeamPockets2D ? BP.beamPockets({
+      walls: drawing?.walls || [],
+      beams: drawing?.beams || [],
+      levelId: activeLevelId(),
+      buildType: drawing?.buildType ?? null,
+      thicknessFt: openingThicknessFt(),
+      faceOffsets: G.wallFaceOffsets,
+    }) : [];
+    canvas.setAttribute('data-beam-pockets', String(pockets.length));
+    if (!pockets.length) return;
+    R.drawBeamPockets2D(ctx, toS, pockets, {
+      paperColor: skin['surface-page'],
+      slabFill: skin['draw-floor'],
+      wallInk: skin['draw-wall-edge'] || skin['ink-primary'],
+    });
+  };
+
   const paintWalls = () => {
     // Lazy, so a load-order change cannot bind these to undefined at parse
     // time -- but LOUD, not guarded. An earlier version returned quietly when
