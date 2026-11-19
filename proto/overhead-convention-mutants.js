@@ -49,7 +49,7 @@ const MUTANTS = [
     test: 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither' },
   { file: 'plan-composition.js',
     name: 'the composition is handed the beams above and paints none',
-    find: "      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id) }, env.structureEnv); });\n",
+    find: "      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id), spanTags }, env.structureEnv); });\n",
     with: '',
     test: 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither' },
   { file: 'plan-composition.js',

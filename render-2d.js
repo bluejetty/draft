@@ -1281,9 +1281,16 @@ if (!window.DraftRender2D) {
   // overhangs and uppers dashed." One alpha for everything over the cut, two
   // dash patterns: dash-dot for a beam, dashed for the rest.
   const OVERHEAD_ALPHA = 0.5;
-  const OVERHEAD_DASH_DOT = Object.freeze([10, 4, 2, 4]);
+  // jb, 19 Nov 2026: "it should be bolder with longer dashes and thicker
+  // dots ... maybe squared off dots". A dot as long as the line is wide,
+  // with butt caps, is a square.
+  const BEAM_ABOVE_WIDTH = 3;
+  const OVERHEAD_DASH_DOT = Object.freeze([20, 7, BEAM_ABOVE_WIDTH, 7]);
   const OVERHEAD_DASH = Object.freeze([6, 4]);
-  const BEAM_DASH_DOT = Object.freeze([14, 5, 3, 5]);
+  // jb, 19 Nov 2026: "the thickness of the line is nice on the foundation
+  // plan" -- the 3px a beam on its own plan always had, now everywhere.
+  const BEAM_WIDTH = 3;
+  const BEAM_DASH_DOT = Object.freeze([28, 9, BEAM_WIDTH, 9]);
   // THE DOOR BUCKS ON A GARAGE'S FOUNDATION PLAN (Movie, 16 Oct): each one a
   // door's width plus 2" a side across the concrete, read off door-bucks.js.
   // The concrete's hatch is knocked out to the paper (env.paperColor), the
@@ -1336,7 +1343,8 @@ if (!window.DraftRender2D) {
     const b = toS(beam.end);
     ctx.save();
     ctx.strokeStyle = env.beamColor;
-    ctx.lineWidth = above ? 1.5 : 3;
+    ctx.lineWidth = above ? BEAM_ABOVE_WIDTH : BEAM_WIDTH;
+    ctx.lineCap = 'butt';
     // EVERY BEAM IS DASH-DOT (jb, 19 Nov 2026: "make the beam dash-dot"),
     // flush or dropped alike -- the span tags say which (drawBeamSpanTags2D).
     // Over the cut it keeps the lighter overhead pattern; a beam on its own
