@@ -1217,6 +1217,21 @@
             md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
             md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
           }
+          // A REDUCED BASEMENT FLIGHT IN THE STACK STOPS AT ITS LINE (jb, 19
+          // Nov 2026): its wall-side edge stays 6" + the cut in from the
+          // house line, caught onto it within 6" (stairExtWallStop).
+          {
+            const held = [{ stair: md.stair, start: md.start, end: md.end }, ...(md.mates || [])]
+              .find(m => m.stair.extWall === true);
+            const stop = held && stairExtWallStop(held.stair, { start: held.start, end: held.end }, dx, dz, snapLive() ? undefined : 0);
+            md.extStop = stop || null;
+            if (stop) {
+              dx = stop.dx;
+              dz = stop.dz;
+              md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
+              md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
+            }
+          }
           // THE WELL TRAVELS WITH THE FLIGHT, by the same delta rather than
           // re-cut from the moved stair: the hole's LENGTH comes from headroom
           // and may have been nudged or drawn wider than the run, and re-
@@ -1799,6 +1814,7 @@
             if (md.shared) said.push('the shared well stayed put — two flights climb through it');
             if (md.well && wellOffItsFloor(md.well)) said.push('the well now runs off its floor');
             if (mates.length) said.push(stairStackSaid(mates.map(m => m.stair)));
+            if (md.extStop) said.push(`the basement flight held ${md.extStop.gapIn}" in from the exterior house line (REDUCE BASEMENT)`);
             sayOnStrip(`${said.join(' · ')}.${stairFramingSaid(reframed)}`);
           }
           moveDrag = null;

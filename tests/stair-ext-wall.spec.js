@@ -161,3 +161,59 @@ test('the switch survives a save and reload', async ({ page }) => {
   expect(base.extWallSide).toBe('right');
   expect(base.widthFt * 12).toBeCloseTo(28, 4);
 });
+
+// "maybe have a magnet so that when a user moves the stairs in the basement
+// it doesn't allow the user to push past that point" (jb, 19 Nov 2026).
+const dragBy = async (page, fromX, fromZ, dxFt, dzFt) => {
+  const { at, scale } = await h.planFrame(page);
+  const [x, y] = at(fromX, fromZ);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dxFt * scale, y + dzFt * scale, { steps: 8 });
+  await page.mouse.up();
+};
+test('a reduced basement flight dragged at the wall stops 14" in from the house line; the flight above rides 6" in', async ({ page }) => {
+  await open(page);
+  await pickBase(page);
+  await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
+  // Two feet north would put it past the house line (z = -20).
+  await dragBy(page, 3, -17.7, 0, -2);
+  const base = await live(page, BASE_ID);
+  const upper = await live(page, UPPER_ID);
+  expect(edges(base).north - -20, 'basement edge 14" from the line').toBeCloseTo(14 / 12, 3);
+  expect(edges(upper).north - -20, 'the flight above 6" from the line').toBeCloseTo(6 / 12, 3);
+  // A drag away from the wall is free.
+  await dragBy(page, 3, -18.4, 0, 3);
+  const off = await live(page, BASE_ID);
+  expect(edges(off).north - -20).toBeCloseTo(14 / 12 + 3, 2);
+});
+
+test('with REDUCE BASEMENT off the flight goes where it is dragged', async ({ page }) => {
+  await open(page);
+  const before = await live(page, BASE_ID);
+  await pickBase(page);
+  // North, past where the 14" line would have held it.
+  await dragBy(page, 1, -17.6, 0, -1.2);
+  const after = await live(page, BASE_ID);
+  expect(after.start.z, 'no stop at 14"').toBeLessThan(before.start.z - 0.4);
+});
+
+test('turning REDUCE BASEMENT on lines a stack near the wall up on the line, in one UNDO', async ({ page }) => {
+  await open(page);
+  // Slide the stack a foot off the wall first (edges 2'-6" in).
+  await page.evaluate(() => drawing.stairs.forEach(st => {
+    st.start = { ...st.start, z: st.start.z + 1 }; st.end = { ...st.end, z: st.end.z + 1 };
+  }));
+  await pickBase(page);
+  // pickBase clicks z = -18: still on the flight (-18.5 .. -15.5).
+  await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
+  const base = await live(page, BASE_ID);
+  const upper = await live(page, UPPER_ID);
+  expect(edges(base).north - -20).toBeCloseTo(14 / 12, 3);
+  expect(edges(upper).north - -20).toBeCloseTo(6 / 12, 3);
+  await page.locator('#model-undo').click();
+  const undone = await live(page, BASE_ID);
+  expect(undone.start.z).toBeCloseTo(-17, 6);
+  expect(undone.widthFt).toBeCloseTo(3, 6);
+  expect((await live(page, UPPER_ID)).start.z).toBeCloseTo(-17, 6);
+});
