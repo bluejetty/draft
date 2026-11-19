@@ -120,6 +120,11 @@ const MUTATIONS = [
   ['the jog\'s footing gets no top line out to its edge', 'cut-view.js',
     c => c.replace('            ctx.moveTo(X(u), Y(g.baseE));\n            ctx.lineTo(X(out), Y(g.baseE));\n            ctx.lineTo(X(out), Y(bottomOf(g)));',
       '            ctx.moveTo(X(out), Y(g.baseE));\n            ctx.lineTo(X(out), Y(bottomOf(g)));')],
+  // jb, 19 Nov 2026 -- the footing centred on the concrete, not the lining.
+  ['the footing is centred on the whole wall, lining and all', 'cut-view.js',
+    c => c.replace('      const concrete = face.concreteIn ?? face.wallIn;\n', '      const concrete = face.wallIn;\n')],
+  ['a footing end a hair in from the run end draws its own shoulder', 'cut-view.js',
+    c => c.replace('      const SHOULDER_SLACK_FT = 1 / 96;\n', '      const SHOULDER_SLACK_FT = 1e-6;\n')],
   // THE `min` IN garageGround HAS NO ROW, and the reason is written here so
   // nobody adds one and watches it survive: the faces of a 2 storey garage
   // arrive ground storey first, so "lowest" and "first seen" give the same
@@ -443,6 +448,39 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   });
 }
 
+
+// ── THE FOOTING IS CENTRED ON THE CONCRETE (jb, 19 Nov 2026) ──────────
+//
+// "it doesn't look like they are centered on the foundation wall like they
+// should be, and extra lines in the middle footing" -- "the plan footing is
+// good". jb's house on the stock 8" CONC + 2X6 BSMT wall, with two 2 ft
+// concrete_8 T stubs run out the front (planTurn 3: jb's E1 is E4 here).
+// The plan rings a 20" footing 6" past each face of the 8" CONCRETE; the
+// elevation measured it off the whole 14" with the hidden lining, so the
+// outside edge stood 3" out and a second 3" shoulder showed at the T.
+{
+  const tFile = path.join(ROOT, 'proto', 'repro-jb-fdn-tee.draft');
+  const tSaved = JSON.parse(fs.readFileSync(tFile, 'utf8'));
+  if (win.DraftWallTypes.adoptDrawing) win.DraftWallTypes.adoptDrawing(tSaved);
+  const tEnv = buildEnv(win, tSaved);
+  const tv = paintElevation(win, tEnv, standardElevationCuts(tEnv).find(c => c.id === 'E4'));
+  const FTG_TOP = -9.348, FTG_BOT = -9.998;
+  check('jb T: the outside corner footing stands 6" past the concrete face (left)',
+    hasLine(tv, -0.5, FTG_TOP, -0.5, FTG_BOT, 0.02), 'riser at u -0.5');
+  check('jb T: the outside corner footing stands 6" past the concrete face (right)',
+    hasLine(tv, 20.0, FTG_TOP, 20.0, FTG_BOT, 0.02), 'riser at u 20.0');
+  check('jb T: no 3" footing edge measured off the lining',
+    inkIn(tv, { uLo: -0.3, uHi: -0.2, eLo: FTG_BOT + 0.05, eHi: FTG_TOP - 0.05 }) < 0.05
+    && inkIn(tv, { uLo: 19.7, uHi: 19.8, eLo: FTG_BOT + 0.05, eHi: FTG_TOP - 0.05 }) < 0.05);
+  check('jb T: the middle stem footing is centred under the stem (11.825..13.5 under 12.325..13)',
+    hasLine(tv, 11.825, FTG_TOP, 11.825, FTG_BOT, 0.02) && hasLine(tv, 13.5, FTG_TOP, 13.5, FTG_BOT, 0.02));
+  const extra = inkIn(tv, { uLo: 13.2, uHi: 13.3, eLo: FTG_BOT + 0.05, eHi: FTG_TOP - 0.05 });
+  check('jb T: no extra shoulder inside the middle footing', extra < 0.05,
+    `${extra.toFixed(2)} ft of ink at u 13.25`);
+  const corner = inkIn(tv, { uLo: -0.45, uHi: -0.05, eLo: FTG_TOP - 0.02, eHi: FTG_TOP + 0.02 });
+  check('jb T: one footing top at the corner, not a second off the stub', corner < 0.5,
+    `${corner.toFixed(2)} ft of ink`);
+}
 
 // ── SECOND FIXTURE: AN ATTACHED GARAGE (board #334, item 1) ───────────
 //
