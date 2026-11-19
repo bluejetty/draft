@@ -220,3 +220,176 @@ test('a details file opens in its detail whatever level the URL asks for', async
   expect(await page.evaluate(() => boneyardActive)).toBe(false);
   expect(await h.modelLevelId(page)).toBe('3');
 });
+
+// ══ THE DETAILS BOARD (step 3 of the plan) ══════════════════════════════════
+//
+// jb: "i'd like a database type organization system so that they can be
+// arranged easily". The plan's board: categories down the LEFT, search and
+// buttons across the top, a card per detail with its thumbnail; double-click
+// opens the detail, BOARD comes back to where the drafter was; drag to sort,
+// right-click for more, + CATEGORY.
+const board = page => page.locator('#details-board');
+const boardCard = (page, id) => board(page).locator(`[data-board-card="${id}"]`);
+const boardNames = page => board(page).locator('[data-board-card] .db-name');
+const threeDetails = () => {
+  const file = library();
+  file.boneyardShelves.push({ id: 3, name: 'WINDOW WELL',
+    detail: { category: 'FOUNDATION', kind: 'special', frameW: 4, frameH: 4, scale: 1, tags: ['basement', 'egress'] } });
+  file.nextBoneyardShelfId = 4;
+  return file;
+};
+
+test('a details file opens on its board: a card per detail, in the library\'s order, each with its thumbnail', async ({ page }) => {
+  await openModel(page, threeDetails());
+  await expect(board(page)).toBeVisible();
+  await expect(boardNames(page)).toHaveText(['TYP. STRIP FOOTING', 'TYP. EAVE', 'WINDOW WELL']);
+  await expect(board(page).locator('[data-board-card] .db-num')).toHaveText(['1', '2', '3']);
+  await expect(boardCard(page, 3).locator('.db-sub')).toHaveText(`FOUNDATION · SPECIAL · 1" = 1'-0"`);
+  await expect(boardCard(page, 3).locator('.db-tags')).toHaveText('basement, egress');
+  // THE RAIL: ALL, FAVOURITES and his three, with what each holds.
+  await expect(board(page).locator('[data-board-category]')).toHaveText(
+    [/^ALL\s*3$/, /FAVOURITES\s*0$/, /^FOUNDATION\s*2$/, /^FRAMING\s*1$/, /^SITE\s*0$/]);
+  // THE THUMBNAIL IS THE DETAIL: the footing's line is in the footing's
+  // card and not in the eave's (inked pixels counted off each canvas).
+  const inked = id => page.evaluate(n => {
+    const c = document.querySelector(`#details-board [data-board-card="${n}"] canvas`);
+    const px = c.getContext('2d').getImageData(0, c.height / 2 - 2, c.width, 4).data;
+    let count = 0;
+    for (let i = 3; i < px.length; i += 4) if (px[i] > 0) count += 1;
+    return count;
+  }, id);
+  expect(await inked(1), 'the footing\'s line across its middle').toBeGreaterThan(200);
+  expect(await inked(2), 'nothing across the eave\'s middle but its frame').toBeLessThan(60);
+  // THE BOARD COVERS THE DRAWING AREA, not the pane beside it.
+  await h.openModelRail(page);
+  const b = await board(page).boundingBox();
+  const pane = await page.locator('#levels-panel').boundingBox();
+  expect(b.x + b.width, 'the board stops short of the pane').toBeLessThanOrEqual(pane.x);
+  // A HOUSE FILE HAS NO BOARD.
+  await openModel(page, blank());
+  await expect(board(page)).toBeHidden();
+});
+
+test('the board filters by category, FAVOURITES, TYP. / SPECIAL and search', async ({ page }) => {
+  await openModel(page, threeDetails());
+  await board(page).locator('[data-board-category="FOUNDATION"]').click();
+  await expect(boardNames(page)).toHaveText(['TYP. STRIP FOOTING', 'WINDOW WELL']);
+  await board(page).locator('[data-board-kind="special"]').click();
+  await expect(boardNames(page)).toHaveText(['WINDOW WELL']);
+  await board(page).locator('[data-board-kind="all"]').click();
+  await board(page).locator('[data-board-category="ALL"]').click();
+  // SEARCH reads the name, the tags, the note and the category.
+  await board(page).locator('[data-board-search]').fill('egress');
+  await expect(boardNames(page)).toHaveText(['WINDOW WELL']);
+  await board(page).locator('[data-board-search]').fill('framing');
+  await expect(boardNames(page)).toHaveText(['TYP. EAVE']);
+  await board(page).locator('[data-board-search]').fill('nothing like it');
+  await expect(board(page).locator('.db-empty')).toBeVisible();
+  await board(page).locator('[data-board-search]').fill('');
+  // THE STAR: a favourite is the file's, and one UNDO takes it off.
+  await board(page).locator('[data-board-favourite="2"]').click();
+  await expect(board(page).locator('[data-board-category="FAVOURITES"]')).toHaveText(/1$/);
+  await board(page).locator('[data-board-category="FAVOURITES"]').click();
+  await expect(boardNames(page)).toHaveText(['TYP. EAVE']);
+  const d = await saved(page);
+  expect(d.boneyardShelves[1].detail.favourite).toBe(true);
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('Control+z');
+  expect(await page.evaluate(() => drawing.boneyardShelves[1].detail.favourite ?? false)).toBe(false);
+});
+
+test('double-click opens the detail; BOARD comes back to the same category and search', async ({ page }) => {
+  await openModel(page, threeDetails());
+  await board(page).locator('[data-board-category="FOUNDATION"]').click();
+  await board(page).locator('[data-board-search]').fill('well');
+  await boardCard(page, 3).dblclick();
+  await expect(board(page)).toBeHidden();
+  expect(await page.evaluate(() => ({ onShelf: boneyardActive, shelf: activeShelfId() })))
+    .toEqual({ onShelf: true, shelf: 3 });
+  await h.openModelRail(page);
+  await page.locator('#levels-panel [data-open-board]').click();
+  await expect(board(page)).toBeVisible();
+  await expect(board(page).locator('[data-board-category="FOUNDATION"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(board(page).locator('[data-board-search]')).toHaveValue('well');
+  await expect(boardCard(page, 3), 'the card it left from is picked').toHaveAttribute('data-picked', '');
+});
+
+test('a card dragged onto another takes its place, the order is saved, and one UNDO puts it back', async ({ page }) => {
+  await openModel(page, threeDetails());
+  const target = await boardCard(page, 1).boundingBox();
+  await boardCard(page, 3).dragTo(boardCard(page, 1), { targetPosition: { x: 8, y: target.height / 2 } });
+  await expect(boardNames(page)).toHaveText(['WINDOW WELL', 'TYP. STRIP FOOTING', 'TYP. EAVE']);
+  // THE NUMBERS FOLLOW THE ORDER: the library's order is the bubbles' order.
+  await expect(board(page).locator('[data-board-card] .db-num')).toHaveText(['1', '2', '3']);
+  // ONE STEP ON THE PAGE'S OWN STACK, not the saved versions'.
+  expect(await page.evaluate(() => undoStack.filter(step => step.kind === 'reorder').length)).toBe(1);
+  expect((await saved(page)).boneyardShelves.map(s => s.id)).toEqual([3, 1, 2]);
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('Control+z');
+  await expect(boardNames(page)).toHaveText(['TYP. STRIP FOOTING', 'TYP. EAVE', 'WINDOW WELL']);
+  // UNDER SORT: NAME the cards show by name and a drop moves nothing.
+  await board(page).locator('[data-board-sort]').selectOption('name');
+  await expect(boardNames(page)).toHaveText(['TYP. EAVE', 'TYP. STRIP FOOTING', 'WINDOW WELL']);
+  await boardCard(page, 3).dragTo(boardCard(page, 2), { targetPosition: { x: 8, y: target.height / 2 } });
+  expect(await page.evaluate(() => drawing.boneyardShelves.map(s => s.id))).toEqual([1, 2, 3]);
+});
+
+test('right-click: MOVE TO, FAVOURITE, RENAME and DELETE (twice); + CATEGORY is kept even empty', async ({ page }) => {
+  await openModel(page, threeDetails());
+  const menu = page.locator('#details-board-menu');
+  await boardCard(page, 1).click({ button: 'right' });
+  await expect(menu).toBeVisible();
+  await menu.locator('[data-board-act="move:FRAMING"]').click();
+  await expect(boardCard(page, 1).locator('.db-sub')).toContainText('FRAMING');
+  await boardCard(page, 1).click({ button: 'right' });
+  await menu.locator('[data-board-act="favourite"]').click();
+  await expect(board(page).locator('[data-board-favourite="1"]')).toHaveAttribute('aria-pressed', 'true');
+  await boardCard(page, 1).click({ button: 'right' });
+  await menu.locator('[data-board-act="rename"]').click();
+  const box = boardCard(page, 1).locator('input');
+  await box.fill('typ. strip footing 8"');
+  await box.press('Enter');
+  await expect(boardCard(page, 1).locator('.db-name')).toHaveText('TYP. STRIP FOOTING 8"');
+  // DELETE ASKS TWICE: the first press only arms it.
+  await boardCard(page, 2).click({ button: 'right' });
+  await menu.locator('[data-board-act="delete"]').click();
+  await expect(menu.locator('[data-board-act="delete"]')).toHaveText('DELETE? PRESS AGAIN');
+  expect(await page.evaluate(() => drawing.boneyardShelves.length)).toBe(3);
+  await menu.locator('[data-board-act="delete"]').click();
+  await expect(boardNames(page)).toHaveText(['TYP. STRIP FOOTING 8"', 'WINDOW WELL']);
+  // + CATEGORY, then a card dropped on it moves there.
+  await board(page).locator('[data-board-add-category]').click();
+  await board(page).locator('[data-board-new-category]').fill('duplex');
+  await board(page).locator('[data-board-new-category]').press('Enter');
+  await expect(board(page).locator('[data-board-category="DUPLEX"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(board(page).locator('.db-empty')).toBeVisible();
+  await board(page).locator('[data-board-category="ALL"]').click();
+  await boardCard(page, 3).dragTo(board(page).locator('[data-board-category="DUPLEX"]'));
+  await expect(board(page).locator('[data-board-category="DUPLEX"]')).toHaveText(/1$/);
+  const d = await saved(page);
+  expect(d.detailCategories).toEqual(['DUPLEX']);
+  expect(d.boneyardShelves.map(s => [s.name, s.detail.category, !!s.detail.favourite])).toEqual([
+    ['TYP. STRIP FOOTING 8"', 'FRAMING', true], ['WINDOW WELL', 'DUPLEX', false]]);
+  expect(d.lines.filter(l => l.levelId === -2), 'the deleted detail\'s drawing went with it').toHaveLength(0);
+});
+
+test('+ DETAIL on the board starts a detail in the category on view, and opens it', async ({ page }) => {
+  await openModel(page, threeDetails());
+  await board(page).locator('[data-board-category="SITE"]').click();
+  await board(page).locator('[data-board-add]').click();
+  await expect(board(page)).toBeHidden();
+  const now = await page.evaluate(() => ({ shelf: activeShelfId(),
+    card: drawing.boneyardShelves.find(s => s.id === activeShelfId()).detail }));
+  expect(now.shelf).toBe(4);
+  expect(now.card.category).toBe('SITE');
+});
+
+test('SAVE LIBRARY on the board saves the drawing and keeps the library copy', async ({ page }) => {
+  await openModel(page, threeDetails());
+  await board(page).locator('[data-board-save]').click();
+  await expect(page.locator('#save')).toHaveText('SAVED');
+  await expect.poll(() => page.evaluate(async () => {
+    const file = await window.SharedFileStore.loadNamedFile('DETAILS-LIBRARY.draft', 'details-libraries');
+    return file ? JSON.parse(await file.text()).boneyardShelves.map(s => s.name) : null;
+  })).toEqual(['TYP. STRIP FOOTING', 'TYP. EAVE', 'WINDOW WELL']);
+});
