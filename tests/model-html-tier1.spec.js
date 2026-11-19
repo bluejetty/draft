@@ -312,7 +312,9 @@ test.describe('MODEL.html tier 1', () => {
       // the painter, the panel, the format and the DXF all read.
       './line-styles.js',
       // backup-email.js: SAVE BACKUP FILE TO EMAIL after SAVE AS (Movie, 30 Oct).
-      './shared-file-store.js', './backup-email.js', './wall-types.js',
+      './shared-file-store.js', './backup-email.js',
+      // SAVE AS ZIP's writer and reader (jb, 19 Nov 2026), plain script, no library.
+      './zip-bundle.js', './wall-types.js',
       // NO PATTERN MODULES HERE, AND THE REASON IS WORTH KEEPING. They were
       // added with the EXT. FINISH pane on 27 Sep under the claim that they
       // "delete a silence" -- that cut-view's paintFaceFinish and paintRoof
