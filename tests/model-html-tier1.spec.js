@@ -658,6 +658,9 @@ test.describe('MODEL.html tier 1', () => {
       // CREATE WALL TYPE (jb, 16 Nov): the card that makes a wall type out
       // of slices, each with its thickness and hatch.
       './model/20-wall-type-card.js',
+      // The DETAILS LIBRARY (jb, 19 Nov): a file of small 2D details, each
+      // shelf one detail with its card and frame.
+      './model/21-details-library.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT
