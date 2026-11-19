@@ -1000,6 +1000,14 @@
   const allPoints = (wide = false) => {
     const pts = [];
     walls().forEach(w => { if (w.start && w.end) pts.push(w.start, w.end); });
+    // AND THE FOUNDATION TYPE'S BASEMENT SLICES (jb, 19 Nov 2026: the
+    // BASEMENT seat "is zoomed in for some reason"). A made foundation type
+    // is drawn once, on FOUNDATION, and BASEMENT (WALLS) paints its basement
+    // slices under its own walls (paintWalls) -- they ARE the basement's
+    // outline. Left out, a basement holding a stair and one short wall
+    // framed that short wall, and the seat (and 0 TO FIT) showed a corner
+    // of hatch. Empty on every other level and view.
+    basementFoundationWalls().forEach(w => { if (w.start && w.end) pts.push(w.start, w.end); });
     lines().forEach(l => { if (l.start && l.end) pts.push(l.start, l.end); });
     floors().forEach(f => (f.points || []).forEach(p => pts.push(p)));
     // ROOFS AND OUTLINES ONLY WHEN ASKED, and the scoping is the point.
