@@ -1545,6 +1545,10 @@
     traceHome().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
+    // AND A TURTLE TRACE'S (jb, 19 Nov 2026): back on it closes the trace.
+    turtleTraceHome().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
     if (faces) wallFaceNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });

@@ -95,6 +95,22 @@ check('feet-inches and a bearing with spaces read as one move each', ({ T }) =>
   [JSON.stringify(T.rowsFromText('N 30 E 50-6 1/2 line 9 west 111-10.25')), '[{"dir":"N30E","dist":"50-6 1/2"}]']);
 check('a line with no move gives no row', ({ T }) => [T.rowsFromText('full width 367-10.25"').length, 0]);
 
+// TRACE writes moves back as rows (jb, 19 Nov 2026).
+const traced = (T, from, to, opts) => { const r = T.rowOfMove(from, to, opts); return r ? `${r.dir} ${r.dist}` : 'none'; };
+check('a traced move west 86.86 is W 86.86 (north is -z)', ({ T }) => [traced(T, { x: 0, z: 0 }, { x: -86.86, z: 0 }), 'W 86.86']);
+check('a traced move up the sheet is N', ({ T }) => [traced(T, { x: 5, z: 5 }, { x: 5, z: -101.38 }), 'N 106.38']);
+check('a traced diagonal lands on NE', ({ T }) => [traced(T, { x: 0, z: 0 }, { x: 10, z: -10 }), 'NE 14.14']);
+check('off the 16 points it is a bearing: N 30 E, N 30 W, S 30 W, S 30 E', ({ T }) => [[60, 120, 240, 300]
+  .map(d => T.directionText(d)).join(' / '), 'N 30 E / N 30 W / S 30 W / S 30 E']);
+check('a bearing keeps hundredths of a degree', ({ T }) => [T.directionText(59.75), 'N 30.25 E']);
+check('every written bearing reads back to its angle', ({ T }) => [[12.34, 101.5, 199.99, 333.33]
+  .map(d => T.parseDirection(T.directionText(d)).deg.toFixed(2)).join(' '), '12.34 101.50 199.99 333.33']);
+check('metric writes metres with the m, and it reads back', ({ T, C }) => {
+  const r = T.rowOfMove({ x: 0, z: 0 }, { x: 0, z: 10 }, { metric: true });
+  return [`${r.dir} ${r.dist} ${T.parseDistance(r.dist, C, { metric: true }).toFixed(3)}`, 'S 3.05m 10.007'];
+});
+check('a move of no length writes no row', ({ T }) => [traced(T, { x: 1, z: 1 }, { x: 1.001, z: 1 }), 'none']);
+
 // ── MUTATIONS ────────────────────────────────────────────────────────────
 const MUTATIONS = [
   ['north counts clockwise', s => s.replace("E: 0, ENE: 22.5, NE: 45, NNE: 67.5, N: 90,", "E: 0, ENE: 22.5, NE: 45, NNE: 67.5, N: 270,")],
@@ -113,6 +129,13 @@ const MUTATIONS = [
   ['R turns left', s => s.replace("return { kind: 'turn', turn: turn[1] === 'L' ? by : -by };", "return { kind: 'turn', turn: by };")],
   ['two legs can close', s => s.replace("closed: legs.length >= 3 && gapFt <= closeFt", "closed: legs.length >= 2 && gapFt <= closeFt")],
   ['an inch off is open', s => s.replace("const CLOSE_FT = 1 / 12;", "const CLOSE_FT = 1 / 1200;")],
+  ['a traced move counts north as +z', s => s.replace("const deg = Math.atan2(-dz, dx) * 180 / Math.PI;", "const deg = Math.atan2(dz, dx) * 180 / Math.PI;")],
+  ['a north bearing names the wrong side', s => s.replace("${d < 90 ? 'E' : 'W'}", "${d < 90 ? 'W' : 'E'}")],
+  ['a south bearing names the wrong side', s => s.replace("${d > 270 ? 'E' : 'W'}", "${d > 270 ? 'W' : 'E'}")],
+  ['the compass word is never used', s => s.replace("    if (word) return word;\n", "")],
+  ['bearings lose their hundredths', s => s.replace("const hundredths = n => Math.round(n * 100) / 100;", "const hundredths = n => Math.round(n);")],
+  ['metric writes feet', s => s.replace("`${(ft * M_PER_FT).toFixed(2)}m`", "ft.toFixed(2)")],
+  ['a hair of a move writes a row', s => s.replace("if (!(ft >= 0.005)) return null;", "")],
   ["the '- 20' is read as a move", s => s.replace("while (i < toks.length && isDist(toks[i])) { dist.push(toks[i]); i += 1; }", "while (i < toks.length && (isDist(toks[i]) || toks[i] === '-')) { dist.push(toks[i]); i += 1; }")],
 ];
 

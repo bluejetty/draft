@@ -470,3 +470,116 @@ test('CALC and TURTLE pages are each their own, ride in the .draft, and the whol
   await expect(page.locator('[data-notes-open-txt]')).toBeVisible();
   await expect(page.locator('[data-notes-clear]')).toBeHidden();
 });
+
+// TRACE (jb, 19 Nov 2026: "make a list of turtle commands (backwards) ...
+// trace the outline of the building and as i make each move the TURTLE
+// records it in the turtle table"). The presses are the LINE tool's, with
+// its snaps; nothing is drawn; back on the first corner closes it.
+async function seedBox(page) {
+  const { at, cx, cz, scale, box } = await h.planFrame(page);
+  // A box of lines LEFT of the pad, whole feet, its corners nodes.
+  const W = Math.max(4, Math.round(box.width * 0.2 / scale));
+  const D = Math.max(3, Math.round(box.height * 0.25 / scale));
+  const x0 = Math.round(cx + (box.width * 0.15 - box.width / 2) / scale), z0 = Math.round(cz + D / 2);
+  const c = [[x0 + W, z0], [x0, z0], [x0, z0 - D], [x0 + W, z0 - D]];
+  await page.evaluate(({ c }) => {
+    c.forEach((p, i) => {
+      const q = c[(i + 1) % c.length];
+      drawing.lines.push({ id: `line-${i + 1}`, start: poolVertex({ x: p[0], z: p[1] }, 3, 'plan'),
+        end: poolVertex({ x: q[0], z: q[1] }, 3, 'plan'), levelId: 3, view: 'plan', layer: 'draft' });
+    });
+    paint();
+  }, { c });
+  // A press a hair off each corner, so the node snap is what lands it.
+  const near = ([x, z]) => at(x + 0.15, z - 0.1);
+  return { c, near, W, D };
+}
+const rowsNow = page => page.evaluate(() => [...document.querySelectorAll('[data-turtle-row]')]
+  .map(r => `${r.querySelector('[data-turtle-dir]').value} ${r.querySelector('[data-turtle-dist]').value}`.trim())
+  .filter(Boolean));
+
+test('TRACE sits after the status; clicking round a building writes each move, and back on the first corner closes it', async ({ page }) => {
+  await open(page);
+  await openTurtle(page);
+  const { c, near, W, D } = await seedBox(page);
+  // AFTER "NO MOVES YET / CLOSED · n MOVES", BEFORE THE PASTE SPOT.
+  const statusBox = await status(page).boundingBox();
+  const traceBox = await act(page, 'trace').boundingBox();
+  const pasteBox = await page.locator('#turtle-paste').boundingBox();
+  expect(traceBox.x).toBeGreaterThan(statusBox.x + statusBox.width - 1);
+  expect(traceBox.y + traceBox.height).toBeLessThanOrEqual(pasteBox.y + 1);
+  await act(page, 'trace').click();
+  await expect(act(page, 'trace')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#strip-message')).toContainText('TURTLE TRACE');
+  for (const k of [0, 1, 2, 3]) await page.mouse.click(...near(c[k]));
+  await expect(status(page)).toHaveText('TRACING · 3 MOVES');
+  expect(await rowsNow(page)).toEqual([`W ${W}.00`, `N ${D}.00`, `E ${W}.00`]);
+  // Home: the fourth move is written, the table closes, the trace ends.
+  await page.mouse.click(...near(c[0]));
+  expect(await rowsNow(page)).toEqual([`W ${W}.00`, `N ${D}.00`, `E ${W}.00`, `S ${D}.00`]);
+  await expect(status(page)).toHaveText('CLOSED · 4 MOVES');
+  await expect(box(page)).toHaveAttribute('data-closed', '');
+  await expect(act(page, 'trace')).toHaveAttribute('aria-pressed', 'false');
+  // NOTHING DRAWN: the four seeded lines and no more, and the tool is down.
+  expect(await pageLines(page)).toHaveLength(4);
+  expect(await page.evaluate(() => activeTool)).toBe('select');
+  // DRAW AT POINT pressed near the traced start lands the path on it.
+  await act(page, 'point').click();
+  await page.mouse.click(...near(c[0]));
+  const lines = await pageLines(page);
+  expect(lines).toHaveLength(8);
+  expect(lines[4].start).toEqual(c[0]);
+  expect(lines[7].end).toEqual(c[0]);
+});
+
+test('TRACE on a table with moves asks REPLACE or ADD TO THE END; BACKSPACE takes a move back; ENTER ends an open path; ESC stops', async ({ page }) => {
+  await open(page);
+  await openTurtle(page);
+  const { c, near, W, D } = await seedBox(page);
+  await typeRows(page, [['N', '10']]);
+  await act(page, 'trace').click();
+  const ask = page.locator('#turtle-trace-ask');
+  await expect(ask).toBeVisible();
+  await expect(ask).toContainText('HAS 1 MOVES');
+  // CANCEL leaves everything as it was.
+  await ask.locator('[data-turtle-trace-cancel]').click();
+  await expect(ask).toBeHidden();
+  await expect(act(page, 'trace')).toHaveAttribute('aria-pressed', 'false');
+  expect(await rowsNow(page)).toEqual(['N 10']);
+  // ADD TO THE END keeps the row and writes after it.
+  await act(page, 'trace').click();
+  await ask.locator('[data-turtle-trace-add]').click();
+  await page.mouse.click(...near(c[0]));
+  await page.mouse.click(...near(c[1]));
+  await page.mouse.click(...near(c[2]));
+  expect(await rowsNow(page)).toEqual(['N 10', `W ${W}.00`, `N ${D}.00`]);
+  // BACKSPACE: the last move comes off, the run goes back a corner.
+  await page.keyboard.press('Backspace');
+  expect(await rowsNow(page)).toEqual(['N 10', `W ${W}.00`]);
+  await page.mouse.click(...near(c[2]));
+  await page.mouse.click(...near(c[3]));
+  expect(await rowsNow(page)).toEqual(['N 10', `W ${W}.00`, `N ${D}.00`, `E ${W}.00`]);
+  // ENTER ends the open path; the rows stay and nothing is drawn.
+  await page.keyboard.press('Enter');
+  await expect(act(page, 'trace')).toHaveAttribute('aria-pressed', 'false');
+  await expect(status(page)).toContainText('OPEN · 4 MOVES');
+  expect(await pageLines(page)).toHaveLength(4);
+  // REPLACE starts the table over; ESC stops with what was written.
+  await act(page, 'trace').click();
+  await ask.locator('[data-turtle-trace-replace]').click();
+  await page.mouse.click(...near(c[1]));
+  await page.mouse.click(...near(c[2]));
+  await page.keyboard.press('Escape');
+  await expect(act(page, 'trace')).toHaveAttribute('aria-pressed', 'false');
+  expect(await rowsNow(page)).toEqual([`N ${D}.00`]);
+  expect(await page.evaluate(() => activeTool)).toBe('select');
+  // A RIGHT CLICK ENDS IT TOO, the AutoCAD way, with no menu.
+  await act(page, 'trace').click();
+  await ask.locator('[data-turtle-trace-replace]').click();
+  await page.mouse.click(...near(c[0]));
+  await page.mouse.click(...near(c[1]));
+  await page.mouse.click(...near(c[2]), { button: 'right' });
+  await expect(act(page, 'trace')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#line-menu')).toBeHidden();
+  expect(await rowsNow(page)).toEqual([`W ${W}.00`]);
+});

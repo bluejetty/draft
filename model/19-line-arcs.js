@@ -696,7 +696,8 @@
   document.body.append(lineMenu);
   const closeLineMenu = () => { if (!lineMenu.hidden) { lineMenu.hidden = true; lineMenu.textContent = ''; } };
   function lineRunMenu(clientX, clientY) {
-    if (!arcToolUp() || modalUp()) return false;
+    // A TURTLE TRACE's right click is ENTER: it ends the trace (04).
+    if (turtleTracing() || !arcToolUp() || modalUp()) return false;
     const loop = loopArcToolUp();
     const corners = loopArcCorners();
     const inHand = loop ? corners.length > 0 || !!lineArcState.centre : !!drawStart;

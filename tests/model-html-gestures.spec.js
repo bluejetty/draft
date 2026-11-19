@@ -853,6 +853,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'TURTLE', 'LINE', 'WALL', 'HOUSE', 'LOT', 'AREA',
             'DRAW AT TARGET', 'DRAW AT POINT', 'REGENERATE', 'NEW PATH', 'FROM NOTES', 'CLEAR',
             '+', '\u00D7',
+            // TRACE (jb, 19 Nov 2026): the LINE tool's presses written into
+            // the table as rows; nothing is drawn, so no absence row moves.
+            // On a table with moves its card asks REPLACE / ADD TO THE END.
+            'TRACE', 'REPLACE', 'ADD TO THE END', 'CANCEL',
             // AND ITS CALC TAB (Movie, 18 Oct: "can we add a construction
             // calculator tab under the notebook tab"): NOTES and CALC swap the
             // pad's page; the keys type on the calculator's line, = works it,
