@@ -165,7 +165,10 @@ const page = PAGE ? read(PAGE) : '';
 // sheets simply come up with fewer drawings on them. There is no louder
 // version of that failure to catch it by.
 check('the page reads the record through the shared validator, cut ids and all',
-  /(?:DraftDrawingFormat|format)\.layout\(\s*[\w.?]+\s*,\s*\w+\s*,\s*\w+\s*\)/
+  // The drawing's OWN record (saved.layout): the page also reads another
+  // file's sheets through the validator (windows from another file, 19 Nov),
+  // and that call must not stand in for this one.
+  /(?:DraftDrawingFormat|format)\.layout\(\s*saved\??\.layout\s*,\s*\w+\s*,\s*\w+\s*\)/
     .test(page.replace(/\/\/[^\n]*/g, '')), true);
 
 // AND IT PUTS THE PAPER ON ONLY WHEN THE VALIDATOR RETURNED ONE. paperKey and
