@@ -235,14 +235,25 @@ test('a house built off a traced OUTLINE stands on 8" CONC + 2X6 BSMT, concrete 
   await page.waitForTimeout(200);
   const north = Math.min(...fdn.flatMap(w => [w.start.z, w.end.z]));
   const bsmtConc = await inkAt(page, 0, north + 0.3);
-  const bsmtStud = await inkAt(page, 0, north + 0.95);
-  expect(near(bsmtStud, bsmtConc), `BASEMENT: a stud wall inside the concrete ${bsmtStud} vs ${bsmtConc}`).toBe(false);
+  // ACROSS THE STUD SLICE, not one pixel of it: a 2X6 slice is two lines
+  // with paper between, so a single probe lands on its lines or its paper
+  // depending on the zoom 0 TO FIT gives (and the BASEMENT fit frames its
+  // foundation walls since 19 Nov). 8 1/2" to 14" in, every 1/4".
+  const studZs = Array.from({ length: 23 }, (_, i) => north + (8.25 + i / 4) / 12);
+  const bsmtStud = [];
+  for (const z of studZs) bsmtStud.push(await inkAt(page, 0, z));
   await shot(page, '5-autohouse-basement', null);
   await page.goto('/MODEL.html?left=1&right=1&level=1&view=foundation');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
-  expect(near(await inkAt(page, 0, north + 0.95), bsmtStud), 'FOUNDATION: no stud wall').toBe(false);
+  const fdnStud = [];
+  for (const z of studZs) fdnStud.push(await inkAt(page, 0, z));
+  // The band reads differently on the two plans: the BASEMENT draws the
+  // stud slice's lines there and the FOUNDATION does not (the footing's
+  // inner line may cross the band on both).
+  expect(studZs.some((z, i) => !near(bsmtStud[i], fdnStud[i])),
+    `BASEMENT stud band ${JSON.stringify(bsmtStud)} vs FOUNDATION ${JSON.stringify(fdnStud)}`).toBe(true);
   expect(near(await inkAt(page, 0, north + 0.3), bsmtConc), 'the same concrete on both').toBe(true);
   // THE FOOTING CENTRES UNDER THE 8" CONCRETE, not the 14" wall.
   const foot = await page.evaluate(north => {
