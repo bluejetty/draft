@@ -5694,10 +5694,22 @@ if (!window.DraftCutView) {
             return rise == null ? base : base + rise;
           };
           const topAt = u => Math.max(base, roofClippedTop(at(u), depth, rakeAt(u)));
+          // COVERED UP TO THE BOARD'S FOOT. The rake board hangs `fascia`
+          // under the roof's edge, and a gable wall stops under the board,
+          // not at the roof's top -- so a wall reaching the foot closes the
+          // gable. jb, 19 Nov 2026, E1 of his front gable (18" stucco board,
+          // the gable 2 ft out past the wall, the 1FT WALL stubs run out to
+          // the rake at both sides): "the underside of the roof gable also
+          // isn't showing". Read against the roof's top, the gable wall
+          // under the deep board never covered; with the stubs' ends at the
+          // rake on both sides the run between them became an infill AT the
+          // rake, flush with the board and in its finish, and the seam rule
+          // took the board's underside line away the whole way up.
+          const footDrop = roofFasciaFt(roof);
           const coveredBy = u => {
             const h = rakeAt(u);
             return faceGeoms.find(g => u >= g.loU - 1e-6 && u <= g.hiU + 1e-6
-              && topOfAt(g, u) >= h - GABLE_INFILL_EPS) || null;
+              && topOfAt(g, u) >= h - footDrop - GABLE_INFILL_EPS) || null;
           };
           const samples = Math.min(256, Math.max(2, Math.ceil((hi - lo) / 0.5)));
           const station = s => lo + (hi - lo) * s / samples;

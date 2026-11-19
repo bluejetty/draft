@@ -56,7 +56,26 @@ if (!window.DraftRender2D) {
       const mid = total / 2;
       const ref = wall.refLine || 'center';
       const first = (ref === 'left' ? 0 : ref === 'right' ? -total : -mid) + (window.DraftWallTypes && window.DraftWallTypes.wallLineShiftFt ? window.DraftWallTypes.wallLineShiftFt(wall) : 0);
-      return { total, first, last: first + total };
+      // THE FACES THIS PLAN SHOWS (jb, 19 Nov 2026: "when i added the T in
+      // the foundation it cut out some of the wall"). A foundation type with
+      // slices hidden on this plan (the stock 8" CONC + 2X6 BSMT shows only
+      // its concrete on FOUNDATION) keeps their room, so a wall teed into it
+      // has to stop at the face that is DRAWN, not at the hidden lining's
+      // face 6" short of it.
+      let shownFirst = first, shownLast = first + total;
+      const planKind = env.slicePlan || null;
+      const WT = window.DraftWallTypes;
+      if (planKind && WT?.sliceShows && Array.isArray(def.layers)) {
+        const layers = wall.sliceFlip === true && def.user ? [...def.layers].reverse() : def.layers;
+        let at = first, lo = null, hi = null;
+        layers.forEach(layer => {
+          const to = at + layer.in / 12;
+          if (WT.sliceShows(layer, planKind)) { if (lo == null) lo = at; hi = to; }
+          at = to;
+        });
+        if (lo != null) { shownFirst = lo; shownLast = hi; }
+      }
+      return { total, first, last: first + total, shownFirst, shownLast };
     };
     // `flip` IS FOR TWO WALLS THAT BOTH START, OR BOTH END, AT THE CORNER
     // (Movie, 20 Oct: "i trimed it and also tried to just attach the nodes and
@@ -125,7 +144,7 @@ if (!window.DraftRender2D) {
         const hNormalX = -hdz / hLen, hNormalZ = hdx / hLen;
         const hostMetric = wallMetrics(host.seg);
         const stemSide = hNormalX * dxOut / outLen + hNormalZ * dzOut / outLen;
-        const hostAcross = stemSide >= 0 ? hostMetric.last : hostMetric.first;
+        const hostAcross = stemSide >= 0 ? hostMetric.shownLast : hostMetric.shownFirst;
         const hostOrigin = pointOnWall(host.seg, host.at, hostAcross);
         const ix = hostOrigin && lineIntersection(currentOrigin, dxOut, dzOut, hostOrigin, hdx, hdz);
         return ix ? { point: ix, resolved: true } : { point: fallback, resolved: false };
@@ -304,8 +323,9 @@ if (!window.DraftRender2D) {
           const out = { x: (stem.at === 'start' ? stem.seg.end.x - stem.seg.start.x : stem.seg.start.x - stem.seg.end.x),
             z: (stem.at === 'start' ? stem.seg.end.z - stem.seg.start.z : stem.seg.start.z - stem.seg.end.z) };
           const side = nx * out.x + nz * out.z;
-          // Only the face on the stem's own side opens.
-          const face = side >= 0 ? endOff : startOff;
+          // Only the face on the stem's own side opens: the face this plan
+          // DRAWS on that side (shownTo / shownFrom), past any hidden slice.
+          const face = side >= 0 ? shownTo : shownFrom;
           if (Math.abs(across - face) > 1e-6) return;
           crossers = [stem];
         } else if (join.type === 'multi') {
@@ -326,7 +346,7 @@ if (!window.DraftRender2D) {
           if (oLen < 0.001) return;
           const onx = -odz / oLen, onz = odx / oLen;
           const m = wallMetrics(o);
-          [m.first, m.last].forEach(oAcross => {
+          [m.shownFirst, m.shownLast].forEach(oAcross => {
             const oOrigin = { x: pt.x + onx * oAcross, z: pt.z + onz * oAcross };
             const ix = lineIntersection(origin, away.x, away.z, oOrigin, odx, odz);
             if (!ix) return;
