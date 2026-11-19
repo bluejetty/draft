@@ -13,13 +13,14 @@ const SPEC = 'tests/underlay-pack.spec.js';
 const MUTANTS = [
   { file: 'model/17-boot-save.js',
     name: 'the download carries no pictures',
-    find: "        const packed = await withUnderlayFiles(contents);",
-    with: "        const packed = contents;",
+    // TWO LINES: the SAVE AS ZIP branch packs with the same first line.
+    find: "        const packed = await withUnderlayFiles(contents);\n        await downloadDrawing(packed, download, handle);",
+    with: "        const packed = contents;\n        await downloadDrawing(packed, download, handle);",
     test: 'packs the picture' },
   { file: 'model/17-boot-save.js',
     name: 'OPEN leaves the pictures in the file',
-    find: "      if (file && (await adoptAndShow(await unpackUnderlayFiles(file)))) setRail('right', true);",
-    with: "      if (file && (await adoptAndShow(file))) setRail('right', true);",
+    find: "      if (opened && (await adoptAndShow(await unpackUnderlayFiles(opened)))) setRail('right', true);",
+    with: "      if (opened && (await adoptAndShow(opened))) setRail('right', true);",
     test: 'packs the picture' },
   { file: 'model/17-boot-save.js',
     name: 'the packed copy rides on into the drawing',

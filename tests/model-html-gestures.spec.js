@@ -839,6 +839,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'CLEAR',   // the NOTES pad's, beside 'notes-tab' above
             'SAVE AS TXT',   // and its backup to a .txt (Movie, 18 Oct)
+            'SAVE AS ZIP',   // the drawing and everything with it in one zip (jb, 19 Nov 2026)
             'OPEN TXT',      // and the backup read back (Movie, 10 Nov)
             // THE FIVE PAGES (Movie, 10 Nov): one pad, one calculator and one
             // turtle table per page. A page key flips; it draws nothing.

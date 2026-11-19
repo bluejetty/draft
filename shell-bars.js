@@ -490,7 +490,7 @@ if (!window.DraftShellBars) {
   <button id="file-new" type="button" data-file-new title="Start an empty drawing">NEW</button>
   <button id="file-open" type="button" data-file-open title="Open a drawing file">OPEN</button>
   <input id="file-input" type="file" data-file-input hidden
-    accept=".json,.draft,.model,.plan,application/json" />
+    accept=".json,.draft,.model,.plan,.zip,application/json,application/zip" />
   <!-- SAVE MOVED OUT OF THE TOP-LEFT BAR, not out of the shell: the right tab
        once landed on top of this button and every spec that pressed SAVE
        timed out, so where it sits is measured, not chosen. The pairwise
@@ -938,6 +938,14 @@ ${trio(true)}
     <div class="promote-row">
       <button type="button" data-save-as-go>Save</button>
       <button type="button" data-save-as-cancel>Cancel</button>
+    </div>
+    <!-- SAVE AS ZIP (jb, 19 Nov 2026): one zip with the .draft at the top
+         and folders for its holograms, underlays, logos and notes; 5 bones,
+         refused at fewer. zip-bundle.js writes it. -->
+    <p class="save-as-toll" data-save-zip-toll style="margin-top:14px"></p>
+    <div class="promote-row">
+      <button type="button" data-save-as-zip
+        title="One zip: the drawing, plus folders of its holograms, underlay files, logos and notes">SAVE AS ZIP</button>
     </div>
   </div>
 </div>`;
