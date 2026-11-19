@@ -748,11 +748,9 @@
   // THE FIRST CORNER IS A NODE ONCE THE LOOP CAN CLOSE ON IT -- three corners
   // down. Below three a press near it is a corner placed there, the rule every
   // loop tool keeps, and a node there would pull the hand onto it.
-  const traceHome = () => {
-    // A TURTLE TRACE'S FIRST CORNER too, once two moves are down (04).
-    if (turtleTracing()) { const p = turtleTrace.points; return p.length >= 3 ? [p[0]] : []; }
-    const c = traceCorners(); return c.length >= 3 ? [c[0]] : [];
-  };
+  const traceHome = () => { const c = traceCorners(); return c.length >= 3 ? [c[0]] : []; };
+  // A TURTLE TRACE'S FIRST CORNER, the same way, once two moves are down (04).
+  const turtleTraceHome = () => { const p = turtleTrace?.points || []; return p.length >= 3 ? [p[0]] : []; };
   // ── THE ORANGE TRACKING RAYS ───────────────────────────────────────────
   //
   // Movie, 1 Oct: *"at this point when i'm drawing a wall past the first point
