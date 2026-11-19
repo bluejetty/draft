@@ -387,8 +387,8 @@
     const BP = window.DraftBeamPockets;
     const R = window.DraftRender2D;
     const G = window.DraftGeometry2D;
-    const onFoundation = activeViewId() === 'foundation';
-    const pockets = onFoundation && BP && R.drawBeamPockets2D ? BP.beamPockets({
+    const pocketView = activeViewId() === 'foundation';
+    const pockets = pocketView && BP && R.drawBeamPockets2D ? BP.beamPockets({
       walls: drawing?.walls || [],
       beams: drawing?.beams || [],
       levelId: activeLevelId(),

@@ -1463,8 +1463,8 @@ if (!window.DraftRender2D) {
     const fontPx = 9;
     ctx.save();
     if (env.labelFont) ctx.font = env.labelFont;
-    if (above) ctx.globalAlpha = OVERHEAD_ALPHA;
-    if (below) ctx.globalAlpha = 0.45;
+    // Over the cut lighter, under this floor lighter still: the line's own.
+    ctx.globalAlpha = above ? OVERHEAD_ALPHA : (below ? 0.45 : ctx.globalAlpha);
     list.forEach(span => {
       const key = lineKey(span.beam);
       const name = named.find(n => n.along === key.along && Math.abs(n.fixed - key.fixed) <= 0.5);
@@ -1514,8 +1514,8 @@ if (!window.DraftRender2D) {
       ctx.beginPath();
       c.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
       ctx.closePath();
-      if (env.paperColor) { ctx.fillStyle = env.paperColor; ctx.fill(); }
-      if (env.slabFill) { ctx.fillStyle = env.slabFill; ctx.fill(); }
+      // Paper first, then the slab poured into the notch, as a buck takes it.
+      [env.paperColor, env.slabFill].filter(Boolean).forEach(fill => { ctx.fillStyle = fill; ctx.fill(); });
       ctx.strokeStyle = ink;
       ctx.lineWidth = 1;
       // corners: [face lo, back lo, back hi, face hi] -- the face side is
