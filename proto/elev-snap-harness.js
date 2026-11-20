@@ -10,6 +10,10 @@
 //     siding courses, stone, shingles), and the clip ends at its restore;
 //   - the first clip, before anything was drawn, is the pinned viewport and
 //     hides nothing;
+//   - nor does a clip the painter NAMES as its viewport (`snapFrameClip`),
+//     however small and whatever was drawn before it -- a zoomed elevation
+//     rules its level lines first and then clips to the room between the
+//     rails -- and the naming is spent on that one clip;
 //   - the whole-glass ground fill is not a drawing edge;
 //   - a straight run traced as a chain of short pieces is one piece, so its
 //     joints are not false nodes;
@@ -106,6 +110,43 @@ function run(S) {
     c.restore();
     check('the first clip before any line hides nothing', rec.segments().length === 1);
   }
+  // THE VIEWPORT OF A ZOOMED ELEVATION. The painter rules the level lines,
+  // THEN clips to the room inside the margins -- a quarter of this glass --
+  // and draws the house in it, siding and all.
+  {
+    const rec = S.recorder(fakeCtx(), W, H);
+    const c = rec.ctx;
+    c.beginPath(); c.moveTo(0, 30); c.lineTo(W, 30); c.stroke();          // a level line, first
+    c.save();
+    c.beginPath(); c.rect(150, 60, 200, 150);                              // the viewport: 25% of the glass
+    c.snapFrameClip = true;
+    c.clip();
+    c.beginPath(); c.moveTo(170, 80); c.lineTo(300, 80); c.lineTo(300, 180); c.stroke();   // the house
+    c.save();
+    c.beginPath(); c.rect(170, 80, 130, 100); c.clip();                    // a face, siding inside
+    c.beginPath(); c.moveTo(170, 100); c.lineTo(300, 100); c.stroke();
+    c.restore();
+    c.beginPath(); c.moveTo(170, 190); c.lineTo(340, 190); c.stroke();     // grade, after the hatch
+    c.restore();
+    const segs = rec.segments();
+    const has = y => segs.some(s => s[0].y === y && s[1].y === y);
+    check('a viewport the painter names hides nothing, though lines came before it and it is small',
+      has(80) && segs.some(s => s[0].x === 300 && s[1].x === 300) && has(190));
+    check('the level line ruled before it is kept too', has(30));
+    check('a face\'s hatch inside the viewport is still not kept: the naming was for one clip', !has(100));
+    check('four pieces in all', segs.length === 4);
+  }
+  // AND UNNAMED, THE SAME CLIP IS A FACE'S: the rule that keeps hatch out.
+  {
+    const rec = S.recorder(fakeCtx(), W, H);
+    const c = rec.ctx;
+    c.beginPath(); c.moveTo(0, 30); c.lineTo(W, 30); c.stroke();
+    c.save();
+    c.beginPath(); c.rect(150, 60, 200, 150); c.clip();
+    c.beginPath(); c.moveTo(170, 80); c.lineTo(300, 80); c.stroke();
+    c.restore();
+    check('a small clip nobody named, after a line, hides what is drawn in it', rec.segments().length === 1);
+  }
   // A TRANSFORM THE PAINTER SET
   {
     const ctx = fakeCtx(2);
@@ -159,7 +200,11 @@ function run(S) {
 const MUTANTS = [
   ['hatch kept', s => s.replace('if (off || hatchDepth > 0 || !path.length) return;', 'if (off || !path.length) return;')],
   ['clip never ends', s => s.replace('if (clipStack.length > 1) hatchDepth -= clipStack.pop().length;', 'if (clipStack.length > 1) clipStack.pop();')],
-  ['frame clip hides', s => s.replace('const frameClip = !clipsSeen && !segs.length;', 'const frameClip = false;')],
+  ['frame clip hides', s => s.replace('const frameClip = frameNext || (!clipsSeen && !segs.length);', 'const frameClip = frameNext;')],
+  ['named viewport hides the house', s => s.replace('const frameClip = frameNext || (!clipsSeen && !segs.length);', 'const frameClip = !clipsSeen && !segs.length;')],
+  ['the naming is never spent', s => s.replace('            frameNext = false;\n            clipsSeen += 1;', '            clipsSeen += 1;')],
+  ['the naming is not heard', s => s.replace("if (prop === 'snapFrameClip') { frameNext = !!value; return true; }", "if (prop === 'snapFrameClip') return true;")],
+  ['every clip is a viewport', s => s.replace('const frameClip = frameNext || (!clipsSeen && !segs.length);', 'const frameClip = true;')],
   ['ground kept', s => s.replace('if (bboxShare(path) >= FRAME_CLIP_SHARE) return;', '')],
   ['switch ignored', s => s.replace("if (prop === 'snapRecordOff') { off = !!value; return true; }", '')],
   ['transform ignored', s => s.replace('return { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f };', 'return { x, y };')],

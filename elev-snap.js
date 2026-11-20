@@ -21,6 +21,18 @@
 // frame's own clip -- the first one, before any line -- holds the whole
 // drawing, and does not count.
 //
+// AND A CLIP THE PAINTER NAMES AS ITS VIEWPORT DOES NOT COUNT, WHEREVER IT
+// COMES (`snapFrameClip`, set true before that one `clip()`). "The first
+// one, before any line" was a guess at which clip is the viewport, and on a
+// zoomed elevation it guessed wrong: the painter rules its level lines
+// FIRST, then clips to the room inside the margins, and with the rails out
+// that room is well under the glass. So the viewport read as a hatch clip
+// and the whole house was dropped -- 5 pieces of 244 kept on one elevation,
+// the five being the level lines -- and a hand drawing over a zoomed-in
+// view caught nothing of the building. Found 20 Nov 2026 while testing the
+// DETAIL SNAPSHOT camera. The painter knows which clip is its viewport, so
+// it says.
+//
 // `snapRecordOff` is a switch the painter can throw round what it does not
 // want caught: the drafter's own marks are snapped from their records
 // (exact feet) rather than from their ink, and the mark being drawn must
@@ -43,6 +55,7 @@ if (!window.DraftElevSnap) {
     let clipStack = [[]];   // per save level: clips that hide (hatch)
     let hatchDepth = 0;
     let clipsSeen = 0;
+    let frameNext = false;  // snapFrameClip: the next clip is the viewport
     let matrix = null;      // current transform relative to the base
     const base = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
     const baseInv = base && typeof base.inverse === 'function' ? base.inverse() : null;
@@ -97,6 +110,7 @@ if (!window.DraftElevSnap) {
     const handler = {
       get: (target, prop) => {
         if (prop === 'snapRecordOff') return off;
+        if (prop === 'snapFrameClip') return frameNext;
         switch (prop) {
           case 'beginPath': return () => { path = []; sub = null; last = null; target.beginPath(); };
           case 'moveTo': return (x, y) => { sub = last = map(x, y); target.moveTo(x, y); };
@@ -132,7 +146,10 @@ if (!window.DraftElevSnap) {
             // THE FIRST CLIP, before a line is drawn, is the pinned frame's
             // viewport (cut-view `pinClip`): the margins of the rails can
             // leave it well under the glass, and it holds the whole drawing.
-            const frameClip = !clipsSeen && !segs.length;
+            // OR THE ONE THE PAINTER NAMED (`snapFrameClip`), which is spent
+            // by the naming: the clip after it is a face's again.
+            const frameClip = frameNext || (!clipsSeen && !segs.length);
+            frameNext = false;
             clipsSeen += 1;
             if (!frameClip && bboxShare(path) < FRAME_CLIP_SHARE) {
               clipStack[clipStack.length - 1].push(1);
@@ -156,6 +173,7 @@ if (!window.DraftElevSnap) {
       },
       set: (target, prop, value) => {
         if (prop === 'snapRecordOff') { off = !!value; return true; }
+        if (prop === 'snapFrameClip') { frameNext = !!value; return true; }
         target[prop] = value;
         return true;
       },

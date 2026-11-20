@@ -4200,6 +4200,14 @@ if (!window.DraftCutView) {
       ctx.save();
       ctx.beginPath();
       ctx.rect(marginL, marginT, Math.max(0, w - marginL - marginR), Math.max(0, h - marginT - marginB));
+      // THIS CLIP IS THE VIEWPORT, AND THE SNAP IS TOLD SO (elev-snap.js
+      // `snapFrameClip`). It takes a clip smaller than the glass for a
+      // face's hatch and keeps nothing drawn inside one; this one comes
+      // after the level lines above and, with the rails out, is well under
+      // the glass, so unnamed it hid the whole house from a hand drawing
+      // over a zoomed elevation. On a plain canvas the word is a property
+      // nobody reads.
+      ctx.snapFrameClip = true;
       ctx.clip();
     }
 

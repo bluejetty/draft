@@ -94,10 +94,12 @@ const toFeet = (f, c) => ({ u: f.uMin + (c.x - f.left - f.x0) / f.pxPerFt,
 // pixels say which of them show (`laidOver`, below).
 //
 // PAINTED AT THE FIT, IN ITS OWN FRAME, whatever the screen is zoomed to.
-// Feet are feet at any zoom, so it does not need the screen's frame -- and
-// must not use it: the snap's recorder loses the house on a pinned (zoomed)
-// pass, keeping 5 pieces of 244 on this elevation. That is a fault in the
-// snap, found here and not this file's to fix.
+// Feet are feet at any zoom, so it does not need the screen's frame. (When
+// this was written it could not have used it: the snap's recorder lost the
+// house on a zoomed pass, keeping 5 pieces of 244 on this elevation. That
+// was found here and is fixed -- tests/elevation-snap-zoomed.spec.js -- and
+// the list is still painted at the fit, where it has one scale to answer
+// for.)
 const strokesFeet = page => page.evaluate(() => {
   const spare = document.createElement('canvas');
   spare.width = Math.round(cssW);
