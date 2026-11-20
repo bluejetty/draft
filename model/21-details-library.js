@@ -212,6 +212,199 @@
     paint();
   };
 
+  // ── A DETAIL FROM A SNAPSHOT ───────────────────────────────────────────────
+  //
+  // jb, 20 Nov 2026: "take a 'snapshot' of the elevation or section and have
+  // it pop up in the DETAIL area as a new detail" -- "(that can be further
+  // edited - not a window that shows what exists there, but takes a snapshot
+  // and copies the lines over so they can be edited and new details added
+  // too" -- "it will only be used to get information for drawing the details
+  // which will be stand alone files".
+  //
+  // THE CAMERA IS IN THE HOUSE'S FILE AND THE DETAIL IS IN THIS ONE, so the
+  // picture waits in a tray in the browser's store (detail-snapshot.js) and
+  // is picked up here: SNAPSHOTS in the pane's head lists what is waiting,
+  // each with a small drawing of itself, and USE makes a detail of one.
+  //
+  // WHAT USE DOES. A new detail, named for the view the picture was taken of,
+  // with its frame set to the box that was dragged; and the picture's lines
+  // drawn in it as this file's OWN LINES -- "copies the lines over so they
+  // can be edited". Full size, centred in the frame as they were centred in
+  // the box, each on the layer SNAPSHOT so they can be told from what is
+  // drawn over them. Its words come as notes. Nothing links back to the
+  // house: a picture does not update, which is what he asked of it.
+  //
+  // NOT ONE ASSEMBLY, where TRACE's EDITABLE makes one. A DXF dropped on a
+  // plan has to be dragged into place and so moves as one; these land where
+  // they belong and are there to be worked on a line at a time.
+  //
+  // THE PICTURE STAYS IN THE TRAY after it is used -- a second detail can
+  // start from the same one -- until its X is pressed or the tray, which
+  // holds two dozen, lets it go.
+  let snapshotTray = [];
+  let snapshotTrayOpen = false;
+  const readSnapshotTray = async () => {
+    const DS = window.DraftDetailSnapshot;
+    if (!DS) return snapshotTray;
+    try { snapshotTray = await DS.list(); } catch (error) {
+      console.warn('draft: the snapshot tray could not be read', error);
+      snapshotTray = [];
+    }
+    return snapshotTray;
+  };
+  // A NAME NOT ALREADY ON A DETAIL: 'S1 SNAPSHOT', then 'S1 SNAPSHOT 2'.
+  const freeDetailName = base => {
+    const taken = new Set(shelves().map(sh => String(sh.name || '').toUpperCase()));
+    if (!taken.has(base.toUpperCase())) return base;
+    let n = 2;
+    while (taken.has(`${base} ${n}`.toUpperCase())) n += 1;
+    return `${base} ${n}`;
+  };
+  // The frame is kept to the quarter inch (drawing-format.js); rounded UP,
+  // so the line that ran to the edge of the box is inside it.
+  const frameOver = ft => Math.ceil(Number(ft) * 48 - 1e-6) / 48;
+  const addDetailFromSnapshot = rec => {
+    if (!drawing || !rec) return false;
+    let geo;
+    try {
+      geo = window.DraftDxfReader.parse(rec.dxf, { segments: true });
+    } catch (error) {
+      sayOnStrip(`That snapshot could not be read: ${error?.message || 'not a picture this can open'}.`);
+      return false;
+    }
+    addDetail();
+    const id = activeShelfId();
+    const shelf = storedShelf(id);
+    if (!shelf) return false;
+    shelf.name = freeDetailName(String(rec.name || 'SNAPSHOT').trim() || 'SNAPSHOT');
+    shelf.detail = window.DraftDrawingFormat.detailCard({
+      ...detailCardOf(shelf),
+      frameW: frameOver(rec.widthFt), frameH: frameOver(rec.heightFt),
+      note: `From a snapshot of ${rec.cut || 'a view'}${rec.from ? ` in ${rec.from}` : ''}, `
+        + `taken ${String(rec.takenAt || '').slice(0, 10)}.`,
+    });
+    // INCHES, Y UP, FROM THE BOX'S CENTRE, which is how the camera files it:
+    // feet on this sheet, z down, from the frame's centre.
+    const toWorld = ([x, y]) => ({ x: x / 12, z: -y / 12 });
+    const { levelId, viewId } = onActiveLevel();
+    const lineView = lineHomeView(viewId);
+    drawing.lines = drawing.lines || [];
+    const made = window.DraftDxfReader.piecesToLines(geo.segments, toWorld).map(seg => ({
+      id: newDrawingItemId('line'),
+      start: seg.start, end: seg.end,
+      levelId, view: lineView,
+      layer: 'SNAPSHOT',
+      importedFrom: rec.name,
+      ...(seg.bulge ? { bulge: seg.bulge } : {}),
+    }));
+    made.forEach(line => drawing.lines.push(line));
+    drawing.notes = drawing.notes || [];
+    let noteId = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0);
+    const lettered = (geo.texts || []).filter(t => t.lines.join('').trim() && Number(t.h) > 0).map(t => {
+      const p = toWorld([t.x, t.y]);
+      return {
+        id: (noteId += 1), anchor: p, text: { ...p }, levelId, view: lineView,
+        body: t.lines.map(line => line.trimEnd()).join('\n').trim(), end: 'none',
+        fill: false, fillOpacity: 0.85, outline: false, bullnose: 0,
+        heightFt: t.h / 12, rot: Number(t.rot) || 0,
+        align: t.align || 'left', baseline: t.baseline || 'alphabetic',
+        layer: 'A-ANNO-NOTE',
+      };
+    });
+    lettered.forEach(note => drawing.notes.push(note));
+    undoStack.push({ kind: 'built', walls: [], outlines: [], list: null, openings: [],
+      items: [...made.map(item => ({ list: drawing.lines, item })),
+        ...lettered.map(item => ({ list: drawing.notes, item }))] });
+    snapshotTrayOpen = false;
+    markDirty();
+    // INTO THE DETAIL'S WINDOW, as the board's own + DETAIL goes: a library
+    // opens on its board, and a detail made behind the board is not seen.
+    closeDetailsBoard();
+    buildChrome();
+    fit(false, 0.8);
+    paint();
+    if (typeof updateReadout === 'function') updateReadout();
+    sayOnStrip(`${shelf.name} — a new detail from the snapshot: ${made.length.toLocaleString()} line${made.length === 1 ? '' : 's'}`
+      + `${lettered.length ? ` and ${lettered.length} note${lettered.length === 1 ? '' : 's'}` : ''}, yours to edit. `
+      + 'Draw over them, change them, delete what you do not want.');
+    return true;
+  };
+  // A SMALL DRAWING OF THE PICTURE, so three snapshots of S1 can be told
+  // apart: its lines fitted to the chip, in the page's ink.
+  const paintSnapshotThumb = (screen, rec) => {
+    let geo;
+    try { geo = window.DraftDxfReader.parse(rec.dxf, { segments: true }); } catch { return; }
+    const W = Math.max(rec.widthFt * 12, 1), H = Math.max(rec.heightFt * 12, 1);
+    const ratio = window.devicePixelRatio || 1;
+    const cw = screen.clientWidth || 56, ch = screen.clientHeight || 42;
+    screen.width = Math.round(cw * ratio);
+    screen.height = Math.round(ch * ratio);
+    const g = screen.getContext('2d');
+    g.setTransform(ratio, 0, 0, ratio, 0, 0);
+    g.clearRect(0, 0, cw, ch);
+    const k = Math.min((cw - 4) / W, (ch - 4) / H);
+    const X = x => cw / 2 + x * k, Y = y => ch / 2 - y * k;
+    g.strokeStyle = skin['draw-note'] || '#333';
+    g.lineWidth = 0.75;
+    g.beginPath();
+    geo.segments.forEach(s => { g.moveTo(X(s.a[0]), Y(s.a[1])); g.lineTo(X(s.b[0]), Y(s.b[1])); });
+    g.stroke();
+    screen.dataset.snapshotThumbLines = String(geo.segments.length);
+  };
+  const buildSnapshotTray = () => {
+    const DS = window.DraftDetailSnapshot;
+    const box = el('div', { className: 'dl-tray', data: { snapshotTray: '' } });
+    if (!snapshotTray.length) {
+      box.append(el('div', { className: 'dl-status', data: { snapshotTrayEmpty: '' } },
+        'No snapshots waiting. In a house\'s file, open an elevation or a section, press the DETAIL SNAPSHOT key '
+        + '(the square with a circle in it) and drag a box round the part you want.'));
+      return box;
+    }
+    // THE NEWEST FIRST: the one he just took is the one he came here for.
+    [...snapshotTray].reverse().forEach(rec => {
+      const thumb = el('canvas', { className: 'dl-tray-thumb', data: { snapshotThumb: rec.id } });
+      const size = `${feetText(rec.widthFt)} x ${feetText(rec.heightFt)}`;
+      const row = el('div', { className: 'dl-tray-row', data: { snapshot: rec.id },
+        title: `${rec.name} — ${size}, ${rec.lines} lines, taken ${String(rec.takenAt || '').slice(0, 16).replace('T', ' ')}` },
+      thumb,
+      el('div', { className: 'dl-tray-what' },
+        el('span', { className: 'dl-name', textContent: rec.name }),
+        el('span', { className: 'dl-cat', textContent: size })),
+      el('button', { type: 'button', className: 'lv-add', textContent: 'USE',
+        title: 'Make a new detail from this snapshot: its lines, yours to edit', data: { snapshotUse: rec.id },
+        onclick: event => { event.stopPropagation(); addDetailFromSnapshot(rec); } }),
+      el('button', { type: 'button', className: 'lv-add', textContent: 'X',
+        title: 'Throw this snapshot away', data: { snapshotDrop: rec.id },
+        onclick: async event => {
+          event.stopPropagation();
+          try { await DS.remove(rec.id); } catch (error) { console.warn('draft: snapshot not removed', error); }
+          await readSnapshotTray();
+          buildChrome();
+          sayOnStrip(`${rec.name} thrown away. ${snapshotTray.length} left in the tray.`);
+        } }));
+      box.append(row);
+      // Painted once it is in the page and has a size to be painted at.
+      requestAnimationFrame(() => paintSnapshotThumb(thumb, rec));
+    });
+    return box;
+  };
+  // THE TRAY IS READ WHEN A DETAILS FILE COMES UP, and again whenever it
+  // changes -- the camera is usually in another tab, and a picture taken
+  // there should be waiting here without a reload.
+  let snapshotTrayWatched = false;
+  const watchSnapshotTray = () => {
+    const DS = window.DraftDetailSnapshot;
+    if (snapshotTrayWatched || !DS || !window.SharedFileStore) return;
+    snapshotTrayWatched = true;
+    const refresh = async () => {
+      const before = snapshotTray.map(r => r.id).join();
+      await readSnapshotTray();
+      if (isDetailsFile() && snapshotTray.map(r => r.id).join() !== before) buildChrome();
+    };
+    window.SharedFileStore.onBucketChanged(DS.BUCKET, refresh);
+    refresh();
+  };
+
   // ── SAVE DETAIL ────────────────────────────────────────────────────────────
   //
   // PLAIN SAVE FIRST (the drawing in this browser, free), then the library
@@ -282,7 +475,19 @@
     const lib = el('div', { className: 'dl-library', data: { detailsLibraryName: '' },
       title: 'The library this file is. SAVE DETAIL keeps a copy of it in this browser under this name.' },
     `LIBRARY: ${libraryName()}`);
-    panel.append(head, lib);
+    // SNAPSHOTS: what the camera has left waiting (jb, 20 Nov 2026). On its
+    // own line under the head, with the count on its face, so a picture taken
+    // a minute ago in the house's file is seen to have arrived.
+    watchSnapshotTray();
+    const trayKey = el('button', { type: 'button', className: 'lv-add dl-tray-key',
+      textContent: `SNAPSHOTS (${snapshotTray.length})`,
+      title: 'Pictures taken with DETAIL SNAPSHOT on an elevation or section, waiting to be made into details',
+      data: { openSnapshots: '', snapshotCount: String(snapshotTray.length) },
+      'aria-expanded': String(snapshotTrayOpen),
+      onclick: event => { event.stopPropagation(); snapshotTrayOpen = !snapshotTrayOpen; buildChrome(); } });
+    if (snapshotTray.length) trayKey.toggleAttribute('data-waiting', true);
+    panel.append(head, lib, trayKey);
+    if (snapshotTrayOpen) panel.append(buildSnapshotTray());
 
     list.forEach((shelf, i) => {
       const card = detailCardOf(shelf);
