@@ -1432,6 +1432,27 @@
     // and show nowhere. One whose wall is not in the paste is not pasted.
     const wallIds = new Map();
     const onWall = type => type === 'fenestration' || type === 'fixture';
+    // A WALL PASTED ON THE PLAN BEING LOOKED AT (jb, 19 Nov 2026). Copied on
+    // MAIN FL and pasted with the FOUNDATION plan up, a wall kept its 'plan'
+    // view and was filed on the foundation level's BASEMENT (WALLS) plan: on
+    // FOUNDATION nothing showed, so PASTE was pressed again, and again --
+    // jb's file held nine copies of each 1FT stub stacked on BASEMENT (WALLS),
+    // invisible from where they were pasted. A wall lands in the home view of
+    // the plan the paste is made on (wallHomeView), as one drawn there does.
+    const viewNow = typeof activeViewId === 'function' ? activeViewId() : null;
+    const pasteWallView = Number(owner) > 0 && viewNow ? wallHomeView(viewNow) : null;
+    // AND NEVER A SECOND WALL EXACTLY ON ONE ALREADY THERE (jb: "yes please
+    // skip that"). The first paste on the level it was copied from lands on
+    // its own original and is the usual PASTE-then-MOVE, so the source does
+    // not count; a copy landing on any OTHER wall of the same plan, end for
+    // end, same type, is the stack -- skipped, and what hangs on it with it.
+    const SAME_SPOT_FT = 0.01;
+    const samePt = (a, b) => Math.hypot((a?.x || 0) - (b?.x || 0), (a?.z || 0) - (b?.z || 0)) < SAME_SPOT_FT;
+    const stacksOn = (copy, sourceId) => (drawing.walls || []).some(w => String(w.id) !== String(sourceId)
+      && Number(w.levelId) === Number(copy.levelId) && (w.view || 'plan') === (copy.view || 'plan')
+      && (w.wallType || '') === (copy.wallType || '')
+      && ((samePt(w.start, copy.start) && samePt(w.end, copy.end)) || (samePt(w.start, copy.end) && samePt(w.end, copy.start))));
+    let stacked = 0;
     const ordered = [...held.filter(h => h.type === 'wall'), ...held.filter(h => h.type !== 'wall')];
     ordered.forEach(({ type, raw }) => {
       const key = type === 'wall' ? 'walls' : SELECTION_LISTS[type];
@@ -1487,7 +1508,11 @@
         if (k > 0) setRoofSitsOn(copy, storeys[k - 1].id, storeys);
         else if (storeys.length) copy.sourceLevelId = storeys[storeys.length - 1].id;
       }
-      if (type === 'wall') wallIds.set(String(raw.id), copy.id);
+      if (type === 'wall') {
+        if (pasteWallView) copy.view = pasteWallView;
+        if (stacksOn(copy, raw.id)) { stacked += 1; return; }
+        wallIds.set(String(raw.id), copy.id);
+      }
       if (free) {
         // ITS OWN LINE, shared with the free pieces pasted beside it but not
         // with the ones it was copied from -- they are not run mates.
@@ -1552,6 +1577,9 @@
       drawing[key].push(copy);
       landed.push({ type, item: copy });
     });
+    if (stacked) {
+      sayOnStrip(`${stacked === 1 ? 'That wall is' : `${stacked} walls are`} already there \u2014 not pasted on top again. MOVE the copy you have, then PASTE.`);
+    }
     if (!landed.length) return 0;
     // A PASTED STAIR'S WELL AND OPEN SIDE, as a placed one's: only the copies,
     // every stair already there is served.
