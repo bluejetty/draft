@@ -987,6 +987,12 @@ if (!window.DraftDrawingFormat) {
         slopeInPerFt: Number(floor?.slopeInPerFt) || 0,
         thickness: positive(floor?.thickness, env.defaultFloorThickness),
         thickenedEdge: floor?.thickenedEdge === true,
+        // DECK (jb, 20 Nov 2026): the drafter's word, kept only when said --
+        // unset leaves it to where the floor is drawn (geometry-2d deckFloors).
+        ...(typeof floor?.deck === 'boolean' ? { deck: floor.deck } : {}),
+        ...(Number.isFinite(Number(floor?.deckDropIn)) && floor?.deckDropIn !== null
+          && floor?.deckDropIn !== '' && Number(floor.deckDropIn) >= 0
+          ? { deckDropIn: Number(floor.deckDropIn) } : {}),
         assembly: { ...(env.defaultFloorAssembly || {}), ...(floor?.assembly || {}) },
       };
     }), env.drops).filter(Boolean))(Array.isArray(rawFloors) ? rawFloors : []));

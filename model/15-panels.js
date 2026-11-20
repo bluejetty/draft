@@ -1442,32 +1442,72 @@
     said.textContent = structure === null ? 'MIXED' : structure;
     box.append(said);
 
-    box.append(propField('THICKNESS',
-      agreedOn(floors, floor => Number(floor.thickness) || 0),
-      feet => {
-        if (!(feet > 0)) return 'A floor needs a thickness greater than zero.';
-        applyToItems(floors, { thickness: feet });
-        return null;
-      }, showSelectionProps));
+    // ── DECK, A FLOOR TYPE OF ITS OWN (jb, 20 Nov 2026) ──────────────────
+    //
+    // "make a special floor type called DECK. make it default 9.25" joists
+    // with 3/4" sheathing" -- and its top "2" approx" below the house floor,
+    // the step down out of the door. A floor out past its storey's walls
+    // is a DECK until the drafter says FLOOR (geometry-2d deckFloors); the
+    // chip writes `deck` either way. Not offered on a slab.
+    const G2 = window.DraftGeometry2D;
+    let deckOnly = false;
+    const framed = floors.every(floor => floor.structure !== 'slab'
+      && (floor.view || 'floor') !== 'foundation' && floor.garage !== true);
+    if (framed && G2 && G2.deckFloors) {
+      const walls = drawing?.walls || [];
+      const kind = agreedOn(floors, floor => (G2.isDeckFloor(floor, walls) ? 'deck' : 'floor'));
+      box.append(propRow('TYPE', [['floor', 'FLOOR'], ['deck', 'DECK']], kind,
+        id => applyToItems(floors, { deck: id === 'deck' })));
+      if (kind === 'deck') {
+        const spec = G2.deckSpec(floors[0]);
+        const says = document.createElement('div');
+        says.className = 'props-title';
+        says.dataset.propDeckAssembly = '';
+        says.textContent = `DECK ${F.formatInchesOnly(spec.joistIn)} ${spec.joistLabel}`
+          + ` + ${F.formatInchesOnly(spec.sheathingIn)} SHTG`;
+        box.append(says);
+        // INCHES, like the slope below: a step of 2" is typed as 2.
+        box.append(numberField('DECK DROP IN',
+          agreedOn(floors, floor => G2.deckSpec(floor).dropIn) ?? G2.DECK.dropIn,
+          0, 24, 0.25, value => {
+            if (value === null) return agreedOn(floors, floor => G2.deckSpec(floor).dropIn) ?? G2.DECK.dropIn;
+            applyToItems(floors, { deckDropIn: value });
+            return value;
+          }));
+        deckOnly = true;
+      }
+    }
 
-    // Movie asked for this one by name on 18 Sep, in the same breath as the
-    // roof: "i'd like the roof and thickened edge done".
-    const thick = agreedOn(floors, floor => floor.thickenedEdge === true);
-    box.append(propRow('THICKENED EDGE', [['on', 'ON'], ['off', 'OFF']],
-      thick === null ? null : (thick ? 'on' : 'off'),
-      id => applyToItems(floors, { thickenedEdge: id === 'on' })));
+    // A DECK'S THICKNESS IS ITS TYPE'S, said above -- no thickness, edge or
+    // fall to set on it.
+    if (!deckOnly) {
+      box.append(propField('THICKNESS',
+        agreedOn(floors, floor => Number(floor.thickness) || 0),
+        feet => {
+          if (!(feet > 0)) return 'A floor needs a thickness greater than zero.';
+          applyToItems(floors, { thickness: feet });
+          return null;
+        }, showSelectionProps));
 
-    // INCHES PER FOOT, which is how a garage slab's fall is drawn and how the
-    // record already stores it. Not an architectural length: a slope is a
-    // ratio, and putting it through the foot-and-inch parser would make
-    // 1/4 read as a quarter of a foot.
-    box.append(numberField('SLOPE IN/FT',
-      agreedOn(floors, floor => Number(floor.slopeInPerFt) || 0) ?? 0,
-      0, 3, 0.125, value => {
-        if (value === null) return agreedOn(floors, floor => Number(floor.slopeInPerFt) || 0) ?? 0;
-        applyToItems(floors, { slopeInPerFt: value });
-        return value;
-      }));
+      // Movie asked for this one by name on 18 Sep, in the same breath as the
+      // roof: "i'd like the roof and thickened edge done".
+      const thick = agreedOn(floors, floor => floor.thickenedEdge === true);
+      box.append(propRow('THICKENED EDGE', [['on', 'ON'], ['off', 'OFF']],
+        thick === null ? null : (thick ? 'on' : 'off'),
+        id => applyToItems(floors, { thickenedEdge: id === 'on' })));
+
+      // INCHES PER FOOT, which is how a garage slab's fall is drawn and how the
+      // record already stores it. Not an architectural length: a slope is a
+      // ratio, and putting it through the foot-and-inch parser would make
+      // 1/4 read as a quarter of a foot.
+      box.append(numberField('SLOPE IN/FT',
+        agreedOn(floors, floor => Number(floor.slopeInPerFt) || 0) ?? 0,
+        0, 3, 0.125, value => {
+          if (value === null) return agreedOn(floors, floor => Number(floor.slopeInPerFt) || 0) ?? 0;
+          applyToItems(floors, { slopeInPerFt: value });
+          return value;
+        }));
+    }
 
     // READ FROM THE GEOMETRY, never stored -- a stored area and a dragged
     // corner are two facts that can disagree, and the drafter would believe

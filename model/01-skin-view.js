@@ -1620,6 +1620,47 @@
     });
   };
 
+  // ── A DECK'S EDGE ON ITS STOREY'S WALLS PLAN (jb, 19 Nov 2026) ─────────
+  //
+  // jb: "when i draw it the outline edge of the floor should show on the
+  // corresponding 'floor plan'". A deck is drawn on the FLOOR LAYOUT; the
+  // walls plan of the same storey showed nothing of it. So there, its outline
+  // goes down as a plain solid line in the skin's line ink -- shown, not
+  // picked: it is still edited on the layout it belongs to. Only a floor
+  // standing out past the walls (geometry-2d deckFloors) -- the house's own
+  // floor runs along the walls and would only double them.
+  const paintDeckEdges = () => {
+    canvas.setAttribute('data-deck-edges', '');
+    if (activeViewId() !== 'plan') return;
+    const G = window.DraftGeometry2D, R = window.DraftRender2D;
+    if (!G || !G.deckFloors) return;
+    const here = onActiveLevel();
+    const own = (drawing?.floors || []).filter(f => here.byLevel(f) && (f.view || 'floor') === 'floor');
+    if (!own.length) return;
+    const decks = G.deckFloors(own, drawing?.walls || []);
+    if (!decks.length) return;
+    ctx.save();
+    ctx.strokeStyle = skin['draw-line'];
+    ctx.lineWidth = 1.25;
+    ctx.setLineDash([]);
+    decks.forEach(deck => {
+      const pts = deck.points;
+      if (G.loopHasArcs && G.loopHasArcs(pts) && R && R.strokeSegPath2D) {
+        pts.forEach((_, i) => R.strokeSegPath2D(ctx, toS, G.loopSegment(pts, i),
+          { controlPoint: G.lineControlPoint }));
+        return;
+      }
+      const sp = pts.map(toS);
+      ctx.beginPath();
+      ctx.moveTo(sp[0].x, sp[0].y);
+      sp.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.closePath();
+      ctx.stroke();
+    });
+    ctx.restore();
+    canvas.setAttribute('data-deck-edges', decks.map(d => d.id).join(','));
+  };
+
   const paintLines = () => {
     ctx.save();
     // A CURVED LINE IS DRAWN CURVED. Every line here was a straight stroke

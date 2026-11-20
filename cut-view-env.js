@@ -110,6 +110,12 @@ if (!window.DraftCutViewEnv) {
         view: floor?.view || 'floor',
         garage: floor?.garage === true,
         thickenedEdge: floor?.thickenedEdge === true,
+        // A DECK'S BAND IS ITS OWN THICKNESS (cut-view deckBands), so the
+        // sheet carries it as the screen does.
+        ...(Number(floor?.thickness) > 0 ? { thickness: Number(floor.thickness) } : {}),
+        ...(typeof floor?.deck === 'boolean' ? { deck: floor.deck } : {}),
+        ...(Number.isFinite(Number(floor?.deckDropIn)) && floor?.deckDropIn != null
+          ? { deckDropIn: Number(floor.deckDropIn) } : {}),
       };
     }).filter(Boolean);
     // THE ROOF'S OWN WORDS COME WITH IT. Without these two lists the
