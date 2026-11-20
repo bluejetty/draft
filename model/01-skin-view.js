@@ -125,6 +125,11 @@
   let elevSnapLit = null;    // { kind, at: { u, e } }
   let elevInk = null;        // { segs: px pieces, frame, feet: cache }
   let elevNotePress = null;  // { at, x, y } -- a note press not yet lifted
+  // DETAIL SNAPSHOT's box in hand (jb, 20 Nov 2026): its first corner, and
+  // the press that set it while the button is still down -- a drag lifted
+  // somewhere else is the second corner, a tap waits for a second press.
+  let elevSnapStart = null;  // { u, e }
+  let elevSnapPress = null;  // { x, y } in client px
   // THE POINTER (Movie, 6 Oct): "when i put in ANNOTATION TEXT - can i have an
   // option for a POINTER ARROW? I will want to adjust the types of 'ARROWS' on
   // the end but put in just a straight end on the line now (no arrow)".

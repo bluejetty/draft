@@ -104,6 +104,180 @@ if (!window.DraftDxfWriter) {
   }
   const inside = (x, y, r) => !r || (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]);
 
+  // ── WHAT AN OPAQUE FILL HIDES (`recorder({ hide: true })`) ──────────────
+  //
+  // A painter draws a house back to front and lets a nearer wall's white
+  // fill cover what stands behind it. Fills are left out of a DXF, so
+  // without this every line the far side of the house drew comes through
+  // the near side: the back wall's windows across the front elevation.
+  //
+  // An engineer's sheet has gone out that way and nobody asked for it to
+  // change, so this is OFF unless asked for. DETAIL SNAPSHOT asks: its
+  // picture is to be what the drafter was looking at (jb, 20 Nov 2026).
+  //
+  // A REGION is a list of closed loops of flat [x, y, x, y, ...] points and
+  // the rule they are filled by. A point is hidden when it is inside the
+  // fill AND inside every clip in force -- the fill only lands where the
+  // clip lets it -- and CLEAR OF THE EDGE of each: a line drawn along the
+  // edge of a fill is half covered by it and still shows.
+  const HIDE_EDGE = 0.35;        // recorder pixels: nearer the edge than this still shows
+  const windingAt = (loops, x, y) => {
+    let wind = 0, cross = 0;
+    loops.forEach(pts => {
+      const n = pts.length / 2;
+      for (let i = 0; i < n; i += 1) {
+        const x0 = pts[2 * i], y0 = pts[2 * i + 1];
+        const j = (i + 1) % n;
+        const x1 = pts[2 * j], y1 = pts[2 * j + 1];
+        if ((y0 <= y) === (y1 <= y)) continue;
+        const xi = x0 + ((y - y0) / (y1 - y0)) * (x1 - x0);
+        if (xi > x) { wind += y1 > y0 ? 1 : -1; cross += 1; }
+      }
+    });
+    return { wind, cross };
+  };
+  const inRegion = (region, x, y) => {
+    const { wind, cross } = windingAt(region.loops, x, y);
+    return region.evenodd ? cross % 2 === 1 : wind !== 0;
+  };
+  const edgeDistance = (region, x, y) => {
+    let best = Infinity;
+    region.loops.forEach(pts => {
+      const n = pts.length / 2;
+      for (let i = 0; i < n; i += 1) {
+        const x0 = pts[2 * i], y0 = pts[2 * i + 1];
+        const j = (i + 1) % n;
+        const dx = pts[2 * j] - x0, dy = pts[2 * j + 1] - y0;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 ? Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / len2)) : 0;
+        best = Math.min(best, Math.hypot(x - (x0 + t * dx), y - (y0 + t * dy)));
+      }
+    });
+    return best;
+  };
+  const regionBox = region => {
+    let box = [Infinity, Infinity, -Infinity, -Infinity];
+    region.loops.forEach(pts => { for (let i = 0; i < pts.length; i += 2) {
+      box = [Math.min(box[0], pts[i]), Math.min(box[1], pts[i + 1]),
+        Math.max(box[2], pts[i]), Math.max(box[3], pts[i + 1])];
+    } });
+    return box;
+  };
+  // Where the segment a-b crosses an edge of any of the regions, as
+  // fractions of the way along it.
+  const crossingsOf = (ax, ay, bx, by, regions) => {
+    const ts = [];
+    const dx = bx - ax, dy = by - ay;
+    regions.forEach(region => region.loops.forEach(pts => {
+      const n = pts.length / 2;
+      for (let i = 0; i < n; i += 1) {
+        const x0 = pts[2 * i], y0 = pts[2 * i + 1];
+        const j = (i + 1) % n;
+        const ex = pts[2 * j] - x0, ey = pts[2 * j + 1] - y0;
+        const den = dx * ey - dy * ex;
+        if (Math.abs(den) < 1e-12) continue;      // parallel: it runs along the edge or misses it
+        const t = ((x0 - ax) * ey - (y0 - ay) * ex) / den;
+        const u = ((x0 - ax) * dy - (y0 - ay) * dx) / den;
+        if (t > 1e-9 && t < 1 - 1e-9 && u >= -1e-9 && u <= 1 + 1e-9) ts.push(t);
+      }
+    }));
+    return ts.sort((p, q) => p - q);
+  };
+  const hiddenAt = (x, y, fill, clips) => {
+    if (!inRegion(fill, x, y) || edgeDistance(fill, x, y) <= HIDE_EDGE) return false;
+    return clips.every(c => inRegion(c, x, y) && edgeDistance(c, x, y) > HIDE_EDGE);
+  };
+  // The runs of a polyline that an opaque fill leaves showing. `null` when
+  // it hides none of it, so an untouched line keeps the entity it was.
+  const showingRuns = (pts, closed, fill, clips) => {
+    const all = closed ? [...pts, pts[0], pts[1]] : pts;
+    const regions = [fill, ...clips];
+    const runs = [];
+    let cur = null, cut = false;
+    for (let i = 2; i < all.length; i += 2) {
+      const ax = all[i - 2], ay = all[i - 1], bx = all[i], by = all[i + 1];
+      const ts = [0, ...crossingsOf(ax, ay, bx, by, regions), 1];
+      for (let k = 1; k < ts.length; k += 1) {
+        const t0 = ts[k - 1], t1 = ts[k];
+        if (t1 - t0 < 1e-9) continue;
+        const tm = (t0 + t1) / 2;
+        if (hiddenAt(ax + (bx - ax) * tm, ay + (by - ay) * tm, fill, clips)) {
+          cut = true;
+          if (cur) { runs.push(cur); cur = null; }
+          continue;
+        }
+        const sx = ax + (bx - ax) * t0, sy = ay + (by - ay) * t0;
+        if (!cur) cur = [sx, sy];
+        cur.push(ax + (bx - ax) * t1, ay + (by - ay) * t1);
+      }
+    }
+    if (cur) runs.push(cur);
+    if (!cut) return null;
+    // A CLOSED SHAPE STARTS SOMEWHERE, and where it starts is not a cut: the
+    // run that ends back at the start goes on into the run that began there.
+    if (closed && runs.length > 1) {
+      const head = runs[0], tail = runs[runs.length - 1];
+      const k = tail.length;
+      if (head[0] === all[0] && head[1] === all[1] && tail[k - 2] === all[0] && tail[k - 1] === all[1]) {
+        runs.pop();
+        runs[0] = [...tail, ...head.slice(2)];
+        runs.push(runs.shift());
+      }
+    }
+    return runs.filter(run => run.length >= 4);
+  };
+  const arcPoints = (e, n = 24) => {
+    const pts = [];
+    for (let i = 0; i <= n; i += 1) {
+      const a = e.a0 + (e.sweep * i) / n;
+      pts.push(e.cx + e.r * Math.cos(a), e.cy + e.r * Math.sin(a));
+    }
+    return pts;
+  };
+  // EVERYTHING ALREADY DRAWN, less what this fill covers. Lines are cut where
+  // they pass under it; an arc that is partly covered goes on as the pieces
+  // of it that show; a dot, a small solid mark or a word is covered when
+  // the point it stands on is.
+  const hideUnder = (entities, fill, clips) => {
+    const box = regionBox(fill);
+    if (!Number.isFinite(box[0])) return;
+    const misses = pts => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let i = 0; i < pts.length; i += 2) {
+        x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]);
+        y0 = Math.min(y0, pts[i + 1]); y1 = Math.max(y1, pts[i + 1]);
+      }
+      return x1 < box[0] || x0 > box[2] || y1 < box[1] || y0 > box[3];
+    };
+    const out = [];
+    entities.forEach(e => {
+      if (e.type === 'poly') {
+        if (misses(e.pts)) { out.push(e); return; }
+        const runs = showingRuns(e.pts, e.closed, fill, clips);
+        if (!runs) { out.push(e); return; }
+        runs.forEach(run => out.push({ ...e, pts: run, closed: false }));
+        return;
+      }
+      if (e.type === 'arc') {
+        const pts = arcPoints(e);
+        if (misses(pts)) { out.push(e); return; }
+        const runs = showingRuns(pts, false, fill, clips);
+        if (!runs) { out.push(e); return; }
+        const { cx, cy, r, a0, sweep, type, ...rest } = e;
+        runs.forEach(run => out.push({ ...rest, type: 'poly', pts: run, closed: false }));
+        return;
+      }
+      const at = e.type === 'circle' ? [e.cx, e.cy]
+        : e.type === 'text' ? [e.x, e.y]
+          : e.type === 'solid' ? [e.corners.reduce((s, c) => s + c[0], 0) / e.corners.length,
+            e.corners.reduce((s, c) => s + c[1], 0) / e.corners.length] : null;
+      if (at && hiddenAt(at[0], at[1], fill, clips)) return;
+      out.push(e);
+    });
+    entities.length = 0;
+    entities.push(...out);
+  };
+
   // ── THE RECORDER ─────────────────────────────────────────────────────────
   // Paths are kept as subpaths of points in RECORDER pixels, with the one
   // exception a CAD file cares about: a subpath that is a single circular arc
@@ -144,10 +318,13 @@ if (!window.DraftDxfWriter) {
     return best ? best.i : null;
   };
 
-  function recorder({ width = 1000, height = 1000, layer = '0' } = {}) {
+  function recorder({ width = 1000, height = 1000, layer = '0', hide = false } = {}) {
     const entities = [];
     let state = {
-      m: [1, 0, 0, 1, 0, 0], clip: null, dash: [], dxfLayer: layer,
+      // `clips`: the shapes clipped to, kept whole for `hide` -- the box in
+      // `clip` is all a stroke is cut by, but a fill clipped to a gable must
+      // not hide what stands beside the gable inside that box.
+      m: [1, 0, 0, 1, 0, 0], clip: null, clips: [], dash: [], dxfLayer: layer,
       strokeStyle: '#000', fillStyle: '#000', globalAlpha: 1, lineWidth: 1, font: '10px sans-serif',
       textAlign: 'start', textBaseline: 'alphabetic',
     };
@@ -183,6 +360,21 @@ if (!window.DraftDxfWriter) {
       return d ? ap(invert(state.m), d[0], d[1]) : null;
     };
     const allPts = sp => sp.segs.flatMap(seg => seg.pts);
+    // The path in hand as loops, for a fill or a clip to be read as a shape.
+    const loopsOf = rule => ({
+      evenodd: rule === 'evenodd',
+      loops: subpaths.map(allPts).filter(pts => pts.length >= 6),
+    });
+    // AN OPAQUE FILL COVERS WHAT IS UNDER IT, whatever its colour: white
+    // paper over the far wall, grey poche over the room behind the cut. A
+    // tint does not -- what is under a tenth of grey still shows.
+    const covers = () => {
+      const c = parseColor(state.fillStyle);
+      return !!c && c[3] * state.globalAlpha >= 0.9;
+    };
+    const hideUnderPath = region => {
+      if (hide && entities.length && region.loops.length && covers()) hideUnder(entities, region, state.clips);
+    };
 
     const ctx = {
       canvas: { width, height },
@@ -261,7 +453,7 @@ if (!window.DraftDxfWriter) {
             it ** 3 * p[1] + 3 * it * it * t * c1y + 3 * it * t * t * c2y + t ** 3 * y);
         }
       },
-      clip() {
+      clip(rule) {
         // The box round what was traced, in recorder pixels, narrowed by any
         // clip already in force.
         let box = [Infinity, Infinity, -Infinity, -Infinity];
@@ -272,6 +464,7 @@ if (!window.DraftDxfWriter) {
         if (!Number.isFinite(box[0])) return;
         state.clip = state.clip ? [Math.max(box[0], state.clip[0]), Math.max(box[1], state.clip[1]),
           Math.min(box[2], state.clip[2]), Math.min(box[3], state.clip[3])] : box;
+        if (hide) state.clips = [...state.clips, loopsOf(rule)];
       },
       stroke() {
         if (isPaper(state.strokeStyle, state.globalAlpha)) return;
@@ -314,7 +507,8 @@ if (!window.DraftDxfWriter) {
           });
         });
       },
-      fill() {
+      fill(rule) {
+        hideUnderPath(loopsOf(rule));
         // Only a small dark mark: an arrowhead, a tick, a dot.
         if (isPaper(state.fillStyle, state.globalAlpha)) return;
         const c = parseColor(state.fillStyle);
@@ -348,7 +542,12 @@ if (!window.DraftDxfWriter) {
         });
       },
       strokeRect(x, y, w, h) { ctx.beginPath(); ctx.rect(x, y, w, h); ctx.stroke(); },
-      fillRect() {},
+      fillRect(x, y, w, h) {
+        if (!hide) return;
+        const m = state.m;
+        hideUnderPath({ evenodd: false, loops: [[...ap(m, x, y), ...ap(m, x + w, y),
+          ...ap(m, x + w, y + h), ...ap(m, x, y + h)]] });
+      },
       clearRect() {},
       fillText(text, x, y) {
         const words = String(text ?? '');

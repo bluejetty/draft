@@ -83,6 +83,12 @@
     // ARCHICAD's Multiply). Copies in a row or a grid; no letter, as
     // ANNOTATION beside it has none.
     { id: 'array',        name: 'ARRAY',        group: 'draw',  kind: 'contextual', command: null },
+    // DETAIL SNAPSHOT (jb, 20 Nov 2026): "i'd like to be able to make a
+    // 'square' area and take a 'snapshot' of the elevation or section" --
+    // "lets call it DETAIL SNAPSHOT and make it camera". A drafting key with
+    // no letter yet, as ARRAY beside it has none. It works on a view, not on
+    // the plan; armed on a plan it says so (model/13).
+    { id: 'snapshot',     name: 'DETAIL SNAPSHOT', group: 'draw', kind: 'contextual', command: null },
     { id: 'wall',         name: 'WALL',         group: 'build', kind: 'contextual', command: 'wall' },
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },

@@ -172,7 +172,7 @@
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || cutStart || beamStart || elevLineStart
-      || elevShapePts.length || elevDimPts.length
+      || elevSnapStart || elevShapePts.length || elevDimPts.length
       || outlineCorners.length || floorCorners.length || shapeCorners.length || dimPoints.length
       || stretchState.a || stairHand.at || draftCommandsBusy());
     if (typeof lineArcCancel === 'function') lineArcCancel();
@@ -189,6 +189,8 @@
     cutStart = null;
     cutEnd = null;
     elevLineStart = null;
+    elevSnapStart = null;
+    elevSnapPress = null;
     elevNotePress = null;
     elevPointerTip = null;
     elevShapePts = [];
@@ -2138,6 +2140,7 @@
   });
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointerup', e => { if (elevNotePress) elevNoteLift(e); });
+  canvas.addEventListener('pointerup', e => { if (elevSnapPress) elevSnapLift(e); });
   canvas.addEventListener('pointerup', e => { if (planNotePress) planNoteLift(e); });
   canvas.addEventListener('pointercancel', endDrag);
 
