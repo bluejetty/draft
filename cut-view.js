@@ -2679,9 +2679,39 @@ if (!window.DraftCutView) {
       ctx.fillStyle = weight(C.concrete, 0.5);
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       const x = X(c.u - c.width / 2), wid = c.width * pxPerFt;
-      ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
-      sectionSlices(ctx, X, Y, pxPerFt, c, top, base, C);
-      ctx.strokeRect(x, Y(top), wid, (top - base) * pxPerFt);
+      // ── THE LINING STANDS ON THE SLAB ────────────────────────────────
+      //
+      // jb, 20 Nov 2026, on S1: "the floor slab should go all the way to
+      // the interior of the foundation wall and the interior 2x6 wall should
+      // only go to the top of the slab". A wall whose FOUNDATION plan shows
+      // less than all of it (the stock 8" CONC + 2X6 BSMT) is the concrete
+      // the whole height and the lining only above the house slab; below
+      // the slab's top the concrete stands alone and the slab meets its
+      // inside face (insideFace below).
+      const span = sectionConcreteSpan(c);
+      const slabTop = fdn.slabTop;
+      const lined = !c.garage && Number.isFinite(slabTop)
+        && span.hi - span.lo < c.width - 1e-3 && slabTop > base + 1e-3 && slabTop < top - 1e-3;
+      if (lined) {
+        ctx.fillRect(x, Y(top), wid, (top - slabTop) * pxPerFt);
+        sectionSlices(ctx, X, Y, pxPerFt, c, top, slabTop, C);
+        ctx.strokeRect(x, Y(top), wid, (top - slabTop) * pxPerFt);
+        const cx = X(span.lo), cwid = (span.hi - span.lo) * pxPerFt;
+        ctx.fillStyle = weight(C.concrete, 0.5);
+        ctx.fillRect(cx, Y(slabTop), cwid, (slabTop - base) * pxPerFt);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(cx, Y(slabTop), cwid, (slabTop - base) * pxPerFt); ctx.clip();
+        sectionSlices(ctx, X, Y, pxPerFt, c, slabTop, base, C);
+        ctx.restore();
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+        ctx.strokeRect(cx, Y(slabTop), cwid, (slabTop - base) * pxPerFt);
+      } else {
+        ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
+        sectionSlices(ctx, X, Y, pxPerFt, c, top, base, C);
+        ctx.strokeRect(x, Y(top), wid, (top - base) * pxPerFt);
+      }
+      ctx.fillStyle = weight(C.concrete, 0.5);
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       // ── AND THE TOP THE BUCK CAME OUT OF, DRAWN LIGHT ────────────────
       //
       // Movie, 26 Sep: *"maybe also show the top of the grade beam in the
@@ -2705,8 +2735,19 @@ if (!window.DraftCutView) {
         ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       }
       if (c.wall.baseHeight <= 0.01) {
+        // ── CENTRED ON THE CONCRETE ─────────────────────────────────────
+        //
+        // jb, 20 Nov 2026, on S1: "on 8\" conc wall it will be centered on
+        // the 8\" wall (foundation wall) and if insulated interior wall is
+        // added, that won't effect the footing. on ICF wall the int won't
+        // need exta insulation so the full wall can be used to center the
+        // footing". The stock 8" CONC + 2X6 BSMT carried its footing under
+        // the middle of all 14"; the slices FOUNDATION shows are the
+        // concrete (an ICF shows all of its own, so it centres on the whole).
         const fw = fdn.footingWidthIn / 12;
-        const fx = X(c.u - fw / 2), fwid = fw * pxPerFt;
+        const span = sectionConcreteSpan(c);
+        const mid = (span.lo + span.hi) / 2;
+        const fx = X(mid - fw / 2), fwid = fw * pxPerFt;
         ctx.fillRect(fx, Y(base), fwid, (fdn.footingIn / 12) * pxPerFt);
         ctx.strokeRect(fx, Y(base), fwid, (fdn.footingIn / 12) * pxPerFt);
       }
@@ -2736,7 +2777,10 @@ if (!window.DraftCutView) {
       const endFace = (u, sign) => {
         const near = cs.filter(c => Math.abs(c.u - u) <= c.width).sort(
           (a, b) => Math.abs(a.u - u) - Math.abs(b.u - u))[0];
-        return near ? near.u + sign * near.width / 2 : u;
+        // THE CONCRETE's inside face, not the lining's (jb, 20 Nov 2026).
+        if (!near) return u;
+        const span = sectionConcreteSpan(near);
+        return sign > 0 ? span.hi : span.lo;
       };
       return { lo: Math.max(lo, endFace(lo, 1)), hi: Math.min(hi, endFace(hi, -1)) };
     };
@@ -3617,6 +3661,32 @@ if (!window.DraftCutView) {
   const SECTION_SLICE_SHADES = Object.freeze({
     black: '#000000', grey: '#808080', lightgrey: '#c8c8c8', white: '#ffffff', insulation: '#cde4f8',
   });
+  // WHERE A CROSSED FOUNDATION WALL'S CONCRETE LIES along the section, in
+  // u: the run of slices its FOUNDATION plan shows (a slice flagged
+  // `fdn: false` is lining), laid out the way sectionSlices lays them. A
+  // wall without slices is concrete through.
+  function sectionConcreteSpan(crossing) {
+    const lo = crossing.u - crossing.width / 2, hi = crossing.u + crossing.width / 2;
+    const WT = window.DraftWallTypes;
+    const wall = crossing?.wall;
+    if (!WT?.isUserWallTypeId || !WT.sliceShows || !wall || !WT.isUserWallTypeId(wall.wallType)) return { lo, hi };
+    const type = WT.wallTypeOf(wall);
+    if (!type?.layers?.length || !(type.totalIn > 0)) return { lo, hi };
+    const layers = wall.sliceFlip === true && type.user ? [...type.layers].reverse() : type.layers;
+    const scale = crossing.width / (type.totalIn / 12);
+    const sign = crossing.sliceSign === -1 ? -1 : 1;
+    let acc = 0, cLo = null, cHi = null;
+    layers.forEach(layer => {
+      const run = (layer.in / 12) * scale;
+      const a = sign > 0 ? lo + acc : hi - acc - run;
+      acc += run;
+      if (!(run > 0) || !WT.sliceShows(layer, 'fdn')) return;
+      cLo = cLo == null ? a : Math.min(cLo, a);
+      cHi = cHi == null ? a + run : Math.max(cHi, a + run);
+    });
+    return cLo == null ? { lo, hi } : { lo: cLo, hi: cHi };
+  }
+
   function sectionSlices(ctx, X, Y, pxPerFt, crossing, topFt, bottomFt, C) {
     const WT = window.DraftWallTypes;
     const wall = crossing?.wall;
