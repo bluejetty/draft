@@ -1515,7 +1515,9 @@
     .some(e => e && Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6))
     || loopCorners().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6)
     // A POST'S CENTRE IS THE PLAN'S OWN NODE, orange like a wall's end.
-    || columnSnapPoints().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6);
+    || columnSnapPoints().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6)
+    // A STAIR'S CORNER, while ROTATE or MIRROR is up (stairSnapNodes).
+    || stairSnapNodes().some(e => Math.abs(e.x - v.x) < 1e-6 && Math.abs(e.z - v.z) < 1e-6);
   // Worked out once per drawing change, level and hologram placing, not on
   // every move of the mouse: a plan of twenty suites is a lot of walls.
   let holoSnapCache = { key: null, list: [] };
@@ -1583,6 +1585,13 @@
     // plan draws, and on the FOUNDATION view its pad's corners
     // (model/01 columnSnapPoints).
     columnSnapPoints().forEach(v => {
+      if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
+    });
+    // AND A STAIR'S CORNERS while ROTATE or MIRROR is up (jb, 20 Nov 2026:
+    // "can we make the node snap work on the corner of the stairs when i'm
+    // using the ROTATE command") -- every outside corner of the flights and
+    // landing (model/06 stairOutlineOf).
+    stairSnapNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
     // AND ON THE SITE, THE REGISTRATION TARGET and the roof drawn over it
@@ -1654,6 +1663,30 @@
       const geo = FG.fixtureGeometry(drawing.walls || [], fx);
       return (geo?.corners || []).map(c => ({ x: c.x, z: c.z }));
     });
+  };
+  // THE STAIR CORNERS ROTATE AND MIRROR CATCH: each stair's outline corners
+  // on this level -- a straight flight's four, an L's or a U's every corner
+  // of its flights and landing -- only while one of those two tools is up,
+  // the centre and arm picks of a turn (jb, 20 Nov 2026). Other tools keep
+  // the stair's own corner grab and its outline magnet (stairSeek) and
+  // nothing more, so a stair dragged is never caught by where it was.
+  // Kept for the paint frame: nodeEnds is asked on every pointer move.
+  let stairNodeCache = { key: null, nodes: [] };
+  const stairSnapNodes = () => {
+    if ((activeTool !== 'rotate' && activeTool !== 'mirror') || !drawing) return [];
+    const key = `${paintFrame}|${modelEpoch}|${activeLevelId()}`;
+    if (stairNodeCache.key === key) return stairNodeCache.nodes;
+    const nodes = [];
+    stairs().forEach(stair => {
+      let corners = [];
+      try { corners = stairOutlineOf(stair).corners || []; } catch { corners = []; }
+      corners.forEach(c => {
+        if (!c || !Number.isFinite(c.x) || !Number.isFinite(c.z)) return;
+        if (!nodes.some(o => Math.abs(o.x - c.x) < 1e-6 && Math.abs(o.z - c.z) < 1e-6)) nodes.push({ x: c.x, y: 0, z: c.z });
+      });
+    });
+    stairNodeCache = { key, nodes };
+    return nodes;
   };
   // THE HALF-INCH CORNERS OF EVERY FIXTURE ON THE LEVEL, kept for the frame:
   // nodeEnds is asked on every pointer move, and a fixture's geometry does not

@@ -147,3 +147,35 @@ test('MOVE: an L taken by its corner lands on the T\'s corner too', async ({ pag
   const s = await saved(page);
   expect([r3(s.start.x - (-2)), r3(s.start.z - (-4))]).toEqual([r3(t.x - c.x), r3(t.z - c.z)]);
 });
+
+// ROTATE (and MIRROR) CATCH A STAIR'S CORNERS (jb, 20 Nov 2026: "can we make
+// the node snap work on the corner of the stairs when i'm using the ROTATE
+// command"): every outline corner of an L, landing included, is a node while
+// the turn's centre and arm are picked -- and only then.
+test('ROTATE\'s picks catch an L flight\'s corners, landing included', async ({ page }) => {
+  const { frame, facts } = await open(page);
+  const key = c => [r4(c.x), r4(c.z)];
+  expect(await page.evaluate(() => stairSnapNodes().length), 'no stair nodes under SELECT').toBe(0);
+  await page.keyboard.press('z');
+  expect(await page.evaluate(() => activeTool)).toBe('rotate');
+  const nodes = await page.evaluate(() => stairSnapNodes().map(n => [n.x, n.z]));
+  expect(nodes.length).toBe(facts.corners.length);
+  // The flight's south-most corner, out on the turned flight's foot.
+  const c = facts.corners.slice().sort((a, b) => b.z - a.z || b.x - a.x)[0];
+  const [cx, cy] = frame.at(c.x, c.z);
+  await page.mouse.move(cx + 2, cy + 2);
+  await page.waitForTimeout(150);
+  expect(await attr(page, 'data-snap-node')).toEqual(key(c));
+  await page.mouse.click(cx + 2, cy + 2);
+  await page.waitForTimeout(120);
+  const base = await page.evaluate(() => [draftCmd.turn.base.x, draftCmd.turn.base.z]);
+  expect(base.map(r4)).toEqual(key(c));
+  // The arm takes another corner the same way: the landing's outer corner
+  // (the north-east-most).
+  const d = facts.corners.slice().sort((a, b) => (b.x - b.z) - (a.x - a.z))[0];
+  const [dx, dy] = frame.at(d.x, d.z);
+  await page.mouse.move(dx - 2, dy + 2);
+  await page.waitForTimeout(150);
+  expect(await attr(page, 'data-snap-node')).toEqual(key(d));
+  await page.keyboard.press('Escape');
+});
