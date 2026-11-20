@@ -5160,10 +5160,37 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // model has no deck kind; a deck IS a floor, and what makes it one is that
   // it lies outside the walls of its own storey. So: a storey floor (not a
   // FOUNDATION slab, not a garage's) with a corner more than DECK_OUT_FT
-  // clear of every room its level's walls enclose. The house's own floor sits
-  // on the wall line, a few inches out at most, and never counts. A level
+  // clear of every room its level's walls enclose, and no room's middle on
+  // it. The house's own floor sits on the wall line, a few inches out at
+  // most, or carries the rooms when pushed out, and never counts. A level
   // with no closed walls has no house to stand out past, and answers none.
   const DECK_OUT_FT = 1;
+  // ── AND A DECK IS ITS OWN FLOOR TYPE (jb, 20 Nov 2026) ─────────────────
+  //
+  // jb: "make a special floor type called DECK. make it default 9.25"
+  // joists with 3/4" sheathing and make that floor light grey shading", and
+  // "drop the top of the floor for the deck from the main floor so there
+  // will be a slight drop from the threshold of the door" -- "2" approx".
+  // So a deck is a 2x10 (dressed 9 1/4") under 3/4" of sheathing, its top
+  // DECK.dropIn below its storey's floor. The drop is the deck's own
+  // (`deckDropIn`, inches) and the FLOOR panel edits it.
+  //
+  // `floor.deck` says what the drafter chose: true is a DECK wherever it
+  // sits, false is a plain floor even out past the walls, and unset leaves
+  // it to where it is drawn -- out past the walls is a deck. That is how
+  // every deck drawn before the type existed comes in as one.
+  const DECK = Object.freeze({
+    joistType: 'conv_2x10', joistLabel: '2x10', joistIn: 9 + 1 / 4, sheathingIn: 3 / 4, dropIn: 2,
+  });
+  const deckSpec = floor => {
+    const drop = Number(floor && floor.deckDropIn);
+    const dropIn = Number.isFinite(drop) && drop >= 0 ? drop : DECK.dropIn;
+    return {
+      joistType: DECK.joistType, joistLabel: DECK.joistLabel,
+      joistIn: DECK.joistIn, sheathingIn: DECK.sheathingIn, dropIn,
+      dropFt: dropIn / 12, thickFt: (DECK.joistIn + DECK.sheathingIn) / 12,
+    };
+  };
   const deckFloors = (floors, walls) => {
     const loopsBy = new Map();
     const loopsOf = id => {
@@ -5185,10 +5212,20 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
       if (!f || f.view === 'foundation' || f.garage === true) return false;
       const pts = Array.isArray(f.points) ? f.points : [];
       if (pts.length < 3) return false;
+      if (f.deck === true) return true;
+      if (f.deck === false) return false;
       const loops = loopsOf(Number(f.levelId));
+      // AND IT IS NOT THE HOUSE'S OWN FLOOR PUSHED OUT. A storey floor
+      // cantilevered past its walls still has the house's rooms on it; a
+      // deck stands beside them. So a floor with a room's middle inside it
+      // is the house's floor, however far it runs out.
+      const middle = loop => ({ x: loop.reduce((a, q) => a + q.x, 0) / loop.length,
+        z: loop.reduce((a, q) => a + q.z, 0) / loop.length });
+      if (loops.some(loop => ringInside(middle(loop), pts))) return false;
       return loops.length > 0 && pts.some(p => clear(p, loops));
     });
   };
+  const isDeckFloor = (floor, walls) => deckFloors([floor], walls).length > 0;
 
   window.DraftGeometry2D = {
     distance,
@@ -5208,6 +5245,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     nearestIntersection,
     roomLoops,
     deckFloors,
+    isDeckFloor,
+    deckSpec,
+    DECK,
     DECK_OUT_FT,
     offsetOutline,
     offsetOutlineVariable,

@@ -1468,8 +1468,14 @@ if (!window.DraftCutView) {
     const concrete = floors.filter(f => (f.view || 'plan') === 'foundation');
     const decks = floors
       .filter(f => (f.view || 'plan') !== 'foundation' && !f.garage)
-      .map(f => ({ pts: f.points, level: stack.floors.find(l => Number(l.id) === Number(f.levelId)) }))
+      .map(f => ({ pts: f.points, floor: f, level: stack.floors.find(l => Number(l.id) === Number(f.levelId)) }))
       .filter(d => d.level);
+    // A DECK'S POST STOPS UNDER THE DECK (jb, 20 Nov 2026): its own 2x10 +
+    // 3/4" a step below the storey's floor, not the storey's floor package.
+    const deckSet = new Set(env.walls ? geo().deckFloors(decks.map(d => d.floor), env.walls()) : []);
+    const undersideOf = d => (deckSet.has(d.floor)
+      ? d.level.floorTop - geo().deckSpec(d.floor).dropFt - geo().deckSpec(d.floor).thickFt
+      : d.level.floorBottom);
     const roofs = (env.roofs() || []).filter(r => r.points && r.points.length >= 3);
     return env.columns()
       .filter(c => (c.view || 'plan') === 'foundation' && c.point && c.auto !== true
@@ -1478,7 +1484,7 @@ if (!window.DraftCutView) {
         const p = column.point;
         if (concrete.some(f => over(p, f.points))) return null;
         const carried = [
-          ...decks.filter(d => over(p, d.pts)).map(d => ({ top: d.level.floorBottom, levelId: d.level.id })),
+          ...decks.filter(d => over(p, d.pts)).map(d => ({ top: undersideOf(d), levelId: d.level.id })),
           ...roofs.filter(r => over(p, r.points)).map(r => ({ top: roofBaseElev(r, stack, env), roof: r })),
         ];
         if (!carried.length) return null;
@@ -1614,6 +1620,9 @@ if (!window.DraftCutView) {
     return out;
   };
   const weight = (triple, a) => `rgba(${triple},${a})`;
+  // A DECK'S LIGHT GREY (jb, 20 Nov 2026), over an opaque face: the ink at
+  // a seventh, so it reads grey on the day skin and the night one alike.
+  const DECK_SHADE = C => weight(C.ink, 0.14);
 
   // THE SKIN, TRANSLATED INTO THE EIGHT THINGS THIS PAINTER DRAWS.
   //
@@ -2532,10 +2541,15 @@ if (!window.DraftCutView) {
     // -- an older or hand-built drawing -- and that fallback is the OLD
     // min..max, named here rather than left as a silent default so a
     // courtyard drawn without floors is a known limit and not a surprise.
+    // THE DECKS COME OUT OF THE STOREY'S BAND (jb, 20 Nov 2026): a DECK is
+    // its own floor -- 2x10 + 3/4" a step below the house floor -- and its
+    // band is drawn on its own below, ending in a line at the wall.
+    const sectionDecks = geo().deckFloors(env.floors(), env.walls());
+    const sectionDeckSays = [];
     const levelRuns = levelId => {
       const polys = env.floors().filter(floor => floor.levelId === levelId
         && !floor.garage && (floor.view || 'plan') !== 'foundation'
-        && (floor.points || []).length >= 3);
+        && (floor.points || []).length >= 3 && !sectionDecks.includes(floor));
       if (polys.length) {
         const runs = floorRuns(cut, axis, polys);
         // THE STAIRWELL IS A HOLE IN THE FLOOR, and a section through the
@@ -2929,6 +2943,44 @@ if (!window.DraftCutView) {
           + ` + ${formatInchesOnly(level.sheathingIn)} SHTG`,
           x + 4, Y((level.floorTop + level.floorBottom) / 2));
       });
+      // ── EACH DECK ON THIS STOREY, ITS OWN BAND (jb, 20 Nov 2026) ─────────
+      //
+      // jb, on S1, where the deck had run on as part of the house's 14" TJI
+      // floor: "put a line at the ext wall to seperate the floors". The deck
+      // is its own floor, so it is its own box -- 2x10 + 3/4" sheathing,
+      // its top the deck's drop under this storey's floor -- and the box's
+      // end is the line at the wall.
+      sectionDecks.filter(deck => Number(deck.levelId) === Number(level.id)).forEach(deck => {
+        const spec = geo().deckSpec(deck);
+        const top = level.floorTop - spec.dropFt;
+        const holes = typeof env.floorOpenings === 'function'
+          ? (env.floorOpenings(deck.id) || []).filter(hole => (hole.points || []).length >= 3) : [];
+        const runs = floorRuns(cut, axis, [deck]);
+        (holes.length ? subtractRuns(runs, floorRuns(cut, axis, holes)) : runs).forEach(span => {
+          if (span.max - span.min <= 0.1) return;
+          const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
+          const tall = spec.thickFt * pxPerFt;
+          ctx.fillStyle = C.ground;
+          ctx.fillRect(x, Y(top), wid, tall);
+          ctx.fillStyle = weight(C.assembly, 0.15);
+          ctx.strokeStyle = INK; ctx.lineWidth = 1;
+          ctx.fillRect(x, Y(top), wid, tall);
+          ctx.strokeRect(x, Y(top), wid, tall);
+          ctx.fillStyle = ink(0.55);
+          ctx.font = `600 ${textPx(9)}px 'Barlow Condensed', system-ui, sans-serif`;
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          // THE LONGEST THAT FITS IN ITS OWN BOX: a deck is often a few feet
+          // across, and its words run over into the house's band otherwise.
+          const said = [
+            `DECK ${formatInchesOnly(spec.joistIn)} ${spec.joistLabel} + ${formatInchesOnly(spec.sheathingIn)} SHTG`,
+            `DECK ${spec.joistLabel} + ${formatInchesOnly(spec.sheathingIn)}`,
+            `DECK ${spec.joistLabel}`, 'DECK',
+          ].find(text => ctx.measureText(text).width <= wid - 8);
+          if (said) ctx.fillText(said, x + 4, Y(top - spec.thickFt / 2));
+          sectionDeckSays.push({ id: deck.id || null, lo: Number(span.min.toFixed(3)), hi: Number(span.max.toFixed(3)),
+            top: Number(top.toFixed(4)), bottom: Number((top - spec.thickFt).toFixed(4)) });
+        });
+      });
       // THE FLOORING (Movie, 23 Oct): where the cut passes a room whose tag
       // lays a finish, a line 3/8" above the sheathing and 1/8" thick --
       // "so hard to see on the section", which is the point. The two
@@ -2951,6 +3003,8 @@ if (!window.DraftCutView) {
       crossings.filter(c => c.wall.levelId === level.id && (c.wall.view || 'plan') === 'plan')
         .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C, fdn));
     });
+
+    if (ctx.canvas && ctx.canvas.setAttribute) ctx.canvas.setAttribute('data-section-decks', JSON.stringify(sectionDeckSays));
 
     // THE STAIRS THE CUT PASSES THROUGH, with their rails (Movie, 7 Oct: "i
     // will need them to also display on the SECTIONS when i make cuts" --
@@ -7317,16 +7371,23 @@ if (!window.DraftCutView) {
         const lo = Math.max(Math.min(...ps.map(p => p.u)), uMin);
         const hi = Math.min(Math.max(...ps.map(p => p.u)), uMax);
         if (!(hi - lo >= 0.25)) return;
-        const thick = Number(floor.thickness) > 0 ? Number(floor.thickness)
-          : (level.floorTop - level.floorBottom);
-        const band = { id: floor.id || null, lo, hi, top: level.floorTop, bottom: level.floorTop - thick,
+        // THE DECK TYPE (jb, 20 Nov 2026): 2x10 + 3/4" sheathing, its top
+        // the deck's drop below the storey's floor -- the step down out of
+        // the door. geometry-2d deckSpec says all three.
+        const spec = geo().deckSpec(floor);
+        const top = level.floorTop - spec.dropFt;
+        const band = { id: floor.id || null, lo, hi, top, bottom: top - spec.thickFt,
           depth: Math.max(...ps.map(p => p.d)) };
         deckBands.push(band);
       });
     const paintDeckBand = band => {
       const x0 = X(band.lo), x1 = X(band.hi);
       const yT = Y(band.top), yB = Y(band.bottom);
+      // OPAQUE, then the deck's light grey over it (jb: "make that floor
+      // light grey shading"): it hides what stands behind it like any face.
       ctx.fillStyle = C.face;
+      ctx.fillRect(x0, yT, x1 - x0, yB - yT);
+      ctx.fillStyle = DECK_SHADE(C);
       ctx.fillRect(x0, yT, x1 - x0, yB - yT);
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.setLineDash([]);

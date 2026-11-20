@@ -135,6 +135,26 @@ const roofBase = CV.roofBaseElev(env.roofs().find(r => !r.garage), stack, env);
     JSON.stringify(posts.map(p => [p.top, p.carries])) + ` want ${main.floorBottom}`);
 }
 
+// ── A DECK: THE POST STOPS UNDER THE DECK (jb, 20 Nov 2026) ─────────────
+//
+// The same piles under a DECK drawn on MAIN FL's floor layout instead -- a
+// floor out past the walls and off the rooms. A deck is 2x10 + 3/4" with
+// its top 2" under the storey's floor, so the post stops 1'-0" under it,
+// not at the storey's floor package.
+{
+  const f = JSON.parse(JSON.stringify(d));
+  f.floors.push({ id: 'deck-front', levelId: 3, view: 'floor', structure: 'floor', thickness: 10 / 12,
+    points: [{ x: -24, y: 0, z: wallZ }, { x: 6, y: 0, z: wallZ }, { x: 6, y: 0, z: wallZ + 6 }, { x: -24, y: 0, z: wallZ + 6 }] });
+  const fEnv = buildEnv(win, f);
+  const fStack = CV.sectionLevelStack(fEnv);
+  const main = fStack.floors.find(l => Number(l.id) === 3);
+  const posts = CV.pilePosts(fEnv, fStack);
+  const want = main.floorTop - 2 / 12 - 10 / 12;
+  check('under a deck, the post holds the deck\'s underside, 1\'-0" under the floor',
+    posts.length === 4 && posts.every(p => Math.abs(p.top - want) < 1e-9 && p.carries === 'floor'),
+    JSON.stringify(posts.map(p => [p.top, p.carries])) + ` want ${want}`);
+}
+
 // ── ON E1: THE POST IS ON THE SHEET ──────────────────────────────────────
 {
   const cuts = standardElevationCuts(env);
