@@ -135,6 +135,8 @@ function loadDraftModules() {
     // AND THE DXF READER that TRACE lays a CAD file under the plan with,
     // and the WRITER that LAYOUT saves its sheets as DXFs through.
     'dxf-reader.js', 'dxf-writer.js',
+    // AND THE CAMERA that takes a box of an elevation through that writer.
+    'detail-snapshot.js',
     // AND THE SHEET PAINTER, for the site plan: the lot line, the roof plan
     // that is its footprint, and the shading inside the walls, which
     // proto/site-plan-harness.js measures off its own strokes. render-2d.js

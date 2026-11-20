@@ -254,7 +254,7 @@
     if (lit) return { ...lit.at };
     return square ? squared(from, raw) : raw;
   };
-  const elevDrawTool = () => ['line', 'shape', 'dimension', 'annotation'].includes(activeTool);
+  const elevDrawTool = () => ['line', 'shape', 'dimension', 'annotation', 'snapshot'].includes(activeTool);
   const paintElevSnap = () => {
     if (!elevSnapLit || !elevFrame || !elevDrawTool()) return;
     const tier = elevSnapLit.kind === 'node' ? 'orange' : elevSnapLit.kind === 'corner' ? 'yellow' : 'neon';
@@ -318,6 +318,13 @@
       const pts = [...elevDimPts, elevCursor];
       return pts.slice(1).map((p, i) => ({ kind: 'line', a: pts[i], b: p }));
     }
+    // DETAIL SNAPSHOT'S BOX, from the corner pressed to the hand: four
+    // dashed lines, the same preview a line in hand gets.
+    if (activeTool === 'snapshot' && elevSnapStart) {
+      const a = elevSnapStart, b = elevCursor;
+      const c = [a, { u: b.u, e: a.e }, b, { u: a.u, e: b.e }];
+      return c.map((p, i) => ({ kind: 'line', a: p, b: c[(i + 1) % 4] }));
+    }
     return null;
   };
   // ENTER, SPACE, A RIGHT CLICK OR A DOUBLE-CLICK on a view: the line run
@@ -340,6 +347,13 @@
       sayOnStrip('DIMENSION — press where the string stands.');
       return true;
     }
+    // A BOX IN HAND IS PUT DOWN, and the camera stays up for the next one.
+    if (activeTool === 'snapshot' && elevSnapStart) {
+      elevSnapStart = null;
+      elevSnapPress = null;
+      sayOnStrip(SNAPSHOT_READY);
+      return true;
+    }
     return false;
   };
   const elevCloseShape = () => {
@@ -353,11 +367,98 @@
     sayOnStrip('SHAPE made — SELECT it for its HATCH (WHITE masks what is under it) and LINETYPE.');
   };
 
+  // ── DETAIL SNAPSHOT: the camera (detail-snapshot.js) ────────────────────
+  //
+  // jb, 20 Nov 2026: "make a 'square' area and take a 'snapshot' of the
+  // elevation or section" -- "copies the lines over so they can be edited".
+  //
+  // PRESS A CORNER AND DRAG TO THE OTHER, OR PRESS BOTH. A drag is what he
+  // asked for and what a camera's frame is; two presses is what LINE and
+  // SHAPE beside it do, and the only one of the two that works when the
+  // other corner is off the screen and the view has to be panned to reach it.
+  //
+  // THE PICTURE IS THE VIEW PAINTED AGAIN, into a recorder, in the frame the
+  // screen was just painted in -- the same painter, the same model, the same
+  // marks, so what is filed is what was under the box. Not the screen's own
+  // paint: that one carries the skin's inks, the box in hand and the mark
+  // held blue, and none of those are the drawing.
+  //
+  // IT COSTS NOTHING AND CHANGES NOTHING. A snapshot is not a mark on this
+  // drawing -- nothing is added to it, nothing goes on the undo stack, and
+  // the file is not made dirty. It goes to the snapshot tray, which the
+  // details library reads.
+  const SNAPSHOT_READY = 'DETAIL SNAPSHOT — press one corner of the box and drag to the other.';
+  const snapshotLength = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
+  const elevSnapshotTake = (a, b) => {
+    const DS = window.DraftDetailSnapshot;
+    const cut = activeCut();
+    elevSnapStart = null;
+    elevSnapPress = null;
+    const frame = elevFrame ? { ...elevFrame } : null;
+    const box = DS && cut && frame ? DS.boxOf(a, b, frame) : null;
+    if (!DS || !DS.bigEnough(box)) {
+      sayOnStrip(`DETAIL SNAPSHOT — that box is under ${DS ? DS.MIN_FT * 12 : 6} inches a side. Press a corner and drag wider.`);
+      paint();
+      return;
+    }
+    const taken = DS.capture({ frame, box, width: cssW, height: cssH,
+      paint: rec => window.DraftCutView.drawCutView(cutEnv(), rec, cssW, cssH, cut,
+        { margins: furnitureMargins(), frame, markScreen: true }) });
+    if (!taken || !taken.entities.length) {
+      sayOnStrip('DETAIL SNAPSHOT — nothing is drawn inside that box. Nothing taken.');
+      paint();
+      return;
+    }
+    const when = new Date();
+    const rec = DS.record({
+      id: `snap-${when.getTime().toString(36)}`, taken, cutName: cut.name,
+      kind: autoElevationCuts().some(c => c.name === cut.name) ? 'elevation' : 'section',
+      when: when.toISOString(),
+    });
+    sayOnStrip(`DETAIL SNAPSHOT taken of ${cut.name} — ${snapshotLength(rec.widthFt)} x ${snapshotLength(rec.heightFt)}, `
+      + `${rec.lines} lines. Saving it to the snapshot tray…`);
+    paint();
+    DS.save(rec).then(tray => {
+      // PUBLISHED FOR THE SPECS, and said plainly: until the details library
+      // can pick one up, the strip is the only place a drafter is told.
+      canvas.dataset.detailSnapshots = String(tray.length);
+      canvas.dataset.detailSnapshotLast = rec.id;
+      sayOnStrip(`DETAIL SNAPSHOT taken of ${cut.name} — ${snapshotLength(rec.widthFt)} x ${snapshotLength(rec.heightFt)}, `
+        + `${rec.lines} lines. In the snapshot tray (${tray.length}). Box another, or ESC.`);
+    }).catch(err => {
+      sayOnStrip('DETAIL SNAPSHOT could not be saved — this browser refused the storage. Nothing was kept.');
+      if (window.DraftErrorReport) window.DraftErrorReport.note(`snapshot save failed: ${err && err.message}`);
+    });
+  };
+  // THE BUTTON COMES UP after a drag: that is the other corner. After a tap
+  // it is nothing -- the box waits for the second press.
+  const elevSnapLift = e => {
+    const press = elevSnapPress;
+    elevSnapPress = null;
+    if (!press || !elevSnapStart || activeTool !== 'snapshot') return;
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) <= 8) return;
+    const rect = canvas.getBoundingClientRect();
+    const lift = elevAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (lift) elevSnapshotTake(elevSnapStart, lift);
+  };
+
   const elevPress = (e, rect) => {
     const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
     const raw = elevAt(cx, cy);
     if (!raw) return false;
     const cut = activeCut();
+    if (activeTool === 'snapshot') {
+      if (!elevSnapStart) {
+        elevSnapStart = raw;
+        elevSnapPress = { x: e.clientX, y: e.clientY };
+        elevCursor = raw;
+        sayOnStrip('DETAIL SNAPSHOT — drag to the opposite corner, or press it. ESC or right click drops the box.');
+        paint();
+        return true;
+      }
+      elevSnapshotTake(elevSnapStart, raw);
+      return true;
+    }
     if (activeTool === 'line') {
       const here = elevPoint(raw, elevLineStart);
       if (!elevLineStart) {
@@ -547,6 +648,14 @@
     paint();
   };
   toolListeners.push(next => {
+    elevSnapStart = null;
+    elevSnapPress = null;
+    // THE CAMERA SAYS WHERE IT WORKS. On a plan it arms and does nothing,
+    // which without a word reads as a broken key.
+    if (next === 'snapshot') {
+      sayOnStrip(drawing && activeCut() ? SNAPSHOT_READY
+        : 'DETAIL SNAPSHOT works on an elevation or a section — open one (E1 to E4, or a CUT) and box the part to take.');
+    }
     elevLineStart = null;
     elevNotePress = null;
     elevPointerTip = null;

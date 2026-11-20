@@ -65,6 +65,9 @@ const ROSTER = [
   // ARRAY (9 Nov) where MULTIPLE's placeholder stood (Movie, 27 Oct: "put a
   // button in the DRAFTING menu we can work on it later").
   ['draw', 'array', 'ARRAY', ''],
+  // DETAIL SNAPSHOT (jb, 20 Nov 2026): "lets call it DETAIL SNAPSHOT and make
+  // it camera". No letter yet, as ARRAY beside it has none.
+  ['draw', 'snapshot', 'DETAIL SNAPSHOT', ''],
   ['build', 'wall', 'WALL', 'W'],
   ['build', 'fenestration', 'FENESTRATION', 'E'],
   ['build', 'floor', 'FLOOR', 'F'],
@@ -147,7 +150,7 @@ test('nineteen keys carry a letter and eight are deliberately bare',
     // letters were ever loosened to ''.
     expect(got.filter(k => k.key !== '')).toHaveLength(19);
     expect(got.filter(k => k.key === '').map(k => k.id))
-      .toEqual(['annotation', 'roomtag', 'array', 'dormer', 'column', 'beam', 'stair', 'fixture']);
+      .toEqual(['annotation', 'roomtag', 'array', 'snapshot', 'dormer', 'column', 'beam', 'stair', 'fixture']);
   });
 
 test('a SETTINGS remap moves the letter on the key face', async ({ page }) => {

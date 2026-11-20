@@ -55,6 +55,9 @@ if (!window.DraftToolIcons) {
     // SITE PLAN (jb, 9 Nov: "make it look like a site plan"): the lot line
     // dot-dashed the way the plan draws it, the house footprint inside with
     // its gable, and a north arrow in the corner.
+    // DETAIL SNAPSHOT (jb, 20 Nov 2026: "make it camera" -- "a square with a
+    // circle in the middle").
+    snapshot: '<rect x="4" y="4" width="16" height="16" /><circle cx="12" cy="12" r="4.5" />',
     siteplan: '<path d="M3 4h18v16H3z" stroke-dasharray="3 1.4 0.8 1.4" />'
       + '<path d="M7 17v-6l4-3 4 3v6z" /><path d="M7 11h8" stroke-width="1" />'
       + '<path d="M18 11V6.5" stroke-width="1.2" /><path d="M16.6 8.2L18 6.3l1.4 1.9" stroke-width="1.2" />',
@@ -80,6 +83,7 @@ if (!window.DraftToolIcons) {
     rotate: 'turn what is picked about a base point',
     fillet: 'join two lines or walls at a corner, square or rounded',
     array: 'make copies of what is picked in a row or a grid',
+    snapshot: 'box part of an elevation or section and take its lines for a detail',
     wall: 'draw a wall',
     fenestration: 'place a door or window',
     floor: 'draw a floor',

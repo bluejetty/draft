@@ -165,6 +165,98 @@ const box = (geo, layer) => {
   check('and the degree sign as AutoCAD writes it', /12'-6" %%d/.test(text), true);
 }
 
+// ── WHAT AN OPAQUE FILL HIDES (`hide`, for DETAIL SNAPSHOT) ────────────────
+//
+// jb, 20 Nov 2026: a snapshot is "the lines" of what he is looking at. A
+// painter draws a house back to front and covers the far wall with the near
+// one's white fill; a DXF leaves fills out; so the first picture the camera
+// took of an elevation had the back wall's windows across the front.
+{
+  const runs = ctx => ctx.entities.filter(e => e.type === 'poly')
+    .map(e => e.pts.map(v => Math.round(v * 100) / 100).join(' ') + (e.closed ? ' closed' : '')).join(' | ');
+  const far = ctx => { ctx.strokeStyle = '#1d1f20'; ctx.beginPath(); ctx.moveTo(0, 50); ctx.lineTo(100, 50); ctx.stroke(); };
+  const wall = (ctx, style) => { ctx.fillStyle = style; ctx.beginPath(); ctx.rect(40, 40, 20, 20); ctx.fill(); };
+
+  const off = W.recorder({ layer: 'A' });
+  far(off); wall(off, '#fff');
+  check('UNASKED, nothing is hidden: an engineer\'s sheet goes out as it always has', runs(off), '0 50 100 50');
+
+  const on = W.recorder({ layer: 'A', hide: true });
+  far(on); wall(on, '#fff');
+  check('a line is cut where a white wall stands in front of it', runs(on), '0 50 40 50 | 60 50 100 50');
+  on.strokeStyle = '#1d1f20'; on.stroke();
+  check('and the wall\'s own outline, drawn after, is whole',
+    runs(on), '0 50 40 50 | 60 50 100 50 | 40 40 60 40 60 60 40 60 closed');
+
+  const grey = W.recorder({ layer: 'A', hide: true });
+  far(grey); wall(grey, '#8a8d8f');
+  check('grey poche hides as white paper does: it is the opacity, not the colour', runs(grey), '0 50 40 50 | 60 50 100 50');
+
+  const tint = W.recorder({ layer: 'A', hide: true });
+  far(tint); wall(tint, 'rgba(29,31,32,0.1)');
+  check('a tint hides nothing: what is under a tenth of grey still shows', runs(tint), '0 50 100 50');
+  const faded = W.recorder({ layer: 'A', hide: true });
+  far(faded); faded.globalAlpha = 0.2; wall(faded, '#fff');
+  check('nor does a fill laid on at a fifth', runs(faded), '0 50 100 50');
+
+  const rect = W.recorder({ layer: 'A', hide: true });
+  far(rect); rect.fillStyle = '#fff'; rect.fillRect(40, 40, 20, 20);
+  check('fillRect hides as a filled path does', runs(rect), '0 50 40 50 | 60 50 100 50');
+  const turned = W.recorder({ layer: 'A', hide: true });
+  far(turned); turned.fillStyle = '#fff';
+  turned.save(); turned.translate(50, 50); turned.scale(2, 2); turned.fillRect(-5, -5, 10, 10); turned.restore();
+  check('in the transform it was filled in', runs(turned), '0 50 40 50 | 60 50 100 50');
+
+  // ALONG THE EDGE IS NOT UNDER. A line drawn on the edge of a fill is half
+  // covered by it and still shows -- and a wall's fill is laid on edges the
+  // wall before it drew.
+  const edge = W.recorder({ layer: 'A', hide: true });
+  edge.strokeStyle = '#1d1f20';
+  edge.beginPath(); edge.moveTo(0, 40); edge.lineTo(100, 40); edge.stroke();
+  wall(edge, '#fff');
+  check('a line along the edge of a fill is kept whole', runs(edge), '0 40 100 40');
+
+  // A FILL ONLY LANDS WHERE THE CLIP LETS IT. A big fill clipped to a gable
+  // must not hide what stands beside the gable.
+  const gable = W.recorder({ layer: 'A', hide: true });
+  far(gable);
+  gable.save();
+  gable.beginPath(); gable.moveTo(30, 100); gable.lineTo(50, 0); gable.lineTo(70, 100); gable.closePath(); gable.clip();
+  gable.fillStyle = '#fff'; gable.fillRect(0, 0, 100, 100);
+  gable.restore();
+  check('a fill clipped to a gable hides the gable\'s width of the line, not the box round it',
+    runs(gable), '0 50 40 50 | 60 50 100 50');
+  far(gable);
+  gable.fillStyle = '#fff'; gable.fillRect(0, 45, 10, 10);
+  // The second line runs whole through where the gable was; the small fill
+  // at the left takes ten off it, and off the first line with it.
+  check('and the clip is gone with its restore', runs(gable), '10 50 40 50 | 60 50 100 50 | 10 50 100 50');
+
+  // A SLOPING LINE, A CLOSED SHAPE, AND WHAT IS NOT A LINE.
+  const mix = W.recorder({ layer: 'A', hide: true });
+  mix.strokeStyle = '#1d1f20';
+  mix.beginPath(); mix.moveTo(0, 0); mix.lineTo(100, 100); mix.stroke();
+  mix.beginPath(); mix.rect(30, 45, 40, 10); mix.stroke();
+  mix.font = '10px sans-serif'; mix.fillStyle = '#1d1f20';
+  mix.fillText('BEHIND', 50, 50); mix.fillText('BESIDE', 5, 90);
+  mix.beginPath(); mix.arc(50, 50, 3, 0, Math.PI * 2); mix.fill();
+  wall(mix, '#fff');
+  check('a sloping line is cut at the wall\'s two faces; a window frame part under it loses that part',
+    runs(mix), '0 0 40 40 | 60 60 100 100 | 60 45 70 45 70 55 60 55 | 40 55 30 55 30 45 40 45');
+  check('a word standing behind the wall goes, one beside it stays',
+    mix.entities.filter(e => e.type === 'text').map(e => e.text).join(), 'BESIDE');
+  check('and a dot behind it goes', mix.entities.filter(e => e.type === 'circle').length, 0);
+
+  const swing = W.recorder({ layer: 'A', hide: true });
+  swing.strokeStyle = '#1d1f20';
+  swing.beginPath(); swing.arc(50, 50, 30, 0, Math.PI); swing.stroke();
+  check('an arc clear of every fill is still an ARC', swing.entities.map(e => e.type).join(), 'arc');
+  swing.fillStyle = '#fff'; swing.fillRect(0, 60, 100, 100);
+  check('one partly behind a wall goes on as the lines of the part that shows',
+    swing.entities.every(e => e.type === 'poly') && swing.entities.length === 2
+      && swing.entities.every(e => e.pts.every((v, i) => i % 2 === 0 || v <= 60.01)), true);
+}
+
 // ── THE ZIP ────────────────────────────────────────────────────────────────
 {
   const bytes = W.zip([{ name: 'a.dxf', text: 'hello' }, { name: 'b.dxf', text: '' }]);
