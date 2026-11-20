@@ -592,6 +592,18 @@ test.describe('MODEL.html tier 1', () => {
       // (Movie, 9 Oct: "the ability to view DXF"). Pure, no dependency, and
       // a library of its own would have cost more than the reader.
       './dxf-reader.js',
+      // DETAIL SNAPSHOT'S TWO (jb, 20 Nov 2026: "take a 'snapshot' of the
+      // elevation or section ... copies the lines over so they can be
+      // edited"), and this list caught them on their first push, in CI, which
+      // is what the exact form is for. They are here on purpose:
+      //   dxf-writer.js       the recorder the camera takes its picture
+      //                       through -- the view's own painter run again
+      //                       into a stand-in canvas that keeps the lines.
+      //                       LAYOUT has loaded it since SAVE DXF; MODEL had
+      //                       no use for it until now. 42 KB, no dependency.
+      //   detail-snapshot.js  the box, the picture and the tray. 7 KB, pure
+      //                       but for the browser's store.
+      './dxf-writer.js', './detail-snapshot.js',
       // THE TWO AUTO STAIR MODULES ARRIVED TOGETHER, and this list caught them
       // the same hour, which is what the exact form is for -- an earlier
       // version of this comment says the palette and build-menu.js were caught
