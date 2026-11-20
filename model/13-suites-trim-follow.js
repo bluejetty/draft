@@ -368,8 +368,11 @@
         return true;
       }
       if (Math.hypot(here.u - elevLineStart.u, here.e - elevLineStart.e) < 0.05) return true;
+      // THE NEXT LINE'S WEIGHT, STYLE AND COLOUR, as on the plan (model/15
+      // lineStyleDefaults): what the LINE panel last set.
       addElevMark({ id: newMarkId(), cut: cut.name, kind: 'line',
-        a: { ...elevLineStart }, b: here });
+        a: { ...elevLineStart }, b: here,
+        ...(typeof lineStyleDefaults === 'function' ? lineStyleDefaults() : {}) });
       elevLineStart = here;
       paint();
       return true;
@@ -454,9 +457,19 @@
     if (m && m.kind === 'shape' && typeof elevShapePropsNode === 'function' && window.ModelProps) {
       window.ModelProps.set('SHAPE', elevShapePropsNode(m));
       selectionPanelUp = true;
+      if (typeof renderObjProp === 'function') renderObjProp();
+      return;
+    }
+    // A HELD LINE GETS THE PLAN LINE'S PANEL (jb, 19 Nov): WEIGHT, STYLE,
+    // ARROWS, COLOUR, here and in OBJ / PROP.
+    if (m && m.kind === 'line' && typeof elevLinePropsNode === 'function' && window.ModelProps) {
+      window.ModelProps.set('LINE', elevLinePropsNode(m));
+      selectionPanelUp = true;
+      if (typeof renderObjProp === 'function') renderObjProp();
       return;
     }
     if (typeof showSelectionProps === 'function') showSelectionProps();
+    if (typeof renderObjProp === 'function') renderObjProp();
   };
   const elevNoteLift = e => {
     const press = elevNotePress;

@@ -2269,10 +2269,28 @@ if (!window.DraftCutView) {
       const isLive = live.includes(m);
       ctx.setLineDash(isLive ? [5, 4] : []);
       if (m.kind === 'line' && m.a && m.b) {
+        // ITS OWN WEIGHT, STYLE, ARROWS AND COLOUR (jb, 19 Nov: the LINE
+        // OBJ / PROP on the elevations), off line-styles.js as the plan's
+        // lines are, scaled with the sheet's ink. A line with none set keeps
+        // the 1.25 px it always drew in the view's ink; held, it is the pick
+        // blue at least 2 px.
+        const LS = typeof window !== 'undefined' ? window.DraftLineStyles : null;
+        const styled = LS && (m.weight != null || m.style != null || m.color != null);
+        const s = styled ? LS.strokeFor(m, { inkScale: TEXT_SCALE }) : null;
+        if (!hot && s && s.color) ctx.strokeStyle = s.color;
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.lineWidth = Math.max(hot ? 2 : 0, s ? s.lineWidth : 1.25);
+        if (s && !isLive) ctx.setLineDash(s.dash);
         ctx.beginPath();
         ctx.moveTo(X(m.a.u), Y(m.a.e));
         ctx.lineTo(X(m.b.u), Y(m.b.e));
         ctx.stroke();
+        const R = typeof window !== 'undefined' ? window.DraftRender2D : null;
+        if (m.arrows && R && R.drawLineArrows2D) {
+          R.drawLineArrows2D(ctx, p => ({ x: X(p.x), y: Y(p.z) }),
+            { arrows: m.arrows, weight: m.weight, start: { x: m.a.u, z: m.a.e }, end: { x: m.b.u, z: m.b.e } },
+            { inkScale: TEXT_SCALE });
+        }
         return;
       }
       if (m.kind === 'shape' && Array.isArray(m.points) && m.points.length >= 2) {

@@ -2490,6 +2490,43 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   }
 }
 
+// ── A LINE'S WEIGHT, STYLE, ARROWS AND COLOUR ON AN ELEVATION (jb, 19 Nov) ──
+// "can we show the LINE OBJ / PROP in the elevations too". The mark keeps
+// the plan line's four fields, and the sheet strokes them: BOLD is wider
+// than a plain mark, the colour is its own, and an END arrow is a filled
+// head at the end drawn TO.
+{
+  const F = win.DraftDrawingFormat;
+  const raw = [
+    { id: 'p1', cut: 'E2', kind: 'line', a: { u: 1, e: 3 }, b: { u: 9, e: 3 },
+      weight: 5, style: 'dashed', color: '#FF0000', arrows: 'end' },
+    { id: 'p2', cut: 'E2', kind: 'line', a: { u: 1, e: 6 }, b: { u: 9, e: 6 }, weight: 99, style: 'wavy', arrows: 'up' },
+  ];
+  const kept = F.elevationMarks(raw);
+  check('line props: the format keeps weight, style, colour and arrows it knows',
+    kept[0].weight === 5 && kept[0].style === 'dashed' && kept[0].color === '#ff0000' && kept[0].arrows === 'end',
+    JSON.stringify(kept[0]));
+  check('line props: and drops ones it does not',
+    !('weight' in kept[1]) && !('style' in kept[1]) && !('arrows' in kept[1]), JSON.stringify(kept[1]));
+  const mEnv = buildEnv(win, { ...saved, elevationMarks: raw });
+  const e2cut = standardElevationCuts(mEnv).find(c => c.id === 'E2');
+  if (e2cut) {
+    const view = paintElevation(win, mEnv, e2cut);
+    const along = e => view.strokes.filter(st => st.pts.length === 2
+      && st.pts.every(p => Math.abs(p.e - e) < 0.05));
+    const bold = along(3)[0], plain = along(6)[0];
+    check('line props: BOLD prints wider than a plain mark', bold && plain && bold.w > plain.w,
+      `${bold && bold.w} vs ${plain && plain.w}`);
+    check('line props: in its own colour', bold && String(bold.ink).toLowerCase() === '#ff0000', bold && bold.ink);
+    const head = view.modelFills.find(f => f.ink === '#ff0000' && f.pts.some(p => Math.hypot(p.u - 9, p.e - 3) < 0.05));
+    check('line props: the END arrow is a head at the end drawn to', !!head);
+    check('line props: and none at the start',
+      !view.modelFills.some(f => f.ink === '#ff0000' && f.pts.some(p => Math.hypot(p.u - 1, p.e - 3) < 0.05)));
+  } else {
+    check('line props: the fixture has an E2 to draw on', false);
+  }
+}
+
 // ── A SHAPE AND A DIMENSION OVER AN ELEVATION (jb, 14 Nov 2026) ─────────
 // "allow the AREA / SHAPE and dimension commands to work on those pages too
 // so i can draw overtop to fix small problems quickly". Both are kept in the
