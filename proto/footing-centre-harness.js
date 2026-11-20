@@ -5,7 +5,7 @@
 // repaint this fixture too: the CI harnesses job runs close to its limit.
 const fs = require('fs');
 const path = require('path');
-const { loadDraftModules, buildEnv, standardElevationCuts, paintElevation } = require('./harness-env.js');
+const { loadDraftModules, buildEnv, standardElevationCuts, paintElevation, recordingCtx } = require('./harness-env.js');
 
 const ROOT = path.join(__dirname, '..');
 const MUTATE = require('./harness-args.js').mutationMode();
@@ -23,6 +23,12 @@ const MUTATIONS = [
     c => c.replace('      const concrete = face.concreteIn ?? face.wallIn;\n', '      const concrete = face.wallIn;\n')],
   ['a footing end a hair in from the run end draws its own shoulder', 'cut-view.js',
     c => c.replace('      const SHOULDER_SLACK_FT = 1 / 96;\n', '      const SHOULDER_SLACK_FT = 1e-6;\n')],
+  ['the section centres the footing on the whole wall, lining and all', 'cut-view.js',
+    c => c.replace('        const mid = (span.lo + span.hi) / 2;\n', '        const mid = c.u;\n')],
+  ['the section slab stops at the lining, not the concrete', 'cut-view.js',
+    c => c.replace('        return sign > 0 ? span.hi : span.lo;\n', '        return near.u + sign * near.width / 2;\n')],
+  ['the section lining runs down to the footing', 'cut-view.js',
+    c => c.replace("      const lined = !c.garage && Number.isFinite(slabTop)\n", "      const lined = false && Number.isFinite(slabTop)\n")],
 ];
 
 if (MUTATE) {
@@ -95,6 +101,60 @@ const hasLine = (view, u0, e0, u1, e1, tol = 0.25) => segmentsOf(view).some(({ a
   const corner = inkIn(tv, { uLo: -0.45, uHi: -0.05, eLo: FTG_TOP - 0.02, eHi: FTG_TOP + 0.02 });
   check('jb T: one footing top at the corner, not a second off the stub', corner < 0.5,
     `${corner.toFixed(2)} ft of ink`);
+
+// ── AND ON THE SECTION (jb, 20 Nov 2026) ──────────────────────────────
+//
+// "on 8\" conc wall it will be centered on the 8\" wall (foundation wall)
+// and if insulated interior wall is added, that won't effect the footing.
+// on ICF wall ... the full wall can be used to center the footing", and
+// "the floor slab should go all the way to the interior of the foundation
+// wall and the interior 2x6 wall should only go to the top of the slab".
+// S1 across jb's house, through both long walls; read in sheet inches.
+{
+  const tFile = path.join(ROOT, 'proto', 'repro-jb-fdn-tee.draft');
+  const saved = JSON.parse(fs.readFileSync(tFile, 'utf8'));
+  if (win.DraftWallTypes.adoptDrawing) win.DraftWallTypes.adoptDrawing(saved);
+  const sec = (drawing) => {
+    const env = buildEnv(win, drawing);
+    const CV = win.DraftCutView, PX = 40;
+    const c = drawing.cuts[0];
+    const { ctx, fills } = recordingCtx();
+    CV.drawCutView(env, ctx, 2000, 1200, c, { pxPerFt: PX, extents: CV.cutViewExtents(env, c) });
+    const inch = v => v / PX * 12;
+    return fills.filter(f => f.rect).map(f => ({ x: inch(f.rect.x), w: inch(f.rect.w), y: inch(f.rect.y), h: inch(f.rect.h) }));
+  };
+  const near = (a, b, tol = 0.1) => Math.abs(a - b) <= tol;
+  const rects = sec(saved);
+  const footings = rects.filter(r => near(r.w, 20) && near(r.h, 8));
+  const concrete = rects.filter(r => near(r.w, 8));
+  check('section: two footings on the cut', footings.length === 2, `${footings.length}`);
+  footings.forEach((f, i) => {
+    const mid = f.x + f.w / 2;
+    check(`section: footing ${i + 1} is centred on the 8" concrete, not the 14" wall`,
+      concrete.some(c => near(c.x + c.w / 2, mid)), `footing centre ${mid.toFixed(2)}"`);
+  });
+  const slab = rects.find(r => near(r.h, 3) && r.w > 120);
+  check('section: the basement slab is drawn', !!slab);
+  if (slab) {
+    const innerFaces = concrete.map(c => [c.x, c.x + c.w]).flat();
+    check('section: the slab runs to the inside face of the concrete at both ends',
+      innerFaces.some(u => near(u, slab.x)) && innerFaces.some(u => near(u, slab.x + slab.w)),
+      `slab ${slab.x.toFixed(2)}..${(slab.x + slab.w).toFixed(2)}"`);
+    const whole = rects.filter(r => near(r.w, 14) && r.h > 3);
+    check('section: the 2x6 lining stops at the top of the slab',
+      whole.length === 2 && whole.every(r => near(r.y + r.h, slab.y)),
+      whole.map(r => (r.y + r.h).toFixed(2)).join(', ') + ` vs slab top ${slab.y.toFixed(2)}`);
+  }
+  // ICF: no lining, the footing centres on the whole wall.
+  const icf = { ...saved, walls: saved.walls.map(w => (w.view === 'foundation' ? { ...w, wallType: 'icf', sliceFlip: false } : w)) };
+  const ir = sec(icf);
+  const iw = (win.DraftWallTypes.WALL_TYPES.find(t => t.id === 'icf') || {}).totalIn;
+  const ifoot = ir.filter(r => r.h > 7.5 && r.h < 8.5 && r.w > iw);
+  const iwalls = ir.filter(r => near(r.w, iw) && r.h > 20);
+  check('section: an ICF wall centres its footing on the whole wall',
+    ifoot.length === 2 && ifoot.every(f => iwalls.some(w => near(w.x + w.w / 2, f.x + f.w / 2))),
+    `${ifoot.length} footings, ${iwalls.length} ICF walls`);
+}
 
 console.log(`footing centre harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {

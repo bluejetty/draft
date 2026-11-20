@@ -15,8 +15,10 @@ const MUTANTS = [
     with: "    return;",
     test: 'a section cuts a made wall' },
   { file: 'cut-view.js', name: 'the foundation crossings skip the slices', spec: 'tests/wall-type-sections.spec.js',
-    find: "      ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);\n      sectionSlices(ctx, X, Y, pxPerFt, c, top, base, C);",
-    with: "      ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);",
+    // The lined branch: a foundation type with a lining stands its slices on
+    // the slab (jb, 20 Nov 2026), and this spec's 8IN CONC + LINING is one.
+    find: "        ctx.fillRect(x, Y(top), wid, (top - slabTop) * pxPerFt);\n        sectionSlices(ctx, X, Y, pxPerFt, c, top, slabTop, C);",
+    with: "        ctx.fillRect(x, Y(top), wid, (top - slabTop) * pxPerFt);",
     test: 'a section cuts a made wall' },
   { file: 'cut-view-env.js', name: 'the sheets\' section env never learns the file\'s made types', spec: 'tests/wall-type-sections.spec.js',
     find: "    if (saved && window.DraftWallTypes?.adoptDrawing) window.DraftWallTypes.adoptDrawing(saved);",
