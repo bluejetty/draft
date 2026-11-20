@@ -89,8 +89,10 @@ jobs:
     # cancelled at 20m00s with every shard green beside it -- the same
     # failure a fourth time, the sweep having grown to 160 engines. The
     # remedy is the same; the ceiling is a ceiling for a hang.
+    # AND AGAIN (20 Nov): 30 -> 45. #1048, #1054, #1057, #1063 and main
+    # were cancelled at 30m00s; the mutation run had simply outgrown it.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       # @v7 ON ALL THREE ACTIONS, AND THE MAJOR WAS CHECKED PER ACTION.
       #
