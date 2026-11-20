@@ -1588,7 +1588,10 @@ if (!window.DraftDrawingFormat) {
         const a = pt(m.a), b = pt(m.b);
         if (!a || !b) return null;
         seen.add(id);
-        return { id, cut, kind: 'line', a, b };
+        // ITS WEIGHT, STYLE, ARROWS AND COLOUR (jb, 19 Nov: "can we show the
+        // LINE OBJ / PROP in the elevations too"): the plan line's own four
+        // fields, kept by the plan line's own rule.
+        return { id, cut, kind: 'line', a, b, ...lineStyleFields(m) };
       }
       if (m?.kind === 'note') {
         const at = pt(m.at);
