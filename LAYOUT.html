@@ -1918,6 +1918,64 @@ class Component extends PageLogic {
       this._layoutSnapshot = JSON.stringify(this._layoutKey());
       document.body.dataset.layoutReady = '1';
       if (!document.body.dataset.layoutSaveSeq) document.body.dataset.layoutSaveSeq = '0';
+      this._adoptHouseLibrary();
+    });
+  }
+
+  // THE LIBRARY THE HOUSE LOADED (MODEL's DETAILS tab, jb 20 Nov 2026: "a
+  // little area in ther main model house area like the SHELFS to load all
+  // the details into"). The house keeps a copy of it (`linkedDetails`); it
+  // comes in here as this sheet set's library source -- linked, the last
+  // one, when it was not here yet; brought up to date when the house's copy
+  // is newer. MODEL's PUT ON SHEET arrives with `?placeDetail=<shelf id>`:
+  // the menu opens with that detail held, and the next click on the sheet
+  // places it.
+  _adoptHouseLibrary() {
+    const format = window.DraftDrawingFormat;
+    const params = new URLSearchParams(location.search);
+    const wanted = params.get('placeDetail');
+    if (wanted != null) {
+      const url = new URL(location.href);
+      url.searchParams.delete('placeDetail');
+      history.replaceState(null, '', url);
+    }
+    const raw = this._saved?.linkedDetails;
+    const lib = raw && typeof raw === 'object' ? format.layoutSourceDrawing(raw.drawing) : null;
+    if (!lib || format.standalone(lib.standalone) !== 'details') {
+      if (wanted != null) this._sourceNote('This house has no details library loaded. Load one with the DETAILS tab on MODEL.', true);
+      return;
+    }
+    const name = String(raw.name || 'DETAILS-LIBRARY.draft').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const copiedAt = typeof raw.copiedAt === 'string' ? raw.copiedAt : new Date().toISOString();
+    let sources = (this.state.sources || []).slice();
+    let src = sources.find(other => other.library && other.name === name);
+    if (!src) {
+      const n = 1 + sources.reduce((top, other) => Math.max(top, Number(String(other.id).replace(/^[A-Z]/, '')) || 0), 0);
+      src = { id: `L${n}`, name, copiedAt, library: true, drawing: lib };
+      sources.push(src);
+    } else if (!src.copiedAt || copiedAt > src.copiedAt) {
+      src = { ...src, copiedAt, drawing: lib };
+      sources = sources.map(other => (other.id === src.id ? src : other));
+    }
+    // PUT ON SHEET names this library, so it is the linked one.
+    if (wanted != null) sources = [...sources.filter(other => other.id !== src.id), src];
+    const patch = { sources };
+    let held = null;
+    if (wanted != null) {
+      const shelf = format.boneyardShelves(lib.boneyardShelves)
+        .find(item => item.detail && String(item.id) === String(wanted));
+      if (shelf) {
+        held = shelf;
+        Object.assign(patch, { addMenuOpen: true, addMenuFile: null,
+          addingViewport: { kind: 'libdetail', shelfId: shelf.id, source: src.id } });
+      }
+    }
+    this.setState(patch, () => {
+      this._draw();
+      if (wanted == null) return;
+      this._sourceNote(held
+        ? `${held.name || `DETAIL ${held.id}`} from ${name}: click the sheet where it goes.`
+        : `That detail is not in ${name} any more.`, !held);
     });
   }
 

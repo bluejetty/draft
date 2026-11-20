@@ -820,6 +820,8 @@
     if (saveButton) saveButton.disabled = !drawing;
     if (saveAsButton) saveAsButton.disabled = !drawing;
     buildShelfStrip();
+    // THE DETAILS TAB beside it (model/22), loaded after this part.
+    if (typeof buildDetailsStrip === 'function') buildDetailsStrip();
   };
 
   // ONE WAY INTO THE BONEYARD, and one way out. The card and every shelf row
