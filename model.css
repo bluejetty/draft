@@ -1942,6 +1942,18 @@
   .dl-frame input { width:0; flex:1; }
   .dl-save { margin-top:2px; padding:4px 6px; color: var(--ink); }
   .dl-status { font-family: var(--font-ui); font-size:8px; letter-spacing:0.04em; color: var(--ink-quiet); }
+  /* THE SNAPSHOT TRAY (jb, 20 Nov 2026): what DETAIL SNAPSHOT left waiting,
+     each with a small drawing of itself, USE and X. */
+  .dl-tray-key { margin:0 6px 4px; align-self:flex-start; }
+  .dl-tray-key[data-waiting] { border-color: var(--accent); color: var(--accent); }
+  .dl-tray { display:flex; flex-direction:column; gap:4px; margin:0 6px 6px; padding:4px;
+    border:1px solid var(--rule); }
+  .dl-tray-row { display:flex; gap:4px; align-items:center; font-family: var(--font-ui); font-size:9px; }
+  .dl-tray-thumb { width:56px; height:42px; flex:none; border:1px solid var(--rule);
+    background: var(--surface-page, transparent); }
+  .dl-tray-what { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .dl-tray-what .dl-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dl-tray-what .dl-cat { font-size:8px; opacity:0.75; }
 
   /* ── THE DETAILS BOARD (model/21-details-library.js, step 3) ──
      Over the drawing area: categories down the LEFT, search and buttons

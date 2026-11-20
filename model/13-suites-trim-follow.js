@@ -430,7 +430,7 @@
       canvas.dataset.detailSnapshots = String(tray.length);
       canvas.dataset.detailSnapshotLast = rec.id;
       sayOnStrip(`DETAIL SNAPSHOT taken of ${cut.name} — ${snapshotLength(rec.widthFt)} x ${snapshotLength(rec.heightFt)}, `
-        + `${rec.lines} lines. In the snapshot tray (${tray.length}). Box another, or ESC.`);
+        + `${rec.lines} lines. In the snapshot tray (${tray.length}) — SNAPSHOTS in a DETAILS LIBRARY makes a detail of it. Box another, or ESC.`);
     }).catch(err => {
       sayOnStrip('DETAIL SNAPSHOT could not be saved — this browser refused the storage. Nothing was kept.');
       if (window.DraftErrorReport) window.DraftErrorReport.note(`snapshot save failed: ${err && err.message}`);
