@@ -401,9 +401,15 @@
       paint();
       return;
     }
+    // AT THE CAMERA'S OWN SCALE, not the screen's (detail-snapshot.js, "a
+    // clean line, and a true one"): the frame it hands back is the screen's
+    // with every pixel multiplied, and the margins and the lettering are
+    // multiplied with it so the sheet is the same sheet, finer.
+    const rails = furnitureMargins();
     const taken = DS.capture({ frame, box, width: cssW, height: cssH,
-      paint: rec => window.DraftCutView.drawCutView(cutEnv(), rec, cssW, cssH, cut,
-        { margins: furnitureMargins(), frame, markScreen: true }) });
+      paint: (rec, at) => window.DraftCutView.drawCutView(cutEnv(), rec, at.width, at.height, cut,
+        { margins: rails ? Object.fromEntries(Object.entries(rails).map(([side, v]) => [side, v * at.scale])) : rails,
+          frame: at.frame, inkScale: at.scale, markScreen: true }) });
     if (!taken || !taken.entities.length) {
       sayOnStrip('DETAIL SNAPSHOT — nothing is drawn inside that box. Nothing taken.');
       paint();

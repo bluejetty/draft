@@ -156,7 +156,8 @@ const tray = page => page.evaluate(async () => {
     const dxf = window.DraftDxfReader.parse(rec.dxf, { segments: true });
     return { ...rec, dxf: undefined, chars: rec.dxf.length, units: dxf.units,
       segs: dxf.segments.map(s => ({ a: s.a, b: s.b })),
-      texts: (dxf.texts || []).length };
+      texts: (dxf.texts || []).length,
+      words: (dxf.texts || []).map(t => ({ text: t.lines.join(' '), h: t.h })) };
   });
 });
 const filed = (page, n) => expect.poll(async () => (await tray(page)).length,
@@ -325,8 +326,15 @@ async function laidOver(page, pic, box, f, ink) {
 // "showing" at the two places a fascia crosses it -- 2 points of 161. Three
 // in a hundred allows that; a picture at the wrong size, or with the far
 // wall in it, or with a visible wall cut out of it, is tens in a hundred.
+//
+// THE FLOORS ARE LOWER THAN THEY WERE (150, then 80 for the picture). When
+// the camera began joining what lies on one line into one line, the same
+// box of E1 went from 206 points of picture to 137: the roof's edge, its
+// fascia and the wall's stepped top had been three lines laid over one
+// another, and each was being walked. Fewer points for the same ink is the
+// change working, and a floor that failed on it was counting duplicates.
 const expectThePictureIsTheScreen = (got, why) => {
-  expect(got.picture, 'the picture has lines to lay over the screen').toBeGreaterThan(150);
+  expect(got.picture, 'the picture has lines to lay over the screen').toBeGreaterThan(80);
   expect(got.showing, 'the screen shows lines of the house inside the box').toBeGreaterThan(150);
   expect(got.onBlankPaper / got.picture,
     `${why}: ${got.onBlankPaper} of ${got.picture} points of the picture are on blank paper`)
@@ -596,4 +604,51 @@ test('the tray holds two dozen pictures and lets the oldest go', async ({ page }
   expect(now[0].id, 'and the next oldest is now first').toBe('old-01');
   expect(now[now.length - 1].cut, 'for the one just taken, which is last').toBe('E1');
   expect(now[now.length - 1].id.startsWith('snap-'), 'the camera\'s own').toBe(true);
+});
+
+// jb, 20 Nov 2026, of the first picture: "the roof lines look kindof scratchy
+// what is that ? how come not crisp clean line?" The painter puts every point
+// on a screen pixel -- most of an inch at the zoom a whole elevation is read
+// at -- and lays a roof's edge, its fascia and the wall's stepped top over
+// one another. The camera now paints the view again at a sixteenth of an
+// inch to the pixel and joins what lies on one line into one line.
+// proto/detail-snapshot-harness.js pins the arithmetic; this is the house.
+test('the lines come clean: a roof slope is a few long lines, not a run of short steps', async ({ page }) => {
+  await openView(page, 'E1');
+  await h.armFromRail(page, 'snapshot');
+  // A BOX BIG ENOUGH FOR THE GABLE: fourteen feet by twelve, where the most
+  // of the house is.
+  const { a, b } = await busyBox(page, 14, 12);
+  await drag(page, a, b);
+  await filed(page, 1);
+  const [pic] = await tray(page);
+  const len = s => Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+  const sloped = pic.segs.filter(s => Math.abs(s.b[0] - s.a[0]) > 1 && Math.abs(s.b[1] - s.a[1]) > 1);
+  expect(sloped.length, 'the gable has slopes in the picture').toBeGreaterThan(1);
+  // NO RUN OF STEPS. Taken at the screen's scale this box held some sixty
+  // sloping pieces under a foot long; a roof's lines are feet long.
+  const steps = sloped.filter(s => len(s) < 12);
+  expect(steps.length, `sloping pieces under a foot: ${steps.length} of ${sloped.length}`).toBeLessThanOrEqual(2);
+  expect(sloped.length, 'and a handful of lines, not dozens').toBeLessThan(20);
+  // AND NO LINE DRAWN TWICE: no two pieces of the picture lie along one
+  // another. A tenth of an inch apart and overlapping by more than an inch
+  // is the same line kept twice.
+  const along = (p, s) => {
+    const dx = s.b[0] - s.a[0], dy = s.b[1] - s.a[1], l = Math.hypot(dx, dy);
+    return { t: ((p[0] - s.a[0]) * dx + (p[1] - s.a[1]) * dy) / l, off: Math.abs((p[0] - s.a[0]) * dy - (p[1] - s.a[1]) * dx) / l, l };
+  };
+  const doubled = pic.segs.filter((s, i) => len(s) > 2 && pic.segs.some((t, j) => {
+    if (i === j || len(t) < len(s)) return false;
+    const a = along(s.a, t), b = along(s.b, t);
+    if (a.off > 0.1 || b.off > 0.1) return false;
+    return Math.min(Math.max(a.t, b.t), a.l) - Math.max(Math.min(a.t, b.t), 0) > 1;
+  }));
+  expect(doubled.length, 'lines kept twice').toBe(0);
+  // THE LETTERING COMES AT THE SIZE THE SCREEN SHOWS IT. The finer sheet
+  // multiplies its lettering with everything else; left behind, a window's
+  // label would come into the detail a sixteenth of its size.
+  const label = pic.words.find(w => /^W \d+ X \d+$/.test(w.text));
+  expect(label, 'the window\'s label is in the picture').toBeTruthy();
+  expect(label.h, `lettered ${label.h.toFixed(2)} inches high`).toBeGreaterThan(2);
+  expect(label.h).toBeLessThan(12);
 });

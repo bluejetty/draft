@@ -38,39 +38,85 @@ const MUTANTS = [
   // ── WHAT THE PICTURE IS MEASURED IN ──────────────────────────────────────
   { file: 'detail-snapshot.js',
     name: 'the picture is in FEET: a wall eight feet long comes into a detail eight inches long',
-    find: '    const inPerPx = 12 / frame.pxPerFt;',
-    with: '    const inPerPx = 1 / frame.pxPerFt;',
+    find: '    const inPerPx = 12 / fine.pxPerFt;',
+    with: '    const inPerPx = 1 / fine.pxPerFt;',
     test: 'a box dragged on an elevation files what the screen shows' },
 
   { file: 'detail-snapshot.js',
     name: 'the picture is upside down: a canvas runs y down, a drawing y up, and nothing turned it over',
-    find: '      ([x, y]) => [(x - cx) * inPerPx, (cy - y) * inPerPx]);',
-    with: '      ([x, y]) => [(x - cx) * inPerPx, (y - cy) * inPerPx]);',
+    find: '      ([x, y]) => [(x - cx) * inPerPx, (cy - y) * inPerPx]));',
+    with: '      ([x, y]) => [(x - cx) * inPerPx, (y - cy) * inPerPx]));',
     test: 'a box dragged on an elevation files what the screen shows' },
 
   { file: 'detail-snapshot.js',
     name: 'the picture is measured from the box\'s corner, not its middle, so it lands half a box off the frame it is dropped in',
-    find: '    const cx = box.px.x + box.px.w / 2, cy = box.px.y + box.px.h / 2;',
-    with: '    const cx = box.px.x, cy = box.px.y + box.px.h / 2;',
+    find: '    const cx = px.x + px.w / 2, cy = px.y + px.h / 2;',
+    with: '    const cx = px.x, cy = px.y + px.h / 2;',
     test: 'a box dragged on an elevation files what the screen shows' },
 
   { file: 'detail-snapshot.js',
     name: 'the box is not set as the clip: the camera files the whole view, whatever was boxed',
-    find: '    ctx.rect(box.px.x, box.px.y, box.px.w, box.px.h);\n    ctx.clip();',
-    with: '    ctx.rect(box.px.x, box.px.y, box.px.w, box.px.h);',
+    find: '    ctx.rect(px.x, px.y, px.w, px.h);\n    ctx.clip();',
+    with: '    ctx.rect(px.x, px.y, px.w, px.h);',
     test: 'a box dragged on an elevation files what the screen shows' },
 
   { file: 'detail-snapshot.js',
     name: 'nothing is hidden: the back wall\'s windows come through the front elevation',
-    find: "    const ctx = W.recorder({ width, height, layer: 'SNAPSHOT', hide: true });",
-    with: "    const ctx = W.recorder({ width, height, layer: 'SNAPSHOT' });",
+    find: "    const ctx = W.recorder({ width: width * k, height: height * k, layer: 'SNAPSHOT', hide: true });",
+    with: "    const ctx = W.recorder({ width: width * k, height: height * k, layer: 'SNAPSHOT' });",
     test: 'a box dragged on an elevation files what the screen shows' },
 
   { file: 'detail-snapshot.js',
     name: 'the same, seen by the harness: the level line runs on through the house',
-    find: "    const ctx = W.recorder({ width, height, layer: 'SNAPSHOT', hide: true });",
-    with: "    const ctx = W.recorder({ width, height, layer: 'SNAPSHOT' });",
+    find: "    const ctx = W.recorder({ width: width * k, height: height * k, layer: 'SNAPSHOT', hide: true });",
+    with: "    const ctx = W.recorder({ width: width * k, height: height * k, layer: 'SNAPSHOT' });",
     harness: 'proto/detail-snapshot-harness.js' },
+
+  // ── A CLEAN LINE, AND A TRUE ONE ─────────────────────────────────────────
+  //
+  // jb, 20 Nov: "the roof lines look kindof scratchy what is that ? how come
+  // not crisp clean line?"
+  { file: 'detail-snapshot.js',
+    name: 'the picture is taken at the screen\'s own scale: every point is on a screen pixel, most of an inch out, and a roof zigzags',
+    find: '    const k = Math.max(1, Math.ceil(FINE_PX_PER_FT / frame.pxPerFt));',
+    with: '    const k = 1;',
+    harness: 'proto/detail-snapshot-harness.js' },
+
+  { file: 'detail-snapshot.js',
+    name: 'what lies on one line is left as the pieces it was drawn in: forty steps up a roof, and the edge over them',
+    find: '    const entities = tidy(W.mapEntities(ctx.entities,\n      ([x, y]) => [(x - cx) * inPerPx, (cy - y) * inPerPx]));',
+    with: '    const entities = (W.mapEntities(ctx.entities,\n      ([x, y]) => [(x - cx) * inPerPx, (cy - y) * inPerPx]));',
+    harness: 'proto/detail-snapshot-harness.js' },
+
+  { file: 'detail-snapshot.js',
+    name: 'two pieces on one line are joined across the gap between them: a sill runs on through the opening beside it',
+    find: '            const hit = spans.filter(sp => t0 <= sp[1] + tol && t1 >= sp[0] - tol);',
+    with: '            const hit = spans.filter(sp => t0 <= sp[1] + 1e6 && t1 >= sp[0] - 1e6);',
+    harness: 'proto/detail-snapshot-harness.js' },
+
+  { file: 'detail-snapshot.js',
+    name: 'a dashed line is swallowed by a solid one on the same line: what was hidden reads as seen',
+    find: "  const styleOf = e => `${e.layer}|${e.linetype || ''}|${e.dashed ? 1 : 0}|${e.color ?? ''}`;",
+    with: "  const styleOf = e => `${e.layer}`;",
+    harness: 'proto/detail-snapshot-harness.js' },
+
+  { file: 'detail-snapshot.js',
+    name: 'the frame is made finer but the box is not: the picture is of the top-left corner of the sheet',
+    find: '    const px = { x: box.px.x * k, y: box.px.y * k, w: box.px.w * k, h: box.px.h * k };',
+    with: '    const px = { x: box.px.x, y: box.px.y, w: box.px.w, h: box.px.h };',
+    test: 'a box dragged on an elevation files what the screen shows' },
+
+  { file: 'model/13-suites-trim-follow.js',
+    name: 'the lettering is not multiplied with the sheet: a window\'s label comes into the detail a sixteenth its size',
+    find: '          frame: at.frame, inkScale: at.scale, markScreen: true }) });',
+    with: '          frame: at.frame, markScreen: true }) });',
+    test: 'the lines come clean' },
+
+  { file: 'detail-snapshot.js',
+    name: 'the same two faults, seen on the house: steps up the gable, and lines kept twice',
+    find: '    const entities = tidy(W.mapEntities(ctx.entities,\n      ([x, y]) => [(x - cx) * inPerPx, (cy - y) * inPerPx]));',
+    with: '    const entities = (W.mapEntities(ctx.entities,\n      ([x, y]) => [(x - cx) * inPerPx, (cy - y) * inPerPx]));',
+    test: 'the lines come clean' },
 
   // ── THE BOX ──────────────────────────────────────────────────────────────
   { file: 'detail-snapshot.js',
@@ -138,8 +184,8 @@ const MUTANTS = [
   // ── WHICH DRAWING IT IS A PICTURE OF ─────────────────────────────────────
   { file: 'model/13-suites-trim-follow.js',
     name: 'the camera repaints the view FITTED, not as it stands on the screen: zoomed in, the box is laid on a different drawing',
-    find: '        { margins: furnitureMargins(), frame, markScreen: true }) });',
-    with: '        { margins: furnitureMargins(), cushion: 0.1, markScreen: true }) });',
+    find: '          frame: at.frame, inkScale: at.scale, markScreen: true }) });',
+    with: '          cushion: 0.1, inkScale: at.scale, markScreen: true }) });',
     test: 'zoomed in on the elevation' },
 
   { file: 'model/13-suites-trim-follow.js',

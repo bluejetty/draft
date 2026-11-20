@@ -59,22 +59,30 @@ const r2 = v => Math.round(v * 100) / 100;
 {
   const frame = { pxPerFt: 20, x0: 100, y0: 50, uMin: 10, yTop: 30 };
   const box = DS.boxOf({ u: 12, e: 28 }, { u: 20, e: 22 }, frame);
-  const X = u => frame.x0 + (u - frame.uMin) * frame.pxPerFt;
-  const Y = e => frame.y0 + (frame.yTop - e) * frame.pxPerFt;
-  const paint = ctx => {
+  // IN THE FRAME IT IS HANDED, which is the camera's and not the screen's:
+  // the same frame with every pixel multiplied.
+  const paint = (ctx, at) => {
+    const f = at.frame;
+    const X = u => f.x0 + (u - f.uMin) * f.pxPerFt;
+    const Y = e => f.y0 + (f.yTop - e) * f.pxPerFt;
     ctx.strokeStyle = '#1d1f20';
     ctx.beginPath(); ctx.moveTo(X(15), Y(25)); ctx.lineTo(X(17), Y(25)); ctx.stroke();   // 2 ft across, centred
     ctx.beginPath(); ctx.moveTo(X(16), Y(25)); ctx.lineTo(X(16), Y(26)); ctx.stroke();   // 1 ft UP from the centre
-    ctx.beginPath(); ctx.moveTo(0, Y(23)); ctx.lineTo(1000, Y(23)); ctx.stroke();        // right across the sheet
+    ctx.beginPath(); ctx.moveTo(0, Y(23)); ctx.lineTo(at.width, Y(23)); ctx.stroke();    // right across the sheet
     ctx.font = '10px sans-serif'; ctx.fillStyle = '#1d1f20';
     ctx.fillText('IN', X(13), Y(27)); ctx.fillText('OUT', X(30), Y(27));
   };
   const taken = DS.capture({ paint, frame, box, width: 1000, height: 600 });
-  const lines = taken.entities.filter(e => e.type === 'poly').map(e => e.pts.map(r2).join(' '));
-  check('inches, from the box\'s centre: two feet across is 24, a foot each way', lines[0], '-12 0 12 0');
-  check('y UP: a line drawn a foot up the house goes up the picture', lines[1], '0 0 0 12');
+  // Each line as "x0 y0 x1 y1", its lower-left end first: the camera hands
+  // its lines back longest first, and which end is which is not a claim.
+  const asText = pts => { const [x0, y0, x1, y1] = pts.map(v => r2(v) + 0);
+    return (x0 < x1 || (x0 === x1 && y0 <= y1) ? [x0, y0, x1, y1] : [x1, y1, x0, y0]).join(' '); };
+  const lines = taken.entities.filter(e => e.type === 'poly').map(e => asText(e.pts));
+  check('three lines', lines.length, 3);
+  check('inches, from the box\'s centre: two feet across is 24, a foot each way', lines.includes('-12 0 12 0'), true);
+  check('y UP: a line drawn a foot up the house goes up the picture', lines.includes('0 0 0 12'), true);
   check('a line across the sheet is cut at the box: 8 ft is 48 inches each way, two feet below the middle',
-    lines[2], '-48 -24 48 -24');
+    lines.includes('-48 -24 48 -24'), true);
   check('a word inside the box comes, one outside does not',
     taken.entities.filter(e => e.type === 'text').map(e => e.text).join(), 'IN');
   check('the size it was taken at', `${taken.widthFt} x ${taken.heightFt}`, '8 x 6');
@@ -88,9 +96,67 @@ const r2 = v => Math.round(v * 100) / 100;
   const geo = D.parse(rec.dxf, { segments: true });
   check('the DXF says no units, which a reader takes as inches', geo.units, null);
   check('and reads back as the same three lines',
-    geo.segments.map(s => [...s.a, ...s.b].map(r2).join(' ')).join(' | '),
-    '-12 0 12 0 | 0 0 0 12 | -48 -24 48 -24');
+    geo.segments.map(s => asText([...s.a, ...s.b])).sort().join(' | '),
+    '-12 0 12 0 | -48 -24 48 -24 | 0 0 0 12');
   check('with its word', geo.texts.map(t => t.lines.join()).join(), 'IN');
+}
+
+// ── A CLEAN LINE, AND A TRUE ONE ───────────────────────────────────────────
+//
+// jb, 20 Nov 2026, of the first picture: "the roof lines look kindof
+// scratchy what is that ? how come not crisp clean line?"
+//
+// A painter that does what the section's does on a roof: it puts every point
+// on a whole pixel, draws the wall's sloped top as a run of short steps, and
+// lays the roof's edge over it as one stroke.
+{
+  // The screen's frame: 13 px to the foot, where a pixel is nearly an inch.
+  const frame = { pxPerFt: 13, x0: 100, y0: 50, uMin: 0, yTop: 30 };
+  const box = DS.boxOf({ u: 0, e: 30 }, { u: 12, e: 20 }, frame);
+  const slope = u => 22 + u * 0.5;                       // a 6:12 roof from (0,22) to (12,28)
+  const paint = (ctx, at) => {
+    const f = at.frame;
+    const px = v => Math.round(v);                       // the painter's pixel
+    const X = u => px(f.x0 + (u - f.uMin) * f.pxPerFt), Y = e => px(f.y0 + (f.yTop - e) * f.pxPerFt);
+    ctx.strokeStyle = '#1d1f20';
+    ctx.beginPath();                                     // the wall's top, in 3 inch steps
+    for (let u = 1; u <= 11.001; u += 0.25) { if (u === 1) ctx.moveTo(X(u), Y(slope(u))); else ctx.lineTo(X(u), Y(slope(u))); }
+    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(1), Y(slope(1))); ctx.lineTo(X(11), Y(slope(11))); ctx.stroke();   // the roof's edge
+    ctx.beginPath(); ctx.moveTo(X(2), Y(21)); ctx.lineTo(X(5), Y(21)); ctx.stroke();                 // a sill, in two pieces
+    ctx.beginPath(); ctx.moveTo(X(5), Y(21)); ctx.lineTo(X(9), Y(21)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(2), Y(20.5)); ctx.lineTo(X(4), Y(20.5)); ctx.stroke();             // and two that only LOOK joined:
+    ctx.beginPath(); ctx.moveTo(X(6), Y(20.5)); ctx.lineTo(X(9), Y(20.5)); ctx.stroke();             // a gap of two feet
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(X(1), Y(slope(1))); ctx.lineTo(X(11), Y(slope(11))); ctx.stroke();   // a hidden line on the same slope
+  };
+  const taken = DS.capture({ paint, frame, box, width: 400, height: 300 });
+  const polys = taken.entities.filter(e => e.type === 'poly');
+  const solid = polys.filter(e => !e.dashed), dashed = polys.filter(e => e.dashed);
+  const sloped = solid.filter(e => Math.abs(e.pts[3] - e.pts[1]) > 1);
+  check('forty steps and the stroke over them are ONE line up the roof', sloped.length, 1);
+  // TEN FEET ALONG AT 6:12: 120 inches across, 60 up. To the sixteenth, at
+  // a zoom where the screen's own pixel is most of an inch.
+  const [x0, y0, x1, y1] = sloped[0].pts;
+  check('and it is the roof\'s true length and pitch, to a sixteenth of an inch',
+    Math.abs(Math.abs(x1 - x0) - 120) < 0.0625 && Math.abs(Math.abs(y1 - y0) - 60) < 0.0625, true);
+  const flat = solid.filter(e => Math.abs(e.pts[3] - e.pts[1]) < 0.01)
+    .map(e => [Math.min(e.pts[0], e.pts[2]), Math.max(e.pts[0], e.pts[2])].map(v => Math.round(v)).join('..')).sort();
+  check('two pieces that touch are one line; two with a gap between them stay two',
+    flat.join(' | '), '-48..-24 | -48..36 | 0..36');
+  check('a dashed line on the same slope is not swallowed by the solid one', dashed.length, 1);
+  check('the picture is taken at a sixteenth of an inch to the pixel or finer, whatever the screen is at',
+    DS.FINE_PX_PER_FT >= 192, true);
+
+  // THE SAME BOX FROM A SCREEN ZOOMED FOUR TIMES IN IS THE SAME PICTURE. It
+  // was not, when the picture was taken at the screen's own scale: the roof
+  // came out half an inch different at every zoom.
+  const zoomed = { ...frame, pxPerFt: 52, x0: 400, y0: 200 };
+  const again = DS.capture({ paint, frame: zoomed, box: DS.boxOf({ u: 0, e: 30 }, { u: 12, e: 20 }, zoomed), width: 1600, height: 1200 });
+  const roof2 = again.entities.filter(e => e.type === 'poly' && !e.dashed && Math.abs(e.pts[3] - e.pts[1]) > 1)[0].pts;
+  const ends = pts => (pts[0] < pts[2] ? pts : [pts[2], pts[3], pts[0], pts[1]]);
+  check('zoom in on the screen and the roof is the same roof, to a sixteenth',
+    ends(roof2).every((v, i) => Math.abs(v - ends(sloped[0].pts)[i]) < 0.0625), true);
 }
 
 // ── A BOX OF A REAL HOUSE, FROM THE PAINTER THAT DRAWS THE SCREEN ─────────
@@ -125,7 +191,7 @@ const r2 = v => Math.round(v * 100) / 100;
   // of air either side of the house, so the corner is two feet in from it.
   const corner = { u: frame.uMin + 2, e: 9 };
   const box = DS.boxOf({ u: corner.u - 4, e: corner.e + 3 }, { u: corner.u + 4, e: corner.e - 3 }, frame);
-  const paint = ctx => CV.drawCutView(env, ctx, w, h, cut, { frame });
+  const paint = (ctx, at) => CV.drawCutView(env, ctx, at.width, at.height, cut, { frame: at.frame, inkScale: at.scale });
   const taken = DS.capture({ paint, frame, box, width: w, height: h });
   const polys = taken.entities.filter(e => e.type === 'poly');
   check('lines of the house came', polys.length >= 3, true);
@@ -154,7 +220,7 @@ const r2 = v => Math.round(v * 100) / 100;
   const seeThrough = W.recorder({ width: w, height: h, layer: 'X' });
   seeThrough.save(); seeThrough.beginPath();
   seeThrough.rect(box.px.x, box.px.y, box.px.w, box.px.h); seeThrough.clip();
-  paint(seeThrough); seeThrough.restore();
+  paint(seeThrough, { frame, width: w, height: h, scale: 1 }); seeThrough.restore();
   const length = es => es.filter(e => e.type === 'poly').reduce((sum, e) => {
     for (let i = 2; i < e.pts.length; i += 2) sum += Math.hypot(e.pts[i] - e.pts[i - 2], e.pts[i + 1] - e.pts[i - 1]);
     return sum;
