@@ -563,6 +563,78 @@
     ghostKeep = item => item.body !== 'garage';
     try { return walls(); } finally { ghostViewId = null; ghostKeep = was; }
   }
+  // ── EVERY POST THIS PLAN DRAWS IS A NODE (jb, 19 Nov 2026, drawing a
+  // basement wall from a telepost under the floor beam above: "can i also
+  // make the column node a snappoint for the walls (also lines shapes
+  // etc)"). A column's cross marks its centre, the point a drafter aligns
+  // to, and it caught nothing. The posts here are the ones the painters in
+  // this file draw on the level and view in view -- the level's own
+  // (paintStructure), the posts under the floor beam above (paintBeamsAbove,
+  // walls plan), the posts under the floor below (paintBeamsBelow, floor
+  // layout), the foundation's posts ghosted on the basement plan
+  // (paintBasementFoundationGhost), the posts standing on piles
+  // (paintStructure's pilePosts), and the BG layers' own -- so a cross
+  // that shows is a cross that catches. On the FOUNDATION view the pads'
+  // corners catch too (build-house padGroups, the dashed squares). Snaps
+  // only: nothing here is picked.
+  let columnSnapCache = { key: null, list: [] };
+  function columnSnapPoints() {
+    if (!drawing || !(drawing.columns || []).length || ghostLevelId != null || ghostViewId != null) return [];
+    const levelId = Number(activeLevelId());
+    const viewId = activeViewId();
+    const key = `${modelEpoch}|${levelId}|${viewId || ''}|${[...bgLayers].join(',')}`;
+    if (columnSnapCache.key === key) return columnSnapCache.list;
+    const B = window.DraftBuildHouse;
+    const isPile = c => !!(B && B.footingFor(c.footing)?.pile) || String(c.footing || '').startsWith('pile');
+    const out = [];
+    const add = p => {
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.z)) return;
+      if (out.some(o => Math.abs(o.x - p.x) < 1e-6 && Math.abs(o.z - p.z) < 1e-6)) return;
+      out.push({ x: p.x, y: 0, z: p.z });
+    };
+    const own = columns();
+    own.forEach(c => add(c.point));
+    if (viewId === 'foundation' && B?.padGroups) {
+      B.padGroups(own).forEach(g => {
+        if (![g.minX, g.minZ, g.maxX, g.maxZ].every(Number.isFinite)) return;
+        [[g.minX, g.minZ], [g.maxX, g.minZ], [g.maxX, g.maxZ], [g.minX, g.maxZ]]
+          .forEach(([x, z]) => add({ x, z }));
+      });
+    }
+    if (viewId === 'plan') {
+      const floorView = levelId === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
+      (drawing.columns || []).filter(c => Number(c.levelId) === levelId && c.view === floorView && !isPile(c))
+        .forEach(c => add(c.point));
+    }
+    if (viewId === 'floor' && typeof framesFrom === 'function') {
+      const from = framesFrom(levelId);
+      if (from != null && Number(from) !== levelId) {
+        const view = Number(from) === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
+        (drawing.columns || []).filter(c => Number(c.levelId) === Number(from) && c.view === view && !isPile(c))
+          .forEach(c => add(c.point));
+      }
+    }
+    if (levelId === FOUNDATION_LEVEL_ID && viewId === 'plan') {
+      ghostViewId = 'foundation';
+      try { columns().filter(c => !isPile(c)).forEach(c => add(c.point)); } finally { ghostViewId = null; }
+    }
+    if (viewId === 'plan' && levelId !== 1 && typeof cutEnv === 'function'
+      && (drawing.columns || []).some(c => c.view === 'foundation' && c.auto !== true
+        && String(c.footing || '').startsWith('pile'))) {
+      try {
+        const CV = window.DraftCutView;
+        const cEnv = CV && cutEnv();
+        const stack = cEnv && CV.sectionLevelStack(cEnv);
+        const level = stack && stack.floors.find(l => Number(l.id) === levelId);
+        if (level) CV.pilePosts(cEnv, stack)
+          .filter(post => post.top > level.floorTop + 0.01 && post.foot < level.wallTop - 0.01)
+          .forEach(post => add(post.point));
+      } catch { /* the section stack is the painter's; no posts, no nodes */ }
+    }
+    bgEntries().forEach(entry => withBg(entry, () => columns()).forEach(c => add(c.point)));
+    columnSnapCache = { key, list: out };
+    return out;
+  }
   const onActiveLevel = () => {
     const LV = window.DraftLayerViews;
     const levelId = ghostLevelId ?? activeLevelId();

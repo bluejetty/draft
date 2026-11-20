@@ -1430,6 +1430,14 @@ const SCHEDULE_ROW_IN = 0.22;
 const SCHEDULE_PAD_IN = 0.1;
 const isSchedule = view => !!view && view.kind === 'schedule';
 const isDetail = view => !!view && view.kind === 'detail';
+// A DETAIL FROM A DETAILS LIBRARY (jb's DETAILS plan, step 4): a framed
+// detail drawn in a details .draft, placed here at its own scale with its
+// bubble under it. Always from another file -- the library.
+const isLibDetail = view => !!view && view.kind === 'libdetail';
+const DETAILS_LIBRARY_BUCKET = 'details-libraries';
+// THE BUBBLE: its circle, in paper inches, and the gap under the frame.
+const LIB_BUBBLE_R_IN = 0.24;
+const LIB_BUBBLE_GAP_IN = 0.12;
 // A DETAIL'S LADDER: the whole section no bigger than 1/2" = 1'-0", a blown-up
 // detail no bigger than 1" = 1'-0", each stepping down until it fits.
 const DETAIL_SCALE_PREFS = [1, 3 / 4, 1 / 2, 3 / 8, 1 / 4, 3 / 16, 1 / 8];
@@ -2260,6 +2268,11 @@ class Component extends PageLogic {
     if (isSchedule(view)) {
       const size = this._scheduleSizeIn(view.table);
       return { wFt: size.wIn, hFt: size.hIn, padIn: 0 };
+    }
+    // A LIBRARY DETAIL is its frame, in real feet: what is inside it prints.
+    if (isLibDetail(view)) {
+      const found = this._libDetail(view);
+      return found ? { wFt: found.card.frameW, hFt: found.card.frameH } : null;
     }
     // A DETAIL is its window on the section, in the section's own feet.
     if (isDetail(view)) {
@@ -3480,6 +3493,32 @@ class Component extends PageLogic {
         });
         ctx.restore();
       }
+    } else if (isLibDetail(viewport)) {
+      // THE DETAIL AS DRAWN IN ITS LIBRARY: its shelf's lines, shapes, notes
+      // and dimensions, centred on its frame (the frame's centre is the
+      // shelf's origin, model/21-details-library.js) and clipped to it.
+      const found = this._libDetail(viewport);
+      if (found && window.DraftLayoutPlan?.drawLevelMarks) {
+        const full = this._naturalRectIn(viewport);
+        const cxIn = full.xIn + full.wIn / 2, cyIn = full.yIn + full.hIn / 2;
+        const toS = pt => ({
+          x: panX + (cxIn + pt.x * viewport.pif) * zoom,
+          y: panY + (cyIn + pt.z * viewport.pif) * zoom,
+        });
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px.x, px.y, px.w, px.h);
+        ctx.clip();
+        if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-DETL';
+        window.DraftLayoutPlan.drawLevelMarks(ctx, toS, this._saved, -found.shelf.id, {
+          paperColor: '#ffffff',
+          inkScale: zoom / PRINT_PX_PER_IN,
+          pif: viewport.pif,
+          shell: opts.thumb === true,
+          layersOff: this._viewportLayersOff(viewport),
+        });
+        ctx.restore();
+      }
     } else if (isSchedule(viewport)) {
       // THE TABLE, laid out on its natural frame and clipped to the window.
       const full = this._naturalRectIn(viewport);
@@ -3548,6 +3587,12 @@ class Component extends PageLogic {
       }
     }
     if (opts.thumb || opts.export) return;
+    // A LIBRARY DETAIL WEARS ITS BUBBLE, not a caption: on paper and on the
+    // desk alike.
+    if (isLibDetail(viewport) && opts.print) {
+      this._paintLibBubble(ctx, viewport, px, zoom, '#1d1f20');
+      return;
+    }
     if (opts.print) {
       // ON PAPER, only the caption: in ink, centred under the drawing.
       // A SCHEDULE HAS NO SCALE, so its caption is its name alone.
@@ -3605,6 +3650,10 @@ class Component extends PageLogic {
       ctx.textBaseline = 'middle';
       ctx.fillText(`FROM ${src.name}${stamp ? `  \u00b7  ${stamp}` : ''}`, px.x + 6, px.y + (offCount ? 23 : 9));
     }
+    if (isLibDetail(viewport)) {
+      this._paintLibBubble(ctx, viewport, px, zoom, selected ? '#5980a6' : '#1d1f20');
+      return;
+    }
     const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
     ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
@@ -3619,6 +3668,10 @@ class Component extends PageLogic {
   _viewportTitle(viewport) {
     if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._viewportTitle(viewport));
     if (isSchedule(viewport)) return viewport.table === 'door' ? 'DOOR SCHEDULE' : 'WINDOW SCHEDULE';
+    if (isLibDetail(viewport)) {
+      const found = this._libDetail(viewport);
+      return found ? found.shelf.name || `DETAIL ${found.shelf.id}` : 'DETAIL';
+    }
     if (isDetail(viewport)) return window.DraftWallSection?.DETAIL_TITLES[viewport.detail] || 'DETAIL';
     if (viewport.kind === 'section') {
       const cut = this._cutForViewport(viewport);
@@ -4167,7 +4220,10 @@ class Component extends PageLogic {
         run: () => this._goToModel(id) },
       // A WINDOW FROM ANOTHER FILE: pick that file again to bring its
       // changes in (jb, 19 Nov 2026).
-      ...(src ? [{ key: 'reload-from-file', label: 'RELOAD FROM FILE', on: true,
+      ...(src && src.library ? [{ key: 'reload-from-library', label: 'RELOAD FROM LIBRARY', on: true,
+        title: `Bring in ${src.name} as this browser keeps it now, onto every detail from it`,
+        run: () => this._reloadLibrary(src.id) }] : []),
+      ...(src && !src.library ? [{ key: 'reload-from-file', label: 'RELOAD FROM FILE', on: true,
         title: `Pick ${src.name} again to bring its changes onto every window from it`,
         run: () => this._askSourceFile(src.id) }] : []),
       { key: 'change-scale', label: 'CHANGE SCALE', on: !isSchedule(viewport),
@@ -4527,6 +4583,17 @@ class Component extends PageLogic {
   // still offered only with a drawing on it: a shelf is a drawing the
   // drafter brought in, not a sheet of the set.
   _addChoices() {
+    // A DETAILS LIBRARY (another file brought in) OFFERS ITS DETAILS and
+    // nothing else: it has no house to draw.
+    if (this._standalone === 'details') {
+      const groups = new Map();
+      this._libDetails().forEach(({ shelf, card }) => {
+        if (!groups.has(card.category)) groups.set(card.category, []);
+        groups.get(card.category).push({ kind: 'libdetail', shelfId: shelf.id,
+          label: `${shelf.name || `DETAIL ${shelf.id}`}  ·  ${scaleLabelOf(card.scale)}` });
+      });
+      return [...groups.entries()];
+    }
     const VIEWS = window.DraftLayerViews;
     const viewsOf = level => (VIEWS?.layerViewsForLevelId ? VIEWS.layerViewsForLevelId(level.id) : [])
       .map(view => view.id);
@@ -4574,7 +4641,8 @@ class Component extends PageLogic {
     const own = view.kind === 'plan' ? `plan:${view.levelId}${view.view ? `:${view.view}` : ''}`
       : view.kind === 'elevation' ? `elevation:${view.elevId}`
         : view.kind === 'schedule' ? `schedule:${view.table}`
-          : view.kind === 'detail' ? `detail:${view.detail}` : `section:${view.cutId}`;
+          : view.kind === 'detail' ? `detail:${view.detail}`
+            : view.kind === 'libdetail' ? `libdetail:${view.shelfId}` : `section:${view.cutId}`;
     return view.source != null ? `${view.source}|${own}` : own;
   }
 
@@ -4641,13 +4709,193 @@ class Component extends PageLogic {
       head(group);
       list.forEach(({ label, ...view }) => pick(label, view));
     });
+    this._paintLibraryChoices(head, pick, press);
     // FROM ANOTHER FILE: open one, or go back to one already brought in.
     head('FROM ANOTHER FILE');
     press('OPEN A .DRAFT FILE…', 'Pick a .draft file, then one of its layout windows or levels',
       { addFileOpen: '1' }, () => this._askSourceFile(null));
-    (this.state.sources || []).forEach(other => press(other.name,
+    (this.state.sources || []).filter(other => !other.library).forEach(other => press(other.name,
       `Windows and levels from ${other.name}${other.copiedAt ? `, copied ${this._sourceStamp(other)}` : ''}`,
       { addFile: other.id }, () => this.setState({ addMenuFile: other.id }, () => this._draw())));
+  }
+
+  // ── DETAILS FROM A DETAILS LIBRARY (jb's DETAILS plan, step 4) ─────────
+  //
+  // jb, 19 Nov 2026: "can the MAIN FILE use the DETAIL FILE", "only allow
+  // each MAIN DRAFT file to open one DETAIL.draft at a time, but they will
+  // still be able to bring in LAYOUT from a different DETAIL2.draft file".
+  // The library a house uses is the one this browser keeps (SAVE DETAIL on
+  // MODEL puts it in the `details-libraries` store), brought in as a COPY
+  // like any other file's windows (`library: true` on the source), so the
+  // sheet prints on a computer that has no library. One library is linked
+  // at a time -- the last one picked; CHANGE LIBRARY picks another, and the
+  // details already on sheets keep the copy they came from. A details .draft
+  // off the disk comes in through FROM ANOTHER FILE as before, and offers
+  // its details the same way.
+
+  // THE DETAIL A VIEW NAMES, in its library: its shelf and its card.
+  _libDetail(view) {
+    if (this._foreign(view)) return this._inSource(view.source, () => this._libDetail(view));
+    return this._libDetails().find(({ shelf }) => Number(shelf.id) === Number(view?.shelfId)) || null;
+  }
+
+  // EVERY DETAIL OF THE FILE THE FIELDS HOLD, in the library's own order.
+  _libDetails() {
+    const format = window.DraftDrawingFormat;
+    if (!this._saved || this._standalone !== 'details') return [];
+    return format.boneyardShelves(this._saved.boneyardShelves)
+      .filter(shelf => shelf.detail)
+      .map(shelf => ({ shelf, card: format.detailCard(shelf.detail) }));
+  }
+
+  // THE LINKED LIBRARY: the last one picked.
+  _linkedLibrary() {
+    const libs = (this.state.sources || []).filter(src => src.library);
+    return libs.length ? libs[libs.length - 1] : null;
+  }
+
+  // THE BUBBLE UNDER A DETAIL: its number on this sheet over the sheet's
+  // number, then its name and scale on the line beside it -- the plan's
+  // "3 / A5". Numbered in the order the details were put on the sheet.
+  _libBubbleNumber(viewport) {
+    const mine = this.state.viewports
+      .filter(other => isLibDetail(other) && (other.sheet || 1) === (viewport.sheet || 1))
+      .sort((a, b) => a.id - b.id);
+    return mine.findIndex(other => other.id === viewport.id) + 1;
+  }
+
+  _paintLibBubble(ctx, viewport, px, zoom, ink) {
+    const found = this._libDetail(viewport);
+    const r = LIB_BUBBLE_R_IN * zoom;
+    const cx = px.x + r;
+    const cy = px.y + px.h + LIB_BUBBLE_GAP_IN * zoom + r;
+    const lw = Math.max(0.75, zoom / PRINT_PX_PER_IN * 1.2);
+    ctx.save();
+    ctx.strokeStyle = ink;
+    ctx.fillStyle = ink;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy);
+    ctx.lineTo(cx + r, cy);
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${r * 0.8}px 'Barlow Condensed', sans-serif`;
+    ctx.fillText(String(this._libBubbleNumber(viewport)), cx, cy - r * 0.45);
+    ctx.fillText(String(viewport.sheet || 1), cx, cy + r * 0.48);
+    // THE NAME ON THE LINE, the scale under it.
+    const right = Math.max(px.x + px.w, cx + r + 1.6 * zoom);
+    ctx.beginPath();
+    ctx.moveTo(cx + r, cy);
+    ctx.lineTo(right, cy);
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
+    const name = found ? (found.shelf.name || `DETAIL ${found.shelf.id}`) : 'DETAIL';
+    ctx.fillText(`${name}${found?.card.kind === 'typ' && !/^TYP\b/.test(name) ? ' (TYP.)' : ''}`,
+      cx + r + 0.06 * zoom, cy - 0.03 * zoom);
+    ctx.textBaseline = 'top';
+    ctx.font = `400 ${zoom * VIEWPORT_TITLE_IN * 0.8}px 'Barlow Condensed', sans-serif`;
+    ctx.fillText(`SCALE: ${scaleLabelOf(viewport.pif)}`, cx + r + 0.06 * zoom, cy + 0.03 * zoom);
+    ctx.restore();
+  }
+
+  // + ADD VIEWPORT's DETAILS LIBRARY: the linked library's details by
+  // category, or the libraries this browser keeps to link one.
+  _paintLibraryChoices(head, pick, press) {
+    head('DETAILS LIBRARY');
+    const linked = this._linkedLibrary();
+    if (linked && !this._libraryPicking) {
+      head(`LIBRARY: ${linked.name}${linked.copiedAt ? `  ·  ${this._sourceStamp(linked)}` : ''}`, 'lay-add-file');
+      const groups = this._inSource(linked.id, () => this._addChoices());
+      if (!groups.length) head('That library has no details yet.', 'lay-add-sub');
+      groups.forEach(([group, list]) => {
+        head(group, 'lay-add-sub');
+        list.forEach(({ label, ...view }) => pick(label, { ...view, source: linked.id }, true));
+      });
+      press('CHANGE LIBRARY…', 'Link another details library kept in this browser',
+        { addLibraryChange: '1' }, () => { this._libraryPicking = true; this._libraries = undefined; this._paintAddMenu(); });
+      return;
+    }
+    if (this._libraries === undefined) {
+      head('Looking in this browser…', 'lay-add-sub');
+      this._loadLibraries();
+      return;
+    }
+    if (!this._libraries.length) {
+      head('No details library in this browser yet: make one with DRAW DETAILS LIBRARY and press SAVE DETAIL.', 'lay-add-sub');
+      return;
+    }
+    this._libraries.forEach(lib => press(`USE ${lib.name.replace(/\.draft$/i, '')}`,
+      `Link ${lib.name} to this drawing and pick its details`, { addLibrary: lib.name },
+      () => this._useLibrary(lib.name)));
+  }
+
+  async _loadLibraries() {
+    if (this._librariesLoading) return;
+    this._librariesLoading = true;
+    const format = window.DraftDrawingFormat;
+    let list = [];
+    try {
+      const files = await window.SharedFileStore.loadSharedFiles(DETAILS_LIBRARY_BUCKET);
+      for (const file of files) {
+        try {
+          const drawing = format.layoutSourceDrawing(JSON.parse(await file.text()));
+          if (drawing && format.standalone(drawing.standalone) === 'details') list.push({ name: file.name, drawing });
+        } catch { /* not a drawing: not offered */ }
+      }
+    } catch (error) {
+      console.warn('layout: details libraries could not be read', error);
+      list = [];
+    }
+    this._libraries = list.sort((a, b) => a.name.localeCompare(b.name));
+    this._librariesLoading = false;
+    this._paintAddMenu();
+  }
+
+  // LINK A LIBRARY: its copy comes in as a source, or the one already here
+  // is brought up to date.
+  _useLibrary(name) {
+    const lib = (this._libraries || []).find(item => item.name === name);
+    if (!lib) return;
+    this._libraryPicking = false;
+    const sources = this.state.sources || [];
+    const had = sources.find(src => src.library && src.name === name);
+    if (had) {
+      // LINKED AGAIN: it goes last, so it is the linked one, with the copy
+      // this browser keeps now.
+      this.setState({ sources: [...sources.filter(src => src.id !== had.id), had] }, () => {
+        this._reloadSource(had.id, { name, drawing: lib.drawing });
+        this._paintAddMenu();
+      });
+      return;
+    }
+    const n = 1 + sources.reduce((top, src) => Math.max(top, Number(String(src.id).replace(/^[A-Z]/, '')) || 0), 0);
+    const src = { id: `L${n}`, name, copiedAt: new Date().toISOString(), library: true, drawing: lib.drawing };
+    this._sourceNote(`${name} is linked. Pick a detail, then click the sheet.`);
+    this.setState({ sources: [...sources, src], addingViewport: true, addMenuOpen: true }, () => this._draw());
+  }
+
+  // RELOAD FROM LIBRARY: the copy swapped for the library as this browser
+  // keeps it now; every detail from it keeps its place and scale.
+  async _reloadLibrary(id) {
+    const src = this._sourceById(id);
+    if (!src) return;
+    const format = window.DraftDrawingFormat;
+    let drawing = null;
+    try {
+      const file = await window.SharedFileStore.loadNamedFile(src.name, DETAILS_LIBRARY_BUCKET);
+      drawing = file ? format.layoutSourceDrawing(JSON.parse(await file.text())) : null;
+    } catch { drawing = null; }
+    if (!drawing) {
+      this._sourceNote(`${src.name} is not in this browser's details libraries. Open it on MODEL and press SAVE DETAIL, then RELOAD again.`, true);
+      return;
+    }
+    this._reloadSource(id, { name: src.name, drawing });
   }
 
   // THE OTHER FILE'S OWN WINDOWS, as its sheets hold them: each comes with
@@ -4796,6 +5044,8 @@ class Component extends PageLogic {
     // A SCHEDULE HAS NO SCALE; a detail walks its own ladder.
     if (isSchedule(view)) return SCHEDULE_PIF;
     if (isDetail(view)) return this._detailPif(view);
+    // A LIBRARY DETAIL COMES AT THE SCALE IT WAS DRAWN AT (its card).
+    if (isLibDetail(view)) return this._libDetail(view)?.card.scale || 1;
     // A SHELF STARTS AT 1/4" = 1' (Movie, 26 Oct), or smaller if a big one
     // needs it.
     const working = view?.kind === 'plan' && view.levelId < 0 ? SHELF_PIF : SCALES[this.state.activeScale].pif;

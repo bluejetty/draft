@@ -1845,6 +1845,25 @@ if (!window.DraftCutView) {
       if (Math.abs(b.u - a.u) < 0.05) return null;
       return { wall: { ...wall, start, end, refLine: 'center', offsetFt: 0, endCapOf: wall.id }, a, b, depth: nearP.d };
     };
+    // The concrete slices of a foundation wall: those its FOUNDATION plan
+    // shows (a slice flagged `fdn: false` is the lining). A type without
+    // slices is concrete through.
+    const concreteSpanOf = (wall, type) => {
+      const total = type ? type.totalIn : 8;
+      const WT = window.DraftWallTypes;
+      if (!type || !Array.isArray(type.layers) || !WT?.sliceShows) {
+        return { concreteIn: total, concreteFromIn: 0 };
+      }
+      const layers = wall.sliceFlip === true && type.user ? [...type.layers].reverse() : type.layers;
+      let at = 0, lo = null, hi = null;
+      layers.forEach(layer => {
+        const to = at + layer.in;
+        if (WT.sliceShows(layer, 'fdn')) { if (lo == null) lo = at; hi = to; }
+        at = to;
+      });
+      return lo == null ? { concreteIn: total, concreteFromIn: 0 }
+        : { concreteIn: hi - lo, concreteFromIn: lo };
+    };
     env.walls().forEach(wall => {
       const p1 = proj(wall.start), p2 = proj(wall.end);
       if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
@@ -1889,6 +1908,21 @@ if (!window.DraftCutView) {
           depth: fdnDepth,
           top: wall.topHeight, base: wall.baseHeight,
           wallIn: type ? type.totalIn : 8,
+          // ── THE FOOTING IS CENTRED ON THE CONCRETE, NOT THE LINING ────
+          //
+          // jb, 19 Nov 2026, on E1 of a house on the stock 8" CONC + 2X6
+          // BSMT wall: "it doesn't look like they are centered on the
+          // foundation wall like they should be" -- "the plan footing is
+          // good". The plan rings the footing round the 8" of concrete
+          // (model/12 raiseLoop: equal projection past each CONCRETE face);
+          // this list measured it off the whole 14" with the hidden lining,
+          // so the footing stood 3" past the outside face instead of 6".
+          // `concreteIn` is the slices FOUNDATION shows (render-2d.js
+          // wallMetrics' shownFirst/shownLast); `concreteFromIn` is where
+          // they start in from the wall's first face.
+          ...concreteSpanOf(wall, type),
+          firstAtLo: f1.u <= f2.u,
+          endOn: fdnWall !== wall,
           bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
           // WHOSE CONCRETE IT IS, for the sill plate on top of it: the house
           // bears on SILL_PLATE_IN, a garage on GARAGE_BEAM_PLATE_IN, and
@@ -4088,6 +4122,28 @@ if (!window.DraftCutView) {
     // the bottom and back up — one loop per building mass — plus dashed
     // creases at viewer-facing corners and the footing steps under them.
     const CREASE = ink(0.45);
+    // HOW FAR THE FOOTING STANDS PAST EACH END OF A FACE (lo, hi), centred
+    // on the concrete (see concreteSpanOf). A wall seen face on ends against
+    // the walls it meets, whose concrete is on the outside face like its
+    // own, so both ends take the concrete's projection. A wall seen END ON
+    // spans its own thickness, lining included: the footing is centred on
+    // the concrete slices inside that span, so the lining side gets less.
+    const footingProj = face => {
+      if (!face.bearing) return { projFt: 0, projLo: 0, projHi: 0 };
+      const fw = fdn.footingWidthIn;
+      const concrete = face.concreteIn ?? face.wallIn;
+      const out = Math.max(0, fw - concrete) / 2;
+      if (!face.endOn) {
+        const p = out / 12;
+        return { projFt: p, projLo: p, projHi: p };
+      }
+      const from = face.concreteFromIn ?? 0;
+      const first = Math.max(0, out - from) / 12;
+      const last = Math.max(0, out - (face.wallIn - from - concrete)) / 12;
+      const projLo = face.firstAtLo ? first : last;
+      const projHi = face.firstAtLo ? last : first;
+      return { projFt: Math.max(projLo, projHi), projLo, projHi };
+    };
     const fdnGeoms = fdnFaces
       .filter(face => face.hi - face.lo >= 0.5)
       .map(face => ({
@@ -4106,8 +4162,7 @@ if (!window.DraftCutView) {
         topE: face.garage ? fdn.wallBottom + face.top
           : Math.min(fdn.wallBottom + face.top, fdn.wallTop - houseSillPlateFt()),
         baseE: fdn.wallBottom + face.base,
-        projFt: face.bearing
-          ? Math.max(0, fdn.footingWidthIn - face.wallIn) / 2 / 12 : 0,
+        ...footingProj(face),
       }));
     const exposed = fdnGeoms.filter(g => g.topE > fdn.grade)
       .sort((a, b) => a.depth - b.depth);   // far first
@@ -4594,7 +4649,7 @@ if (!window.DraftCutView) {
       // Asked over the FOOTING's extent, to match the stops below: a wall's
       // concrete stops at g.lo, the footing under it does not.
       const bottomAt = u => Math.min(...run.faces
-        .filter(g => g.lo - g.projFt - 1e-6 <= u && u <= g.hi + g.projFt + 1e-6)
+        .filter(g => g.lo - g.projLo - 1e-6 <= u && u <= g.hi + g.projHi + 1e-6)
         .map(bottomOf));
       // ── A FOOTING IS WIDER THAN THE WALL ON IT, AT BOTH ENDS ──────────
       //
@@ -4622,10 +4677,10 @@ if (!window.DraftCutView) {
       // SO THE STOPS ARE THE FOOTING'S extent rather than the wall's, and
       // both ends of every face fall out of one rule. The two special cases
       // go with it -- the run's ends are just the outermost stops now.
-      const footLo = g => g.lo - g.projFt;
-      const footHi = g => g.hi + g.projFt;
-      const startU = run.lo - leftF.projFt;
-      const endU = run.hi + rightF.projFt;
+      const footLo = g => g.lo - g.projLo;
+      const footHi = g => g.hi + g.projHi;
+      const startU = run.lo - leftF.projLo;
+      const endU = run.hi + rightF.projHi;
       const stops = [...new Set([startU, endU,
         ...run.faces.flatMap(g => [footLo(g), footHi(g)])])]
         .filter(u => u >= startU - 1e-6 && u <= endU + 1e-6)
@@ -4669,7 +4724,7 @@ if (!window.DraftCutView) {
       ctx.beginPath();
       ctx.moveTo(X(run.lo), Y(Math.min(leftF.topE, fdn.grade)));
       ctx.lineTo(X(run.lo), Y(leftF.baseE));
-      if (leftF.projFt > 0) ctx.lineTo(X(startU), Y(leftF.baseE));
+      if (leftF.projLo > 0) ctx.lineTo(X(startU), Y(leftF.baseE));
       ctx.lineTo(X(startU), Y(bottomOf(leftF)));
       let prevBottom = bottomOf(leftF);
       for (let s = 0; s < stops.length - 1; s++) {
@@ -4703,10 +4758,10 @@ if (!window.DraftCutView) {
         prevBottom = b;
       }
       if (prevBottom !== bottomOf(rightF)) {
-        ctx.lineTo(X(run.hi + rightF.projFt), Y(bottomOf(rightF)));
+        ctx.lineTo(X(run.hi + rightF.projHi), Y(bottomOf(rightF)));
       }
-      if (rightF.projFt > 0) {
-        ctx.lineTo(X(run.hi + rightF.projFt), Y(rightF.baseE));
+      if (rightF.projHi > 0) {
+        ctx.lineTo(X(run.hi + rightF.projHi), Y(rightF.baseE));
         ctx.lineTo(X(run.hi), Y(rightF.baseE));
       }
       ctx.lineTo(X(run.hi), Y(Math.min(rightF.topE, fdn.grade)));
@@ -4867,11 +4922,16 @@ if (!window.DraftCutView) {
       // wall line (a front and a back at the same u) do NOT trip it: their
       // walls stop at the same u, so neither spans the other's 6".
       const shoulders = new Set();
+      const SHOULDER_SLACK_FT = 1 / 96;
       run.faces.forEach(g => {
         if (g.projFt <= 0) return;
         [[g.lo, footLo(g)], [g.hi, footHi(g)]].forEach(([at, out]) => {
           const lo = Math.min(at, out), hi = Math.max(at, out);
-          if (lo <= startU + 1e-6 || hi >= endU - 1e-6) return;
+          if (hi - lo < 1e-6) return;   // the lining side of a wall end on
+          // An eighth of slack at the run's own ends: jb's T stub off the
+          // corner sat 0.05" in from the outside face, and its footing's
+          // end then drew a second shoulder over the outline's own.
+          if (lo <= startU + SHOULDER_SLACK_FT || hi >= endU - SHOULDER_SLACK_FT) return;
           if (run.faces.some(o => o !== g && o.baseE <= g.baseE + 1e-6
             && o.lo <= lo + 1e-6 && o.hi >= hi - 1e-6)) return;
           const key = `${g.baseE.toFixed(4)}|${lo.toFixed(4)}|${hi.toFixed(4)}`;
@@ -4938,7 +4998,7 @@ if (!window.DraftCutView) {
           ctx.lineTo(X(u), Y(g.baseE));
           ctx.stroke();
           if (g.projFt > 0) {
-            const out = u === g.lo ? u - g.projFt : u + g.projFt;
+            const out = u === g.lo ? u - g.projLo : u + g.projHi;
             // ── ONLY THE OUTSIDE EDGE OF THE FOOTING ──────────────────────
             //
             // jb, 15 Nov 2026, on E2 of a house whose front steps back a

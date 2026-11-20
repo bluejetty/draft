@@ -3752,8 +3752,20 @@
     const descent = levelId == null ? null : SG.stairDescent(levelId, stairLevels());
     return descent && descent.riseFt > 0 ? { levelId, layout: SG.stairLayout(descent.riseFt) } : null;
   };
-  const stairHandShaped = toward => {
+  // THE WAY IT RUNS, as the hand points it (jb, 19 Nov: "when i'm placing
+  // the stairs the T-Square isn't locking"): node snap first, as the first
+  // step's press takes it, then squared to the T-SQUARE's axes off the first
+  // step, as a wall's or a line's run is. The preview and the commit both
+  // read the aim through here, so what is drawn dashed is what is placed.
+  const stairHandAim = toward => {
+    if (!toward) return null;
+    const snap = drawSnap(toward);
+    const p = snap.pt ? { x: snap.pt.x, z: snap.pt.z } : { x: toward.x, z: toward.z };
+    return stairHand.at ? squareTo(stairHand.at, p) : p;
+  };
+  const stairHandShaped = rawToward => {
     const ready = stairHandLayout();
+    const toward = stairHandAim(rawToward);
     if (!ready || !stairHand.at || !toward) return null;
     const shaped = window.DraftStairPlace.stairFromAim(window.DraftStairGeometry, {
       at: stairHand.at, toward, layout: ready.layout, shape: stairHand.shape, turn: stairHand.turn,
@@ -3795,16 +3807,14 @@
         : 'STAIR DOWN: this level is no floor a stair comes down from -- pick UP FROM HERE.');
       return;
     }
-    const snap = drawSnap(at);
-    const p = snap.pt ? { x: snap.pt.x, z: snap.pt.z } : { x: at.x, z: at.z };
     if (!stairHand.at) {
-      stairHand.at = p;
+      stairHand.at = stairHandAim(at);
       sayOnStrip(stairHandSay());
       syncStairPick();
       paint();
       return;
     }
-    commitHandStair(p);
+    commitHandStair(at);
   };
   const commitHandStair = toward => {
     const made = stairHandShaped(toward);

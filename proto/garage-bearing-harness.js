@@ -3212,7 +3212,7 @@ const MUTATIONS = [
     s => s.replace('...run.faces.flatMap(g => [footLo(g), footHi(g)])])]',
       '...run.faces.flatMap(g => [g.lo, g.hi])])]')],
   ['only the run\'s outer ends carry a footing projection',
-    s => s.replace('const footLo = g => g.lo - g.projFt;\n      const footHi = g => g.hi + g.projFt;',
+    s => s.replace('const footLo = g => g.lo - g.projLo;\n      const footHi = g => g.hi + g.projHi;',
       'const footLo = g => g.lo;\n      const footHi = g => g.hi;')],
   ['the elevation stops drawing piles',
     s => s.replace("        && String(column.footing || '').startsWith('pile')\n        && column.point);",

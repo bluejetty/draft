@@ -198,11 +198,14 @@ if (!window.DraftStairSection) {
     const rootE = u => notchRootE(flight, layout, u);
     const footE = flight.e0 - flightRise;
     if (flight.ontoLanding) {
-      // Plumb down the landing's nosing face to its underside, then level
-      // out to where the underside line meets it.
+      // Back under the last riser, plumb down the landing's end to its
+      // underside, then level out to where the underside line meets it
+      // (jb, 19 Nov: the landing's end meets the stringer, no gap).
       const cutE = footE - bandFt;
-      ctx.lineTo(uToX(faceU(flight.risers)), yOf(cutE));
-      ctx.lineTo(uToX(Math.max(faceU(flight.risers), undersideU(cutE))), yOf(cutE));
+      const endU = faceU(flight.risers) - riserThk;
+      ctx.lineTo(uToX(endU), yOf(footE));
+      ctx.lineTo(uToX(endU), yOf(cutE));
+      ctx.lineTo(uToX(Math.max(endU, undersideU(cutE))), yOf(cutE));
     } else {
       ctx.lineTo(uToX(undersideU(footE)), yOf(footE));
     }
@@ -302,13 +305,20 @@ if (!window.DraftStairSection) {
     ctx.strokeRect(rect.x - 2, yOf(-layout.riseFt), rect.w + 4, (8 / 12) * pxPerFt);
 
     flights.forEach((flight, i) => drawFlight(ctx, flight, layout, uToX, yOf, PANE_INKS,
-      i === 0 ? { topBacking: { depthFt: floorFt } } : {}));
+      i === 0 ? { topBacking: { depthFt: floorFt } }
+        : flight.offLanding ? { topBacking: { depthFt: STAIR_LANDING_BAND_IN / 12 } } : {}));
 
     // The mid-flight landing on a turned stair: a level structural band
     // between the two flights, labelled with its clear size rule.
     // A U's two landings each draw their band, the upper and the lower.
+    // THE LANDING'S ENDS (jb, 19 Nov, his green circles): it starts under
+    // the last riser of the flight above, so that riser stands on it and the
+    // stringer meets its end, and it stops at the backing of the flight
+    // below, as the floor stops at the top -- 1 1/2" backing, 1/2" nosing.
     flats.forEach((band, i) => {
-      const x = uToX(band.u0), w = (band.u1 - band.u0) * pxPerFt;
+      const u0 = band.u0 - (STAIR_RISER_FACE_IN - treadRunIn() + STAIR_RISER_THICK_IN) / 12;
+      const u1 = band.u1 - STAIR_OPENING_NOSING_MIN_IN / 12;
+      const x = uToX(u0), w = (u1 - u0) * pxPerFt;
       ctx.fillStyle = 'rgba(93,74,138,0.12)';
       ctx.strokeStyle = STAIR_COLOR;
       ctx.lineWidth = 1.25;
