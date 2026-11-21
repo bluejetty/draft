@@ -472,6 +472,9 @@
       el('button', { type: 'button', className: 'lv-add', textContent: '+ DETAIL',
         title: 'Add a detail: a new framed detail window', data: { addDetail: '' },
         onclick: event => { event.stopPropagation(); addDetail(); } }));
+    // BACK TO HOUSE while a house waits on its EDIT (model/22).
+    const back = typeof backToHouseButton === 'function' ? backToHouseButton() : null;
+    if (back) panel.append(back);
     const lib = el('div', { className: 'dl-library', data: { detailsLibraryName: '' },
       title: 'The library this file is. SAVE DETAIL keeps a copy of it in this browser under this name.' },
     `LIBRARY: ${libraryName()}`);

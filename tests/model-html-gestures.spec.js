@@ -691,6 +691,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // + ADD SHELF between OPEN SHELF and the tab (jb, 10 Nov): the
             // LEVELS pane's + SHELF press again, so no absence row moves.
             'shelf-add',
+            // THE DETAILS TAB right of the bone (jb, 20 Nov 2026): it opens
+            // the panel of the library loaded into the house; loading one is
+            // a copy kept on the drawing, not an entity, so no absence row
+            // moves.
+            'details-tab',
             // UNDO ON SCREEN (audit C4) is the Ctrl+Z row's own verb with a
             // button on it: the parity table already has Undo **present**,
             // and a second way to press it makes nothing new.

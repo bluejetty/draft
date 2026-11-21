@@ -678,6 +678,9 @@ test.describe('MODEL.html tier 1', () => {
       // The DETAILS LIBRARY (jb, 19 Nov): a file of small 2D details, each
       // shelf one detail with its card and frame.
       './model/21-details-library.js',
+      // The DETAILS tab on a house (jb, 20 Nov): a library loaded into the
+      // house's own file, searched, put on sheets, edited and fed snapshots.
+      './model/22-details-strip.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT

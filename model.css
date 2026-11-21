@@ -2020,3 +2020,60 @@
   #details-board-menu .db-menu-label { font-family: var(--font-ui); font-size:9px; letter-spacing:0.08em;
     color: var(--ink-quiet); padding:3px 10px; }
   #details-board-menu .line-menu-rule { height:1px; margin:3px 6px; background: var(--edge-panel); }
+
+  /* THE DETAILS TAB AND PANEL (jb, 20 Nov 2026: "a little area in ther main
+     model house area like the SHELFS to load all the details into"). On the
+     foot lane RIGHT of the bone, past SAVE SHELF's place: #dt-bar's left is
+     the sheet's axis, so 132px clears the SHELVES row (its widest, on a
+     shelf, ends ~123px right of the axis). The panel rises above the tab. */
+  #details-strip { position:absolute; left:132px; bottom:calc(100% - 14px);
+    display:flex; flex-direction:column; align-items:flex-start; gap:4px; pointer-events:auto;
+    font-family: var(--font-ui); }
+  #details-strip[hidden], #details-panel[hidden] { display:none; }
+  #details-tab { height:14px; box-sizing:border-box; padding:0 10px; font-size:8px; letter-spacing:.08em;
+    cursor:pointer; line-height:12px; white-space:nowrap; color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px 6px 0 0; }
+  #details-tab:hover, #details-strip[data-open="true"] #details-tab { color: var(--accent); border-color: var(--accent); }
+  #details-tab[data-waiting]::after { content:''; display:inline-block; width:5px; height:5px; margin-left:5px;
+    border-radius:50%; background: var(--accent); vertical-align:middle; }
+  #details-panel { width:320px; max-width:calc(50vw - 150px); min-width:240px; max-height:min(470px, 62vh);
+    box-sizing:border-box; padding:8px; overflow:auto; display:flex; flex-direction:column; gap:5px;
+    background-color: var(--surface-page, #111);
+    background-image: linear-gradient(var(--surface-panel), var(--surface-panel));
+    border:1px solid var(--accent); border-radius:4px; color: var(--ink-primary); font-size:10px; }
+  #details-panel .ds-head { display:flex; gap:5px; align-items:center; }
+  #details-panel .ds-title { flex:1; min-width:0; font-size:10px; font-weight:600; letter-spacing:.06em;
+    color: var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #details-panel .ds-btn { padding:2px 6px; font-size:8px; letter-spacing:.06em; cursor:pointer; white-space:nowrap;
+    color: var(--ink-primary); background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:3px; }
+  #details-panel .ds-btn:hover { color: var(--accent); border-color: var(--accent); }
+  #details-panel .ds-btn.wide { width:100%; text-align:left; }
+  #details-panel .ds-btn.waiting { border-color: var(--accent); color: var(--accent); }
+  #details-panel .ds-btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  #details-panel > .ds-btn { align-self:flex-start; }
+  #details-panel .ds-sub { font-size:8px; letter-spacing:.04em; color: var(--ink-quiet); }
+  #details-panel .ds-note { font-size:9px; white-space:pre-wrap; }
+  #details-panel .ds-pick { display:flex; flex-direction:column; gap:3px; padding:4px; border:1px dashed var(--edge-panel); }
+  #details-panel .ds-search { width:100%; box-sizing:border-box; padding:4px 5px; font-family: var(--font-ui); font-size:10px;
+    color: var(--ink-primary); background: var(--surface-page, #111); border:1px solid var(--edge-panel); border-radius:3px; }
+  #details-panel .ds-chips { display:flex; flex-wrap:wrap; gap:4px; }
+  #details-panel .ds-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(72px, 1fr)); gap:5px;
+    max-height:236px; overflow:auto; }
+  #details-panel .ds-square { padding:0; cursor:pointer; overflow:hidden; text-align:center;
+    background-color: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:3px; color: var(--ink-primary); }
+  #details-panel .ds-square:hover { border-color: var(--accent); }
+  #details-panel .ds-square canvas { display:block; width:100%; height:56px; }
+  #details-panel .ds-square-name { display:block; padding:2px 3px; font-size:8px; letter-spacing:.04em;
+    border-top:1px solid var(--edge-panel); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #details-panel .ds-tray { display:flex; flex-direction:column; gap:4px; padding:4px; border:1px dashed var(--edge-panel); }
+  #details-panel .ds-tray-row { display:flex; gap:4px; align-items:center; }
+  #details-panel .ds-tray-row .ds-name { flex:1; min-width:0; font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #details-panel .ds-tray-thumb { width:56px; height:42px; flex:none; border:1px solid var(--edge-panel); }
+  #details-panel .ds-look { display:flex; flex-direction:column; gap:4px; }
+  #details-panel .ds-look-pic { width:100%; height:190px; border:1px solid var(--edge-panel); border-radius:3px; }
+  #details-panel .ds-look-name { font-size:11px; font-weight:600; letter-spacing:.06em; }
+  #details-panel .ds-look-presses { display:flex; gap:6px; }
+  #details-panel .ds-look-presses .ds-btn { flex:1; padding:5px 6px; font-size:9px; }
+  .dl-back-house { margin:0 6px 4px; align-self:flex-start; border-color: var(--accent); color: var(--accent); }
