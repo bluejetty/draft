@@ -129,6 +129,28 @@
     if (!res.ok) throw new Error(`the mail server replied ${res.status}`);
   };
 
+  // ── ONE SEND: the file in as many parts as it takes ───────────────────
+  // Throws (in words) on a bad address, too many parts for this hour, or a
+  // mail server that refused; returns the number of emails it took. The
+  // bones are the caller's: one backup is paid once, however many parts.
+  const sendFile = async ({ to, name, blob, progress = () => {} }) => {
+    const address = String(to || '').trim();
+    if (!validAddress(address)) throw new Error('Enter a valid email address.');
+    progress('Getting the file ready…');
+    const pieces = await piecesOf(name, blob);
+    if (pieces.length > allowance()) {
+      throw new Error(`That is ${pieces.length} emails and this browser has ${Math.max(0, allowance())} left this hour. Try again later.`);
+    }
+    store.set(ADDRESS_KEY, address);
+    for (let i = 0; i < pieces.length; i += 1) {
+      progress(pieces.length > 1 ? `Sending PART ${i + 1} OF ${pieces.length}…` : 'Sending…');
+      await post(address, pieces[i]);
+      noteSent(1);
+    }
+    return pieces.length;
+  };
+  const lastAddress = () => store.get(ADDRESS_KEY) || '';
+
   // ── THE POPUP ─────────────────────────────────────────────────────────
   const CSS = `
   .bk-scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100000}
@@ -246,6 +268,7 @@
   window.DraftBackupEmail = Object.freeze({
     offer: ({ name, blob }) => open({ name, blob }),
     offerPicked: ({ what = 'PDF', accept = '.pdf,application/pdf' } = {}) => open({ what, accept }),
+    sendFile, lastAddress, validAddress,
     piecesOf, zipOne, crc32, allowance, noteSent,
     ENDPOINT, APP, PART_BYTES, SENDS_PER_HOUR,
   });
