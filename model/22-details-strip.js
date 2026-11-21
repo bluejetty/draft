@@ -36,6 +36,8 @@
 
   let detailsStripOpen = stored.detailsStrip === true;
   const stripView = { search: '', category: STRIP_ALL, looking: null, snapshots: false };
+  // SAVE DETAILS FILE's box: open or not, what is typed, and its last word.
+  const fileBox = { open: false, name: '', to: '', say: '', kind: '' };
   let stripLibraries;          // undefined = not read yet; [] = none in this browser
   let stripLibrariesLoading = false;
   let stripPicking = false;    // the LOAD list is showing
@@ -407,6 +409,137 @@
     readHouseWaiting();
   };
 
+  // ── SAVE DETAILS FILE ─────────────────────────────────────────────────────
+  //
+  // jb, 21 Nov 2026: "when i'm in a house plan can i save the DETAIL.draft
+  // file seperately (and allow rename and send to email address)". The plan
+  // he passed ("looks good Proceed Sir"): a SAVE DETAILS FILE press on this
+  // panel saves the loaded library on its own, with a name box, to the
+  // computer or by email, through the same mail as the house's BACKUP FILE,
+  // at the house's prices -- SAVE AS to the computer 1 bone (refused short),
+  // the email 1 bone -- each PAID ONCE IT HAS GONE, so a cancelled picker or
+  // a failed send costs nothing.
+  //
+  // WHAT IS SAVED is the library as this browser keeps it (the copy EDIT and
+  // ADD TO DETAILS write), else the house's own copy. A NEW NAME is the
+  // file's name AND the library's name inside it, so the renamed file opens
+  // (or LOADs into a house) under the name it was given. The house's link and
+  // this browser's library are left as they are.
+  const fileStem = text => String(text || '').trim()
+    .replace(/\.(draft|json)$/i, '').replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 60);
+  const detailsFileText = async stem => {
+    const now = linkedDetails();
+    if (!now) return null;
+    const lib = JSON.parse(JSON.stringify((await storedLibrary(now.name)) || now.drawing));
+    if (stem) lib.detailsLibrary = stem;
+    return JSON.stringify(lib);
+  };
+  const fileToll = key => Number(window.DraftBoneWallet?.COSTS?.[key]) || 0;
+  const bonesHeldNow = () => (window.DraftBoneWallet ? window.DraftBoneWallet.read().balance : Infinity);
+  const tollWord = n => (window.DraftBoneWallet ? window.DraftBoneWallet.bonesWord(n) : `${n} bones`);
+  const spendToll = key => {
+    if (!window.DraftBoneWallet || !fileToll(key)) return;
+    window.DraftBoneWallet.spend(fileToll(key));
+    window.dispatchEvent(new CustomEvent('draft-bones-changed'));
+  };
+  const fileSay = (text, kind = '') => {
+    fileBox.say = text;
+    fileBox.kind = kind;
+    const line = document.querySelector('[data-details-file-say]');
+    if (line) { line.textContent = text; line.dataset.kind = kind; }
+  };
+  // TO THIS COMPUTER: the picker straight from the press (the gesture is
+  // spent by the first await), then the file, then the bone.
+  const saveDetailsFileToComputer = async () => {
+    const stem = fileStem(fileBox.name);
+    if (!stem) { fileSay('Type a name for the file.', 'error'); return false; }
+    const toll = fileToll('saveToComputer');
+    if (bonesHeldNow() < toll) {
+      fileSay(`Saving to the computer costs ${tollWord(toll)} and you have ${bonesHeldNow()}. A free bone drips in every hour.`, 'error');
+      return false;
+    }
+    const name = `${stem}.draft`;
+    const handle = await pickSaveTarget(name);
+    if (handle === 'cancelled') return false;
+    try {
+      const text = await detailsFileText(stem);
+      if (!text) { fileSay('Load a DETAILS file first.', 'error'); return false; }
+      await downloadDrawing(text, name, handle);
+    } catch (error) {
+      fileSay(`${name} could not be written: ${error?.message || error}. No bone spent.`, 'error');
+      return false;
+    }
+    spendToll('saveToComputer');
+    fileSay(`${(handle && handle.name) || name} saved on this computer.`, 'ok');
+    return true;
+  };
+  // EMAIL IT: the same mail as the house's BACKUP FILE (backup-email.js).
+  const emailDetailsFile = async () => {
+    const mail = window.DraftBackupEmail;
+    const stem = fileStem(fileBox.name);
+    if (!stem) { fileSay('Type a name for the file.', 'error'); return false; }
+    if (!mail?.sendFile) { fileSay('Email is not available on this page.', 'error'); return false; }
+    if (!mail.validAddress(fileBox.to)) { fileSay('Enter a valid email address.', 'error'); return false; }
+    const toll = fileToll('emailBackup');
+    if (bonesHeldNow() < toll) {
+      fileSay(`The email costs ${tollWord(toll)} and you have ${bonesHeldNow()}. A free bone drips in every hour.`, 'error');
+      return false;
+    }
+    const name = `${stem}.draft`;
+    const go = document.querySelector('[data-details-file-email]');
+    if (go) go.disabled = true;
+    try {
+      const text = await detailsFileText(stem);
+      if (!text) { fileSay('Load a DETAILS file first.', 'error'); return false; }
+      const parts = await mail.sendFile({ to: fileBox.to, name, progress: fileSay,
+        blob: new Blob([text], { type: 'application/json' }) });
+      spendToll('emailBackup');
+      fileSay(parts > 1
+        ? `${name} sent to ${fileBox.to.trim()} in ${parts} emails. Open the .001 with 7-Zip or WinRAR to put them back together.`
+        : `${name} sent to ${fileBox.to.trim()}.`, 'ok');
+      return true;
+    } catch (error) {
+      fileSay(`Could not send (${error?.message || error}). No bone spent.`, 'error');
+      return false;
+    } finally {
+      if (go) go.disabled = false;
+    }
+  };
+  const detailsFileBox = lib => {
+    const box = stripEl('div', { className: 'ds-file', data: { detailsFileBox: '' } });
+    const nameBox = stripEl('input', { type: 'text', className: 'ds-search', value: fileBox.name,
+      placeholder: 'FILE NAME', spellcheck: false, data: { detailsFileName: '' } });
+    nameBox.addEventListener('input', () => { fileBox.name = nameBox.value; });
+    nameBox.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); saveDetailsFileToComputer(); }
+    });
+    const toBox = stripEl('input', { type: 'email', className: 'ds-search', value: fileBox.to,
+      placeholder: 'you@example.com', spellcheck: false, data: { detailsFileTo: '' } });
+    toBox.addEventListener('input', () => { fileBox.to = toBox.value; });
+    toBox.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); emailDetailsFile(); }
+    });
+    const held = bonesHeldNow();
+    const pc = fileToll('saveToComputer'), em = fileToll('emailBackup');
+    box.append(
+      stripEl('div', { className: 'ds-sub', textContent: `SAVE ${lib.name.replace(/\.draft$/i, '')} ON ITS OWN — type a new name to rename the copy` }),
+      stripEl('div', { className: 'ds-file-row' }, nameBox, stripEl('span', { className: 'ds-sub', textContent: '.draft' })),
+      stripButton('SAVE TO COMPUTER', 'Save the details file on this computer', { detailsFileSave: '' },
+        () => saveDetailsFileToComputer(), 'wide'),
+      stripEl('div', { className: 'ds-file-row' }, toBox,
+        stripButton('EMAIL IT', 'Email the details file to this address', { detailsFileEmail: '' }, () => emailDetailsFile())),
+      stripEl('div', { className: 'ds-sub', data: { detailsFileToll: '' }, textContent: window.DraftBoneWallet
+        ? `Computer ${tollWord(pc)}, email ${tollWord(em)} (you have ${held}).` : '' }),
+      stripEl('div', { className: 'ds-file-say', data: { detailsFileSay: '', kind: fileBox.kind }, textContent: fileBox.say }));
+    return box;
+  };
+  window.addEventListener('draft-bones-changed', () => {
+    const line = document.querySelector('[data-details-file-toll]');
+    if (line && window.DraftBoneWallet) {
+      line.textContent = `Computer ${tollWord(fileToll('saveToComputer'))}, email ${tollWord(fileToll('emailBackup'))} (you have ${bonesHeldNow()}).`;
+    }
+  });
+
   // ── THE TAB AND THE PANEL ─────────────────────────────────────────────────
   const stripEl = (tag, props = {}, ...kids) => {
     const node = document.createElement(tag);
@@ -459,6 +592,9 @@
     panel.hidden = !detailsStripOpen || strip.hidden;
     if (panel.hidden) return;
     const keepFocus = document.activeElement?.dataset?.detailsSearch !== undefined;
+    // A NAME OR ADDRESS BEING TYPED keeps its place across a rebuild too.
+    const typing = ['detailsFileName', 'detailsFileTo'].find(key => document.activeElement?.dataset?.[key] !== undefined);
+    const typingCaret = typing ? document.activeElement.selectionStart : null;
     const caret = keepFocus ? document.activeElement.selectionStart : null;
     const scroll = panel.querySelector('[data-details-grid]')?.scrollTop || 0;
     panel.textContent = '';
@@ -474,6 +610,28 @@
     if (lib?.copiedAt) {
       panel.append(stripEl('div', { className: 'ds-sub' },
         `Copy kept in this house ${String(lib.copiedAt).slice(0, 16).replace('T', ' ')}`));
+    }
+    if (lib) {
+      const fileKey = stripButton('SAVE DETAILS FILE', `Save ${lib.name} on its own: rename it, put it on the computer or email it`,
+        { detailsFile: '' }, () => {
+          fileBox.open = !fileBox.open;
+          if (fileBox.open) {
+            fileBox.name = lib.name.replace(/\.draft$/i, '');
+            fileBox.to = fileBox.to || window.DraftBackupEmail?.lastAddress?.() || '';
+            fileBox.say = ''; fileBox.kind = '';
+          }
+          buildDetailsStrip();
+        });
+      fileKey.setAttribute('aria-pressed', String(fileBox.open));
+      panel.append(fileKey);
+      if (fileBox.open) {
+        panel.append(detailsFileBox(lib));
+        const again = typing && panel.querySelector(`[data-${typing === 'detailsFileName' ? 'details-file-name' : 'details-file-to'}]`);
+        if (again) {
+          again.focus();
+          try { if (typingCaret != null) again.setSelectionRange(typingCaret, typingCaret); } catch { /* email boxes refuse a caret */ }
+        }
+      }
     }
 
     // LOAD: the libraries this browser keeps, and the computer.
