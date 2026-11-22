@@ -65,7 +65,7 @@ const MUTATIONS = [
     c => c.replace('        if (!band || !Array.isArray(landing.poly)) return;',
       '        if (true) return;')],
   ['what lies beyond is not hidden behind what the cut slices', 'cut-view.js',
-    c => c.replace('        ctx.clip();\n        paint();', '        paint();')],
+    c => c.replace('          ctx.clip();\n          paint();', '          paint();')],
   ['the floor bands are left out of what the cut slices', 'cut-view.js',
     c => c.replace('      ...stack.floors.flatMap(level => levelRuns(level.id)', '      ...[].flatMap(level => levelRuns(level.id)')],
 ];
@@ -278,7 +278,7 @@ const check = (label, got, want) => {
   const PAST = { id: 11, name: 'SL', startPt: { x: -8, z: -52 }, endPt: { x: -8, z: -4 }, dirVec: { x: 1, z: 0 }, levelId: 3 };
   const seenL = paintClip(L, PAST), seenBare = paintClip(L, PAST, noStairs);
   check('a landing seen past the cut is drawn',
-    count(seenL, SEEN_LANDING) - count(seenBare, SEEN_LANDING), 1);
+    count(seenL, SEEN_LANDING) - count(seenBare, SEEN_LANDING) > 0, true);
   // Across the landing, looking back up the first flight (it lies at smaller
   // z, the far side of a +z dirVec).
   const SG = win.DraftStairGeometry;

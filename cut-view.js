@@ -3531,16 +3531,22 @@ if (!window.DraftCutView) {
           return out;
         });
       });
+      // ONE BOX AT A TIME: the boxes do not overlap, and a recorder that
+      // keeps a clip as its bounding box (dxf-writer.js, under the DXF and
+      // the DETAIL SNAPSHOT camera) cuts each pass exactly where the screen
+      // does -- one clip of many boxes would be their whole span to it.
       const beyond = paint => {
-        ctx.save();
-        ctx.beginPath();
         open.forEach(r => {
           const xa = Math.max(-1e5, X(r.lo)), xb = Math.min(1e5, X(r.hi));
-          ctx.rect(xa, Y(r.top), xb - xa, Y(r.bottom) - Y(r.top));
+          const ya = Y(r.top), yb = Y(r.bottom);
+          if (!(xb - xa > 0.01) || !(yb - ya > 0.01)) return;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(xa, ya, xb - xa, yb - ya);
+          ctx.clip();
+          paint();
+          ctx.restore();
         });
-        ctx.clip();
-        paint();
-        ctx.restore();
       };
       ctx.save();
       // ── THE LANDING SEEN PAST THE CUT (jb, 22 Nov 2026) ─────────────────
