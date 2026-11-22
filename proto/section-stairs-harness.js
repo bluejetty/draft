@@ -22,7 +22,7 @@ const ROOT = path.join(__dirname, '..');
 
 const MUTATIONS = [
   ['the section never draws its stairs', 'cut-view.js',
-    c => c.replace('    drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU);\n', '')],
+    c => c.replace('    drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU, cutSolids);\n', '')],
   ['a cut along the run is read as one across it', 'cut-view.js',
     c => c.replace('if (Math.abs(c) > Math.SQRT1_2) {', 'if (Math.abs(c) > 2) {')],
   // RE-AIMED 13 OCT, when a flight over a garage learned to land on the slab
