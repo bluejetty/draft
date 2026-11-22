@@ -2376,6 +2376,9 @@
         // coming out of it, without this drawing's own work over them.
         // Only while there is a hologram to look at instead.
         const showOwn = hologramShow.new || !holograms().some(holo => !holo.hidden);
+        // A DETAIL CROPPED TO ITS FRAME draws its own work inside the frame
+        // only (model/21-details-library.js); nothing is deleted.
+        const detailClipped = showOwn && typeof detailCropClip === 'function' && detailCropClip();
         if (showOwn) {
         paintBackgrounds();
         paintHalfLevelGhostFloors();
@@ -2424,6 +2427,7 @@
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
         paintDimensions();
+        if (detailClipped) ctx.restore();
         // The selection highlight sits where MODEL.dc.html puts it: after the
         // dimension strings (:6960) and immediately before the cut marks
         // (:7380 against :7432), so the highlight is never buried under the
@@ -2455,9 +2459,11 @@
         // Notes ride with the dimensions, for the same reason and in the same
         // place the bone puts them (MODEL.dc.html:7025, immediately after the
         // dimension pass): annotation goes over the geometry it annotates.
+        const notesClipped = detailClipped && detailCropClip();
         paintNotes();
         // Room tags are annotation too, and go down with the notes.
         paintRoomTags();
+        if (notesClipped) ctx.restore();
         }
         // The datum marker goes on top of everything, as it does in the old
         // page (MODEL.dc.html:6956, immediately before the committed lines):

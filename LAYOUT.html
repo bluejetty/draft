@@ -3567,6 +3567,15 @@ class Component extends PageLogic {
         ctx.beginPath();
         ctx.rect(px.x, px.y, px.w, px.h);
         ctx.clip();
+        // CROPPED TO ITS FRAME in the library (card.crop, jb 21 Nov 2026):
+        // a window grown past the frame still shows nothing outside it --
+        // on the desk, in print, in the PDF and in the DXF (the recorder
+        // honours the clip).
+        if (found.card.crop) {
+          ctx.beginPath();
+          ctx.rect(panX + full.xIn * zoom, panY + full.yIn * zoom, full.wIn * zoom, full.hIn * zoom);
+          ctx.clip();
+        }
         if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-DETL';
         window.DraftLayoutPlan.drawLevelMarks(ctx, toS, this._saved, -found.shelf.id, {
           paperColor: '#ffffff',

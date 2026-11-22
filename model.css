@@ -1702,6 +1702,15 @@
     letter-spacing:0.03em; white-space:nowrap;
     box-shadow:0 2px 8px rgba(0,0,0,0.3); }
   #hover-name[hidden] { display:none; }
+  /* THE DETAIL FRAME'S CROP POPUP (model/21): the hover name's twin, in the
+     accent so it reads as a press on offer rather than a name. */
+  .dl-frame-popup { position:fixed; z-index:8; pointer-events:none;
+    padding:3px 8px; border:1px solid var(--accent); border-radius:3px;
+    background-color: var(--surface-panel);
+    color: var(--ink-primary); font-family: var(--font-ui); font-size:11px;
+    font-weight:600; letter-spacing:0.05em; white-space:nowrap;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+  .dl-frame-popup[hidden] { display:none; }
   .promote-card { max-width:26em; padding:16px 18px; border-radius:4px;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel);
