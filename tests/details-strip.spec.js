@@ -220,3 +220,45 @@ test('the DETAILS LIBRARY seat sits after the sections and opens the library on 
   await expect.poll(() => page.evaluate(() => drawing.standalone ?? null)).toBeNull();
   await expect(page.locator('#view-rail .seat[data-seat="DETAILS"] .seat-label')).toHaveText('DETAILS LIBRARY (3)');
 });
+
+// A DETAIL ON A SHEET OPENS THE LIBRARY ON IT (jb, 22 Nov 2026: "when i
+// double click to go into the viewport to edit it doesn't work for the
+// DETAILS"). The double-click puts the house aside and opens the library at
+// that detail; BACK TO HOUSE keeps the edit and lands back on the sheet,
+// where the window paints from the fresh copy.
+test('a double-click on a detail on LAYOUT edits it in the library, and BACK TO HOUSE returns to the sheet', async ({ page }) => {
+  await openHouse(page);
+  await loadLibrary(page);
+  await page.locator('[data-details-square="2"]').click();
+  await page.locator('[data-details-put="2"]').click();
+  await page.waitForURL(/LAYOUT\.html/);
+  await expect(page.locator('body')).toHaveAttribute('data-layout-ready', '1', { timeout: 10000 });
+  const sheet = await page.locator('canvas').first().boundingBox();
+  const at = { x: sheet.x + sheet.width * 0.4, y: sheet.y + sheet.height * 0.4 };
+  await page.mouse.click(at.x, at.y);
+  await expect.poll(async () => ((await h.savedDrawing(page)).layout?.viewports || [])
+    .filter(v => v.kind === 'libdetail').length).toBe(1);
+  // THE BROWSER'S LIBRARY GONE (another domain, another computer): the
+  // sheets' own copy still opens.
+  await page.evaluate(() => window.SharedFileStore.removeNamedFile('DETAILS-LIBRARY.draft', 'details-libraries'));
+  await page.mouse.dblclick(at.x, at.y);
+  await page.waitForURL(/MODEL\.html/);
+  await expect.poll(() => page.evaluate(() => drawing?.standalone ?? null), { timeout: 10000 }).toBe('details');
+  expect(await page.evaluate(() => activeShelfId())).toBe(2);
+  expect(page.url(), 'the ask is spent').not.toContain('editDetail');
+  await h.openModelRail(page);
+  await expect(page.locator('[data-back-to-house]')).toBeVisible();
+  await page.evaluate(() => {
+    drawing.lines.push({ id: 'new', levelId: -2, view: 'plan', start: { x: 0, y: 0, z: 0 }, end: { x: 0.5, y: 0, z: 0.5 }, layer: 'draft' });
+    markDirty();
+  });
+  await page.locator('[data-back-to-house]').click();
+  await page.waitForURL(/LAYOUT\.html/);
+  await expect(page.locator('body')).toHaveAttribute('data-layout-ready', '1', { timeout: 10000 });
+  const d = await h.savedDrawing(page);
+  expect(d.standalone ?? null, 'the house is back').toBeNull();
+  const vp = d.layout.viewports.find(v => v.kind === 'libdetail');
+  const src = d.layout.sources.find(s => s.id === vp.source);
+  expect(src.drawing.lines.some(l => l.id === 'new'), 'the sheet copy carries the edit').toBe(true);
+  expect(d.linkedDetails.drawing.lines.some(l => l.id === 'new'), 'and the house copy').toBe(true);
+});

@@ -306,14 +306,17 @@
   // EDIT: THE HOUSE WAITS, AS IT STANDS -- unsaved edits and all -- in its
   // own corner of this browser, and the library opens at the detail. Its
   // BACK TO HOUSE press keeps the library and brings the house back.
-  const editLinkedDetail = async shelfId => {
-    const now = linkedDetails();
+  // `from` (LAYOUT's double-click, below) names another library than the
+  // linked one and where BACK TO HOUSE lands afterwards.
+  const editLinkedDetail = async (shelfId, from = null) => {
+    const now = from || linkedDetails();
     if (!now || !drawing) return false;
     const lib = (await storedLibrary(now.name)) || now.drawing;
     const houseText = JSON.stringify(serializeDrawing({ trim: false }));
     try {
       await window.SharedFileStore.saveNamedFile(new File([JSON.stringify({
         libraryName: now.name, at: new Date().toISOString(), house: JSON.parse(houseText),
+        returnTo: from?.returnTo || null,
       })], HOUSE_WAITING_FILE, { type: 'application/json' }), HOUSE_WAITING_BUCKET);
     } catch (error) {
       sayOnStrip(`The house could not be put aside: ${error?.message || error}. Nothing was opened.`);
@@ -333,6 +336,48 @@
     buildChrome();
     sayOnStrip(`${now.name} is open — edit the detail, then BACK TO HOUSE (top of the DETAILS pane) keeps it and brings the house back.`);
     return true;
+  };
+
+  // ── FROM A LAYOUT SHEET (jb, 22 Nov 2026) ───────────────────────────────
+  //
+  // "when i double click to go into the viewport to edit it doesn't work for
+  // the DETAILS". LAYOUT's double-click (and EDIT IN MODEL SPACE) on a detail
+  // window lands here with `?editDetail=<shelf id>&library=<name>`: EDIT's
+  // road, with BACK TO HOUSE going on to the sheet. The library is this
+  // browser's copy, else the house's linked copy, else the copy the sheets
+  // hold -- so a browser that never kept the library can still open it.
+  // Spent at once, like every ask in the bar, so a reload does not repeat it.
+  const detailAskedByLayout = (() => {
+    const id = params.get('editDetail');
+    if (id == null) return null;
+    const library = params.get('library') || '';
+    params.delete('editDetail');
+    params.delete('library');
+    syncUrl();
+    return { shelfId: Number(id), library };
+  })();
+  const layoutLibraryCopy = name => {
+    const F = window.DraftDrawingFormat;
+    const sources = Array.isArray(drawing?.layout?.sources) ? drawing.layout.sources : [];
+    for (const src of sources) {
+      if (!src || String(src.name || '') !== name) continue;
+      const lib = F.layoutSourceDrawing(src.drawing);
+      if (lib && F.standalone(lib.standalone) === 'details') return lib;
+    }
+    return null;
+  };
+  const editDetailFromLayout = async (ask = detailAskedByLayout) => {
+    if (!ask || !drawing) return false;
+    const linked = linkedDetails();
+    const name = ask.library || linked?.name || '';
+    const lib = (name && await storedLibrary(name))
+      || (linked && linked.name === name ? linked.drawing : null)
+      || layoutLibraryCopy(name);
+    if (!lib) {
+      sayOnStrip(`${name || 'That details library'} is not in this house or this browser. Load it with the DETAILS tab, then try again from the sheet.`);
+      return false;
+    }
+    return editLinkedDetail(ask.shelfId, { name, drawing: lib, returnTo: 'layout' });
   };
 
   // BACK TO HOUSE: the library kept in this browser's libraries (as SAVE
@@ -363,8 +408,23 @@
     try { await window.SharedFileStore.removeNamedFile(HOUSE_WAITING_FILE, HOUSE_WAITING_BUCKET); } catch { /* left: harmless */ }
     houseWaiting = null;
     const linkedName = drawing?.linkedDetails?.name;
+    const copiedAt = new Date().toISOString();
     if (libAfter && (!linkedName || linkedName === keptName)) {
-      drawing.linkedDetails = { name: keptName, copiedAt: new Date().toISOString(), drawing: libAfter };
+      drawing.linkedDetails = { name: keptName, copiedAt, drawing: libAfter };
+    }
+    // THE SHEETS' COPY TOO: every LAYOUT window from this library shows the
+    // edit when the sheet comes back up.
+    const sources = Array.isArray(drawing?.layout?.sources) ? drawing.layout.sources : [];
+    if (libAfter) {
+      const names = new Set([keptName, waiting.libraryName].filter(Boolean));
+      sources.forEach(src => {
+        if (src && names.has(String(src.name || ''))) Object.assign(src, { drawing: libAfter, copiedAt });
+      });
+    }
+    if (waiting.returnTo === 'layout') {
+      await save();
+      window.location.href = './LAYOUT.html';
+      return true;
     }
     detailsStripOpen = true;
     keepLight('detailsStrip', true);

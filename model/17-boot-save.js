@@ -1910,6 +1910,8 @@
     projectOrder = null;
     if (order) runProjectOrder(order);
     if (wantsHandoffAtBoot) openHandoff();
+    // A DETAIL DOUBLE-CLICKED ON A LAYOUT SHEET (model/22).
+    if (detailAskedByLayout) editDetailFromLayout();
     // ── THE BOARD ONLY MEETS A BLANK SHEET (Movie, 12 Oct) ────────────────
     //
     // "when the user already have plans in memory in the computer (not a
