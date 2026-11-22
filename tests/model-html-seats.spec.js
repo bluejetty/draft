@@ -163,6 +163,8 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
     '1 MAIN FL PLAN (WALLS)', '1 MAIN FL LAYOUT (FLOOR)',
     'FOUNDATION', 'BASEMENT (WALLS)',
     'S1', 'S2',
+    // AND THE DETAILS LIBRARY after the sections (jb, 22 Nov 2026).
+    'DETAILS LIBRARY',
   ]);
 
   // EVERY SEAT IS THE SAME WIDTH, which is what "it just flows" means and is
