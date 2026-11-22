@@ -2274,6 +2274,11 @@ if (!window.DraftDrawingFormat) {
       frameH: detailFrameFt(card.frameH, DETAIL_DEFAULTS.frameH),
       scale: DETAIL_SCALES.includes(Number(card.scale)) ? Number(card.scale) : DETAIL_DEFAULTS.scale,
       ...(card.favourite === true ? { favourite: true } : {}),
+      // CROPPED TO THE FRAME (jb, 21 Nov 2026: "just hide the outside part
+      // ... and can still adjust it later"): what lies outside the frame is
+      // kept and only not shown -- on screen, on a sheet, in print, the PDF
+      // and the DXF. Moving or growing the frame brings it back.
+      ...(card.crop === true ? { crop: true } : {}),
       ...(typeof card.changed === 'string' && card.changed ? { changed: card.changed.slice(0, 40) } : {}),
     };
   };

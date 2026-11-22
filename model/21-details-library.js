@@ -129,8 +129,21 @@
     const ink = skin['draw-note'] || '#333';
     ctx.save();
     // THE FRAME, dashed: a boundary, not a line of the detail.
-    ctx.strokeStyle = skin['draw-selected'] || ink;
-    ctx.lineWidth = 1.5;
+    // LIT UNDER THE CURSOR, the crop's press (below): a wide soft glow
+    // under a heavier dash, in the snap ring's orange.
+    if (detailFrameHover) {
+      const glow = '#ff8a1f';
+      ctx.strokeStyle = glow;
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 8;
+      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = glow;
+      ctx.lineWidth = 2.5;
+    } else {
+      ctx.strokeStyle = skin['draw-selected'] || ink;
+      ctx.lineWidth = 1.5;
+    }
     ctx.setLineDash([8, 5]);
     ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
     ctx.setLineDash([]);
@@ -138,7 +151,7 @@
     ctx.font = '11px "DM Mono", monospace';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(`FRAME ${feetText(card.frameW)} x ${feetText(card.frameH)}`, b.x, a.y - 4);
+    ctx.fillText(`FRAME ${feetText(card.frameW)} x ${feetText(card.frameH)}${card.crop ? '  · CROPPED' : ''}`, b.x, a.y - 4);
     // THE BUBBLE UNDER IT (the plan's mockup): number, name, scale. The
     // number is the detail's place in the library for now; on a sheet it
     // will be the sheet's own (step 4).
@@ -164,6 +177,123 @@
     ctx.fillText(`SCALE: ${scaleLabel(card.scale)}${card.kind === 'typ' ? '  TYP.' : ''}`, cx + 22, cy + 15);
     ctx.restore();
   };
+
+  // ── CROP TO THE FRAME (jb, 21 Nov 2026) ────────────────────────────────
+  //
+  // "if the user scrolls over the 'detail box' dotted line, light up and also
+  // show a popup that says 'click to crop to detail window' and then cut off
+  // any part of the drawing outside the box" -- and then, the same minute:
+  // "ok ya actually just hide the ouside part and we won't have to worry
+  // about it and can still adjust it later". So the crop is a CLIP, not a
+  // trim: `card.crop` (drawing-format detailCard) hides what lies outside
+  // the frame and deletes nothing. A press on the frame again, or SHOW ALL
+  // on the card, brings it all back; moving or growing the frame shows what
+  // it now takes in. LAYOUT clips the same way, so a sheet, its print, its
+  // PDF and its DXF carry only what is inside ("when you make DXF or PDF it
+  // won't show it right?" -- right).
+  const DETAIL_FRAME_REACH_PX = 6;
+  let detailFrameHover = false;
+  // THE POPUP is the hover name's twin (#hover-name: follows the cursor,
+  // takes no presses), made on first use.
+  let detailFramePopupNode = null;
+  const detailFramePopup = () => {
+    if (!detailFramePopupNode) {
+      detailFramePopupNode = document.createElement('div');
+      detailFramePopupNode.className = 'dl-frame-popup';
+      detailFramePopupNode.dataset.detailFramePopup = '';
+      detailFramePopupNode.setAttribute('aria-hidden', 'true');
+      detailFramePopupNode.hidden = true;
+      document.body.append(detailFramePopupNode);
+    }
+    return detailFramePopupNode;
+  };
+  // THE CLIP, in screen pixels, for the painters to draw inside: the active
+  // detail on the MODEL screen, or the one a thumbnail is painting.
+  const detailCropClip = () => {
+    if (!isDetailsFile()) return false;
+    let card = null;
+    if (thumbTarget) {
+      const shelf = shelves().find(sh => -Number(sh.id) === Number(thumbTarget.levelId));
+      card = shelf ? detailCardOf(shelf) : null;
+    } else if (boneyardActive) {
+      card = activeDetail()?.card || null;
+    }
+    if (!card || !card.crop) return false;
+    const r = detailFrameRect(card);
+    const a = toS({ x: r.x0, z: r.z0 });
+    const b = toS({ x: r.x1, z: r.z1 });
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    ctx.clip();
+    return true;
+  };
+  const detailCropEnd = clipped => { if (clipped) ctx.restore(); };
+  // ON THE DASHED LINE, within a few pixels either side of it.
+  const onDetailFrame = (sx, sy) => {
+    if (!isDetailsFile() || !boneyardActive || thumbTarget) return false;
+    const now = activeDetail();
+    if (!now) return false;
+    const r = detailFrameRect(now.card);
+    const a = toS({ x: r.x0, z: r.z0 });
+    const b = toS({ x: r.x1, z: r.z1 });
+    const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x);
+    const y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+    const d = DETAIL_FRAME_REACH_PX;
+    const inOuter = sx >= x0 - d && sx <= x1 + d && sy >= y0 - d && sy <= y1 + d;
+    const inInner = sx > x0 + d && sx < x1 - d && sy > y0 + d && sy < y1 - d;
+    return inOuter && !inInner;
+  };
+  // THE FRAME TAKES THE PRESS only with Select in hand and nothing of the
+  // drawing under the cursor: a line drawn along the frame still picks.
+  const detailFrameLive = e => {
+    if (!isDetailsFile() || !boneyardActive || !drawing) return false;
+    if (activeTool !== RESTING_TOOL || e.pointerType === 'touch') return false;
+    if (typeof modalUp === 'function' && modalUp()) return false;
+    if (typeof hoverBusy === 'function' && hoverBusy()) return false;
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    if (!onDetailFrame(sx, sy)) return false;
+    return !hitAt(toWorld(sx, sy));
+  };
+  const hideDetailFramePopup = () => {
+    if (detailFramePopupNode && !detailFramePopupNode.hidden) detailFramePopupNode.hidden = true;
+    if (detailFrameHover) { detailFrameHover = false; canvas.style.cursor = ''; paint(); }
+  };
+  canvas.addEventListener('pointermove', e => {
+    if (!detailFrameLive(e)) { hideDetailFramePopup(); return; }
+    const now = activeDetail();
+    const pop = detailFramePopup();
+    pop.textContent = now?.card.crop
+      ? 'CLICK TO SHOW THE WHOLE DRAWING'
+      : 'CLICK TO CROP TO DETAIL WINDOW';
+    pop.hidden = false;
+    const pad = 14;
+    const w = pop.offsetWidth;
+    const x = e.clientX + pad + w > window.innerWidth ? e.clientX - pad - w : e.clientX + pad;
+    pop.style.left = `${Math.max(2, x)}px`;
+    pop.style.top = `${Math.max(2, e.clientY + pad)}px`;
+    canvas.style.cursor = 'pointer';
+    if (!detailFrameHover) { detailFrameHover = true; paint(); }
+  });
+  canvas.addEventListener('pointerleave', hideDetailFramePopup);
+  const setDetailCrop = on => {
+    const now = activeDetail();
+    if (!now || Boolean(now.card.crop) === Boolean(on)) return;
+    writeCard({ crop: Boolean(on) }, on
+      ? `${now.shelf.name} — cropped to its frame. Nothing outside it is deleted: press the frame again (or SHOW ALL) to see it.`
+      : `${now.shelf.name} — showing the whole drawing again.`);
+  };
+  // CAPTURE, so the press is the frame's before Select reads it as the
+  // start of a selection box.
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || !detailFrameLive(e)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const now = activeDetail();
+    setDetailCrop(!now?.card.crop);
+    hideDetailFramePopup();
+  }, true);
 
   // ── STARTING ONE, AND ADDING TO IT ─────────────────────────────────────────
   //
@@ -554,6 +684,13 @@
     const frameRow = el('div', { className: 'dl-frame' }, frameBox('frameW', 'width'),
       el('span', { textContent: 'x' }), frameBox('frameH', 'height'));
 
+    // CROP: the frame's own press, on the card too, so it can be found.
+    const cropRow = el('div', { className: 'dl-chips' }, [[true, 'CROP TO FRAME'], [false, 'SHOW ALL']].map(([on, label]) =>
+      el('button', { type: 'button', className: 'lv-add dl-chip', textContent: label,
+        data: { detailCrop: on ? 'on' : 'off' }, 'aria-pressed': String(Boolean(card.crop) === on),
+        title: on ? 'Hide what lies outside the frame (nothing is deleted)' : 'Show the whole drawing, inside the frame and out',
+        onclick: () => setDetailCrop(on) })));
+
     const scale = el('select', { data: { detailScale: '' }, title: 'The scale the detail is drawn at, and lands on a sheet at' },
       window.DraftDrawingFormat.DETAIL_SCALES.map(s => el('option', { value: String(s), textContent: scaleLabel(s), selected: s === card.scale })));
     scale.addEventListener('change', () => writeCard({ scale: Number(scale.value) }, `Scale: ${scaleLabel(Number(scale.value))}.`));
@@ -578,6 +715,7 @@
       field('CATEGORY', cat), datalist,
       field('KIND', kindRow),
       field('FRAME', frameRow),
+      field('CROP', cropRow),
       field('SCALE', scale),
       field('TAGS', tags),
       field('NOTE', note),
@@ -669,7 +807,9 @@
       ctx.clearRect(0, 0, cssW, cssH);
       view.cx = 0; view.cz = 0;
       view.scale = Math.min((cssW - 12) / card.frameW, (cssH - 12) / card.frameH);
+      const clipped = detailCropClip();
       paintShapes(); paintLines(); paintNotes(); paintDimensions();
+      detailCropEnd(clipped);
       const r = detailFrameRect(card);
       const a = toS({ x: r.x0, z: r.z0 });
       const b = toS({ x: r.x1, z: r.z1 });

@@ -187,6 +187,12 @@
     g.setLineDash([3, 2]);
     g.strokeRect(X(-W / 2), Y(-H / 2), W * k, H * k);
     g.setLineDash([]);
+    // CROPPED TO ITS FRAME (card.crop, model/21): nothing outside shows.
+    if (card.crop) {
+      g.beginPath();
+      g.rect(X(-W / 2), Y(-H / 2), W * k, H * k);
+      g.clip();
+    }
     g.strokeStyle = ink;
     g.fillStyle = ink;
     g.beginPath();
