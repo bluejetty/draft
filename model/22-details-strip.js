@@ -90,6 +90,8 @@
     stripView.looking = null;
     markDirty();
     buildDetailsStrip();
+    // The DETAILS LIBRARY seat on LEVELS / LAYERS shows the new copy.
+    paint();
     sayOnStrip(say || `${name} is loaded into this house: ${libraryDetails(linkedDetails()).length} details.`);
   };
 
@@ -169,19 +171,23 @@
   //
   // Its frame dashed, and what is drawn on its shelf -- lines, shape edges,
   // a dot for each note -- fitted to the square, in the page's ink.
-  const paintLibraryDetail = (screen, lib, shelf, card) => {
-    const ratio = window.devicePixelRatio || 1;
-    const cw = screen.clientWidth || 70, ch = screen.clientHeight || 56;
-    screen.width = Math.round(cw * ratio);
-    screen.height = Math.round(ch * ratio);
-    const g = screen.getContext('2d');
-    g.setTransform(ratio, 0, 0, ratio, 0, 0);
-    g.clearRect(0, 0, cw, ch);
+  // ONE DETAIL INTO A BOX of a canvas already scaled to CSS pixels: the box
+  // at (bx, by), cw x ch. Returns how many marks it drew. Used by a square
+  // in the panel and by the DETAILS LIBRARY seat on the LEVELS / LAYERS
+  // pane, which draws up to four of them in one picture.
+  const drawLibraryDetail = (g, lib, shelf, card, bx, by, cw, ch, pad = 3) => {
     const level = -Number(shelf.id);
     const W = Math.max(card.frameW, 0.25), H = Math.max(card.frameH, 0.25);
-    const k = Math.min((cw - 6) / W, (ch - 6) / H);
-    const X = x => cw / 2 + x * k, Y = z => ch / 2 + z * k;
+    const k = Math.min((cw - 2 * pad) / W, (ch - 2 * pad) / H);
+    const X = x => bx + cw / 2 + x * k, Y = z => by + ch / 2 + z * k;
     const ink = skin['draw-note'] || '#333';
+    g.save();
+    // A DETAIL CROPPED TO ITS FRAME (card.crop) shows nothing past it here
+    // either; the box itself is always the edge.
+    g.beginPath();
+    if (card.crop) g.rect(X(-W / 2), Y(-H / 2), W * k, H * k);
+    else g.rect(bx, by, cw, ch);
+    g.clip();
     g.strokeStyle = skin['draw-selected'] || ink;
     g.lineWidth = 0.75;
     g.setLineDash([3, 2]);
@@ -211,7 +217,68 @@
       g.fillRect(X(at.x) - 1, Y(at.z) - 1, 2, 2);
       count += 1;
     });
+    g.restore();
+    return count;
+  };
+  const paintLibraryDetail = (screen, lib, shelf, card) => {
+    const ratio = window.devicePixelRatio || 1;
+    const cw = screen.clientWidth || 70, ch = screen.clientHeight || 56;
+    screen.width = Math.round(cw * ratio);
+    screen.height = Math.round(ch * ratio);
+    const g = screen.getContext('2d');
+    g.setTransform(ratio, 0, 0, ratio, 0, 0);
+    g.clearRect(0, 0, cw, ch);
+    const count = drawLibraryDetail(g, lib, shelf, card, 0, 0, cw, ch);
     screen.dataset.detailThumbMarks = String(count);
+  };
+
+  // ── THE DETAILS LIBRARY SEAT (LEVELS / LAYERS) ────────────────────────────
+  //
+  // jb, 22 Nov 2026: "could we make a 'viewport' window after the section
+  // cuts for the DETAIL LIBRARY". One more seat on the pane's preview grid,
+  // after S1 / S2: a picture of the linked library's first details, and a
+  // press opens the library on its DETAILS BOARD the way a press on S1
+  // brings S1 up (EDIT's road: the house waits, BACK TO HOUSE returns).
+  // With nothing linked yet the seat says + LOAD and opens the DETAILS
+  // panel on its LOAD list.
+  const DETAILS_SEAT_SHOWS = 4;
+  const detailsSeatInfo = () => {
+    const lib = linkedDetails();
+    return lib ? { name: lib.name.replace(/\.draft$/i, ''), count: libraryDetails(lib).length } : null;
+  };
+  // Up to four details, two across, in the seat's 2x canvas.
+  const paintDetailsSeat = screen => {
+    const g = screen.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, screen.width, screen.height);
+    const lib = linkedDetails();
+    const shown = lib ? libraryDetails(lib).slice(0, DETAILS_SEAT_SHOWS) : [];
+    screen.dataset.detailsSeatShows = String(shown.length);
+    if (!shown.length) return 0;
+    const dpr = 2;
+    const cw = screen.width / dpr, ch = screen.height / dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cols = shown.length === 1 ? 1 : 2;
+    const rows = shown.length > 2 ? 2 : 1;
+    const w = cw / cols, h = ch / rows;
+    let marks = 0;
+    shown.forEach(({ shelf, card }, i) => {
+      marks += drawLibraryDetail(g, lib.drawing, shelf, card,
+        (i % cols) * w, Math.floor(i / cols) * h, w, h, 2);
+    });
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    screen.dataset.detailThumbMarks = String(marks);
+    return marks;
+  };
+  const pressDetailsSeat = () => {
+    if (linkedDetails()) return editLinkedDetail(null);
+    detailsStripOpen = true;
+    keepLight('detailsStrip', true);
+    stripPicking = true;
+    stripLibraries = undefined;
+    buildDetailsStrip();
+    sayOnStrip('No details file is loaded into this house yet. Pick one from the DETAILS panel, or LOAD DETAILS FILE off the computer.');
+    return false;
   };
 
   // ── PUT ON SHEET, EDIT ────────────────────────────────────────────────────

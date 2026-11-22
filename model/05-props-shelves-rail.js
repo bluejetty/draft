@@ -1618,6 +1618,10 @@
     for (let n = 0; n < Math.max(2, stored.length); n += 1) {
       seats.push({ kind: 'cut', name: `S${n + 1}` });
     }
+    // AND THE DETAILS LIBRARY, after the sections (jb, 22 Nov 2026: "could
+    // we make a 'viewport' window after the section cuts for the DETAIL
+    // LIBRARY"). Its picture and its press are model/22's.
+    seats.push({ kind: 'details', name: 'DETAILS' });
     return seats;
   };
 
@@ -1667,6 +1671,22 @@
   // it is the view on screen, and where a press goes -- so the rail below
   // does not care which it is holding.
   const seatSpec = entry => {
+    if (entry.kind === 'details') {
+      const info = typeof detailsSeatInfo === 'function' ? detailsSeatInfo() : null;
+      return {
+        cut: null,
+        details: true,
+        key: 'details',
+        seatId: 'DETAILS',
+        label: info ? `DETAILS LIBRARY (${info.count})` : 'DETAILS LIBRARY',
+        title: info
+          ? `${info.name} — tap to open the details library (BACK TO HOUSE brings you back here)`
+          : 'DETAILS LIBRARY — no details file loaded into this house yet; tap to load one',
+        overlay: info ? null : '+ LOAD',
+        active: false,
+        press: () => { if (typeof pressDetailsSeat === 'function') pressDetailsSeat(); },
+      };
+    }
     if (entry.kind === 'cut') {
       const base = seatFor(entry.name);
       return { ...base,
@@ -1784,7 +1804,10 @@
       // plan seat always has something behind it, because the chart only
       // seats levels the drawing actually holds.
       seat.disabled = !spec.press;
-      seat.querySelector('.seat-cut').hidden = !spec.addCut;
+      const overlay = spec.addCut ? '+ CUT' : spec.overlay || null;
+      seat.querySelector('.seat-cut').hidden = !overlay;
+      if (overlay) seat.querySelector('.seat-cut span').textContent = overlay;
+      if (spec.details) seat.dataset.seatDetails = ''; else delete seat.dataset.seatDetails;
       if (spec.addCut) seat.dataset.seatCut = ''; else delete seat.dataset.seatCut;
       const fold = seat.querySelector('.seat-fold');
       fold.hidden = !spec.fold;
@@ -2019,6 +2042,11 @@
       paintPlanThumb(screen, spec.plan.levelId, spec.plan.viewId);
       return;
     }
+    // THE DETAILS LIBRARY'S SEAT draws its first details (model/22).
+    if (spec.details) {
+      if (typeof paintDetailsSeat === 'function') paintDetailsSeat(screen);
+      return;
+    }
     const c = screen.getContext('2d');
     c.clearRect(0, 0, screen.width, screen.height);
     if (!spec.cut) return;
@@ -2206,7 +2234,9 @@
   // case -- a seat enabled but not yet painted, because the rail paints one
   // per frame -- so an empty rectangle never reaches the paper.
   const inkedSeats = () => [...rail.querySelectorAll('.seat')].filter(seat => {
-    if (seat.disabled || 'seatCut' in seat.dataset) return false;
+    // The DETAILS LIBRARY seat is not a view of this house, so it stays off
+    // the presentation's views page.
+    if (seat.disabled || 'seatCut' in seat.dataset || 'seatDetails' in seat.dataset) return false;
     const screen = seat.firstChild;
     if (!screen || !screen.width) return false;
     const { data } = screen.getContext('2d')

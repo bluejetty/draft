@@ -186,3 +186,37 @@ test('PUT ON SHEET goes to LAYOUT holding the detail, and a click places it', as
     return (d.layout?.viewports || []).filter(v => v.kind === 'libdetail' && v.shelfId === 2).length;
   }).toBe(1);
 });
+
+// THE DETAILS LIBRARY SEAT on the LEVELS / LAYERS pane (jb, 22 Nov 2026:
+// "could we make a 'viewport' window after the section cuts for the DETAIL
+// LIBRARY"): the last seat, after S1 / S2, a picture of the first details,
+// and a press opens the library on its board.
+test('the DETAILS LIBRARY seat sits after the sections and opens the library on its board', async ({ page }) => {
+  await openHouse(page);
+  await h.openModelRail(page);
+  const seats = page.locator('#view-rail .seat');
+  const ids = await seats.evaluateAll(els => els.map(el => el.dataset.seat));
+  expect(ids.slice(-3), 'after the section seats').toEqual(['S1', 'S2', 'DETAILS']);
+  const seat = page.locator('#view-rail .seat[data-seat="DETAILS"]');
+  // NOTHING LINKED: + LOAD, and a press opens the DETAILS panel's LOAD list.
+  await expect(seat.locator('.seat-cut')).toBeVisible();
+  await expect(seat.locator('.seat-cut span')).toHaveText('+ LOAD');
+  await seat.click();
+  await expect(page.locator('#details-panel')).toBeVisible();
+  await page.locator('[data-details-use="DETAILS-LIBRARY.draft"]').click();
+  // LINKED: the count on the label, the picture drawn, no + LOAD.
+  await expect(seat.locator('.seat-label')).toHaveText('DETAILS LIBRARY (3)');
+  await expect(seat.locator('.seat-cut')).toBeHidden();
+  await expect.poll(() => seat.locator('canvas').evaluate(c => Number(c.dataset.detailsSeatShows || 0))).toBe(3);
+  await expect.poll(() => seat.locator('canvas').evaluate(c => Number(c.dataset.detailThumbMarks || 0)),
+    'the details lines are drawn into the seat').toBeGreaterThan(0);
+  // A PRESS: the library is the drawing, on its board, the house waiting.
+  await seat.click();
+  await expect.poll(() => page.evaluate(() => drawing.standalone)).toBe('details');
+  await expect(page.locator('#details-board')).toBeVisible();
+  await expect(page.locator('#view-rail .seat'), 'a library seats nothing').toHaveCount(0);
+  await expect(page.locator('[data-back-to-house]')).toBeVisible();
+  await page.locator('[data-back-to-house]').click();
+  await expect.poll(() => page.evaluate(() => drawing.standalone ?? null)).toBeNull();
+  await expect(page.locator('#view-rail .seat[data-seat="DETAILS"] .seat-label')).toHaveText('DETAILS LIBRARY (3)');
+});

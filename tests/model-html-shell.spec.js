@@ -170,7 +170,8 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
     await page.locator('#right-tab').click();
     await page.waitForTimeout(200);
     await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
-    await expect(page.locator('.seat')).toHaveCount(14);
+    // Fourteen views and the DETAILS LIBRARY seat after them (22 Nov 2026).
+    await expect(page.locator('.seat')).toHaveCount(15);
 
     // TWO COLUMNS AND NO MORE (Movie, 15 Sep: "only the one with 2 columns").
     // Asked as the seats' own geometry -- how many share a row -- because a
@@ -184,7 +185,9 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
     // have passed that cut without noticing.
     const rows = await page.evaluate(() => {
       const tally = new Map();
-      [...document.querySelectorAll('.seat')].forEach(el => {
+      // The DETAILS LIBRARY seat closes the grid under S1 and may stand
+      // alone; the views above it are the pairs this rule is about.
+      [...document.querySelectorAll('.seat:not([data-seat-details])')].forEach(el => {
         const top = Math.round(el.getBoundingClientRect().top);
         tally.set(top, (tally.get(top) || 0) + 1);
       });
@@ -204,7 +207,8 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
     // The last seat that GOES somewhere: the section seats at the end are
     // + CUT until a cut exists (Movie, 11 Oct), and a press that arms a tool
     // leaves the URL where it was, so it proves nothing about scroll.
-    const last = page.locator('.seat:not([disabled]):not([data-seat-cut])').last();
+    // The DETAILS LIBRARY seat after them opens a panel, not a view.
+    const last = page.locator('.seat:not([disabled]):not([data-seat-cut]):not([data-seat-details])').last();
     await last.scrollIntoViewIfNeeded();
     await last.click();
     await page.waitForTimeout(200);
