@@ -28,7 +28,7 @@ const MUTANTS = [
     find: '    const deckOccluders = [...allSpans, ...rimBands,',
     with: '    const deckOccluders = [...allSpans,',
     test: 'E3:' },
-  { file: 'cut-view.js', name: 'laid back down BEFORE the line passes, so they still cross it',
+  { file: 'cut-view.js', name: 'everything counts as nearer: no deck is ever laid back down',
     find: '    const deckOccluders = [...allSpans, ...rimBands,',
     with: '    const deckOccluders = [...allSpans, ...rimBands, { lo: -1e9, hi: 1e9, depth: 1e9, top: 1e9, bottom: -1e9 },',
     test: 'E1:' },
