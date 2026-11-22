@@ -125,6 +125,15 @@ test('picking a deck on the FLOOR LAYOUT says DECK on the panel; DECK DROP and t
   // The OBJ / PROP pane may be folded; the box's own change is what commits.
   await drop.evaluate(input => { input.value = '3'; input.dispatchEvent(new Event('change')); });
   await expect.poll(() => page.evaluate(() => drawing.floors.find(f => f.id === 'deck-e').deckDropIn)).toBe(3);
+  // jb, 22 Nov 2026: fractions, the way a drafter writes them; decimals still go.
+  for (const [typed, inches, shows] of [['4-5/8"', 4.625, '4 5/8'], ['1 1/2', 1.5, '1 1/2'], ['0-1 1/4"', 1.25, '1 1/4'], ['2.75', 2.75, '2 3/4']]) {
+    await drop.evaluate((input, text) => { input.value = text; input.dispatchEvent(new Event('change')); }, typed);
+    await expect.poll(() => page.evaluate(() => drawing.floors.find(f => f.id === 'deck-e').deckDropIn)).toBe(inches);
+    await expect(drop).toHaveValue(shows);
+  }
+  // Nonsense is refused and the box shows what held.
+  await drop.evaluate(input => { input.value = 'abc'; input.dispatchEvent(new Event('change')); });
+  await expect(drop).toHaveValue('2 3/4');
   await page.locator('[data-prop-row="type"] [data-prop-value="floor"]').evaluate(btn => btn.click());
   await expect.poll(() => page.evaluate(() => drawing.floors.find(f => f.id === 'deck-e').deck)).toBe(false);
   await expect(page.locator('[data-prop-deck-assembly]')).toHaveCount(0);
