@@ -2693,18 +2693,44 @@ if (!window.DraftCutView) {
       const lined = !c.garage && Number.isFinite(slabTop)
         && span.hi - span.lo < c.width - 1e-3 && slabTop > base + 1e-3 && slabTop < top - 1e-3;
       if (lined) {
-        ctx.fillRect(x, Y(top), wid, (top - slabTop) * pxPerFt);
-        sectionSlices(ctx, X, Y, pxPerFt, c, top, slabTop, C);
-        ctx.strokeRect(x, Y(top), wid, (top - slabTop) * pxPerFt);
         const cx = X(span.lo), cwid = (span.hi - span.lo) * pxPerFt;
+        ctx.fillRect(x, Y(top), wid, (top - slabTop) * pxPerFt);
+        // The lining's slices only; the pour's are laid below in one go.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, Y(top), cx - x, (top - slabTop) * pxPerFt);
+        ctx.rect(cx + cwid, Y(top), x + wid - cx - cwid, (top - slabTop) * pxPerFt);
+        ctx.clip();
+        sectionSlices(ctx, X, Y, pxPerFt, c, top, slabTop, C);
+        ctx.restore();
         ctx.fillStyle = weight(C.concrete, 0.5);
         ctx.fillRect(cx, Y(slabTop), cwid, (slabTop - base) * pxPerFt);
         ctx.save();
-        ctx.beginPath(); ctx.rect(cx, Y(slabTop), cwid, (slabTop - base) * pxPerFt); ctx.clip();
-        sectionSlices(ctx, X, Y, pxPerFt, c, slabTop, base, C);
+        // The pour's hatch is laid top to footing in one go, so no seam
+        // shows in it at the slab (jb, 22 Nov 2026).
+        ctx.beginPath(); ctx.rect(cx, Y(top), cwid, (top - base) * pxPerFt); ctx.clip();
+        sectionSlices(ctx, X, Y, pxPerFt, c, top, base, C);
         ctx.restore();
+        // ── ONE POUR, NO LINE ACROSS IT AT THE SLAB ─────────────────────
+        //
+        // jb, 22 Nov 2026, on S1: "that slab line shouldn't go through the
+        // foundation wall / should stop at interior of 8\" foundation conc
+        // wall". The upper part was outlined as one box the whole wall wide,
+        // so its foot ran across the concrete at the slab's top. The
+        // concrete is one pour top to footing and is outlined as one; only
+        // the lining is boxed off at the slab.
+        const box = (u0, u1, t, b) => {
+          if (!(u1 - u0 > 1e-6)) return;
+          ctx.beginPath();
+          ctx.moveTo(X(u0), Y(t)); ctx.lineTo(X(u1), Y(t));
+          ctx.lineTo(X(u1), Y(b)); ctx.lineTo(X(u0), Y(b));
+          ctx.closePath(); ctx.stroke();
+        };
         ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
-        ctx.strokeRect(cx, Y(slabTop), cwid, (slabTop - base) * pxPerFt);
+        const wLo = c.u - c.width / 2, wHi = c.u + c.width / 2;
+        box(wLo, span.lo, top, slabTop);
+        box(span.hi, wHi, top, slabTop);
+        box(span.lo, span.hi, top, base);
       } else {
         ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
         sectionSlices(ctx, X, Y, pxPerFt, c, top, base, C);

@@ -29,6 +29,8 @@ const MUTATIONS = [
     c => c.replace('        return sign > 0 ? span.hi : span.lo;\n', '        return near.u + sign * near.width / 2;\n')],
   ['the section lining runs down to the footing', 'cut-view.js',
     c => c.replace("      const lined = !c.garage && Number.isFinite(slabTop)\n", "      const lined = false && Number.isFinite(slabTop)\n")],
+  ['the lining box runs its foot across the concrete at the slab top', 'cut-view.js',
+    c => c.replace('        box(wLo, span.lo, top, slabTop);\n', '        box(wLo, wHi, top, slabTop);\n')],
 ];
 
 if (MUTATE) {
@@ -118,11 +120,13 @@ const hasLine = (view, u0, e0, u1, e1, tol = 0.25) => segmentsOf(view).some(({ a
     const env = buildEnv(win, drawing);
     const CV = win.DraftCutView, PX = 40;
     const c = drawing.cuts[0];
-    const { ctx, fills } = recordingCtx();
+    const { ctx, fills, strokes } = recordingCtx();
     CV.drawCutView(env, ctx, 2000, 1200, c, { pxPerFt: PX, extents: CV.cutViewExtents(env, c) });
     const inch = v => v / PX * 12;
-    return fills.filter(f => f.rect).map(f => ({ x: inch(f.rect.x), w: inch(f.rect.w), y: inch(f.rect.y), h: inch(f.rect.h) }));
+    lastStrokes = strokes.map(s => ({ ...s, pts: s.pts.map(p => ({ ...p, x: inch(p.x), y: inch(p.y) })) }));
+    return fills.filter(f => f.rect).map(f => ({ seq: f.seq, x: inch(f.rect.x), w: inch(f.rect.w), y: inch(f.rect.y), h: inch(f.rect.h) }));
   };
+  let lastStrokes = [];
   const near = (a, b, tol = 0.1) => Math.abs(a - b) <= tol;
   const rects = sec(saved);
   const footings = rects.filter(r => near(r.w, 20) && near(r.h, 8));
@@ -144,6 +148,22 @@ const hasLine = (view, u0, e0, u1, e1, tol = 0.25) => segmentsOf(view).some(({ a
     check('section: the 2x6 lining stops at the top of the slab',
       whole.length === 2 && whole.every(r => near(r.y + r.h, slab.y)),
       whole.map(r => (r.y + r.h).toFixed(2)).join(', ') + ` vs slab top ${slab.y.toFixed(2)}`);
+    // jb, 22 Nov 2026: "that slab line shouldn't go through the foundation
+    // wall". No ink laid over the 8" concrete runs level at the slab's top
+    // inside it (a datum painted before the pour is covered by its fill).
+    const pours = concrete.filter(cr => near(cr.y + cr.h, slab.y + slab.h, 0.05) || cr.y + cr.h > slab.y + 1);
+    const across = [];
+    lastStrokes.forEach(st => st.pts.forEach((b, i) => {
+      const a = st.pts[i - 1];
+      if (!a || b.move || !near(a.y, slab.y, 0.05) || !near(b.y, slab.y, 0.05)) return;
+      const l = Math.min(a.x, b.x), r = Math.max(a.x, b.x);
+      pours.forEach(cr => { if (st.seq > cr.seq && Math.min(r, cr.x + cr.w) - Math.max(l, cr.x) > 0.5) across.push(`${l.toFixed(2)}..${r.toFixed(2)}`); });
+    }));
+    check('section: no line across the concrete at the slab top', across.length === 0, across.join(', '));
+    const outlined = footings.filter(f => lastStrokes.some(st => st.pts.length >= 4
+      && concrete.some(cr => st.pts.some(p => near(p.x, cr.x) && near(p.y, f.y)) && st.pts.some(p => near(p.x, cr.x + cr.w) && near(p.y, f.y)))
+      && st.pts.some(p => p.y < slab.y - 12)));
+    check('section: each pour is outlined top to footing in one box', outlined.length === 2, `${outlined.length}`);
   }
   // ICF: no lining, the footing centres on the whole wall.
   const icf = { ...saved, walls: saved.walls.map(w => (w.view === 'foundation' ? { ...w, wallType: 'icf', sliceFlip: false } : w)) };
