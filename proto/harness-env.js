@@ -228,8 +228,8 @@ function recordingCtx() {
     lineTo(x, y) { (cur || (cur = [])).push({ x, y }); },
     closePath() { if (cur && cur.length) cur.push({ ...cur[0], close: true }); },
     stroke() { if (cur && cur.length > 1) strokes.push({ seq: seq++, pts: cur.slice(), ink: this.strokeStyle, w: this.lineWidth, clip: clipPath }); },
-    fill() { if (cur && cur.length > 1) fills.push({ seq: seq++, pts: cur.slice(), ink: this.fillStyle }); },
-    fillRect(x, y, w, h) { fills.push({ seq: seq++, rect: { x, y, w, h }, ink: this.fillStyle }); },
+    fill() { if (cur && cur.length > 1) fills.push({ seq: seq++, pts: cur.slice(), ink: this.fillStyle, clip: clipPath }); },
+    fillRect(x, y, w, h) { fills.push({ seq: seq++, rect: { x, y, w, h }, ink: this.fillStyle, clip: clipPath }); },
     strokeRect() {}, clearRect() {}, rect() {},
     save() { clipStack.push(clipPath); },
     restore() { if (clipStack.length) clipPath = clipStack.pop(); },
@@ -324,6 +324,12 @@ function buildEnv(win, saved) {
       id: String(floor?.id || ''),
       points, levelId: Number(floor.levelId), view: floor?.view || 'floor',
       garage: floor?.garage === true, thickenedEdge: floor?.thickenedEdge === true,
+      // A DECK'S OWN WORDS, as cut-view-env carries them: without these the
+      // mirror paints every deck at the default type whatever the file says.
+      ...(Number(floor?.thickness) > 0 ? { thickness: Number(floor.thickness) } : {}),
+      ...(typeof floor?.deck === 'boolean' ? { deck: floor.deck } : {}),
+      ...(Number.isFinite(Number(floor?.deckDropIn)) && floor?.deckDropIn != null
+        ? { deckDropIn: Number(floor.deckDropIn) } : {}),
     };
   }).filter(Boolean);
   // Same two lists cut-view-env hands over, for the same reason: a mirror
@@ -539,6 +545,10 @@ function paintElevation(win, env, cut, { pxPerFt = 40, ...opts } = {}) {
         { u: toU(f.rect.x + f.rect.w), e: toE(f.rect.y + f.rect.h) },
         { u: toU(f.rect.x), e: toE(f.rect.y + f.rect.h) }]
       : f.pts.filter(p => !p.close).map(p => ({ u: toU(p.x), e: toE(p.y) })),
+    // The clip in force, as the strokes carry it (pen-up markers kept, so a
+    // clip of several boxes reads as several boxes): a fill laid back down
+    // under a clip covers only what the clip lets through.
+    clip: f.clip ? f.clip.map(p => ({ u: toU(p.x), e: toE(p.y), move: !!p.move, close: !!p.close })) : null,
   }));
   // ── AND THE WRITING ON IT ────────────────────────────────────────────
   //
