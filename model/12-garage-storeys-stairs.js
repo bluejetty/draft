@@ -3734,7 +3734,7 @@
   // AUTO STAIR flight's are, by the same two calls, and one UNDO takes the
   // three back.
   const stairPickCard = document.querySelector('[data-stair-pick]');
-  let stairHand = { shape: 'straight', turn: 'right', up: false,
+  let stairHand = { shape: 'straight', turn: 'right', up: false, allLevels: true,
     widthIn: Math.max(36, window.DraftStairGeometry?.STAIR_MIN_WIDTH_IN || 36), at: null };
   // THE FLOOR A FLIGHT PLACED FROM HERE IS FILED ON: this one going DOWN; the
   // one above going UP -- from the basement plan, the lowest floor.
@@ -3790,6 +3790,8 @@
       btn.setAttribute('aria-pressed', String((btn.dataset.stairDir === 'up') === stairHand.up));
       btn.disabled = stairHandLevel(btn.dataset.stairDir === 'up') == null;
     });
+    stairPickCard.querySelectorAll('[data-stair-levels]').forEach(btn =>
+      btn.setAttribute('aria-pressed', String((btn.dataset.stairLevels === 'all') === stairHand.allLevels)));
     const turns = stairPickCard.querySelector('[data-stair-turns]');
     if (turns) turns.hidden = stairHand.shape === 'straight';
     // THE WIDTH IT WILL PLACE, never under the office's least.
@@ -3832,20 +3834,104 @@
       rail: stairRailSide, shape: shaped.shape, turn: shaped.turn, winders: 0,
     };
     drawing.stairs.push(stair);
-    // ITS WELL AND ITS OPEN SIDE, as AUTO STAIR's flights get them -- this
-    // flight's only: every other stair is served.
-    const cut = buildStairOpenings(others);
-    const framed = placeStairSideFraming([stair]);
+    // AND THE SAME STAIR ON EVERY OTHER FLOOR (jb, 22 Nov 2026), unless
+    // THIS LEVEL ONLY is lit -- see stairFillLevels.
+    // EACH FLIGHT'S WELL IS CUT AS IT IS PLACED, before the next is stacked
+    // on it: the cut can nudge a flight clear of a beam or the wall line, and
+    // the flight over it must stand where it ended up, as AUTO STAIR's loop
+    // does. Every other stair is served.
+    const cut = { cut: 0, nudges: [], refused: [], placed: [] };
+    const settle = st => {
+      const served = new Set([...others, ...drawing.stairs.filter(o => o !== st).map(o => o.id)]);
+      const c = buildStairOpenings(served);
+      cut.cut += c.cut; cut.nudges.push(...c.nudges); cut.refused.push(...c.refused); cut.placed.push(...c.placed);
+    };
+    settle(stair);
+    const filled = stairHand.allLevels ? stairFillLevels(stair, settle) : { made: [], kept: [] };
+    // AND THEIR OPEN SIDES, as AUTO STAIR's flights get them.
+    const framed = placeStairSideFraming([stair, ...filled.made]);
     undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
-      items: [{ list: drawing.stairs, item: stair }, ...cut.placed, ...framed.placed], restored: [] });
+      items: [{ list: drawing.stairs, item: stair }, ...filled.made.map(item => ({ list: drawing.stairs, item })),
+        ...cut.placed, ...framed.placed], restored: [] });
     stairHand.at = null;
     markDirty();
-    const well = cut.cut ? 'its well cut' : cut.refused.length ? `NO well cut -- ${cut.refused.join('; ')}` : 'no floor to cut a well in';
-    sayOnStrip(`STAIR placed -- ${layout.risers} risers ${stairHand.up ? 'up to' : 'down from'} ${namedLevel(levelId)}, ${well}`
+    const well = cut.cut ? `${cut.cut === 1 ? 'its well' : `${cut.cut} wells`} cut` : cut.refused.length ? `NO well cut -- ${cut.refused.join('; ')}` : 'no floor to cut a well in';
+    const more = filled.made.length
+      ? `, and stacked on ${filled.made.map(st => namedLevel(st.levelId)).join(', ')} (DELETE a floor's flight you don't need)`
+      : '';
+    const kept = filled.kept.length ? `; ${filled.kept.map(namedLevel).join(', ')} already had a stair there` : '';
+    sayOnStrip(`STAIR placed -- ${layout.risers} risers ${stairHand.up ? 'up to' : 'down from'} ${namedLevel(levelId)}${more}${kept}, ${well}`
       + `${cut.nudges.length ? `, nudged ${cut.nudges.join(', ')} clear` : ''}. UNDO takes it back; click the next stair's first step.`);
     syncStairPick();
     buildChrome();
     paint();
+  };
+  // ── THE SAME STAIR ON EVERY FLOOR (jb, 22 Nov 2026) ───────────────────
+  //
+  // "when i create a set of stairs can you create it for all levels and once
+  // its created the user can delete the level they don't need". A flight
+  // placed by hand is stacked up and down the house as AUTO STAIR stacks
+  // its own: each floor's flight over the one below it (buildStackedStair,
+  // so an L's long leg rides over the long leg and its landing over the
+  // landing), with that floor's own rise and risers and the width the hand
+  // chose. Going DOWN the same call is used the other way round -- the
+  // stack is the same picture read from either end.
+  //
+  // A FLOOR THAT ALREADY HAS A STAIR STANDING THERE is left alone, and the
+  // stack carries on from that stair. The flights are stacked, so they move
+  // together (stairStackOf); DELETE takes only the flight picked.
+  //
+  // THE BASEMENT FLIGHT BESIDE AN EXTERIOR WALL takes the cut (jb, 19 Nov:
+  // 8" off the wall side, REDUCE BASEMENT on) -- only a flight made here,
+  // never one the drafter placed himself.
+  //
+  // Pushes the new flights onto drawing.stairs, calling `settle` on each as
+  // it lands (the caller's well cut); the caller frames them and makes the
+  // one UNDO. Returns { made, kept } -- kept is
+  // the level ids that already had one.
+  const stairFillLevels = (placed, settle = () => {}) => {
+    const SG = window.DraftStairGeometry;
+    const levels = stairLevels();
+    const ids = stairFloorLevels().map(level => Number(level.id));
+    const k = ids.indexOf(Number(placed.levelId));
+    const made = [], kept = [];
+    if (k < 0) return { made, kept };
+    const view = placed.view || 'plan';
+    const ringsOf = st => stairRings(st, levels).filter(r => Array.isArray(r) && r.length >= 3);
+    const standingThere = cand => {
+      const mine = ringsOf(cand);
+      return (drawing.stairs || []).find(st => st !== cand && st?.start && st?.end
+        && Number(st.levelId) === Number(cand.levelId) && (st.view || 'plan') === view
+        && ringsOf(st).some(ra => mine.some(rb => convexOverlap(ra, rb)))) || null;
+    };
+    let nextId = newStructureId(drawing.stairs);
+    const stackOnto = (from, levelId) => {
+      const descent = SG.stairDescent(levelId, levels);
+      if (!descent || !(descent.riseFt > 0)) return null;
+      const layout = SG.stairLayout(descent.riseFt);
+      const cand = buildStackedStair(from, levelId, layout, Number(placed.widthFt) || from.widthFt, nextId);
+      delete cand.auto;
+      cand.view = view;
+      cand.rail = placed.rail;
+      const there = standingThere(cand);
+      if (there) { kept.push(levelId); return there; }
+      drawing.stairs.push(cand);
+      made.push(cand);
+      nextId += 1;
+      // THE BASEMENT FLIGHT narrowed before its well is cut, so the hole fits.
+      if (levelId === ids[0] && stairWallAdjacent(cand)) {
+        const was = { ...cand, start: { ...cand.start }, end: { ...cand.end } };
+        if (stairApplyExtWall(cand, { on: true, cutIn: STAIR_EXT_WALL_CUT_IN })) Object.assign(cand, was);
+      }
+      settle(cand);
+      return cand;
+    };
+    let from = placed;
+    for (let i = k + 1; i < ids.length && from; i++) from = stackOnto(from, ids[i]);
+    from = placed;
+    for (let i = k - 1; i >= 0 && from; i--) from = stackOnto(from, ids[i]);
+    made.sort((a, b) => ids.indexOf(Number(a.levelId)) - ids.indexOf(Number(b.levelId)));
+    return { made, kept };
   };
   // THE FLIGHT IN HAND, in the preview's ink: its runs and its landing.
   const paintStairHandPreview = () => {
@@ -3877,6 +3963,9 @@
   }));
   stairPickCard?.querySelectorAll('[data-stair-dir]').forEach(btn => btn.addEventListener('click', () => {
     stairHand.up = btn.dataset.stairDir === 'up'; stairHand.at = null; syncStairPick(); sayOnStrip(stairHandSay()); paint();
+  }));
+  stairPickCard?.querySelectorAll('[data-stair-levels]').forEach(btn => btn.addEventListener('click', () => {
+    stairHand.allLevels = btn.dataset.stairLevels === 'all'; syncStairPick(); paint();
   }));
   stairPickCard?.querySelector('[data-stair-width]')?.addEventListener('change', e => {
     const inches = Math.round(Number(e.target.value));

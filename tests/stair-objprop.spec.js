@@ -158,7 +158,8 @@ test('a press on the SECTION box opens that stair\'s section large on the STAIR 
   await expect(win(page)).toHaveAttribute('data-objprop-kind', 'stair');
   const picked = await page.evaluate(() => selection[0].item.id);
   const ids = await page.evaluate(() => drawing.stairs.map(st => st.id));
-  expect(ids.length).toBe(2);
+  // Two stairs, each stacked on 2ND FL too (ALL LEVELS, jb 22 Nov 2026).
+  expect(ids.length).toBe(4);
   expect(picked, 'the first stair is the one picked').toBe(ids[0]);
   await expect(win(page).locator('[data-objprop-view="front"]')).toHaveAttribute('title', /OPEN THIS STAIR SECTION/);
   await win(page).locator('[data-objprop-view="front"]').click();
@@ -175,7 +176,7 @@ test('a press on the SECTION box opens that stair\'s section large on the STAIR 
   await expect(page.locator('#plan')).toHaveAttribute('data-stair-pane', 'split');
   // Back to the walls and into STAIR by hand: the last placed, as before.
   await page.evaluate(() => { goToView('plan'); goToView('stair'); });
-  expect(await page.evaluate(() => workspaceStair().id)).toBe(ids[1]);
+  expect(await page.evaluate(() => workspaceStair().id)).toBe(ids[2]); // the second MAIN FL flight (ids[3] is its 2ND FL mate)
 });
 
 test('RISERS +: one more riser, each lower, the flight a tread longer, kept on save; UNDO takes it back', async ({ page }) => {

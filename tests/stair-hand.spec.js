@@ -113,8 +113,10 @@ test('STAIR brings up its popup; DOWN, two presses place a straight flight there
   await expect(strip(page)).toContainText('STAIR placed');
   await saveNow(page);
   const d = await savedFile(page);
-  expect(d.stairs).toHaveLength(1);
-  const st = d.stairs[0];
+  // AND THE SAME STAIR STACKED ON 2ND FL (jb, 22 Nov 2026) -- see
+  // stair-every-level.spec.js; this one is MAIN FL's.
+  expect(d.stairs).toHaveLength(2);
+  const st = d.stairs.find(s => s.levelId === MAIN_FL);
   expect(st.levelId, 'filed on the floor it comes down from').toBe(MAIN_FL);
   expect([r2(st.start.x), r2(st.start.z)], 'the top step where pressed').toEqual([0, -8]);
   expect(r2(st.end.x)).toBe(0);
@@ -132,8 +134,8 @@ test('UP FROM HERE: the bottom step where pressed, filed on the floor above, cli
   await press(page, at, 5, 0);
   await expect(strip(page)).toContainText('STAIR placed');
   await saveNow(page);
-  const st = (await savedFile(page)).stairs[0];
-  expect(st.levelId, 'filed on 2ND FL, which it comes down from').toBe(SECOND_FL);
+  const st = (await savedFile(page)).stairs.find(s => s.levelId === SECOND_FL);
+  expect(st, 'filed on 2ND FL, which it comes down from').toBeTruthy();
   // ITS TOP is up the run from the press; it comes DOWN toward the press.
   expect(st.start.x).toBeGreaterThan(-10 + 5);
   expect(r2(st.start.z)).toBe(0);
@@ -150,7 +152,7 @@ test('the popup\'s L and TURN LEFT are what is placed', async ({ page }) => {
   await press(page, at, 8, -10);
   await press(page, at, 8, 4);
   await saveNow(page);
-  const st = (await savedFile(page)).stairs[0];
+  const st = (await savedFile(page)).stairs.find(s => s.levelId === MAIN_FL);
   expect([st.shape, st.turn]).toEqual(['L', 'left']);
 });
 
@@ -200,8 +202,11 @@ test('Ctrl+C and Ctrl+V copy a stair: a new whole-number id, beside the first, i
   await page.waitForTimeout(150);
   await saveNow(page);
   const d = await savedFile(page);
-  expect(d.stairs).toHaveLength(2);
-  const [a, b] = d.stairs;
+  // MAIN FL's flight and its copy; the 2ND FL flight placed with the first
+  // is not copied (a paste is the one flight copied).
+  const mains = d.stairs.filter(s => s.levelId === MAIN_FL);
+  expect(mains).toHaveLength(2);
+  const [a, b] = mains;
   expect(Number.isInteger(Number(b.id)) && b.id !== a.id).toBe(true);
   expect(Math.abs(b.start.x - a.start.x), 'a stair\'s width and a foot to the side').toBeGreaterThan(3.5);
   expect(d.surfaceOpenings.filter(o => o.stairId === b.id), 'the copy\'s own well').toHaveLength(1);
@@ -224,7 +229,7 @@ test('T-SQUARE lit: a slanted aim runs the flight square; off, it runs on the sl
   await press(page, at, -3.3, 4);
   await expect(strip(page)).toContainText('STAIR placed');
   await saveNow(page);
-  let st = (await savedFile(page)).stairs[0];
+  let st = (await savedFile(page)).stairs.find(s => s.levelId === MAIN_FL);
   expect(r2(st.end.x), 'squared to the start: straight down the plan').toBe(-6);
   expect(st.end.z).toBeGreaterThan(st.start.z);
 
@@ -234,6 +239,6 @@ test('T-SQUARE lit: a slanted aim runs the flight square; off, it runs on the sl
   await press(page, at, 8, -10);
   await press(page, at, 11.3, 4);
   await saveNow(page);
-  st = (await savedFile(page)).stairs[1];
+  st = (await savedFile(page)).stairs.filter(s => s.levelId === MAIN_FL)[1];
   expect(st.end.x - st.start.x, 'T-SQUARE off: on the slant').toBeGreaterThan(0.3);
 });
