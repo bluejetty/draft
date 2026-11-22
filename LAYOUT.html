@@ -3773,6 +3773,18 @@ class Component extends PageLogic {
   // guessing a destination for it would open the wrong drawing.
   _modelUrlForViewport(viewport) {
     if (!viewport) return null;
+    // A DETAIL FROM THE DETAILS LIBRARY OPENS THE LIBRARY ON IT (jb, 22 Nov
+    // 2026: "when i double click to go into the viewport to edit it doesn't
+    // work for the DETAILS"). MODEL puts the house aside the way its own
+    // DETAILS panel EDIT does and opens the library at this detail; BACK TO
+    // HOUSE keeps the library and comes back to this sheet, where the
+    // house's fresh copy brings every window from it up to date.
+    if (isLibDetail(viewport) && viewport.source != null) {
+      const src = this._sourceById(viewport.source);
+      if (!src) return null;
+      const ask = new URLSearchParams({ editDetail: String(viewport.shelfId), library: String(src.name || '') });
+      return `./MODEL.html?${ask}`;
+    }
     // A WINDOW FROM ANOTHER FILE has no drawing here to open: that file is
     // where it is changed, and RELOAD FROM FILE brings the change in.
     if (viewport.source != null) return null;
@@ -4282,7 +4294,8 @@ class Component extends PageLogic {
         run: (x, y) => this._openLayersCard(id, x, y) },
       { rule: true },
       { key: 'edit-in-model', label: 'EDIT IN MODEL SPACE', on: Boolean(url),
-        title: url ? 'Open this drawing in the Model Space to edit it'
+        title: url && isLibDetail(viewport) ? `Open ${src?.name || 'the details library'} at this detail; BACK TO HOUSE brings you back to this sheet`
+          : url ? 'Open this drawing in the Model Space to edit it'
           : src ? `This window comes from ${src.name}: open that file to change it` : 'This viewport has no drawing to open',
         run: () => this._goToModel(id) },
       // A WINDOW FROM ANOTHER FILE: pick that file again to bring its
@@ -6405,7 +6418,9 @@ class Component extends PageLogic {
     const title = viewport ? this._viewportTitle(viewport) : '';
     const url = this._modelUrlForViewport(viewport);
     const src = viewport?.source != null ? this._sourceById(viewport.source) : null;
-    document.querySelector('#lay-edit-description').textContent = src
+    document.querySelector('#lay-edit-description').textContent = src && url && isLibDetail(viewport)
+      ? `Open ${title || 'this detail'} in ${src.name} to edit it. The sheet is saved first; BACK TO HOUSE brings you back here.`
+      : src
       ? `${title || 'This window'} comes from ${src.name}. Open that file to change it, then RELOAD FROM FILE on this window's right-click menu.`
       : url
       ? `Open ${title} in ${isDetail(viewport) ? 'PROJECT, where its heights, foundation and roof are set,' : 'the Model Space'} to edit it. The sheet is saved first, and the layout is here when you come back.`
