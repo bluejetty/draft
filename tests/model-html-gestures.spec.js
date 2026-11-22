@@ -901,7 +901,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // DONE. The choices set what the STAIR tool's two presses make;
             // the presses make the stair, and AUTO STAIR made stairs already,
             // so no absence row moves.
-            'STRAIGHT', 'L', 'U', 'TURN LEFT', 'TURN RIGHT', 'DOWN FROM HERE', 'UP FROM HERE', 'DONE',
+            'STRAIGHT', 'L', 'U', 'TURN LEFT', 'TURN RIGHT', 'DOWN FROM HERE', 'UP FROM HERE',
+            // ...on every floor or this one (jb, 22 Nov 2026).
+            'ALL LEVELS', 'THIS LEVEL ONLY', 'DONE',
             // A LOCKED STAIR FOLLOWED ITS WALL (Movie, 18 Oct): the pop-up's
             // one answer.
             'OK',

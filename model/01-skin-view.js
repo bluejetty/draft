@@ -966,12 +966,32 @@
   // line and fixture beside it. So a stair saved without a view is hidden on
   // a level that has layer views, and shown on one that has none. Reusing
   // onPlan() here would have quietly REVEALED those stairs on this page only.
+  //
+  // AND THE FLIGHT THAT LANDS HERE (jb, 22 Nov 2026: "allow the user to move
+  // the stairs on multiple levels (the basement as well as main floor"). A
+  // flight is filed on the floor it goes DOWN from, so the basement plan drew
+  // the main floor's flight coming UP to it (stair-geometry stairRoleOn
+  // 'lands') but could not pick it. It is the same flight, standing on this
+  // floor as much as the one above: it picks, moves, deletes and opens its
+  // OBJ / PROP from either. A flight entirely below ('below', drawn light) is
+  // still not this floor's to pick.
   const stairs = () => {
     const { levelId, viewId } = onActiveLevel();
     const views = window.DraftLayerViews.layerViewsForLevelId(levelId);
-    return (drawing?.stairs || [])
-      .filter(stair => Number(stair.levelId) === levelId
-        && (!views.length || stair.view === viewId));
+    const SG = window.DraftStairGeometry;
+    let floors = null;
+    // stairLevels lives in part 3; before it has run nothing lands anywhere.
+    try { if (SG && typeof SG.stairRoleOn === 'function') floors = stairLevels().floors; } catch { floors = null; }
+    const onView = stair => !views.length || stair.view === viewId;
+    const all = drawing?.stairs || [];
+    // THIS FLOOR'S OWN FLIGHTS LAST, so a press where a flight DN and the
+    // flight UP to here overlap picks the one going DN (stairAt reads from
+    // the end): the floor's own, as it was before the landing ones joined.
+    return [
+      ...(floors ? all.filter(stair => Number(stair.levelId) !== levelId && onView(stair)
+        && SG.stairRoleOn(stair, levelId, floors) === 'lands') : []),
+      ...all.filter(stair => Number(stair.levelId) === levelId && onView(stair)),
+    ];
   };
   // UNDERLAYS TAKE THE LEVEL FILTER ONLY -- no view filter, because an
   // underlay is a tracing image for the whole level, not for one layer set.
