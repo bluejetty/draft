@@ -281,7 +281,10 @@ const readScreen = (page, pts) => page.evaluate(points => {
     let c = 255;
     for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) c = Math.min(c, lum(x + dx, y + dy));
     const a = lum(x + 3 * nx, y + 3 * ny), b = lum(x - 3 * nx, y - 3 * ny);
-    return [c <= paper - 25 ? 1 : 0, c < a - 12 && c < b - 12 ? 1 : 0];
+    // 18, NOT 25 (22 Nov 2026): the section's level marks are a quarter-ink
+    // 0.75px line, 23 under the paper on the screen. A box on S1 that took in
+    // the footing-bottom mark read it as a picture line on blank paper.
+    return [c <= paper - 18 ? 1 : 0, c < a - 12 && c < b - 12 ? 1 : 0];
   });
 }, pts);
 const within = (box, p, pad) => p.u > box.uMin + pad && p.u < box.uMax - pad

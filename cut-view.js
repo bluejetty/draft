@@ -3131,7 +3131,24 @@ if (!window.DraftCutView) {
     // THE STAIRS THE CUT PASSES THROUGH, with their rails (Movie, 7 Oct: "i
     // will need them to also display on the SECTIONS when i make cuts" --
     // "it should show the full stairs with the rails").
-    drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU);
+    // WHAT THE CUT SLICES HIDES WHAT LIES BEYOND IT (jb, 22 Nov 2026): every
+    // floor band and every wall the cut passes through, as boxes in section
+    // feet, so a flight seen past the cut is not painted over them.
+    const cutSolids = [
+      ...stack.floors.flatMap(level => levelRuns(level.id)
+        .map(span => ({ lo: span.min, hi: span.max, bottom: level.floorBottom, top: level.floorTop }))),
+      ...crossings.map(c => {
+        const isFdn = (c.wall.view || 'plan') === 'foundation';
+        const level = isFdn ? null : stack.floors.find(l => l.id === c.wall.levelId);
+        if (!isFdn && !level) return null;
+        return {
+          lo: c.u - c.width / 2, hi: c.u + c.width / 2,
+          bottom: isFdn ? fdn.wallBottom + (Number(c.wall.baseHeight) || 0) : level.floorTop,
+          top: isFdn ? fdn.wallBottom + (Number(c.wall.topHeight) || 0) : level.wallTop,
+        };
+      }).filter(Boolean),
+    ];
+    drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU, cutSolids);
     // AND THE BATH FIXTURES BEYOND THE CUT (Movie, 9 Oct: "redraw all").
     drawSectionFixtures(env, ctx, cut, axis, stack, X, Y, pxPerFt, C);
 
@@ -3396,7 +3413,7 @@ if (!window.DraftCutView) {
   // A turned stair draws flight by flight in its real place; the landing
   // between them draws where the cut crosses it. Pages without
   // stair-section.js (an elevation-only page) simply draw no stairs.
-  function drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU) {
+  function drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU, cutSolids = []) {
     const SS = window.DraftStairSection, SG = window.DraftStairGeometry;
     if (!SS || !SG || typeof env.stairs !== 'function') return;
     const stairs = (env.stairs() || []).filter(st => st && st.start && st.end
@@ -3491,7 +3508,78 @@ if (!window.DraftCutView) {
           : [stair.rail === 'right' ? 1 : -1];
       const railOff = Math.max(0.05, half - SG.STAIR_RAIL_INSET_FT);
       const yOf = e => Y(top.floorTop + e);
+      // ── BEYOND THE CUT, BEHIND WHAT IT SLICES (jb, 22 Nov 2026) ─────────
+      //
+      // On S2 a flight seen end-on past the landing painted its risers up
+      // through the cut floor band, and its rail ran as a loose line over
+      // it: "the stairs on the section seem to not position properly". What
+      // the viewer sees past the cut stands in the stair's own storey -- the
+      // floor it lands on up to the floor it leaves -- and is hidden behind
+      // every band and wall the cut slices. The clip is that storey with the
+      // sliced boxes taken out of it.
+      const storeyLo = bottomFt, storeyHi = top.floorTop;
+      let open = [{ lo: -1e6, hi: 1e6, bottom: storeyLo, top: storeyHi }];
+      cutSolids.forEach(box => {
+        open = open.flatMap(r => {
+          if (box.hi <= r.lo || box.lo >= r.hi || box.top <= r.bottom || box.bottom >= r.top) return [r];
+          const out = [];
+          if (box.lo > r.lo) out.push({ ...r, hi: box.lo });
+          if (box.hi < r.hi) out.push({ ...r, lo: box.hi });
+          const lo = Math.max(r.lo, box.lo), hi = Math.min(r.hi, box.hi);
+          if (box.bottom > r.bottom) out.push({ lo, hi, bottom: r.bottom, top: box.bottom });
+          if (box.top < r.top) out.push({ lo, hi, bottom: box.top, top: r.top });
+          return out;
+        });
+      });
+      // ONE BOX AT A TIME: the boxes do not overlap, and a recorder that
+      // keeps a clip as its bounding box (dxf-writer.js, under the DXF and
+      // the DETAIL SNAPSHOT camera) cuts each pass exactly where the screen
+      // does -- one clip of many boxes would be their whole span to it.
+      const beyond = paint => {
+        open.forEach(r => {
+          const xa = Math.max(-1e5, X(r.lo)), xb = Math.min(1e5, X(r.hi));
+          const ya = Y(r.top), yb = Y(r.bottom);
+          if (!(xb - xa > 0.01) || !(yb - ya > 0.01)) return;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(xa, ya, xb - xa, yb - ya);
+          ctx.clip();
+          paint();
+          ctx.restore();
+        });
+      };
       ctx.save();
+      // ── THE LANDING SEEN PAST THE CUT (jb, 22 Nov 2026) ─────────────────
+      //
+      // S1 looked past the L: its long flight stopped in mid-air and the
+      // short flight under the landing stood alone as a box, because a
+      // landing was drawn only where the cut crossed it. A landing the cut
+      // only sees is drawn too, in the lighter line of everything beyond,
+      // so the flight runs on to the landing and the landing to the wall.
+      const flatsSeen = SS.stairUnfold ? SS.stairUnfold(layout, parts.split).flats : [];
+      const markU = [projU(cut.startPt), projU(cut.endPt)];
+      (parts.landings || []).forEach(landing => {
+        const band = landing.flatIndex == null ? null : flatsSeen[landing.flatIndex];
+        if (!band || !Array.isArray(landing.poly)) return;
+        if (floorRuns(cut, axis, [{ points: landing.poly }]).length) return;
+        if (!landing.poly.every(p => depthOf(p) > -1e-6)) return;
+        const us = landing.poly.map(projU);
+        const lo = Math.max(Math.min(...markU), Math.min(...us));
+        const hi = Math.min(Math.max(...markU), Math.max(...us));
+        if (!(hi - lo > 1e-6)) return;
+        beyond(() => {
+          const x = X(lo), wid = (hi - lo) * pxPerFt;
+          ctx.fillStyle = weight(C.assembly, 0.08);
+          ctx.strokeStyle = ink(0.45); ctx.lineWidth = 1;
+          ctx.fillRect(x, yOf(band.e), wid, (8 / 12) * pxPerFt);
+          ctx.strokeRect(x, yOf(band.e), wid, (8 / 12) * pxPerFt);
+          if (railSides.length) {
+            ctx.beginPath();
+            ctx.moveTo(x, yOf(band.e + RAIL_FT)); ctx.lineTo(x + wid, yOf(band.e + RAIL_FT));
+            ctx.stroke();
+          }
+        });
+      });
       // EACH RUN WITH ITS FLIGHT: the top run the first, the bottom run the
       // last, and a U's middle flight (jb, 14 Nov 2026) the one between its
       // landings. Unfolded winders make one flight, drawn along the top run.
@@ -3543,6 +3631,7 @@ if (!window.DraftCutView) {
           // only PASSES draws the same profile in the lighter line everything
           // beyond the cut is drawn in, so a reader can tell what was sliced
           // from what was merely seen.
+          const profile = () => {
           SS.drawFlight(ctx, flight, layout, u => X(station(u)), yOf,
             seen ? { line: ink(0.45), stringer: weight(C.assembly, 0.08),
               tread: weight(C.face, 0.5), riser: weight(C.face, 0.5) } : inks);
@@ -3555,6 +3644,8 @@ if (!window.DraftCutView) {
             ctx.lineTo(X(station(end.u)), yOf(end.e + RAIL_FT));
             ctx.stroke();
           }
+          };
+          if (seen) beyond(profile); else profile();
           return;
         }
         // ACROSS THE RUN AND BEYOND THE CUT: the flight end-on, every nosing
@@ -3562,6 +3653,7 @@ if (!window.DraftCutView) {
         // The sliced case below is the same picture with one tread cut
         // through it; this one has no cut tread because nothing was cut.
         if (seen) {
+          beyond(() => {
           const xa = X(seen.min), xb = X(seen.max);
           const eEnd = flight.e0 - flight.risers * riseStep;
           ctx.strokeStyle = ink(0.45); ctx.lineWidth = 0.75;
@@ -3585,6 +3677,7 @@ if (!window.DraftCutView) {
             });
             ctx.stroke();
           }
+          });
           return;
         }
         // ACROSS THE RUN: where along the flight the cut slices it.
@@ -3600,20 +3693,22 @@ if (!window.DraftCutView) {
         // Beyond: every other tread on the far side, a light nosing line
         // across the width, with the stringers' outline down (or up) to it.
         const far = (depthOf(at(lenFt, 0)) > depthOf(at(0, 0))) ? 1 : -1;
-        const beyond = [];
-        for (let j = 1; j < flight.risers; j += 1) if ((j - k) * far > 0) beyond.push(j);
+        const farSteps = [];
+        for (let j = 1; j < flight.risers; j += 1) if ((j - k) * far > 0) farSteps.push(j);
+        beyond(() => {
         ctx.strokeStyle = ink(0.45); ctx.lineWidth = 0.75;
         ctx.beginPath();
-        beyond.forEach(j => {
+        farSteps.forEach(j => {
           const y = yOf(flight.e0 - j * riseStep);
           ctx.moveTo(xa, y); ctx.lineTo(xb, y);
         });
-        if (beyond.length) {
+        if (farSteps.length) {
           const eEnd = far > 0 ? flight.e0 - flight.risers * riseStep : flight.e0;
           ctx.moveTo(xa, yOf(eTread)); ctx.lineTo(xa, yOf(eEnd));
           ctx.moveTo(xb, yOf(eTread)); ctx.lineTo(xb, yOf(eEnd));
         }
         ctx.stroke();
+        });
         // The cut: the tread the line passes through, and a stringer each side.
         ctx.strokeStyle = C.line; ctx.lineWidth = 1.25;
         ctx.fillStyle = weight(C.assembly, 0.3);

@@ -22,7 +22,7 @@ const ROOT = path.join(__dirname, '..');
 
 const MUTATIONS = [
   ['the section never draws its stairs', 'cut-view.js',
-    c => c.replace('    drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU);\n', '')],
+    c => c.replace('    drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU, cutSolids);\n', '')],
   ['a cut along the run is read as one across it', 'cut-view.js',
     c => c.replace('if (Math.abs(c) > Math.SQRT1_2) {', 'if (Math.abs(c) > 2) {')],
   // RE-AIMED 13 OCT, when a flight over a garage learned to land on the slab
@@ -58,6 +58,16 @@ const MUTATIONS = [
       '- (layout.riserIn / treadRunIn()) * (u - flight.u0);')],
   ['a flight draws one tread short', 'stair-section.js',
     c => c.replace('    for (let k = 1; k < flight.risers; k++) {', '    for (let k = 2; k < flight.risers; k++) {')],
+  // jb, 22 Nov 2026: "the stairs on the section seem to not position
+  // properly" -- a landing only SEEN past the cut was never drawn, and what
+  // lies beyond painted over the floor bands the cut slices.
+  ['a landing seen past the cut is not drawn', 'cut-view.js',
+    c => c.replace('        if (!band || !Array.isArray(landing.poly)) return;',
+      '        if (true) return;')],
+  ['what lies beyond is not hidden behind what the cut slices', 'cut-view.js',
+    c => c.replace('          ctx.clip();\n          paint();', '          paint();')],
+  ['the floor bands are left out of what the cut slices', 'cut-view.js',
+    c => c.replace('      ...stack.floors.flatMap(level => levelRuns(level.id)', '      ...[].flatMap(level => levelRuns(level.id)')],
 ];
 
 if (MUTATE) {
@@ -225,6 +235,71 @@ const check = (label, got, want) => {
   check('and nothing across',
     paint(SAVED, flip(PAST_ACROSS)).strokes.length
       - paint(SAVED, flip(PAST_ACROSS), noStairs).strokes.length, 0);
+}
+
+// ── AN L SEEN PAST THE CUT: ITS LANDING, AND NOTHING OVER A CUT FLOOR ─────
+//
+// jb, 22 Nov 2026, on S1 and S2 of an L stair at a corner: "the stairs on the
+// section seem to not position properly". On S1 (looking past the stair) the
+// long flight stopped in mid-air and the short one stood alone as a box,
+// because a landing was drawn only where the cut crossed it. On S2 (through
+// the landing, looking back up the long flight) the flight seen end-on painted
+// its risers up through the cut floor band. The landing is drawn when seen;
+// everything beyond is clipped to its storey with the sliced bands taken out.
+{
+  const L = { ...SAVED, stairs: SAVED.stairs.map(st => (st.levelId === 3
+    ? { ...st, shape: 'L', turn: 'right', splitTreads: 8 } : st)) };
+  // The recorder's rect() is a no-op, so the clip's boxes are kept here.
+  const paintClip = (saved, cut, tweak) => {
+    const env = (tweak || (e => e))(H.buildEnv(win, saved));
+    const extents = CV.cutViewExtents(env, cut);
+    const w = 2000, h = 1200;
+    const rec = H.recordingCtx();
+    const { ctx } = rec;
+    let pending = [], clipRects = null;
+    const stack = [];
+    const orig = { beginPath: ctx.beginPath, stroke: ctx.stroke, save: ctx.save, restore: ctx.restore };
+    ctx.beginPath = function () { pending = []; return orig.beginPath.call(this); };
+    ctx.rect = (x, y, rw, rh) => pending.push({ x0: Math.min(x, x + rw), x1: Math.max(x, x + rw), y0: Math.min(y, y + rh), y1: Math.max(y, y + rh) });
+    ctx.clip = () => { clipRects = pending.slice(); };
+    ctx.save = function () { stack.push(clipRects); return orig.save.call(this); };
+    ctx.restore = function () { if (stack.length) clipRects = stack.pop(); return orig.restore.call(this); };
+    ctx.stroke = function () {
+      const n = rec.strokes.length;
+      orig.stroke.call(this);
+      if (rec.strokes.length > n) rec.strokes[n].rects = clipRects;
+    };
+    CV.drawCutView(env, ctx, w, h, cut, { pxPerFt: PX, extents });
+    return { ...rec, stack: CV.sectionLevelStack(env) };
+  };
+  const SEEN_LANDING = 'rgba(89,128,166,0.08)';
+  // Parallel to the first flight, 6 ft to its +x side, looking -x: the L is
+  // wholly past the cut.
+  const PAST = { id: 11, name: 'SL', startPt: { x: -8, z: -52 }, endPt: { x: -8, z: -4 }, dirVec: { x: 1, z: 0 }, levelId: 3 };
+  const seenL = paintClip(L, PAST), seenBare = paintClip(L, PAST, noStairs);
+  check('a landing seen past the cut is drawn',
+    count(seenL, SEEN_LANDING) - count(seenBare, SEEN_LANDING) > 0, true);
+  // Across the landing, looking back up the first flight (it lies at smaller
+  // z, the far side of a +z dirVec).
+  const SG = win.DraftStairGeometry;
+  const st = L.stairs.find(s => s.levelId === 3);
+  const parts = SG.stairPlanParts(st, SG.stairLayout(st.riseFt, st.risers));
+  const zs = parts.landings[0].poly.map(p => p.z);
+  const zMid = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const THROUGH = { id: 12, name: 'ST', startPt: { x: -37, z: zMid }, endPt: { x: 4, z: zMid }, dirVec: { x: 0, z: 1 }, levelId: 3 };
+  const thru = paintClip(L, THROUGH), thruBare = paintClip(L, THROUGH, noStairs);
+  const lightInk = 'rgba(29,31,32,0.45)';
+  const beyondStrokes = thru.strokes.filter(s => s.ink === lightInk).slice(thruBare.strokes.filter(s => s.ink === lightInk).length);
+  check('the first flight is seen end-on past the landing', beyondStrokes.length > 0, true);
+  check('and every line of it is drawn under the clip', beyondStrokes.every(s => Array.isArray(s.rects) && s.rects.length > 0), true);
+  // The floor bands the cut slices: rects in the band ink deeper than 10".
+  const bands = thru.fills.filter(f => f.rect && f.ink === BAND && Math.abs(f.rect.h) / PX > 10 / 12)
+    .map(f => ({ x0: Math.min(f.rect.x, f.rect.x + f.rect.w), x1: Math.max(f.rect.x, f.rect.x + f.rect.w),
+      y0: Math.min(f.rect.y, f.rect.y + f.rect.h), y1: Math.max(f.rect.y, f.rect.y + f.rect.h) }));
+  const overlaps = (a, b) => a.x0 < b.x1 - 0.5 && b.x0 < a.x1 - 0.5 && a.y0 < b.y1 - 0.5 && b.y0 < a.y1 - 0.5;
+  check('the cut floor bands are there to hide behind', bands.length > 0, true);
+  check('and nothing seen past the cut is painted over one',
+    beyondStrokes.every(s => (s.rects || []).every(r => bands.every(b => !overlaps(r, b)))), true);
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

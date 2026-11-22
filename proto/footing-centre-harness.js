@@ -169,8 +169,11 @@ const hasLine = (view, u0, e0, u1, e1, tol = 0.25) => segmentsOf(view).some(({ a
   const icf = { ...saved, walls: saved.walls.map(w => (w.view === 'foundation' ? { ...w, wallType: 'icf', sliceFlip: false } : w)) };
   const ir = sec(icf);
   const iw = (win.DraftWallTypes.WALL_TYPES.find(t => t.id === 'icf') || {}).totalIn;
-  const ifoot = ir.filter(r => r.h > 7.5 && r.h < 8.5 && r.w > iw);
   const iwalls = ir.filter(r => near(r.w, iw) && r.h > 20);
+  // UNDER A WALL, not merely 8" deep: a stair landing seen past the cut is an
+  // 8" band too (jb, 22 Nov 2026), and it stands on no footing.
+  const ifoot = ir.filter(r => r.h > 7.5 && r.h < 8.5 && r.w > iw
+    && iwalls.some(w => near(w.y + w.h, r.y, 0.5) && r.x <= w.x + 0.1 && r.x + r.w >= w.x + w.w - 0.1));
   check('section: an ICF wall centres its footing on the whole wall',
     ifoot.length === 2 && ifoot.every(f => iwalls.some(w => near(w.x + w.w / 2, f.x + f.w / 2))),
     `${ifoot.length} footings, ${iwalls.length} ICF walls`);
