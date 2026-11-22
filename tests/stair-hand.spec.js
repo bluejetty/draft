@@ -130,12 +130,17 @@ test('UP FROM HERE: the bottom step where pressed, filed on the floor above, cli
   const { at } = await h.planFrame(page);
   await armStair(page);
   await card(page).locator('[data-stair-dir="up"]').click();
+  // THIS LEVEL ONLY, so the one flight is the one placed (ALL LEVELS would
+  // stack one on MAIN FL too -- stair-every-level.spec.js).
+  await card(page).locator('[data-stair-levels="one"]').click();
   await press(page, at, -10, 0);
   await press(page, at, 5, 0);
   await expect(strip(page)).toContainText('STAIR placed');
   await saveNow(page);
-  const st = (await savedFile(page)).stairs.find(s => s.levelId === SECOND_FL);
-  expect(st, 'filed on 2ND FL, which it comes down from').toBeTruthy();
+  const all = (await savedFile(page)).stairs;
+  expect(all).toHaveLength(1);
+  const st = all[0];
+  expect(st.levelId, 'filed on 2ND FL, which it comes down from').toBe(SECOND_FL);
   // ITS TOP is up the run from the press; it comes DOWN toward the press.
   expect(st.start.x).toBeGreaterThan(-10 + 5);
   expect(r2(st.start.z)).toBe(0);
