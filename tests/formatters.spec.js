@@ -215,3 +215,19 @@ test('a negative that rounds to zero prints without a minus', async ({ page }) =
   });
   expect(results).toEqual([`0'-0"`, `0"`, `-0'-1"`, `-1/2"`]);
 });
+
+// jb, 22 Nov 2026: 4-5/8 typed in DECK DROP IN was refused. An inch box
+// reads a bare number as inches and 4-5/8 as four and five-eighths; feet
+// only when the drafter says feet (a mark, ft, or a dash before a whole number).
+test('parseInches reads fractions, decimals, and feet when the drafter says feet', async ({ page }) => {
+  const results = await page.evaluate(() => {
+    const f = window.DraftFormatters;
+    return ['4-5/8', '4-5/8"', '4 5/8', '4 5/8"', '5/8', '4.625', '4', '4 5/8 in', '4–5/8', '4”',
+      '0-4 5/8"', '10-4', "10'-4", '10ft 4"', "1'", '100mm', '10 4', '', 'abc', '1/0']
+      .map(text => { const r = f.parseInches(text); return r.ok ? r.inches : null; });
+  });
+  expect(results.slice(0, 10)).toEqual([4.625, 4.625, 4.625, 4.625, 0.625, 4.625, 4, 4.625, 4.625, 4]);
+  expect(results.slice(10, 15)).toEqual([4.625, 124, 124, 124, 12]);
+  expect(results[15]).toBeCloseTo(3.9375, 4); // 100 mm, to the sixteenth
+  expect(results.slice(16)).toEqual([null, null, null, null]);
+});

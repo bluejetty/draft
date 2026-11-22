@@ -356,7 +356,7 @@ test('FASCIA, IN on the ROOF panel sets one roof\'s board and the file keeps it'
   await click(page, at, 30, 15);
   expect((await state(page)).picked).toEqual(['roof:roof-1']);
   const field = page.locator('#props-slot [data-roof-field="fascia, in"]');
-  await expect(field).toHaveValue('5.5');
+  await expect(field).toHaveValue('5 1/2');
   await field.fill('10');
   await field.press('Enter');
   await page.waitForTimeout(150);

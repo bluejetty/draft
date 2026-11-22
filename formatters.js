@@ -191,6 +191,39 @@ if (!window.DraftFormatters) {
     return { ok: false, error: `Use 15 for feet, 15-6 or 15 6 for feet and inches, 5" for inches, or 6.5m for metres.` };
   }
 
+  // AN INCHES-ONLY BOX (jb, 22 Nov 2026: "DECK DROP IN ... can we allow to
+  // put in fractions - i'm trying and put in 4-5/8" -- decimals already
+  // went). The box says IN, so a bare number is INCHES, never feet: 4,
+  // 4.625, 5/8, 4 5/8, 4 5/8", 4 5/8 in. The hyphen in 4-5/8 joins the
+  // whole inch to its fraction the way a drafter writes it.
+  //
+  // FEET IF THE DRAFTER SAYS FEET (jb, same morning: "if they want to enter
+  // in feet using 10ft 4" or 10'-4 or 10-4 can we do that?" and "0-4 5/8""):
+  // a foot mark or ft, or a dash with a WHOLE number after it, is feet-and-
+  // inches and goes to parseArchitecturalLength, which also gives the metric
+  // suffix (100mm). So 4-5/8 is 4 5/8", 10-4 is 124", 0-4 5/8 is 4 5/8".
+  // Snapped to the sixteenth, the grain formatInchesOnly prints.
+  function parseInches(value) {
+    const refused = { ok: false, error: `Use inches such as 4, 4 5/8, 4-5/8 or 4.625, or feet such as 10'-4.` };
+    let text = String(value ?? '').trim()
+      .replace(/[\u201C\u201D\u2033]/g, '"')
+      .replace(/[\u2018\u2019\u2032]/g, "'")
+      .replace(/[\u2012\u2013\u2014\u2212]/g, '-');
+    if (!text) return refused;
+    const negative = /^-/.test(text);
+    text = text.replace(/^[+-]/, '');
+    const fractionDash = /^(\d+(?:\.\d+)?)\s*-\s*(\d+\s*\/\s*\d+\s*(?:"|in(?:ch|ches)?\.?)?)$/i.exec(text);
+    if (fractionDash) text = `${fractionDash[1]} ${fractionDash[2]}`;
+    const inches = parseInchesComponent(text);
+    let result = inches.ok && !/['-]|ft/i.test(text) ? inches : null;
+    if (!result && /'|ft|-\s*\d|\d\s*(?:mm|cm|m)$/i.test(text)) {
+      const long = parseArchitecturalLength(text);
+      if (long.ok) result = long;
+    }
+    if (!result || !Number.isFinite(result.inches)) return refused;
+    return architecturalLengthResult((negative ? -1 : 1) * result.inches);
+  }
+
   // Joist depth, spacing, and sheathing are inch-scale values, so a bare number
   // or fraction reads as inches; anything with feet marks parses architecturally.
   function parseAssemblyInches(value) {
@@ -273,6 +306,7 @@ if (!window.DraftFormatters) {
     DIMENSION_UNITS,
     parseArchitecturalLength,
     parseAssemblyInches,
+    parseInches,
     parseLength,
   };
 })();

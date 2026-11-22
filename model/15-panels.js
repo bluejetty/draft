@@ -1473,7 +1473,7 @@
             if (value === null) return agreedOn(floors, floor => G2.deckSpec(floor).dropIn) ?? G2.DECK.dropIn;
             applyToItems(floors, { deckDropIn: value });
             return value;
-          }));
+          }, { fractions: true }));
         deckOnly = true;
       }
     }
@@ -1506,7 +1506,7 @@
           if (value === null) return agreedOn(floors, floor => Number(floor.slopeInPerFt) || 0) ?? 0;
           applyToItems(floors, { slopeInPerFt: value });
           return value;
-        }));
+        }, { fractions: true }));
     }
 
     // READ FROM THE GEOMETRY, never stored -- a stored area and a dragged
@@ -3182,7 +3182,7 @@
         if (v !== null) say(setRoofMain(group, kin, 'fascia', v));
         again();
         return roofMainValue(group, kin, 'fascia');
-      });
+      }, { fractions: true });
     fasciaRow.firstChild.textContent += tail('fascia');
     const overRow = propField('OVERHANG, ALL EDGES', roofMainValue(group, kin, 'overhang'),
       ft => setRoofMain(group, kin, 'overhang', ft), again);
@@ -3332,7 +3332,7 @@
         }
         again();
         return window.DraftDrawingFormat.roofFasciaIn(items[0].fascia);
-      }));
+      }, { fractions: true }));
     }
     // SITS ON (Movie, 27 Oct: "cut the roof how it is now and drop it down to
     // match the one beside it" -- "we shouldn't drop it automatically but
@@ -3433,10 +3433,10 @@
             }
             if (Math.abs(v - heelNow()) < 1e-9) return v;
             editRoofs([lone], roof => setRoofHeel(roof, index, v));
-            sayOnStrip(v > 0 ? `EAVE raised ${v}" -- the ridge moves toward it.` : 'EAVE back on the plate.');
+            sayOnStrip(v > 0 ? `EAVE raised ${window.DraftFormatters.formatInchesOnly(v)} -- the ridge moves toward it.` : 'EAVE back on the plate.');
             again();
             return heelNow();
-          }));
+          }, { fractions: true }));
           const heelLine = document.createElement('div');
           heelLine.className = 'props-title';
           heelLine.dataset.roofEdgeHeel = '';
@@ -3987,28 +3987,53 @@
   // deliberate one: two specs drive the roof's pitch through that attribute,
   // and renaming it to buy a tidier word would be changing a hook that works
   // in order to fix a comment. The name is what moved.
-  const numberField = (label, value, min, max, step, commit) => {
+  //
+  // { fractions: true } FOR THE INCH BOXES (jb, 22 Nov 2026: 4-5/8 typed in
+  // DECK DROP IN was refused -- a number box takes no slash). A text box
+  // then, read by DraftFormatters.parseInches (4, 4.625, 5/8, 4 5/8, 4-5/8,
+  // 4-5/8") and shown back as 4 5/8. Decimals still go in as before.
+  const numberField = (label, value, min, max, step, commit, opts = {}) => {
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
     const name = document.createElement('div');
     name.className = 'props-title';
     name.textContent = label;
     const input = document.createElement('input');
-    input.type = 'number';
+    const FMT = window.DraftFormatters;
+    const fractions = opts.fractions === true && FMT && FMT.parseInches;
     input.className = 'roof-field';
     input.dataset.roofField = label.toLowerCase();
-    input.min = String(min); input.max = String(max); input.step = String(step);
-    input.value = String(value);
+    if (fractions) {
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.dataset.fractions = '';
+    } else {
+      input.type = 'number';
+      input.min = String(min); input.max = String(max); input.step = String(step);
+    }
+    const shown = v => {
+      if (!fractions) return String(v);
+      const n = Number(v);
+      return Number.isFinite(n) ? FMT.formatInchesOnly(n).replace(/"$/, '') : String(v);
+    };
+    input.value = shown(value);
+    const read = () => {
+      if (!fractions) return Number(input.value);
+      const parsed = FMT.parseInches(input.value);
+      return parsed.ok ? parsed.inches : NaN;
+    };
     const apply = () => {
-      const raw = Number(input.value);
+      const raw = read();
       // REFUSE, DO NOT ROUND. Number('') is 0 and a blank box would otherwise
       // read as a zero overhang -- a roof cut flush to the wall, which is a
       // drawing nobody asked for and no message would explain.
       if (!Number.isFinite(raw) || raw < min || raw > max) {
-        input.value = String(commit(null));
+        input.value = shown(commit(null));
         return;
       }
-      input.value = String(commit(raw));
+      input.value = shown(commit(raw));
     };
     input.addEventListener('change', apply);
     row.append(name, input);
