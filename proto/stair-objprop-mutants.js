@@ -81,7 +81,7 @@ const MUTANTS = [
     test: 'the plan says the width' },
   { file: 'model/16-gestures-undo.js',
     name: 'ENTER on the plan\'s width box changes nothing',
-    find: "      if (keep) { setStairWidth(mark.stair, value); showSelectionProps(); renderObjProp(); }\n",
+    find: "      if (keep) { setStairWidth(mark.stair, Number(value) - extra); showSelectionProps(); renderObjProp(); }\n",
     with: '',
     test: 'the plan says the width' },
   { file: 'model/16-gestures-undo.js',
