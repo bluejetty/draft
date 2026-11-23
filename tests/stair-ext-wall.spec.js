@@ -162,8 +162,11 @@ test('the switch survives a save and reload', async ({ page }) => {
   expect(base.widthFt * 12).toBeCloseTo(28, 4);
 });
 
-// "maybe have a magnet so that when a user moves the stairs in the basement
-// it doesn't allow the user to push past that point" (jb, 19 Nov 2026).
+// THE 6" STOP AT THE HOUSE LINE IS GONE (jb, 23 Nov 2026: "i think we can
+// remove the 'basement rule'"). It fought the corner snap: an L held by its
+// corner and brought to a wall's inside corner was pulled 6" off it, or
+// shoved out of the house through the far wall. REDUCE BASEMENT narrows the
+// basement flight and nothing more; the stair goes where it is dragged.
 const dragBy = async (page, fromX, fromZ, dxFt, dzFt) => {
   const { at, scale } = await h.planFrame(page);
   const [x, y] = at(fromX, fromZ);
@@ -172,48 +175,71 @@ const dragBy = async (page, fromX, fromZ, dxFt, dzFt) => {
   await page.mouse.move(x + dxFt * scale, y + dzFt * scale, { steps: 8 });
   await page.mouse.up();
 };
-test('a reduced basement flight dragged at the wall stops 14" in from the house line; the flight above rides 6" in', async ({ page }) => {
+test('a reduced basement flight dragged toward the wall is not stopped 14" in from the house line', async ({ page }) => {
   await open(page);
   await pickBase(page);
   await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
-  // Two feet north would put it past the house line (z = -20).
-  await dragBy(page, 3, -17.7, 0, -2);
-  const base = await live(page, BASE_ID);
-  const upper = await live(page, UPPER_ID);
-  expect(edges(base).north - -20, 'basement edge 14" from the line').toBeCloseTo(14 / 12, 3);
-  expect(edges(upper).north - -20, 'the flight above 6" from the line').toBeCloseTo(6 / 12, 3);
-  // A drag away from the wall is free.
-  await dragBy(page, 3, -18.4, 0, 3);
-  const off = await live(page, BASE_ID);
-  expect(edges(off).north - -20).toBeCloseTo(14 / 12 + 3, 2);
-});
-
-test('with REDUCE BASEMENT off the flight goes where it is dragged', async ({ page }) => {
-  await open(page);
   const before = await live(page, BASE_ID);
-  await pickBase(page);
-  // North, past where the 14" line would have held it.
-  await dragBy(page, 1, -17.6, 0, -1.2);
-  const after = await live(page, BASE_ID);
-  expect(after.start.z, 'no stop at 14"').toBeLessThan(before.start.z - 0.4);
+  // Two feet north: the old rule held its edge 14" from the line (z = -20).
+  await dragBy(page, 3, -17.7, 0, -1.2);
+  const base = await live(page, BASE_ID);
+  expect(edges(base).north - -20, 'past where the 14" stop held it').toBeLessThan(14 / 12 - 0.2);
+  expect(base.start.z - before.start.z).toBeLessThan(-0.4);
+  await expect(page.locator('#strip-message')).not.toContainText('HOUSE LINE');
 });
 
-test('turning REDUCE BASEMENT on lines a stack near the wall up on the line, in one UNDO', async ({ page }) => {
+test('turning REDUCE BASEMENT on narrows the flight and leaves the stack where it is', async ({ page }) => {
   await open(page);
-  // Slide the stack a foot off the wall first (edges 2'-6" in).
   await page.evaluate(() => drawing.stairs.forEach(st => {
     st.start = { ...st.start, z: st.start.z + 1 }; st.end = { ...st.end, z: st.end.z + 1 };
   }));
   await pickBase(page);
-  // pickBase clicks z = -18: still on the flight (-18.5 .. -15.5).
   await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
-  const base = await live(page, BASE_ID);
   const upper = await live(page, UPPER_ID);
-  expect(edges(base).north - -20).toBeCloseTo(14 / 12, 3);
-  expect(edges(upper).north - -20).toBeCloseTo(6 / 12, 3);
-  await page.locator('#model-undo').click();
-  const undone = await live(page, BASE_ID);
-  expect(undone.start.z).toBeCloseTo(-17, 6);
-  expect(undone.widthFt).toBeCloseTo(3, 6);
-  expect((await live(page, UPPER_ID)).start.z).toBeCloseTo(-17, 6);
+  const base = await live(page, BASE_ID);
+  expect(upper.start.z, 'the flight above is not slid onto the line').toBeCloseTo(-17, 6);
+  expect(edges(base).south, 'inside edges still lined up').toBeCloseTo(edges(upper).south, 4);
+  expect(base.widthFt * 12).toBeCloseTo(28, 4);
 });
+
+// jb's case: an L flight, REDUCE BASEMENT on at 0", held by a corner and
+// brought to the inside corner of two 2x6 exterior walls -- on either EXT.
+// WALL SIDE, the corner lands exactly there.
+for (const side of ['left', 'right']) {
+  test(`held by a corner, a reduced L flight lands on the walls' inside corner (side ${side})`, async ({ page }) => {
+    const Wl = (id, a, b) => ({ id, start: { x: a[0], y: 0, z: a[1] }, end: { x: b[0], y: 0, z: b[1] },
+      levelId: MAIN_FL, view: 'plan', wallType: 'stud_2x6', refLine: 'center', baseHeight: 0, topHeight: 8 });
+    const f = fixture();
+    f.walls = [Wl('n', [-20, -20], [20, -20]), Wl('e', [20, -20], [20, 20]), Wl('s', [20, 20], [-20, 20]), Wl('w', [-20, 20], [-20, -20])];
+    f.stairs = [flight(BASE_ID, MAIN_FL, { start: { x: 2, z: -14 }, end: { x: 8, z: -14 }, widthFt: 3.5,
+      shape: 'L', turn: 'right', extWall: true, extWallCutIn: 0, extWallSide: side })];
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, f }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, f });
+    await page.goto(`/MODEL.html?level=${MAIN_FL}`);
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await page.evaluate(() => { view.cx = 12; view.cz = -14; view.scale = 24; paint(); });
+    await page.waitForTimeout(150);
+    const frame = await h.planFrame(page);
+    const facts = await page.evaluate(() => ({ o: stairOutlineOf(drawing.stairs[0]).corners,
+      fc: window.DraftGeometry2D.wallFaceCorners(walls(), openingThicknessFt()) }));
+    await page.mouse.click(...frame.at(3, -14));
+    await page.waitForTimeout(120);
+    const ne = list => list.slice().sort((a, b) => (b.x - b.z) - (a.x - a.z))[0];
+    const c = ne(facts.o);
+    const t = ne(facts.fc.filter(p => p.x < 20 && p.z > -20));
+    const [cx, cy] = frame.at(c.x, c.z);
+    const [tx, ty] = frame.at(t.x, t.z);
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(tx + 3, ty + 3, { steps: 12 });
+    await page.mouse.move(tx, ty, { steps: 3 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    const landed = ne(await page.evaluate(() => stairOutlineOf(drawing.stairs[0]).corners));
+    expect(landed.x, 'on the east wall\'s inside face').toBeCloseTo(t.x, 4);
+    expect(landed.z, 'on the north wall\'s inside face').toBeCloseTo(t.z, 4);
+  });
+}

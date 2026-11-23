@@ -4158,74 +4158,18 @@
       sayOnStrip('REDUCE BASEMENT -- this stair has no flight going down to the basement.');
       return false;
     }
-    const was = undoStack.length;
+    // NO LINE-UP ON THE WALL (jb, 23 Nov 2026: "i think we can remove the
+    // 'basement rule'"): the switch narrows the flight and nothing more. The
+    // stair's own corner and face snaps put it against the wall, where the
+    // drafter puts it.
     const done = editStair(base, st => stairApplyExtWall(st, want));
-    // LINED UP ON THE WALL (jb, 19 Nov 2026: "place the stairs lined up
-    // against the main floor or 2nd floor ext wall"): a stack within reach of
-    // the line, or past it, is slid onto it -- the basement flight's edge
-    // 6" + the cut in, the flight above 6" in -- in the same UNDO.
-    let lined = false;
-    if (done && base.extWall) {
-      const stop = stairExtWallStop(base, base, 0, 0, 36);
-      if (stop && Math.hypot(stop.dx, stop.dz) > 1e-6) {
-        [base, ...stairStackOf(base)].forEach(st => editStair(st, f => { stairShift(f, stop.dx, stop.dz); return null; }));
-        lined = true;
-      }
-      if (undoStack.length - was > 1) undoStack.push({ kind: 'batch', steps: undoStack.splice(was) });
-    }
     if (done) {
       const F = window.DraftFormatters;
       sayOnStrip(base.extWall
-        ? `BASEMENT FLIGHT ${F.formatArchitecturalInches(base.widthFt * 12)} wide -- ${base.extWallCutIn}" off the ${stairSideCompass(base, base.extWallSide)} side (exterior wall)${lined ? `, lined up ${STAIR_EXT_WALL_UPPER_IN + base.extWallCutIn}" in from the house line` : ''}. UNDO puts it back.`
+        ? `BASEMENT FLIGHT ${F.formatArchitecturalInches(base.widthFt * 12)} wide -- ${base.extWallCutIn}" off the ${stairSideCompass(base, base.extWallSide)} side (exterior wall). UNDO puts it back.`
         : `BASEMENT FLIGHT ${F.formatArchitecturalInches(base.widthFt * 12)} wide -- the same as the flight above. UNDO puts it back.`);
     }
     return done;
-  };
-  // ── AND IT STOPS AT THE LINE (jb, 19 Nov 2026) ─────────────────────────
-  //
-  // "maybe have a magnet so that when a user moves the stairs in the
-  // basement it doesn't allow the user to push past that point (will be a
-  // gap unless they manually change the gap distance)". A reduced basement
-  // flight's wall-side edge stays (6" upper wall + the cut) in from the
-  // exterior house line -- 14" at the 8" default -- so the flight above
-  // stays 6" in. Dragged toward the wall it STOPS there; brought within
-  // `catchIn` (6" on a drag, 3 ft when the switch is turned on) it is
-  // CAUGHT onto it. `from` is the flight where the drag
-  // began, `dx/dz` the drag so far. Returns the delta to use, or null when
-  // nothing applies.
-  const STAIR_EXT_WALL_UPPER_IN = 6;
-  const STAIR_EXT_WALL_CATCH_IN = 6;
-  const stairExtWallStop = (base, from, dx, dz, catchIn = STAIR_EXT_WALL_CATCH_IN) => {
-    if (!base || base.extWall !== true) return null;
-    const G = window.DraftGeometry2D;
-    const f = stairRunFrame(from);
-    const outline = houseOutlineOn(base.levelId);
-    if (!f || !outline || outline.points.length < 3) return null;
-    const k = base.extWallSide === 'right' ? -1 : 1;
-    const dir = { x: f.n.x * k, z: f.n.z * k };
-    const half = (Number(base.widthFt) || 3) / 2;
-    const edge = { x: f.c.x + dx + dir.x * half, z: f.c.z + dz + dir.z * half };
-    // FROM BEHIND THE EDGE, so an edge already pushed past the line still
-    // finds it: the ray starts a stair's width back inside the flight.
-    const back = { x: edge.x - dir.x * half * 2, z: edge.z - dir.z * half * 2 };
-    const ray = { start: back, end: { x: back.x + dir.x * 1000, z: back.z + dir.z * 1000 } };
-    const ring = outline.points;
-    let best = Infinity;
-    for (let i = 0; i < ring.length; i++) {
-      const hit = G.segmentIntersection(ray, { start: ring[i], end: ring[(i + 1) % ring.length] });
-      if (hit) best = Math.min(best, Math.hypot(hit.x - back.x, hit.z - back.z));
-    }
-    if (!Number.isFinite(best)) return null;
-    const gap = best - half * 2;
-    const cutIn = Number(base.extWallCutIn) >= 0 ? Number(base.extWallCutIn) : STAIR_EXT_WALL_CUT_IN;
-    const min = (STAIR_EXT_WALL_UPPER_IN + cutIn) / 12;
-    // Only the wall it is beside: a line many feet off is some other wall.
-    if (gap > min + 3) return null;
-    const stopped = gap < min - 1e-6;
-    const caught = catchIn > 0 && !stopped && gap - min < catchIn / 12;
-    if (!stopped && !caught) return null;
-    const by = gap - min;
-    return { dx: dx + dir.x * by, dz: dz + dir.z * by, stopped, gapIn: min * 12 };
   };
   // AN UPPER FLIGHT'S WIDTH CHANGED: a reduced basement flight under it
   // follows, still the cut narrower. Folded into the width's own UNDO.
