@@ -1433,6 +1433,17 @@ if (!window.DraftDrawingFormat) {
           && Number(stair.extWallCutIn) >= 0 && Number(stair.extWallCutIn) <= 24
           ? { extWallCutIn: Number(stair.extWallCutIn) } : {}),
         ...(['left', 'right'].includes(stair?.extWallSide) ? { extWallSide: stair.extWallSide } : {}),
+        // UPPER FLIGHTS WIDER BESIDE AN EXTERIOR WALL (jb, 23 Nov 2026), per
+        // leg top to bottom: `extLegs` the switches on the basement flight
+        // ({ in, side: left / right walking down, or off }), `legWiden` what a
+        // flight above carries ({ in, side } or null). Written only when set;
+        // the old extWall fields are read once by MODEL and replaced.
+        ...(Array.isArray(stair?.extLegs) ? { extLegs: stair.extLegs.slice(0, 3).map(e => ({
+          in: Number(e?.in) >= 0 && Number(e?.in) <= 24 ? Number(e.in) : 9,
+          side: oneOf(e?.side, ['left', 'right', 'off'], 'off') })) } : {}),
+        ...(Array.isArray(stair?.legWiden) && stair.legWiden.some(e => Number(e?.in) > 0)
+          ? { legWiden: stair.legWiden.slice(0, 3).map(e => (Number(e?.in) > 0 && Number(e.in) <= 24
+            && ['left', 'right'].includes(e?.side) ? { in: Number(e.in), side: e.side } : null)) } : {}),
         layer: 'A-STR',
       };
     }).filter(Boolean);

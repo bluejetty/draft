@@ -63,8 +63,8 @@ if (!window.DraftStairPlace) {
   // centre line, and the landing's square.
   const stairOutline = (SG, rec, layout) => {
     const parts = SG.stairPlanParts(rec, layout);
-    const half = (Number(rec.widthFt) || 3) / 2;
     const runs = parts.runs.map(run => {
+      const half = (Number(run.widthFt) || Number(rec.widthFt) || 3) / 2;
       const n = { x: -run.dir.z, z: run.dir.x };
       const a = run.start, b = { x: run.start.x + run.dir.x * run.lenFt, z: run.start.z + run.dir.z * run.lenFt };
       return [

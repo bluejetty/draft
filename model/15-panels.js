@@ -421,6 +421,15 @@
     ['pile8', 'PILE 8"'], ['pile10', 'PILE 10"'], ['pile12', 'PILE 12"']];
   const BEAM_MODES = [['flush', 'FLUSH'], ['dropped', 'DROPPED']];
 
+  // A STAIR'S WIDTH AS DRAWN: one number, or each leg's top to bottom when
+  // a leg is wider beside the exterior wall (36/45).
+  const stairWidthsSaid = (stair, layout) => {
+    const SG = window.DraftStairGeometry;
+    const base = Math.round((Number(stair.widthFt) || 3) * 12 * 2) / 2;
+    if (!Array.isArray(stair.legWiden) || !stair.legWiden.some(Boolean)) return String(base);
+    const ws = SG.stairPlanParts(stair, layout).runs.map(r => Math.round((Number(r.widthFt) || stair.widthFt) * 24) / 2);
+    return ws.every(w => w === ws[0]) ? String(ws[0]) : ws.join('/');
+  };
   const propRow = (label, options, current, pick) => {
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
@@ -2445,46 +2454,52 @@
     box.append(width, risers, propRow('RAIL', [['left', 'LEFT'], ['right', 'RIGHT'], ['both', 'BOTH'], ['none', 'NONE']],
       stair.rail || 'left', id => { editStair(stair, st => { st.rail = id; return null; }); redraw(); }));
 
-    // ── THE BASEMENT FLIGHT BESIDE AN EXTERIOR WALL (jb, 19 Nov 2026) ──────
+    // ── UPPER FLIGHTS WIDER BESIDE AN EXTERIOR WALL (jb, 23 Nov 2026) ──────
     //
-    // "one switch for reducing (maybe allow manual input to change the
-    // distance too) and another switch for the side the stairs are on ext".
-    // Shown on any flight of a stack that goes down to the basement; both
-    // switches write to that basement flight. The side is named by the
-    // compass, never left or right.
+    // "increase the upper floors by 9\" rather than reducing basement", one
+    // row per leg ("a 2nd for the 2nd leg (for L and U) and 3rd leg (for U
+    // only)"), each with its side, LEFT or RIGHT "when walking DOWN" that leg
+    // -- the compass beside it, so the chip says which wall. Shown on any
+    // flight of a stack that goes down to the basement; written to that
+    // basement flight, which keeps its width, and carried to every flight
+    // above it (setStairExtLeg).
     const base = stairBasementFlightOf(stair);
     if (base) {
-      const on = base.extWall === true;
-      const cutIn = Number(base.extWallCutIn) >= 0 ? Number(base.extWallCutIn) : STAIR_EXT_WALL_CUT_IN;
-      const reduce = propRow('REDUCE BASEMENT (EXT. WALL)', [['on', 'ON'], ['off', 'OFF']], on ? 'on' : 'off',
-        id => { setStairExtWall(stair, { on: id === 'on' }); redraw(); });
-      reduce.dataset.propRow = 'reduce basement';
-      const cut = document.createElement('input');
-      cut.type = 'number';
-      cut.dataset.stairExtCut = '';
-      cut.min = '0';
-      cut.max = '24';
-      cut.step = '0.5';
-      cut.value = String(cutIn);
-      cut.title = 'Inches the basement flight is narrower, off the exterior wall side (14" foundation less 6" upper wall = 8")';
-      cut.style.width = '52px';
-      cut.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') cut.blur(); });
-      cut.addEventListener('change', () => {
-        const v = Math.round(Number(cut.value) * 8) / 8;
-        if (!(v >= 0 && v <= 24)) { sayOnStrip('REDUCE BASEMENT -- 0" to 24".'); redraw(); return; }
-        setStairExtWall(stair, { on: true, cutIn: v });
-        redraw();
-      });
-      const inch = document.createElement('span');
-      inch.textContent = '" LESS';
-      const chips = reduce.querySelector('.chip-row') || reduce;
-      chips.append(cut, inch);
-      const sideName = side => ({ N: 'NORTH', S: 'SOUTH', E: 'EAST', W: 'WEST' })[stairSideCompass(base, side)] || side.toUpperCase();
-      const sideNow = base.extWallSide === 'right' ? 'right' : base.extWallSide === 'left' ? 'left' : stairNearWallSide(base);
-      const sideRow = propRow('EXT. WALL SIDE', [['left', sideName('left')], ['right', sideName('right')]], sideNow,
-        id => { setStairExtWall(stair, { side: id }); redraw(); });
-      sideRow.dataset.propRow = 'ext wall side';
-      box.append(reduce, sideRow);
+      const head = document.createElement('div');
+      head.className = 'props-title';
+      head.dataset.stairExtHead = '';
+      head.textContent = 'EXT. WALL (UPPER FLOORS WIDER)';
+      box.append(head);
+      const legs = stairExtLegsOf(base);
+      const count = Math.max(1, Math.min(3, stairLegWalks(base).length));
+      for (let i = 0; i < count; i++) {
+        const e = legs[i];
+        const row = propRow(`LEG ${i + 1}`, [['off', 'OFF'],
+          ['left', `LEFT (${stairLegSideCompass(base, i, 'left')})`],
+          ['right', `RIGHT (${stairLegSideCompass(base, i, 'right')})`]], e.side,
+        id => { setStairExtLeg(stair, { leg: i, side: id }); redraw(); });
+        row.dataset.propRow = `ext leg ${i + 1}`;
+        const inch = document.createElement('input');
+        inch.type = 'number';
+        inch.dataset.stairExtIn = String(i + 1);
+        inch.min = '0';
+        inch.max = '24';
+        inch.step = '0.5';
+        inch.value = String(e.in);
+        inch.title = 'Inches the flights above are wider than the basement flight, on the side picked (9" by default)';
+        inch.style.width = '52px';
+        inch.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') inch.blur(); });
+        inch.addEventListener('change', () => {
+          const v = Math.round(Number(inch.value) * 8) / 8;
+          if (!(v >= 0 && v <= 24)) { sayOnStrip('EXT. WALL -- 0" to 24".'); redraw(); return; }
+          setStairExtLeg(stair, { leg: i, in: v });
+          redraw();
+        });
+        const unit = document.createElement('span');
+        unit.textContent = '" WIDER';
+        (row.querySelector('.chip-row') || row).append(inch, unit);
+        box.append(row);
+      }
     }
 
     // THE FLIGHT AS IT IS, in the painter's own words (drawStairs2D writes
@@ -2494,7 +2509,7 @@
     note.className = 'props-title';
     note.dataset.stairLayout = '';
     note.textContent = `${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)}`
-      + ` · ${layout.treads} TREADS · ${Math.round((stair.widthFt || 3) * 12)}" WIDE`;
+      + ` · ${layout.treads} TREADS · ${stairWidthsSaid(stair, layout)}" WIDE`;
     box.append(note);
     return box;
   };
@@ -3773,7 +3788,7 @@
       if (stairViews) stairViews.hidden = false;
       const SG = window.DraftStairGeometry, F = window.DraftFormatters;
       const layout = SG.stairCurrentLayout(stair, stairLevels());
-      title.textContent = `STAIR \u2014 ${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)} \u00b7 ${Math.round((Number(stair.widthFt) || 3) * 12)}" WIDE`;
+      title.textContent = `STAIR \u2014 ${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)} \u00b7 ${stairWidthsSaid(stair, layout)}" WIDE`;
       props.replaceChildren(stairPropsNode(stair));
       drawObjStairViews(stair);
       return;

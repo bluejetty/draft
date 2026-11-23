@@ -1309,7 +1309,7 @@
       let angle = Math.atan2(-ux, uy);
       let baseline = 'alphabetic';
       if (Math.abs(angle) > Math.PI / 2 + 1e-6) { angle += angle > 0 ? -Math.PI : Math.PI; baseline = 'top'; }
-      const text = String(Math.round((Number(stair.widthFt) || 3) * 12));
+      const text = String(Math.round((Number(run.widthFt) || Number(stair.widthFt) || 3) * 12));
       const px = Math.max(7, Math.min(16, len * 0.7));
       const at = { x: b.x - ux * 1, y: b.y - uy * 1 };
       ctx.save();

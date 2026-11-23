@@ -901,8 +901,8 @@
     const SG = window.DraftStairGeometry;
     if (!SG || !stair?.start || !stair?.end) return [];
     const parts = SG.stairPlanParts(stair, SG.stairCurrentLayout(stair, levels));
-    const half = (Number(stair.widthFt) || 3) / 2;
     const rings = (parts.runs || []).map(run => {
+      const half = (Number(run.widthFt) || Number(stair.widthFt) || 3) / 2;
       const end = { x: run.start.x + run.dir.x * run.lenFt, z: run.start.z + run.dir.z * run.lenFt };
       const side = { x: -run.dir.z * half, z: run.dir.x * half };
       return [

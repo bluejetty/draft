@@ -181,6 +181,9 @@
     turtleOnDrawingChanged();
     trimSlivers({ walls: true });
     dropLotRoofs();
+    // A BASEMENT FLIGHT NARROWED THE OLD WAY (before 23 Nov 2026) is read
+    // as upper flights widened instead, the plan unchanged.
+    migrateStairExtWall();
     // THE HALF INCH OFF A CROSSING WALL, on every drawing opened (Movie, 23
     // Oct: "update all the stuff"): a piece or run that ran into a wall
     // stands its half inch off it (settleFixtureGaps).

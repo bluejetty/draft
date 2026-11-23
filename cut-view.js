@@ -3502,11 +3502,9 @@ if (!window.DraftCutView) {
       const parts = SG.stairPlanParts(stair, layout);
       const { flights } = SS.stairFlights(layout, parts.split);
       const riseStep = layout.riserIn / 12;
-      const half = stair.widthFt / 2;
       const railSides = stair.rail === 'both' ? [-1, 1]
         : stair.rail === 'none' || !stair.rail ? []
           : [stair.rail === 'right' ? 1 : -1];
-      const railOff = Math.max(0.05, half - SG.STAIR_RAIL_INSET_FT);
       const yOf = e => Y(top.floorTop + e);
       // ── BEYOND THE CUT, BEHIND WHAT IT SLICES (jb, 22 Nov 2026) ─────────
       //
@@ -3671,7 +3669,7 @@ if (!window.DraftCutView) {
             ctx.strokeStyle = ink(0.45); ctx.lineWidth = 1;
             ctx.beginPath();
             railSides.forEach(side => {
-              const x = X(projU(at(0, side * railOff)));
+              const x = X(projU(at(0, side * Math.max(0.05, half - SG.STAIR_RAIL_INSET_FT))));
               ctx.moveTo(x, yOf(flight.e0 + RAIL_FT));
               ctx.lineTo(x, yOf(eEnd + RAIL_FT));
             });
@@ -3729,7 +3727,7 @@ if (!window.DraftCutView) {
         ctx.strokeStyle = C.line; ctx.lineWidth = 2;
         ctx.beginPath();
         railSides.forEach(side => {
-          const x = X(projU(at(s, side * railOff)));
+          const x = X(projU(at(s, side * Math.max(0.05, half - SG.STAIR_RAIL_INSET_FT))));
           ctx.moveTo(x, yOf(nosingE(s) + RAIL_FT));
           ctx.lineTo(x, yOf(eFar + RAIL_FT));
         });
