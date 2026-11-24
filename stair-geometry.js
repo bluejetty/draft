@@ -249,6 +249,13 @@ if (!window.DraftStairGeometry) {
   // leg 1 wider toward the turn deepens the landing; a U's return flight
   // wider toward the first moves out. A U's landing end grows only away from
   // the flights -- its other side IS them.
+  // A BASEMENT FLIGHT'S OWN LEG 2 SWITCH (extLegs, its width unchanged) says
+  // where the wall is too: on the turn's inside, the flight keeps that side.
+  const stairLegWallNear = (stair, s) => {
+    const e = Array.isArray(stair?.extLegs) ? stair.extLegs[1] : null;
+    if (!e || (e.side !== 'left' && e.side !== 'right')) return false;
+    return (s > 0 ? 'right' : 'left') === e.side;
+  };
   const stairLegFrame = (stair, split) => {
     const w = Number(stair.widthFt) || 3;
     const s = split && split.turn === 'left' ? -1 : 1;
@@ -263,8 +270,18 @@ if (!window.DraftStairGeometry) {
     const near2 = s > 0 ? e2.R : e2.L, far2 = s > 0 ? e2.L : e2.R;
     const landU = L0 + far2;
     if (split.shape === 'L') {
+      // THE SECOND FLIGHT RUNS FLUSH TO THE LANDING'S FAR EDGE (jb, 24 Nov
+      // 2026: "how come the bottom stairs don't go to the int side of the
+      // ext wall (small gap)" ... "the extra gap can be added to opposite
+      // side"). The landing is deeper than the flight is wide -- its 36" is
+      // clear of the nosing above -- and that extra goes to the inside of
+      // the turn. A flight widened on the turn's inside (its wall there)
+      // keeps that side flush instead, and the extra goes out.
+      const wallNear = near2 > 0 && !(far2 > 0)
+        || (!(near2 > 0) && !(far2 > 0) && stairLegWallNear(stair, s));
+      const lo = wallNear ? 0 : L0 - w;
       return { w, s, lo1, hi1, v1: lo1 + L0 + (hi1 - lo1 - w), landU,
-        u2lo: (L0 - w) / 2 - near2, u2hi: (L0 + w) / 2 + far2 };
+        u2lo: lo - near2, u2hi: lo + w + far2 };
     }
     // Walking the return flight (along -u) the right hand is toward the first
     // flight when the stair turns right.

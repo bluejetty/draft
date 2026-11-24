@@ -295,3 +295,38 @@ for (const side of ['left', 'right']) {
     expect(landed.z, 'on the north wall\'s inside face').toBeCloseTo(t.z, 4);
   });
 }
+
+// THE GAP AT THE LANDING (jb, 24 Nov 2026: "gap at landing to bottom
+// stairs" ... "the extra gap can be added to opposite side"). An L's landing
+// is 37 1/2" (36" clear of the nosing above); its second flight, 36", ran
+// centred on it, 3/4" short of the landing's far edge -- the wall. It now
+// runs flush to that edge, the 1 1/2" on the inside of the turn.
+test('an L\'s second flight runs flush to the landing\'s far edge; the extra goes to the inside of the turn', async ({ page }) => {
+  const L = extra => ({ shape: 'L', turn: 'right', start: { x: -8, z: -18 }, end: { x: -3, z: -18 }, ...extra });
+  await open(page, fixture([flight(BASE_ID, MAIN_FL, L()), flight(UPPER_ID, SECOND, L())]));
+  const facts = await page.evaluate(id => {
+    const SG = window.DraftStairGeometry;
+    const st = drawing.stairs.find(s => Number(s.id) === id);
+    const parts = SG.stairPlanParts(st, SG.stairCurrentLayout(st, stairLevels()));
+    const r = parts.runs[1];
+    const xs = parts.landing.poly.map(p => p.x);
+    return { east: r.start.x + r.widthFt / 2, west: r.start.x - r.widthFt / 2,
+      landEast: Math.max(...xs), landWest: Math.min(...xs) };
+  }, BASE_ID);
+  expect(facts.east, 'flush to the landing\'s far (east) edge').toBeCloseTo(facts.landEast, 6);
+  expect((facts.west - facts.landWest) * 12, 'the extra on the inside of the turn').toBeGreaterThan(0.5);
+  // ...and the corner node is where it is drawn: a straight flight widened
+  // 9" has its corners 9" out on that side.
+  await pickAt(page, -6, -18);
+  await row(page, 'ext leg 1').locator('[data-prop-value="left"]').click();
+});
+
+test('a straight flight widened 9" has its corner nodes at the corners drawn', async ({ page }) => {
+  await open(page);
+  await pickBase(page);
+  await row(page, 'ext leg 1').locator('[data-prop-value="left"]').click();
+  const zs = await page.evaluate(id => stairCorners(drawing.stairs.find(s => Number(s.id) === id)).map(c => c.z), UPPER_ID);
+  const [drawn] = await legsOf(page, UPPER_ID);
+  expect(Math.min(...zs)).toBeCloseTo(drawn.left.z, 6);
+  expect(Math.max(...zs)).toBeCloseTo(drawn.right.z, 6);
+});
