@@ -2491,10 +2491,10 @@ if (!window.DraftCutView) {
     const uMax = Number.isFinite(box.uMax) ? box.uMax : held.uMax;
     const C = inksFor(opts);
     const pin = pinnedFrame(opts);
-    const ext = Boolean(pin && pin.external);
+    const onSheet = Boolean(fit || (pin && pin.external));
     const mg = screenMargins(opts, w);
-    const marginL = fit || ext ? 0 : mg.left, marginR = fit || ext ? 0 : mg.right,
-      marginT = fit || ext ? 0 : mg.top, marginB = fit || ext ? 0 : mg.bottom;
+    const marginL = onSheet ? 0 : mg.left, marginR = onSheet ? 0 : mg.right;
+    const marginT = onSheet ? 0 : mg.top, marginB = onSheet ? 0 : mg.bottom;
     const yTop = fit?.extents ? fit.extents.yTop : held.yTopDrawn + SKY_ABOVE_ROOF_FT;
     const yFit = fit?.extents ? fit.extents.yBottom : held.yBottomDrawn - GROUND_UNDER_FOOTING_FT;
     const grow = 1 + 2 * screenCushion(opts);
@@ -2517,8 +2517,7 @@ if (!window.DraftCutView) {
       ctx.save();
       ctx.beginPath();
       ctx.rect(marginL, marginT, Math.max(0, w - marginL - marginR), Math.max(0, h - marginT - marginB));
-      ctx.snapFrameClip = true;
-      ctx.clip();
+      ctx.snapFrameClip = true; ctx.clip();   // the viewport, named (elev-snap.js)
     }
     if (!runUnderlay(opts, frame)) {
       runOverlay(opts, frame);

@@ -1260,11 +1260,11 @@
           built = CE.buildCutViewEnv({ ...placed(holo, suiteExisting(holo, parts(holo).existing, info)),
             ...shellHeights(saved) }, shellLevels(holo, saved));
         } else {
-          const fits = isSuiteFile(holo);
+          const suiteFile = isSuiteFile(holo);
           const source = holo.source || {};
-          const levels = fits ? shellLevels(holo, saved)
+          const levels = suiteFile ? shellLevels(holo, saved)
             : (F.levels ? F.levels(source.levels) : (source.levels || []));
-          built = CE.buildCutViewEnv({ ...placed(holo, parts(holo).existing), ...(fits ? shellHeights(saved) : {}) }, levels);
+          built = CE.buildCutViewEnv({ ...placed(holo, parts(holo).existing), ...(suiteFile ? shellHeights(saved) : {}) }, levels);
         }
         if (!built || !(built.walls() || []).some(wall => wall.levelId > 0)) return;
         const box = CV.cutViewExtents(built, cut);
