@@ -2096,8 +2096,29 @@
     c.fillText = () => {};
     c.strokeText = () => {};
     try {
+      // A DRAWING OF HOLOGRAMS ALONE (jb, 24 Nov 2026: "in the layout views
+      // not showing" -- E1 to E4 drew in the main view and their seats stayed
+      // blank) hands its holograms to the seat the way the main view does. A
+      // drawing with walls of its own keeps its seat as it was: its house.
+      const inks = window.DraftCutView.inksFromSkin(skin);
+      const holoOnly = window.DraftHologram && !(drawing?.walls || []).some(wall => Number(wall?.levelId) > 0);
+      // FITTED TO THE SEAT, as a sheet fits a viewport: the main view's
+      // gutters (64 px at the left) are for its rails, and in a seat 116 px
+      // across they left a 600 ft row of suites a sliver in one corner.
+      const held = holoOnly ? window.DraftHologram.cutExtents(spec.cut, drawing) : null;
+      const seatFit = held ? (() => {
+        const air = 0.08;
+        const spanU = Math.max(held.uMax - held.uMin, 4), spanY = Math.max(held.yTopDrawn - held.yBottomDrawn, 4);
+        const pxPerFt = Math.min(screen.width / (spanU * (1 + 2 * air)), screen.height / (spanY * (1 + 2 * air)));
+        const padY = (screen.height / pxPerFt - spanY) / 2;
+        return { pxPerFt, extents: { uMin: held.uMin, uMax: held.uMax,
+          yTop: held.yTopDrawn + padY, yBottom: held.yBottomDrawn - padY } };
+      })() : null;
       window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
-        { coarseSilhouette: true, colors: window.DraftCutView.inksFromSkin(skin) });
+        { coarseSilhouette: true, colors: inks,
+          ...(seatFit || {}),
+          ...(holoOnly ? window.DraftHologram.cutOptions(c, screen.width, screen.height, spec.cut, drawing,
+            { show: hologramShow, paperColor: skin['surface-page'], colors: inks }) : {}) });
     } finally {
       delete c.fillText;
       delete c.strokeText;

@@ -2499,10 +2499,11 @@ if (!window.DraftCutView) {
     const yFit = fit?.extents ? fit.extents.yBottom : held.yBottomDrawn - GROUND_UNDER_FOOTING_FT;
     const grow = 1 + 2 * screenCushion(opts);
     const sky = fit || pin ? 0 : screenCushion(opts) * Math.max(yTop - yFit, 8);
-    // A FLOOR OF HALF A PIXEL TO THE FOOT, not the house's 2: a row of
-    // suites runs 600 ft end to end (jb's PHASE 1-3), and at 2 px a foot the
-    // long elevations ran off both sides of the screen.
-    const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(0.5, Math.min(
+    // NEARLY NO FLOOR, not the house's 2 px to the foot: a row of suites
+    // runs 600 ft end to end (jb's PHASE 1-3), and at 2 px a foot the long
+    // elevations ran off both sides of the screen -- and off a rail seat
+    // 116 px across at any floor at all.
+    const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(0.05, Math.min(
       (w - marginL - marginR) / (Math.max(uMax - uMin, 4) * grow),
       (h - marginT - marginB) / (Math.max(yTop - yFit, 8) + sky)));
     const x0 = pin ? pin.x0 + (uMin - pin.uMin) * pxPerFt
