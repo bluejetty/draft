@@ -1444,6 +1444,14 @@ if (!window.DraftDrawingFormat) {
         ...(Array.isArray(stair?.legWiden) && stair.legWiden.some(e => Number(e?.in) > 0)
           ? { legWiden: stair.legWiden.slice(0, 3).map(e => (Number(e?.in) > 0 && Number(e.in) <= 24
             && ['left', 'right'].includes(e?.side) ? { in: Number(e.in), side: e.side } : null)) } : {}),
+        // THE LANDING (jb, 24 Nov 2026): inches past the flights along the
+        // first flight (`landExtraU`, an L's or a U's landing length) and
+        // toward the turn (`landExtraV`, an L), 3" each when unset; `uGapIn`
+        // the space between a U's flights. Written only when set.
+        ...(['landExtraU', 'landExtraV'].reduce((o, k) => (stair?.[k] != null && Number(stair[k]) >= 0
+          && Number(stair[k]) <= 48 ? { ...o, [k]: Number(stair[k]) } : o), {})),
+        ...(stair?.uGapIn != null && Number(stair.uGapIn) >= 0 && Number(stair.uGapIn) <= 96
+          ? { uGapIn: Number(stair.uGapIn) } : {}),
         layer: 'A-STR',
       };
     }).filter(Boolean);

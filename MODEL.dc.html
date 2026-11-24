@@ -19423,7 +19423,10 @@ class Component extends DCLogic {
 
   // The 36" landing is CLEAR — the allowance is in stair-geometry.js.
   _stairLandFt(widthFt) {
-    return window.DraftStairGeometry.stairLandFt(widthFt);
+    // The landing as stairShapeSplit draws it: the stair's width and 3"
+    // (jb, 24 Nov 2026), not the 36"-clear minimum.
+    const SG = window.DraftStairGeometry;
+    return widthFt + SG.STAIR_LANDING_EXTRA_IN / 12;
   }
 
   // ─── AUTO-PLACE STAIRS (board #260) ──────────────────────────────────────
