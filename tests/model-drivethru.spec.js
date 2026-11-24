@@ -685,7 +685,7 @@ test('every tile is on the shelf and says its own name, card or no card',
     // are printed, and a tile on the post or over Gruff's face is as lost as
     // one off the frame.
     const shelf = await page.locator('#dt-tiles').boundingBox();
-    const tiles = page.locator('#dt-tiles button');
+    const tiles = page.locator('#dt-tiles #build-bar button');
     const count = await tiles.count();
     expect(count, 'the board went empty').toBeGreaterThan(5);
 
@@ -831,7 +831,7 @@ test('the board is a picture with live cards on it, and nothing else takes a pre
     // what centres the rows on it), so this point is inside the container and
     // outside every card: under the old rule it was the container's, and the
     // sheet never heard it.
-    const card = await page.locator('#dt-tiles button').first().boundingBox();
+    const card = await page.locator('#dt-tiles #build-bar button').first().boundingBox();
     expect(card.x, 'the cards reach the edge of the bar, so this proves nothing')
       .toBeGreaterThan(bar.x + 8);
     expect(await at(bar.x + 3, card.y + card.height / 2),

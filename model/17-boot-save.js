@@ -1395,6 +1395,76 @@
     });
   }
 
+  // ── THE DRIVE-THRU'S OPEN ROW (jb, 24 Nov 2026) ──────────────────────────
+  //
+  // OPEN EXISTING PLAN is the top bar's OPEN, pressed from the board: the
+  // same unsaved-edits guard and the same file picker. The board goes down
+  // once a file is in (watched on the input, so a cancelled picker leaves
+  // it up).
+  //
+  // OPEN DETAIL LIBRARY lists the libraries this browser keeps (SAVE DETAIL
+  // stores each one in `details-libraries`, model/21) and opens the one
+  // pressed; FROM COMPUTER is the picker, for a DETAILS.draft on disk. With
+  // none kept it goes straight to the picker.
+  const openRow = document.querySelector('[data-drivethru-open-row]');
+  const openList = document.querySelector('[data-drivethru-open-list]');
+  let openFromBoard = false;
+  const dropBoardAfterOpen = () => {
+    if (typeof setSign === 'function') setSign(false);
+  };
+  const pickFromBoard = () => {
+    openFromBoard = true;
+    openDrawing();
+  };
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      if (!openFromBoard) return;
+      openFromBoard = false;
+      if (fileInput.files && fileInput.files[0]) dropBoardAfterOpen();
+    }, true); // capture: runs before the adopt listener above clears the input
+  }
+  const showOpenRow = () => {
+    if (openList) { openList.hidden = true; openList.replaceChildren(); }
+    if (openRow) openRow.hidden = false;
+  };
+  const listButton = (text, title, press) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = text;
+    button.title = title;
+    button.addEventListener('click', press);
+    return button;
+  };
+  const openStoredLibrary = file => guardUnsaved('opening another', async () => {
+    if (await adoptAndShow(file)) {
+      showOpenRow();
+      dropBoardAfterOpen();
+      setRail('right', true);
+    }
+  });
+  const showDetailsList = async () => {
+    let files = [];
+    try {
+      files = (await window.SharedFileStore.loadSharedFiles('details-libraries')) || [];
+    } catch (error) {
+      console.warn('draft: details libraries could not be read', error);
+    }
+    if (!files.length || !openList || !openRow) { pickFromBoard(); return; }
+    const say = document.createElement('div');
+    say.className = 'dt-open-say';
+    say.textContent = 'DETAIL LIBRARIES IN THIS BROWSER';
+    openList.replaceChildren(say,
+      ...files.slice().sort((a, b) => a.name.localeCompare(b.name)).map(file =>
+        listButton(file.name.replace(/\.draft$/i, ''), `Open ${file.name}`,
+          () => openStoredLibrary(file))),
+      listButton('FROM COMPUTER', 'Open a DETAILS.draft from your computer', () => { showOpenRow(); pickFromBoard(); }),
+      listButton('BACK', 'Back to the open row', showOpenRow));
+    openRow.hidden = true;
+    openList.hidden = false;
+  };
+  document.querySelector('[data-drivethru-open-plan]')?.addEventListener('click', pickFromBoard);
+  document.querySelector('[data-drivethru-open-details]')?.addEventListener('click', showDetailsList);
+
   document.getElementById('file-new').addEventListener('click', () => newDrawing());
   document.getElementById('file-open').addEventListener('click', openDrawing);
 

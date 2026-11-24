@@ -580,6 +580,23 @@
         >CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT</a>
     </div>
     <div id="dt-tiles" data-drivethru-tiles>
+      <!-- THE OPEN ROW, ABOVE THE HOUSE TYPES AND SET APART FROM THEM (jb,
+           24 Nov 2026: "we should add - open existing plan - to this, maybe
+           above or below the others to 'seperate' it somewhat", then OPEN
+           DETAIL LIBRARY beside it). An order builds something new; these
+           pick up something already drawn, so they stand on their own row
+           in the board's dark ink rather than as paper cards. OPEN EXISTING
+           PLAN is the top bar's OPEN (a site plan is a .draft too). OPEN
+           DETAIL LIBRARY lists the libraries this browser keeps, with FROM
+           COMPUTER for a DETAILS.draft on disk. Only on the first screen:
+           once a family is open its submenu needs the shelf. -->
+      <div id="dt-open-row" data-drivethru-open-row>
+        <button type="button" data-drivethru-open-plan
+          title="Open a drawing file from your computer (the same as OPEN on the top bar)">OPEN EXISTING PLAN</button>
+        <button type="button" data-drivethru-open-details
+          title="Open a details library">OPEN DETAIL LIBRARY</button>
+      </div>
+      <div id="dt-open-list" data-drivethru-open-list hidden></div>
       <div id="build-bar" data-build-bar hidden>
         <div id="build-families" data-build-families></div>
         <div id="build-entries" data-build-entries hidden></div>
