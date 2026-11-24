@@ -851,6 +851,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'SAVE AS TXT',   // and its backup to a .txt (Movie, 18 Oct)
             'SAVE AS ZIP',   // the drawing and everything with it in one zip (jb, 19 Nov 2026)
             'OPEN TXT',      // and the backup read back (Movie, 10 Nov)
+            // THE DRIVE-THRU'S OPEN ROW (jb, 24 Nov 2026): the top bar's OPEN,
+            // and the details libraries this browser keeps. Opens; draws nothing.
+            'OPEN EXISTING PLAN', 'OPEN DETAIL LIBRARY',
             // THE FIVE PAGES (Movie, 10 Nov): one pad, one calculator and one
             // turtle table per page. A page key flips; it draws nothing.
             '1', '2', '3', '4', '5',

@@ -534,6 +534,31 @@
      with the board up -- started failing on CI when the camera framed the
      drawing small. That belongs to the spec, and clearOfTheShelf there is
      where it is answered. */
+  /* THE OPEN ROW (jb, 24 Nov 2026), above the house types and set apart:
+     dark plates with the paper's lettering, so they read as a different
+     kind of press from the cards, and a rule under them. Hidden once a
+     family is open -- that pair of rows needs the whole shelf. */
+  #dt-open-row, #dt-open-list { flex:0 0 auto; display:flex; gap:8px; justify-content:center;
+    flex-wrap:wrap; padding-bottom:8px; margin-bottom:6px;
+    border-bottom:1px solid rgba(241,233,210,0.28); }
+  #dt-open-row[hidden], #dt-open-list[hidden] { display:none; }
+  #dt-tiles:has(#build-entries:not([hidden])) #dt-open-row,
+  #dt-tiles:has(#build-entries:not([hidden])) #dt-open-list { display:none; }
+  #dt-open-row button, #dt-open-list button { font-family: var(--font-ui);
+    font-size:clamp(9px, 1.25vw, 13px); font-weight:700; letter-spacing:0.06em;
+    text-transform:uppercase; cursor:pointer; padding:5px 12px; border-radius:2px;
+    color:#f1e9d2; background:#1d1f20; border:1px solid #f1e9d2; }
+  #dt-open-row button:hover, #dt-open-row button:focus-visible,
+  #dt-open-list button:hover, #dt-open-list button:focus-visible { background:#1f3f6b; }
+  #dt-open-list .dt-open-say { flex:1 0 100%; text-align:center; color:#f1e9d2; opacity:0.75;
+    font-family: var(--font-ui); font-size:clamp(9px, 1.1vw, 12px); letter-spacing:0.06em; }
+  html[data-theme="rough"] #dt-open-row, html[data-theme="rough"] #dt-open-list {
+    border-bottom-color:rgba(31,63,107,0.35); }
+  html[data-theme="rough"] #dt-open-row button, html[data-theme="rough"] #dt-open-list button {
+    color:#f1e9d2; background:#1f3f6b; border-color:#1f3f6b; }
+  html[data-theme="rough"] #dt-open-row button:hover, html[data-theme="rough"] #dt-open-list button:hover {
+    background:#2c5a99; }
+  html[data-theme="rough"] #dt-open-list .dt-open-say { color:#1f3f6b; }
   #dt-tiles > * { pointer-events:none; }
   #dt-tiles button, #dt-tiles input { pointer-events:auto; }
   /* THE DISC IS A SMALLER SHARE OF A WIDER BOARD -- 110px of 2000 where it
