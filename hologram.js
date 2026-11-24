@@ -76,6 +76,9 @@
     ctx.strokeText = () => {};
     try { return draw(); } finally { delete ctx.fillText; delete ctx.strokeText; }
   };
+  // `env.noWords` (a MODEL rail seat, 82 px across): the hologram's own set
+  // plus every word, the way the seat writes none of the drawing's own.
+  const wordless = (off, env) => (env && env.noWords ? new Set([...(off || []), ...TEXT_OFF]) : off);
   const cleanOff = raw => [...new Set((Array.isArray(raw) ? raw : []).map(v => String(v ?? '').trim()).filter(Boolean))];
   // WHICH SET A HOLOGRAM WEARS: its own (THIS ONE ONLY), else its file's
   // (THIS TYPE ONLY), else the drawing's main set. `{ off, from }`, `from`
@@ -803,7 +806,7 @@
         const own = parts(holo).existing;
         const existing = suiteExisting(holo, own, info);
         const gone = info.hidden.get(holo.id);
-        const layersOff = layersOffFor(holo, env.saved);
+        const layersOff = wordless(layersOffFor(holo, env.saved), env);
         const paperColor = night ? '#ffffff' : (env.paperColor || '#ffffff');
         const draw = target => {
           const plan = withoutWords(target, layersOff, () => LP.drawPlan(target, place, existing, levelId,
@@ -936,7 +939,7 @@
           const place = pt => toS(F.hologramPoint(holo, pt));
           const split = parts(holo);
           if (show.existing) {
-            const layersOff = layersOffFor(holo, saved);
+            const layersOff = wordless(layersOffFor(holo, saved), env);
             drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, lotLess(holo, saved, split.existing, levelId), levelId,
               { view, hologram: true, paperColor: env.paperColor || '#ffffff', layersOff })) || drew;
             drew = paintOutlines(ink, place, split.existing, levelId) || drew;
@@ -981,10 +984,22 @@
         ...(Array.isArray(moved.walls) ? moved.walls : []).filter(on).flatMap(wall => [wall?.start, wall?.end]),
         ...(Array.isArray(moved.outlines) ? moved.outlines : []).filter(o => on(o) && o?.site !== true)
           .flatMap(o => (Array.isArray(o.points) ? o.points : [])),
+        // ITS ROOFS, so a ROOF PLAN of holograms alone has a frame (24 Nov).
+        ...(Array.isArray(moved.roofs) ? moved.roofs : []).filter(on)
+          .flatMap(r => (Array.isArray(r?.points) ? r.points : [])),
       ].filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z))
         .map(pt => F.hologramPoint(holo, pt));
     });
   };
+
+  // EVERY SHOWN HOLOGRAM'S ITEMS OF ONE KIND ('walls', 'roofs', ...) on the
+  // levels they stand on in this drawing (a suite's MAIN FL is the shell's).
+  // LAYOUT asks it to deal sheets for a drawing made of holograms alone (jb,
+  // 24 Nov 2026). Levels only: the points are left in the hologram's feet.
+  const itemsOn = (saved, key) => drawn(saved).flatMap(holo => {
+    const list = levelsMoved(holo)[key];
+    return Array.isArray(list) ? list.filter(Boolean) : [];
+  });
 
   // ── ELEVATIONS AND SECTIONS (hologram PR 5) ──────────────────────────────
   //
@@ -1221,10 +1236,58 @@
   // The cut painter's options for a drawing that may carry a hologram: its
   // `underlay` and, with NEW off, `underlayOnly`. Nothing at all when there
   // is no hologram to show, so a plain drawing paints exactly as before.
+  // ── WHERE THE HOLOGRAMS STAND IN A CUT VIEW, ALL OF THEM TOGETHER (jb, 24
+  // Nov 2026: a file built of PHASE 1/2/3 SUITES and nothing else -- "the
+  // layout views aren't showing and the elevations aren't being produced") ──
+  //
+  // A hologram's pass is drawn in the frame of the drawing it sits under, and
+  // a drawing with no walls of its own sets no frame: the elevation said "the
+  // cut line crosses no walls" over three buildings. cut-view.js now frames
+  // such a view from these instead -- the union of each hologram's own
+  // cutViewExtents, built from the same env its pass is drawn from, so the
+  // frame and the drawing agree. LAYOUT sizes a viewport from them too.
+  const cutExtents = (cut, saved) => {
+    const CV = window.DraftCutView;
+    const CE = window.DraftCutViewEnv;
+    const F = window.DraftDrawingFormat;
+    if (!cut || !CV || !CE || !F || typeof CV.cutViewExtents !== 'function') return null;
+    const info = shared(saved);
+    const boxes = [];
+    drawn(saved).forEach(holo => {
+      try {
+        let built = null;
+        if (isSuite(holo)) {
+          built = CE.buildCutViewEnv({ ...placed(holo, suiteExisting(holo, parts(holo).existing, info)),
+            ...shellHeights(saved) }, shellLevels(holo, saved));
+        } else {
+          const suiteFile = isSuiteFile(holo);
+          const source = holo.source || {};
+          const levels = suiteFile ? shellLevels(holo, saved)
+            : (F.levels ? F.levels(source.levels) : (source.levels || []));
+          built = CE.buildCutViewEnv({ ...placed(holo, parts(holo).existing), ...(suiteFile ? shellHeights(saved) : {}) }, levels);
+        }
+        if (!built || !(built.walls() || []).some(wall => wall.levelId > 0)) return;
+        const box = CV.cutViewExtents(built, cut);
+        if (box && [box.uMin, box.uMax, box.yTop, box.yBottom].every(Number.isFinite)) boxes.push(box);
+      } catch (error) {
+        console.warn(`hologram ${holo.name || holo.id} could not be measured in ${cut.name}`, error);
+      }
+    });
+    if (!boxes.length) return null;
+    const lo = key => Math.min(...boxes.map(box => box[key]));
+    const hi = key => Math.max(...boxes.map(box => box[key]));
+    return {
+      uMin: lo('uMin'), uMax: hi('uMax'), yTop: hi('yTop'), yBottom: lo('yBottom'),
+      yTopDrawn: hi('yTopDrawn'), yBottomDrawn: lo('yBottomDrawn'), grade: boxes[0].grade,
+    };
+  };
+
   const cutOptions = (ctx, w, h, cut, saved, env = {}) => {
     if (!drawn(saved).length) return {};
     const show = { existing: true, demo: true, new: true, ...(env.show || {}) };
     return {
+      // Asked only when the drawing has nothing of its own in the view.
+      hologramExtents: () => cutExtents(cut, saved),
       underlay: frame => paintCut(ctx, w, h, cut, saved, frame, { ...env, show, front: frame?.section ? null : false }),
       overlay: frame => paintCut(ctx, w, h, cut, saved, frame, { ...env, show, front: true }),
       ...(show.new ? {} : { underlayOnly: true }),
@@ -1262,7 +1325,7 @@
     edgesOn,
     BLUE, PALE, ALPHA, VIEWS, COLOURS, colourOf, colourIndex, nextColour, fileOf,
     planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
-    placed, paintCut, cutOptions, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
+    placed, paintCut, cutOptions, cutExtents, itemsOn, standsInFront, isSuite, shared, hostOpenings, clashes, suiteSnap, levelsMoved, suiteNear,
     drawn, siteLots, lotShown, suiteSuperNodes, shelfSuperNodes, suiteEndLines, suiteLineSnap,
     LAYER_GROUPS, TEXT_OFF, WORDS, layerSetFor, layersOffFor,
   });

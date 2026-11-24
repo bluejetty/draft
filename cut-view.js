@@ -2466,6 +2466,78 @@ if (!window.DraftCutView) {
     opts.overlay(frame);
   };
 
+  // ── A DRAWING MADE OF HOLOGRAMS ALONE (jb, 24 Nov 2026) ──────────────────
+  //
+  // jb built a file from PHASE 1, 2 and 3 SUITES and nothing else: the plan
+  // and the roof showed them, every elevation said "the cut line crosses no
+  // walls" and the LAYOUT sheets came up blank. The holograms only ever drew
+  // UNDER or OVER this drawing, in the frame its own faces set; with no faces
+  // there was no frame, so neither pass was ever called.
+  //
+  // So the frame comes from the holograms (`opts.hologramExtents`, hologram.js
+  // cutExtents) when the drawing has nothing in the view, and is fitted the
+  // way an elevation fits its own building: an inch of ground under the
+  // footing, sky over the ridge, the cushion at the sides -- or the sheet's
+  // own fit, or the hand's pin. Behind, then in front, then grade over both,
+  // then the drafter's own lines and notes, as on any elevation. Returns
+  // false (and draws nothing) when there is no hologram to frame.
+  function drawHologramsAlone(env, ctx, w, h, cut, stack, opts) {
+    if (!opts || hologramPass(opts) || typeof opts.hologramExtents !== 'function') return false;
+    const held = opts.hologramExtents();
+    if (!held) return false;
+    const fit = externalFit(opts);
+    const box = fit?.extents || held;
+    const uMin = Number.isFinite(box.uMin) ? box.uMin : held.uMin;
+    const uMax = Number.isFinite(box.uMax) ? box.uMax : held.uMax;
+    const C = inksFor(opts);
+    const pin = pinnedFrame(opts);
+    const onSheet = Boolean(fit || (pin && pin.external));
+    const mg = screenMargins(opts, w);
+    const marginL = onSheet ? 0 : mg.left, marginR = onSheet ? 0 : mg.right;
+    const marginT = onSheet ? 0 : mg.top, marginB = onSheet ? 0 : mg.bottom;
+    const yTop = fit?.extents ? fit.extents.yTop : held.yTopDrawn + SKY_ABOVE_ROOF_FT;
+    const yFit = fit?.extents ? fit.extents.yBottom : held.yBottomDrawn - GROUND_UNDER_FOOTING_FT;
+    const grow = 1 + 2 * screenCushion(opts);
+    const sky = fit || pin ? 0 : screenCushion(opts) * Math.max(yTop - yFit, 8);
+    // A FLOOR OF HALF A PIXEL TO THE FOOT, not the house's 2: a row of
+    // suites runs 600 ft end to end (jb's PHASE 1-3), and at 2 px a foot the
+    // long elevations ran off both sides of the screen.
+    const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(0.5, Math.min(
+      (w - marginL - marginR) / (Math.max(uMax - uMin, 4) * grow),
+      (h - marginT - marginB) / (Math.max(yTop - yFit, 8) + sky)));
+    const x0 = pin ? pin.x0 + (uMin - pin.uMin) * pxPerFt
+      : marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
+    const y0 = pin ? pin.y0 + (pin.yTop - yTop) * pxPerFt
+      : marginT + ((h - marginT - marginB) - (yTop + sky - yFit) * pxPerFt) / 2 + sky * pxPerFt;
+    const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
+    const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
+    const frame = { x0, y0, pxPerFt, uMin, yTop, external: Boolean(fit) };
+    const pinClip = Boolean(pin) && !fit;
+    if (pinClip) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(marginL, marginT, Math.max(0, w - marginL - marginR), Math.max(0, h - marginT - marginB));
+      ctx.snapFrameClip = true; ctx.clip();   // the viewport, named (elev-snap.js)
+    }
+    if (!runUnderlay(opts, frame)) {
+      runOverlay(opts, frame);
+      const grade = stack?.foundation && Number.isFinite(stack.foundation.grade) ? stack.foundation.grade
+        : Number.isFinite(held.grade) ? held.grade : null;
+      if (grade != null) {
+        ctx.strokeStyle = C.line; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(marginL - 18, Y(grade));
+        ctx.lineTo(w - marginR, Y(grade));
+        ctx.stroke();
+      }
+    }
+    paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
+      { x0, y0, pxPerFt, uMin, yTop, uMax, yFit, w, h, marginL, marginR, marginT, marginB,
+        cushion: fit || pin ? 0 : screenCushion(opts) });
+    if (pinClip) ctx.restore();
+    return true;
+  }
+
   function drawCutView(env, ctx, w, h, cut, opts) {
     // 1 unless the caller is drawing to a sheet at some zoom other than print.
     TEXT_SCALE = Number((opts || {}).inkScale) > 0 ? Number(opts.inkScale) : 1;
@@ -2492,6 +2564,8 @@ if (!window.DraftCutView) {
       if (drawElevationView(env, ctx, w, h, cut, stack, axis, header, opts)) return;
       // A hologram with nothing facing this way simply draws nothing.
       if (hologramPass(opts)) return;
+      // A DRAWING MADE OF HOLOGRAMS ALONE still has a view to draw.
+      if (drawHologramsAlone(env, ctx, w, h, cut, stack, opts)) return;
       header(cut.name);
       ctx.fillStyle = ink(0.55);
       ctx.font = `600 ${textPx(13)}px 'Barlow Condensed', system-ui, sans-serif`;

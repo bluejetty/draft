@@ -1995,10 +1995,18 @@ class Component extends PageLogic {
     return this.state.viewports.length === 0 && this._levelsWithWalls().length > 0;
   }
 
+  _hologramItems(key) {
+    const H = window.DraftHologram;
+    return H && H.itemsOn && this._saved ? H.itemsOn(this._saved, key) : [];
+  }
+
   _levelsWithWalls() {
     if (!this._saved) return [];
     const counts = new Map();
-    (Array.isArray(this._saved.walls) ? this._saved.walls : []).forEach(wall => {
+    // A SHOWN HOLOGRAM'S WALLS COUNT TOO (jb, 24 Nov 2026): a file built of
+    // PHASE 1/2/3 SUITES and nothing else came up on a blank sheet, with no
+    // deal, because it had no walls of its own.
+    (Array.isArray(this._saved.walls) ? this._saved.walls : []).concat(this._hologramItems('walls')).forEach(wall => {
       counts.set(wall?.levelId, (counts.get(wall?.levelId) || 0) + 1);
     });
     return this._levels
@@ -2042,7 +2050,10 @@ class Component extends PageLogic {
             minZ: Math.min(...pts.map(p => p.z)) - pad, maxZ: Math.max(...pts.map(p => p.z)) + pad };
         }
       }
-      const extra = levelId < 0 ? [] : window.DraftHologram ? window.DraftHologram.framePoints(this._saved, levelId) : [];
+      // THE SITE PLAN TAKES IN EVERY HOLOGRAM'S BUILDING, whatever level its
+      // walls stand on (jb, 24 Nov 2026: a file of suites alone).
+      const extra = levelId < 0 ? [] : window.DraftHologram
+        ? window.DraftHologram.framePoints(this._saved, levelId === SITE_LEVEL_ID ? null : levelId) : [];
       if (extra.length) {
         box = extra.reduce((b, pt) => ({
           minX: Math.min(b.minX, pt.x), maxX: Math.max(b.maxX, pt.x),
@@ -2292,6 +2303,12 @@ class Component extends PageLogic {
       let extents = null;
       if (cut && env) {
         try { extents = window.DraftCutView.cutViewExtents(env, cut); } catch { extents = null; }
+        // A DRAWING OF HOLOGRAMS ALONE (jb, 24 Nov 2026) is sized by them:
+        // its own extents are the bare level stack, no roof, no building.
+        const H = window.DraftHologram;
+        const ownWalls = (env.walls() || []).some(wall => wall.levelId > 0);
+        const held = !ownWalls && H && H.cutExtents ? H.cutExtents(cut, this._saved) : null;
+        if (held) extents = { ...(extents || {}), ...held };
       }
       this._cutExtentsCache.set(key, extents);
     }
@@ -2559,7 +2576,9 @@ class Component extends PageLogic {
     // null for a level with no walls in that view.
     const planSheet = (levelId, view) => {
       const walls = window.DraftLayoutPlan.planWalls(this._saved, levelId, view);
-      return walls.length ? sized({ kind: 'plan', levelId, view }) : null;
+      const held = this._hologramItems('walls').some(wall => wall.levelId === levelId
+        && (wall.view || 'plan') === view);
+      return walls.length || held ? sized({ kind: 'plan', levelId, view }) : null;
     };
     const sectionViews = this._cuts
       .map(cut => sized({ kind: 'section', cutId: cut.id }))
@@ -2618,14 +2637,15 @@ class Component extends PageLogic {
     // AND ITS SHAPES, a tree among them (jb, 6 Nov), which print now.
     const siteMarks = ['lines', 'notes', 'dimensions', 'shapes'].some(key =>
       (Array.isArray(this._saved[key]) ? this._saved[key] : []).some(item => item?.levelId === SITE_LEVEL_ID));
-    deal('SITE PLAN', [siteParts.lot || siteParts.bodies.length || siteMarks
+    const siteHolograms = window.DraftHologram ? window.DraftHologram.framePoints(this._saved).length > 0 : false;
+    deal('SITE PLAN', [siteParts.lot || siteParts.bodies.length || siteMarks || siteHolograms
       ? sized({ kind: 'plan', levelId: SITE_LEVEL_ID, view: null }) : null]);
     for (let i = 0; i < Math.max(1, elevViews.length); i += 2) {
       deal('ELEVATIONS', elevViews.slice(i, i + 2));
     }
     // THE ROOF PLAN, wherever the drawing has a roof (Movie, 6 Oct): the roof
     // level drawn by layout-plan.js's drawRoofPlan.
-    const roofed = (this._saved.roofs || []).some(roof => roof?.levelId === 7);
+    const roofed = (this._saved.roofs || []).concat(this._hologramItems('roofs')).some(roof => roof?.levelId === 7);
     deal('ROOF PLAN', [roofed ? sized({ kind: 'plan', levelId: 7, view: null }) : null]);
     // Levels the drafter added sit above the stock storeys and read first,
     // top down, each under its own name.
@@ -2638,7 +2658,9 @@ class Component extends PageLogic {
     // under its full floor, the way the plans carry theirs.
     const floorSheet = ids => {
       const LP = window.DraftLayoutPlan;
-      const id = ids.find(levelId => LP.hasFloorLayout(this._saved, levelId)
+      // OR A HOLOGRAM'S FLOOR on it (a plan made of holograms alone).
+      const held = levelId => this._hologramItems('floors').some(floor => floor.levelId === levelId);
+      const id = ids.find(levelId => (LP.hasFloorLayout(this._saved, levelId) || held(levelId))
         && !LP.ridesOnFullFloor(this._saved, levelId)
         && this._levels.some(level => level.id === levelId));
       return id == null ? null : sized({ kind: 'plan', levelId: id, view: 'floor' });

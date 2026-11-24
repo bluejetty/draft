@@ -2013,6 +2013,13 @@
       paintOutlines(); paintLines();
       paintHalfLevelGhost();
       paintWalls();
+      // A SEAT WITH NOTHING OF ITS OWN SHOWS ITS HOLOGRAMS (jb, 24 Nov 2026:
+      // a file of suites alone had a blank rail). A seat with a house of its
+      // own stays that house, as it always has.
+      if (Number(levelId) >= 0 && !allPoints(true).length && window.DraftHologram) {
+        window.DraftHologram.paint(ctx, toS, drawing, Number(levelId),
+          { view: activeViewId(), show: hologramShow, paperColor: skin['surface-page'], noWords: true });
+      }
       // A SHELF'S SQUARE ABOVE THE BONE SHOWS ITS CORNERS, in its unit's
       // colour (Movie, 23 Oct: "in the little SHELF layout in the middle
       // above the bone can you show the corner colors so they can easily
