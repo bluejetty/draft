@@ -211,3 +211,27 @@ test('an elevation viewport zoomed out small still shows the existing house', as
   expect(small.black, 'the new work still drawn').toBeGreaterThan(20);
   expect(small.blue, 'and the existing house beside it').toBeGreaterThan(20);
 });
+
+// ── A DRAWING OF HOLOGRAMS ALONE (jb, 24 Nov 2026) ──────────────────────────
+// A file of suites and nothing else came up on one blank sheet: the deal on
+// entry looked for walls of its own, and an elevation framed on none drew
+// nothing. Now the holograms deal the set and draw in its elevations.
+const STOCK = [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0 },
+  { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 }, { id: 1, name: 'FOUNDATION', elev: -8 }];
+const mainWall = (id, sx, sz, ex, ez) => ({ ...wall(id, sx, sz, ex, ez), levelId: 3, topHeight: 9 });
+test('a drawing of holograms alone deals its sheets, elevations drawn', async ({ page }) => {
+  await openLayout(page, {
+    version: 1, levels: STOCK, walls: [],
+    holograms: [{ id: 'hologram-1', name: 'existing', x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0,
+      source: { version: 1, levels: STOCK, walls: [mainWall('e1', 0, 0, 28, 0), mainWall('e2', 28, 0, 28, 24),
+        mainWall('e3', 28, 24, 0, 24), mainWall('e4', 0, 24, 0, 0)] } }],
+  });
+  const views = await page.evaluate(() => globalThis.eval('page').state.viewports.map(v => ({ kind: v.kind, sheet: v.sheet, levelId: v.levelId })));
+  expect(views.filter(v => v.kind === 'elevation').length).toBe(4);
+  expect(views.some(v => v.kind === 'plan' && v.levelId === 3), 'MAIN FL PLAN dealt').toBe(true);
+  const elevSheet = views.find(v => v.kind === 'elevation').sheet;
+  await page.evaluate(n => new Promise(r => globalThis.eval('page').setState({ activeSheet: n }, () => { globalThis.eval('page')._draw(); r(); })), elevSheet);
+  await page.waitForTimeout(300);
+  const seen = await ink(page);
+  expect(seen.blue + seen.black, 'the elevation has ink in it').toBeGreaterThan(200);
+});

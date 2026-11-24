@@ -522,3 +522,40 @@ test('the PHOTO card lists pictures only; the holograms are on their own card', 
   await expect(page.locator('#hologram-ask [data-hologram-count]')).toContainText('1 hologram');
   await expect(page.locator('#hologram-ask [data-hologram-ask-upload]')).toBeVisible();
 });
+
+// ── A DRAWING OF HOLOGRAMS ALONE (jb, 24 Nov 2026) ──────────────────────────
+//
+// jb built a file of PHASE 1, 2 and 3 SUITES and nothing else: the plan and
+// the roof showed them, the elevations said "the cut line crosses no walls"
+// and the rail was blank. With no walls of its own the drawing set no frame,
+// so the holograms' passes were never called.
+const alone = () => ({ ...BLANK, walls: [],
+  holograms: [{ id: 'hologram-1', name: 'existing', x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0,
+    source: { ...BLANK, walls: box('e', 16, -4, 44, 20) } }] });
+
+test('a drawing of holograms alone still draws its elevations', async ({ page }) => {
+  await openE1(page, alone());
+  expect(await bluePixels(page), 'the hologram drawn in E1').toBeGreaterThan(800);
+  // A frame came back, so a press on the view reads in feet as on any other.
+  const frame = await page.evaluate(() => window.__elevFrame);
+  expect(frame && frame.pxPerFt).toBeGreaterThan(0);
+  // And framed on it: the 28 ft hologram, not a 4 ft scrap of nothing.
+  expect(frame.uMax - frame.uMin).toBeGreaterThan(24);
+});
+
+test('a drawing of holograms alone shows them in its rail seat', async ({ page }) => {
+  await open(page, alone());
+  await page.goto('/MODEL.html?left=1&right=1&level=3&view=plan');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  const seat = page.locator('#view-rail .seat', { hasText: 'MAIN FL PLAN' });
+  await expect(seat).toHaveCount(1);
+  await page.waitForTimeout(800);
+  const blue = await seat.evaluate(el => {
+    const c = el.querySelector('canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 40 && d[i + 2] > 150 && d[i + 2] - d[i] > 50) n += 1;
+    return n;
+  });
+  expect(blue).toBeGreaterThan(40);
+});

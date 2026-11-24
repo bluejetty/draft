@@ -1303,11 +1303,22 @@
   const hologramFramePoints = () => holograms()
     .flatMap(holo => hologramWallsHere(holo).flatMap(w => [w.start, w.end]))
     .filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.z));
+  const thumbHologramPoints = () => {
+    const H = window.DraftHologram;
+    if (!H || !drawing) return [];
+    const level = activeLevelId();
+    return hologramFramePoints().concat(H.framePoints(drawing, level === SITE_LEVEL_ID ? null : level));
+  };
   const fit = (wide = false, margin = 0.86) => {
     // 0 TO FIT on an elevation: back to the painter's own fit.
     elevPin = null; elevPinFor = null;
     const own = allPoints(wide);
-    const pts = thumbTarget || shootingPaper ? own : own.concat(hologramFramePoints());
+    // A SEAT OF HOLOGRAMS ALONE (jb, 24 Nov 2026: a file of PHASE 1/2/3
+    // SUITES and nothing else had a blank rail) frames the holograms, since
+    // there is no house of its own to frame. The ROOF and SITE seats take in
+    // their roofs and whole buildings.
+    const pts = shootingPaper ? own : thumbTarget ? (own.length ? own : thumbHologramPoints())
+      : own.concat(hologramFramePoints());
     // THE EMPTY TEST STILL STANDS HERE FOR EVERY OTHER LEVEL, and only moves
     // out of the way for the site. It used to fire on a site every time --
     // allPoints measures the ACTIVE level's walls, lines and floors, and a
