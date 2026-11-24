@@ -559,3 +559,22 @@ test('a drawing of holograms alone shows them in its rail seat', async ({ page }
   });
   expect(blue).toBeGreaterThan(40);
 });
+
+// jb, 24 Nov 2026, after the elevations drew: "in the layout views not
+// showing" -- E1 to E4 in the main view, and their seats in the rail blank.
+test('a drawing of holograms alone shows them in its elevation seats', async ({ page }) => {
+  await open(page, alone());
+  await page.goto('/MODEL.html?left=1&right=1&level=3&view=plan');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  const seat = page.locator('#view-rail .seat', { hasText: 'E1' });
+  await expect(seat).toHaveCount(1);
+  await page.waitForTimeout(800);
+  const inked = await seat.evaluate(el => {
+    const c = el.querySelector('canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 40) n += 1;
+    return n;
+  });
+  expect(inked).toBeGreaterThan(200);
+});
