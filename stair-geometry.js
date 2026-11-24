@@ -177,6 +177,11 @@ if (!window.DraftStairGeometry) {
   // THE TREAD SLOTS THE TURN EATS (`landSlots`): a flat landing is one slot
   // (it is a tread, a deep one), each winder a slot, each middle tread a
   // slot. Two level flat landings are ONE slot between them.
+  const STAIR_LANDING_EXTRA_IN = 3;
+  const stairLandExtraIn = v => {
+    const n = Number(v);
+    return v != null && Number.isFinite(n) && n >= 0 && n <= 48 ? n : STAIR_LANDING_EXTRA_IN;
+  };
   const stairShapeSplit = (stair, layout) => {
     const shape = STAIR_SHAPE_OPTIONS.some(option => option.id === stair.shape) ? stair.shape : 'straight';
     if (shape === 'straight' || layout.treads < 3) return null;
@@ -215,14 +220,24 @@ if (!window.DraftStairGeometry) {
       : Math.max(1, Math.floor(avail / 2));
     const t2 = Math.max(1, avail - t1);
     const runStep = stairStandards().treadRunIn / 12;
-    const gapFt = STAIR_U_GAP_IN / 12;
+    // THE SPACE BETWEEN A U'S FLIGHTS: the 4.5" for the rail or wall, or the
+    // drafter's own (`uGapIn`, written by the U landing's WIDTH box), or the
+    // middle flight's run where that is more.
+    const gapIn = Number(stair.uGapIn);
+    const gapFt = (Number.isFinite(gapIn) && gapIn >= 0 && gapIn <= 96 ? gapIn : STAIR_U_GAP_IN) / 12;
     const widthFt = Number(stair.widthFt) || 3;
-    // The space between a U's two flights: the 4.5" for the rail or wall, or
-    // the middle flight's run where there is one.
     const sepFt = shape === 'U' ? Math.max(gapFt, midTreads * runStep) : 0;
+    // THE LANDING, the stair's width and a little more (jb, 24 Nov 2026: "can
+    // we make the landing 3\" wider than the stairs ... allow the user to
+    // change 3\" ... so the stair landing could be longer in one of the
+    // directions"): `landExtraU` past the flights along the first flight's
+    // run (an L's or a U's landing length), `landExtraV` past the first
+    // flight's side toward the turn (an L only). 3" each when not set.
+    const landFt = widthFt + stairLandExtraIn(stair.landExtraU) / 12;
+    const landSideFt = stairLandExtraIn(stair.landExtraV) / 12;
     return { shape, winders: w1, lowerWinders: w2, midRisers: shape === 'U' ? midRisers : 0, midTreads, merged,
-      landTreads, t1, t2, landFt: stairLandFt(widthFt), turn: stair.turn === 'left' ? 'left' : 'right',
-      sepFt, offFt: shape === 'U' ? widthFt + sepFt : 0 };
+      landTreads, t1, t2, landFt, landSideFt, turn: stair.turn === 'left' ? 'left' : 'right',
+      sepFt, gapFt, offFt: shape === 'U' ? widthFt + sepFt : 0 };
   };
 
   // ── A LEG WIDER ON ONE SIDE (jb, 23 Nov 2026) ─────────────────────────
@@ -249,6 +264,13 @@ if (!window.DraftStairGeometry) {
   // leg 1 wider toward the turn deepens the landing; a U's return flight
   // wider toward the first moves out. A U's landing end grows only away from
   // the flights -- its other side IS them.
+  // A BASEMENT FLIGHT'S OWN LEG 2 SWITCH (extLegs, its width unchanged) says
+  // where the wall is too: on the turn's inside, the flight keeps that side.
+  const stairLegWallNear = (stair, s) => {
+    const e = Array.isArray(stair?.extLegs) ? stair.extLegs[1] : null;
+    if (!e || (e.side !== 'left' && e.side !== 'right')) return false;
+    return (s > 0 ? 'right' : 'left') === e.side;
+  };
   const stairLegFrame = (stair, split) => {
     const w = Number(stair.widthFt) || 3;
     const s = split && split.turn === 'left' ? -1 : 1;
@@ -261,11 +283,29 @@ if (!window.DraftStairGeometry) {
     // Walking the second leg (along +v) the right hand is back toward the
     // first flight's top when the stair turns right.
     const near2 = s > 0 ? e2.R : e2.L, far2 = s > 0 ? e2.L : e2.R;
-    const landU = L0 + far2;
     if (split.shape === 'L') {
-      return { w, s, lo1, hi1, v1: lo1 + L0 + (hi1 - lo1 - w), landU,
-        u2lo: (L0 - w) / 2 - near2, u2hi: (L0 + w) / 2 + far2 };
+      // THE SECOND FLIGHT RUNS FLUSH TO THE LANDING'S FAR EDGE (jb, 24 Nov
+      // 2026: "how come the bottom stairs don't go to the int side of the
+      // ext wall (small gap)" ... "the extra gap can be added to opposite
+      // side"), and the landing's extra (landExtraU) is on the inside of
+      // the turn. A flight widened on the turn's inside (its wall there)
+      // keeps that side flush instead, and the extra goes out.
+      //
+      // THE INSIDE CORNER IS NOTCHED (jb: "don't 'poke' into the corner ...
+      // a little square 3\"x3\" taken out of the corner of the landing on
+      // int. side"): where the landing runs past both flights, that square
+      // -- landExtraU by landExtraV -- is not landing.
+      const wallNear = near2 > 0 && !(far2 > 0)
+        || (!(near2 > 0) && !(far2 > 0) && stairLegWallNear(stair, s));
+      const w2 = w + near2 + far2;
+      const exU = L0 - w;
+      const landU = w2 + exU;
+      const u2lo = wallNear ? 0 : exU;
+      const v1 = hi1 + split.landSideFt;
+      return { w, s, lo1, hi1, v1, landU, u2lo, u2hi: u2lo + w2,
+        notchU: wallNear ? 0 : exU, notchV: split.landSideFt };
     }
+    const landU = L0 + far2;
     // Walking the return flight (along -u) the right hand is toward the first
     // flight when the stair turns right.
     const in3 = s > 0 ? e3.R : e3.L, out3 = s > 0 ? e3.L : e3.R;
@@ -377,8 +417,12 @@ if (!window.DraftStairGeometry) {
         const u = run1Len + (-side * s > 0 ? F.u2hi - I : F.u2lo + I);
         return [at(0, v), at(u, v), at(u, v1 + run2Len)];
       });
-      const landing = { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len, v1)],
-        winderLines, flatIndex: split.winders ? null : 0 };
+      const nu = F.notchU, nv = F.notchV;
+      const landing = { poly: nu > 1e-6 && nv > 1e-6
+        ? [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len + nu, v1),
+          at(run1Len + nu, F.hi1), at(run1Len, F.hi1)]
+        : [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len, v1)],
+      winderLines, flatIndex: split.winders ? null : 0 };
       return { shape: 'L', split, gap: null, middle: null,
         runs: [
           { start: S1, dir: d, treads: split.t1, lenFt: run1Len, widthFt: w1 },
@@ -665,6 +709,8 @@ if (!window.DraftStairGeometry) {
     stairPlanParts,
     stairLegWiden,
     stairLegFrame,
+    stairLandExtraIn,
+    STAIR_LANDING_EXTRA_IN,
     // READ LIVE, so every painter and every page follows the office's numbers
     // without holding a copy of its own.
     get STAIR_MAX_RISER_IN() { return stairStandards().maxRiserIn; },

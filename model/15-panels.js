@@ -2409,6 +2409,62 @@
           avail > 2 ? () => write({ midRisers: mid + 1, splitTreads: Math.max(1, split.t1 - 1) }) : null));
         landingChips('LOWER LANDING', 'lowerWinders', split.lowerWinders);
       }
+
+      // THE LANDING'S SIZE (jb, 24 Nov 2026). An L: "the landing 3\" wider
+      // than the stairs ... allow the user to change 3\" to wider for each
+      // edge of the landing ... or less wide ... each side to change
+      // differently" -- two inch boxes, named by the way they run in plan.
+      // A U: "allow the user to change the width and length of the U
+      // landing" -- LENGTH its depth along the flights (landExtraU), WIDTH
+      // across both flights and the space between them (uGapIn).
+      const F = SG.stairLegFrame(stair, split);
+      const dx0 = stair.end.x - stair.start.x, dz0 = stair.end.z - stair.start.z;
+      const along = Math.abs(dx0) >= Math.abs(dz0) ? 'E\u2013W' : 'N\u2013S';
+      const across = along === 'E\u2013W' ? 'N\u2013S' : 'E\u2013W';
+      const extraNow = k => SG.stairLandExtraIn(stair[k]);
+      const inchRow = (label, key, value, unitText, lo, hi, onSet) => {
+        const row = document.createElement('div');
+        row.dataset.propRow = key;
+        const name = document.createElement('div');
+        name.className = 'props-title';
+        name.textContent = label;
+        const chips = document.createElement('div');
+        chips.className = 'chip-row';
+        const inch = document.createElement('input');
+        inch.type = 'number';
+        inch.dataset.stairLanding = key;
+        inch.min = String(lo);
+        inch.max = String(hi);
+        inch.step = '0.5';
+        inch.value = String(Math.round(value * 8) / 8);
+        inch.style.width = '60px';
+        inch.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') inch.blur(); });
+        inch.addEventListener('change', () => {
+          const v = Math.round(Number(inch.value) * 8) / 8;
+          if (!(v >= lo && v <= hi)) { sayOnStrip(`${label} -- ${lo}" to ${hi}".`); renderObjProp(); return; }
+          onSet(v);
+        });
+        const unit = document.createElement('span');
+        unit.textContent = unitText;
+        chips.append(inch, unit);
+        row.append(name, chips);
+        return row;
+      };
+      if (split.shape === 'L') {
+        box.append(inchRow(`LANDING ${along}`, 'landing u', extraNow('landExtraU'), '" PAST STAIRS', 0, 48,
+          v => write({ landExtraU: v })));
+        box.append(inchRow(`LANDING ${across}`, 'landing v', extraNow('landExtraV'), '" PAST STAIRS', 0, 48,
+          v => write({ landExtraV: v })));
+      } else {
+        const lenIn = F.landU * 12;
+        const baseLen = lenIn - extraNow('landExtraU');
+        box.append(inchRow(`LANDING LENGTH (${along})`, 'landing length', lenIn, '"',
+          Math.ceil(baseLen), Math.floor(baseLen + 48), v => write({ landExtraU: Math.max(0, Math.round((v - baseLen) * 8) / 8) })));
+        const widIn = (F.hi3 - F.lo1) * 12;
+        const flightsIn = widIn - split.sepFt * 12;
+        box.append(inchRow(`LANDING WIDTH (${across})`, 'landing width', widIn, '"',
+          Math.ceil(flightsIn), Math.floor(flightsIn + 96), v => write({ uGapIn: Math.max(0, Math.round((v - flightsIn) * 8) / 8) })));
+      }
     }
 
     // ITS WIDTH, ONE RISER MORE OR LESS, AND ITS RAIL (Movie, 25 Oct: "One

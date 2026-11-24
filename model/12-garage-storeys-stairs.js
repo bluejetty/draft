@@ -2648,12 +2648,16 @@
         const v1 = F.v1;
         const u2a = run1 + F.u2lo;
         const u2b = run1 + F.u2hi;
+        // The landing's inside corner, notched or square (stairLegFrame).
+        const notch = F.notchU > 1e-6 && F.notchV > 1e-6
+          ? [{ u: run1 + F.notchU, v: v1 }, { u: run1 + F.notchU, v: hi1 }]
+          : [{ u: run1, v: v1 }];
         uv = r2c <= 0
           ? [{ u: -noseFt, v: lo1 }, { u: run1 + L, v: lo1 }, { u: run1 + L, v: v1 },
-             { u: run1, v: v1 }, { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }]
+             ...notch, { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }]
           : [{ u: -noseFt, v: lo1 }, { u: run1 + L, v: lo1 }, { u: run1 + L, v: v1 },
              { u: u2b, v: v1 }, { u: u2b, v: v1 + r2c }, { u: u2a, v: v1 + r2c },
-             { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }];
+             { u: u2a, v: v1 }, ...notch, { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }];
       } else {
         // Run 2 stands across the space between the flights -- 4.5", or a
         // middle flight's run.
@@ -3087,7 +3091,7 @@
       runFt: layout.runFt,
       treads: layout.treads,
       widthFt: stairWidthFt,
-      landFt: SG.stairLandFt(stairWidthFt),
+      landFt: stairWidthFt + SG.STAIR_LANDING_EXTRA_IN / 12, // the landing as drawn (stairShapeSplit)
       finishIn: STAIR_OPENING_FINISH_IN,
       gapIn: STAIR_BEAM_CLEAR_IN,
       runStepFt: SG.STAIR_TREAD_RUN_IN / 12,
@@ -3222,26 +3226,42 @@
       const tShort = belowSplit.t1;
       const s = belowSplit.turn === 'right' ? 1 : -1;
       const perp = { x: -d.z * s, z: d.x * s };
-      const L = belowSplit.landFt;
+      // The landing as built (stairLegFrame): run1b..run1b+landU along d,
+      // lo1..v1 toward the turn. The flight above takes the same extras the
+      // other way round (its first leg runs along this one's second), so its
+      // landing lies over this one.
+      const Fb = SG.stairLegFrame(below, belowSplit);
       const run1b = belowSplit.t1 * runStep;
+      const cu = run1b + Fb.landU / 2;
+      const cv = belowSplit.shape === 'L' ? (Fb.lo1 + Fb.v1) / 2 : (-below.widthFt / 2 + Fb.landU / 2);
       const landingCentre = {
-        x: below.start.x + d.x * (run1b + L / 2) + perp.x * (-below.widthFt / 2 + L / 2),
-        z: below.start.z + d.z * (run1b + L / 2) + perp.z * (-below.widthFt / 2 + L / 2),
+        x: below.start.x + d.x * cu + perp.x * cv,
+        z: below.start.z + d.z * cu + perp.z * cv,
       };
       const t1u = Math.max(1, layout.treads - 1 - tShort);
       const du = { x: -perp.x, z: -perp.z };
       const su = -s;
       const perpU = { x: -du.z * su, z: du.x * su };
-      const Lu = SG.stairLandFt(widthFt);
       const run1u = t1u * runStep;
+      const swapped = {};
+      if (below.landExtraV != null) swapped.landExtraU = below.landExtraV;
+      if (below.landExtraU != null) swapped.landExtraV = below.landExtraU;
+      const probe = make({ x: 0, z: 0 }, du, run1u, {
+        turn: su > 0 ? 'right' : 'left', winders: 0, splitTreads: t1u, ...swapped,
+      });
+      const pSplit = SG.stairShapeSplit(probe, layout);
+      const Fu = pSplit ? SG.stairLegFrame(probe, pSplit) : null;
+      const Lu = Fu ? Fu.landU : SG.stairLandFt(widthFt);
+      const cvu = Fu && pSplit.shape === 'L' ? (Fu.lo1 + Fu.v1) / 2 : (-widthFt / 2 + Lu / 2);
       const start = {
-        x: landingCentre.x - du.x * (run1u + Lu / 2) - perpU.x * (-widthFt / 2 + Lu / 2),
-        z: landingCentre.z - du.z * (run1u + Lu / 2) - perpU.z * (-widthFt / 2 + Lu / 2),
+        x: landingCentre.x - du.x * (run1u + Lu / 2) - perpU.x * cvu,
+        z: landingCentre.z - du.z * (run1u + Lu / 2) - perpU.z * cvu,
       };
       return widened(make(start, du, run1u, {
         turn: su > 0 ? 'right' : 'left',
         winders: 0,
         splitTreads: t1u,
+        ...swapped,
       }));
     }
     const firstLen = belowSplit

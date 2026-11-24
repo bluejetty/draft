@@ -1079,10 +1079,20 @@
   // the stair corners NODE snapable so i can position the corner or edge to
   // a edge wall") -- they had none, so a turned stair could not be held by
   // a corner at all.
+  // HOW FAR EACH EDGE OF A STRAIGHT FLIGHT STANDS from its centre line,
+  // along the frame's normal (its right hand walking down): half its width,
+  // and a leg widened beside an exterior wall (legWiden, jb 23 Nov 2026)
+  // that much more on its side -- so its corner nodes are the corners drawn.
+  const stairEdgeAcross = (stair, f, k) => {
+    const lf = window.DraftStairGeometry?.stairLegFrame;
+    if (!lf || !Array.isArray(stair.legWiden)) return f.half * k;
+    const F = lf(stair, null);
+    return k > 0 ? F.hi1 : F.lo1;
+  };
   const stairCorners = stair => {
     const f = stairFrame(stair);
     if (!f) return stairOutlineOf(stair).corners;
-    const side = (p, k) => ({ x: p.x + f.n.x * f.half * k, z: p.z + f.n.z * f.half * k });
+    const side = (p, k) => { const v = stairEdgeAcross(stair, f, k); return { x: p.x + f.n.x * v, z: p.z + f.n.z * v }; };
     return [side(stair.start, 1), side(stair.start, -1), side(stair.end, -1), side(stair.end, 1)];
   };
   // ITS OUTLINE AS A MAGNET READS IT: every corner once, and every edge with
@@ -1094,7 +1104,7 @@
   const stairOutlineOf = stair => {
     const f = stairFrame(stair);
     const rings = f ? [(() => {
-      const side = (p, k) => ({ x: p.x + f.n.x * f.half * k, z: p.z + f.n.z * f.half * k });
+      const side = (p, k) => { const v = stairEdgeAcross(stair, f, k); return { x: p.x + f.n.x * v, z: p.z + f.n.z * v }; };
       return [side(stair.start, 1), side(stair.start, -1), side(stair.end, -1), side(stair.end, 1)];
     })()] : stairRings(stair, stairLevels());
     const corners = [];

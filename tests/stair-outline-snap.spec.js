@@ -179,3 +179,19 @@ test('ROTATE\'s picks catch an L flight\'s corners, landing included', async ({ 
   expect(await attr(page, 'data-snap-node')).toEqual(key(d));
   await page.keyboard.press('Escape');
 });
+
+// AND LINE (jb, 24 Nov 2026: "i'm trying to draw a line and use a node on
+// the stairs to start the line but not making nodes for the line"): the
+// same corners are nodes for the drawing tools.
+test('LINE catches an L flight\'s corners: a line starts on one', async ({ page }) => {
+  const { frame, facts } = await open(page);
+  await page.keyboard.press('l');
+  expect(await page.evaluate(() => activeTool)).toBe('line');
+  expect(await page.evaluate(() => stairSnapNodes().length)).toBe(facts.corners.length);
+  const c = facts.corners.slice().sort((a, b) => b.z - a.z || b.x - a.x)[0];
+  const [cx, cy] = frame.at(c.x, c.z);
+  await page.mouse.move(cx + 2, cy + 2);
+  await page.waitForTimeout(150);
+  expect(await attr(page, 'data-snap-node')).toEqual([r4(c.x), r4(c.z)]);
+  await page.keyboard.press('Escape');
+});

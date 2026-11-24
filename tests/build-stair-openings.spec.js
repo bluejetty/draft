@@ -263,12 +263,12 @@ test('an L stair cuts an L-shaped well over its landing and second run', async (
   const saved = await h.savedDrawing(page);
   expect(saved.surfaceOpenings).toHaveLength(1);
   const opening = saved.surfaceOpenings[0];
-  // First run (6 treads) + 3'-1 1/2" landing + the used stretch of run 2:
+  // First run (6 treads) + 3'-3" landing + the used stretch of run 2:
   // 12.366 slots - 6 treads - 1 landing = 5.366 -> 53.66" -> 54" down run 2.
   // 55" until the 7 Sep foundation ruling; see OPEN_LEN_FT for the arithmetic.
   expect(opening.points).toHaveLength(10);
   const box = bbox(opening.points);
-  const run1 = 5, land = 3.125, run2Cut = 54 / 12;
+  const run1 = 5, land = 3.25, run2Cut = 54 / 12;   // landing: 36" + 3" (jb, 24 Nov 2026)
   expect(Math.abs(box.minX - (-4 - FINISH_FT - NOSE_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.maxX - (-4 + run1 + land + FINISH_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.minZ - (-4 - HALF_W))).toBeLessThan(0.02);

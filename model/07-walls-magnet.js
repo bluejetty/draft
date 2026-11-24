@@ -1666,14 +1666,21 @@
   };
   // THE STAIR CORNERS ROTATE AND MIRROR CATCH: each stair's outline corners
   // on this level -- a straight flight's four, an L's or a U's every corner
-  // of its flights and landing -- only while one of those two tools is up,
-  // the centre and arm picks of a turn (jb, 20 Nov 2026). Other tools keep
+  // of its flights and landing -- while one of those two tools is up, the
+  // centre and arm picks of a turn (jb, 20 Nov 2026), or a drawing tool
+  // (STAIR_NODE_TOOLS). SELECT and the tools that carry a stair keep
   // the stair's own corner grab and its outline magnet (stairSeek) and
   // nothing more, so a stair dragged is never caught by where it was.
   // Kept for the paint frame: nodeEnds is asked on every pointer move.
+  // AND THE DRAWING TOOLS (jb, 24 Nov 2026: "i'm trying to draw a line and
+  // use a node on the stairs to start the line but not making nodes"): a
+  // line, a wall, a dimension, a shape drawn from a stair's corner. Never
+  // SELECT, MOVE or STRETCH, which carry the stair itself.
+  const STAIR_NODE_TOOLS = new Set(['rotate', 'mirror', 'line', 'wall', 'dimension', 'shape', 'floor',
+    'outline', 'annotation', 'roomtag', 'beam', 'column', 'offset', 'array']);
   let stairNodeCache = { key: null, nodes: [] };
   const stairSnapNodes = () => {
-    if ((activeTool !== 'rotate' && activeTool !== 'mirror') || !drawing) return [];
+    if (!STAIR_NODE_TOOLS.has(activeTool) || !drawing) return [];
     const key = `${paintFrame}|${modelEpoch}|${activeLevelId()}`;
     if (stairNodeCache.key === key) return stairNodeCache.nodes;
     const nodes = [];
