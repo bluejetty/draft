@@ -139,10 +139,10 @@ const MUTANTS = [
     test: 'one Ctrl+Z takes the stair framing back with the house' },
 
   { file: 'model/12-garage-storeys-stairs.js',
-    name: 'the widened flight stays centred, so half the width it gained '
-      + 'lands in the room and the flights no longer line up',
-    find: '      const grew = (record.widthFt - (below.widthFt || record.widthFt)) / 2;',
-    with: '      const grew = 0;',
+    name: 'the flight above is widened on the room side, so its 9" lands in '
+      + 'the room and the flights no longer line up on the wall side',
+    find: "      out[pick.j] = { in: e.in, side: ur.x * wall.x + ur.z * wall.z > 0 ? 'right' : 'left' };",
+    with: "      out[pick.j] = { in: e.in, side: ur.x * wall.x + ur.z * wall.z > 0 ? 'left' : 'right' };",
     test: 'the flight above takes its extra width on the wall side' },
 ];
 

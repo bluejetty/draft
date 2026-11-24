@@ -280,21 +280,23 @@ test('the flight above takes its extra width on the wall side', async ({ page })
   const lower = runs.find(s => Number(s.levelId) === MAIN_FL);
   const upper = runs.find(s => Number(s.levelId) === 5);
   expect(lower && upper, 'a flight on each floor').toBeTruthy();
-  // 3'-8" over 3'-0" (jb, 19 Nov 2026: the 14" foundation allowance less the
-  // 6" upper wall), and the basement flight's REDUCE BASEMENT switch is on.
-  expect(r(upper.widthFt), 'the upper flight is the wider one').toBe(r(3 + 8 / 12));
+  // 3'-9" over 3'-0" (jb, 23 Nov 2026: "always place upstairs as 3-9W and
+  // basement as 3'W"): the basement flight keeps its 3'-0" and its LEG 1
+  // switch is on; the flight above is 3'-0" with its first leg 9" wider.
+  expect(r(upper.widthFt)).toBe(3);
   expect(r(lower.widthFt)).toBe(3);
-  expect(lower.extWall).toBe(true);
-  expect(lower.extWallCutIn).toBe(8);
-  // THE INSIDE EDGES LINE UP, which is the whole of "line it up on and leave
-  // the extra inch on the exterior wall side": the flight above grew 8", and
-  // all 8" went toward the wall rather than 4" of it into the room.
-  const grew = (upper.widthFt - lower.widthFt) / 2;
+  expect(lower.extLegs[0].in).toBe(9);
+  expect(upper.legWiden[0].in).toBe(9);
+  // THE INSIDE EDGES LINE UP: the two flights stand on one centre line and
+  // all 9" goes toward the wall, none of it into the room.
   const house = boxOf((d.outlines || [])
     .find(o => Number(o.levelId) === MAIN_FL && !o.garage).points);
   const towardWall = Math.abs(lower.start.x - house.x0) < Math.abs(lower.start.x - house.x1)
     ? -1 : 1;
-  expect(r(upper.start.x - lower.start.x), 'the centre moved half the growth, wall-ward')
-    .toBe(r(towardWall * grew));
+  expect(r(upper.start.x), 'one centre line').toBe(r(lower.start.x));
+  const len = Math.hypot(upper.end.x - upper.start.x, upper.end.z - upper.start.z);
+  const right = { x: -(upper.end.z - upper.start.z) / len, z: (upper.end.x - upper.start.x) / len };
+  const k = upper.legWiden[0].side === 'right' ? 1 : -1;
+  expect(Math.sign(right.x * k), 'the 9" goes to the wall side').toBe(towardWall);
   expect(r(upper.start.z), 'and not along the run').toBe(r(lower.start.z));
 });

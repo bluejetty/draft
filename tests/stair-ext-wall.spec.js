@@ -1,17 +1,16 @@
-// THE BASEMENT FLIGHT BESIDE AN EXTERIOR WALL (jb, 19 Nov 2026).
+// UPPER FLIGHTS WIDER BESIDE AN EXTERIOR WALL (jb, 19 + 23 Nov 2026).
 //
-// "if they are placed beside the exterior wall, the downstairs flight will
-// need to be adjusted ... 14\" ... for 8\" conc. wall ... the upper ext wall
-// ... lets give them 6\" ... if the upstairs are 3'8\" wide, on the side next
-// to the ext wall, 8\" reduced for basement width 3'0\"", "on the INTERIOR
-// stairs the widths can be the same", "one switch for reducing (maybe allow
-// manual input to change the distance too) and another switch for the side
-// the stairs are on ext".
+// 19 Nov the basement flight was narrowed beside the wall (REDUCE BASEMENT).
+// 23 Nov jb turned it round: "always place upstairs as 3-9W and basement as
+// 3'W ... increase the upper floors by 9\" rather than reducing basement",
+// one value per leg ("a 2nd for the 2nd leg (for L and U) and 3rd leg (for U
+// only)"), each with its side LEFT or RIGHT "when walking DOWN".
 //
-// REDUCE BASEMENT (ON / OFF + inches, 8 by default) and EXT. WALL SIDE (by
-// the compass) on the stair panel, written to the basement flight: its
-// width is the flight above's less the cut, taken off the wall side only, so
-// the inside edges line up. A width typed on the flight above carries down.
+// EXT. WALL (UPPER FLOORS WIDER) on the stair panel: LEG 1..3, each OFF /
+// LEFT (compass) / RIGHT (compass) and inches (9 by default), written to the
+// basement flight (`extLegs`), which keeps its width; every flight above
+// carries `legWiden` and is that leg wider on the wall side only, so its
+// other edge stays over the basement flight's.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -28,7 +27,7 @@ const flight = (id, levelId, extra = {}) => ({
 });
 const square = { id: 'OUT-1', levelId: MAIN_FL, view: 'plan',
   points: [{ x: -20, z: -20 }, { x: 20, z: -20 }, { x: 20, z: 20 }, { x: -20, z: 20 }] };
-const fixture = () => ({
+const fixture = (stairs = [flight(BASE_ID, MAIN_FL), flight(UPPER_ID, SECOND)]) => ({
   version: 1,
   levels: [
     { id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0 },
@@ -40,15 +39,15 @@ const fixture = () => ({
   outlines: [square], shapes: [], notes: [], roomTags: [], columns: [], beams: [],
   boneyardOutlines: [], boneyardShelves: [], groups: [], levelLocks: [], underlays: [],
   floors: [], surfaceOpenings: [],
-  stairs: [flight(BASE_ID, MAIN_FL), flight(UPPER_ID, SECOND)],
+  stairs,
 });
 
-async function open(page) {
+async function open(page, f = fixture()) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: fixture() });
+  }, { bucket: BUCKET, f });
   await page.goto(`/MODEL.html?left=1&right=1&level=${MAIN_FL}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(300);
@@ -57,97 +56,165 @@ const live = (page, id) => page.evaluate(id => {
   const st = drawing.stairs.find(s => Number(s.id) === id);
   return JSON.parse(JSON.stringify(st));
 }, id);
-async function pickBase(page) {
+// EACH LEG AS DRAWN, top to bottom: its two edges in world space, `right`
+// and `left` walking down. `plain` draws it as if no leg were widened.
+const legsOf = (page, id, plain = false) => page.evaluate(({ id, plain }) => {
+  const SG = window.DraftStairGeometry;
+  const st = { ...drawing.stairs.find(s => Number(s.id) === id) };
+  if (plain) delete st.legWiden;
+  const parts = SG.stairPlanParts(st, SG.stairCurrentLayout(st, stairLevels()));
+  const legs = parts.runs.map(r => ({ r, w: r.widthFt }));
+  if (parts.shape === 'U') legs.splice(1, 0, null);
+  return legs.map(leg => {
+    if (!leg) return null;
+    const { r, w } = leg;
+    const n = { x: -r.dir.z, z: r.dir.x };
+    const mid = { x: r.start.x + r.dir.x * r.lenFt / 2, z: r.start.z + r.dir.z * r.lenFt / 2 };
+    return { w,
+      right: { x: mid.x + n.x * w / 2, z: mid.z + n.z * w / 2 },
+      left: { x: mid.x - n.x * w / 2, z: mid.z - n.z * w / 2 } };
+  });
+}, { id, plain });
+async function pickAt(page, x, z) {
   const { at } = await h.planFrame(page);
-  const [x, y] = at(3, -18);
-  await page.mouse.move(x, y);
+  const [sx, sy] = at(x, z);
+  await page.mouse.move(sx, sy);
   await expect(page.locator('#hover-name')).toHaveText('STAIR', { timeout: 4000 });
-  await page.mouse.click(x, y);
+  await page.mouse.click(sx, sy);
 }
+const pickBase = page => pickAt(page, 3, -18);
 const row = (page, name) => page.locator(`[data-prop-row="${name}"]`).first();
-// Across the run (+z is south here): the flight's north and south edges.
-const edges = st => ({ north: st.start.z - st.widthFt / 2, south: st.start.z + st.widthFt / 2 });
 
-test('REDUCE BASEMENT takes 8" off the north (wall) side; the inside edge stays under the flight above', async ({ page }) => {
+test('LEG 1 LEFT (N): the flight above is 9" wider on the north (wall) side; the basement flight stays 3\'-0"', async ({ page }) => {
   await open(page);
   await pickBase(page);
-  const reduce = row(page, 'reduce basement');
-  await expect(reduce).toBeVisible();
-  await expect(reduce.locator('[data-prop-value="off"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(reduce.locator('[data-stair-ext-cut]')).toHaveValue('8');
-  // The side nearest the house line is offered, named by the compass.
-  const side = row(page, 'ext wall side');
-  await expect(side.locator('[aria-pressed="true"]')).toHaveText('NORTH');
-  await expect(side).toContainText('SOUTH');
+  await expect(page.locator('[data-stair-ext-head]').first()).toHaveText('EXT. WALL (UPPER FLOORS WIDER)');
+  const leg1 = row(page, 'ext leg 1');
+  await expect(leg1).toBeVisible();
+  await expect(row(page, 'ext leg 2')).toHaveCount(0);
+  await expect(leg1.locator('[data-prop-value="off"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(leg1.locator('[data-stair-ext-in]')).toHaveValue('9');
+  // Walking DOWN, east: the left hand is north, the right hand south.
+  await expect(leg1.locator('[data-prop-value="left"]')).toHaveText('LEFT (N)');
+  await expect(leg1.locator('[data-prop-value="right"]')).toHaveText('RIGHT (S)');
 
-  await reduce.locator('[data-prop-value="on"]').click();
+  const plain = await legsOf(page, UPPER_ID, true);
+  await leg1.locator('[data-prop-value="left"]').click();
   const base = await live(page, BASE_ID);
   const upper = await live(page, UPPER_ID);
-  expect(base.extWall).toBe(true);
-  expect(base.extWallCutIn).toBe(8);
-  expect(base.widthFt * 12).toBeCloseTo(28, 4);
-  expect(edges(base).south, 'inside edge lined up').toBeCloseTo(edges(upper).south, 4);
-  expect(edges(base).north - edges(upper).north, 'the 8" comes off the north side').toBeCloseTo(8 / 12, 4);
-  expect(upper.widthFt, 'the flight above is untouched').toBeCloseTo(3, 6);
+  expect(base.widthFt * 12, 'the basement flight keeps its 3\'-0"').toBeCloseTo(36, 4);
+  expect(base.start.z).toBeCloseTo(-18, 6);
+  expect(base.extLegs[0]).toEqual({ in: 9, side: 'left' });
+  expect(upper.widthFt * 12, 'its own width is the same').toBeCloseTo(36, 4);
+  expect(upper.legWiden[0]).toEqual({ in: 9, side: 'left' });
+  const [drawn] = await legsOf(page, UPPER_ID);
+  const [below] = await legsOf(page, BASE_ID);
+  expect(drawn.w * 12, '3\'-9" as drawn').toBeCloseTo(45, 4);
+  expect(drawn.right.z, 'the south (inside) edge stays over the basement flight').toBeCloseTo(below.right.z, 4);
+  expect(drawn.left.z - plain[0].left.z, 'the 9" goes north').toBeCloseTo(-9 / 12, 4);
+  await expect(row(page, 'ext leg 1').locator('[data-prop-value="left"]')).toHaveAttribute('aria-pressed', 'true');
 
-  // ONE UNDO puts it back.
+  // ONE UNDO puts both back.
   await page.locator('#model-undo').click();
-  const undone = await live(page, BASE_ID);
-  expect(undone.widthFt).toBeCloseTo(3, 6);
-  expect(undone.start.z).toBeCloseTo(-18, 6);
-  expect(undone.extWall).toBeUndefined();
+  expect((await live(page, BASE_ID)).extLegs).toBeUndefined();
+  expect((await live(page, UPPER_ID)).legWiden).toBeUndefined();
 });
 
-test('3\'-8" typed on the flight above gives a 3\'-0" basement flight; the inches and the side can change; OFF puts it back', async ({ page }) => {
+test('the inches can change, the side can flip, OFF puts the flight above back to 3\'-0"', async ({ page }) => {
   await open(page);
   await pickBase(page);
-  await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
-  // jb's example: 3'-8" upstairs.
-  await page.evaluate(id => setStairWidth(drawing.stairs.find(s => Number(s.id) === id), 44), UPPER_ID);
-  let base = await live(page, BASE_ID);
-  let upper = await live(page, UPPER_ID);
-  expect(upper.widthFt * 12).toBeCloseTo(44, 4);
-  expect(base.widthFt * 12, '3\'-0" below').toBeCloseTo(36, 4);
-  expect(edges(base).south).toBeCloseTo(edges(upper).south, 4);
-  // ...and one UNDO takes both back.
-  await page.locator('#model-undo').click();
-  base = await live(page, BASE_ID);
-  upper = await live(page, UPPER_ID);
-  expect(upper.widthFt * 12).toBeCloseTo(36, 4);
-  expect(base.widthFt * 12).toBeCloseTo(28, 4);
-  await page.evaluate(id => setStairWidth(drawing.stairs.find(s => Number(s.id) === id), 44), UPPER_ID);
-
-  // A typed reduction.
+  await row(page, 'ext leg 1').locator('[data-prop-value="left"]').click();
   await pickBase(page);
-  const cut = row(page, 'reduce basement').locator('[data-stair-ext-cut]');
-  await cut.fill('6');
-  await cut.press('Enter');
-  base = await live(page, BASE_ID);
-  expect(base.extWallCutIn).toBe(6);
-  expect(base.widthFt * 12).toBeCloseTo(38, 4);
-  expect(edges(base).south).toBeCloseTo(edges(await live(page, UPPER_ID)).south, 4);
+  const inch = row(page, 'ext leg 1').locator('[data-stair-ext-in]');
+  await inch.fill('6');
+  await inch.press('Enter');
+  expect((await live(page, UPPER_ID)).legWiden[0]).toEqual({ in: 6, side: 'left' });
+  expect((await legsOf(page, UPPER_ID))[0].w * 12).toBeCloseTo(42, 4);
 
-  // The wall on the SOUTH side instead: the north edges line up now.
-  await row(page, 'ext wall side').locator('[data-prop-value="left"]').click();
-  base = await live(page, BASE_ID);
-  upper = await live(page, UPPER_ID);
-  expect(base.extWallSide).toBe('left');
-  expect(base.widthFt * 12).toBeCloseTo(38, 4);
-  expect(edges(base).north).toBeCloseTo(edges(upper).north, 4);
-  await expect(row(page, 'ext wall side').locator('[aria-pressed="true"]')).toHaveText('SOUTH');
+  await row(page, 'ext leg 1').locator('[data-prop-value="right"]').click();
+  const [drawn] = await legsOf(page, UPPER_ID);
+  const [below] = await legsOf(page, BASE_ID);
+  expect(drawn.left.z, 'now the north edges line up').toBeCloseTo(below.left.z, 4);
+  expect(drawn.right.z - below.right.z, 'and the 6" goes south').toBeCloseTo(6 / 12, 4);
 
-  // OFF: an interior stair, the same width as above and right under it.
-  await row(page, 'reduce basement').locator('[data-prop-value="off"]').click();
-  base = await live(page, BASE_ID);
-  expect(base.extWall).toBe(false);
-  expect(base.widthFt * 12).toBeCloseTo(44, 4);
-  expect(base.start.z).toBeCloseTo(upper.start.z, 4);
+  await row(page, 'ext leg 1').locator('[data-prop-value="off"]').click();
+  expect((await live(page, UPPER_ID)).legWiden).toBeUndefined();
+  expect((await live(page, BASE_ID)).extLegs[0]).toEqual({ in: 6, side: 'off' });
+  expect((await legsOf(page, UPPER_ID))[0].w * 12).toBeCloseTo(36, 4);
 });
 
-test('the switch survives a save and reload', async ({ page }) => {
+// THE OFF-KILTER L (jb's screenshot, 23 Nov 2026): one width for the whole
+// stair narrowed BOTH legs, and the second leg slid off its inside line. Each
+// leg now has its own width, and a leg not switched on is untouched.
+test('an L: LEG 1 wider on the wall side leaves LEG 2 as it was; LEG 2 has its own switch', async ({ page }) => {
+  const L = extra => ({ shape: 'L', turn: 'right', start: { x: -8, z: -18 }, end: { x: -3, z: -18 }, ...extra });
+  await open(page, fixture([flight(BASE_ID, MAIN_FL, L()), flight(UPPER_ID, SECOND, L())]));
+  await pickAt(page, -6, -18);
+  await expect(row(page, 'ext leg 2')).toBeVisible();
+  await expect(row(page, 'ext leg 3')).toHaveCount(0);
+  const plain = await legsOf(page, UPPER_ID, true);
+  await row(page, 'ext leg 1').locator('[data-prop-value="left"]').click();
+  let legs = await legsOf(page, UPPER_ID);
+  expect(legs[0].w * 12).toBeCloseTo(45, 4);
+  expect(legs[0].right.z, 'leg 1 inside edge stays').toBeCloseTo(plain[0].right.z, 4);
+  expect(legs[1].w * 12, 'leg 2 untouched').toBeCloseTo(36, 4);
+  expect(legs[1].left.x).toBeCloseTo(plain[1].left.x, 4);
+  expect(legs[1].right.x).toBeCloseTo(plain[1].right.x, 4);
+  // LEG 2 runs south: walking down it, the left hand is east.
+  await pickAt(page, -6, -18);
+  await expect(row(page, 'ext leg 2').locator('[data-prop-value="left"]')).toHaveText('LEFT (E)');
+  await row(page, 'ext leg 2').locator('[data-prop-value="left"]').click();
+  legs = await legsOf(page, UPPER_ID);
+  expect(legs[1].w * 12).toBeCloseTo(45, 4);
+  expect(legs[1].right.x, 'leg 2 west edge stays').toBeCloseTo(plain[1].right.x, 4);
+  expect(legs[1].left.x - plain[1].left.x, 'the 9" goes east').toBeCloseTo(9 / 12, 4);
+  // The basement flight is 3'-0" on both legs throughout.
+  const below = await legsOf(page, BASE_ID);
+  expect(below.map(l => Math.round(l.w * 12))).toEqual([36, 36]);
+});
+
+test('a U: three legs, the return flight wider on its outer side keeps its inner edge', async ({ page }) => {
+  const U = extra => ({ shape: 'U', turn: 'right', start: { x: -8, z: -18 }, end: { x: -3, z: -18 }, ...extra });
+  await open(page, fixture([flight(BASE_ID, MAIN_FL, U()), flight(UPPER_ID, SECOND, U())]));
+  await pickAt(page, -6, -18);
+  await expect(row(page, 'ext leg 3')).toBeVisible();
+  const plain = await legsOf(page, UPPER_ID, true);
+  // LEG 3 runs back west, south of leg 1: walking down it, the left hand is south.
+  await expect(row(page, 'ext leg 3').locator('[data-prop-value="left"]')).toHaveText('LEFT (S)');
+  await row(page, 'ext leg 3').locator('[data-prop-value="left"]').click();
+  const legs = await legsOf(page, UPPER_ID);
+  expect(legs[0].w * 12, 'leg 1 untouched').toBeCloseTo(36, 4);
+  expect(legs[2].w * 12).toBeCloseTo(45, 4);
+  expect(legs[2].right.z, 'the inner (north) edge stays').toBeCloseTo(plain[2].right.z, 4);
+  expect(legs[2].left.z - plain[2].left.z, 'the 9" goes south').toBeCloseTo(9 / 12, 4);
+});
+
+test('a file saved the old way (basement narrowed) opens with the flight above widened instead, nothing moved', async ({ page }) => {
+  // REDUCE BASEMENT 8" on the north: the basement flight 28" against the
+  // south edge of a 36" flight above. Old 'right' was the frame's -n side,
+  // walking east: north.
+  const f = fixture([
+    flight(BASE_ID, MAIN_FL, { widthFt: 28 / 12, start: { x: -2, z: -18 + 4 / 12 }, end: { x: 8, z: -18 + 4 / 12 },
+      extWall: true, extWallCutIn: 8, extWallSide: 'right' }),
+    flight(UPPER_ID, SECOND)]);
+  await open(page, f);
+  const base = await live(page, BASE_ID);
+  const upper = await live(page, UPPER_ID);
+  expect(base.extWall).toBeUndefined();
+  expect(base.extLegs[0]).toEqual({ in: 8, side: 'left' });
+  expect(base.widthFt * 12).toBeCloseTo(28, 4);
+  expect(upper.widthFt * 12).toBeCloseTo(28, 4);
+  expect(upper.legWiden[0]).toEqual({ in: 8, side: 'left' });
+  const [drawn] = await legsOf(page, UPPER_ID);
+  expect(drawn.w * 12).toBeCloseTo(36, 4);
+  expect(drawn.left.z, 'north edge where it was').toBeCloseTo(-19.5, 4);
+  expect(drawn.right.z, 'south edge where it was').toBeCloseTo(-16.5, 4);
+});
+
+test('the switches survive a save and reload', async ({ page }) => {
   await open(page);
   await pickBase(page);
-  await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
+  await row(page, 'ext leg 1').locator('[data-prop-value="left"]').click();
   await expect(page.locator('#save')).toBeEnabled({ timeout: 4000 });
   await page.locator('#save').click();
   await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
@@ -155,11 +222,10 @@ test('the switch survives a save and reload', async ({ page }) => {
     const f = await window.SharedFileStore.loadSharedFile(bucket);
     return JSON.parse(await f.text());
   }, BUCKET);
-  const base = file.stairs.find(s => Number(s.id) === BASE_ID);
-  expect(base.extWall).toBe(true);
-  expect(base.extWallCutIn).toBe(8);
-  expect(base.extWallSide).toBe('right');
-  expect(base.widthFt * 12).toBeCloseTo(28, 4);
+  expect(file.stairs.find(s => Number(s.id) === BASE_ID).extLegs[0]).toEqual({ in: 9, side: 'left' });
+  expect(file.stairs.find(s => Number(s.id) === UPPER_ID).legWiden[0]).toEqual({ in: 9, side: 'left' });
+  const norm = await page.evaluate(stairs => window.DraftDrawingFormat.stairs(stairs, new Set([3, 5])), file.stairs);
+  expect(norm.find(s => Number(s.id) === UPPER_ID).legWiden[0]).toEqual({ in: 9, side: 'left' });
 });
 
 // THE 6" STOP AT THE HOUSE LINE IS GONE (jb, 23 Nov 2026: "i think we can
@@ -175,36 +241,22 @@ const dragBy = async (page, fromX, fromZ, dxFt, dzFt) => {
   await page.mouse.move(x + dxFt * scale, y + dzFt * scale, { steps: 8 });
   await page.mouse.up();
 };
-test('a reduced basement flight dragged toward the wall is not stopped 14" in from the house line', async ({ page }) => {
+test('a basement flight with LEG 1 on, dragged toward the wall, is not stopped 14" in from the house line', async ({ page }) => {
   await open(page);
   await pickBase(page);
-  await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
+  await row(page, 'ext leg 1').locator('[data-prop-value="left"]').click();
   const before = await live(page, BASE_ID);
   // Two feet north: the old rule held its edge 14" from the line (z = -20).
   await dragBy(page, 3, -17.7, 0, -1.2);
   const base = await live(page, BASE_ID);
-  expect(edges(base).north - -20, 'past where the 14" stop held it').toBeLessThan(14 / 12 - 0.2);
+  expect(base.start.z - base.widthFt / 2 - -20, 'past where the 14" stop held it').toBeLessThan(14 / 12 - 0.2);
   expect(base.start.z - before.start.z).toBeLessThan(-0.4);
   await expect(page.locator('#strip-message')).not.toContainText('HOUSE LINE');
 });
 
-test('turning REDUCE BASEMENT on narrows the flight and leaves the stack where it is', async ({ page }) => {
-  await open(page);
-  await page.evaluate(() => drawing.stairs.forEach(st => {
-    st.start = { ...st.start, z: st.start.z + 1 }; st.end = { ...st.end, z: st.end.z + 1 };
-  }));
-  await pickBase(page);
-  await row(page, 'reduce basement').locator('[data-prop-value="on"]').click();
-  const upper = await live(page, UPPER_ID);
-  const base = await live(page, BASE_ID);
-  expect(upper.start.z, 'the flight above is not slid onto the line').toBeCloseTo(-17, 6);
-  expect(edges(base).south, 'inside edges still lined up').toBeCloseTo(edges(upper).south, 4);
-  expect(base.widthFt * 12).toBeCloseTo(28, 4);
-});
-
-// jb's case: an L flight, REDUCE BASEMENT on at 0", held by a corner and
-// brought to the inside corner of two 2x6 exterior walls -- on either EXT.
-// WALL SIDE, the corner lands exactly there.
+// jb's case (#1085): an L flight with its EXT. WALL switch on, held by a
+// corner and brought to the inside corner of two 2x6 exterior walls -- on
+// either side, the corner lands exactly there.
 for (const side of ['left', 'right']) {
   test(`held by a corner, a reduced L flight lands on the walls' inside corner (side ${side})`, async ({ page }) => {
     const Wl = (id, a, b) => ({ id, start: { x: a[0], y: 0, z: a[1] }, end: { x: b[0], y: 0, z: b[1] },
@@ -212,7 +264,7 @@ for (const side of ['left', 'right']) {
     const f = fixture();
     f.walls = [Wl('n', [-20, -20], [20, -20]), Wl('e', [20, -20], [20, 20]), Wl('s', [20, 20], [-20, 20]), Wl('w', [-20, 20], [-20, -20])];
     f.stairs = [flight(BASE_ID, MAIN_FL, { start: { x: 2, z: -14 }, end: { x: 8, z: -14 }, widthFt: 3.5,
-      shape: 'L', turn: 'right', extWall: true, extWallCutIn: 0, extWallSide: side })];
+      shape: 'L', turn: 'right', extLegs: [{ in: 9, side }] })];
     await h.openModel(page, { webgl: false });
     await page.evaluate(async ({ bucket, f }) => {
       await window.SharedFileStore.saveSharedFile(

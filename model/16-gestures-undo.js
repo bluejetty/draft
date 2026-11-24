@@ -377,7 +377,10 @@
     box.dataset.stairWidthEdit = '';
     box.min = '36';
     box.step = '1';
-    box.value = String(Math.round((Number(mark.stair.widthFt) || 3) * 12));
+    // The mark says the first leg as drawn, wider beside an exterior wall
+    // (legWiden); the box edits the flight's own width under it.
+    const extra = Number(mark.stair.legWiden?.[0]?.in) || 0;
+    box.value = String(Math.round((Number(mark.stair.widthFt) || 3) * 12 + extra));
     box.style.cssText = `position:fixed;left:${clientX - 30}px;top:${clientY - 12}px;width:60px;z-index:60;`;
     let done = false;
     const settle = keep => {
@@ -385,7 +388,7 @@
       done = true;
       const value = box.value;
       box.remove();
-      if (keep) { setStairWidth(mark.stair, value); showSelectionProps(); renderObjProp(); }
+      if (keep) { setStairWidth(mark.stair, Number(value) - extra); showSelectionProps(); renderObjProp(); }
       paint();
     };
     box.addEventListener('keydown', ev => {

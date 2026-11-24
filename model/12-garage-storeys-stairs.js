@@ -2623,45 +2623,48 @@
     const slots = clearIn / layout.riserIn;
     const runStep = SG.STAIR_TREAD_RUN_IN / 12;
     const inchUp = ft => Math.ceil(ft * 12 - 0.0001) / 12;
-    const w = stair.widthFt;
     const noseFt = STAIR_OPENING_NOSING_MIN_IN / 12;
+    // EACH LEG AS WIDE AS IT IS (stairLegFrame): a leg wider on the wall
+    // side opens a hole that much wider on that side.
+    const F = SG.stairLegFrame(stair, split);
+    const lo1 = F.lo1, hi1 = F.hi1;
     let uv;
     if (!split || slots <= split.t1) {
       const capFt = split ? split.t1 * runStep : layout.runFt;
       const lenFt = Math.min(inchUp(slots * runStep), capFt);
       if (!(lenFt > 0)) return null;
-      uv = [{ u: -noseFt, v: -w / 2 }, { u: lenFt, v: -w / 2 },
-            { u: lenFt, v: w / 2 }, { u: -noseFt, v: w / 2 }];
+      uv = [{ u: -noseFt, v: lo1 }, { u: lenFt, v: lo1 },
+            { u: lenFt, v: hi1 }, { u: -noseFt, v: hi1 }];
     } else {
       const run1 = split.t1 * runStep;
       const run2 = split.t2 * runStep;
-      const L = split.landFt;
+      const L = F.landU;
       // The slots the turn eats: a flat landing one, winders their count, a
       // U's two landings and any middle flight between them (stairShapeSplit).
       const landSlots = split.landTreads;
       const past = Math.max(0, slots - split.t1 - landSlots);
       const r2c = Math.min(inchUp(past * runStep), run2);
       if (split.shape === 'L') {
-        const v1 = -w / 2 + L;
-        const u2a = run1 + L / 2 - w / 2;
-        const u2b = run1 + L / 2 + w / 2;
+        const v1 = F.v1;
+        const u2a = run1 + F.u2lo;
+        const u2b = run1 + F.u2hi;
         uv = r2c <= 0
-          ? [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
-             { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }]
-          : [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
+          ? [{ u: -noseFt, v: lo1 }, { u: run1 + L, v: lo1 }, { u: run1 + L, v: v1 },
+             { u: run1, v: v1 }, { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }]
+          : [{ u: -noseFt, v: lo1 }, { u: run1 + L, v: lo1 }, { u: run1 + L, v: v1 },
              { u: u2b, v: v1 }, { u: u2b, v: v1 + r2c }, { u: u2a, v: v1 + r2c },
-             { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }];
+             { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }];
       } else {
-        // Run 2 stands split.offFt across (a width and the space between
-        // the flights -- 4.5", or a middle flight's run).
-        const vTop = split.offFt + w / 2;
-        const vLow = split.offFt - w / 2;
+        // Run 2 stands across the space between the flights -- 4.5", or a
+        // middle flight's run.
+        const vTop = F.hi3;
+        const vLow = F.lo3;
         uv = r2c <= 0
-          ? [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
-             { u: run1, v: vTop }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }]
-          : [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
+          ? [{ u: -noseFt, v: lo1 }, { u: run1 + L, v: lo1 }, { u: run1 + L, v: vTop },
+             { u: run1, v: vTop }, { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }]
+          : [{ u: -noseFt, v: lo1 }, { u: run1 + L, v: lo1 }, { u: run1 + L, v: vTop },
              { u: run1 - r2c, v: vTop }, { u: run1 - r2c, v: vLow }, { u: run1, v: vLow },
-             { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }];
+             { u: run1, v: hi1 }, { u: -noseFt, v: hi1 }];
       }
     }
     const dedup = uv.filter((pt, index) => {
@@ -2690,6 +2693,16 @@
 
   // Push the well back inside the interior ring, worst corner first. Six steps
   // because one push can expose another corner on a different edge.
+  // THE WELL AS IF NO LEG WERE WIDENED: what the wall rules test. A leg
+  // widened beside an exterior wall (legWiden, jb 23 Nov 2026: 9" with "extra
+  // 1/2\" ... the stair contractor will have extra") runs to the wall's face
+  // on purpose; the flight under it already stands where the rules put it.
+  const stairFitFootprint = stair => {
+    if (!Array.isArray(stair.legWiden)) return stairOpeningFootprint(stair);
+    const plain = { ...stair };
+    delete plain.legWiden;
+    return stairOpeningFootprint(plain);
+  };
   const stairNudgeInsideWalls = stair => {
     const G = window.DraftGeometry2D;
     const outline = houseOutlineOn(stair.levelId);
@@ -2699,7 +2712,7 @@
       -stairOpeningSetbackFt(stair.levelId));
     let moved = false;
     for (let step = 0; step < 6; step++) {
-      const poly = stairOpeningFootprint(stair);
+      const poly = stairFitFootprint(stair);
       if (!poly) break;
       let worst = null;
       poly.forEach(pt => {
@@ -2778,7 +2791,7 @@
   const stairPlacementLegal = stair => {
     const outline = houseOutlineOn(stair.levelId);
     if (!outline || outline.points.length < 3) return false;
-    const poly = stairOpeningFootprint(stair);
+    const poly = stairFitFootprint(stair);
     if (!poly || poly.length < 3) return false;
     const ring = window.DraftGeometry2D.offsetOutline(
       outline.points.map(pt => ({ x: pt.x, z: pt.z })),
@@ -3259,28 +3272,29 @@
     const below = idx > 0
       ? planStairs.find(stair => Number(stair.levelId) === Number(floors[idx - 1].id))
       : null;
-    // RULE B: a basement descent running beside an exterior wall widens every
-    // stacked flight above it by the cut -- 3'-8" over a 3'-0" basement run
-    // (jb, 19 Nov 2026: 14" foundation allowance less the 6" upper wall) --
-    // and the basement flight's REDUCE BASEMENT switch is turned on, so a
-    // width typed on the flight above later carries down to it.
+    // RULE B: a basement descent running beside an exterior wall makes every
+    // flight stacked above it wider on the wall side -- 3'-9" over a 3'-0"
+    // basement run (jb, 23 Nov 2026: "always place upstairs as 3-9W and
+    // basement as 3'W and user can adjust it"). The basement flight's LEG 1
+    // switch is turned on, toward the wall, the first time; the drafter's
+    // own setting (any `extLegs`, even all OFF) is left as it is.
     const lowestStair = floors.length
       ? planStairs.find(stair => Number(stair.levelId) === Number(floors[0].id))
       : null;
-    const widen = lowestStair
-      ? (lowestStair.extWall === true || (lowestStair.extWall == null && stairWallAdjacent(lowestStair)))
-      : false;
-    if (idx > 0 && widen && lowestStair.extWall == null) {
-      lowestStair.extWall = true;
-      lowestStair.extWallCutIn = STAIR_EXT_WALL_CUT_IN;
-      lowestStair.extWallSide = stairNearWallSide(lowestStair);
+    if (idx > 0 && lowestStair && lowestStair.extLegs == null && stairWallAdjacent(lowestStair)) {
+      const legs = stairExtLegsOf(null);
+      legs[0] = { in: STAIR_EXT_WALL_WIDEN_IN, side: stairNearWallSide(lowestStair) };
+      lowestStair.extLegs = legs;
     }
-    const cutFt = widen ? (Number(lowestStair.extWallCutIn) >= 0
-      ? Number(lowestStair.extWallCutIn) : STAIR_EXT_WALL_CUT_IN) / 12 : 0;
-    const widthFt = idx > 0 && widen ? (Number(lowestStair.widthFt) || stairWidthFt) + cutFt : stairWidthFt;
+    const widen = idx > 0 && lowestStair && stairExtLegsOf(lowestStair).some(e => e.side !== 'off');
+    const widthFt = widen ? (Number(lowestStair.widthFt) || stairWidthFt) : stairWidthFt;
+    const widened = st => {
+      if (widen && st) stairSetLegWiden(st, stairLegWidenFor(st, lowestStair));
+      return st;
+    };
     let stackNote = '';
     if (below) {
-      const stacked = buildStackedStair(below, levelId, layout, widthFt, id);
+      const stacked = widened(buildStackedStair(below, levelId, layout, widthFt, id));
       if (stairPlacementLegal(stacked)) {
         return {
           stair: stacked,
@@ -3308,7 +3322,7 @@
           + ` U ${sug.report?.U || 'blocked'}.`,
       };
     }
-    const stair = buildAutoStair(levelId, sug, widthFt, id);
+    const stair = widened(buildAutoStair(levelId, sug, widthFt, id));
     const how = sug.stair.splitTreads
       ? `entry L — landing at the front wall, ${sug.stair.splitTreads} steps down from the entry`
       : sug.stair.shape === 'straight'
@@ -3918,11 +3932,6 @@
       drawing.stairs.push(cand);
       made.push(cand);
       nextId += 1;
-      // THE BASEMENT FLIGHT narrowed before its well is cut, so the hole fits.
-      if (levelId === ids[0] && stairWallAdjacent(cand)) {
-        const was = { ...cand, start: { ...cand.start }, end: { ...cand.end } };
-        if (stairApplyExtWall(cand, { on: true, cutIn: STAIR_EXT_WALL_CUT_IN })) Object.assign(cand, was);
-      }
       settle(cand);
       return cand;
     };
@@ -3930,6 +3939,26 @@
     for (let i = k + 1; i < ids.length && from; i++) from = stackOnto(from, ids[i]);
     from = placed;
     for (let i = k - 1; i >= 0 && from; i--) from = stackOnto(from, ids[i]);
+    // THE FLIGHTS ABOVE A BASEMENT FLIGHT BESIDE THE EXTERIOR WALL are 9"
+    // wider on the wall side (jb, 23 Nov 2026: "always place upstairs as
+    // 3-9W and basement as 3'W") -- LEG 1's switch turned on toward the wall
+    // when the basement flight is one made or placed now. Their wells, cut
+    // as they landed, are cut again to the wider flight.
+    const fresh = [placed, ...made];
+    const base = stairBasementFlightOf(placed);
+    if (base && fresh.includes(base) && base.extLegs == null && fresh.length > 1 && stairWallAdjacent(base)) {
+      const legs = stairExtLegsOf(null);
+      legs[0] = { in: STAIR_EXT_WALL_WIDEN_IN, side: stairNearWallSide(base) };
+      base.extLegs = legs;
+    }
+    if (base && Array.isArray(base.extLegs)) {
+      fresh.filter(st => st !== base && Number(st.levelId) !== ids[0]).forEach(st => {
+        stairSetLegWiden(st, stairLegWidenFor(st, base));
+        const hole = stairWellOf(st).hole;
+        const ring = hole && stairOpeningFootprint(st);
+        if (ring && ring.length >= 3) hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
+      });
+    }
     made.sort((a, b) => ids.indexOf(Number(a.levelId)) - ids.indexOf(Number(b.levelId)));
     return { made, kept };
   };
@@ -4055,26 +4084,27 @@
       }
       st.widthFt = want / 12;
       return null;
-    }) && (followBasementCut(stair),
-      sayOnStrip(`STAIR ${want}" wide -- its well cut again. UNDO puts it back.`), true);
+    }) && (sayOnStrip(`STAIR ${want}" wide -- its well cut again. UNDO puts it back.`), true);
   };
-  // ── THE BASEMENT FLIGHT BESIDE AN EXTERIOR WALL (jb, 19 Nov 2026) ────
+  // ── UPPER FLIGHTS WIDER BESIDE AN EXTERIOR WALL (jb, 19 + 23 Nov 2026) ─
   //
-  // "if they are placed beside the exterior wall, the downstairs flight will
-  // need to be adjusted ... 14\" complete with int. for 8\" conc. wall ... the
-  // upper ext wall is 5.5\" ... lets give them 6\" ... so basically if the
-  // upstairs are 3'8\" wide, on the side next to the ext wall, 8\" reduced for
-  // basement width 3'0\"", and "on the INTERIOR stairs the widths can be the
-  // same ... one switch for reducing (maybe allow manual input to change the
-  // distance too) and another switch for the side the stairs are on ext".
+  // 19 Nov: the basement flight beside an exterior wall loses width to the
+  // foundation wall; "on the INTERIOR stairs the widths can be the same".
+  // 23 Nov, turned round: "always place upstairs as 3-9W and basement as
+  // 3'W ... make straight stairs 3' wide and then if they go to the change
+  // the side for ext wall.. increase the upper floors by 9\" rather than
+  // reducing basement", one value per leg ("a 2nd for the 2nd leg (for L and
+  // U) and 3rd leg (for U only)"), each with its side, LEFT or RIGHT "when
+  // walking DOWN".
   //
-  // THREE FIELDS ON THE BASEMENT FLIGHT (the one filed on the lowest floor,
-  // going down to the basement): `extWall` the switch, `extWallCutIn` the
-  // inches taken off (8 = 14" foundation allowance less the 6" upper wall),
-  // `extWallSide` which side of its frame the wall is on ('left' = the
-  // frame's +n side). The width comes off THAT side only: the inside edge
-  // stays lined up with the flight above.
-  const STAIR_EXT_WALL_CUT_IN = 8;
+  // THE SWITCHES LIVE ON THE BASEMENT FLIGHT (the one filed on the lowest
+  // floor, going down to the basement), which keeps its width: `extLegs`,
+  // one `{ in, side }` per leg top to bottom, side 'left' / 'right' walking
+  // down that leg or 'off'. Every flight stacked above it carries the result
+  // as `legWiden` (stair-geometry stairLegFrame): the same leg that much
+  // wider on the same side of the house, its other edge over the basement
+  // flight's.
+  const STAIR_EXT_WALL_WIDEN_IN = 9;
   const stairBasementFlightOf = stair => {
     const floors = stairFloorLevels();
     if (!stair || !floors.length) return null;
@@ -4082,10 +4112,11 @@
     if (Number(stair.levelId) === low) return stair;
     return stairStackOf(stair).find(st => Number(st.levelId) === low) || null;
   };
-  const stairUpperFlightOf = base => {
+  const stairUpperFlightsOf = base => {
     const floors = stairFloorLevels();
-    if (!base || floors.length < 2) return null;
-    return stairStackOf(base).find(st => Number(st.levelId) === Number(floors[1].id)) || null;
+    if (!base || floors.length < 2) return [];
+    const low = Number(floors[0].id);
+    return stairStackOf(base).filter(st => Number(st.levelId) !== low && (st.view || 'plan') === (base.view || 'plan'));
   };
   const stairRunFrame = stair => {
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
@@ -4095,91 +4126,154 @@
     return { u, n: { x: -u.z, z: u.x },
       c: { x: (stair.start.x + stair.end.x) / 2, z: (stair.start.z + stair.end.z) / 2 } };
   };
-  // THE SIDE BY THE COMPASS, never left or right: the plan's top is NORTH
-  // (smaller z), as the auto dimension rows read it.
-  const stairSideCompass = (stair, side) => {
-    const f = stairRunFrame(stair);
-    if (!f) return side === 'right' ? 'RIGHT' : 'LEFT';
-    const k = side === 'right' ? -1 : 1;
-    const x = f.n.x * k, z = f.n.z * k;
-    return Math.abs(x) >= Math.abs(z) ? (x > 0 ? 'E' : 'W') : (z > 0 ? 'S' : 'N');
+  // EACH LEG'S WALK, top to bottom: the way down it and its middle. A U's
+  // landing end is walked across, from the first flight's side to the
+  // return flight's.
+  const stairLegWalks = stair => {
+    const SG = window.DraftStairGeometry;
+    const plain = { ...stair };
+    delete plain.legWiden;
+    const parts = SG.stairPlanParts(plain, SG.stairCurrentLayout(plain, stairLevels()));
+    const mid = r => ({ x: r.start.x + r.dir.x * r.lenFt / 2, z: r.start.z + r.dir.z * r.lenFt / 2 });
+    const r0 = parts.runs[0];
+    if (!r0) return [];
+    const legs = [{ dir: r0.dir, at: mid(r0) }];
+    if (parts.shape === 'L' && parts.runs[1]) legs.push({ dir: parts.runs[1].dir, at: mid(parts.runs[1]) });
+    if (parts.shape === 'U' && parts.runs[1]) {
+      const s = parts.split.turn === 'left' ? -1 : 1;
+      const poly = parts.landing.poly;
+      const at = poly.reduce((m, p) => ({ x: m.x + p.x / poly.length, z: m.z + p.z / poly.length }), { x: 0, z: 0 });
+      legs.push({ dir: { x: -r0.dir.z * s, z: r0.dir.x * s }, at }, { dir: parts.runs[1].dir, at: mid(parts.runs[1]) });
+    }
+    return legs;
   };
-  // The side nearest the exterior house line, for a switch turned on with
-  // no side chosen yet.
+  const rightHand = dir => ({ x: -dir.z, z: dir.x });
+  // THE SIDE BY THE COMPASS, for the chips: the plan's top is NORTH
+  // (smaller z), as the auto dimension rows read it.
+  const compassOf = v => (Math.abs(v.x) >= Math.abs(v.z) ? (v.x > 0 ? 'E' : 'W') : (v.z > 0 ? 'S' : 'N'));
+  const stairLegSideCompass = (stair, leg, side) => {
+    const walk = stairLegWalks(stair)[leg];
+    if (!walk) return side === 'right' ? 'RIGHT' : 'LEFT';
+    const r = rightHand(walk.dir), k = side === 'right' ? 1 : -1;
+    return compassOf({ x: r.x * k, z: r.z * k });
+  };
+  // The side of leg 1 nearest the exterior house line, for a switch turned
+  // on with no side chosen yet.
   const stairNearWallSide = stair => {
     const f = stairRunFrame(stair);
     const [near] = stairSideStrips(stair);
-    if (!f || !near) return 'left';
-    return near.dir.x * f.n.x + near.dir.z * f.n.z >= 0 ? 'left' : 'right';
+    if (!f || !near) return 'right';
+    // f.n is the right hand walking down.
+    return near.dir.x * f.n.x + near.dir.z * f.n.z >= 0 ? 'right' : 'left';
   };
-  // WRITES THE CUT INTO A BASEMENT FLIGHT: its width and where its centre
-  // stands, from the flight above when there is one (inside edges lined up),
-  // else from its own full width (what it was before any cut). `want` is
-  // { on, cutIn, side }; anything left out keeps what the record holds.
-  // Returns null, or why not -- editStair's contract.
-  const stairApplyExtWall = (st, want = {}) => {
-    const f = stairRunFrame(st);
-    if (!f) return 'STAIR -- no run to measure across.';
-    const wasOn = st.extWall === true;
-    const wasCut = Number(st.extWallCutIn) >= 0 ? Number(st.extWallCutIn) : STAIR_EXT_WALL_CUT_IN;
-    const wasSide = st.extWallSide === 'right' ? 'right' : 'left';
-    const on = want.on ?? wasOn;
-    const cutIn = want.cutIn ?? wasCut;
-    const side = want.side ?? (st.extWallSide ? wasSide : stairNearWallSide(st));
-    if (!(cutIn >= 0) || cutIn > 24) return 'REDUCE BASEMENT -- 0" to 24".';
-    const w = Number(st.widthFt) || 3;
-    // THE FULL FLIGHT, measured across this flight's frame (centre at 0).
-    let fullC = wasOn ? (wasSide === 'left' ? 1 : -1) * wasCut / 24 : 0;
-    let fullW = w + (wasOn ? wasCut / 12 : 0);
-    const up = stairUpperFlightOf(st);
-    const uf = up && stairRunFrame(up);
-    if (uf && (up.shape || 'straight') === 'straight' && (st.shape || 'straight') === 'straight'
-      && Math.abs(uf.u.x * f.n.x + uf.u.z * f.n.z) < 1e-3) {
-      fullC = (uf.c.x - f.c.x) * f.n.x + (uf.c.z - f.c.z) * f.n.z;
-      fullW = Number(up.widthFt) || fullW;
-    }
-    const k = side === 'left' ? 1 : -1;
-    const W = fullW - (on ? cutIn / 12 : 0);
-    if (W < 1.5) return `REDUCE BASEMENT -- the basement flight would be only ${Math.round(W * 12)}" wide.`;
-    const m = fullC - k * fullW / 2 + k * W / 2;
-    st.start = { ...st.start, x: st.start.x + f.n.x * m, z: st.start.z + f.n.z * m };
-    st.end = { ...st.end, x: st.end.x + f.n.x * m, z: st.end.z + f.n.z * m };
-    st.widthFt = W;
-    st.extWall = on;
-    st.extWallCutIn = cutIn;
-    st.extWallSide = side;
+  const stairExtLegsOf = base => [0, 1, 2].map(i => {
+    const e = Array.isArray(base?.extLegs) ? base.extLegs[i] : null;
+    const inch = Number(e?.in);
+    return { in: inch >= 0 && inch <= 24 ? inch : STAIR_EXT_WALL_WIDEN_IN,
+      side: e?.side === 'left' || e?.side === 'right' ? e.side : 'off' };
+  });
+  // WHAT ONE UPPER FLIGHT CARRIES for the basement flight's switches: for
+  // each leg turned on, the wall's way in plan; the upper flight's leg that
+  // runs along that wall (the same leg where it can, else the nearest one
+  // running that way) is widened toward it.
+  const stairLegWidenFor = (up, base) => {
+    const baseWalks = stairLegWalks(base), upWalks = stairLegWalks(up);
+    const out = [null, null, null];
+    stairExtLegsOf(base).forEach((e, i) => {
+      const walk = baseWalks[i];
+      if (!walk || e.side === 'off' || !(e.in > 0)) return;
+      const r = rightHand(walk.dir), k = e.side === 'right' ? 1 : -1;
+      const wall = { x: r.x * k, z: r.z * k };
+      const along = upWalks.map((w, j) => ({ w, j }))
+        .filter(({ w }) => Math.abs(w.dir.x * wall.x + w.dir.z * wall.z) < 0.1);
+      if (!along.length) return;
+      const pick = along.find(({ j }) => j === i)
+        || along.sort((p, q) => Math.hypot(p.w.at.x - walk.at.x, p.w.at.z - walk.at.z)
+          - Math.hypot(q.w.at.x - walk.at.x, q.w.at.z - walk.at.z))[0];
+      const ur = rightHand(pick.w.dir);
+      out[pick.j] = { in: e.in, side: ur.x * wall.x + ur.z * wall.z > 0 ? 'right' : 'left' };
+    });
+    return out.some(Boolean) ? out : null;
+  };
+  const stairSetLegWiden = (st, widen) => {
+    if (widen) st.legWiden = widen.map(e => e || null);
+    else delete st.legWiden;
     return null;
   };
+  // WRITES THE SWITCHES, unchecked, for a flight being made (no UNDO of its
+  // own): the basement flight's `extLegs` and every upper flight's widening.
+  const stairWriteExtLegs = (base, legs, uppers = stairUpperFlightsOf(base)) => {
+    base.extLegs = legs.map(e => ({ in: e.in, side: e.side }));
+    uppers.forEach(up => stairSetLegWiden(up, stairLegWidenFor(up, base)));
+  };
   // THE PANEL'S DOOR: the stair picked may be any flight of the stack; the
-  // switch belongs to its basement flight.
-  const setStairExtWall = (stair, want) => {
+  // switches belong to its basement flight. `want` is { leg, in?, side? }.
+  // One UNDO puts every flight back.
+  const setStairExtLeg = (stair, want) => {
     const base = stairBasementFlightOf(stair);
     if (!base) {
-      sayOnStrip('REDUCE BASEMENT -- this stair has no flight going down to the basement.');
+      sayOnStrip('EXT. WALL -- this stair has no flight going down to the basement.');
       return false;
     }
-    // NO LINE-UP ON THE WALL (jb, 23 Nov 2026: "i think we can remove the
-    // 'basement rule'"): the switch narrows the flight and nothing more. The
-    // stair's own corner and face snaps put it against the wall, where the
-    // drafter puts it.
-    const done = editStair(base, st => stairApplyExtWall(st, want));
-    if (done) {
-      const F = window.DraftFormatters;
-      sayOnStrip(base.extWall
-        ? `BASEMENT FLIGHT ${F.formatArchitecturalInches(base.widthFt * 12)} wide -- ${base.extWallCutIn}" off the ${stairSideCompass(base, base.extWallSide)} side (exterior wall). UNDO puts it back.`
-        : `BASEMENT FLIGHT ${F.formatArchitecturalInches(base.widthFt * 12)} wide -- the same as the flight above. UNDO puts it back.`);
+    const legs = stairExtLegsOf(base);
+    const e = legs[want.leg];
+    if (!e) return false;
+    if (want.in != null) {
+      if (!(want.in >= 0 && want.in <= 24)) { sayOnStrip('EXT. WALL -- 0" to 24".'); return false; }
+      e.in = want.in;
+      if (e.side === 'off' && want.side == null) e.side = want.leg === 0 ? stairNearWallSide(base) : 'right';
     }
-    return done;
-  };
-  // AN UPPER FLIGHT'S WIDTH CHANGED: a reduced basement flight under it
-  // follows, still the cut narrower. Folded into the width's own UNDO.
-  const followBasementCut = stair => {
-    const base = stairBasementFlightOf(stair);
-    if (!base || base === stair || base.extWall !== true) return;
+    if (want.side != null) e.side = want.side;
     const was = undoStack.length;
-    if (!editStair(base, st => stairApplyExtWall(st, {}))) return;
-    const steps = undoStack.splice(was - 1, 2);
-    undoStack.push({ kind: 'batch', steps });
+    if (!editStair(base, st => {
+      st.extLegs = legs.map(x => ({ in: x.in, side: x.side }));
+      return null;
+    })) return false;
+    const uppers = stairUpperFlightsOf(base);
+    uppers.forEach(up => editStair(up, st => stairSetLegWiden(st, stairLegWidenFor(st, base))));
+    const steps = undoStack.splice(was);
+    if (steps.length) undoStack.push({ kind: 'batch', steps });
+    const F = window.DraftFormatters;
+    const name = `LEG ${want.leg + 1}`;
+    sayOnStrip(e.side === 'off'
+      ? `${name} -- the same width on every floor. UNDO puts it back.`
+      : `${name} -- ${uppers.length ? `${uppers.length === 1 ? 'the flight above is' : 'the flights above are'} ${F.formatInchesOnly(e.in)} wider on the ${stairLegSideCompass(base, want.leg, e.side)} side` : 'no flight above to widen yet'}; the basement flight stays ${F.formatArchitecturalInches(base.widthFt * 12)}. UNDO puts it back.`);
+    return true;
+  };
+  // A FILE SAVED BEFORE 23 NOV had the basement flight NARROWED (`extWall`,
+  // `extWallCutIn`, `extWallSide` -- 'left' then meant the frame's +n side,
+  // the right hand walking down) and the flight above full width. Read the
+  // new way: the basement flight keeps the width it has, and the flight
+  // above becomes that width with its first leg wider by the cut on the
+  // wall side -- the very same edges, so nothing on the plan moves.
+  const migrateStairExtWall = () => {
+    (drawing?.stairs || []).filter(st => st && (st.extWall != null || st.extWallCutIn != null || st.extWallSide != null))
+      .forEach(base => {
+        const on = base.extWall === true;
+        const cut = Number(base.extWallCutIn) >= 0 ? Number(base.extWallCutIn) : 8;
+        const side = base.extWallSide === 'right' ? 'left' : 'right';
+        delete base.extWall; delete base.extWallCutIn; delete base.extWallSide;
+        if (!on || !(cut > 0)) return;
+        const legs = stairExtLegsOf(null);
+        legs[0] = { in: cut, side };
+        const uppers = stairUpperFlightsOf(base);
+        uppers.forEach(up => {
+          const f = stairRunFrame(up), bf = stairRunFrame(base);
+          if (!f || !bf) return;
+          const w = Number(base.widthFt) || 3;
+          const was = Number(up.widthFt) || w;
+          const grew = was - w;
+          if (!(grew > 0.0001)) return;
+          // The wall's way, from the basement flight's right hand.
+          const k = side === 'right' ? 1 : -1;
+          const wall = { x: bf.n.x * k, z: bf.n.z * k };
+          up.widthFt = w;
+          up.start = { ...up.start, x: up.start.x - wall.x * grew / 2, z: up.start.z - wall.z * grew / 2 };
+          up.end = { ...up.end, x: up.end.x - wall.x * grew / 2, z: up.end.z - wall.z * grew / 2 };
+        });
+        base.extLegs = legs.map(e => ({ in: e.in, side: e.side }));
+        uppers.forEach(up => stairSetLegWiden(up, stairLegWidenFor(up, base)));
+      });
   };
 
   // ONE RISER MORE OR LESS: the rise is the floor's, so each riser takes its
