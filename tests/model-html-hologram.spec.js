@@ -614,3 +614,36 @@ test('a drawing of holograms alone shows them in its elevation seats', async ({ 
   });
   expect(inked).toBeGreaterThan(200);
 });
+
+// jb, 25 Nov 2026, on the PHASE master plan turned so E1 looks along the
+// row: "the FRONT Elevation doesn't work looks like it cutting through end of
+// suite 1 near suite 2". The holograms were painted in the file's order, so
+// the one BEHIND, listed last, was painted over the one in front. Here the
+// far one is listed last; the near one's side edge must still show.
+test('a hologram in front is drawn over the one behind it, whatever the file order', async ({ page }) => {
+  const holo = (id, walls) => ({ id, name: id, x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0,
+    source: { ...BLANK, walls } });
+  await openE1(page, { ...BLANK, walls: [],
+    holograms: [holo('near', box('n', 10, 30, 20, 40)), holo('far', box('f', 0, 0, 40, 20))] });
+  const edge = await page.evaluate(() => {
+    const f = window.__elevFrame;
+    const c = document.getElementById('plan');
+    const k = c.width / c.getBoundingClientRect().width;
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const inked = (px, py) => {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        const i = (Math.round(py * k) * c.width + Math.round(px * k) + dx) * 4;
+        if (d[i + 3] > 40 && d[i] < 200) return true;
+      }
+      return false;
+    };
+    // E1 looks north: u runs with x. The near box's west edge at x = 10,
+    // from a foot over the floor to a foot under its top.
+    const X = u => f.x0 + (u - f.uMin) * f.pxPerFt;
+    const Y = e => f.y0 + (f.yTop - e) * f.pxPerFt;
+    let on = 0, n = 0;
+    for (let e = 1; e <= 8; e += 0.25) { n += 1; if (inked(X(10), Y(e))) on += 1; }
+    return on / n;
+  });
+  expect(edge, 'the near hologram\'s edge over the far one\'s face').toBeGreaterThan(0.8);
+});

@@ -272,3 +272,22 @@ test('a drawing of holograms alone deals its sheets, elevations drawn', async ({
   const seen = await ink(page);
   expect(seen.blue + seen.black, 'the elevation has ink in it').toBeGreaterThan(200);
 });
+
+// jb, 25 Nov 2026: the PHASE master plan is turned (planTurn 3), so the
+// Model Space stands E1 on the EAST side, looking along the row. The sheet
+// stood E1 on the unturned south side, so its ELEVATION E1 was the Model
+// Space's E2. Both read the turn now.
+test('a turned plan stands the sheet elevations where the Model Space does', async ({ page }) => {
+  await openLayout(page, {
+    version: 1, levels: STOCK, walls: [], planTurn: 3,
+    holograms: [{ id: 'hologram-1', name: 'existing', x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0,
+      source: { version: 1, levels: STOCK, walls: [mainWall('e1', 0, 0, 80, 0), mainWall('e2', 80, 0, 80, 24),
+        mainWall('e3', 80, 24, 0, 24), mainWall('e4', 0, 24, 0, 0)] } }],
+  });
+  const dirs = await page.evaluate(() => Object.fromEntries(globalThis.eval('page')._standardElevationCuts()
+    .map(cut => [cut.id, cut.dirVec])));
+  const model = await page.evaluate(() => Object.fromEntries(['E1', 'E2', 'E3', 'E4']
+    .map(id => [id, window.DraftCutMarks.eMarkDir(id, 3)])));
+  expect(dirs).toEqual(model);
+  expect(dirs.E1).toEqual({ x: 1, z: 0 });
+});

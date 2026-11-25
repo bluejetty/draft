@@ -13,8 +13,8 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/nested-elevation.spec.js';
 const MUTANTS = [
   { file: 'hologram.js', name: 'the shell first again, its suites painted over it',
-    find: "    const list = [...all.filter(holo => holo.nested), ...all.filter(holo => !holo.nested)];",
-    with: "    const list = all;",
+    find: "      || (top(a) === top(b) ? (b.nested ? 1 : 0) - (a.nested ? 1 : 0) : 0)",
+    with: "      || 0",
     test: 'on E1' },
 ];
 const run = name => {

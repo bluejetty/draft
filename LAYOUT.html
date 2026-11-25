@@ -2352,21 +2352,28 @@ class Component extends PageLogic {
     if (maxX - minX < 1 || maxZ - minZ < 1) return (this._elevCutsCache = []);
     const pad = 2;
     const edge = { S: maxZ, N: minZ, E: maxX, W: minX };
-    const at = id => edge[E_MARK_SIDES[id].side] + E_MARK_SIDES[id].sign * E_MARK_CLEAR_FT;
-    this._elevCutsCache = [
-      { id: 'E1', name: 'E1', elev: 0, levelId: null, auto: true,
-        startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') },
-        dirVec: E_MARK_SIDES.E1.dir },
-      { id: 'E2', name: 'E2', elev: 0, levelId: null, auto: true,
-        startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad },
-        dirVec: E_MARK_SIDES.E2.dir },
-      { id: 'E3', name: 'E3', elev: 0, levelId: null, auto: true,
-        startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') },
-        dirVec: E_MARK_SIDES.E3.dir },
-      { id: 'E4', name: 'E4', elev: 0, levelId: null, auto: true,
-        startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad },
-        dirVec: E_MARK_SIDES.E4.dir },
-    ];
+    // THE HOUSE'S TURN TOO (jb, 25 Nov 2026: a PHASE master plan turned a
+    // quarter so E1 looks along the row). The Model Space walks E1-E4 round
+    // with planTurn (cut-marks.js eMarkSeat) -- E1 stays the FRONT, whichever
+    // side of the plan the front now lies on -- and this sheet stood them on
+    // the unturned sides, so ELEVATION E1 here was the Model Space's E2.
+    const CM = window.DraftCutMarks;
+    const turn = this._saved?.planTurn || 0;
+    const seatOf = id => {
+      const seat = CM && CM.eMarkSeat ? CM.eMarkSeat(id, turn) : null;
+      if (!seat) return E_MARK_SIDES[id];
+      const dir = seat.axis === 'z' ? { x: 0, z: seat.sign } : { x: seat.sign, z: 0 };
+      return { side: seat.side, sign: seat.sign, dir };
+    };
+    this._elevCutsCache = ['E1', 'E2', 'E3', 'E4'].map(id => {
+      const seat = seatOf(id);
+      const along = edge[seat.side] + seat.sign * E_MARK_CLEAR_FT;
+      const acrossX = seat.side === 'S' || seat.side === 'N';
+      return { id, name: id, elev: 0, levelId: null, auto: true,
+        startPt: acrossX ? { x: minX - pad, z: along } : { x: along, z: minZ - pad },
+        endPt: acrossX ? { x: maxX + pad, z: along } : { x: along, z: maxZ + pad },
+        dirVec: seat.dir };
+    });
     return this._elevCutsCache;
   }
 
