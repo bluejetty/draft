@@ -1012,6 +1012,7 @@
       }
       const rect = canvas.getBoundingClientRect();
       bandDrag.to = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      boxAllHeld = allLevelsHeld(e);
       if (bandDrag.active) paint();
       return;
     }
@@ -1568,6 +1569,7 @@
     if (dragging.box) {
       const rect = canvas.getBoundingClientRect();
       dragging.box.to = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      boxAllHeld = allLevelsHeld(e);
       if (dragging.moved > DRAG_ARM_PX) dragging.box.active = true;
       if (dragging.box.active) paint();
       return;
@@ -1590,8 +1592,10 @@
       const band = bandDrag;
       bandDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      const allHeld = allLevelsHeld(e);
+      boxAllHeld = false;
       if (band.active) {
-        const raw = enclosedBy(band.from, band.to);
+        const raw = allHeld ? boxCatch(band.from, band.to, { all: true }) : enclosedBy(band.from, band.to);
         // Deduped by item. withGroup is the identity today (see its note), so
         // this is a straight copy -- kept as the shape it will need if the
         // whole-assembly question above is ever answered yes.
@@ -1603,10 +1607,11 @@
         // old page's own `!shiftHeld` replace flag. Without it a drafter can
         // build a selection by clicking but not by boxing, which is the
         // inconsistency that makes a tool feel broken rather than limited.
-        setSelection(band.shift
+        setSelection(band.shift || e?.shiftKey
           ? selection.concat(caught.filter(c =>
             !selection.some(entry => entry.item === c.item)))
           : caught);
+        if (allHeld) sayAllLevelsCaught(caught.length);
       } else {
         // A press that never armed is a click, and a click still selects --
         // the old page runs _handleSelectClick for "a clean click (no drag) in
@@ -2001,8 +2006,10 @@
       itemBox = null;
       dragging = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      const allHeld = allLevelsHeld(e);
+      boxAllHeld = false;
       const caught = [];
-      boxCatch(box.from, box.to, { crossing: boxIsCrossing(box) })
+      boxCatch(box.from, box.to, { crossing: boxIsCrossing(box), all: allHeld })
         .forEach(entry => withGroup(entry).forEach(w => {
           if (!caught.some(c => c.item === w.item)) caught.push(w);
         }));
@@ -2010,7 +2017,7 @@
       // (Movie, 18 Oct: "if the user makes a right sweeping rectangle select
       // over roof nodes it will select the nodes and allow the user to either
       // delete all, move all, or reselect one node in the square").
-      const nodes = !caught.length && !e?.shiftKey ? roofNodesInBox(box.from, box.to) : null;
+      const nodes = !caught.length && !allHeld ? roofNodesInBox(box.from, box.to) : null;
       if (nodes) {
         pickRoofNodes(nodes.roof, nodes.list);
         paint();
@@ -2019,6 +2026,7 @@
       setSelection(e && (e.shiftKey || activeTool === 'assembly')
         ? selection.concat(caught.filter(c => !selection.some(entry => entry.item === c.item)))
         : caught);
+      if (allHeld) sayAllLevelsCaught(caught.length);
       paint();
       return;
     }

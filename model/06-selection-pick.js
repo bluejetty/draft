@@ -254,7 +254,7 @@
   // the shading, since the footprint is a filled shape here and not a line.
   // A footprint switched off (HOUSE FOOTPRINT) is not painted, so
   // sitePlanParts returns none and nothing is picked under an empty lot.
-  const siteParts = () => (activeLevelId() === SITE_LEVEL_ID && !boneyardActive && window.DraftLayoutPlan
+  const siteParts = (levelId = activeLevelId()) => (Number(levelId) === SITE_LEVEL_ID && !boneyardActive && window.DraftLayoutPlan
     ? window.DraftLayoutPlan.sitePlanParts(drawing) : { lot: null, bodies: [], roofs: [] });
   // INSIDE THE SHADING, OR ON ITS EDGE. A shadow on SITE is a filled shape,
   // so a press anywhere inside it is a press on it -- and a press within
@@ -357,24 +357,25 @@
   // a line is its centre line, an area its ring, a door/window or fixture the
   // quad the painter draws, a stair its flights and landing, a tag the box
   // its text paints in.
-  const boxShapes = all => {
-    const scope = (key, onScreen) => (all ? (drawing?.[key] || []) : onScreen());
+  const boxShapes = all => (all ? everyLevelShapes() : levelShapes(activeLevelId(), false));
+  // ONE LEVEL'S (and one view's) PICKABLE THINGS. `levelId` is the level the
+  // filters below are answering for -- the one in view, or under ALL LEVELS
+  // the one withBg has stood in its place; `everyLayer` takes what a layer or
+  // a chip has put out of sight too (jb, 25 Nov 2026: "all levels all layers
+  // too").
+  const levelShapes = (levelId, everyLayer) => {
     const out = [];
     const seg = item => [[item.start, item.end]];
     // A LOOP WITH ARCS (jb, 11 Nov) is boxed by its flattened ring, so a
     // circle's bow is caught where it is drawn and not only at its corners.
     const flat = pts => (window.DraftGeometry2D?.flattenLoop ? window.DraftGeometry2D.flattenLoop(pts) : pts);
     const ring = item => [flat((item.points || []).filter(Boolean))];
-    if (filterAllows('wall')) scope('walls', walls).forEach(item => out.push({ type: 'wall', item, parts: seg(item), open: true }));
-    if (filterAllows('line')) scope('lines', lines).forEach(item => out.push({ type: 'line', item, parts: seg(item), open: true }));
-    if (filterAllows('floor')) scope('floors', floors).forEach(item => out.push({ type: 'floor', item, parts: ring(item) }));
-    // THE OTHERS ARE THIS LEVEL'S: what the sheet paints is what a box drawn
-    // on it can mean. ALL LEVELS reaches them through their walls' levels
-    // only where a record is filed that way, so it keeps the three it had.
-    if (all) return out;
-    if (filterAllows('outline')) [...outlines(), ...siteParts().bodies].forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
+    if (filterAllows('wall')) walls().forEach(item => out.push({ type: 'wall', item, parts: seg(item), open: true }));
+    if (filterAllows('line')) lines().forEach(item => out.push({ type: 'line', item, parts: seg(item), open: true }));
+    if (filterAllows('floor')) floors().forEach(item => out.push({ type: 'floor', item, parts: ring(item) }));
+    if (filterAllows('outline')) [...outlines(), ...siteParts(levelId).bodies].forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
     if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
-    if (filterAllows('roof')) pickRoofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
+    if (filterAllows('roof')) pickRoofs(levelId).forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
     if (filterAllows('beam')) beams().forEach(item => out.push({ type: 'beam', item, parts: seg(item), open: true }));
     if (filterAllows('column')) columns().filter(c => c.point)
       .forEach(item => out.push({ type: 'column', item, parts: [[item.point]], open: true }));
@@ -393,7 +394,7 @@
       const levels = stairLevels();
       stairs().forEach(item => out.push({ type: 'stair', item, parts: stairRings(item, levels) }));
     }
-    if (filterAllows('roomtag') && roomTagsShown()) {
+    if (filterAllows('roomtag') && (everyLayer || roomTagsShown())) {
       roomTags().forEach(item => {
         const b = roomTagBox(item);
         out.push({ type: 'roomtag', item, parts: [[toWorld(b.left, b.top), toWorld(b.right, b.top),
@@ -407,7 +408,7 @@
     // kept their strings; DIMENSION picked still takes them alone. Each is the
     // line as drawn, where the drafter sees it.
     if (filterAllows('dimension')) {
-      shownDimensions().forEach(item => {
+      (everyLayer ? dimensions() : shownDimensions()).forEach(item => {
         const line = dimDrawnLine(item);
         if (line) out.push({ type: 'dimension', item, parts: [line.map(p => toWorld(p.x, p.y))], open: true });
       });
@@ -416,7 +417,7 @@
     // them are, caught by the green one when the box touches any.
     if (filterAllows('hologram')) {
       holograms().forEach(item => {
-        const segs = hologramWallsHere(item).map(w => [w.start, w.end]);
+        const segs = hologramWallsOn(item, levelId).map(w => [w.start, w.end]);
         if (segs.length) out.push({ type: 'hologram', item, parts: segs, open: true });
       });
     }
@@ -429,6 +430,34 @@
         out.push({ type: 'note', item, parts: [item.end === 'none' ? box : [...box, item.anchor]] });
       });
     }
+    return out;
+  };
+  // ── ALL LEVELS (jb, 25 Nov 2026: "everything in a certain area can be
+  // deleted" -- "yes everything", "all levels all layers too") ────────────
+  // EVERY LEVEL AND EVERY VIEW OF IT, each asked as if it were the one in view
+  // (withBg, the BG layers' own stand-in), so a stair, a note or a beam upstairs
+  // is caught by the same outline a box on that floor would catch it by. And
+  // the raw walls, lines and floors first, as this mode always took them, so
+  // a record filed on no view a level lists still comes. One entry per item.
+  const everyLevelShapes = () => {
+    const out = [];
+    const seen = new Set();
+    const add = entry => { if (entry.item && !seen.has(entry.item)) { seen.add(entry.item); out.push(entry); } };
+    const seg = item => [[item.start, item.end]];
+    const flat = pts => (window.DraftGeometry2D?.flattenLoop ? window.DraftGeometry2D.flattenLoop(pts) : pts);
+    const ring = item => [flat((item.points || []).filter(Boolean))];
+    if (filterAllows('wall')) (drawing?.walls || []).forEach(item => add({ type: 'wall', item, parts: seg(item), open: true }));
+    if (filterAllows('line')) (drawing?.lines || []).forEach(item => add({ type: 'line', item, parts: seg(item), open: true }));
+    if (filterAllows('floor')) (drawing?.floors || []).forEach(item => add({ type: 'floor', item, parts: ring(item) }));
+    const LV = window.DraftLayerViews;
+    (drawing?.levels || []).forEach(level => {
+      const levelId = Number(level.id);
+      if (!Number.isFinite(levelId)) return;
+      const views = (LV?.layerViewsForLevelId(levelId) || []).map(v => v.id);
+      (views.length ? views : [null]).forEach(viewId =>
+        withBg({ levelId, viewId }, () => levelShapes(levelId, true)).forEach(add));
+    });
+    return out;
     return out;
   };
 
@@ -451,7 +480,10 @@
       return list;
     };
     return boxShapes(all).filter(({ parts, open }) => {
-      const rings = parts.filter(p => p && p.length >= (open ? 2 : 3) && p.every(Boolean));
+      // ONE POINT IS ENOUGH FOR AN OPEN PART: a column is its centre, and
+      // asking two of it left every column out of every box (found 25 Nov
+      // 2026 boxing a whole floor away).
+      const rings = parts.filter(p => p && p.length >= (open ? 1 : 3) && p.every(Boolean));
       if (!rings.length) return false;
       if (rings.every(p => p.every(inside))) return true;
       if (!crossing) return false;
@@ -488,19 +520,68 @@
   // THE ITEMS BOX SAYS WHICH IT IS (Movie, 4 Oct, CAD style): dragged left to
   // right it is a solid blue window, right to left a dashed green crossing.
   const boxIsCrossing = band => toS(band.to).x < toS(band.from).x;
+  // CTRL OR SHIFT HELD MAKES THE BOX ALL LEVELS (jb, 25 Nov 2026: "either ctl
+  // or shift ... when you hold it down make the rectangle glow brighter and
+  // show along top SELECT ALL LEVELS and when shift or ctl removed go back to
+  // normal"). Cmd stands in for Ctrl on a Mac. Read off the release, so the
+  // key held when the box is let go is the one that counts; `boxAllHeld` is
+  // the live copy the painter shows while the box is out. Shift still adds
+  // to what is picked, as it always has -- it now adds from every level.
+  const allLevelsHeld = e => !!(e && (e.ctrlKey || e.metaKey || e.shiftKey));
+  let boxAllHeld = false;
+  // A KEY PRESSED OR LET GO WITH THE HAND STILL shows at once, not on the next
+  // move: the box glows the moment Ctrl or Shift goes down and calms when it
+  // comes up.
+  ['keydown', 'keyup'].forEach(type => window.addEventListener(type, e => {
+    if (!['Control', 'Shift', 'Meta'].includes(e.key)) return;
+    const band = bandDrag || itemBox;
+    if (!band || !band.active) return;
+    const held = allLevelsHeld(e);
+    if (held !== boxAllHeld) { boxAllHeld = held; paint(); }
+  }, true));
+  const sayAllLevelsCaught = n => sayOnStrip(n
+    ? `SELECT ALL LEVELS \u2014 ${n} selected on every level. DELETE, MOVE, or Esc.`
+    : 'SELECT ALL LEVELS \u2014 nothing in that box on any level.');
   const paintBand = () => {
     const band = bandDrag || itemBox;
     if (!band || !band.active) return;
     const a = toS(band.from), b = toS(band.to);
+    const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+    const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
     ctx.save();
     const itemsBox = band === itemBox;
     const crossing = itemsBox && boxIsCrossing(band);
-    ctx.strokeStyle = crossing ? skin['draw-selected-cross'] : bandInk(selectionMode);
-    ctx.lineWidth = 1;
+    const held = boxAllHeld;
+    ctx.strokeStyle = held ? skin['draw-selected-all']
+      : crossing ? skin['draw-selected-cross'] : bandInk(selectionMode);
+    ctx.lineWidth = held ? 2.5 : 1;
     ctx.setLineDash(itemsBox && !crossing ? [] : [4, 3]);
-    ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y),
-      Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    if (held) {
+      // THE GLOW: the same red, blurred out round the edge and a wash inside.
+      ctx.shadowColor = skin['draw-selected-all'];
+      ctx.shadowBlur = 12;
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = skin['draw-selected-all'];
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+    }
+    ctx.strokeRect(x, y, w, h);
+    // THE BOX SAYS WHAT IT TAKES, along its top in its own ink (jb, 25 Nov
+    // 2026: "on the GREEN DOTTED lets put text there"): the solid blue box
+    // takes what is wholly inside, the green crossing box what it touches
+    // too, and with Ctrl or Shift held the red one says so for every level.
+    const all = held || selectionMode === 'window-all';
+    const label = `${all ? 'SELECT ALL LEVELS \u2014 ' : ''}${crossing
+      ? 'SELECT ALL IN AND PARTIALLY WITHIN BOX' : 'SELECT FULLY WITHIN BOX'}`;
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([]);
+    ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fillText(label, x + 2, y - 3);
     ctx.restore();
+    canvas.setAttribute('data-box-all-levels', held ? 'on' : 'off');
+    canvas.setAttribute('data-box-label', label);
   };
 
   // ── assemblies ────────────────────────────────────────────────────────────
@@ -1264,7 +1345,7 @@
   // a roof filed on a storey rather than on ROOF, say, was painted on SITE
   // and could not be pressed there. On SITE the press may land on a roof's
   // edge as well as inside it (onRingOrEdge), for the sliver's reason.
-  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? siteParts().roofs : roofs());
+  const pickRoofs = (levelId = activeLevelId()) => (Number(levelId) === SITE_LEVEL_ID ? siteParts(levelId).roofs : roofs());
   const roofsAt = worldPt => pickRoofs().slice().reverse()
     .filter(roof => (activeLevelId() === SITE_LEVEL_ID ? onRingOrEdge(roof.points, worldPt)
       : (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)));

@@ -1141,8 +1141,10 @@
   const MODE_HELP = {
     click: 'Click items to select; Shift adds or removes. Drag left to right for a '
       + 'blue box of what it encloses, right to left for a green box of what it '
-      + 'crosses. Right-drag (two fingers) pans.',
-    window: 'Drag a blue box to select fully enclosed items on the current level.',
+      + 'crosses. Right-drag (two fingers) pans. Hold Ctrl or Shift (Cmd on a Mac) '
+      + 'while dragging to SELECT ALL LEVELS.',
+    window: 'Drag a blue box to select fully enclosed items on the current level. '
+      + 'Hold Ctrl or Shift (Cmd on a Mac) for every level.',
     'window-all': 'Drag a red box to select fully enclosed items on every level.',
   };
   const FILTERS = [

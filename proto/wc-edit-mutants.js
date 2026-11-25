@@ -105,7 +105,7 @@ const MUTANTS = [
     with: "",
     test: "a click close to a roof node picks just the node" },
   { file: 'model/16-gestures-undo.js', name: "a box over roof nodes picks none", spec: 'tests/model-html-roof-move.spec.js',
-    find: "      const nodes = !caught.length && !e?.shiftKey ? roofNodesInBox(box.from, box.to) : null;",
+    find: "      const nodes = !caught.length && !allHeld ? roofNodesInBox(box.from, box.to) : null;",
     with: "      const nodes = null;",
     test: "a box over two roof nodes picks them" },
   { file: 'model/09-draw-move-stretch.js', name: "a drag on one picked node leaves the others", spec: 'tests/model-html-roof-move.spec.js',
