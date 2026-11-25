@@ -113,7 +113,9 @@ const check = (name, cond, detail) => {
   console.log(`  FAIL  ${name}${detail ? `\n        ${detail}` : ''}`);
 };
 
-const STAIR = /^DN — \d+R @ /;
+// A plan stair says DN and nothing more (jb, 25 Nov 2026): the riser count
+// and height live on the stair section.
+const STAIR = /^DN$/;
 
 function run(label) {
   // ── THE FIXTURE'S OWN REACH, before anything is read off it ───────────
@@ -127,6 +129,9 @@ function run(label) {
   check('a complete load draws the stair notes',
     base.texts.some(t => STAIR.test(t)),
     `texts seen: ${base.texts.slice(0, 6).join(' | ') || '(none)'}`);
+  check('and no riser count or height rides with them -- that is the section\'s',
+    !base.texts.some(t => /\d+R @ /.test(t)),
+    base.texts.filter(t => /R @ /.test(t)).join(' | '));
   check('a complete load says nothing',
     full.warnings.length === 0, full.warnings.join(' / '));
 
@@ -896,15 +901,15 @@ function run(label) {
       JSON.stringify(roles(3)) === '{"1":"own","2":"lands"}', JSON.stringify(roles(3)));
     check('2ND FL shows its own and the MAIN stair under it, lighter',
       JSON.stringify(roles(5)) === '{"1":"below","2":"own"}', JSON.stringify(roles(5)));
-    const UP = /^UP — \d+R @ /;
+    const UP = /^UP$/;
     const main = draw(full.win, 3, { env: { view: 'plan' } });
     check('the MAIN FL sheet tags one stair DN and one UP',
       main.ok && main.texts.filter(t => STAIR.test(t)).length === 1 && main.texts.filter(t => UP.test(t)).length === 1,
-      main.ok ? main.texts.filter(t => /^(DN|UP) /.test(t)).join(' | ') : main.why);
+      main.ok ? main.texts.filter(t => /^(DN|UP)\b/.test(t)).join(' | ') : main.why);
     const upper = draw(full.win, 5, { env: { view: 'plan' } });
     check('the 2ND FL sheet tags its own stair DN and the one under it not at all',
       upper.ok && upper.texts.filter(t => STAIR.test(t)).length === 1 && !upper.texts.some(t => UP.test(t)),
-      upper.ok ? upper.texts.filter(t => /^(DN|UP) /.test(t)).join(' | ') : upper.why);
+      upper.ok ? upper.texts.filter(t => /^(DN|UP)\b/.test(t)).join(' | ') : upper.why);
     check('and draws the stair under it lighter',
       upper.ok && upper.strokes.some(a => Math.abs(a - 0.45) < 0.01),
       upper.ok ? [...new Set(upper.strokes.map(a => Math.round(a * 100) / 100))].join(',') : upper.why);
@@ -914,7 +919,7 @@ function run(label) {
     check('the BASEMENT sheet tags the MAIN stair UP and shows no other',
       basement.ok && basement.texts.filter(t => UP.test(t)).length === 1 && !basement.texts.some(t => STAIR.test(t))
         && !basement.strokes.some(a => Math.abs(a - 0.45) < 0.01),
-      basement.ok ? basement.texts.filter(t => /^(DN|UP) /.test(t)).join(' | ') : basement.why);
+      basement.ok ? basement.texts.filter(t => /^(DN|UP)\b/.test(t)).join(' | ') : basement.why);
   }
 
   if (label) console.log(label);

@@ -2290,33 +2290,44 @@ suite('drawStairs2D', 'rails, landing, winders and the U gap are each drawn only
   expect('the U gap adds a stroke', strokesFor({ gap: [{ x: 0, z: 1.5 }, { x: 9, z: 1.5 }] }) > bare, true);
 });
 
-suite('drawStairs2D', 'the walk line carries the DN label with its riser count and rise', R => {
+// JUST THE WORD (jb, 25 Nov 2026): no riser count or height on the plan --
+// that lives on the stair section -- only DN, centred across the flight in
+// its second tread down, turned to run parallel to the treads.
+suite('drawStairs2D', 'the plan says DN and nothing else, in the second tread, along the treads', R => {
   const ctx = recordingCtx();
   R.drawStairs2D(ctx, toS, stairsEnv());
   expect('one label', count(ctx, 'fillText'), 1);
-  expect('reading direction, count and rise', calls(ctx, 'fillText')[0][0], 'DN — 14R @ 7.5"');
+  expect('the bare word', calls(ctx, 'fillText')[0][0], 'DN');
+  expect('centred on its own point', calls(ctx, 'fillText')[0][1], 0);
+  const at = calls(ctx, 'translate')[0];
+  const step = 10 / 12;
+  const want = toS({ x: step * 1.5, z: 0 });
+  expect('the middle of tread 2 down the flight', Math.abs(at[0] - want.x) < 0.01, true);
+  expect('and the middle of the stair width', Math.abs(at[1] - want.y) < 0.01, true);
+  // The flight runs along x, so its treads run along z: a quarter turn.
+  expect('turned parallel to the treads', Math.abs(Math.abs(calls(ctx, 'rotate')[0][0]) - Math.PI / 2) < 1e-6, true);
 });
 
-suite('drawStairs2D', 'the label is levelled rather than drawn upside down', R => {
+suite('drawStairs2D', 'the word is levelled rather than drawn upside down', R => {
   // The painter turns an upside-down label by adding a half turn, so the
   // angle it ends on may be a full turn away from zero -- 2pi reads upright.
   // Upright is therefore "within a quarter turn once the full turns are
-  // taken out", not "equal to zero". Reading it the strict way failed this
-  // check against correct code.
-  const uprightness = walk => {
+  // taken out", not "equal to zero".
+  const uprightness = dir => {
     const ctx = recordingCtx();
-    R.drawStairs2D(ctx, toS, stairsEnv({}, { walk }));
+    R.drawStairs2D(ctx, toS, stairsEnv({}, { runs: [{ start: { x: 0, z: 0 }, dir, lenFt: 10, treads: 12 }] }));
     let angle = calls(ctx, 'rotate')[0][0] % (Math.PI * 2);
     if (angle > Math.PI) angle -= Math.PI * 2;
     if (angle <= -Math.PI) angle += Math.PI * 2;
     return Math.abs(angle);
   };
   const quarterTurn = Math.PI / 2 + 1e-9;
-  expect('walking right', uprightness([{ x: 0, z: 0 }, { x: 9, z: 0 }]) <= quarterTurn, true);
-  expect('walking left', uprightness([{ x: 9, z: 0 }, { x: 0, z: 0 }]) <= quarterTurn, true);
-  expect('walking down the screen', uprightness([{ x: 0, z: 0 }, { x: 0, z: 9 }]) <= quarterTurn, true);
+  const r = Math.SQRT1_2;
+  expect('walking right', uprightness({ x: 1, z: 0 }) <= quarterTurn, true);
+  expect('walking left', uprightness({ x: -1, z: 0 }) <= quarterTurn, true);
+  expect('walking down the screen', uprightness({ x: 0, z: 1 }) <= quarterTurn, true);
   expect('and up-left, the diagonal case a single half turn has to cover',
-    uprightness([{ x: 9, z: 9 }, { x: 0, z: 0 }]) <= quarterTurn, true);
+    uprightness({ x: -r, z: -r }) <= quarterTurn, true);
 });
 
 suite('drawStairs2D', 'the stair wears the colour the page handed it', R => {
@@ -2328,34 +2339,37 @@ suite('drawStairs2D', 'the stair wears the colour the page handed it', R => {
 
 // ── WHICH FLOOR IS LOOKING (Movie, 16 Oct): a stair going DN from here, one
 // landing UP here, and one entirely under this floor, lighter and untagged.
-suite('drawStairs2D', 'the floor a stair lands on reads it UP, the arrow turned round', R => {
+suite('drawStairs2D', 'the floor a stair lands on reads it UP, at the foot, the arrow turned round', R => {
   const ctx = recordingCtx();
   R.drawStairs2D(ctx, toS, stairsEnv({ roleFor: () => 'lands' }));
-  const label = calls(ctx, 'fillText')[0][0];
-  expect('the tag says UP', label.startsWith('UP — 14R'), true);
+  expect('the tag says UP and nothing else', calls(ctx, 'fillText')[0][0], 'UP');
+  // UP sits in the LAST tread, at the foot of the flight.
+  const step = 10 / 12;
+  const foot = toS({ x: 10 - step / 2, z: 0 });
+  const at = calls(ctx, 'translate')[0];
+  expect('in the bottom tread', Math.abs(at[0] - foot.x) < 0.01 && Math.abs(at[1] - foot.y) < 0.01, true);
   // The arrowhead's tip is the last lineTo of the head; it sits at the top of
   // the walk (walk[0]) rather than at its foot.
-  const tip = calls(ctx, 'lineTo').filter(a => a.length === 2)
-    .find(a => Math.abs(a[0] - toS({ x: 0.5, z: 1.5 }).x) < 0.01 && Math.abs(a[1] - toS({ x: 0.5, z: 1.5 }).y) < 0.01);
-  expect('and the arrow points up the stair', !!tip, true);
-  // ON THE OTHER SIDE OF THE WALK LINE from the DN tag, so a stacked pair's
-  // tags do not land on each other on the floor between.
-  expect('the UP tag hangs off the far side of the walk line', calls(ctx, 'fillText')[0][2] > 0, true);
+  const lineTosAt = (c, p) => calls(c, 'lineTo').filter(a => a.length === 2
+    && Math.abs(a[0] - toS(p).x) < 0.01 && Math.abs(a[1] - toS(p).y) < 0.01).length;
+  expect('and the arrow points up the stair', lineTosAt(ctx, { x: 0.5, z: 1.5 }), 1);
+  // THE WALK LINE STOPS SHORT OF THE WORD: the foot of the walk is cut back
+  // a tread, so nothing reaches the old end.
+  expect('the walk line no longer reaches the foot', lineTosAt(ctx, { x: 9.5, z: 1.5 }), 0);
+  expect('it stops a tread short', lineTosAt(ctx, { x: 9.5 - step, z: 1.5 }), 1);
   const own = recordingCtx();
   R.drawStairs2D(own, toS, stairsEnv({ roleFor: () => 'own' }));
-  expect('its own floor still reads DN', calls(own, 'fillText')[0][0].startsWith('DN — 14R'), true);
-  expect('on the near side', calls(own, 'fillText')[0][2] < 0, true);
+  expect('its own floor still reads DN', calls(own, 'fillText')[0][0], 'DN');
   // THE WALK LINE ITSELF ENDS AT THE FOOT, so one lineTo there is the line;
-  // the arrowhead's tip is a second. Its own floor has both at the foot and
-  // the landing floor has the second one at the top instead.
-  const at = (ctx, p) => calls(ctx, 'lineTo').filter(a => a.length === 2
-    && Math.abs(a[0] - toS(p).x) < 0.01 && Math.abs(a[1] - toS(p).y) < 0.01).length;
-  expect('with the arrowhead at the foot of the walk', at(own, { x: 9.5, z: 1.5 }), 2);
-  expect('and the landing floor\'s arrowhead at the top instead', at(ctx, { x: 0.5, z: 1.5 }), 1);
-  expect('not at its foot', at(ctx, { x: 9.5, z: 1.5 }), 1);
+  // the arrowhead's tip is a second.
+  expect('with the arrowhead at the foot of the walk', lineTosAt(own, { x: 9.5, z: 1.5 }), 2);
+  // ...and its top is cut back two treads, past the DN in tread 2.
+  const moves = calls(own, 'moveTo').filter(a => Math.abs(a[1] - toS({ z: 1.5 }).y) < 0.01).map(a => a[0]);
+  expect('the walk starts below the DN', moves.includes(toS({ x: 0.5 + step * 2 }).x), true);
+  expect('not at the top tread', moves.includes(toS({ x: 0.5 }).x), false);
   const plain = recordingCtx();
   R.drawStairs2D(plain, toS, stairsEnv());
-  expect('and a caller that says nothing gets DN, as before', calls(plain, 'fillText')[0][0].startsWith('DN — 14R'), true);
+  expect('and a caller that says nothing gets DN, as before', calls(plain, 'fillText')[0][0], 'DN');
 });
 suite('drawStairs2D', 'a stair under this floor is drawn lighter, with no walk line and no tag', R => {
   const ctx = recordingCtx();
@@ -4462,8 +4476,19 @@ function coverage() {
       src => src.replace("      if (role === 'below') { ctx.restore(); return; }\n", '')],
     ['drawStairs2D draws the stair under this floor at full weight',
       src => src.replace("      if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;\n", '')],
-    ['drawStairs2D hangs the UP tag on the DN tag\'s side',
-      src => src.replace("          up ? { font, offset: -3, baseline: 'top' } : { font, offset: 3 });", '          { font, offset: 3 });')],
+    // JUST THE WORD (jb, 25 Nov 2026): DN in tread 2 at the top, UP in the
+    // last tread at the foot, and the walk line stopping short of it.
+    ['drawStairs2D puts the UP at the top of the flight like the DN',
+      src => src.replace('        const along = up ? run.lenFt - step / 2 : (treads >= 2 ? step * 1.5 : step / 2);',
+        '        const along = treads >= 2 ? step * 1.5 : step / 2;')],
+    ['drawStairs2D puts the DN in the top tread, under the width mark',
+      src => src.replace('        const along = up ? run.lenFt - step / 2 : (treads >= 2 ? step * 1.5 : step / 2);',
+        '        const along = up ? run.lenFt - step / 2 : step / 2;')],
+    ['drawStairs2D runs the walk line through the word',
+      src => src.replace('      if (showTag) walk = trimWalkEnd2D(walk, up, tag.clearPx);\n', '')],
+    ['drawStairs2D writes the riser count back on the plan',
+      src => src.replace("labelAlongLine2D(ctx, tag.a, tag.b, up ? 'UP' : 'DN', { font, offset: 0 });",
+        "labelAlongLine2D(ctx, tag.a, tag.b, `${up ? 'UP' : 'DN'} — ${layout.risers}R`, { font, offset: 0 });")],
     ['drawStairs2D turns the arrow round for its own floor too',
       src => src.replace("      const wa = up ? walk[1] : walk[walk.length - 2];", '      const wa = walk[1];')
         .replace("      const wb = up ? walk[0] : walk[walk.length - 1];", '      const wb = walk[0];')],

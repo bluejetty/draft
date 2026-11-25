@@ -135,7 +135,7 @@ test('MODEL paints the Z on MAIN FL and keeps both tags; LAYOUT\'s MAIN FL PLAN 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, -1);
   await page.waitForTimeout(400);
-  const tags = await page.evaluate(() => [...new Set(window.__texts.filter(t => /^(UP|DN) — /.test(t)).map(t => t.slice(0, 2)))].sort());
+  const tags = await page.evaluate(() => [...new Set(window.__texts.filter(t => /^(UP|DN)$/.test(t)).map(t => t.slice(0, 2)))].sort());
   expect(tags).toEqual(['DN', 'UP']);
   // The Z's centre is inked: the stair colour under it on the canvas.
   const { at } = await h.planFrame(page);
