@@ -108,7 +108,7 @@
     $('drop-hint').hidden = state.faces.length > 0;
     document.title = `${state.name} - VIEWER`;
     const c = built.counts;
-    setStatus(`${state.name}: ${c.walls} walls, ${c.foundationWalls} foundation walls, ${c.floors} floors, ${c.roofs} roofs`
+    setStatus(`${state.name}: ${c.walls} walls, ${c.foundationWalls} foundation walls, ${c.floors} floors, ${c.roofs} roofs, ${c.gables} gable ends`
       + ` (${Math.round(performance.now() - t0)} ms)`, !state.faces.length);
     document.body.dataset.loaded = String(state.faces.length);
     redraw();
