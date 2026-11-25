@@ -559,6 +559,24 @@
   html[data-theme="rough"] #dt-open-row button:hover, html[data-theme="rough"] #dt-open-list button:hover {
     background:#2c5a99; }
   html[data-theme="rough"] #dt-open-list .dt-open-say { color:#1f3f6b; }
+  /* THE CLASSIC ROW (jb, 25 Nov 2026), the OPEN row's twin under the
+     house tiles: the same dark plates, the rule above them instead. */
+  #dt-classic-row { flex:0 0 auto; display:flex; gap:8px; justify-content:center;
+    flex-wrap:wrap; padding-top:8px; margin-top:6px;
+    border-top:1px solid rgba(241,233,210,0.28); }
+  #dt-classic-row:empty { display:none; }
+  #dt-tiles:has(#build-entries:not([hidden])) #dt-classic-row,
+  #dt-tiles:has(#build-bar[hidden]) #dt-classic-row { display:none; }
+  #dt-classic-row button { font-family: var(--font-ui);
+    font-size:clamp(9px, 1.25vw, 13px); font-weight:700; letter-spacing:0.06em;
+    text-transform:uppercase; cursor:pointer; padding:5px 12px; border-radius:2px;
+    color:#f1e9d2; background:#1d1f20; border:1px solid #f1e9d2; }
+  #dt-classic-row button:hover, #dt-classic-row button:focus-visible { background:#1f3f6b; }
+  #dt-classic-row button:disabled { opacity:0.35; cursor:not-allowed; }
+  html[data-theme="rough"] #dt-classic-row { border-top-color:rgba(31,63,107,0.35); }
+  html[data-theme="rough"] #dt-classic-row button {
+    color:#f1e9d2; background:#1f3f6b; border-color:#1f3f6b; }
+  html[data-theme="rough"] #dt-classic-row button:hover { background:#2c5a99; }
   #dt-tiles > * { pointer-events:none; }
   #dt-tiles button, #dt-tiles input { pointer-events:auto; }
   /* THE DISC IS A SMALLER SHARE OF A WIDER BOARD -- 110px of 2000 where it

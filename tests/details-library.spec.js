@@ -80,15 +80,17 @@ const pressTile = async page => {
 };
 const card = page => page.locator('#levels-panel [data-detail-card]');
 
-test('the tile is the third half of the site-plan stack, under CLASSIC DRAFTING', async ({ page }) => {
+test('the tile is the lower half of the site-plan stack, under DRAW STANDALONE SITE PLAN', async ({ page }) => {
+  // CLASSIC DRAFTING, which stood between them, moved to its own row under
+  // the house tiles (jb, 25 Nov 2026).
   await openModel(page);
   await h.openDriveThru(page);
   const stack = page.locator('#build-families [data-build-stack="sitePlan"]');
   await expect(stack.locator('[data-build-entry]'))
-    .toHaveText(['DRAW STANDALONE SITE PLAN', 'CLASSIC DRAFTING', 'DRAW DETAILS LIBRARY']);
-  const classic = await page.locator('[data-build-entry="classic-drafting"]').boundingBox();
+    .toHaveText(['DRAW STANDALONE SITE PLAN', 'DRAW DETAILS LIBRARY']);
+  const site = await page.locator('[data-build-entry="site-standalone"]').boundingBox();
   const tile = await page.locator('[data-build-entry="details-library"]').boundingBox();
-  expect(tile.y, 'under CLASSIC DRAFTING').toBeGreaterThan(classic.y + classic.height - 1);
+  expect(tile.y, 'under DRAW STANDALONE SITE PLAN').toBeGreaterThan(site.y + site.height - 1);
 });
 
 test('the press builds nothing, marks the file details and stands in DETAIL 1 with the default card', async ({ page }) => {
