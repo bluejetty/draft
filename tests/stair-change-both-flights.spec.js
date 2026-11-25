@@ -202,4 +202,10 @@ test('a stair laid on every floor comes ticked, and the tick is saved', async ({
   }, BUCKET);
   expect(saved.stairs).toHaveLength(2);
   expect(saved.stairs.every(s => s.matchStack === true)).toBe(true);
+  // And read back on the next open (drawing-format keeps the field).
+  await page.goto(`/MODEL.html?left=1&lpane=build&right=1&level=${MAIN_FL}`);
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const reopened = await page.evaluate(() => drawing.stairs.map(s => s.matchStack));
+  expect(reopened).toEqual([true, true]);
 });
