@@ -2259,7 +2259,17 @@
     //
     // A SHARED WELL IS NOT RE-CUT, for the drag's reason: it is sized to two
     // flights and this is one of them. Said, not ignored.
+    // CHANGE BOTH FLIGHTS ticked: the same change on every floor's flight
+    // of the stack, in the same UNDO (stairEditMatched, model/12).
     const write = patch => {
+      stairEditMatched(stair, () => { writeOne(patch); return true; });
+      if (stair.matchStack) {
+        showSelectionProps();
+        if (typeof renderObjProp === 'function') renderObjProp();
+        paint();
+      }
+    };
+    const writeOne = patch => {
       const before = { ...stair };
       Object.assign(stair, patch);
       // THE FORMAT'S OWN RULE, applied here rather than discovered on the next
@@ -2360,9 +2370,37 @@
     // BETWEEN, risers parting the two (0 level); a step added comes off the
     // upper flight, and FLIGHTS puts it back where the drafter wants it.
     // OPEN, NOT BEHIND THE OLD DOUBLE-CLICK: jb asked for the sections.
+    // CHANGE BOTH FLIGHTS (jb, 25 Nov 2026): "beside UPPER 10 - LOWER 2 on
+    // the right put a box". Ticked, an edit here is matched on the flights
+    // stacked over and under this one, and ticking it lines them up with
+    // this one now (setStairMatchStack, model/12). A straight flight has no
+    // FLIGHTS row, so the box stands on a row of its own there.
+    const matchBox = () => {
+      const label = document.createElement('label');
+      label.dataset.stairMatch = '';
+      label.className = 'props-title';
+      label.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:8px;cursor:pointer;white-space:nowrap';
+      label.title = 'Ticked: a change to this stair is made to the stacked stairs on the other floors too, landings lined up. Unticked: this stair only.';
+      const tick = document.createElement('input');
+      tick.type = 'checkbox';
+      tick.checked = stair.matchStack === true;
+      tick.addEventListener('change', () => {
+        setStairMatchStack(stair, tick.checked);
+        showSelectionProps();
+        if (typeof renderObjProp === 'function') renderObjProp();
+      });
+      label.append(tick, document.createTextNode('CHANGE BOTH FLIGHTS'));
+      return label;
+    };
     const split = SG.stairShapeSplit(stair, layout);
+    if (!split) {
+      const row = document.createElement('div');
+      row.dataset.propRow = 'match stack';
+      row.append(matchBox());
+      box.append(row);
+    }
     if (split) {
-      const stepper = (label, key, said, less, more) => {
+      const stepper =(label, key, said, less, more) => {
         const row = document.createElement('div');
         row.dataset.propRow = key;
         const name = document.createElement('div');
@@ -2392,6 +2430,7 @@
       box.append(stepper('FLIGHTS (TREADS)', 'flights', `UPPER ${split.t1} \u00b7 LOWER ${split.t2}`,
         split.t1 > 1 ? () => write({ splitTreads: split.t1 - 1 }) : null,
         split.t2 > 1 ? () => write({ splitTreads: split.t1 + 1 }) : null));
+      box.lastElementChild.querySelector('.chip-row').append(matchBox());
       // A landing's chips. What the rise can afford is the geometry's to say
       // (stairShapeSplit), so the lit chip is the split's, not the record's.
       const landingChips = (label, field, value) => box.append(propRow(label,
@@ -2508,7 +2547,10 @@
     rRow.append(step('\u2212', -1, 'less'), count, step('+', 1, 'more'));
     risers.append(rName, rRow);
     box.append(width, risers, propRow('RAIL', [['left', 'LEFT'], ['right', 'RIGHT'], ['both', 'BOTH'], ['none', 'NONE']],
-      stair.rail || 'left', id => { editStair(stair, st => { st.rail = id; return null; }); redraw(); }));
+      stair.rail || 'left', id => {
+        stairEditMatched(stair, () => editStair(stair, st => { st.rail = id; return null; }));
+        redraw();
+      }));
 
     // ── UPPER FLIGHTS WIDER BESIDE AN EXTERIOR WALL (jb, 23 Nov 2026) ──────
     //
