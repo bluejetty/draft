@@ -3827,7 +3827,20 @@ if (!window.DraftRender2D) {
     // supposed to leave; 10 puts a 3px gap under it. In paper units like
     // everything else here, so it holds its distance on a zoomed sheet.
     const tight = labelFont === TIGHT_FONT;
-    const push = tight ? 10 * k * t : 0;
+    // ── AND ONE THAT STILL DOES NOT FIT STEPS OUT A SECOND ROW ───────────
+    //
+    // jb, 25 Nov 2026, dimensioning a 2' bump on the ROOF plan zoomed right
+    // in: a 15/16" piece beside a 1'-11 3/8" one, and the two figures lay on
+    // top of each other ("the dim label overlaps huge"). Zoomed in that far
+    // BOTH figures are stepped down and outboard, to the same row, and the
+    // short piece's figure is many times wider than its own run, so it
+    // sprawled across its neighbour's. A stepped-down figure that still
+    // overflows its run stands one plate further out: the tight row's plate
+    // runs 2..17 off the line, so 26 puts this one's 3px clear beyond it.
+    // A figure that fits stays exactly where the 13 Oct rule put it.
+    ctx.font = TIGHT_FONT;
+    const overflows = tight && ctx.measureText(label).width > room;
+    const push = overflows ? 26 * k * t : tight ? 10 * k * t : 0;
     labelAlongLine2D(ctx,
       { x: da.x + nx * push, y: da.y + ny * push },
       { x: db.x + nx * push, y: db.y + ny * push },
