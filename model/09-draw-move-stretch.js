@@ -1471,6 +1471,108 @@
     });
     return best ? best.p : null;
   };
+  // ── A COLUMN RIDES ITS BEAM (jb, 25 Nov 2026) ─────────────────────────
+  //
+  // "when a guy drags a column can you force it to follow the beam, and
+  // also move any footings, or columns above or below that column". The
+  // plan jb said go to:
+  //   - a column on a beam slides ALONG that beam only, between its ends;
+  //   - a beam that STOPS on the column has that end ride with it, so the
+  //     beam grows or shortens (never under a foot);
+  //   - a column under two beams that cross (a corner, a tee) stays put --
+  //     ALT on the press drags it free, as ALT drags any column free;
+  //   - with LEVEL LOCK on (the default, drawing.beamLock), every column
+  //     within 3" of the same spot on the other levels and views goes the
+  //     same distance -- the FOUNDATION one, so its pad, too -- and the
+  //     beams that stop on those go with them the same way;
+  //   - one UNDO puts all of it back (the move's own step holds every
+  //     point it carried).
+  // Only when the selection is columns and nothing else; a column moved
+  // along with walls or a beam moves as it always did.
+  const COLUMN_STACK_FT = 0.25;
+  const BEAM_MIN_FT = 1;
+  const columnSlideOf = entries => {
+    if (!entries.length || !entries.every(e => e.type === 'column' && e.item?.point)) return null;
+    const picked = entries.map(e => e.item);
+    const free = stairStackAlone; // ALT held on the press
+    const G = window.DraftGeometry2D;
+    const allBeams = (drawing?.beams || []).filter(b => b.start && b.end);
+    const sameSheet = (b, c) => Number(b.levelId) === Number(c.levelId) && (b.view || 'plan') === (c.view || 'plan');
+    const hostsOf = c => allBeams.filter(b => sameSheet(b, c) && G.pointToSegment(c.point, b).d <= COLUMN_ON_BEAM_FT);
+    const dirOf = b => {
+      const ux = b.end.x - b.start.x, uz = b.end.z - b.start.z, len = Math.hypot(ux, uz);
+      return len > 1e-6 ? { x: ux / len, z: uz / len } : null;
+    };
+    const parallel = (a, b) => Math.abs(a.x * b.z - a.z * b.x) < 1e-3;
+    // THE STACK: the same spot on every other level and view, while locked.
+    const stack = [];
+    if (drawing?.beamLock !== false) {
+      picked.forEach(c => (drawing.columns || []).forEach(o => {
+        if (!o.point || picked.includes(o) || stack.includes(o)) return;
+        if (Math.hypot(o.point.x - c.point.x, o.point.z - c.point.z) <= COLUMN_STACK_FT) stack.push(o);
+      }));
+    }
+    const out = { stack, points: stack.map(c => c.point), across: null, range: null, pinned: false, levels: [] };
+    if (free) return out;
+    // ONE WAY FOR THEM ALL, or no slide: every picked column on a beam, and
+    // every one of those beams on the same line direction.
+    let u = null, loose = false;
+    for (const c of picked) {
+      const hosts = hostsOf(c);
+      if (!hosts.length) { loose = true; continue; }
+      for (const b of hosts) {
+        const d = dirOf(b);
+        if (!d) continue;
+        if (!u) u = d;
+        else if (!parallel(u, d)) { out.pinned = true; break; }
+      }
+      if (out.pinned) break;
+    }
+    if (out.pinned) {
+      out.across = { x: 0, z: 0 };
+      out.say = `This column carries ${picked.length === 1 ? '2 beams' : 'beams both ways'} -- hold ALT as you press to drag it free.`;
+      return out;
+    }
+    if (!u || loose) return out; // not on a beam: free, as before
+    out.across = u;
+    let lo = -Infinity, hi = Infinity;
+    const at = p => p.x * u.x + p.z * u.z;
+    const carried = new Set();
+    [...picked, ...stack].forEach(c => {
+      const p = at(c.point);
+      allBeams.filter(b => sameSheet(b, c) && G.pointToSegment(c.point, b).d <= COLUMN_ON_BEAM_FT).forEach(b => {
+        const d = dirOf(b);
+        if (!d || !parallel(u, d)) return;
+        const near = q => Math.hypot(q.x - c.point.x, q.z - c.point.z) <= COLUMN_STACK_FT;
+        const rides = near(b.start) ? 'start' : near(b.end) ? 'end' : null;
+        if (rides) {
+          // THE END RIDES; the beam keeps a foot at least.
+          carried.add(b[rides]);
+          const other = at(b[rides === 'start' ? 'end' : 'start']);
+          if (other < p) lo = Math.max(lo, other + BEAM_MIN_FT - p);
+          else hi = Math.min(hi, other - BEAM_MIN_FT - p);
+          if (!out.levels.includes(Number(b.levelId))) out.levels.push(Number(b.levelId));
+        } else if (picked.includes(c)) {
+          // ON IT MID-SPAN: it stays between the beam's ends.
+          const a = at(b.start), z = at(b.end);
+          lo = Math.max(lo, Math.min(a, z) - p);
+          hi = Math.min(hi, Math.max(a, z) - p);
+        }
+      });
+    });
+    out.points.push(...carried);
+    out.range = { lo: Math.min(lo, 0), hi: Math.max(hi, 0) };
+    return out;
+  };
+  // A MOVE HELD TO A LINE: a beam row across itself, a column along its
+  // beam (clamped to the beam's ends), a pinned column not at all.
+  const alongLine = (set, dx, dz) => {
+    const u = set?.across;
+    if (!u) return { dx, dz };
+    let k = dx * u.x + dz * u.z;
+    if (set.range) k = Math.max(set.range.lo, Math.min(set.range.hi, k));
+    return { dx: u.x * k, dz: u.z * k };
+  };
   const selectionMoveSet = () => {
     const entries = selectionEntries();
     const chosen = new Set(entries.map(entry => entry.item));
@@ -1504,7 +1606,9 @@
         item[key] = { ...orig };
       });
     });
-    const points = carriedPoints(entries);
+    const colSlide = columnSlideOf(entries);
+    const points = [...new Set([...carriedPoints(entries), ...(colSlide ? colSlide.points : [])])]
+      .filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
     // A LONE BEAM SLIDES ACROSS ITSELF ONLY -- "move beams up or down (in
     // this situation but if positioned the other direction from side to
     // side)" -- and its ends find the walls again wherever it lands.
@@ -1516,7 +1620,9 @@
     })() : null;
     const wells = entries.filter(e => e.type === 'stair').map(({ item }) => stairWellOf(item))
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
-    return { points, detached, wells, run: across ? entries.map(e => e.item) : null, across, slide,
+    return { points, detached, wells, run: across ? entries.map(e => e.item) : null,
+      across: across || colSlide?.across || null, range: colSlide?.range || null, slide,
+      column: colSlide,
       stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
       // ITS OUTLINE AS IT STOOD, for stairSeek: corners and edges onto
       // nodes, T corners and wall faces (jb, 15 Nov 2026).
@@ -1539,7 +1645,9 @@
   // both, after the move's own, and the strip's word on them. Shared by the
   // drag's release and by a typed length that finishes it.
   const settleSelectionMove = set => {
-    const stepped = set.run ? stepUpJoists(set.run[0].levelId) : { edits: [], said: [] };
+    // A COLUMN THAT CARRIED A BEAM'S END re-asks that floor's span too.
+    const runLevel = set.run ? set.run[0].levelId : set.column?.levels?.length ? set.column.levels[0] : null;
+    const stepped = runLevel != null ? stepUpJoists(runLevel) : { edits: [], said: [] };
     const carrying = set.run && !set.run.some(beam => beam.stairId);
     const reframed = [...(set.stairs || []).map(reframeStair),
       ...(carrying ? reframeStairsOn([Number(set.run[0].levelId)], set.stairs || []) : [])];
@@ -1865,6 +1973,7 @@
       stairStackAlone = !!event.altKey;
       let stackSet;
       try { stackSet = selectionMoveSet(); } finally { stairStackAlone = false; }
+      if (stackSet.column?.say) sayOnStrip(stackSet.column.say);
       moveState.drag = { kind: 'selection', at: grab ? { x: grab.x, z: grab.z } : at, grab: grab || null, press: at,
         set: stackSet, moved: false };
       canvas.setPointerCapture(event.pointerId);
@@ -1955,10 +2064,7 @@
       // A BEAM ROW SLIDES ACROSS ITSELF and takes no magnet (Movie, 19 Oct:
       // the beams are placed and moved by hand); every other selection
       // SEEKS by every point it carries (SNAP lit, off TOY).
-      if (d.set.across) {
-        const k = dx * d.set.across.x + dz * d.set.across.z;
-        dx = d.set.across.x * k; dz = d.set.across.z * k;
-      }
+      if (d.set.across) ({ dx, dz } = alongLine(d.set, dx, dz));
       // THE T-SQUARE HOLDS IT SQUARE (Movie, 19 Oct: "i'm trying to move this
       // ASSEMBLY of WALLS and the T SQUARE isn't keeping it at 90 degrees it
       // is freemoving"). The hand's larger travel wins and the other is
@@ -2141,6 +2247,12 @@
     }
     if (d.kind === 'selection') {
       if (!d.moved) { d.set.detached.forEach(x => { x.wall[x.key] = x.orig; }); finishTypedMidDrag(); paint(); return; }
+      if (d.set.column?.pinned) {
+        d.set.before.forEach(b => { b.vtx.x = b.x; b.vtx.z = b.z; });
+        d.set.detached.forEach(x => { x.wall[x.key] = x.orig; });
+        sayOnStrip(d.set.column.say);
+        finishTypedMidDrag(); paint(); return;
+      }
       // SUITES MOVED ON THEIR OWN LINE UP WITH THE SHELL when let go near it,
       // as one does in hand (hologram.js suiteSnap) -- all of them by the
       // first suite's slide, so the set keeps its spacing.

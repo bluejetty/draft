@@ -294,7 +294,9 @@
     const wx = m.way ? m.way.x : m.dx, wz = m.way ? m.way.z : m.dz;
     const len = Math.hypot(wx, wz);
     if (!(feet > 0) || len < 1e-9) { sayOnStrip('Type a length over zero.'); return; }
-    const dx = wx / len * feet, dz = wz / len * feet;
+    // HELD TO ITS LINE, a column to its beam's ends (alongLine).
+    const { dx, dz } = m.set.range ? alongLine(m.set, wx / len * feet, wz / len * feet)
+      : { dx: wx / len * feet, dz: wz / len * feet };
     // WHAT THE RELEASE WORKED OUT COMES BACK FIRST -- a floor stepped deeper
     // for the drag's span, a stair's framing laid where the drag left it --
     // last first, the way UNDO takes a batch. The move's own step stays: it
@@ -315,7 +317,7 @@
     m.step = entry;
     lengthBox.blur();
     markDirty();
-    sayOnStrip(`Moved ${feetLabel(feet)}.${settled.said} UNDO puts it ${settled.said ? 'all ' : ''}back.`);
+    sayOnStrip(`Moved ${feetLabel(Math.hypot(dx, dz))}.${settled.said} UNDO puts it ${settled.said ? 'all ' : ''}back.`);
     paint();
   };
   // A DOOR OR WINDOW, THE SAME WAY (Movie, 19 Oct: typed distance for doors):

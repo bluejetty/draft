@@ -2185,7 +2185,17 @@
       return true;
     }
     if (set.slide) ({ dx, dz } = slideDelta(set.slide, dx, dz));
-    if (set.across) { const t = dx * set.across.x + dz * set.across.z; dx = set.across.x * t; dz = set.across.z * t; }
+    if (set.column?.pinned) {
+      set.detached.forEach(x => { x.wall[x.key] = x.orig; });
+      sayOnStrip(set.column.say);
+      return true;
+    }
+    if (set.across) ({ dx, dz } = alongLine(set, dx, dz));
+    if (set.column?.across && Math.hypot(dx, dz) < 1e-9) {
+      set.detached.forEach(x => { x.wall[x.key] = x.orig; });
+      sayOnStrip('The column is at the end of its beam -- it slides along the beam only (ALT-drag with MOVE takes it off).');
+      return true;
+    }
     set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
     if (set.run) reclipRun(set.run);
     set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
