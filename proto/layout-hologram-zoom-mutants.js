@@ -19,8 +19,8 @@ const MUTANTS = [
     test: 'zoomed out small' },
   { file: 'cut-view.js',
     name: 'the elevation does not tell the hologram it is on a sheet',
-    find: '    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop, external: Boolean(fit) })) return true;',
-    with: '    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop })) return true;',
+    find: '    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop, external: Boolean(fit) }, ctx, viewRoom)) return true;',
+    with: '    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop }, ctx, viewRoom)) return true;',
     test: 'zoomed out small' },
 ];
 
