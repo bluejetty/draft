@@ -12,22 +12,21 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/beam-slide-node-snap.spec.js';
-// -g takes a regex: plain words, so the shell quoting stays simple.
-const STAIR = 'FLOOR LAYOUT: a sliding beam lines up';
-const HOLE = 'a stair HOLE.s corner catches the sliding beam';
+// -g takes a regex: plain words (written into each row, which
+// mutant-anchors-harness reads on its own), so the shell quoting stays simple.
 const MUTANTS = [
   { file: 'model/09-draw-move-stretch.js', name: 'the sliding row seeks nothing',
     find: "          if (hit) { dx = n.x * hit.k; dz = n.z * hit.k; d.lit = hit.lit; }\n",
     with: "",
-    test: STAIR },
+    test: 'FLOOR LAYOUT: a sliding beam lines up' },
   { file: 'model/07-walls-magnet.js', name: 'the stair drawn here gives the slide no corners',
     find: "        corners.forEach(add);\n",
     with: "",
-    test: STAIR },
+    test: 'FLOOR LAYOUT: a sliding beam lines up' },
   { file: 'model/07-walls-magnet.js', name: 'a stair hole gives the slide no corners',
     find: "      .forEach(o => o.points.forEach(add));\n",
     with: "",
-    test: HOLE },
+    test: 'a stair HOLE.s corner catches the sliding beam' },
 ];
 const run = name => {
   try {
