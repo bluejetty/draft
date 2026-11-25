@@ -98,7 +98,12 @@ if (!window.DraftBuildMenu) {
       stack: true,
       entries: Object.freeze([
         Object.freeze({ id: 'site-standalone', label: 'DRAW STANDALONE SITE PLAN', standalone: 'site' }),
-        Object.freeze({ id: 'classic-drafting', label: 'CLASSIC DRAFTING', free: true,
+        // `below: true` (jb, 25 Nov 2026: "lets move the CLASSIC DRAFTING to
+        // underneath and make it dark blue like the upper buttons"): the
+        // entry stays in this family for its data, but the board draws it on
+        // its own dark row under the house tiles, mirroring the OPEN row
+        // above them, not in this stack.
+        Object.freeze({ id: 'classic-drafting', label: 'CLASSIC DRAFTING', free: true, below: true,
           title: 'CLASSIC DRAFTING — the blank sheet, every level and every tool, no house built: draw it yourself' }),
         // THE DETAILS LIBRARY (jb, 19 Nov 2026: "making a different DRAFT
         // file option a DETAILS LAYOUT that should all the typical details

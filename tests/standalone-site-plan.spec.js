@@ -82,7 +82,7 @@ const levelRows = page => page.locator('#levels-panel [data-level-row]')
   .evaluateAll(rows => rows.map(row => row.dataset.levelRow));
 const panelHasText = (page, re) => page.locator('#levels-panel').locator(`text=${re}`).count();
 
-test('the tile stands left of DETACHED GARAGE, half a card high, with CLASSIC DRAFTING under it', async ({ page }) => {
+test('the tile stands left of DETACHED GARAGE, half a card high, with CLASSIC DRAFTING under the tiles', async ({ page }) => {
   await openModel(page);
   await h.openDriveThru(page);
   const tile = page.locator('#build-families [data-build-entry="site-standalone"]');
@@ -91,9 +91,12 @@ test('the tile stands left of DETACHED GARAGE, half a card high, with CLASSIC DR
   // THE HALF UNDER IT, named an hour after he kept it empty: "just a blank
   // drafting for just free drafting (no autohouse)" -- "shorter lets go
   // CLASSIC".
-  // AND THE DETAILS LIBRARY UNDER BOTH (jb, 19 Nov 2026), the stack's third.
+  // AND THE DETAILS LIBRARY UNDER IT (jb, 19 Nov 2026). CLASSIC DRAFTING
+  // left the stack for its own dark row under the house tiles (jb, 25 Nov
+  // 2026: "lets move the CLASSIC DRAFTING to underneath and make it dark
+  // blue like the upper buttons").
   await expect(stack.locator('[data-build-entry]'))
-    .toHaveText(['DRAW STANDALONE SITE PLAN', 'CLASSIC DRAFTING', 'DRAW DETAILS LIBRARY']);
+    .toHaveText(['DRAW STANDALONE SITE PLAN', 'DRAW DETAILS LIBRARY']);
 
   const tileBox = await tile.boundingBox();
   const garage = await page.locator('[data-build-family="detachedGarage"]').boundingBox();
@@ -103,16 +106,16 @@ test('the tile stands left of DETACHED GARAGE, half a card high, with CLASSIC DR
   expect(tileBox.x + tileBox.width, 'left of DETACHED GARAGE').toBeLessThan(garage.x + 1);
   await expect(page.locator('#build-families > *').first(), 'first on the shelf')
     .toHaveAttribute('data-build-stack', 'sitePlan');
-  // A PART OF THE CARD, NOT A CARD: half of it while the stack held two,
-  // a third since DRAW DETAILS LIBRARY joined it (19 Nov 2026), and never
-  // taller than the RESIDENTIAL SUITE half beside it.
+  // A PART OF THE CARD, NOT A CARD: half of it (the stack holds two
+  // again since CLASSIC DRAFTING moved under the tiles), and never taller
+  // than the RESIDENTIAL SUITE half beside it.
   expect(tileBox.height, 'no taller than the SUITE tile').toBeLessThan(suite.height + 8);
   expect(tileBox.height, 'part of the card').toBeLessThan(garage.height * 0.56);
-  // AND CLASSIC DRAFTING IS BELOW IT, not beside it: the tile sits in the
-  // card's top half.
+  // The tile sits in the card's top half.
   expect(tileBox.y, 'the tile is the top half').toBeLessThan(garage.y + garage.height / 2);
-  const classic = await page.locator('[data-build-entry="classic-drafting"]').boundingBox();
-  expect(classic.y, 'CLASSIC DRAFTING under it').toBeGreaterThan(tileBox.y + tileBox.height - 1);
+  // AND CLASSIC DRAFTING IS UNDER THE WHOLE ROW of tiles, on its own row.
+  const classic = await page.locator('[data-drivethru-classic-row] [data-build-entry="classic-drafting"]').boundingBox();
+  expect(classic.y, 'CLASSIC DRAFTING under the tiles').toBeGreaterThan(garage.y + garage.height - 1);
 });
 
 test('CLASSIC DRAFTING drops the board, builds nothing, keeps every level, lands on MAIN FL, and locks the autohouse out', async ({ page }) => {

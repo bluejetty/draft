@@ -521,7 +521,7 @@ test('the board carries the office\'s house types and its own bone',
     const fromModule = await page.evaluate(() =>
       window.DraftBuildMenu.BUILD_MENU.filter(f => !f.stack).map(f => f.label));
     const stacked = await page.evaluate(() =>
-      window.DraftBuildMenu.BUILD_MENU.filter(f => f.stack).flatMap(f => f.entries.map(e => e.label)));
+      window.DraftBuildMenu.BUILD_MENU.filter(f => f.stack).flatMap(f => f.entries.filter(e => !e.below).map(e => e.label)));
     expect(await page.locator('#build-families [data-build-entry]').allTextContents(),
       'the stacked family\'s tiles stand in the row').toEqual(stacked);
     expect(await page.locator('#dt-tiles [data-build-family]').allTextContents(),
@@ -773,7 +773,7 @@ test('the cards are square, every row the same size, and all of them on the shel
     // AND BOTH ROWS STILL CLEAR THE SHELF, which is what caps them. This is
     // the check the sizes were chosen against: 2.6 rows plus a gap inside
     // 294px.
-    const entries = page.locator('#dt-tiles [data-build-entry]');
+    const entries = page.locator('#build-bar [data-build-entry]');
     const last = await entries.nth(await entries.count() - 1).boundingBox();
     expect(last.y + last.height,
       'the submenu hangs off the bottom of the shelf')

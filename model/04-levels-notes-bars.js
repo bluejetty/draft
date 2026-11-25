@@ -1721,6 +1721,7 @@
   const buildBar = document.getElementById('build-bar');
   const familyRow = document.getElementById('build-families');
   const entryRow = document.getElementById('build-entries');
+  const classicRow = document.getElementById('dt-classic-row');
   let openFamilyId = null;
   // THE CARDS ARE KEYED BY MENU ID, not by position in a list. Movie drew
   // five -- 1 STOREY, 2 STOREY, BILEVEL, MODIFIED BILEVEL, DETACHED GARAGE --
@@ -2171,7 +2172,7 @@
         const stack = document.createElement('span');
         stack.className = 'dt-stack';
         stack.dataset.buildStack = family.id;
-        stack.append(...family.entries.map(entry => {
+        stack.append(...family.entries.filter(entry => !entry.below).map(entry => {
           const button = document.createElement('button');
           button.type = 'button';
           button.dataset.buildEntry = entry.id;
@@ -2209,6 +2210,25 @@
       };
       return button;
     }));
+    // THE ENTRIES THAT LIVE UNDER THE TILES (`below`, jb 25 Nov 2026):
+    // CLASSIC DRAFTING on its own dark row, the OPEN row's twin. The same
+    // press and the same lock as when it stood in the stack.
+    if (classicRow) {
+      classicRow.replaceChildren(...BM.BUILD_MENU.flatMap(family => family.entries)
+        .filter(entry => entry.below).map(entry => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.buildEntry = entry.id;
+          button.textContent = entry.label;
+          button.title = entry.title || '';
+          button.onclick = entry.standalone
+            ? () => startStandalone(entry.standalone)
+            : entry.free ? () => startClassic()
+              : () => { openFamilyId = null; pressEntry(entry.id); };
+          lockTile(button, entry);
+          return button;
+        }));
+    }
 
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
     entryRow.hidden = !open;
