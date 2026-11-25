@@ -686,6 +686,13 @@
   #lay-layers .lay-onoff-part { background:#b8892a; color:#ffffff; }
   #lay-layers .lay-layers-name { flex:1 1 auto; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   #lay-layers .lay-layers-advanced .lay-onoff { min-width:24px; font-size:9px; }
+  #lay-layers .lay-layers-more { flex:0 0 auto; margin-left:auto; padding:0 4px; font-size:14px; line-height:1;
+    color: var(--ink-secondary); }
+  #lay-layers .lay-layers-more:hover { color: var(--accent-mark); }
+  #lay-layers .lay-layers-fly { position:fixed; z-index:42; width:210px; padding:6px; box-sizing:border-box;
+    background: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:4px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
+  #lay-layers .lay-layers-fly[hidden] { display:none; }
   #lay-layers .lay-layers-section { margin:8px 0 3px; font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color: var(--ink-secondary); }
   #lay-layers .lay-layers-group { grid-column:1 / -1; margin-top:4px; font-family:'Barlow Condensed', system-ui, sans-serif;
@@ -3606,7 +3613,9 @@ class Component extends PageLogic {
         if (window.DraftHologram) {
           if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-EXST';
           window.DraftHologram.paint(ctx, toS, this._viewportSaved(viewport), viewport.levelId,
-            { view: viewport.view || 'plan', show, paperColor: '#ffffff' });
+            { view: viewport.view || 'plan', show, paperColor: '#ffffff',
+              // SHOW LAYERS reaches the holograms too (jb, 25 Nov 2026).
+              viewportLayersOff: this._viewportLayersOff(viewport) });
         }
         // In a DXF, the existing house is its own layer, and what the plan
         // draws outside a tagged piece falls on A-PLAN.
@@ -4525,9 +4534,38 @@ class Component extends PageLogic {
       { id: 'openings', label: 'DOORS & WINDOWS', layers: ['A-DOOR', 'A-GLAZ'] },
       { id: 'fixtures', label: 'FIXTURES / CABINETS', layers: ['A-FIXT', 'E-POWER'] },
       { id: 'flooring', label: 'FLOORING / AREAS', layers: ['A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'SHAPE'] },
-      { id: 'text', label: 'TEXT & ROOM NAMES', layers: ['ROOM-IDS-AREA', 'A-DIMS-WIN', 'A-DIMS-DOOR'] },
+      // TEXT, ALL OF IT OR ONE KIND (jb, 25 Nov 2026): a press on the row is
+      // every kind; hover (or the arrow) shows each kind on its own.
+      // ANNOTATION TEXT is the NOTES layer, so it also rides NOTES & LINES.
+      // BUILTINS rides two text ids plan-composition.js stops the
+      // lettering under (TEXT_IDS), not layers anything is filed on.
+      { id: 'text', label: 'TEXT & ROOM NAMES', layers: ['ROOM-IDS-AREA', 'A-DIMS-WIN', 'A-DIMS-DOOR',
+        'A-DIMS-EQUIP', 'A-ANNO-NOTE', 'BUILTIN-TEXT'],
+      subs: [
+        { id: 'text-door', label: 'DOOR TEXT', layers: ['A-DIMS-DOOR'] },
+        { id: 'text-room', label: 'ROOM NAMES', layers: ['ROOM-IDS-AREA'] },
+        { id: 'text-window', label: 'WINDOW TEXT', layers: ['A-DIMS-WIN'] },
+        { id: 'text-note', label: 'ANNOTATION TEXT', layers: ['A-ANNO-NOTE'] },
+        // CABINETS AND EVERYTHING ELSE IN ONE ROW (jb: "change CABINET TEXT
+        // to BUILTINS TEXT ... put everything else in there").
+        { id: 'text-builtin', label: 'BUILTINS TEXT', layers: ['A-DIMS-EQUIP', 'BUILTIN-TEXT'],
+          title: 'Cabinets, bath and laundry pieces, stairs, beam and joist tags, pile marks, shape labels' },
+      ] },
+      // DIMENSIONS BY KIND the same way (jb, 25 Nov 2026), one row per
+      // A-DIMS layer the STANDARDS table names. A-DIMS-EQUIP (cabinet size
+      // tags) is BUILTINS TEXT now.
       { id: 'dims', label: 'DIMENSIONS', layers: ['A-DIMS', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT',
-        'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND', 'A-DIMS-EQUIP'] },
+        'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND'],
+      subs: [
+        { id: 'dims-fens', label: 'FENESTRATION DIMS', layers: ['A-DIMS-FENS'],
+          title: 'The string locating window and door centres from the corners' },
+        { id: 'dims-ext', label: 'EXT DIMS', layers: ['A-DIMS-EXT'], title: 'Overhang string and outline jogs' },
+        { id: 'dims-int', label: 'INT DIMS', layers: ['A-DIMS-INT'], title: 'Wall faces and items inside the footprint' },
+        { id: 'dims-ovr', label: 'OVERALL DIMS', layers: ['A-DIMS-OVR'], title: 'The footprint corner to corner' },
+        { id: 'dims-cols', label: 'STRUCTURE DIMS', layers: ['A-DIMS-COLS'], title: 'Column and beam locations' },
+        { id: 'dims-hand', label: 'HAND DIMS', layers: ['A-DIMS-HAND'], title: 'Drawn with the DIMENSION tool' },
+        { id: 'dims-special', label: 'SPECIAL DIMS', layers: ['A-DIMS'], title: 'Dimensions for cases the other rows do not cover (A-DIMS)' },
+      ] },
       { id: 'notes', label: 'NOTES & LINES', layers: ['A-ANNO-NOTE', 'draft'] },
       { id: 'structure', label: 'STRUCTURE / ROOF', layers: ['S-BEAM', 'S-SLAB', 'S-FDN', 'S-COL-FOOTING',
         'S-FOOTING', 'A-STR', 'A-STR-DECK', 'A-ROOF'] },
@@ -4572,6 +4610,51 @@ class Component extends PageLogic {
     if (!viewport || viewport.kind !== 'plan') return;
     this._layersCard = { id, advanced: false, eachHologram: false, left: clientX, top: clientY };
     this._paintLayersCard();
+  }
+
+  // THE KINDS OF A GROUP, BESIDE IT (jb, 25 Nov 2026: "when you scroll over
+  // it could show different categories"). Over the row or its arrow the
+  // list stands beside the card; a press on the arrow pins it open for a
+  // finger. It stays open across a press inside it, the card repainting.
+  _layersFlyout(button, group, viewport, off, row, el) {
+    const open = this._layersCard;
+    const arrow = el('span', 'lay-layers-more', '›');
+    arrow.dataset.layersMore = group.id;
+    arrow.title = 'Each kind on its own';
+    button.append(arrow);
+    const fly = el('div', 'lay-layers-fly');
+    fly.dataset.layersFly = group.id;
+    group.subs.forEach(sub => {
+      const isOff = sub.layers.every(layer => off.has(layer));
+      const item = row(sub.label, isOff ? 'OFF' : 'ON', sub.title || (isOff ? `Draw ${sub.label} again` : `Switch ${sub.label} off`),
+        () => { open.fly = group.id; this._toggleViewportLayers(viewport.id, sub.layers); });
+      item.dataset.layerGroup = sub.id;
+      fly.append(item);
+    });
+    button.closest('[data-layers-card]')?.append(fly);
+    let timer = null;
+    const place = () => {
+      const r = button.getBoundingClientRect();
+      fly.hidden = false;
+      const w = fly.offsetWidth, h = fly.offsetHeight;
+      const right = r.right + 6 + w <= window.innerWidth - 4;
+      const cardBox = button.closest('[data-layers-card]').getBoundingClientRect();
+      fly.style.left = `${right ? cardBox.right + 4 : Math.max(4, cardBox.left - w - 4)}px`;
+      fly.style.top = `${Math.max(4, Math.min(r.top - 8, window.innerHeight - h - 4))}px`;
+    };
+    const show = () => { clearTimeout(timer); place(); };
+    const hide = () => { clearTimeout(timer); timer = setTimeout(() => { if (open.fly !== group.id) fly.hidden = true; }, 200); };
+    fly.hidden = true;
+    [button, fly].forEach(node => {
+      node.addEventListener('pointerenter', show);
+      node.addEventListener('pointerleave', hide);
+    });
+    arrow.addEventListener('click', event => {
+      event.stopPropagation();
+      open.fly = open.fly === group.id ? null : group.id;
+      if (open.fly) show(); else fly.hidden = true;
+    });
+    if (open.fly === group.id) requestAnimationFrame(show);
   }
 
   _closeLayersCard() {
@@ -4631,6 +4714,7 @@ class Component extends PageLogic {
         () => this._toggleViewportLayers(viewport.id, group.layers));
       button.dataset.layerGroup = group.id;
       card.append(button);
+      if (group.subs) this._layersFlyout(button, group, viewport, off, row, el);
     });
     // THE HOLOGRAMS, IN THE SAME CARD (jb, 25 Nov 2026): ALL, then one row
     // per name, and EACH ONE below opens every copy by itself.

@@ -166,6 +166,14 @@ test('SHOW LAYERS turns a hologram off in one viewport, ON/OFF in words', async 
   expect(off.black).toBeGreaterThan(before.black * 0.8);
   expect((await savedDrawing(page)).layout.viewports.find(v => v.id === id).hologramsOff).toEqual(['hologram-1']);
 
+  // THE VIEWPORT'S LAYERS REACH THE HOLOGRAMS TOO: WALLS off takes theirs.
+  await withLayoutSave(page, () => holoRow.click());
+  const back = await ink(page);
+  await withLayoutSave(page, () => card.locator('[data-layer-group="walls"]').click());
+  expect((await ink(page)).blue, 'the hologram\'s walls go with WALLS').toBeLessThan(back.blue * 0.5);
+  await withLayoutSave(page, () => card.locator('[data-layer-group="walls"]').click());
+  await withLayoutSave(page, () => holoRow.click());
+
   // EACH HOLOGRAM lists every copy; RESET puts it back.
   await card.locator('[data-layers-each-hologram]').click();
   await expect(card.locator('[data-hologram-id="hologram-1"] .lay-onoff')).toHaveText('OFF');
