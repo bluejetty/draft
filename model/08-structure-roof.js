@@ -1395,14 +1395,38 @@
         columnsOnBeam(piece).forEach(post => { if (!has(post)) out.push({ type: 'column', item: post }); });
       });
     });
+    // A COLUMN COPIES WITH ITS WHOLE STACK (jb, 25 Nov 2026: "if i copy and
+    // paste a column we should copy an paste all columns in its location on
+    // other floors and also the pad footing or pile which supports it below
+    // ... the user can delete peices he doesn't need"). Every column within
+    // 3" of a picked one, on every level and view -- the FOUNDATION one is
+    // the pad or the pile -- always, LEVEL LOCK or not. Each piece of the
+    // stack keeps its own level and view where it lands (stackedCopy), so
+    // the copy stands as the original did, floor over floor over footing.
+    selection.filter(entry => entry.type === 'column' && entry.item?.point).forEach(({ item }) => {
+      const mates = (drawing.columns || []).filter(o => o !== item && o.point
+        && Math.hypot(o.point.x - item.point.x, o.point.z - item.point.z) <= COLUMN_STACK_FT);
+      if (!mates.length) return;
+      const unit = stackedCopy.size ? Math.max(...stackedCopy.values()) + 1 : 1;
+      stackedCopy.set(item, -unit); // negative: the piece that was picked
+      mates.forEach(o => {
+        if (!stackedCopy.has(o)) stackedCopy.set(o, unit);
+        if (!has(o)) out.push({ type: 'column', item: o });
+      });
+    });
     return out;
   };
+  // item -> its unit's number; the picked piece holds the number negated.
+  const stackedCopy = new Map();
   const copySelection = () => {
     if (!drawing || !selection.length) return 0;
+    stackedCopy.clear();
     held = copiedEntries()
       .filter(entry => entry.type === 'wall'
         || (SELECTION_LISTS[entry.type] && !NOT_COPIED.has(entry.type)))
-      .map(entry => ({ type: entry.type, raw: JSON.parse(JSON.stringify(entry.item)) }));
+      .map(entry => ({ type: entry.type, raw: JSON.parse(JSON.stringify(entry.item)),
+        ...(stackedCopy.has(entry.item) ? { stacked: Math.abs(stackedCopy.get(entry.item)),
+          ...(stackedCopy.get(entry.item) < 0 ? { pickedPiece: true } : {}) } : {}) }));
     // NOTHING TAKEN SAYS SO, rather than a COPY that looks pressed and a
     // PASTE that never comes.
     if (!held.length) {
@@ -1410,6 +1434,10 @@
       return 0;
     }
     const posts = held.filter(h => h.type === 'column').length;
+    const stackPosts = held.filter(h => h.stacked).length;
+    if (stackPosts && !held.some(h => h.type === 'beam')) {
+      sayOnStrip(`COPIED ${stackPosts} columns -- the whole stack, every floor and the footing under it. PASTE ALL LEVELS puts it all down, PASTE THIS LEVEL just the one on the plan showing; then MOVE it.`);
+    }
     if (held.some(h => h.type === 'beam')) {
       sayOnStrip(`COPIED the beam row${posts ? ` and its ${posts} post${posts === 1 ? '' : 's'} with their pads` : ''}. PASTE, then MOVE it where the new row goes.`);
     }
@@ -1420,7 +1448,35 @@
   // and ARRAY (18-draft-commands.js), which move the copies themselves and
   // would otherwise carry the paste's 2 ft dimension step and the stair's
   // sideways step along into the mirror image or the grid.
-  const pasteHeld = ({ nudge = true } = {}) => {
+  // PASTE THIS LEVEL (jb, 25 Nov 2026: "copy everything and then paste it
+  // all or just the level they are on"). Of each copied column stack, only
+  // the piece on the plan showing -- the same level and view, else the same
+  // level -- lands, on its floor; a stack with no piece here lands the piece
+  // that was picked, on this plan, as a lone column would. Everything else
+  // held pastes as PASTE does.
+  const heldHasStack = () => held.some(h => h.stacked);
+  const thisLevelOnly = (list, owner, viewNow) => {
+    const units = new Map();
+    list.forEach(h => { if (h.stacked) (units.get(h.stacked) || units.set(h.stacked, []).get(h.stacked)).push(h); });
+    const keep = new Set();
+    units.forEach(pieces => {
+      const onLevel = pieces.filter(h => Number(h.raw.levelId) === Number(owner));
+      const here = onLevel.find(h => (h.raw.view || 'plan') === (viewNow || 'plan')) || onLevel[0];
+      if (here) keep.add(here);
+      else {
+        const picked = pieces.find(h => h.pickedPiece) || pieces[0];
+        const { stacked: _s, pickedPiece: _p, ...lone } = picked;
+        keep.add(lone);
+      }
+    });
+    return list.flatMap(h => {
+      if (!h.stacked) return [h];
+      if (keep.has(h)) return [h];
+      const lone = [...keep].find(k => !k.stacked && k.raw === h.raw);
+      return lone ? [lone] : [];
+    });
+  };
+  const pasteHeld = ({ nudge = true, thisLevel = false } = {}) => {
     if (!drawing || !held.length) return 0;
     const owner = activeLevelId();
     const landed = [];
@@ -1453,8 +1509,9 @@
       && (w.wallType || '') === (copy.wallType || '')
       && ((samePt(w.start, copy.start) && samePt(w.end, copy.end)) || (samePt(w.start, copy.end) && samePt(w.end, copy.start))));
     let stacked = 0;
-    const ordered = [...held.filter(h => h.type === 'wall'), ...held.filter(h => h.type !== 'wall')];
-    ordered.forEach(({ type, raw }) => {
+    const pasting = thisLevel ? thisLevelOnly(held, owner, viewNow) : held;
+    const ordered = [...pasting.filter(h => h.type === 'wall'), ...pasting.filter(h => h.type !== 'wall')];
+    ordered.forEach(({ type, raw, stacked: inStack }) => {
       const key = type === 'wall' ? 'walls' : SELECTION_LISTS[type];
       if (!key) return;
       // A FREE FIXTURE (its wall deleted, Movie: "leave the item") has no
@@ -1488,6 +1545,9 @@
       //             copy around.
       const { id: _id, groupId: _g, ...rest } = raw;
       const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };
+      // A STACKED COLUMN STAYS ON ITS OWN FLOOR: the 2ND FL post on 2ND FL,
+      // the pad on FOUNDATION, whatever plan the paste is made on.
+      if (type === 'column' && inStack) copy.levelId = raw.levelId;
       // A HOLOGRAM IS THE SAME FILE AGAIN, as its card's COPY makes it: where
       // it stood, on no level of this drawing's (its own levels say where it
       // stands), with none of the first one's DEMO marks.
