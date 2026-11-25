@@ -35,7 +35,7 @@ const MUTANTS = [
   {
     file: 'model/14-promotion-tools.js',
     name: 'the mode help drops the shift-drag sentence',
-    find: "    click: 'Click items to select; Shift adds or removes. Drag left to right for a '\n      + 'blue box of what it encloses, right to left for a green box of what it '\n      + 'crosses. Right-drag (two fingers) pans.',",
+    find: "    click: 'Click items to select; Shift adds or removes. Drag left to right for a '\n      + 'blue box of what it encloses, right to left for a green box of what it '\n      + 'crosses. Right-drag (two fingers) pans. Hold Ctrl or Shift (Cmd on a Mac) '\n      + 'while dragging to SELECT ALL LEVELS.',",
     with: "    click: 'Click items to select; Shift adds or removes.',",
     test: 'the mode help says exactly',
   },
@@ -126,14 +126,14 @@ const MUTANTS = [
   {
     file: 'model/06-selection-pick.js',
     name: 'the filter stops restricting a window',
-    find: "    if (filterAllows('line')) scope('lines', lines).forEach(",
-    with: "    if (true) scope('lines', lines).forEach(",
+    find: "    if (filterAllows('line')) lines().forEach(",
+    with: "    if (true) lines().forEach(",
     test: 'the OBJECT TYPE filter restricts a window',
   },
   {
     file: 'model/16-gestures-undo.js',
     name: 'a shift-drag replaces instead of adding',
-    find: '        setSelection(band.shift\n          ? selection.concat(caught.filter(c =>\n            !selection.some(entry => entry.item === c.item)))\n          : caught);',
+    find: '        setSelection(band.shift || e?.shiftKey\n          ? selection.concat(caught.filter(c =>\n            !selection.some(entry => entry.item === c.item)))\n          : caught);',
     with: '        setSelection(caught);',
     test: 'shift-drag adds to the selection',
   },

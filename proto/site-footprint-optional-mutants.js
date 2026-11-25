@@ -36,8 +36,8 @@ const MUTANTS = [
     test: 'DELETE takes it and its roof' },
   { file: 'model/06-selection-pick.js',
     name: 'a roof hidden with the footprint is out of a press\'s reach',
-    find: "  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? siteParts().roofs : roofs());",
-    with: "  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());",
+    find: "  const pickRoofs = (levelId = activeLevelId()) => (Number(levelId) === SITE_LEVEL_ID ? siteParts(levelId).roofs : roofs());",
+    with: "  const pickRoofs = (levelId = activeLevelId()) => (Number(levelId) === SITE_LEVEL_ID ? (drawing?.roofs || []).filter(r => Number(r.levelId) === ROOF_LEVEL_ID) : roofs());",
     test: 'hides the building' },
 ];
 

@@ -96,7 +96,7 @@ const MUTANTS = [
   // green target) all have snap nodes on the hologram site plan" (28 Oct).
   { file: 'model/02-holograms-tags.js',
     name: 'a hologram\'s lot line is not its wall on SITE',
-    find: "      .filter(w => w?.start && w?.end), ...hologramLotHere(holo)] : []);",
+    find: "      .filter(w => w?.start && w?.end), ...hologramLotOn(holo, levelId)] : []);",
     with: "      .filter(w => w?.start && w?.end)] : []);",
     test: 'on SITE a hologram is picked by its lot line' },
   { file: 'model/09-draw-move-stretch.js',

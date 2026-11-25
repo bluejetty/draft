@@ -75,8 +75,8 @@ const MUTANTS = [
     with: "back.addEventListener('click', () => { again(); });",
     test: 'a roof in an ASSEMBLY: MAIN ROOF reaches every piece, THIS PIECE keeps its own until put back' },
   { file: 'model/06-selection-pick.js', name: 'the SITE plan offers no roof to pick',
-    find: "  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? siteParts().roofs : roofs());\n",
-    with: "  const pickRoofs = () => (activeLevelId() === SITE_LEVEL_ID ? [] : roofs());\n",
+    find: "  const pickRoofs = (levelId = activeLevelId()) => (Number(levelId) === SITE_LEVEL_ID ? siteParts(levelId).roofs : roofs());\n",
+    with: "  const pickRoofs = (levelId = activeLevelId()) => (Number(levelId) === SITE_LEVEL_ID ? [] : roofs());\n",
     test: 'on SITE the roof picks, and the edge clicked takes its overhang' },
 ];
 const run = name => {
