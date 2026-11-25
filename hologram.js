@@ -640,7 +640,11 @@
   // screen draws a traced outline, in black for the colour pass to tint
   // (and a suite's in the drawing's own ink). The lot line is not: it is
   // REGISTRATION's (siteLots), shown or not by its box.
-  const paintOutlines = (ink, place, existing, levelId) => {
+  // OFF WITH 'OUTLINE' (jb, 25 Nov 2026: a holograms-only plan with every
+  // layer off still drew the suites' dashed footprint): the viewport's
+  // WALLS row carries it, as the drawing's own outline is gated.
+  const paintOutlines = (ink, place, existing, levelId, layersOff = null) => {
+    if (layersOff && layersOff.has('OUTLINE')) return false;
     const G = window.DraftGeometry2D;
     const loops = (existing.outlines || []).filter(o => o && o.site !== true
       && Number(o.levelId) === Number(levelId) && Array.isArray(o.points) && o.points.length > 1);
@@ -820,7 +824,7 @@
         const draw = target => {
           const plan = withoutWords(target, layersOff, () => LP.drawPlan(target, place, existing, levelId,
             { view, hologram: true, paperColor, layersOff }));
-          return paintOutlines(target, place, existing, levelId) || plan;
+          return paintOutlines(target, place, existing, levelId, layersOff) || plan;
         };
         // OFF THE SCREEN, NOT DRAWN; ON IT, DRAWN ONCE AND LAID ON AFTER.
         const box = suiteBox(existing, levelId, pt => dev(place(pt)));
@@ -951,7 +955,7 @@
             const layersOff = wordless(layersOffFor(holo, saved), env);
             drew = withoutWords(ink, layersOff, () => LP.drawPlan(ink, place, lotLess(holo, saved, split.existing, levelId), levelId,
               { view, hologram: true, paperColor: env.paperColor || '#ffffff', layersOff })) || drew;
-            drew = paintOutlines(ink, place, split.existing, levelId) || drew;
+            drew = paintOutlines(ink, place, split.existing, levelId, layersOff) || drew;
           }
           if (show.demo) drew = paintDemo(ink, place, holo, split, levelId, view || 'plan') || drew;
         } catch (error) {

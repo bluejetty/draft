@@ -182,6 +182,38 @@ test('SHOW LAYERS turns a hologram off in one viewport, ON/OFF in words', async 
   expect((await ink(page)).blue).toBeGreaterThan(before.blue * 0.8);
 });
 
+// A HOLOGRAM'S DASHED FOOTPRINT GOES WITH WALLS (jb, 25 Nov 2026: a suites-
+// only 2ND FL PLAN with every row off still drew the outline). WALLS carries
+// OUTLINE, and the hologram painter asks it.
+test('WALLS off takes a hologram\'s outline too', async ({ page }) => {
+  const saved = drawing();
+  delete saved.holograms[0].demo;
+  saved.holograms[0].source.walls = [];
+  saved.holograms[0].source.outlines = [{ id: 'o1', levelId: 1, points: [point(16, 0), point(40, 0), point(40, 16), point(16, 16)] }];
+  saved.walls = [];
+  await openLayout(page, saved);
+  const walls = await page.evaluate(() => globalThis.eval('Component').VIEWPORT_LAYER_GROUPS.find(g => g.id === 'walls').layers);
+  expect(walls).toContain('OUTLINE');
+  const marked = await page.evaluate(({ walls }) => {
+    const run = off => {
+      const c = document.createElement('canvas');
+      c.width = 400; c.height = 300;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 400, 300);
+      const saved = JSON.parse(JSON.stringify(globalThis.eval('page')._saved));
+      window.DraftHologram.paint(ctx, p => ({ x: 20 + p.x * 8, y: 20 + p.z * 8 }), saved, 1,
+        { view: 'plan', paperColor: '#ffffff', viewportLayersOff: off ? new Set(off) : null });
+      const d = ctx.getImageData(0, 0, 400, 300).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (Math.min(d[i], d[i + 1], d[i + 2]) < 230) n += 1;
+      return n;
+    };
+    return { on: run(null), off: run(walls) };
+  }, { walls });
+  expect(marked.on, 'the outline draws').toBeGreaterThan(100);
+  expect(marked.off, 'the outline is gone with WALLS').toBe(0);
+});
+
 test('no hologram, no section', async ({ page }) => {
   const plain = drawing();
   delete plain.holograms;

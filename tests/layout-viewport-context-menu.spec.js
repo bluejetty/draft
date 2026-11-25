@@ -202,7 +202,7 @@ test('SHOW LAYERS switches a group off for that viewport only, and UNDO puts it 
   await withLayoutSave(page, () => card.locator('[data-layer-group="walls"]').click());
   await expect(card.locator('[data-layer-group="walls"]')).toHaveAttribute('aria-pressed', 'true');
   const saved = await savedViewports(page);
-  expect(saved.find(v => v.id === 1).layersOff).toEqual(['A-WALL-EXT', 'A-WALL-INT', 'A-WALL-PATT']);
+  expect(saved.find(v => v.id === 1).layersOff).toEqual(['A-WALL-EXT', 'A-WALL-INT', 'A-WALL-PATT', 'OUTLINE']);
   expect(saved.find(v => v.id === 2).layersOff, 'the other viewport is untouched').toBeUndefined();
   expect(await inkInside(page, 1), 'the walls are gone from the window').toBeLessThan(inkBefore1 * 0.5);
   expect(await inkInside(page, 2)).toBeGreaterThan(inkBefore2 * 0.8);
