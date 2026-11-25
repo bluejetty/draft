@@ -49,14 +49,20 @@ const MUTANTS = [
     test: 'LAYOUT: the dealt MAIN FL PLAN and 2ND FL PLAN sheets hang their overhead lines; the MAIN FLOOR layout none' },
   { file: 'plan-composition.js',
     name: 'the composition is handed the overhead lines and paints none',
-    find: '      render.drawOverheadLines2D(ctx, toS, env.overheadLines, env.overheadEnv || {});\n',
+    find: '        render.drawOverheadLines2D(ctx, toS, segs, env.overheadEnv || {});\n',
     with: '',
     test: 'LAYOUT: the dealt MAIN FL PLAN and 2ND FL PLAN sheets hang their overhead lines; the MAIN FLOOR layout none' },
+  { file: 'plan-composition.js',
+    name: 'an overhead line ignores the viewport\'s layers off',
+    find: '        if (off(layer)) return;\n',
+    with: '',
+    test: 'the overhead roof overhang goes off with A-ROOF, the cantilever with A-WALL-EXT',
+    spec: 'tests/layout-viewport-context-menu.spec.js' },
 ];
 
-const run = name => {
+const run = (name, spec = SPEC) => {
   try {
-    execSync(`npx playwright test ${SPEC} --workers=1 --reporter=line`
+    execSync(`npx playwright test ${spec} --workers=1 --reporter=line`
       + (name ? ` -g ${JSON.stringify(name)}` : ''),
       { cwd: ROOT, stdio: 'pipe',
         env: { ...process.env, DRAFT_TEST_PORT: '4386' } });
@@ -91,7 +97,7 @@ for (const m of MUTANTS) {
   }
   ran += 1;
   fs.writeFileSync(path, before.replace(m.find, m.with));
-  let result = run(m.test);
+  let result = run(m.test, m.spec);
   let note = '';
   if (result === 'passed' && run(null) === 'failed') {
     result = 'failed'; note = '  (caught by another check — re-aim `test`)';

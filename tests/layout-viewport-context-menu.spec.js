@@ -225,3 +225,92 @@ test('SHOW LAYERS switches a group off for that viewport only, and UNDO puts it 
   await page.keyboard.press('Escape');
   await expect(card).toBeHidden();
 });
+
+// THE DASHED ROOF OVERHANG on a walls plan (jb, 25 Nov 2026: "whats the
+// dotted roof line? it didn't turn off"): an overhead line asks its own
+// layer -- A-ROOF for the overhang, A-WALL-EXT for a cantilever -- so
+// STRUCTURE / ROOF takes the overhang with it and WALLS the cantilever.
+test('the overhead roof overhang goes off with A-ROOF, the cantilever with A-WALL-EXT', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  const drawn = await page.evaluate(() => {
+    const R = window.DraftRender2D;
+    const real = R.drawOverheadLines2D;
+    const run = off => {
+      const seen = [];
+      // The module freezes its export; draw on a stub render instead.
+      const saved = window.DraftRender2D;
+      window.DraftRender2D = { ...saved, drawOverheadLines2D: (ctx, toS, segs) => seen.push(...segs.map(s => s.layer)) };
+      try {
+        window.DraftPlanComposition.drawPlan(document.createElement('canvas').getContext('2d'), p => ({ x: p.x, y: p.z }), {
+          levelId: 3,
+          overheadLines: [
+            { start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, layer: 'A-ROOF' },
+            { start: { x: 0, z: 5 }, end: { x: 10, z: 5 }, layer: 'A-WALL-EXT' },
+          ],
+          layersOff: off ? new Set(off) : null,
+        });
+      } finally { window.DraftRender2D = saved; }
+      return seen;
+    };
+    return { all: run(null), roofOff: run(['A-ROOF']), wallsOff: run(['A-WALL-EXT']), real: typeof real };
+  });
+  expect(drawn.real).toBe('function');
+  expect(drawn.all.sort()).toEqual(['A-ROOF', 'A-WALL-EXT']);
+  expect(drawn.roofOff).toEqual(['A-WALL-EXT']);
+  expect(drawn.wallsOff).toEqual(['A-ROOF']);
+});
+
+// TEXT AND DIMENSIONS BY KIND (jb, 25 Nov 2026): a press on the row is every
+// kind; over the row the kinds stand beside the card, each its own switch.
+test('TEXT and DIMENSIONS open their kinds beside the card, each a switch of its own', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  await rightClickViewport(page, 1);
+  await item(page, 'show-layers').click();
+  const card = page.locator('[data-layers-card]');
+  const textFly = card.locator('[data-layers-fly="text"]');
+  await expect(textFly).toBeHidden();
+  await card.locator('[data-layer-group="text"]').hover();
+  await expect(textFly).toBeVisible();
+  await expect(textFly.locator('.lay-layers-name')).toHaveText(['DOOR TEXT', 'ROOM NAMES', 'WINDOW TEXT', 'ANNOTATION TEXT', 'BUILTINS TEXT']);
+
+  await withLayoutSave(page, () => textFly.locator('[data-layer-group="text-builtin"]').click());
+  const off = (await savedViewports(page)).find(v => v.id === 1).layersOff;
+  expect(off.sort()).toEqual(['A-DIMS-EQUIP', 'BUILTIN-TEXT']);
+  await expect(textFly, 'stays open across its own press').toBeVisible();
+  await expect(textFly.locator('[data-layer-group="text-builtin"] .lay-onoff')).toHaveText('OFF');
+  await expect(card.locator('[data-layer-group="text"] .lay-onoff').first()).toHaveText('PART');
+
+  // The arrow opens DIMENSIONS for a finger.
+  await card.locator('[data-layers-more="dims"]').click();
+  const dimsFly = card.locator('[data-layers-fly="dims"]');
+  await expect(dimsFly).toBeVisible();
+  await expect(dimsFly.locator('.lay-layers-name')).toHaveText(['FENESTRATION DIMS', 'EXT DIMS', 'INT DIMS',
+    'OVERALL DIMS', 'STRUCTURE DIMS', 'HAND DIMS', 'SPECIAL DIMS']);
+  await withLayoutSave(page, () => dimsFly.locator('[data-layer-group="dims-int"]').click());
+  expect((await savedViewports(page)).find(v => v.id === 1).layersOff).toContain('A-DIMS-INT');
+});
+
+// THE WORDS WITH NO LAYER OF THEIR OWN -- a stair's DN 13R, a beam's tag --
+// stop under BUILTIN-TEXT while the piece itself still draws.
+test('BUILTIN-TEXT off stops a stair\'s words and keeps its lines', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  const seen = await page.evaluate(() => {
+    const run = off => {
+      const calls = [];
+      const ctx = document.createElement('canvas').getContext('2d');
+      const saved = window.DraftRender2D;
+      window.DraftRender2D = { ...saved, drawStairs2D: c => { c.fillText('DN 13R', 0, 0); c.lineTo(1, 1); calls.push('lines'); } };
+      const fill = ctx.fillText.bind(ctx);
+      ctx.fillText = (...args) => { calls.push(`text:${args[0]}`); return fill(...args); };
+      try {
+        window.DraftPlanComposition.drawPlan(ctx, p => ({ x: p.x, y: p.z }), {
+          levelId: 1, stairEnv: {}, stairsShown: [{}], layersOff: off ? new Set(off) : null,
+        });
+      } finally { window.DraftRender2D = saved; }
+      return calls;
+    };
+    return { on: run(null), off: run(['BUILTIN-TEXT']) };
+  });
+  expect(seen.on).toEqual(['text:DN 13R', 'lines']);
+  expect(seen.off).toEqual(['lines']);
+});

@@ -145,6 +145,43 @@ test('EXISTING, DEMO and NEW switch per viewport, and the sheet keeps the choice
   expect(Math.abs(again.blue - demoOnly.blue)).toBeLessThan(demoOnly.blue * 0.2 + 20);
 });
 
+// SHOW LAYERS CARRIES THE HOLOGRAMS (jb, 25 Nov 2026): a row per name,
+// ON/OFF in words, kept on the viewport as `hologramsOff`, RESET clears it.
+test('SHOW LAYERS turns a hologram off in one viewport, ON/OFF in words', async ({ page }) => {
+  await placed(page);
+  const before = await ink(page);
+  const id = await page.evaluate(() => globalThis.eval('page').state.selectedViewportId);
+  await page.evaluate(id => globalThis.eval('page')._openLayersCard(id, 200, 100), id);
+  const card = page.locator('[data-layers-card]');
+  await expect(card).toBeVisible();
+  await expect(card.locator('[data-layer-group="walls"] .lay-onoff')).toHaveText('ON');
+  const holoRow = card.locator('[data-hologram-row="EXISTING"]');
+  await expect(holoRow.locator('.lay-onoff')).toHaveText('ON');
+
+  await withLayoutSave(page, () => holoRow.click());
+  await expect(holoRow.locator('.lay-onoff')).toHaveText('OFF');
+  await expect(card.locator('[data-hologram-row="*"] .lay-onoff')).toHaveText('OFF');
+  const off = await ink(page);
+  expect(off.blue, 'the hologram is gone from the window').toBeLessThan(before.blue * 0.2 + 20);
+  expect(off.black).toBeGreaterThan(before.black * 0.8);
+  expect((await savedDrawing(page)).layout.viewports.find(v => v.id === id).hologramsOff).toEqual(['hologram-1']);
+
+  // THE VIEWPORT'S LAYERS REACH THE HOLOGRAMS TOO: WALLS off takes theirs.
+  await withLayoutSave(page, () => holoRow.click());
+  const back = await ink(page);
+  await withLayoutSave(page, () => card.locator('[data-layer-group="walls"]').click());
+  expect((await ink(page)).blue, 'the hologram\'s walls go with WALLS').toBeLessThan(back.blue * 0.5);
+  await withLayoutSave(page, () => card.locator('[data-layer-group="walls"]').click());
+  await withLayoutSave(page, () => holoRow.click());
+
+  // EACH HOLOGRAM lists every copy; RESET puts it back.
+  await card.locator('[data-layers-each-hologram]').click();
+  await expect(card.locator('[data-hologram-id="hologram-1"] .lay-onoff')).toHaveText('OFF');
+  await withLayoutSave(page, () => card.locator('[data-layers-reset]').click());
+  expect((await savedDrawing(page)).layout.viewports.find(v => v.id === id).hologramsOff).toBeUndefined();
+  expect((await ink(page)).blue).toBeGreaterThan(before.blue * 0.8);
+});
+
 test('no hologram, no section', async ({ page }) => {
   const plain = drawing();
   delete plain.holograms;

@@ -78,7 +78,16 @@
   };
   // `env.noWords` (a MODEL rail seat, 82 px across): the hologram's own set
   // plus every word, the way the seat writes none of the drawing's own.
-  const wordless = (off, env) => (env && env.noWords ? new Set([...(off || []), ...TEXT_OFF]) : off);
+  // AND THE SHEET VIEWPORT'S OWN LAYERS OFF (`env.viewportLayersOff`, jb 25
+  // Nov 2026: SHOW LAYERS on a holograms-only plan switched nothing off,
+  // because each hologram wore only its own set). Added to the hologram's.
+  const wordless = (off, env) => {
+    let set = off;
+    const sheet = env && env.viewportLayersOff;
+    if (sheet && sheet.size) set = new Set([...(set || []), ...sheet]);
+    if (env && env.noWords) set = new Set([...(set || []), ...TEXT_OFF]);
+    return set;
+  };
   const cleanOff = raw => [...new Set((Array.isArray(raw) ? raw : []).map(v => String(v ?? '').trim()).filter(Boolean))];
   // WHICH SET A HOLOGRAM WEARS: its own (THIS ONE ONLY), else its file's
   // (THIS TYPE ONLY), else the drawing's main set. `{ off, from }`, `from`

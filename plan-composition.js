@@ -148,6 +148,25 @@ if (!window.DraftPlanComposition) {
   // into one loop: every wall's FILL goes down before any wall's STROKE, so a
   // join reads as one continuous assembly instead of each wall's body being
   // painted over its neighbour's edge.
+  // THE TEXT IDS for words that ride a piece with no layer of their own
+  // (jb, 25 Nov 2026). Not drawing layers -- nothing is filed on them -- only
+  // names a viewport's SHOW LAYERS list can switch off.
+  // CABINET TEXT is a kitchen piece's or a vanity's name (A-DIMS-EQUIP,
+  // the standards table's size tag for casework); BUILTINS TEXT is every
+  // other word a plan writes on its pieces -- tub, toilet, washer, a stair's
+  // DN 13R, a beam's or a joist's tag, a pile mark, a shape's label (jb:
+  // "put everything else in there").
+  const TEXT_IDS = Object.freeze({
+    cabinet: 'A-DIMS-EQUIP',
+    builtin: 'BUILTIN-TEXT',
+  });
+  const isCabinet = fixture => {
+    const K = window.DraftFixtureKinds;
+    if (!K || !K.isKind(fixture?.kind)) return false;
+    const kind = K.kindFor(fixture.kind);
+    return kind.group === 'KITCHEN' || kind.casework === true;
+  };
+
   const drawPlan = (ctx, toS, env) => {
     const render = R();
     if (!render || !ctx || typeof toS !== 'function') return;
@@ -163,6 +182,21 @@ if (!window.DraftPlanComposition) {
     // DIMS -- which carry no layer key -- go off with A-DIMS.
     const off = id => Boolean(env.layersOff && id && env.layersOff.has(id));
     const pick = (items, options) => forLevel(items, levelId, viewId, hasLayerViews, options);
+    // THE WORDS OF A KIND, OFF ON THEIR OWN (jb, 25 Nov 2026: TEXT on SHOW
+    // LAYERS splits into DOOR TEXT, ROOM NAMES, WINDOW TEXT, CABINET TEXT,
+    // ANNOTATION TEXT ...). Where the words have no layer of their own --
+    // a stair's DN 13R, a beam's tag, a cabinet's name, a shape's label --
+    // the piece is drawn as ever with the canvas's lettering stopped, under
+    // a text id the viewport's list can name (TEXT_IDS below).
+    const muted = (id, draw) => {
+      if (!off(id) || !ctx) return draw();
+      const own = ['fillText', 'strokeText'].map(k => [k, Object.prototype.hasOwnProperty.call(ctx, k), ctx[k]]);
+      ctx.fillText = () => {};
+      ctx.strokeText = () => {};
+      try { return draw(); } finally {
+        own.forEach(([k, had, fn]) => { if (had) ctx[k] = fn; else delete ctx[k]; });
+      }
+    };
 
     // Roofs and outlines are whole-level, not per-view: a roof belongs to the
     // level it covers and shows on every drawing of it.
@@ -195,7 +229,7 @@ if (!window.DraftPlanComposition) {
     // would throw in the middle of a sheet. A caller says what it can draw by
     // supplying the env for it, and this is where that is honoured.
     if (env.floorEnv) floors.forEach(floor => { onLayer(ctx, floor.layer || 'A-FL'); render.drawFloor2D(ctx, toS, floor, {}, env.floorEnv); });
-    if (env.shapeEnv) shapes.forEach(shape => { onLayer(ctx, shape.layer || 'SHAPE'); render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv); });
+    if (env.shapeEnv) muted(TEXT_IDS.builtin, () => shapes.forEach(shape => { onLayer(ctx, shape.layer || 'SHAPE'); render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv); }));
     if (env.roofEnv) roofs.forEach(roof => { onLayer(ctx, roof.layer || 'A-ROOF'); render.drawRoof2D(ctx, toS, roof, {}, env.roofEnv); });
     // THE FLOORING A ROOM TAG LAYS (Movie, 23 Oct), under the walls so their
     // fill stops it at the face, on the finishes layer. Only a shaped tag
@@ -293,7 +327,7 @@ if (!window.DraftPlanComposition) {
         .filter(fixture => fixture.levelId === levelId
           && (wallById.has(fixture.wallId) || (fixture.wallId == null && fixture.host)) && shows(fixture.layer)
           && !off(fixture.layer || 'A-FIXT'));
-      drawn.forEach(fixture => {
+      drawn.forEach(fixture => muted(isCabinet(fixture) ? TEXT_IDS.cabinet : TEXT_IDS.builtin, () => {
         onLayer(ctx, fixture.layer || 'A-FIXT');
         render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
         // THE UPPERS OVER A KITCHEN PIECE, dashed and lighter (the overhead
@@ -302,11 +336,11 @@ if (!window.DraftPlanComposition) {
           && typeof render.drawUpperCabinets2D === 'function') {
           render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId) || undefined, env.fixtureEnv);
         }
-      });
+      }));
       // ONE COUNTER over the pieces under it, and the uppers as one run.
       if (env.fixtureEnv.meldCounters === true && typeof render.drawCounters2D === 'function') {
         onLayer(ctx, 'A-FIXT');
-        render.drawCounters2D(ctx, toS, drawn, env.fixtureEnv);
+        muted(TEXT_IDS.cabinet, () => render.drawCounters2D(ctx, toS, drawn, env.fixtureEnv));
       }
     }
 
@@ -344,8 +378,8 @@ if (!window.DraftPlanComposition) {
     // (Movie, 16 Oct), which a level filter here could not know about.
     if (env.stairEnv && !off('A-STR')) {
       onLayer(ctx, 'A-STR');
-      render.drawStairs2D(ctx, toS,
-        { ...env.stairEnv, stairs: Array.isArray(env.stairsShown) ? env.stairsShown : pick(env.stairs, { strict: true }) });
+      muted(TEXT_IDS.builtin, () => render.drawStairs2D(ctx, toS,
+        { ...env.stairEnv, stairs: Array.isArray(env.stairsShown) ? env.stairsShown : pick(env.stairs, { strict: true }) }));
     }
     if (env.cutMarkEnv) { onLayer(ctx, 'A-SECT-MARK'); render.drawCutMarks2D(ctx, toS, env.cutMarkEnv); }
     if (env.outlineEnv && !off('OUTLINE')) { onLayer(ctx, 'OUTLINE'); render.drawOutlines2D(ctx, toS, env.outlineEnv); }
@@ -375,11 +409,23 @@ if (!window.DraftPlanComposition) {
     // Oct), dashed and lighter. Worked out by the caller (layout-plan
     // overheadLines); this only paints them, on the exterior wall layer
     // they hang past, before the structure so a beam above reads over them.
+    // EACH SEGMENT ASKS ITS OWN LAYER (jb, 25 Nov 2026): the roof overhang
+    // is A-ROOF and goes off with STRUCTURE / ROOF; a cantilever is
+    // A-WALL-EXT. An untagged segment is the exterior wall, as it was.
     if (Array.isArray(env.overheadLines) && env.overheadLines.length && typeof render.drawOverheadLines2D === 'function') {
-      onLayer(ctx, 'A-WALL-EXT');
-      render.drawOverheadLines2D(ctx, toS, env.overheadLines, env.overheadEnv || {});
+      const byLayer = new Map();
+      env.overheadLines.forEach(seg => {
+        const layer = seg?.layer || 'A-WALL-EXT';
+        if (off(layer)) return;
+        if (!byLayer.has(layer)) byLayer.set(layer, []);
+        byLayer.get(layer).push(seg);
+      });
+      byLayer.forEach((segs, layer) => {
+        onLayer(ctx, layer);
+        render.drawOverheadLines2D(ctx, toS, segs, env.overheadEnv || {});
+      });
     }
-    if (env.structureEnv) {
+    if (env.structureEnv) muted(TEXT_IDS.builtin, () => {
       // THE TAG OPPOSITE THE BEAM'S STRING, one per line (render-2d
       // beamTagSides), read off the dimensions this same pass draws.
       const beamsHere = pick(env.beams).filter(beam => !off(beam.layer || 'S-BEAM'));
@@ -416,7 +462,7 @@ if (!window.DraftPlanComposition) {
       if (Array.isArray(env.joistCallouts) && typeof render.drawJoistSpans2D === 'function') {
         env.joistCallouts.forEach(callout => { onLayer(ctx, 'S-BEAM'); render.drawJoistSpans2D(ctx, toS, callout, {}, env.structureEnv); });
       }
-    }
+    });
 
     if (env.noteEnv) {
       // A note lettered at its real size (DXF text) needs the sheet's feet.
@@ -598,6 +644,7 @@ if (!window.DraftPlanComposition) {
 
   window.DraftPlanComposition = Object.freeze({
     drawPlan,
+    TEXT_IDS,
     // Exported for the harness and for a caller that wants the same filtering
     // without the painting -- a sheet that has to FIT a plan needs the points
     // before it can draw them.
