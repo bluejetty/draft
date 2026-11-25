@@ -697,11 +697,12 @@ suite('drawBeam2D', 'a printing pass draws the beam and drops the label', R => {
 // Movie, 13 Oct: "the main floor support beam should show on the MAIN FLOOR
 // (layout) and the foundation plan". One record, two sheets -- the second one
 // draws it as context, so it has to be TELLABLE from a beam that is really on
-// this plan, and it still has to print.
+// this plan, and it still has to print. TELLABLE BY WEIGHT, NOT BY WORD since
+// jb, 25 Nov 2026: "don't show BELOW, just ENGINEERED LVL".
 suite('drawBeam2D', 'a beam below reads as below, and still prints', R => {
   const ctx = recordingCtx();
   R.drawBeam2D(ctx, toS, SPAN, { below: true }, structEnv());
-  expect('it says it is below', calls(ctx, 'fillText')[0][0], 'FLUSH BEAM BELOW');
+  expect('its name carries no BELOW', calls(ctx, 'fillText')[0][0], 'FLUSH BEAM');
   expect('and is drawn lighter than one on this plan',
     sets(ctx, 'globalAlpha').pop() < 1, true);
   // NOT HIDDEN FROM THE PRINTER. The sheet that goes out carrying the beam
@@ -713,7 +714,7 @@ suite('drawBeam2D', 'a beam below reads as below, and still prints', R => {
   // A dropped beam keeps saying it is dropped.
   const dropped = recordingCtx();
   R.drawBeam2D(dropped, toS, { ...SPAN, mode: 'dropped' }, { below: true }, structEnv());
-  expect('and a dropped one says both', calls(dropped, 'fillText')[0][0], 'DROPPED BEAM BELOW');
+  expect('and a dropped one says dropped', calls(dropped, 'fillText')[0][0], 'DROPPED BEAM');
 });
 
 // AND A BEAM ON THIS PLAN IS NOT DIMMED, which is the half that makes the
@@ -884,14 +885,15 @@ suite('drawBeam2D', 'the label sits BESIDE the beam, not on it', R => {
 // ── THE JOIST CALLOUT, ONE PER BAY (Movie, 16 Oct) ──
 // An arrowed span line perpendicular to the beam in every bay of the deck,
 // the short form beside it. The bays are build-house joistBays' answer; the
-// painter draws a line, two arrowheads and the label per bay.
+// painter draws a line, two arrowheads and the label per bay. The heads are
+// OPEN V shapes, two strokes each (jb, 25 Nov 2026: bigger, black lines).
 const CALLOUT = { axis: 'z', label: 'ENGINEERED OWJ 19-1/4"',
   bays: [{ at: 8, from: 0, to: 22 }, { at: 16, from: 22, to: 30 }] };
 suite('drawJoistSpans2D', 'every bay gets a line, two arrowheads and the label', R => {
   const ctx = recordingCtx();
   R.drawJoistSpans2D(ctx, toS, CALLOUT, {}, structEnv());
-  expect('one line per bay', count(ctx, 'stroke'), 2);
-  expect('an arrowhead at each end of each', count(ctx, 'fill'), 4);
+  expect('a line and two open heads per bay', count(ctx, 'stroke'), 6);
+  expect('the heads are not filled', count(ctx, 'fill'), 0);
   expect('the label beside each', calls(ctx, 'fillText').map(c => c[0]).join('|'),
     'ENGINEERED OWJ 19-1/4"|ENGINEERED OWJ 19-1/4"');
   expect('in the structure ink', sets(ctx, 'strokeStyle').pop(), SENTINEL_COLUMN);
@@ -911,7 +913,7 @@ suite('drawJoistSpans2D', 'the arrow runs the joists\' way, from bearing to bear
 suite('drawJoistSpans2D', 'a printing pass keeps the arrows and drops the label, as the beam tag does', R => {
   const ctx = recordingCtx();
   R.drawJoistSpans2D(ctx, toS, CALLOUT, {}, structEnv({ isPrinting: true }));
-  expect('the lines print', count(ctx, 'stroke'), 2);
+  expect('the lines and heads print', count(ctx, 'stroke'), 6);
   expect('and no label', count(ctx, 'fillText'), 0);
 });
 suite('drawJoistSpans2D', 'nothing to call out draws nothing', R => {
@@ -1003,9 +1005,19 @@ suite('drawBeamSpanTags2D', 'each span says FLUSH or DROPPED, opposite the name'
   R.drawBeamSpanTags2D(printing, toS, spans, {}, structEnv({ isPrinting: true }));
   expect('a printing pass writes none', count(printing, 'fillText'), 0);
 });
+suite('beamSpanRuns', 'touching spans of one mode on one line share one tag', R => {
+  const ctx = recordingCtx();
+  const hits = R.drawBeamSpanTags2D(ctx, toS, R.beamSpans([SPAN], [{ point: { x: 4, z: 0 } }, { point: { x: 7, z: 0 } }]), {}, structEnv());
+  expect('one tag for the beam', calls(ctx, 'fillText').map(c => c[0]).join(','), 'FLUSH');
+  expect('its hit carries all three spans', hits.length === 1 && hits[0].span.spans.length, 3);
+  expect('and runs the whole beam', `${hits[0].span.start.x}-${hits[0].span.end.x}`, '0-10');
+});
 suite('spanTagAt', 'a click on a tag finds its span, a click beside it nothing', R => {
   const ctx = recordingCtx();
-  const hits = R.drawBeamSpanTags2D(ctx, toS, R.beamSpans([SPAN], [{ point: { x: 5, z: 0 } }]), {}, structEnv());
+  // Two spans of one mode share a tag (jb, 25 Nov 2026: "once per beam"), so
+  // the dropped second piece is what keeps a tag of its own here.
+  const spans = R.beamSpans([{ ...SPAN, end: { x: 5, z: 0 } }, { ...SPAN, id: 2, start: { x: 5, z: 0 }, mode: 'dropped' }], []);
+  const hits = R.drawBeamSpanTags2D(ctx, toS, spans, {}, structEnv());
   const second = hits[1];
   const on = R.spanTagAt(hits, second.cx, second.cy + (second.y0 + second.y1) / 2);
   expect('the second span', on && on.span.start.x, 5);
@@ -4426,8 +4438,10 @@ function coverage() {
     ['drawBeam2D draws a beam below at full weight',
       src => src.replace('    if (below) ctx.globalAlpha = 0.45;\n    if (above)',
         '    if (above)')],
-    ['drawBeam2D does not say a beam below is below',
-      src => src.replace("(below ? ' BELOW' : above ? ' ABOVE' : '')", "(above ? ' ABOVE' : '')")],
+    ['drawBeamSpanTags2D tags every span again',
+      src => src.replace('    const list = beamSpanRuns(spans);\n', '    const list = Array.isArray(spans) ? spans : [];\n')],
+    ['drawBeam2D says BELOW again under a floor layout',
+      src => src.replace("        named + (above ? ' ABOVE' : ''),", "        named + (below ? ' BELOW' : above ? ' ABOVE' : ''),")],
     // THE OVERHEAD CONVENTION (Movie, 16 Oct): the beam over this plan, wrong
     // in each of the four ways it can be -- full weight, solid, full width,
     // and not saying it is above; and the uppers wrong in theirs -- as deep as
