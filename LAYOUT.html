@@ -676,14 +676,15 @@
   #lay-layers .lay-layers-advanced { display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-top:4px; }
   #lay-layers .lay-layers-advanced .lay-pick { margin:0; font-size:10px; padding:4px 6px; }
   /* ON / OFF IN WORDS on the left of every row (jb, 25 Nov 2026). The word
-     sits in a fixed box so the names line up; OFF is dark on the lit row,
-     ON is the green a switched-on lamp is, PART half way. */
+     sits in a fixed box so the names line up; ON is boxed in the
+     skin's ink-good, OFF in its ink-warn, PART dashed. */
   #lay-layers .lay-layers-row { display:flex; align-items:center; gap:8px; }
   #lay-layers .lay-onoff { flex:0 0 auto; min-width:30px; text-align:center; padding:1px 0;
     border-radius:2px; font-size:10px; letter-spacing:0.06em; font-weight:700; }
-  #lay-layers .lay-onoff-on { background:#2f7d46; color:#ffffff; }
-  #lay-layers .lay-onoff-off { background:#a04040; color:#ffffff; }
-  #lay-layers .lay-onoff-part { background:#b8892a; color:#ffffff; }
+  #lay-layers .lay-onoff { border:1px solid currentColor; padding:0; }
+  #lay-layers .lay-onoff-on { color: var(--ink-good); }
+  #lay-layers .lay-onoff-off { color: var(--ink-warn); }
+  #lay-layers .lay-onoff-part { color: var(--ink-warn); border-style:dashed; }
   #lay-layers .lay-layers-name { flex:1 1 auto; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   #lay-layers .lay-layers-advanced .lay-onoff { min-width:24px; font-size:9px; }
   #lay-layers .lay-layers-more { flex:0 0 auto; margin-left:auto; padding:0 4px; font-size:14px; line-height:1;

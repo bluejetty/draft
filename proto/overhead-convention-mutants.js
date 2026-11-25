@@ -54,7 +54,7 @@ const MUTANTS = [
     test: 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither' },
   { file: 'plan-composition.js',
     name: 'the composition hangs no uppers',
-    find: '        render.drawCounters2D(ctx, toS, drawn, env.fixtureEnv);\n',
+    find: '        muted(TEXT_IDS.cabinet, () => render.drawCounters2D(ctx, toS, drawn, env.fixtureEnv));\n',
     with: '',
     test: 'LAYOUT: the dealt MAIN FL PLAN sheet draws the beam over it dash-dot and the uppers dashed; the MAIN FLOOR layout neither' },
 ];
