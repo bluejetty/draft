@@ -4243,10 +4243,15 @@
     if (!e) return false;
     if (want.in != null) {
       if (!(want.in >= 0 && want.in <= 24)) { sayOnStrip('EXT. WALL -- 0" to 24".'); return false; }
+      // 0 on an OFF leg leaves it off (the box already reads 0); any more
+      // turns the wall side on at exactly that much.
+      if (e.side === 'off' && want.side == null && !(want.in > 0)) return true;
       e.in = want.in;
       if (e.side === 'off' && want.side == null) e.side = want.leg === 0 ? stairNearWallSide(base) : 'right';
     }
     if (want.side != null) e.side = want.side;
+    // A side picked on a leg at 0" gets the 9" back, so the chip shows on the plan.
+    if (want.in == null && e.side !== 'off' && !(e.in > 0)) e.in = STAIR_EXT_WALL_WIDEN_IN;
     const was = undoStack.length;
     if (!editStair(base, st => {
       st.extLegs = legs.map(x => ({ in: x.in, side: x.side }));

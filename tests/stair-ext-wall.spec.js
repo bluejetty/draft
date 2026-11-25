@@ -93,7 +93,7 @@ test('LEG 1 LEFT (N): the flight above is 9" wider on the north (wall) side; the
   await expect(leg1).toBeVisible();
   await expect(row(page, 'ext leg 2')).toHaveCount(0);
   await expect(leg1.locator('[data-prop-value="off"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(leg1.locator('[data-stair-ext-in]')).toHaveValue('9');
+  await expect(leg1.locator('[data-stair-ext-in]')).toHaveValue('0');
   // Walking DOWN, east: the left hand is north, the right hand south.
   await expect(leg1.locator('[data-prop-value="left"]')).toHaveText('LEFT (N)');
   await expect(leg1.locator('[data-prop-value="right"]')).toHaveText('RIGHT (S)');
@@ -329,4 +329,56 @@ test('a straight flight widened 9" has its corner nodes at the corners drawn', a
   const [drawn] = await legsOf(page, UPPER_ID);
   expect(Math.min(...zs)).toBeCloseTo(drawn.left.z, 6);
   expect(Math.max(...zs)).toBeCloseTo(drawn.right.z, 6);
+});
+
+// THE BOX SAYS WHAT THE PLAN DRAWS (jb, 25 Nov 2026: "it said it was 9\" but
+// it actually wasn't adjusted on the plan. it was 0 on the plan, i change it
+// to 8\" and it changes drastically (not just 1\")"). An OFF leg read 9 while
+// nothing was widened, so typing 8 put on the whole 8". OFF now reads 0, and
+// each inch typed moves the plan one inch.
+test('an OFF leg reads 0; typing 8 then 9 widens the flight above 8" then 1" more, nothing else moves', async ({ page }) => {
+  const L = extra => ({ shape: 'L', turn: 'right', start: { x: -8, z: -18 }, end: { x: -3, z: -18 }, ...extra });
+  await open(page, fixture([flight(BASE_ID, MAIN_FL, L()), flight(UPPER_ID, SECOND, L())]));
+  await pickAt(page, -6, -18);
+  for (const n of ['ext leg 1', 'ext leg 2']) {
+    await expect(row(page, n).locator('[data-prop-value="off"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(row(page, n).locator('[data-stair-ext-in]'), `${n} OFF draws nothing`).toHaveValue('0');
+  }
+  const plain = await legsOf(page, UPPER_ID, true);
+  // 0 typed into an OFF leg leaves it off.
+  let inch = row(page, 'ext leg 1').locator('[data-stair-ext-in]');
+  await inch.fill('0');
+  await inch.press('Enter');
+  expect((await live(page, UPPER_ID)).legWiden).toBeUndefined();
+
+  await pickAt(page, -6, -18);
+  inch = row(page, 'ext leg 1').locator('[data-stair-ext-in]');
+  await inch.fill('8');
+  await inch.press('Enter');
+  const at8 = await legsOf(page, UPPER_ID);
+  expect(at8[0].w * 12, 'leg 1 is 8" wider').toBeCloseTo(44, 4);
+  await pickAt(page, -6, -18);
+  await expect(row(page, 'ext leg 1').locator('[data-stair-ext-in]')).toHaveValue('8');
+  inch = row(page, 'ext leg 1').locator('[data-stair-ext-in]');
+  await inch.fill('9');
+  await inch.press('Enter');
+  const at9 = await legsOf(page, UPPER_ID);
+  expect(at9[0].w * 12, 'one inch more').toBeCloseTo(45, 4);
+  // The inside edge and leg 2 stay put: only the wall edge moves the inch.
+  expect(at9[0].right.z).toBeCloseTo(at8[0].right.z, 4);
+  expect(at9[0].right.z).toBeCloseTo(plain[0].right.z, 4);
+  expect(Math.abs(at9[0].left.z - at8[0].left.z) * 12).toBeCloseTo(1, 4);
+  expect(at9[1].left.x).toBeCloseTo(at8[1].left.x, 4);
+  expect(at9[1].right.x).toBeCloseTo(at8[1].right.x, 4);
+  // A side picked on a leg at 0" puts the 9" on.
+  await pickAt(page, -6, -18);
+  inch = row(page, 'ext leg 1').locator('[data-stair-ext-in]');
+  await inch.fill('0');
+  await inch.press('Enter');
+  expect((await legsOf(page, UPPER_ID))[0].w * 12).toBeCloseTo(36, 4);
+  await pickAt(page, -6, -18);
+  await row(page, 'ext leg 1').locator('[data-prop-value="right"]').click();
+  expect((await live(page, BASE_ID)).extLegs[0]).toEqual({ in: 9, side: 'right' });
+  await pickAt(page, -6, -18);
+  await expect(row(page, 'ext leg 1').locator('[data-stair-ext-in]')).toHaveValue('9');
 });

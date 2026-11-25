@@ -2662,8 +2662,12 @@
         inch.min = '0';
         inch.max = '24';
         inch.step = '0.5';
-        inch.value = String(e.in);
-        inch.title = 'Inches the flights above are wider than the basement flight, on the side picked (9" by default)';
+        // THE BOX SAYS WHAT THE PLAN DRAWS (jb, 25 Nov 2026: "it said it was
+        // 9\" but it actually wasn't adjusted on the plan. it was 0"): an OFF
+        // leg widens nothing, so it reads 0, not the 9" a side chip would
+        // put on. Typing inches into it turns the wall side on at that much.
+        inch.value = String(e.side === 'off' ? 0 : e.in);
+        inch.title = 'Inches the flights above are wider than the basement flight, on the side picked (0 while OFF; a side chip puts on 9")';
         inch.style.width = '52px';
         inch.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') inch.blur(); });
         inch.addEventListener('change', () => {
