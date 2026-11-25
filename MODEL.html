@@ -923,7 +923,7 @@
 <div id="underlay-ask" data-underlay-ask role="dialog" aria-label="Underlays on this level">
   <div class="underlay-stack">
     <div class="promote-card underlay-head" data-underlay-head data-underlay-section hidden>
-      <p><b>UNDERLAY</b> &mdash; on <span data-underlay-level></span><br>A photo or PDF, a DXF or DWG, or a .draft as a hologram: the kind is read off the file.</p>
+      <p><b>UNDERLAY</b> &mdash; on <span data-underlay-level></span><br>A photo or PDF, or a DXF or DWG: the kind is read off the file (a .draft goes to HOLOGRAM).</p>
       <div class="promote-row">
         <button type="button" id="underlay-open-any" data-underlay-any>OPEN ANY FILE</button>
         <button type="button" id="underlay-close" data-underlay-close>CLOSE</button>
@@ -968,6 +968,32 @@
   </div>
 </div>
   </div>
+</div>
+<!-- THE HOUSE CHIP'S POP-UP (jb, 25 Nov: "when the HOUSE button is scrolled
+     over, 2 buttons will pop up ... underlay which will include trace, Photo
+     ... and the 2nd button HOLOGRAM" ... "one a photo" ... "hologram house
+     like original button"). Hovering the chip shows it, and so does a press,
+     so a tablet with no hover gets it too. UNDERLAY opens the card's head
+     (OPEN ANY FILE) with PHOTO and TRACE; HOLOGRAM opens the hologram
+     section alone. -->
+<div id="underlay-pop" data-underlay-pop role="menu" hidden aria-label="Underlay or hologram">
+  <button type="button" id="underlay-pop-underlay" data-underlay-pop-underlay role="menuitem"
+    title="UNDERLAY — photos, PDFs and DXF / DWG under this level">
+    <svg width="22" height="18" viewBox="0 0 22 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <rect x="1" y="1" width="20" height="16" rx="1.5"></rect>
+      <circle cx="7" cy="6" r="2"></circle>
+      <path d="M1.5 15 L8 9 L12 13 L15 10 L20.5 15"></path>
+    </svg>
+    <span>UNDERLAY</span>
+  </button>
+  <button type="button" id="underlay-pop-hologram" data-underlay-pop-hologram role="menuitem"
+    title="HOLOGRAM — the .draft files shown under this one, and bring in another">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" stroke="none" aria-hidden="true">
+      <path d="M1.5 8.6 L8 2.4 L14.5 8.6 V14.5 H1.5 Z"></path>
+      <rect x="10.6" y="3.2" width="1.9" height="3.4"></rect>
+    </svg>
+    <span>HOLOGRAM</span>
+  </button>
 </div>
 <!-- THE CHIP'S RIGHT-CLICK MENU. The lines carry the old PHOTO and HOLOGRAM
      chips' ids and data-mode names on purpose: the handlers and the specs

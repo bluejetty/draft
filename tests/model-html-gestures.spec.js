@@ -1007,7 +1007,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // a DXF / DWG, HIDE PHOTOS on the PHOTO section, the DWG
             // verdict's door to the converter, and the menu's TRACE line.
             // Every one opens a file or a page; none draws.
+            // The chip's pop-up (jb, 25 Nov): UNDERLAY and HOLOGRAM, each
+            // only opening its part of the same card.
             'strip-underlay', 'underlay-open-any', 'underlay-close', 'strip-dxf',
+            'underlay-pop-underlay', 'underlay-pop-hologram',
             'trace-dxf-upload', 'trace-dxf-convert', 'trace-dxf-later', 'trace-off', 'trace-dxf-page',
             'strip-trace', 'trace-upload', 'trace-later', 'trace-prev', 'trace-next',
             'trace-calibrate', 'trace-cal-apply', 'trace-go', 'trace-other', 'trace-cancel',

@@ -454,9 +454,11 @@ if (!window.DraftShellBars) {
          card shows that kind alone. Lit while photos are on or a hologram is
          loaded. The old chips' ids and data-mode names live on as the menu's
          lines (MODEL.html #underlay-menu), so every spec that pressed them
-         still finds them. -->
+         still finds them. 25 Nov (jb): hover or press now drops a pop-up of
+         two icon buttons, UNDERLAY (photo, PDF, DXF / DWG) and HOLOGRAM,
+         instead of the card with every kind (MODEL.html #underlay-pop). -->
     <button type="button" id="strip-underlay" class="chip" data-mode-underlay aria-pressed="false"
-      title="UNDERLAY — photos, PDFs, DXF / DWG and holograms under this level. Press to open any kind; right-click for one">
+      title="UNDERLAY — photos, PDFs, DXF / DWG and holograms under this level. Hover or press for UNDERLAY or HOLOGRAM; right-click for one kind">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" stroke="none" aria-hidden="true">
         <path d="M1.5 8.6 L8 2.4 L14.5 8.6 V14.5 H1.5 Z"></path>
         <rect x="10.6" y="3.2" width="1.9" height="3.4"></rect>

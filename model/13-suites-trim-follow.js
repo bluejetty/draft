@@ -2386,12 +2386,15 @@
   const openUnderlayCard = kind => {
     if (!drawing || !underlayAsk) return;
     closeUnderlayCard();
+    // 'underlay' (the pop-up's UNDERLAY, jb 25 Nov): the head with OPEN ANY
+    // FILE, PHOTO and TRACE -- everything but the holograms.
     const all = kind === 'all';
-    if (all || kind === 'photo') {
+    const under = kind === 'underlay';
+    if (all || under || kind === 'photo') {
       if (!traceOn) setTraceOn(true);
       openTraceAsk();
     }
-    if ((all || kind === 'dxf') && traceDxfAsk) {
+    if ((all || under || kind === 'dxf') && traceDxfAsk) {
       traceDxfAsk.querySelector('[data-trace-dxf-level]').textContent = traceLevelName();
       traceDxfAsk.hidden = false;
     }
@@ -2402,7 +2405,7 @@
     const head = underlayAsk.querySelector('[data-underlay-head]');
     if (head) {
       head.querySelector('[data-underlay-level]').textContent = traceLevelName();
-      head.hidden = !all;
+      head.hidden = !(all || under);
     }
     setHologramChip();
   };
@@ -2414,17 +2417,69 @@
     underlayMenu.style.left = `${Math.max(4, Math.min(clientX, window.innerWidth - w - 4))}px`;
     underlayMenu.style.top = `${Math.max(4, Math.min(clientY, window.innerHeight - hh - 4))}px`;
   };
+  // THE POP-UP (jb, 25 Nov): hover the chip -- or press it, for a tablet --
+  // and two icon buttons drop under it, UNDERLAY (photo, PDF, DXF / DWG) and
+  // HOLOGRAM. It goes when the pointer leaves the chip and the pop-up both,
+  // on Esc, or on a press anywhere else.
+  const underlayPop = document.getElementById('underlay-pop');
+  let underlayPopTimer = null;
+  const closeUnderlayPop = () => {
+    clearTimeout(underlayPopTimer);
+    if (underlayPop && !underlayPop.hidden) underlayPop.hidden = true;
+  };
+  const openUnderlayPop = () => {
+    clearTimeout(underlayPopTimer);
+    if (!underlayPop || !underlayChip || !drawing) return;
+    closeUnderlayMenu();
+    underlayPop.querySelector('[data-underlay-pop-underlay]')?.classList.toggle('lit', traceOn);
+    underlayPop.querySelector('[data-underlay-pop-hologram]')?.classList.toggle('lit', holograms().length > 0);
+    underlayPop.hidden = false;
+    const r = underlayChip.getBoundingClientRect();
+    const w = underlayPop.offsetWidth;
+    underlayPop.style.left = `${Math.max(4, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 4))}px`;
+    underlayPop.style.top = `${r.bottom + 4}px`;
+  };
+  const leaveUnderlayPop = () => {
+    clearTimeout(underlayPopTimer);
+    underlayPopTimer = setTimeout(closeUnderlayPop, 250);
+  };
   if (underlayChip) {
-    // A PRESS: the card with every kind, or down again if it is up.
+    // A PRESS: the pop-up (a tablet has no hover), or the card down again if
+    // it is up.
     underlayChip.addEventListener('click', () => {
       if (!drawing) return;
       closeUnderlayMenu();
-      if (underlayCardUp()) { closeUnderlayCard(); paint(); return; }
-      openUnderlayCard('all');
+      if (underlayCardUp()) { closeUnderlayPop(); closeUnderlayCard(); paint(); return; }
+      openUnderlayPop();
     });
+    underlayChip.addEventListener('pointerenter', e => {
+      if (e.pointerType === 'touch' || underlayCardUp() || (underlayMenu && !underlayMenu.hidden)) return;
+      openUnderlayPop();
+    });
+    underlayChip.addEventListener('pointerleave', leaveUnderlayPop);
+    if (underlayPop) {
+      underlayPop.addEventListener('pointerenter', () => clearTimeout(underlayPopTimer));
+      underlayPop.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') leaveUnderlayPop(); });
+      underlayPop.querySelector('[data-underlay-pop-underlay]')?.addEventListener('click', () => {
+        closeUnderlayPop();
+        openUnderlayCard('underlay');
+      });
+      underlayPop.querySelector('[data-underlay-pop-hologram]')?.addEventListener('click', () => {
+        closeUnderlayPop();
+        openUnderlayCard('hologram');
+      });
+      window.addEventListener('pointerdown', e => {
+        if (underlayPop.hidden || underlayPop.contains(e.target) || underlayChip.contains(e.target)) return;
+        closeUnderlayPop();
+      }, true);
+      window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !underlayPop.hidden) { closeUnderlayPop(); e.stopPropagation(); }
+      }, true);
+    }
     // A RIGHT-CLICK: the three lines, under the chip.
     underlayChip.addEventListener('contextmenu', e => {
       e.preventDefault();
+      closeUnderlayPop();
       if (underlayMenu && !underlayMenu.hidden) { closeUnderlayMenu(); return; }
       const r = underlayChip.getBoundingClientRect();
       openUnderlayMenu(r.left, r.bottom + 2);
