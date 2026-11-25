@@ -1069,6 +1069,11 @@ if (!window.DraftLayoutPlan) {
     // dimension on the SITE stood twice -- once where MODEL put it and once
     // here, in the sheet's ink with a white plate.
     const marks = env.levelMarks !== false;
+    // A VIEWPORT'S LAYERS OFF REACH THE SITE TOO (jb, 25 Nov 2026: "ROOF /
+    // STRUCTURE layer isn't turning off the roof ... the site plan line should
+    // also be out"): the roof footprint asks A-ROOF, the building outline
+    // OUTLINE (the WALLS row), the lot line A-SITE (the NOTES & LINES row).
+    const off = id => Boolean(env.layersOff && env.layersOff.has(id));
     if (!lot && !bodies.length && !roofs.length) {
       return marks ? drawLevelMarks(ctx, toS, saved, SITE_LEVEL_ID, env) : false;
     }
@@ -1091,7 +1096,7 @@ if (!window.DraftLayoutPlan) {
     // than borrowing `listing` or `shell`, which mean other things and would
     // read as this painter pretending to be a sheet it is not.
     let drewFootprint = false;
-    [...new Set(roofs.map(roof => num(roof.levelId)))]
+    [...new Set((off('A-ROOF') ? [] : roofs).map(roof => num(roof.levelId)))]
       .filter(id => id !== null)
       .forEach(id => {
         if (drawRoofPlan(ctx, toS, saved, id, { ...env, siteFootprint: true })) {
@@ -1119,7 +1124,7 @@ if (!window.DraftLayoutPlan) {
         && inner.every(pt => Number.isFinite(pt.x) && Number.isFinite(pt.z))
         ? inner : body.points;
     };
-    if (drewFootprint && bodies.length) {
+    if (drewFootprint && bodies.length && !off('OUTLINE')) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-PLAN';
       ctx.fillStyle = SITE_INSIDE_FILL;
       bodies.forEach(body => { siteLoop(ctx, toS, insideOf(body)); ctx.fill(); });
@@ -1127,7 +1132,7 @@ if (!window.DraftLayoutPlan) {
     // NO ROOF YET, SO THE OUTLINE STANDS IN. A drafter who has traced his
     // walls and not yet pressed the bone still has a lot to place a building
     // on, and an empty square on the site sheet would say he has not.
-    if (!drewFootprint) {
+    if (!drewFootprint && !off('OUTLINE')) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-PLAN';
       ctx.fillStyle = SITE_FOOTPRINT_FILL;
       ctx.strokeStyle = 'rgba(29,31,32,0.95)';
@@ -1140,7 +1145,7 @@ if (!window.DraftLayoutPlan) {
     }
     // AND THE LOT LINE OVER EVERYTHING, heavy: it is the boundary the whole
     // sheet is about, and on a crowded corner lot the footprint may touch it.
-    if (lot) {
+    if (lot && !off('A-SITE')) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE';
       ctx.save();
       const scale = env.inkScale || 1;
