@@ -375,9 +375,21 @@ if (!window.DraftPlanComposition) {
     // Oct), dashed and lighter. Worked out by the caller (layout-plan
     // overheadLines); this only paints them, on the exterior wall layer
     // they hang past, before the structure so a beam above reads over them.
+    // EACH SEGMENT ASKS ITS OWN LAYER (jb, 25 Nov 2026): the roof overhang
+    // is A-ROOF and goes off with STRUCTURE / ROOF; a cantilever is
+    // A-WALL-EXT. An untagged segment is the exterior wall, as it was.
     if (Array.isArray(env.overheadLines) && env.overheadLines.length && typeof render.drawOverheadLines2D === 'function') {
-      onLayer(ctx, 'A-WALL-EXT');
-      render.drawOverheadLines2D(ctx, toS, env.overheadLines, env.overheadEnv || {});
+      const byLayer = new Map();
+      env.overheadLines.forEach(seg => {
+        const layer = seg?.layer || 'A-WALL-EXT';
+        if (off(layer)) return;
+        if (!byLayer.has(layer)) byLayer.set(layer, []);
+        byLayer.get(layer).push(seg);
+      });
+      byLayer.forEach((segs, layer) => {
+        onLayer(ctx, layer);
+        render.drawOverheadLines2D(ctx, toS, segs, env.overheadEnv || {});
+      });
     }
     if (env.structureEnv) {
       // THE TAG OPPOSITE THE BEAM'S STRING, one per line (render-2d

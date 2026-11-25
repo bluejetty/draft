@@ -2757,9 +2757,14 @@ if (!window.DraftDrawingFormat) {
       // brought in from another file comes with the ones its file had off.
       const layersOff = [...new Set((Array.isArray(viewport?.layersOff) ? viewport.layersOff : [])
         .map(v => String(v ?? '').trim()).filter(v => v && v.length <= 64))];
+      // AND WHICH HOLOGRAMS IT LEAVES OUT (jb, 25 Nov 2026: SHOW LAYERS
+      // turns a hologram on or off for one viewport), by hologram id.
+      const hologramsOff = [...new Set((Array.isArray(viewport?.hologramsOff) ? viewport.hologramsOff : [])
+        .map(v => String(v ?? '').trim()).filter(v => v && v.length <= 64))];
       const base = { id, kind, pif, xIn, yIn, sheet, ...(crop ? { crop } : {}),
         ...(Object.keys(hologram).length ? { hologram } : {}),
         ...(layersOff.length ? { layersOff } : {}),
+        ...(hologramsOff.length ? { hologramsOff } : {}),
         ...(sourceId ? { source: sourceId } : {}) };
       if (kind === 'plan') {
         const viewportLevelId = levelId(viewport?.levelId, levelIds);

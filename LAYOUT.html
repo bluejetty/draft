@@ -654,9 +654,8 @@
   /* SHOW LAYERS: the card a viewport's layers are switched on and off from.
      The same chips as the HOLOGRAM card's five groups, plus the sheet's own
      dimensions, notes and structure, and ADVANCED for every layer by name.
-     A chip LIT is a group that is OFF -- the card is a list of what has
-     been switched off, and nothing lit means the whole drawing. */
-  #lay-layers { position:fixed; z-index:41; width:250px; max-height:calc(100vh - 24px); overflow:auto;
+     Each row says ON, OFF or PART in words; the holograms follow. */
+  #lay-layers { position:fixed; z-index:41; width:340px; max-height:calc(100vh - 24px); overflow:auto;
     box-sizing:border-box; padding:8px; background: var(--surface-panel);
     border:1px solid var(--edge-panel); border-radius:4px; box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
   #lay-layers[hidden] { display:none; }
@@ -670,10 +669,25 @@
   #lay-layers .lay-layers-note { font-family:'Barlow Condensed', system-ui, sans-serif; font-size:10px;
     letter-spacing:0.04em; text-transform:uppercase; color: var(--ink-quiet); margin:4px 0 6px; }
   #lay-layers .lay-pick { margin-bottom:3px; }
-  #lay-layers .lay-pick.off { border-color: var(--accent); background-color: var(--accent);
-    background-image:none; color: var(--accent-ink); }
+  /* AN OFF ROW IS QUIET, not lit (jb, 25 Nov 2026): it used to fill with the
+     accent, so a card with everything off looked like everything was on.
+     The ON / OFF word on the left says it; the name fades. */
+  #lay-layers .lay-pick.off { color: var(--ink-quiet); }
   #lay-layers .lay-layers-advanced { display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-top:4px; }
   #lay-layers .lay-layers-advanced .lay-pick { margin:0; font-size:10px; padding:4px 6px; }
+  /* ON / OFF IN WORDS on the left of every row (jb, 25 Nov 2026). The word
+     sits in a fixed box so the names line up; OFF is dark on the lit row,
+     ON is the green a switched-on lamp is, PART half way. */
+  #lay-layers .lay-layers-row { display:flex; align-items:center; gap:8px; }
+  #lay-layers .lay-onoff { flex:0 0 auto; min-width:30px; text-align:center; padding:1px 0;
+    border-radius:2px; font-size:10px; letter-spacing:0.06em; font-weight:700; }
+  #lay-layers .lay-onoff-on { background:#2f7d46; color:#ffffff; }
+  #lay-layers .lay-onoff-off { background:#a04040; color:#ffffff; }
+  #lay-layers .lay-onoff-part { background:#b8892a; color:#ffffff; }
+  #lay-layers .lay-layers-name { flex:1 1 auto; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  #lay-layers .lay-layers-advanced .lay-onoff { min-width:24px; font-size:9px; }
+  #lay-layers .lay-layers-section { margin:8px 0 3px; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color: var(--ink-secondary); }
   #lay-layers .lay-layers-group { grid-column:1 / -1; margin-top:4px; font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-secondary); }
   #lay-layers .lay-layers-foot { display:flex; gap:4px; margin-top:6px; }
@@ -2074,6 +2088,62 @@ class Component extends PageLogic {
 
   _hasHolograms() {
     return Array.isArray(this._saved?.holograms) && this._saved.holograms.some(holo => !holo.hidden);
+  }
+
+  // ── A HOLOGRAM ON OR OFF IN ONE VIEWPORT (jb, 25 Nov 2026: "add another
+  // selection for the HOLOGRAMS ... to turn on and off") ──────────────────
+  //
+  // Saved on the viewport as `hologramsOff`, the ids it leaves out. The
+  // painters are handed the drawing with those holograms marked hidden --
+  // the same flag the HOLOGRAM card's eye sets for the whole file -- so plan,
+  // elevation, print, PDF and DXF all follow without a line of their own.
+  // The frame does not move: the window stays where it was put.
+  _viewportHologramsOff(viewport) {
+    return new Set((Array.isArray(viewport?.hologramsOff) ? viewport.hologramsOff : []).map(String));
+  }
+
+  _viewportSaved(viewport) {
+    const off = this._viewportHologramsOff(viewport);
+    const saved = this._saved;
+    if (!off.size || !Array.isArray(saved?.holograms)) return saved;
+    return { ...saved, holograms: saved.holograms.map(holo => (off.has(String(holo?.id)) ? { ...holo, hidden: true } : holo)) };
+  }
+
+  _setViewportHologramsOff(id, ids) {
+    const clean = [...new Set(ids.map(v => String(v ?? '').trim()).filter(Boolean))];
+    this.setState({
+      viewports: this.state.viewports.map(viewport => {
+        if (viewport.id !== id) return viewport;
+        const { hologramsOff: _old, ...rest } = viewport;
+        return clean.length ? { ...rest, hologramsOff: clean } : rest;
+      }),
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); });
+  }
+
+  // A press on a row whose holograms are all off puts them all back; on any
+  // other row takes them all off. The same rule as a layer group.
+  _toggleViewportHolograms(id, ids) {
+    const viewport = this.state.viewports.find(v => v.id === id);
+    if (!viewport) return;
+    const off = this._viewportHologramsOff(viewport);
+    const allOff = ids.every(holo => off.has(String(holo)));
+    ids.forEach(holo => { if (allOff) off.delete(String(holo)); else off.add(String(holo)); });
+    this._setViewportHologramsOff(id, [...off]);
+  }
+
+  // The holograms the file shows, grouped by name (jb's master plans carry
+  // seven 1BDs and four SUITEs), in the order they came in.
+  _hologramRows() {
+    const rows = new Map();
+    (Array.isArray(this._saved?.holograms) ? this._saved.holograms : [])
+      .filter(holo => holo && !holo.hidden && holo.id != null)
+      .forEach(holo => {
+        const name = String(holo.name || 'HOLOGRAM').trim().toUpperCase() || 'HOLOGRAM';
+        if (!rows.has(name)) rows.set(name, []);
+        rows.get(name).push(holo);
+      });
+    return [...rows].map(([name, list]) => ({ name, list }));
   }
 
   // Flip one of the selected plan viewport's three switches. Undoable like
@@ -3535,7 +3605,7 @@ class Component extends PageLogic {
         const show = this._viewportHologramShow(viewport);
         if (window.DraftHologram) {
           if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-EXST';
-          window.DraftHologram.paint(ctx, toS, this._saved, viewport.levelId,
+          window.DraftHologram.paint(ctx, toS, this._viewportSaved(viewport), viewport.levelId,
             { view: viewport.view || 'plan', show, paperColor: '#ffffff' });
         }
         // In a DXF, the existing house is its own layer, and what the plan
@@ -3670,7 +3740,7 @@ class Component extends PageLogic {
           // THE EXISTING HOUSE UNDER IT (hologram PR 5), in this viewport's
           // EXISTING, DEMO and NEW.
           ...(window.DraftHologram ? window.DraftHologram.cutOptions(ctx, full.wIn * zoom, full.hIn * zoom,
-            cut, this._saved, { show: this._viewportHologramShow(viewport), paperColor: '#ffffff' }) : {}),
+            cut, this._viewportSaved(viewport), { show: this._viewportHologramShow(viewport), paperColor: '#ffffff' }) : {}),
         });
         ctx.restore();
       }
@@ -3718,7 +3788,10 @@ class Component extends PageLogic {
     // is seen to be switched off, not lost. Desk furniture: never printed,
     // exported or on a thumbnail.
     const offCount = (viewport.layersOff || []).length;
-    if (offCount && !opts.print && !opts.export && !opts.thumb) {
+    // AND THE HOLOGRAMS LEFT OUT OF IT (jb, 25 Nov 2026), counted the same.
+    const holoOffCount = this._hologramRows().flatMap(row => row.list)
+      .filter(holo => this._viewportHologramsOff(viewport).has(String(holo.id))).length;
+    if ((offCount || holoOffCount) && !opts.print && !opts.export && !opts.thumb) {
       ctx.fillStyle = '#5980a6';
       ctx.beginPath();
       ctx.arc(px.x + 9, px.y + 9, 4, 0, Math.PI * 2);
@@ -3726,7 +3799,10 @@ class Component extends PageLogic {
       ctx.font = `600 10px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`${offCount} LAYER${offCount === 1 ? '' : 'S'} OFF`, px.x + 16, px.y + 9);
+      ctx.fillText([
+        offCount ? `${offCount} LAYER${offCount === 1 ? '' : 'S'} OFF` : '',
+        holoOffCount ? `${holoOffCount} HOLOGRAM${holoOffCount === 1 ? '' : 'S'} OFF` : '',
+      ].filter(Boolean).join(' · '), px.x + 16, px.y + 9);
     }
     // WHERE IT CAME FROM, on the desk only: a window from another file says
     // which, and when it was copied, so a stale one can be seen.
@@ -4494,7 +4570,7 @@ class Component extends PageLogic {
   _openLayersCard(id, clientX, clientY) {
     const viewport = this.state.viewports.find(v => v.id === id);
     if (!viewport || viewport.kind !== 'plan') return;
-    this._layersCard = { id, advanced: false, left: clientX, top: clientY };
+    this._layersCard = { id, advanced: false, eachHologram: false, left: clientX, top: clientY };
     this._paintLayersCard();
   }
 
@@ -4528,6 +4604,15 @@ class Component extends PageLogic {
       button.addEventListener('click', onPress);
       return button;
     };
+    // A ROW SAYS ON OR OFF IN WORDS (jb, 25 Nov 2026: "add on the left side
+    // ON or OFF words to make it obvious whats going on"), the word first,
+    // then the name. PART is a group with some of its layers off.
+    const row = (label, state, title, onPress) => {
+      const button = chip('', state === 'OFF', title, onPress, ' lay-layers-row');
+      button.append(el('span', `lay-onoff lay-onoff-${state.toLowerCase()}`, state), el('span', 'lay-layers-name', label));
+      button.dataset.state = state;
+      return button;
+    };
     const head = el('div', 'lay-layers-head');
     head.append(el('div', 'lay-layers-title', `SHOW LAYERS · ${this._viewportTitle(viewport)}`));
     const close = el('button', 'lay-layers-close', '×');
@@ -4536,16 +4621,41 @@ class Component extends PageLogic {
     close.addEventListener('click', () => this._closeLayersCard());
     head.append(close);
     card.append(head);
-    card.append(el('div', 'lay-layers-note', 'LIT IS OFF · THIS VIEWPORT ONLY'));
+    card.append(el('div', 'lay-layers-note', 'THIS VIEWPORT ONLY · PRESS A ROW TO SWITCH IT'));
+    card.append(el('div', 'lay-layers-section', 'LAYERS'));
     Component.VIEWPORT_LAYER_GROUPS.forEach(group => {
       const isOff = group.layers.every(layer => off.has(layer));
       const some = !isOff && group.layers.some(layer => off.has(layer));
-      const button = chip(`${group.label}${some ? ' (PART)' : ''}`, isOff,
+      const button = row(group.label, isOff ? 'OFF' : some ? 'PART' : 'ON',
         isOff ? `Draw ${group.label} again` : `Switch ${group.label} off in this viewport`,
         () => this._toggleViewportLayers(viewport.id, group.layers));
       button.dataset.layerGroup = group.id;
       card.append(button);
     });
+    // THE HOLOGRAMS, IN THE SAME CARD (jb, 25 Nov 2026): ALL, then one row
+    // per name, and EACH ONE below opens every copy by itself.
+    const holoRows = this._hologramRows();
+    const holoOff = this._viewportHologramsOff(viewport);
+    const stateOf = list => {
+      const n = list.filter(holo => holoOff.has(String(holo.id))).length;
+      return n === 0 ? 'ON' : n === list.length ? 'OFF' : 'PART';
+    };
+    if (holoRows.length) {
+      card.append(el('div', 'lay-layers-section', 'HOLOGRAMS'));
+      const every = holoRows.flatMap(r => r.list);
+      const all = row('ALL HOLOGRAMS', stateOf(every), 'Every hologram in this viewport',
+        () => this._toggleViewportHolograms(viewport.id, every.map(holo => holo.id)));
+      all.dataset.hologramRow = '*';
+      card.append(all);
+      holoRows.forEach(({ name, list }) => {
+        const state = stateOf(list);
+        const button = row(list.length > 1 ? `${name} × ${list.length}` : name, state,
+          state === 'OFF' ? `Draw ${name} again` : `Switch ${name} off in this viewport`,
+          () => this._toggleViewportHolograms(viewport.id, list.map(holo => holo.id)));
+        button.dataset.hologramRow = name;
+        card.append(button);
+      });
+    }
     const foot = el('div', 'lay-layers-foot');
     const advanced = chip('ADVANCED', open.advanced, 'Every layer by name',
       () => { open.advanced = !open.advanced; this._paintLayersCard(); });
@@ -4553,11 +4663,40 @@ class Component extends PageLogic {
     advanced.classList.toggle('on', open.advanced);
     advanced.classList.remove('off');
     foot.append(advanced);
-    const reset = chip('RESET', false, 'Every layer back on', () => this._setViewportLayersOff(viewport.id, []));
+    if (holoRows.length) {
+      const each = chip('EACH HOLOGRAM', false, 'Every hologram by itself',
+        () => { open.eachHologram = !open.eachHologram; this._paintLayersCard(); });
+      each.dataset.layersEachHologram = '1';
+      each.classList.toggle('on', open.eachHologram);
+      foot.append(each);
+    }
+    // ONE STEP, so one UNDO brings both lists back.
+    const reset = chip('RESET', false, 'Every layer and hologram back on', () => this.setState({
+      viewports: this.state.viewports.map(v => {
+        if (v.id !== viewport.id) return v;
+        const { layersOff: _layers, hologramsOff: _holos, ...rest } = v;
+        return rest;
+      }),
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); }));
     reset.dataset.layersReset = '1';
-    reset.disabled = !off.size;
+    reset.disabled = !off.size && !holoOff.size;
     foot.append(reset);
     card.append(foot);
+    if (open.eachHologram && holoRows.length) {
+      const grid = el('div', 'lay-layers-advanced');
+      holoRows.forEach(({ name, list }) => {
+        grid.append(el('div', 'lay-layers-group', name));
+        list.forEach((holo, i) => {
+          const label = list.length > 1 ? `${name} ${i + 1}` : name;
+          const button = row(label, holoOff.has(String(holo.id)) ? 'OFF' : 'ON', String(holo.id),
+            () => this._toggleViewportHolograms(viewport.id, [holo.id]));
+          button.dataset.hologramId = String(holo.id);
+          grid.append(button);
+        });
+      });
+      card.append(grid);
+    }
     if (open.advanced) {
       const grid = el('div', 'lay-layers-advanced');
       const groups = window.DraftLayerStandards?.DEFAULT_LAYER_STANDARDS || [];
@@ -4566,7 +4705,7 @@ class Component extends PageLogic {
         if (!layers.length) return;
         grid.append(el('div', 'lay-layers-group', group.group));
         layers.forEach(layer => {
-          const button = chip(layer.name || layer.id, off.has(layer.id), layer.use || layer.id,
+          const button = row(layer.name || layer.id, off.has(layer.id) ? 'OFF' : 'ON', layer.use || layer.id,
             () => this._toggleViewportLayers(viewport.id, [layer.id]));
           button.dataset.layerId = layer.id;
           grid.append(button);

@@ -225,3 +225,37 @@ test('SHOW LAYERS switches a group off for that viewport only, and UNDO puts it 
   await page.keyboard.press('Escape');
   await expect(card).toBeHidden();
 });
+
+// THE DASHED ROOF OVERHANG on a walls plan (jb, 25 Nov 2026: "whats the
+// dotted roof line? it didn't turn off"): an overhead line asks its own
+// layer -- A-ROOF for the overhang, A-WALL-EXT for a cantilever -- so
+// STRUCTURE / ROOF takes the overhang with it and WALLS the cantilever.
+test('the overhead roof overhang goes off with A-ROOF, the cantilever with A-WALL-EXT', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  const drawn = await page.evaluate(() => {
+    const R = window.DraftRender2D;
+    const real = R.drawOverheadLines2D;
+    const run = off => {
+      const seen = [];
+      // The module freezes its export; draw on a stub render instead.
+      const saved = window.DraftRender2D;
+      window.DraftRender2D = { ...saved, drawOverheadLines2D: (ctx, toS, segs) => seen.push(...segs.map(s => s.layer)) };
+      try {
+        window.DraftPlanComposition.drawPlan(document.createElement('canvas').getContext('2d'), p => ({ x: p.x, y: p.z }), {
+          levelId: 3,
+          overheadLines: [
+            { start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, layer: 'A-ROOF' },
+            { start: { x: 0, z: 5 }, end: { x: 10, z: 5 }, layer: 'A-WALL-EXT' },
+          ],
+          layersOff: off ? new Set(off) : null,
+        });
+      } finally { window.DraftRender2D = saved; }
+      return seen;
+    };
+    return { all: run(null), roofOff: run(['A-ROOF']), wallsOff: run(['A-WALL-EXT']), real: typeof real };
+  });
+  expect(drawn.real).toBe('function');
+  expect(drawn.all.sort()).toEqual(['A-ROOF', 'A-WALL-EXT']);
+  expect(drawn.roofOff).toEqual(['A-WALL-EXT']);
+  expect(drawn.wallsOff).toEqual(['A-ROOF']);
+});

@@ -1735,7 +1735,12 @@ if (!window.DraftLayoutPlan) {
             outlines: of('outlines'),
             roofs: of('roofs'),
           });
-          return [...lines.cantilevers, ...lines.overhangs];
+          // EACH ON THE LAYER IT BELONGS TO (jb, 25 Nov 2026: "whats the
+          // dotted roof line? it didn't turn off"): a cantilever is the wall
+          // above, A-WALL-EXT; a roof overhang is the roof, A-ROOF -- so
+          // SHOW LAYERS takes each off with its group.
+          return [...lines.cantilevers.map(seg => ({ ...seg, layer: 'A-WALL-EXT' })),
+            ...lines.overhangs.map(seg => ({ ...seg, layer: 'A-ROOF' }))];
         })()
         : [],
       overheadEnv: { ink: GHOST_BELOW_INK },
