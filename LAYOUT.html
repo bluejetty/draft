@@ -680,8 +680,17 @@
   #lay-layers .lay-layers-foot .lay-pick { margin:0; text-align:center; }
   #lay-rename { position:fixed; z-index:40; height:24px; padding:0 6px; box-sizing:border-box;
     font: 600 12px 'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em; text-transform:uppercase;
-    color: var(--ink-primary); background: var(--surface-panel);
+    color: var(--ink-primary); caret-color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1.5px solid var(--accent); border-radius:3px; outline:none; }
+  /* AN OPAQUE GROUND, NOT THE PANEL'S (jb, 25 Nov 2026: "the text in the text
+     box ... make it brighter white, it's hard to see"). The box floats over
+     the white sheet, and --surface-panel is 50% / 60% see-through, so on
+     night the near-white ink sat on a mid grey. --surface-chip is a flat hex
+     on every skin, like #lay-viewport-section's ground. The placeholder
+     (NEW HOME on an unnamed project) reads in ink-secondary, not the
+     browser's faint default. */
+  #lay-rename::placeholder { color: var(--ink-secondary); opacity:1; }
   .lay-thumb span { display:block; max-width:100%; overflow:hidden; white-space:nowrap;
     text-overflow:ellipsis; font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; }
