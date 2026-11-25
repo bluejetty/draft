@@ -4547,7 +4547,9 @@ class Component extends PageLogic {
   // STANDARDS table names, one chip each.
   static get VIEWPORT_LAYER_GROUPS() {
     return [
-      { id: 'walls', label: 'WALLS', layers: ['A-WALL-EXT', 'A-WALL-INT', 'A-WALL-PATT'] },
+      // OUTLINE rides WALLS (jb, 25 Nov 2026): a hologram's dashed
+      // footprint stayed on with every row off.
+      { id: 'walls', label: 'WALLS', layers: ['A-WALL-EXT', 'A-WALL-INT', 'A-WALL-PATT', 'OUTLINE'] },
       { id: 'openings', label: 'DOORS & WINDOWS', layers: ['A-DOOR', 'A-GLAZ'] },
       { id: 'fixtures', label: 'FIXTURES / CABINETS', layers: ['A-FIXT', 'E-POWER'] },
       { id: 'flooring', label: 'FLOORING / AREAS', layers: ['A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'SHAPE'] },
