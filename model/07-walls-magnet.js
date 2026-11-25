@@ -1775,9 +1775,18 @@
   const beamSlideMagnet = pts => {
     const nodes = [];
     const moving = new Set(pts);
+    // THE PADS UNDER THE ROW'S OWN POSTS ride with it: their corners are
+    // not targets either (a 3' pad's corner is 1'-6" off the line).
+    const B = window.DraftBuildHouse;
+    const ownPosts = (drawing?.columns || []).filter(c => moving.has(c.point));
+    const padCorners = ownPosts.length && B?.padGroups ? B.padGroups(ownPosts)
+      .filter(g => [g.minX, g.minZ, g.maxX, g.maxZ].every(Number.isFinite))
+      .flatMap(g => [[g.minX, g.minZ], [g.maxX, g.minZ], [g.maxX, g.maxZ], [g.minX, g.maxZ]])
+      .map(([x, z]) => ({ x, z })) : [];
+    const skip = [...pts, ...padCorners];
     const add = v => {
       if (!v || !Number.isFinite(v.x) || !Number.isFinite(v.z) || moving.has(v)) return;
-      if (pts.some(p => Math.abs(p.x - v.x) < 0.001 && Math.abs(p.z - v.z) < 0.001)) return;
+      if (skip.some(p => Math.abs(p.x - v.x) < 0.001 && Math.abs(p.z - v.z) < 0.001)) return;
       if (!nodes.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) nodes.push({ x: v.x, y: 0, z: v.z });
     };
     magnetExcluding(pts).nodes.forEach(add);

@@ -1751,6 +1751,14 @@
           ctx.lineTo(b.x, b.y);
           ctx.stroke();
         }
+        // A PICKED BEAM ROW'S TWO ENDS wear squares too (jb, 25 Nov 2026):
+        // a press on one pulls that end in off the wall (beamEndAt).
+        if (type === 'beam') {
+          const row = pickedBeamRow();
+          ctx.fillStyle = selectHandle();
+          [item.start, item.end].filter(pt => row && (pt === row.lo || pt === row.hi)).map(toS)
+            .forEach(pt => ctx.fillRect(pt.x - 5, pt.y - 5, 10, 10));
+        }
         if (item === lone) {
           // Square handles at each end -- the same 8px squares the old page
           // draws, and the grab targets the corner drag uses.
