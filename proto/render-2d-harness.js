@@ -2327,6 +2327,17 @@ suite('drawStairs2D', 'UP sits centred in the last tread, at the foot', R => {
   expect('on the centre line', Math.abs(w.y - toS({ x: 0, z: 0 }).y) < 0.01, true);
 });
 
+suite('drawStairs2D', 'on a turned stair UP sits at the foot of the LAST run', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({ roleFor: () => 'lands' }, { runs: [
+    { start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt: 5, treads: 6 },
+    { start: { x: 6, z: 1 }, dir: { x: 0, z: 1 }, lenFt: 5, treads: 6 },
+  ] }));
+  const w = wordAt(ctx);
+  expect('down the second run, half a tread up from its foot',
+    Math.abs(w.y - toS({ x: 6, z: 1 + 5 - 5 / 12 }).y) < 0.01 && Math.abs(w.x - toS({ x: 6, z: 0 }).x) < 0.01, true);
+});
+
 suite('drawStairs2D', 'the word lies across the flight, parallel to the treads, and upright', R => {
   const angleFor = dir => {
     const ctx = recordingCtx();
@@ -4508,6 +4519,8 @@ function coverage() {
     ['drawStairs2D draws the stair under this floor at full weight',
       src => src.replace("      if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;\n", '')],
     ['drawStairs2D puts UP at the top of the flight like DN',
+      src => src.replace('    const along = up ? Math.max(0, lenFt - step / 2)', '    const along = false ? Math.max(0, lenFt - step / 2)')],
+    ['drawStairs2D puts UP on the first run of a turned stair',
       src => src.replace("    const run = up ? runs[runs.length - 1] : runs[0];", '    const run = runs[0];')],
     ['drawStairs2D puts the stair word on the walk line\'s angle',
       src => src.replace('    let angle = Math.atan2(-ux, uy);', '    let angle = Math.atan2(uy, ux);')],
