@@ -1121,6 +1121,12 @@
     // framed that short wall, and the seat (and 0 TO FIT) showed a corner
     // of hatch. Empty on every other level and view.
     basementFoundationWalls().forEach(w => { if (w.start && w.end) pts.push(w.start, w.end); });
+    // AND, IN A SEAT, THE FOUNDATION WALLS THE BASEMENT PLAN GHOSTS (jb, 25
+    // Nov 2026: BASEMENT (WALLS) blank on a house whose basement holds no
+    // walls of its own). The seat now paints that ghost as the main view
+    // does (paintPlanThumb), so it frames it too. Seats only: the main
+    // view's fit is the drafter's default zoom. Empty on every other level.
+    if (thumbTarget) basementGhostWalls().forEach(w => { if (w.start && w.end) pts.push(w.start, w.end); });
     lines().forEach(l => { if (l.start && l.end) pts.push(l.start, l.end); });
     floors().forEach(f => (f.points || []).forEach(p => pts.push(p)));
     // ROOFS AND OUTLINES ONLY WHEN ASKED, and the scoping is the point.
@@ -1317,7 +1323,14 @@
     // SUITES and nothing else had a blank rail) frames the holograms, since
     // there is no house of its own to frame. The ROOF and SITE seats take in
     // their roofs and whole buildings.
-    const pts = shootingPaper ? own : thumbTarget ? (own.length ? own : thumbHologramPoints())
+    // THE SITE SEAT FRAMES ITS LOT AND THE HOLOGRAMS ON IT TOGETHER (jb, 25
+    // Nov 2026: "the site plan is just a line"). A lot of its own is no house
+    // of its own: the buildings on it are the holograms, so the seat draws
+    // them (paintPlanThumb) and takes them into its frame as the site does.
+    const siteSeat = thumbTarget && activeLevelId() === SITE_LEVEL_ID;
+    const pts = shootingPaper ? own
+      : siteSeat ? own.concat(thumbHologramPoints())
+      : thumbTarget ? (own.length ? own : thumbHologramPoints())
       : own.concat(hologramFramePoints());
     // THE EMPTY TEST STILL STANDS HERE FOR EVERY OTHER LEVEL, and only moves
     // out of the way for the site. It used to fire on a site every time --
@@ -1406,7 +1419,12 @@
     const spanX = Math.max(maxX - minX, 1);
     const spanZ = Math.max(maxZ - minZ, 1);
     view.scale = Math.min(cssW / spanX, openH / spanZ) * margin;
-    view.scale = Math.max(0.25, Math.min(view.scale, 200));
+    // A SEAT GOES SMALLER THAN THE SHEET'S FLOOR (jb, 25 Nov 2026: "the site
+    // plan is just a line"). 0.25 px/ft keeps the main view from zooming out
+    // to nothing, but a seat is 82px across: a 895 ft lot wants about 0.08,
+    // and held at 0.25 it was drawn three seats wide, so all the seat caught
+    // was one edge of it.
+    view.scale = Math.max(thumbTarget ? 0.005 : 0.25, Math.min(view.scale, 200));
     // CENTRE IN THE OPEN BAND, not on the canvas. toS puts view.cz at cssH/2
     // and that stays true -- panning and zooming are untouched. The drawing's
     // own middle is offset so it lands at the middle of what is uncovered:
@@ -2360,14 +2378,16 @@
   // its posts, off the FOUNDATION view, faded like a half-floor and drawn
   // under the basement's own walls. No pads and no piles: a pile is the
   // garage's, and both are footings.
-  const paintBasementFoundationGhost = () => {
+  // A SEAT passes withPosts false: a post's cross is drawn at a fixed pixel
+  // size, and forty of them in a seat 82px across ran together into a smear.
+  const paintBasementFoundationGhost = ({ withPosts = true } = {}) => {
     if (!drawing || Number(activeLevelId()) !== FOUNDATION_LEVEL_ID || activeViewId() !== 'plan') return;
     const R = window.DraftRender2D;
     const B = window.DraftBuildHouse;
     ghostViewId = 'foundation';
     ghostKeep = item => item.body !== 'garage';
     try {
-      const posts = columns().filter(c => !(B && B.footingFor(c.footing)?.pile));
+      const posts = withPosts ? columns().filter(c => !(B && B.footingFor(c.footing)?.pile)) : [];
       if (!walls().length && !posts.length) return;
       ctx.save();
       ctx.globalAlpha = HALF_LEVEL_GHOST_ALPHA;

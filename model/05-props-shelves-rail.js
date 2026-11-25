@@ -2010,13 +2010,32 @@
       // own lines, so where the pair overlap the full floor is what reads.
       paintHalfLevelGhostFloors();
       paintFloors(); paintRoofs(); paintShapes();
+      // THE SITE SEAT DRAWS THE BUILDING ON ITS LOT (jb, 25 Nov 2026: "the
+      // site plan is just a line"). The main SITE view paints the lot, the
+      // footprint and the eave through LAYOUT's drawSitePlan; the seat had
+      // only the lot line. Same painter, no dimension rows (no words here).
+      if (Number(levelId) === SITE_LEVEL_ID && window.DraftLayoutPlan) {
+        window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {
+          siteLineInk: skin['draw-site-line'], siteDims: false, levelMarks: false,
+          wallTopInk: skin['draw-wall-edge'] || skin['draw-line'],
+        });
+      }
       paintOutlines(); paintLines();
       paintHalfLevelGhost();
+      // BASEMENT (WALLS) SHOWS THE FOUNDATION IT STANDS IN, faded, as the
+      // main view does (jb, 25 Nov 2026: the seat was blank on a house whose
+      // basement holds no walls of its own). Its walls only: the posts'
+      // crosses would smear at this size. Nothing on any other seat.
+      paintBasementFoundationGhost({ withPosts: false });
       paintWalls();
       // A SEAT WITH NOTHING OF ITS OWN SHOWS ITS HOLOGRAMS (jb, 24 Nov 2026:
       // a file of suites alone had a blank rail). A seat with a house of its
       // own stays that house, as it always has.
-      if (Number(levelId) >= 0 && !allPoints(true).length && window.DraftHologram) {
+      // THE SITE SEAT ALWAYS SHOWS THEM (jb, 25 Nov 2026): a lot is no
+      // house, and the main SITE view draws the holograms standing on it,
+      // so its seat does too.
+      if (Number(levelId) >= 0 && window.DraftHologram
+        && (Number(levelId) === SITE_LEVEL_ID || !allPoints(true).length)) {
         window.DraftHologram.paint(ctx, toS, drawing, Number(levelId),
           { view: activeViewId(), show: hologramShow, paperColor: skin['surface-page'], noWords: true });
       }
