@@ -84,7 +84,7 @@ const savedUnderlays = async page => {
 // monopoly house"). A press opens the card with every kind on it; a
 // right-click is the three-line menu, and PHOTO from it shows that section
 // alone -- and the section still says PHOTO, the word a drafter meets.
-test('the UNDERLAY chip is a house, opens every kind on a press, and one kind from its menu', async ({ page }) => {
+test('the UNDERLAY chip is a house, pops UNDERLAY / HOLOGRAM on hover or press, and one kind from its menu', async ({ page }) => {
   await open(page);
   const underlay = page.locator('[data-mode-underlay]');
   await expect(underlay).toHaveAttribute('title', /^UNDERLAY\b/);
@@ -95,13 +95,29 @@ test('the UNDERLAY chip is a house, opens every kind on a press, and one kind fr
   }));
   expect(glyph.filled, 'a solid house, the Monopoly piece').toBe('currentColor');
   expect(glyph.paths + glyph.rects).toBeGreaterThanOrEqual(2);
-  // A PRESS: all three sections and the head with OPEN ANY FILE.
+  // HOVER (jb, 25 Nov): two icon buttons drop under the chip, and nothing
+  // opens until one is picked. Leaving both takes the pop-up away.
+  const pop = page.locator('#underlay-pop');
   await expect(underlay).toHaveAttribute('aria-pressed', 'false');
+  await underlay.hover();
+  await expect(pop).toBeVisible();
+  await expect(pop.locator('[role="menuitem"]')).toHaveText(['UNDERLAY', 'HOLOGRAM']);
+  await expect(pop.locator('[data-underlay-pop-underlay] svg rect')).toHaveCount(1);
+  await expect(pop.locator('[data-underlay-pop-hologram] svg')).toHaveAttribute('fill', 'currentColor');
+  await expect(page.locator('#underlay-ask')).toBeHidden();
+  await page.mouse.move(5, 400);
+  await expect(pop).toBeHidden();
+  // A PRESS shows the same pop-up (no hover on a tablet). UNDERLAY: the head
+  // with OPEN ANY FILE, PHOTO and TRACE -- and no holograms.
   await underlay.click();
+  await expect(pop).toBeVisible();
+  await pop.locator('[data-underlay-pop-underlay]').click();
+  await expect(pop).toBeHidden();
   await expect(underlay).toHaveAttribute('aria-pressed', 'true');
-  for (const sel of ['[data-underlay-head]', '#trace-ask', '#trace-dxf-ask', '#hologram-ask']) {
+  for (const sel of ['[data-underlay-head]', '#trace-ask', '#trace-dxf-ask']) {
     await expect(page.locator(sel), `${sel} is up`).toBeVisible();
   }
+  await expect(page.locator('#hologram-ask')).toBeHidden();
   await expect(page.locator('#trace-ask')).toContainText('PHOTO');
   await expect(page.locator('#trace-ask')).not.toContainText('TRACE');
   await expect(page.locator('#trace-dxf-ask')).toContainText('TRACE');
@@ -110,6 +126,15 @@ test('the UNDERLAY chip is a house, opens every kind on a press, and one kind fr
   await page.locator('[data-underlay-close]').click();
   await expect(page.locator('#underlay-ask')).toBeHidden();
   await expect(underlay).toHaveAttribute('aria-pressed', 'false');
+  // HOLOGRAM from the pop-up: the hologram section alone.
+  await underlay.click();
+  await pop.locator('[data-underlay-pop-hologram]').click();
+  await expect(page.locator('#hologram-ask')).toBeVisible();
+  for (const sel of ['[data-underlay-head]', '#trace-ask', '#trace-dxf-ask']) {
+    await expect(page.locator(sel), `${sel} stays down`).toBeHidden();
+  }
+  await page.locator('[data-hologram-close]').click();
+  await expect(page.locator('#underlay-ask')).toBeHidden();
   // THE MENU: three lines, and PHOTO shows the PHOTO section alone.
   await underlay.click({ button: 'right' });
   const menu = page.locator('#underlay-menu');
