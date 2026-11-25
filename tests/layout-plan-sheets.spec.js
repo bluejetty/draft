@@ -160,3 +160,40 @@ test('the site plan sheet flies the north arrow by convention even with the togg
   await goSheet(page, site.sheet);
   expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25), 'the site plan flies it regardless').toBeGreaterThan(20);
 });
+
+// jb, 25 Nov 2026, on the SITE PLAN window: "ROOF / STRUCTURE layer isn't
+// turning off the roof in this layer, the site plan line should also be out
+// because i turned out the LINE". The site painter now asks the viewport's
+// layers: roof footprint A-ROOF, building OUTLINE (WALLS row), lot line
+// A-SITE (NOTES & LINES row).
+test('a SITE viewport with its layers off draws no roof, outline or lot line', async ({ page }) => {
+  await openLayout(page, drawing());
+  const counts = await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const saved = JSON.parse(await file.text());
+    const paint = off => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 600; canvas.height = 600;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 600, 600);
+      const toS = p => ({ x: 300 + (p.x - 18) * 2, y: 300 + (p.z - 13) * 2 });
+      window.DraftLayoutPlan.drawPlan(ctx, toS, saved, 8,
+        { levelMarks: false, inkScale: 1, layersOff: new Set(off) });
+      const data = ctx.getImageData(0, 0, 600, 600).data;
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i] < 240 || data[i + 1] < 240 || data[i + 2] < 240) n += 1;
+      return n;
+    };
+    const dims = ['A-DIMS', 'A-DIMS-EXT'];
+    return {
+      all: paint(dims),
+      noLot: paint([...dims, 'A-SITE']),
+      noRoof: paint([...dims, 'A-ROOF']),
+      none: paint([...dims, 'A-SITE', 'A-ROOF', 'OUTLINE']),
+    };
+  }, BUCKET);
+  expect(counts.all, 'the site draws roof and lot').toBeGreaterThan(0);
+  expect(counts.noLot, 'A-SITE off takes the lot line').toBeLessThan(counts.all);
+  expect(counts.noRoof, 'A-ROOF off takes the roof footprint').toBeLessThan(counts.all);
+  expect(counts.none, 'everything off: nothing left').toBe(0);
+});

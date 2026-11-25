@@ -4585,7 +4585,8 @@ class Component extends PageLogic {
         { id: 'dims-hand', label: 'HAND DIMS', layers: ['A-DIMS-HAND'], title: 'Drawn with the DIMENSION tool' },
         { id: 'dims-special', label: 'SPECIAL DIMS', layers: ['A-DIMS'], title: 'Dimensions for cases the other rows do not cover (A-DIMS)' },
       ] },
-      { id: 'notes', label: 'NOTES & LINES', layers: ['A-ANNO-NOTE', 'draft'] },
+      // A-SITE is the SITE plan's lot line (jb, 25 Nov 2026).
+      { id: 'notes', label: 'NOTES & LINES', layers: ['A-ANNO-NOTE', 'draft', 'A-SITE'] },
       { id: 'structure', label: 'STRUCTURE / ROOF', layers: ['S-BEAM', 'S-SLAB', 'S-FDN', 'S-COL-FOOTING',
         'S-FOOTING', 'A-STR', 'A-STR-DECK', 'A-ROOF'] },
     ];
