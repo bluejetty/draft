@@ -2558,8 +2558,10 @@
       }
     }
 
-    // THE FLIGHT AS IT IS, in the painter's own words (drawStairs2D writes
-    // `DN — {risers}R @ {riser}`), so the panel and the plan cannot disagree.
+    // THE FLIGHT AS IT IS, from the same stair layout the painter and the
+    // stair section read, so the panel and the drawings cannot disagree. (The
+    // plan itself says only DN or UP since jb's 25 Nov 2026 ask; the riser
+    // count and rise are here and on the stair section.)
     // SHORT, and the length is load-bearing -- see the BEAM panel's note.
     const note = document.createElement('div');
     note.className = 'props-title';

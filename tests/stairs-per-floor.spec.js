@@ -46,7 +46,8 @@ const fixture = () => ({
   layout: { auto: true },
 });
 
-const TAG = /^(UP|DN) — \d+R @ /;
+// JUST DN OR UP (jb, 25 Nov 2026): the riser count and rise live on the stair section.
+const TAG = /^(UP|DN)$/;
 // Each paint's text, per canvas, the last paint read on its own (clearRect
 // marks a paint's start); and every stroke's alpha with it, so the lighter
 // stair can be told from a full-weight one.

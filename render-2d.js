@@ -3142,12 +3142,52 @@ if (!window.DraftRender2D) {
     return out;
   }
 
+  // THE STAIR'S ONE WORD, DN or UP, laid across the flight like a tread:
+  // centred on the run's centre line, its reading direction turned so it is
+  // never upside down. DN sits in the second tread down from the top of the
+  // first run, UP in the last tread of the last run. Returns where it goes
+  // and a screen box round it (for the walk line to stop at), or null when
+  // the flight is too small on screen to carry a word.
+  function stairWordAt2D(ctx, parts, pt, env, up, pxPerFt) {
+    const runs = parts.runs || [];
+    const run = up ? runs[runs.length - 1] : runs[0];
+    if (!run) return null;
+    const step = (env.treadRunIn || 10) / 12;
+    const lenFt = Number(run.lenFt) || 0;
+    const treads = Math.max(1, Number(run.treads) || Math.round(lenFt / step) || 1);
+    const along = up ? Math.max(0, lenFt - step / 2)
+      : Math.min(lenFt / 2, treads >= 2 ? step * 1.5 : step / 2);
+    const c = pt({ x: run.start.x + run.dir.x * along, z: run.start.z + run.dir.z * along });
+    const n = pt({ x: run.start.x + run.dir.x * (along + 1), z: run.start.z + run.dir.z * (along + 1) });
+    const dx = n.x - c.x, dy = n.y - c.y;
+    const d = Math.hypot(dx, dy);
+    if (!(d > 0)) return null;
+    const ux = dx / d, uy = dy / d;
+    // Sized to the tread, but never smaller than the old 9px note was on a
+    // small-scale sheet: a listing plan still says which way the stair goes.
+    const stepPx = step * pxPerFt;
+    if (lenFt * pxPerFt < 4) return null;
+    const px = Math.max(7, Math.min(14, stepPx * 0.75));
+    let angle = Math.atan2(-ux, uy);
+    if (Math.abs(angle) > Math.PI / 2 + 1e-6) angle += angle > 0 ? -Math.PI : Math.PI;
+    const text = up ? 'UP' : 'DN';
+    const font = `600 ${px.toFixed(1)}px 'Barlow Condensed', system-ui, sans-serif`;
+    ctx.save();
+    ctx.font = font;
+    const w = ctx.measureText(text).width || px * 1.2;
+    ctx.restore();
+    const hw = w / 2 + 2, hh = px / 2 + 1;
+    const cx = Math.cos(angle), sy = Math.sin(angle);
+    const corner = (a, b) => ({ x: c.x + cx * a - sy * b, y: c.y + sy * a + cx * b });
+    return { text, font, angle, x: c.x, y: c.y,
+      box: [corner(-hw, -hh), corner(hw, -hh), corner(hw, hh), corner(-hw, hh)] };
+  }
+
   function drawStairs2D(ctx, toS, env) {
     const std = env.layer;
     if (!std.visible || (env.isPrinting && !std.printable)) return;
     const stairs = env.stairs;
     if (!stairs.length) return;
-    const font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
     const elev = env.elev || 0;
     const origin = toS({ x: 0, y: elev, z: 0 });
     const unit = toS({ x: 1, y: elev, z: 0 });
@@ -3256,15 +3296,26 @@ if (!window.DraftRender2D) {
       }
       // A STAIR UNDER THIS FLOOR CARRIES NO WALK LINE AND NO TAG.
       if (role === 'below') { ctx.restore(); return; }
-      // Walk-line arrow with the DN label and riser count -- downhill on the
-      // floor the stair leaves, and UP, the arrow turned round, on the floor
-      // it lands on.
+      // Walk-line arrow -- downhill on the floor the stair leaves, and UP,
+      // the arrow turned round, on the floor it lands on.
       const walk = (brk && brk.walk && brk.walk.length >= 2 ? brk.walk : parts.walk).map(pt);
+      const up = role === 'lands';
+      // JUST DN OR UP (jb, 25 Nov 2026: "don't show the text number and
+      // heights dimension, they can get that on the stair section. just show
+      // DN in the middle at the top of the stairs, or UP in the middle at the
+      // bottom of the stairs ... centered within the stair, parallel to the
+      // tread"). At the arrow's tail, where the walk starts on this floor: DN
+      // one tread below the top (the first is the width mark's), UP in the
+      // last tread at the foot. The walk line stops short of the word.
+      const tag = (!env.isPrinting || std.printable) ? stairWordAt2D(ctx, parts, pt, env, up, pxPerFt) : null;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      walk.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      for (let i = 0; i + 1 < walk.length; i++) {
+        const p = walk[i], q = walk[i + 1];
+        const pieces = tag ? clipSegToRegion2D(p.x, p.y, q.x, q.y, tag.box, true) : [[p, q]];
+        pieces.forEach(([m, n]) => { ctx.moveTo(m.x, m.y); ctx.lineTo(n.x, n.y); });
+      }
       ctx.stroke();
-      const up = role === 'lands';
       const wa = up ? walk[1] : walk[walk.length - 2];
       const wb = up ? walk[0] : walk[walk.length - 1];
       const wd = Math.hypot(wb.x - wa.x, wb.y - wa.y) || 1;
@@ -3274,15 +3325,15 @@ if (!window.DraftRender2D) {
       ctx.moveTo(wb.x - wux * 8 - wpx * 4, wb.y - wuy * 8 - wpy * 4); ctx.lineTo(wb.x, wb.y);
       ctx.lineTo(wb.x - wux * 8 + wpx * 4, wb.y - wuy * 8 + wpy * 4);
       ctx.stroke();
-      if (!env.isPrinting || std.printable) {
-        // The walk line is a line with a label on it, same as a beam. THE UP
-        // TAG TAKES THE OTHER SIDE OF THE LINE: a storey's stair down and the
-        // next storey's stair up share one well (they stack), so on the
-        // floor between them both tags ride one walk line -- DN on the side
-        // it always had, UP hung from the line's other side.
-        labelAlongLine2D(ctx, walk[0], walk[1],
-          `${up ? 'UP' : 'DN'} — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`,
-          up ? { font, offset: -3, baseline: 'top' } : { font, offset: 3 });
+      if (tag) {
+        ctx.save();
+        ctx.translate(tag.x, tag.y);
+        ctx.rotate(tag.angle);
+        ctx.font = tag.font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(tag.text, 0, 0);
+        ctx.restore();
       }
       ctx.restore();
     });

@@ -33,9 +33,13 @@ const OVER_GARAGE = 4;
 const OVER_GARAGE_JOIST_IN = 19.25;
 const HOUSE_JOIST_IN = 11.875;
 
-// The painter's legend, recorded from THE LAST FRAME ONLY. drawStairs2D writes
-// `DN — {risers}R @ {riser}` under every stair it draws, so the legend is both
-// the proof it ran and the layout it used, in one string.
+// The painter's legend, recorded from THE LAST FRAME ONLY. drawStairs2D used
+// to write `DN — {risers}R @ {riser}` under every stair it drew; since jb's
+// 25 Nov 2026 ask it writes only DN (the riser count and rise live on the
+// stair section). So the legend is now RECORDED AT THE PAINTER'S DOOR: each
+// stair drawStairs2D is handed on #plan adds `DN — {risers}R @ {riser}` from
+// the very layout the page gave it, still the proof it ran and the layout it
+// used, in one string -- and the word on the plan is checked separately.
 //
 // THE FRAME RESET IS NOT TIDINESS. Recording every fillText since page load
 // counts each stair once PER PAINT, and paint() runs again on any resize, font
@@ -53,13 +57,32 @@ const HOUSE_JOIST_IN = 11.875;
 async function recordText(page) {
   await page.addInitScript(() => {
     window.__painted = [];
+    window.__legends = [];
     const onPlan = ctx => ctx.canvas && ctx.canvas.id === 'plan';
     const proto = CanvasRenderingContext2D.prototype;
     const clearRect = proto.clearRect;
     proto.clearRect = function (...args) {
-      if (onPlan(this)) window.__painted = [];
+      if (onPlan(this)) { window.__painted = []; window.__legends = []; }
       return clearRect.apply(this, args);
     };
+    let render2d;
+    Object.defineProperty(window, 'DraftRender2D', {
+      configurable: true,
+      get: () => render2d,
+      set: value => {
+        const draw = value && value.drawStairs2D;
+        render2d = !draw ? value : Object.freeze({ ...value, drawStairs2D(ctx, toS, env) {
+          if (onPlan(ctx)) {
+            (env.stairs || []).forEach(stair => {
+              if (env.roleFor && env.roleFor(stair) === 'below') return;
+              const layout = env.layoutFor(stair);
+              window.__legends.push(`DN — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`);
+            });
+          }
+          return draw(ctx, toS, env);
+        } });
+      },
+    });
     const fillText = proto.fillText;
     proto.fillText = function (text, ...rest) {
       if (onPlan(this)) window.__painted.push(String(text));
@@ -92,8 +115,7 @@ async function loadWith(page, src, { level = null } = {}) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
 }
 
-const legends = page => page.evaluate(
-  () => window.__painted.filter(t => t.startsWith('DN')));
+const legends = page => page.evaluate(() => window.__legends.slice());
 
 // A STORED RISE OF 3'-0" is deliberately absurd for a storey, and that is the
 // control: 36" at the 7 7/8" maximum is 5 risers, a number the real level
@@ -123,6 +145,9 @@ test.describe('MODEL.html stairs', () => {
     // The shape of the legend, not its numbers -- those are the next test's
     // subject and pinning them here would make this fail for the wrong reason.
     expect(dn[0]).toMatch(/^DN — \d+R @ /);
+    // AND THE PLAN SAYS ONLY DN (jb, 25 Nov 2026): no riser count, no rise.
+    const words = await page.evaluate(() => window.__painted.filter(t => /^(DN|UP)\b/.test(t)));
+    expect(words, 'the plan writes DN alone').toEqual(['DN']);
   });
 
   test('the riser count comes from the LEVEL HEIGHTS, not the stored rise',
@@ -143,7 +168,7 @@ test.describe('MODEL.html stairs', () => {
       await loadWith(page, withJoist(11.875));
       const shallow = (await legends(page))[0];
 
-      await page.evaluate(() => { window.__painted = []; });
+      await page.evaluate(() => { window.__painted = []; window.__legends = []; });
       await loadWith(page, withJoist(23.875));
       const deep = (await legends(page))[0];
 
@@ -278,13 +303,13 @@ test.describe('MODEL.html stairs', () => {
       await loadWith(page, overGarage('{}'), { level: OVER_GARAGE });
       const derived = await legend();
 
-      await page.evaluate(() => { window.__painted = []; });
+      await page.evaluate(() => { window.__painted = []; window.__legends = []; });
       await loadWith(page, overGarage(
         `{ ${OVER_GARAGE}: { joistDepthIn: ${HOUSE_JOIST_IN}, sheathingIn: 0.75 } }`),
         { level: OVER_GARAGE });
       const asPlainFloor = await legend();
 
-      await page.evaluate(() => { window.__painted = []; });
+      await page.evaluate(() => { window.__painted = []; window.__legends = []; });
       await loadWith(page, overGarage(
         `{ ${OVER_GARAGE}: { joistDepthIn: ${OVER_GARAGE_JOIST_IN}, sheathingIn: 0.75 } }`),
         { level: OVER_GARAGE });
