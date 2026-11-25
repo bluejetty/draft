@@ -1679,14 +1679,80 @@
   const STAIR_NODE_TOOLS = new Set(['rotate', 'mirror', 'line', 'wall', 'dimension', 'shape', 'floor',
     'outline', 'annotation', 'roomtag', 'beam', 'column', 'offset', 'array']);
   let stairNodeCache = { key: null, nodes: [] };
+  // EVERY CORNER THE PAINTER DRAWS, INSIDE ONES TOO (jb, 25 Nov 2026: "the
+  // interior corner of the stair don't SNAP NODES can you make them snap?").
+  // The outline corners were all there was: a U's middle flight and its
+  // second landing were missed, and nothing inside the outline caught -- an
+  // L's or a U's handrail turning across the landing, the rail's ends, the U
+  // gap line, a winder line's ends, or where one drawn edge meets another
+  // part way along it (a flight's stringer into a wider landing, the middle
+  // flight across its landings). Tread lines are left out: a node at each
+  // tread's ends would bury the corners under a row of them.
+  const stairDrawnCorners = (stair, levels) => {
+    const SG = window.DraftStairGeometry;
+    const G = window.DraftGeometry2D;
+    if (!SG?.stairPlanParts || !stair?.start || !stair?.end) return [];
+    const parts = SG.stairPlanParts(stair, SG.stairCurrentLayout(stair, levels));
+    const rings = typeof SG.stairFootprintRings === 'function' ? SG.stairFootprintRings(parts, stair)
+      : stairRings(stair, levels);
+    const out = [];
+    const add = p => {
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.z)) return;
+      if (!out.some(o => Math.abs(o.x - p.x) < 1e-4 && Math.abs(o.z - p.z) < 1e-4)) out.push({ x: p.x, z: p.z });
+    };
+    const segs = [];
+    const seg = (a, b) => { if (a && b && Math.hypot(b.x - a.x, b.z - a.z) > 1e-6) segs.push({ start: a, end: b }); };
+    rings.forEach(ring => ring.forEach((p, i) => { add(p); seg(p, ring[(i + 1) % ring.length]); }));
+    (parts.rails || []).forEach(rail => rail.forEach((p, i) => { add(p); if (i) seg(rail[i - 1], p); }));
+    if (parts.gap) { add(parts.gap[0]); add(parts.gap[1]); seg(parts.gap[0], parts.gap[1]); }
+    const landings = parts.landings && parts.landings.length ? parts.landings : parts.landing ? [parts.landing] : [];
+    landings.forEach(l => (l.winderLines || []).forEach(wl => { add(wl[0]); add(wl[1]); }));
+    // WHERE TWO DRAWN EDGES MEET (a T or a crossing), not only at their ends.
+    if (G?.segmentIntersection) {
+      for (let i = 0; i < segs.length; i += 1) {
+        for (let j = i + 1; j < segs.length; j += 1) {
+          const hit = G.segmentIntersection(segs[i], segs[j]);
+          if (hit) add(hit);
+        }
+      }
+    }
+    return out;
+  };
+  // THE STAIRS THIS PLAN DRAWS, the painter's own pick (model/03
+  // paintStairs, stair-geometry stairsShownOn): its own going DN, the ones
+  // landing on it going UP and the ones under it drawn light -- on this
+  // layer, on every BG layer lit behind it (the FLOOR LAYOUT shows the
+  // walls plan's stairs that way), and on a split's paired floor.
+  const stairsDrawnHere = () => {
+    const SG = window.DraftStairGeometry;
+    if (!SG?.stairsShownOn || !drawing) return { list: [], levels: null };
+    const levels = stairLevels();
+    const pick = () => {
+      const { levelId, viewId } = onActiveLevel();
+      const views = window.DraftLayerViews.layerViewsForLevelId(levelId);
+      const onView = stair => !views.length || stair.view === viewId;
+      return SG.stairsShownOn(levelId, (drawing.stairs || []).filter(onView), levels.floors).map(e => e.stair);
+    };
+    const list = pick();
+    bgEntries().forEach(entry => withBg(entry, pick).forEach(st => { if (!list.includes(st)) list.push(st); }));
+    const partner = halfLevelPartner(activeLevelId());
+    if (partner != null && (drawing.levels || []).some(l => Number(l.id) === partner)) {
+      withBg({ levelId: partner, viewId: null }, pick).forEach(st => { if (!list.includes(st)) list.push(st); });
+    }
+    return { list, levels };
+  };
   const stairSnapNodes = () => {
     if (!STAIR_NODE_TOOLS.has(activeTool) || !drawing) return [];
-    const key = `${paintFrame}|${modelEpoch}|${activeLevelId()}`;
+    const key = `${paintFrame}|${modelEpoch}|${activeLevelId()}|${activeViewId()}|${[...bgLayers].join(',')}`;
     if (stairNodeCache.key === key) return stairNodeCache.nodes;
     const nodes = [];
-    stairs().forEach(stair => {
+    const { list, levels } = stairsDrawnHere();
+    list.forEach(stair => {
       let corners = [];
-      try { corners = stairOutlineOf(stair).corners || []; } catch { corners = []; }
+      try { corners = stairDrawnCorners(stair, levels); } catch { corners = []; }
+      if (!corners.length) {
+        try { corners = stairOutlineOf(stair).corners || []; } catch { corners = []; }
+      }
       corners.forEach(c => {
         if (!c || !Number.isFinite(c.x) || !Number.isFinite(c.z)) return;
         if (!nodes.some(o => Math.abs(o.x - c.x) < 1e-6 && Math.abs(o.z - c.z) < 1e-6)) nodes.push({ x: c.x, y: 0, z: c.z });

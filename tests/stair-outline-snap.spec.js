@@ -159,7 +159,8 @@ test('ROTATE\'s picks catch an L flight\'s corners, landing included', async ({ 
   await page.keyboard.press('z');
   expect(await page.evaluate(() => activeTool)).toBe('rotate');
   const nodes = await page.evaluate(() => stairSnapNodes().map(n => [n.x, n.z]));
-  expect(nodes.length).toBe(facts.corners.length);
+  // Every outline corner (and the inside ones besides, 25 Nov).
+  facts.corners.forEach(c => expect(nodes.some(([x, z]) => Math.abs(x - c.x) < 1e-6 && Math.abs(z - c.z) < 1e-6)).toBe(true));
   // The flight's south-most corner, out on the turned flight's foot.
   const c = facts.corners.slice().sort((a, b) => b.z - a.z || b.x - a.x)[0];
   const [cx, cy] = frame.at(c.x, c.z);
@@ -187,7 +188,10 @@ test('LINE catches an L flight\'s corners: a line starts on one', async ({ page 
   const { frame, facts } = await open(page);
   await page.keyboard.press('l');
   expect(await page.evaluate(() => activeTool)).toBe('line');
-  expect(await page.evaluate(() => stairSnapNodes().length)).toBe(facts.corners.length);
+  // Every outline corner is a node (and, since 25 Nov, the inside ones too:
+  // tests/stair-inside-corners.spec.js).
+  const nodes = await page.evaluate(() => stairSnapNodes());
+  facts.corners.forEach(c => expect(nodes.some(n => Math.abs(n.x - c.x) < 1e-6 && Math.abs(n.z - c.z) < 1e-6)).toBe(true));
   const c = facts.corners.slice().sort((a, b) => b.z - a.z || b.x - a.x)[0];
   const [cx, cy] = frame.at(c.x, c.z);
   await page.mouse.move(cx + 2, cy + 2);
