@@ -2029,6 +2029,85 @@
   // `opts.refresh` rebuilds the panels after a chip (the plan's selection
   // panel by default; a line held on an elevation rebuilds its own),
   // `opts.lengthOf` measures one line, `opts.note` is the foot line.
+  // ── A JOIST CALLOUT'S WORDS AND SIDE (jb, 25 Nov 2026) ─────────────────
+  // "allow the user to delete the default floor [text] and either add to
+  // that floor text or delete it and change to what he wants". The words
+  // start as the floor's (`defaultText`); RESET hands them back. TEXT ABOVE /
+  // BELOW puts them on either side of the arrow. One UNDO a change.
+  const writeJoistCallout = (lines, patch) => {
+    const edits = lines.map(line => ({ item: line, before: { ...line, joist: { ...line.joist } } }));
+    lines.forEach(line => { line.joist = { ...line.joist, ...patch }; });
+    undoStack.push({ kind: 'props', edits });
+    markDirty();
+    paint();
+  };
+  const joistCalloutPropsNode = lines => {
+    const box = document.createElement('div');
+    const title = text => {
+      const t = document.createElement('div');
+      t.className = 'props-title';
+      t.textContent = text;
+      return t;
+    };
+    const len = Math.max(...lines.map(line => Math.hypot(line.end.x - line.start.x, line.end.z - line.start.z)));
+    const span = title(`SPAN ${feetLabel(len)}`);
+    span.dataset.propSpan = '';
+    box.append(span);
+    box.append(title('TEXT'));
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'prop-field';
+    input.dataset.joistText = '';
+    input.maxLength = 200;
+    const same = lines.every(line => line.joist.text === lines[0].joist.text);
+    input.value = same ? lines[0].joist.text : '';
+    input.placeholder = same ? 'TYPE THE JOISTS, OR LEAVE IT BLANK' : '(DIFFERENT ON EACH)';
+    const commit = () => {
+      const text = input.value.replace(/\s+/g, ' ').trim();
+      if (lines.every(line => line.joist.text === text)) return;
+      writeJoistCallout(lines, { text });
+      showSelectionProps();
+    };
+    input.addEventListener('change', commit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); input.blur(); } });
+    box.append(input);
+    const row = document.createElement('div');
+    row.className = 'chip-row';
+    const chip = (data, text, pressed, onClick, tip) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sel-chip';
+      Object.entries(data).forEach(([k, v]) => { b.dataset[k] = v; });
+      b.textContent = text;
+      b.title = tip;
+      b.setAttribute('aria-pressed', String(pressed === true));
+      b.classList.toggle('lit', pressed === true);
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    const sideNow = lines.every(line => line.joist.side === lines[0].joist.side) ? lines[0].joist.side : null;
+    ['above', 'below'].forEach(side => {
+      row.append(chip({ joistSide: side }, `TEXT ${side.toUpperCase()}`, sideNow === side, () => {
+        if (sideNow !== side) { writeJoistCallout(lines, { side }); showSelectionProps(); }
+      }, side === 'above' ? 'The words on top of the arrow' : 'The words under the arrow'));
+    });
+    const isDefault = lines.every(line => line.joist.text === line.joist.defaultText);
+    const reset = chip({ joistReset: '' }, 'RESET', false, () => {
+      const edits = lines.map(line => ({ item: line, before: { ...line, joist: { ...line.joist } } }));
+      lines.forEach(line => { line.joist = { ...line.joist, text: line.joist.defaultText }; });
+      undoStack.push({ kind: 'props', edits });
+      markDirty();
+      paint();
+      showSelectionProps();
+    }, 'Back to the words the floor gave it');
+    reset.disabled = isDefault;
+    row.append(reset);
+    box.append(row);
+    const hint = title('DRAG IT ANYWHERE. ROTATE, COPY / PASTE AND DELETE LIKE ANY LINE.');
+    hint.dataset.joistHint = '';
+    box.append(hint);
+    return box;
+  };
   const linePropsNode = (lines, opts = {}) => {
     const refresh = opts.refresh || (() => showSelectionProps());
     const LS = window.DraftLineStyles;
@@ -3719,7 +3798,10 @@
     // A FIXTURE'S SIZE, and an island's aisle (Movie, 20 Oct).
     fixture: items => ({ title: fixturePanelTitle(items), node: fixturePropsNode(items) }),
     floor: items => ({ title: 'FLOOR', node: floorPropsNode(items) }),
-    line: items => ({ title: 'LINE', node: linePropsNode(items) }),
+    // A JOIST CALLOUT is a line with words (jb, 25 Nov 2026).
+    line: items => (items.every(item => item.joist)
+      ? { title: 'JOIST CALLOUT', node: joistCalloutPropsNode(items) }
+      : { title: 'LINE', node: linePropsNode(items) }),
     // ONE AT A TIME. The shape of two flights at once is two questions --
     // which way each turns is about where each one sits -- and the pick chain
     // offers a stair singly anyway; a window-select of several is the only way

@@ -1366,6 +1366,79 @@ if (!window.DraftBuildHouse) {
     return Number.isFinite(depthIn) && depthIn > 0 ? inchesLabel(depthIn) : null;
   };
 
+  // ── ONE JOIST CALLOUT PER FLOOR AREA AND PER DECK (jb, 25 Nov 2026) ────
+  //
+  // "should only need 1 per floor area", "need one for each deck / floor
+  // area". Each callout is an arrow across the longest bay of its area (the
+  // joists' way, bearing to bearing) and its text. `seed` names where it came
+  // from -- 'body:<outline id>', 'floor:<floor id>' (a level with no
+  // outline), 'deck:<floor id>' -- and a seed listed in the drawing's
+  // `joistCalloutsTaken` is drawn no more: the drafter picked it up (it is a
+  // LINE of their own now, model/08 adoptJoistCalloutAt) or deleted it.
+  // `beamsUnder` are the beams that hold the deck up (the level under's).
+  // Pure: answers [{ seed, start, end, text, warn? }], points in plan feet;
+  // `warn` is the engineering mark of a bay past what its joist reaches;
+  // and the area's framing: { axis, bays, spanFt, label } (joistBays).
+  const DECK_JOIST_CALLOUT = '2x10 DECK JOISTS';
+  const joistCalloutSeeds = (saved, levelId, beamsUnder = []) => {
+    const LA = window.DraftLevelAssembly;
+    const VIEWS = window.DraftLayerViews;
+    const G2 = window.DraftGeometry2D;
+    if (!LA || !VIEWS) return [];
+    const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
+    const id = Number(levelId);
+    const taken = new Set(of('joistCalloutsTaken').map(String));
+    const holes = of('surfaceOpenings').filter(opening => Number(opening?.levelId) === id
+      && opening.hostType === 'floor' && Array.isArray(opening.points) && opening.points.length >= 3);
+    const ladder = VIEWS.floorLevels(of('levels')).map(level => Number(level.id));
+    const at = ladder.indexOf(id);
+    const below = new Set(at < 0 ? [] : ladder.slice(0, at));
+    const garages = of('outlines').filter(outline => outline?.garage === true
+      && below.has(Number(outline.levelId)) && Array.isArray(outline.points) && outline.points.length >= 3);
+    const wallById = new Map(of('walls').map(wall => [String(wall.id), wall]));
+    const doorPoints = of('fenestrations').filter(fen => fen?.garage === true)
+      .map(fen => wallById.get(String(fen.wallId))).filter(wall => wall?.start && wall?.end)
+      .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
+    const asm = LA.levelAssemblyFor(saved?.levelAssemblies, id);
+    const label = joistCallout(asm);
+    const loop = pts => (Array.isArray(pts) ? pts : []).map(pt => ({ x: Number(pt.x) || 0, z: Number(pt.z) || 0 }));
+    // THE ONE ARROW: the longest bay, at its own `at` (clear of a stairwell).
+    const arrowFor = (points, opts, text, assembly) => {
+      const raw = joistBays(points, opts);
+      if (!raw) return null;
+      const bays = (assembly ? overSpanBays({ ...raw, label: text }, assembly) : null) || { ...raw, label: text };
+      const bay = bays.bays.reduce((best, b) => (b.spanFt > best.spanFt ? b : best));
+      const p = v => (bays.axis === 'x' ? { x: v, z: bay.at } : { x: bay.at, z: v });
+      // The whole bay analysis rides along (axis, bays, spanFt, label) for
+      // a reader that wants the deck's framing, not just the one arrow.
+      return { start: p(bay.from), end: p(bay.to), text: bays.label || text, ...(bay.warn ? { warn: bay.warn } : {}),
+        axis: bays.axis, bays: bays.bays, spanFt: bays.spanFt, label: bays.label || text };
+    };
+    const floorsHere = of('floors').filter(floor => Number(floor?.levelId) === id
+      && (floor.view || 'floor') === 'floor' && floor.garage !== true
+      && Array.isArray(floor.points) && floor.points.length >= 3);
+    const isDeck = floor => !!(G2 && typeof G2.isDeckFloor === 'function' && G2.isDeckFloor(floor, of('walls')));
+    const bodies = of('outlines').filter(outline => Number(outline?.levelId) === id && outline.garage !== true
+      && outline.site !== true && Array.isArray(outline.points) && outline.points.length >= 3)
+      .map(outline => ({ seed: `body:${outline.id}`, points: loop(outline.points) }));
+    const areas = bodies.length ? bodies
+      : floorsHere.filter(floor => !isDeck(floor)).map(floor => ({ seed: `floor:${floor.id}`, points: loop(floor.points) }));
+    const out = [];
+    areas.forEach(area => {
+      if (taken.has(area.seed)) return;
+      const arrow = arrowFor(area.points,
+        { beams: beamsUnder, holes, axis: deckJoistAxis(area.points, { garages, doorPoints }) }, label, asm);
+      if (arrow) out.push({ seed: area.seed, ...arrow });
+    });
+    floorsHere.filter(isDeck).forEach(floor => {
+      const seed = `deck:${floor.id}`;
+      if (taken.has(seed)) return;
+      const arrow = arrowFor(loop(floor.points), {}, DECK_JOIST_CALLOUT, null);
+      if (arrow) out.push({ seed, ...arrow });
+    });
+    return out;
+  };
+
   window.DraftBuildHouse = Object.freeze({
     ENGINEERING_MARK,
     OWJ_MAX_SPAN_FT,
@@ -1375,6 +1448,8 @@ if (!window.DraftBuildHouse) {
     joistBays,
     deckJoistAxis,
     joistCallout,
+    joistCalloutSeeds,
+    DECK_JOIST_CALLOUT,
     inchesLabel,
     JOIST_ARROW_CLEAR_FT,
     OWJ_OC_IN,

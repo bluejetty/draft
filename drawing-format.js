@@ -828,8 +828,23 @@ if (!window.DraftDrawingFormat) {
         // drawn before today carries none of the three and reads exactly as
         // it always drew.
         ...lineStyleFields(line),
+        // A JOIST CALLOUT picked up off a floor (jb, 25 Nov 2026): where it
+        // came from, its words, the floor's own words for RESET, and which
+        // side of the arrow they sit. Written only on one.
+        ...joistField(line?.joist),
       };
     }), env.drops).filter(Boolean);
+  };
+  const joistField = raw => {
+    if (!raw || typeof raw !== 'object') return {};
+    const text = v => String(v ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200);
+    return { joist: {
+      seed: String(raw.seed ?? '').slice(0, 80),
+      text: text(raw.text),
+      defaultText: text(raw.defaultText),
+      side: raw.side === 'below' ? 'below' : 'above',
+      ...(raw.warn ? { warn: text(raw.warn) } : {}),
+    } };
   };
   const lineStyleFields = line => {
     const LS = (typeof window !== 'undefined' && window.DraftLineStyles) || null;

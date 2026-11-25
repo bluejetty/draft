@@ -1248,6 +1248,80 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // ── ONE JOIST CALLOUT: AN ARROW AND ITS TEXT (jb, 25 Nov 2026) ─────────
+  // "put the text on top or bottom of the line", one per floor area / deck,
+  // movable, editable. `callout` is { start, end, text, side } in plan feet
+  // ('above' or 'below' the line as it reads; above when unsaid): the shaft
+  // bearing to bearing, an open V at each end (drawJoistSpans2D's heads), and
+  // the text along it. `options.color` overrides the structure ink (a LINE
+  // record's own colour), `options.inkScale` scales the heads and the
+  // lettering on a sheet, `options.noText` leaves the words off. Answers the
+  // screen ends { a, b } for a page's click, or null.
+  function drawJoistCallout2D(ctx, toS, callout, env = {}, options = {}) {
+    if (!callout?.start || !callout?.end) return null;
+    const a = toS({ x: callout.start.x, y: 0, z: callout.start.z });
+    const b = toS({ x: callout.end.x, y: 0, z: callout.end.z });
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 1) return null;
+    const ink = Number.isFinite(options.inkScale) && options.inkScale > 0 ? options.inkScale : 1;
+    const colour = options.color || env.joistColor || env.columnColor || '#1d1f20';
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const size = JOIST_ARROW_PX * ink;
+    ctx.save();
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = 1.25 * ink;
+    if (ctx.setLineDash) ctx.setLineDash([]);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    const head = (tip, dir) => {
+      ctx.beginPath();
+      ctx.moveTo(tip.x + size * Math.cos(dir + Math.PI - JOIST_ARROW_SPREAD), tip.y + size * Math.sin(dir + Math.PI - JOIST_ARROW_SPREAD));
+      ctx.lineTo(tip.x, tip.y);
+      ctx.lineTo(tip.x + size * Math.cos(dir + Math.PI + JOIST_ARROW_SPREAD), tip.y + size * Math.sin(dir + Math.PI + JOIST_ARROW_SPREAD));
+      ctx.stroke();
+    };
+    head(a, angle + Math.PI);
+    head(b, angle);
+    const text = String(callout.text ?? '').replace(/\s+/g, ' ').trim();
+    if (text && !options.noText) {
+      const below = callout.side === 'below';
+      const px = Math.round(9 * ink * 100) / 100;
+      labelAlongLine2D(ctx, a, b, text, {
+        font: ink === 1 && env.labelFont ? env.labelFont : `600 ${px}px 'Barlow Condensed', system-ui, sans-serif`,
+        color: colour, offset: (below ? -5 : 5) * ink, baseline: below ? 'top' : 'bottom' });
+    }
+    // THE ENGINEERING MARK of a bay past its joist's reach, on the other side.
+    const warn = String(callout.warn ?? '').trim();
+    if (warn && !options.noText) {
+      const textBelow = callout.side === 'below';
+      const markPx = Math.round(9 * ink * 100) / 100;
+      labelAlongLine2D(ctx, a, b, warn, {
+        font: ink === 1 && env.labelFont ? env.labelFont : `600 ${markPx}px 'Barlow Condensed', system-ui, sans-serif`,
+        color: colour, offset: (textBelow ? 5 : -5) * ink, baseline: textBelow ? 'bottom' : 'top' });
+    }
+    ctx.restore();
+    return { a, b };
+  }
+  // The callout under a screen point (within `tol` px of its shaft), or null.
+  // TIGHT, 4 px: a callout stands inside the floor it calls out, and a press
+  // meant for the floor beside its shaft must still reach the floor.
+  function joistCalloutAt(hits, sx, sy, tol = 4) {
+    let best = null, bestD = Infinity;
+    (Array.isArray(hits) ? hits : []).forEach(hit => {
+      const { a, b } = hit;
+      const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+      if (!len2) return;
+      const t = Math.max(0, Math.min(1, ((sx - a.x) * dx + (sy - a.y) * dy) / len2));
+      const d = Math.hypot(sx - (a.x + t * dx), sy - (a.y + t * dy));
+      if (d <= tol && d < bestD) { bestD = d; best = hit; }
+    });
+    return best;
+  }
+
   // WHICH SIDE OF EACH BEAM ITS TAG GOES, AND WHETHER IT GETS ONE (Movie, 16
   // Oct, on the 2ND FL FLOOR LAYOUT: the FLUSH/DROPPED BEAM note and the
   // beam's string on OPPOSITE sides of the beam, and one note for a beam laid
@@ -4689,6 +4763,8 @@ if (!window.DraftRender2D) {
     drawOverheadLines2D,
     drawDoorBucks2D,
     drawJoistSpans2D,
+    drawJoistCallout2D,
+    joistCalloutAt,
     beamTagSides,
     beamSpans,
     beamSpanRuns,

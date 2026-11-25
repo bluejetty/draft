@@ -849,12 +849,17 @@ function run(label) {
     const none = loadWith(['level-assembly.js']);
     check('without the storey ladder there is no footprint', none.win.DraftLayoutPlan.footprintLoops(SAVED).length === 0);
     // THE JOIST CALLOUTS REACH THE SHEET (Movie, 16 Oct): the floor layout's
-    // env carries one per deck and the composer paints its label per bay.
+    // env carries one per floor area (jb, 25 Nov 2026) and the composer
+    // paints each one's label.
     const floorSheet = draw(full.win, 5, { env: { view: 'floor' } });
     const labels = floorSheet.ok ? floorSheet.texts.filter(t => /^(ENGINEERED OWJ|TJI|\dx\d+ JOISTS)/.test(t)) : [];
-    const expected = LP.joistCalloutsFor(SAVED, 5, { levelId: 3, view: 'floor' }).reduce((n, c) => n + c.bays.length, 0);
-    check('the 2ND FLOOR sheet labels every bay of its decks', expected > 0 && labels.length === expected,
-      `${labels.length} labels for ${expected} bays`);
+    const expected = LP.joistCalloutsFor(SAVED, 5, { levelId: 3, view: 'floor' }).length;
+    check('the 2ND FLOOR sheet labels each floor area of its decks', expected > 0 && labels.length === expected,
+      `${labels.length} labels for ${expected} callouts`);
+    // AND ONE PICKED UP AS A LINE (joistCalloutsTaken) is the sheet's no more.
+    const taken = LP.joistCalloutsFor({ ...SAVED, joistCalloutsTaken: LP.joistCalloutsFor(SAVED, 5, { levelId: 3, view: 'floor' }).map(c => c.seed) },
+      5, { levelId: 3, view: 'floor' });
+    check('a callout the drafter picked up is not drawn from the floor again', taken.length === 0, `${taken.length} left`);
     check('and the walls plan carries none', !draw(full.win, 5, { env: { view: 'plan' } }).texts.some(t => /^TJI|^ENGINEERED OWJ/.test(t)));
   }
 

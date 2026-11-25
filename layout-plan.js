@@ -718,43 +718,16 @@ if (!window.DraftLayoutPlan) {
   // (render-2d drawJoistSpans2D): build-house joistBays per floor body, with
   // the beams filed on the level under (`under`, structureUnder's answer),
   // the holes in this deck, and the label off the schedule.
+  // ONE PER FLOOR AREA AND ONE PER DECK (jb, 25 Nov 2026): build-house
+  // joistCalloutSeeds with the beams filed on the level under (`under`,
+  // structureUnder's answer) -- the same list the Model Space draws, less
+  // the ones the drafter picked up as lines of their own.
   function joistCalloutsFor(saved, levelId, under) {
     const B = window.DraftBuildHouse;
-    const LA = window.DraftLevelAssembly;
-    const VIEWS = window.DraftLayerViews;
-    if (!B || typeof B.joistBays !== 'function' || !LA || !VIEWS) return [];
+    if (!B || typeof B.joistCalloutSeeds !== 'function') return [];
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
-    const beams = under ? of('beams').filter(beam => beam?.levelId === under.levelId && beam.view === under.view) : [];
-    const holes = of('surfaceOpenings').filter(opening => opening?.levelId === levelId
-      && opening.hostType === 'floor' && Array.isArray(opening.points) && opening.points.length >= 3);
-    const ladder = VIEWS.floorLevels(of('levels')).map(level => Number(level.id));
-    const at = ladder.indexOf(Number(levelId));
-    const below = new Set(at < 0 ? [] : ladder.slice(0, at));
-    const garages = of('outlines').filter(outline => outline?.garage === true
-      && below.has(Number(outline.levelId)) && Array.isArray(outline.points) && outline.points.length >= 3);
-    const wallById = new Map(of('walls').map(wall => [String(wall.id), wall]));
-    const doorPoints = of('fenestrations').filter(fen => fen?.garage === true)
-      .map(fen => wallById.get(String(fen.wallId))).filter(wall => wall?.start && wall?.end)
-      .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
-    const asm = LA.levelAssemblyFor(saved?.levelAssemblies, levelId);
-    const label = B.joistCallout(asm);
-    // THE BODIES AUTO BEAM FRAMES -- the level's outlines, the garage's own
-    // aside -- so the callout and the beam plan read one deck. A floor
-    // record can carry a stair landing's tab past the room, and its box is
-    // then wider than any joist spans; the floors stand in only where a
-    // level has no outline.
-    const bodies = of('outlines').filter(outline => outline?.levelId === levelId && outline.garage !== true
-      && outline.site !== true && Array.isArray(outline.points) && outline.points.length >= 3);
-    const decks = bodies.length ? bodies : of('floors').filter(floor => floor?.levelId === levelId
-      && (floor.view || 'floor') === 'floor' && floor.garage !== true
-      && Array.isArray(floor.points) && floor.points.length >= 3);
-    return decks
-      .map(floor => {
-        const points = floor.points.map(pt => ({ x: num(pt.x), z: num(pt.z) }));
-        const bays = B.joistBays(points, { beams, holes, axis: B.deckJoistAxis(points, { garages, doorPoints }) });
-        // Past the table, the ENGINEERING mark rides the bay (overSpanBays).
-        return bays ? (B.overSpanBays ? B.overSpanBays({ ...bays, label }, asm) : { ...bays, label }) : null;
-      }).filter(Boolean);
+    const beams = under ? of('beams').filter(beam => Number(beam?.levelId) === Number(under.levelId) && beam.view === under.view) : [];
+    return B.joistCalloutSeeds(saved, levelId, beams);
   }
 
   // A level's FLOOR LAYOUT: the floors filed on its 'floor' view.
