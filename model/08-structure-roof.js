@@ -1752,9 +1752,17 @@
     if (!drawing || !R?.spanTagAt || !filterAllows('beam')) return false;
     const hit = R.spanTagAt(beamSpanTagHits, sx, sy);
     if (!hit) return false;
-    const { beam, from, to } = hit.span;
+    // A RUN of spans (one tag for a whole beam, render-2d beamSpanRuns) flips
+    // every piece under it: a run always covers whole pieces, since a piece
+    // has one mode and its spans all run together.
+    const run = Array.isArray(hit.span.spans) ? hit.span.spans : null;
+    const { beam } = run ? run[0] : hit.span;
     const list = drawing.beams || [];
     if (!list.includes(beam)) return false;
+    const runPieces = run ? [...new Set(run.map(span => span.beam))].filter(piece => list.includes(piece)) : null;
+    const pieceLen = Math.hypot(beam.end.x - beam.start.x, beam.end.z - beam.start.z);
+    const from = run ? 0 : hit.span.from;
+    const to = run ? pieceLen : hit.span.to;
     const now = hit.span.mode === 'dropped' ? 'flush' : 'dropped';
     const listBefore = [...list];
     const edits = [];
@@ -1777,6 +1785,7 @@
     beam.start = at(from);
     beam.end = at(to);
     beam.mode = now;
+    (runPieces || []).forEach(piece => { if (piece !== beam) { touch(piece); piece.mode = now; } });
     list.splice(list.indexOf(beam) + 1, 0, ...extra);
     // JOIN WHAT NOW AGREES: walk the row along the line and run touching
     // pieces of the same kind together.
@@ -1814,7 +1823,7 @@
     ] });
     markDirty();
     setSelection(selection.filter(entry => entry.type !== 'beam' || list.includes(entry.item)));
-    sayOnStrip(`That span is ${now === 'dropped' ? 'DROPPED' : 'FLUSH'} now. Click its tag again for ${now === 'dropped' ? 'FLUSH' : 'DROPPED'}, or UNDO.`);
+    sayOnStrip(`That ${run ? 'beam' : 'span'} is ${now === 'dropped' ? 'DROPPED' : 'FLUSH'} now. Click its tag again for ${now === 'dropped' ? 'FLUSH' : 'DROPPED'}, or UNDO.`);
     paint();
     return true;
   };

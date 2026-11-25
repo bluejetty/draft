@@ -76,16 +76,16 @@ const file = (extra = {}) => ({
   roomTags: [], columns: posts(), beams: [beam()], boneyardOutlines: [], groups: [], levelLocks: [], underlays: [], roofs: [],
   ...extra,
 });
-async function open(page, f = file()) {
+async function open(page, f = file(), tags = '1') {
   await page.goto('/MODEL.html?left=1');
   await page.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 15000 });
   await page.evaluate(async d => {
     await window.SharedFileStore.saveSharedFile(new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), 'model-drawing');
   }, f);
   await page.goto('/MODEL.html?level=1&view=foundation&left=1');
-  await expect.poll(() => page.locator('#plan').getAttribute('data-beam-span-tags'), { timeout: 15000 }).toBe('3');
+  await expect.poll(() => page.locator('#plan').getAttribute('data-beam-span-tags'), { timeout: 15000 }).toBe(tags);
 }
-// The tag of the span over world x (each span's middle is unique here).
+// The tag over world x.
 const tagAt = async (page, wx) => {
   const hit = await page.evaluate(x => {
     const t = beamSpanTagHits.find(h => Math.min(h.span.start.x, h.span.end.x) < x && Math.max(h.span.start.x, h.span.end.x) > x);
@@ -97,31 +97,52 @@ const tagAt = async (page, wx) => {
 const rows = page => page.evaluate(() => drawing.beams.map(b => [+b.start.x.toFixed(3), +b.end.x.toFixed(3), b.mode, b.auto])
   .sort((a, b) => a[0] - b[0]));
 
-test('MODEL: tags on every span, pockets on the FOUNDATION view, a click flips one span', async ({ page }) => {
+// jb, 25 Nov 2026: "only needs FLUSH / DROPPED once per beam".
+test('runs: touching spans of one mode on one line share one tag', () => {
+  const win = H.loadDraftModules();
+  const R = win.DraftRender2D;
+  const one = R.beamSpanRuns(R.beamSpans([beam()], posts()));
+  expect(one.length).toBe(1);
+  expect([+one[0].start.x.toFixed(3), +one[0].end.x.toFixed(3), one[0].mode, one[0].spans.length]).toEqual([0.667, 29.333, 'flush', 3]);
+  const mixed = R.beamSpanRuns(R.beamSpans([
+    beam({ id: 1, end: { x: 10, y: 0, z: -12 } }),
+    beam({ id: 2, start: { x: 10, y: 0, z: -12 }, end: { x: 20, y: 0, z: -12 }, mode: 'dropped' }),
+    beam({ id: 3, start: { x: 20, y: 0, z: -12 } })], posts()));
+  expect(mixed.map(r => r.mode)).toEqual(['flush', 'dropped', 'flush']);
+  // Two beams on separate lines keep a tag each.
+  const two = R.beamSpanRuns(R.beamSpans([beam(), beam({ id: 2, start: { x: IN, y: 0, z: -6 }, end: { x: 30 - IN, y: 0, z: -6 } })], posts()));
+  expect(two.length).toBe(2);
+});
+
+test('MODEL: one tag per beam, pockets on the FOUNDATION view, a click flips the beam', async ({ page }) => {
   await open(page);
   await expect(page.locator('#plan')).toHaveAttribute('data-beam-pockets', '2');
   await page.keyboard.press('s');
-  const middle = await tagAt(page, 15);
-  expect(middle.text).toBe('FLUSH');
-  await page.mouse.click(middle.x, middle.y);
-  expect(await rows(page)).toEqual([[0.667, 10, 'flush', false], [10, 20, 'dropped', false], [20, 29.333, 'flush', false]]);
+  const tag = await tagAt(page, 15);
+  expect(tag.text).toBe('FLUSH');
+  await page.mouse.click(tag.x, tag.y);
+  expect(await rows(page)).toEqual([[0.667, 29.333, 'dropped', false]]);
   // Posts handed over too, so AUTO BEAM leaves the line alone.
   expect(await page.evaluate(() => drawing.columns.every(c => c.auto === false))).toBe(true);
-  // The end span flipped too joins the middle one.
-  const last = await tagAt(page, 25);
-  await page.mouse.click(last.x, last.y);
-  expect(await rows(page)).toEqual([[0.667, 10, 'flush', false], [10, 29.333, 'dropped', false]]);
-  // UNDO takes back one flip at a time.
-  await page.keyboard.press('Control+z');
-  expect(await rows(page)).toEqual([[0.667, 10, 'flush', false], [10, 20, 'dropped', false], [20, 29.333, 'flush', false]]);
-  // Flipped back: one flush piece wall to wall again.
-  const back = await tagAt(page, 15);
-  expect(back.text).toBe('DROPPED');
-  await page.mouse.click(back.x, back.y);
-  expect(await rows(page)).toEqual([[0.667, 29.333, 'flush', false]]);
-  await page.keyboard.press('Control+z');
+  await expect(page.locator('#plan')).toHaveAttribute('data-beam-span-tags', '1');
   await page.keyboard.press('Control+z');
   expect(await rows(page)).toEqual([[0.667, 29.333, 'flush', true]]);
+});
+
+test('MODEL: a beam with a dropped span keeps a tag per mode; flipping it back joins the line', async ({ page }) => {
+  const split = [
+    beam({ id: 1, end: { x: 10, y: 0, z: -12 }, auto: false }),
+    beam({ id: 2, start: { x: 10, y: 0, z: -12 }, end: { x: 20, y: 0, z: -12 }, mode: 'dropped', auto: false }),
+    beam({ id: 3, start: { x: 20, y: 0, z: -12 }, auto: false })];
+  await open(page, file({ beams: split }), '3');
+  await page.keyboard.press('s');
+  const middle = await tagAt(page, 15);
+  expect(middle.text).toBe('DROPPED');
+  await page.mouse.click(middle.x, middle.y);
+  expect(await rows(page)).toEqual([[0.667, 29.333, 'flush', false]]);
+  await expect(page.locator('#plan')).toHaveAttribute('data-beam-span-tags', '1');
+  await page.keyboard.press('Control+z');
+  expect(await rows(page)).toEqual([[0.667, 10, 'flush', false], [10, 20, 'dropped', false], [20, 29.333, 'flush', false]]);
 });
 
 test('MODEL: a bilevel draws no pockets', async ({ page }) => {
