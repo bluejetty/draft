@@ -1452,6 +1452,10 @@ if (!window.DraftDrawingFormat) {
           && Number(stair[k]) <= 48 ? { ...o, [k]: Number(stair[k]) } : o), {})),
         ...(stair?.uGapIn != null && Number(stair.uGapIn) >= 0 && Number(stair.uGapIn) <= 96
           ? { uGapIn: Number(stair.uGapIn) } : {}),
+        // CHANGE BOTH FLIGHTS (jb, 25 Nov 2026): an edit to this flight is
+        // matched on the flights stacked over and under it. Written only when
+        // set; absent (an older file) = this flight alone.
+        ...(typeof stair?.matchStack === 'boolean' ? { matchStack: stair.matchStack } : {}),
         layer: 'A-STR',
       };
     }).filter(Boolean);

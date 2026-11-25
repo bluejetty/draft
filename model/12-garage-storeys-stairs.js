@@ -3979,6 +3979,9 @@
         if (ring && ring.length >= 3) hole.points = ring.map(pt => ({ x: pt.x, z: pt.z }));
       });
     }
+    // CHANGE BOTH FLIGHTS ticked from the start on a stair laid on every
+    // floor (jb, 25 Nov 2026): it was made to line up, so it stays lined up.
+    if (made.length) fresh.forEach(st => { st.matchStack = true; });
     made.sort((a, b) => ids.indexOf(Number(a.levelId)) - ids.indexOf(Number(b.levelId)));
     return { made, kept };
   };
@@ -4093,7 +4096,7 @@
       sayOnStrip(`STAIR WIDTH -- ${stairMinWidthIn()}" at the least.`);
       return false;
     }
-    return editStair(stair, st => {
+    return stairEditMatched(stair, () => editStair(stair, st => {
       const frame = stairFrame(st);
       const lock = stairLockNow(st);
       const half = (Number(st.widthFt) || 3) / 2, now = want / 24;
@@ -4104,7 +4107,7 @@
       }
       st.widthFt = want / 12;
       return null;
-    }) && (sayOnStrip(`STAIR ${want}" wide -- its well cut again. UNDO puts it back.`), true);
+    }) && (sayOnStrip(`STAIR ${want}" wide -- its well cut again. UNDO puts it back.`), true));
   };
   // ── UPPER FLIGHTS WIDER BESIDE AN EXTERIOR WALL (jb, 19 + 23 Nov 2026) ─
   //
@@ -4294,6 +4297,101 @@
         base.extLegs = legs.map(e => ({ in: e.in, side: e.side }));
         uppers.forEach(up => stairSetLegWiden(up, stairLegWidenFor(up, base)));
       });
+  };
+
+  // ── CHANGE BOTH FLIGHTS (jb, 25 Nov 2026) ──────────────────────────────
+  //
+  // "beside UPPER 10 - LOWER 2 on the right put a box for CHANGE BOTH
+  // FLIGHTS and if they click it it will match the changes on each level",
+  // and "the landings should line up ... but sometimes the stairs might not
+  // land directly over or below so that will need to be adjustable".
+  //
+  // WHY THEY DRIFTED: every floor's flight is its own record, and an edit
+  // only ever touched the one picked. A flight stacked over a 2-step entry L
+  // is its mirror (UPPER 11 · LOWER 2 on a 14-tread flight); change the one
+  // below to 6 / 6 and the one above never heard.
+  //
+  // TICKED (`matchStack` on each flight of the stack): the shape, turn,
+  // flight split, landings, steps between, landing size, width and rail of
+  // the flight edited are written onto every flight stacked over and under
+  // it, each laid from the same top nosing the same way -- the landings over
+  // each other. Each floor keeps its own risers (the rise is the floor's), so
+  // a tread more or less lands on the lower flight. The EXT. WALL widening is
+  // worked out again after, so the 9" stays on the wall side. UNTICKED, an
+  // edit is the one flight's alone, as before.
+  const STAIR_MATCH_FIELDS = ['shape', 'turn', 'winders', 'lowerWinders', 'midRisers',
+    'landExtraU', 'landExtraV', 'uGapIn', 'widthFt', 'rail'];
+  const stairStackMates = stair => (stair ? stairStackOf(stair) : [])
+    .filter(st => (st.view || 'plan') === (stair.view || 'plan'));
+  const stairMatchOnto = (src, mate) => editStair(mate, st => {
+    const SG = window.DraftStairGeometry;
+    STAIR_MATCH_FIELDS.forEach(k => { if (src[k] == null) delete st[k]; else st[k] = src[k]; });
+    // THE SPLIT AS DRAWN, not as stored: an even split on a flight with a
+    // tread more would put its landing half a tread off.
+    delete st.splitTreads;
+    const split = SG.stairShapeSplit(src, SG.stairCurrentLayout(src, stairLevels()));
+    if (split) st.splitTreads = split.t1;
+    const dx = src.end.x - src.start.x, dz = src.end.z - src.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    st.start = { ...st.start, x: src.start.x, z: src.start.z };
+    st.end = { ...st.end, x: src.start.x + dx / len, z: src.start.z + dz / len };
+    return null;
+  });
+  // The flights above the stack's basement flight widened again for its
+  // switches -- the stack as it was before the edit, which may no longer
+  // overlap the way it did.
+  const stairRewidenStack = flights => {
+    const floors = stairFloorLevels();
+    if (!floors.length) return;
+    const low = Number(floors[0].id);
+    const base = flights.find(st => Number(st.levelId) === low);
+    if (!base || !Array.isArray(base.extLegs)) return;
+    flights.filter(st => st !== base && Number(st.levelId) !== low)
+      .forEach(up => editStair(up, st => stairSetLegWiden(st, stairLegWidenFor(st, base))));
+  };
+  const stairMatchSaid = mates => {
+    const names = [...new Set(mates.map(st => (drawing?.levels || [])
+      .find(l => Number(l.id) === Number(st.levelId))?.name || 'another floor'))];
+    return `CHANGE BOTH FLIGHTS -- matched on ${names.join(', ')}`;
+  };
+  // ONE UNDO for the edit and every flight it was matched on. `edit` makes
+  // the change to the picked flight and returns true when it took. The stack
+  // is read BEFORE the edit: a new shape may no longer overlap the old.
+  const stairEditMatched = (stair, edit) => {
+    const mates = stair?.matchStack ? stairStackMates(stair) : [];
+    const was = undoStack.length;
+    const ok = edit();
+    if (ok && mates.length) {
+      mates.forEach(mate => stairMatchOnto(stair, mate));
+      stairRewidenStack([stair, ...mates]);
+      sayOnStrip(`${String(stripNotice || '').replace(/\.?\s*(UNDO puts it back\.)?\s*$/, '')} · ${stairMatchSaid(mates)}. UNDO puts it all back.`);
+    }
+    const steps = undoStack.splice(was);
+    if (steps.length === 1) undoStack.push(steps[0]);
+    else if (steps.length) undoStack.push({ kind: 'batch', steps });
+    return ok;
+  };
+  // THE BOX ITSELF: ticked on every flight of the stack at once, and the
+  // others lined up with the one picked there and then.
+  const setStairMatchStack = (stair, on) => {
+    const mates = stairStackMates(stair);
+    const all = [stair, ...mates];
+    const was = undoStack.length;
+    undoStack.push({ kind: 'props', edits: all.map(st => ({ item: st, before: { ...st } })) });
+    all.forEach(st => { st.matchStack = !!on; });
+    if (on) {
+      mates.forEach(mate => stairMatchOnto(stair, mate));
+      stairRewidenStack(all);
+    }
+    const steps = undoStack.splice(was);
+    undoStack.push(steps.length === 1 ? steps[0] : { kind: 'batch', steps });
+    markDirty();
+    paint();
+    sayOnStrip(!mates.length
+      ? 'CHANGE BOTH FLIGHTS -- no stair stacked over or under this one yet.'
+      : on ? `${stairMatchSaid(mates)}, landings lined up with this one. UNDO puts it back.`
+        : 'CHANGE BOTH FLIGHTS off -- an edit changes this flight only. UNDO puts it back.');
+    return true;
   };
 
   // ONE RISER MORE OR LESS: the rise is the floor's, so each riser takes its
