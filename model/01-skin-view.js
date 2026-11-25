@@ -1710,6 +1710,14 @@
       // ITS OWN WEIGHT, COLOUR AND STYLE (Movie, 19 Oct), off line-styles.js;
       // a line with none set is FINE, solid, in the skin's line ink -- what
       // every line drew before today.
+      // A JOIST CALLOUT the drafter picked up (jb, 25 Nov 2026) draws as
+      // one: the arrow, its open heads and its text, in the structure ink
+      // unless the line was given a colour of its own.
+      if (line.joist && R.drawJoistCallout2D) {
+        R.drawJoistCallout2D(ctx, toS, { start: line.start, end: line.end, text: line.joist.text, side: line.joist.side, warn: line.joist.warn },
+          paintEnv(), { color: line.color || null });
+        return;
+      }
       const ink = LS ? LS.strokeFor(line) : { lineWidth: 1, dash: [], color: null };
       ctx.strokeStyle = ink.color || skin['draw-line'];
       ctx.lineWidth = ink.lineWidth;
@@ -1920,7 +1928,13 @@
   // where it drew it here; paint() empties the list first, and a Select
   // click on one flips that span (flipBeamSpanAt, model/08).
   let beamSpanTagHits = [];
-  const clearBeamSpanTags = () => { beamSpanTagHits = []; canvas.setAttribute('data-beam-span-tags', '0'); };
+  const clearBeamSpanTags = () => {
+    beamSpanTagHits = []; canvas.setAttribute('data-beam-span-tags', '0');
+    joistCalloutHits = []; canvas.setAttribute('data-joist-callouts', '0');
+  };
+  // THE JOIST CALLOUTS DRAWN FROM THE FLOORS (paintJoistCallouts), for the
+  // press that picks one up (adoptJoistCalloutAt, model/08).
+  let joistCalloutHits = [];
   const paintBeamSpanTags = (list, columnList, tags, options, env) => {
     const R = window.DraftRender2D;
     if (!R.beamSpans || !R.drawBeamSpanTags2D) return;
@@ -2043,41 +2057,21 @@
   // form off this storey's schedule (level-assembly: PROJECT's own row, and
   // the depth AUTO BEAM wrote there for a room over a garage). A bare deck
   // over a garage runs with the door wall (build-house deckJoistAxis).
+  // ONE PER FLOOR AREA AND ONE PER DECK (jb, 25 Nov 2026): build-house
+  // joistCalloutSeeds, the same list a LAYOUT sheet draws. Each is filed in
+  // joistCalloutHits for the Select press that picks it up as a LINE of the
+  // drafter's own (adoptJoistCalloutAt, model/08); one picked up or deleted
+  // is in `joistCalloutsTaken` and drawn no more from here.
   const paintJoistCallouts = (belowBeams, env) => {
     const R = window.DraftRender2D;
     const B = window.DraftBuildHouse;
-    const LA = window.DraftLevelAssembly;
-    if (!B || !R.drawJoistSpans2D || !LA) return;
-    const levelId = Number(activeLevelId());
-    const holes = (drawing?.surfaceOpenings || []).filter(opening =>
-      Number(opening.levelId) === levelId && opening.hostType === 'floor'
-      && (opening.points || []).length >= 3);
-    const ladder = window.DraftLayerViews.floorLevels(drawing?.levels || []).map(level => Number(level.id));
-    const at = ladder.indexOf(levelId);
-    const under = new Set(at < 0 ? [] : ladder.slice(0, at));
-    const garages = (drawing?.outlines || []).filter(outline => outline.garage === true
-      && under.has(Number(outline.levelId)) && (outline.points || []).length >= 3);
-    const wallById = new Map((drawing?.walls || []).map(wall => [String(wall.id), wall]));
-    const doorPoints = (drawing?.fenestrations || []).filter(fen => fen.garage === true)
-      .map(fen => wallById.get(String(fen.wallId))).filter(Boolean)
-      .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
-    const asm = LA.levelAssemblyFor(drawing?.levelAssemblies, levelId);
-    const label = B.joistCallout(asm);
-    // THE BODIES AUTO BEAM FRAMES: this level's outlines, the garage's own
-    // aside (layout-plan joistCalloutsFor reads the same), the floors only
-    // where a level has no outline.
-    const bodies = (drawing?.outlines || []).filter(outline => Number(outline.levelId) === levelId
-      && outline.garage !== true && outline.site !== true && (outline.points || []).length >= 3);
-    const decks = bodies.length ? bodies
-      : floors().filter(floor => floor.garage !== true && (floor.points || []).length >= 3);
-    decks.forEach(floor => {
-      const points = floor.points.map(pt => ({ x: pt.x, z: pt.z }));
-      const bays = B.joistBays(points, {
-        beams: belowBeams, holes,
-        axis: B.deckJoistAxis(points, { garages, doorPoints }),
-      });
-      if (bays) R.drawJoistSpans2D(ctx, toS, B.overSpanBays({ ...bays, label }, asm), {}, env);
+    if (!B?.joistCalloutSeeds || !R.drawJoistCallout2D) return;
+    const seeds = B.joistCalloutSeeds(drawing, Number(activeLevelId()), belowBeams);
+    seeds.forEach(seed => {
+      const at = R.drawJoistCallout2D(ctx, toS, seed, env);
+      if (at) joistCalloutHits.push({ ...at, seed });
     });
+    canvas.setAttribute('data-joist-callouts', String(joistCalloutHits.length));
   };
 
   // THE BEAM IN THE FLOOR SYSTEM OVER THIS PLAN (Movie, 16 Oct, MAIN FL PLAN

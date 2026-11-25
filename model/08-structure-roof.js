@@ -1736,6 +1736,54 @@
   };
 
 
+  // ── A JOIST CALLOUT PICKED UP (jb, 25 Nov 2026) ───────────────────────
+  //
+  // "allow the user to delete the default floor [text] and either add to
+  // that floor text or delete it and change to what he wants, and allow the
+  // user to move that configuration around to where he wants and copy and
+  // paste it". The callouts the floors give (paintJoistCallouts, model/01)
+  // are drawn, not filed. A Select press on one files it as a LINE of the
+  // drafter's own carrying `joist` { seed, text, defaultText, side }, and
+  // lists its seed in `joistCalloutsTaken` so the floor draws it no more --
+  // which is also what keeps a deleted one gone. From there it is a line:
+  // picked, dragged, turned, copied, pasted and deleted the way every line
+  // is, its words and side on OBJ / PROP. The press goes on to the pick, so
+  // the same press holds the new line. One UNDO puts the drawn one back.
+  const adoptJoistCalloutAt = (sx, sy) => {
+    const R = window.DraftRender2D;
+    if (!drawing || !R?.joistCalloutAt || !filterAllows('line')) return null;
+    const hit = R.joistCalloutAt(joistCalloutHits, sx, sy);
+    if (!hit) return null;
+    const { seed } = hit;
+    const line = {
+      id: newDrawingItemId('line'),
+      levelId: Number(activeLevelId()),
+      view: activeViewId(),
+      layer: 'draft',
+      start: { x: seed.start.x, y: 0, z: seed.start.z },
+      end: { x: seed.end.x, y: 0, z: seed.end.z },
+      bulge: 0,
+      joist: { seed: seed.seed, text: seed.text, defaultText: seed.text, side: 'above', ...(seed.warn ? { warn: seed.warn } : {}) },
+    };
+    if (!Array.isArray(drawing.lines)) drawing.lines = [];
+    if (!Array.isArray(drawing.joistCalloutsTaken)) drawing.joistCalloutsTaken = [];
+    drawing.lines.push(line);
+    const wasTaken = drawing.joistCalloutsTaken.includes(seed.seed);
+    if (!wasTaken) drawing.joistCalloutsTaken.push(seed.seed);
+    undoStack.push({ kind: 'node', undo: () => {
+      const k = drawing.lines.indexOf(line);
+      if (k >= 0) drawing.lines.splice(k, 1);
+      if (!wasTaken) {
+        const t = drawing.joistCalloutsTaken.indexOf(seed.seed);
+        if (t >= 0) drawing.joistCalloutsTaken.splice(t, 1);
+      }
+      setSelection(selection.filter(entry => entry.item !== line));
+    } });
+    markDirty();
+    paint();
+    return line;
+  };
+
   // ── FLUSH OR DROPPED, ONE SPAN AT A TIME (jb, 19 Nov 2026) ─────────────
   //
   // "put flush or dropped on each section between columns and allow user to

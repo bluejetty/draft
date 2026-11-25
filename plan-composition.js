@@ -455,12 +455,13 @@ if (!window.DraftPlanComposition) {
           footing: env.columnFooting ? env.columnFooting(column) : null,
         }, env.structureEnv);
       });
-      // THE JOIST CALLOUTS (Movie, 16 Oct): an arrowed span line in every
-      // bay of the deck, the short form beside it. Worked out by the caller
-      // (layout-plan joistCalloutsFor); this only paints them, over the
-      // beams they span between.
-      if (Array.isArray(env.joistCallouts) && typeof render.drawJoistSpans2D === 'function') {
-        env.joistCallouts.forEach(callout => { onLayer(ctx, 'S-BEAM'); render.drawJoistSpans2D(ctx, toS, callout, {}, env.structureEnv); });
+      // THE JOIST CALLOUTS: one arrow and its words per floor area and per
+      // deck (jb, 25 Nov 2026), the ones the drafter has not picked up as a
+      // line of their own (those print with the lines). Worked out by the
+      // caller (layout-plan joistCalloutsFor, build-house joistCalloutSeeds);
+      // this only paints them, over the beams they span between.
+      if (Array.isArray(env.joistCallouts) && typeof render.drawJoistCallout2D === 'function') {
+        env.joistCallouts.forEach(callout => { onLayer(ctx, 'S-BEAM'); render.drawJoistCallout2D(ctx, toS, callout, env.structureEnv, { inkScale: env.inkScale }); });
       }
     });
 
@@ -611,6 +612,14 @@ if (!window.DraftPlanComposition) {
     const inkScale = env.inkScale || 1;
     ctx.save();
     lines.forEach(seg => {
+      // A JOIST CALLOUT the drafter picked up prints as one (jb, 25 Nov 2026).
+      const R0 = typeof window !== 'undefined' ? window.DraftRender2D : null;
+      if (seg.joist && R0 && R0.drawJoistCallout2D) {
+        onLayer(ctx, seg.layer || 'draft');
+        R0.drawJoistCallout2D(ctx, toS, { start: seg.start, end: seg.end, text: seg.joist.text, side: seg.joist.side, warn: seg.joist.warn },
+          { columnColor: env.lineColor || '#1d1f20' }, { inkScale, color: seg.color || null });
+        return;
+      }
       const ink = LS ? LS.strokeFor(seg, { inkScale }) : { lineWidth: 1, dash: [], color: null };
       ctx.strokeStyle = ink.color || env.lineColor || '#1d1f20';
       ctx.lineWidth = ink.lineWidth;

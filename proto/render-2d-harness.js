@@ -922,6 +922,43 @@ suite('drawJoistSpans2D', 'nothing to call out draws nothing', R => {
   R.drawJoistSpans2D(ctx, toS, null, {}, structEnv());
   expect('no stroke', count(ctx, 'stroke'), 0);
 });
+// ── ONE JOIST CALLOUT, AN ITEM OF ITS OWN (jb, 25 Nov 2026) ──
+// "put the text on top or bottom of the line": a shaft, two open V heads and
+// the words on the side asked; the engineering mark on the other side.
+const ONE_CALLOUT = { start: { x: 8, z: 0 }, end: { x: 8, z: 22 }, text: 'TJI 560 11-7/8"' };
+suite('drawJoistCallout2D', 'a shaft, two open heads and the words, in the structure ink', R => {
+  const ctx = recordingCtx();
+  const at = R.drawJoistCallout2D(ctx, toS, ONE_CALLOUT, structEnv());
+  expect('a shaft and two open heads', count(ctx, 'stroke'), 3);
+  expect('nothing filled', count(ctx, 'fill'), 0);
+  expect('the words', calls(ctx, 'fillText').map(c => c[0]).join('|'), 'TJI 560 11-7/8"');
+  expect('in the structure ink', sets(ctx, 'strokeStyle').pop(), SENTINEL_COLUMN);
+  expect('answers its screen ends', at && at.a.y === toS({ x: 8, z: 0 }).y && at.b.y === toS({ x: 8, z: 22 }).y, true);
+  const own = recordingCtx();
+  R.drawJoistCallout2D(own, toS, ONE_CALLOUT, structEnv(), { color: '#123456' });
+  expect('a line\'s own colour wins', sets(own, 'strokeStyle').pop(), '#123456');
+});
+suite('drawJoistCallout2D', 'the words go above or below the arrow; the mark takes the other side', R => {
+  const above = recordingCtx();
+  R.drawJoistCallout2D(above, toS, ONE_CALLOUT, structEnv());
+  const below = recordingCtx();
+  R.drawJoistCallout2D(below, toS, { ...ONE_CALLOUT, side: 'below' }, structEnv());
+  expect('above: written on the -y side', calls(above, 'fillText')[0][2] < 0, true);
+  expect('below: written on the +y side', calls(below, 'fillText')[0][2] > 0, true);
+  const warned = recordingCtx();
+  R.drawJoistCallout2D(warned, toS, { ...ONE_CALLOUT, warn: 'ENGINEERING' }, structEnv());
+  const texts = calls(warned, 'fillText');
+  expect('the mark is written too', texts.map(c => c[0]).join('|'), 'TJI 560 11-7/8"|ENGINEERING');
+  expect('on the other side', texts[1][2] > 0, true);
+  const quiet = recordingCtx();
+  R.drawJoistCallout2D(quiet, toS, ONE_CALLOUT, structEnv(), { noText: true });
+  expect('noText leaves the words off', count(quiet, 'fillText'), 0);
+});
+suite('joistCalloutAt', 'a press on the shaft finds the callout, beside it nothing', R => {
+  const hits = [{ a: { x: 0, y: 0 }, b: { x: 0, y: 100 }, seed: 'one' }];
+  expect('on the shaft', R.joistCalloutAt(hits, 3, 50)?.seed, 'one');
+  expect('well off it', R.joistCalloutAt(hits, 30, 50), null);
+});
 // ── THE TAG OPPOSITE THE STRING (Movie, 16 Oct, on the 2ND FL FLOOR LAYOUT) ──
 // The FLUSH/DROPPED BEAM note and the beam's column string on OPPOSITE sides
 // of the beam, and one note for a beam laid in pieces. beamTagSides reads the
@@ -4506,6 +4543,14 @@ function coverage() {
     ['drawStairs2D turns the arrow round for its own floor too',
       src => src.replace("      const wa = up ? walk[1] : walk[walk.length - 2];", '      const wa = walk[1];')
         .replace("      const wb = up ? walk[0] : walk[walk.length - 1];", '      const wb = walk[0];')],
+    // ONE JOIST CALLOUT (jb, 25 Nov 2026).
+    ['drawJoistCallout2D puts the words below when asked for above',
+      src => src.replace("      const below = callout.side === 'below';\n      const px", "      const below = callout.side !== 'below';\n      const px")],
+    ['drawJoistCallout2D fills its heads',
+      src => src.replace("      ctx.lineTo(tip.x + size * Math.cos(dir + Math.PI + JOIST_ARROW_SPREAD), tip.y + size * Math.sin(dir + Math.PI + JOIST_ARROW_SPREAD));\n      ctx.stroke();",
+        "      ctx.lineTo(tip.x + size * Math.cos(dir + Math.PI + JOIST_ARROW_SPREAD), tip.y + size * Math.sin(dir + Math.PI + JOIST_ARROW_SPREAD));\n      ctx.fill();")],
+    ['joistCalloutAt takes any press',
+      src => src.replace('      if (d <= tol && d < bestD) { bestD = d; best = hit; }', '      if (d < bestD) { bestD = d; best = hit; }')],
     // THE JOIST CALLOUT (Movie, 16 Oct).
     ['drawJoistSpans2D draws the span with no arrowheads',
       src => src.replace('      arrow(a, angle + Math.PI);\n      arrow(b, angle);\n', '')],

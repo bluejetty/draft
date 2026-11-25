@@ -134,7 +134,7 @@ async function openLayout(page, file) {
 }
 const sheetTitled = (layout, title) => layout.sheets.findIndex(s => s.title === title) + 1;
 
-test('the deck is called out in every bay, on MODEL and on the 2ND FLOOR sheet', async ({ page }) => {
+test('the deck is called out once per floor area, on MODEL and on the 2ND FLOOR sheet', async ({ page }) => {
   await openModel(page, fixture());
   await spy(page);
   await h.pickModelLayer(page, 5, 'floor');
@@ -145,10 +145,11 @@ test('the deck is called out in every bay, on MODEL and on the 2ND FLOOR sheet',
   await page.waitForTimeout(300);
   const plan = await lastPaint(page, 'plan');
   const labels = plan.filter(e => e.op === 'text' && JOIST.test(e.text)).map(e => e.text);
-  // TWO BAYS -- wall to beam, beam to wall -- and the short form in each,
-  // off the storey's schedule (a 2ND FL deck's stock TJI), its series read
-  // off TJ-4500 for the longer bay since 16 Nov 2026 (build-house tjiBays).
-  expect(labels, 'one label per bay').toEqual(['TJI 560 11-7/8"', 'TJI 560 11-7/8"']);
+  // ONE PER FLOOR AREA since 25 Nov 2026 (jb: "should only need 1 per
+  // floor area"), across the longer bay, with the short form off the
+  // storey's schedule (a 2ND FL deck's stock TJI), its series read off
+  // TJ-4500 for the longer bay since 16 Nov 2026 (build-house tjiBays).
+  expect(labels, 'one label for the floor area').toEqual(['TJI 560 11-7/8"']);
   expect(plan.some(e => e.op === 'text' && /TO BE CONFIRMED|O\.C\.|SPAN$/.test(e.text)),
     'the three-line note is gone').toBe(false);
 
@@ -160,7 +161,7 @@ test('the deck is called out in every bay, on MODEL and on the 2ND FLOOR sheet',
   await page.waitForTimeout(400);
   const onSheet = await lastPaint(page, 'lay-canvas');
   expect(onSheet.filter(e => e.op === 'text' && JOIST.test(e.text)).map(e => e.text),
-    'the sheet labels both bays too').toEqual(['TJI 560 11-7/8"', 'TJI 560 11-7/8"']);
+    'the sheet labels the floor area once too').toEqual(['TJI 560 11-7/8"']);
 });
 
 test('every plan page carries the faded footprint, and the building\'s plan sheets share one scale', async ({ page }) => {
