@@ -76,11 +76,37 @@ test('the 0.5 floor shows MAIN FL\'s walls, which it cannot pick', async ({ page
 // and any main->basement"; tests/stairs-per-floor.spec.js), so the 2ND FL's
 // stair adds ink here. What the half-level rule must still not do is ghost
 // it: the ink gained is a whole stair's, not a faded one's.
+//
+// RE-PINNED AGAIN (25 Nov 2026): the margin used to be `own + 100` pixels,
+// and most of those 100 were the UP tag's `UP — 14R @ 7 9/16"`. The plan now
+// says a bare UP (jb: the counts live on the stair section), and in this
+// house the two stairs stack, so the Z break keeps only the DN flight's top
+// and the UP flight's foot -- the net ink barely moves. What says "drawn,
+// and drawn as a stair landing here" is the UP tag itself: a ghost (or a
+// stair below) carries no tag at all.
 test('a house with no half-floor: MAIN FL draws the 2ND FL stair landing on it, not as a ghost', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__planText = [];
+    const proto = CanvasRenderingContext2D.prototype;
+    const onPlan = ctx => ctx.canvas && ctx.canvas.id === 'plan';
+    const clearRect = proto.clearRect;
+    proto.clearRect = function (...args) {
+      if (onPlan(this)) window.__planText = [];
+      return clearRect.apply(this, args);
+    };
+    const fillText = proto.fillText;
+    proto.fillText = function (text, ...rest) {
+      if (onPlan(this)) window.__planText.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  });
+  const tags = () => page.evaluate(() => window.__planText.filter(t => t === 'UP' || t === 'DN').sort());
   await load(page, { ...BUNGALOW, stairs: BUNGALOW.stairs.filter(st => st.levelId === 3) }, 3);
   const own = await stairInk(page);
+  expect(await tags(), 'MAIN FL alone: its own stair, going DN').toEqual(['DN']);
   await load(page, BUNGALOW, 3);
-  expect(await stairInk(page), 'the 2ND FL stair lands here and is drawn').toBeGreaterThan(own + 100);
+  expect(await tags(), 'the 2ND FL stair lands here, tagged UP like a stair, not a ghost').toEqual(['DN', 'UP']);
+  expect(await stairInk(page), 'and it adds ink of its own').toBeGreaterThan(own);
 });
 
 // THE BASEMENT PLAN SHOWS THE FOUNDATION IT STANDS IN (Movie, 7 Oct): "show
