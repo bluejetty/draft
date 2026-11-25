@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="draft-build" content="dev">
+    <script src="../build-id.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VIEWER - Rough Drafter 3D</title>
+    <meta name="description" content="Rough Drafter VIEWER: open a .draft or a SAVE AS ZIP and see the house in 3D." />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="stylesheet" href="../vendor/fonts.css" />
+    <!--
+      THE 3D VIEWER (jb, 25 Nov 2026). A separate program: nothing in the 2D
+      drafter loads this page or anything in viewer/, so deleting this folder
+      leaves every 2D page working (tests/viewer.spec.js holds MODEL.html to
+      that). It borrows the drafter's own modules from the folder above --
+      the level stack, the roof skeleton, the wall types, the zip reader --
+      so the 3D house is the house the elevations draw.
+    -->
+    <style>
+      :root {
+        --bar: #0f2a4a;
+        --bar-ink: #f2f5f9;
+        --chip: #1f4778;
+        --chip-lit: #f0b429;
+        --chip-lit-ink: #0f2a4a;
+        --stage: #dfe6ee;
+        --warn: #ffb4a8;
+      }
+      html, body { margin: 0; height: 100%; }
+      body {
+        display: flex; flex-direction: column;
+        background: var(--stage);
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        color: var(--bar-ink);
+      }
+      header {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 6px 12px; background: var(--bar);
+      }
+      header img { height: 40px; width: auto; }
+      header h1 { margin: 0 8px 0 0; font-size: 26px; letter-spacing: 0.06em; font-weight: 700; }
+      .chips { display: flex; gap: 4px; align-items: center; }
+      .chips .label { font-size: 13px; opacity: 0.75; margin-right: 2px; letter-spacing: 0.05em; }
+      button {
+        font: inherit; font-size: 16px; font-weight: 600; letter-spacing: 0.04em;
+        color: var(--bar-ink); background: var(--chip);
+        border: 1px solid rgba(255,255,255,0.25); border-radius: 4px;
+        padding: 4px 12px; cursor: pointer;
+      }
+      button:hover:not(:disabled) { filter: brightness(1.2); }
+      button.lit { background: var(--chip-lit); color: var(--chip-lit-ink); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      #status { flex: 1 1 260px; text-align: right; font-size: 15px; opacity: 0.9; min-width: 0; }
+      #status.warn { color: var(--warn); opacity: 1; }
+      #painter-note { font-size: 13px; opacity: 0.8; }
+      #stage { position: relative; flex: 1; min-height: 0; touch-action: none; user-select: none; }
+      #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+      #stage canvas:active { cursor: grabbing; }
+      #stage.dropping { outline: 4px dashed var(--chip-lit); outline-offset: -8px; }
+      #drop-hint {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        color: #34506f; font-size: 24px; text-align: center; padding: 16px; pointer-events: none;
+      }
+      #help {
+        position: absolute; left: 10px; bottom: 8px; font-size: 13px; color: #34506f;
+        pointer-events: none; opacity: 0.85;
+      }
+      [hidden] { display: none !important; }
+      @media (max-width: 600px) {
+        header h1 { font-size: 20px; }
+        #status { text-align: left; }
+        #help { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="../index.html" title="Back to Rough Drafter"><img src="../assets/bluejetty.png" alt="Rough Drafter" /></a>
+      <h1>VIEWER</h1>
+      <button id="open" type="button">OPEN FILE</button>
+      <input id="file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
+      <button id="fit" type="button" title="Fit the house to the window (F)">FIT</button>
+      <button id="edges" type="button" class="lit" title="Draw the edges of every face">EDGES</button>
+      <span class="chips" role="group" aria-label="Painter">
+        <span class="label">PAINTER</span>
+        <button type="button" data-painter="auto" title="WebGL when this computer has it, plain canvas when it does not">AUTO</button>
+        <button type="button" data-painter="webgl" title="Graphics card drawing">WEBGL</button>
+        <button type="button" data-painter="plain" title="Plain canvas: works on any computer">PLAIN</button>
+        <span id="painter-note"></span>
+      </span>
+      <span id="status" role="status"></span>
+    </header>
+    <main id="stage">
+      <canvas id="gl" hidden></canvas>
+      <canvas id="plain" hidden></canvas>
+      <div id="drop-hint">Drop a .draft or a SAVE AS ZIP here, or press OPEN FILE.</div>
+      <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits</div>
+    </main>
+
+    <!-- The drafter's own modules, read from the folder above. Order as LAYOUT.html loads them. -->
+    <script src="../profile-manager.js"></script>
+    <script src="../formatters.js"></script>
+    <script src="../wall-types.js"></script>
+    <script src="../geometry-2d.js"></script>
+    <script src="../line-styles.js"></script>
+    <script src="../pen-table.js"></script>
+    <script src="../drawing-format.js"></script>
+    <script src="../roof-types.js"></script>
+    <script src="../level-assembly.js"></script>
+    <script src="../building-bodies.js"></script>
+    <script src="../cut-view.js"></script>
+    <script src="../cut-view-env.js"></script>
+    <script src="../zip-bundle.js"></script>
+    <!-- 3D only from here down: never loaded by any 2D page. -->
+    <script src="../vendor/three-0.128.0.min.js"></script>
+    <script src="house-mesh.js"></script>
+    <script src="viewer-camera.js"></script>
+    <script src="paint-canvas.js"></script>
+    <script src="paint-webgl.js"></script>
+    <script src="viewer.js"></script>
+  </body>
+</html>

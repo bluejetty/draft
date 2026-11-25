@@ -1,0 +1,192 @@
+// THE 3D VIEWER (jb, 25 Nov 2026) -- viewer/index.html, a separate program.
+//
+// Two promises are held here.
+//
+// 1. THE 2D DRAFTER NEVER LOADS 3D. jb: "if i just delete it all the 2d stuff
+//    will still work?" -- yes, because no 2D page asks for anything in
+//    viewer/ or for three.js. The pages are read off the disk (as
+//    no-third-party.spec.js does), so a page added tomorrow is covered.
+//    MODEL.dc.html is the one exception: the OLD editor has always loaded
+//    three.js for its own wireframe, and it is not the page jb draws on.
+//
+// 2. THE VIEWER BUILDS THE HOUSE from a .draft and from a SAVE AS ZIP, with
+//    the plain-canvas painter jb's own PC (no graphics card, no WebGL) uses.
+const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.join(__dirname, '..');
+const FIXTURE = path.join(ROOT, 'proto', 'repro-movie-2storey-garage.draft');
+const OLD_EDITOR_WITH_ITS_OWN_THREE = new Set(['MODEL.dc.html']);
+const TWO_D_PAGES = fs.readdirSync(ROOT)
+  .filter(name => name.endsWith('.html') && !OLD_EDITOR_WITH_ITS_OWN_THREE.has(name))
+  .sort();
+const is3D = url => /\/viewer\/|three-[\d.]+(\.min)?\.js|orbitcontrols/i.test(url);
+
+test('the scan finds the 2D pages, MODEL.html among them', () => {
+  expect(TWO_D_PAGES.length).toBeGreaterThan(5);
+  expect(TWO_D_PAGES).toContain('MODEL.html');
+});
+
+test('no 2D page names the viewer or three.js in its source', () => {
+  const offenders = TWO_D_PAGES.filter(name => {
+    const html = fs.readFileSync(path.join(ROOT, name), 'utf8');
+    return /<script[^>]+src=["'][^"']*(viewer\/|three-[\d.]+)/i.test(html);
+  });
+  expect(offenders).toEqual([]);
+});
+
+for (const page of ['MODEL.html', 'LAYOUT.html', 'index.html']) {
+  test(`${page} loads without asking for any 3D file`, async ({ page: p }) => {
+    const asked = [];
+    p.on('request', req => { if (is3D(req.url())) asked.push(req.url()); });
+    await p.goto(`/${page}`);
+    await p.waitForLoadState('load');
+    expect(asked).toEqual([]);
+    expect(await p.evaluate(() => typeof window.THREE)).toBe('undefined');
+  });
+}
+
+async function openViewer(p, painter = 'plain') {
+  const errors = [];
+  const urls = [];
+  p.on('pageerror', e => errors.push(String(e)));
+  p.on('request', req => urls.push(req.url()));
+  await p.goto(`/viewer/index.html?painter=${painter}`);
+  await p.waitForSelector('body[data-ready="1"]');
+  const origin = new URL(p.url()).origin;
+  // Read when asked, so requests made after this call count too.
+  const offSite = { toJSON: () => urls.filter(u => /^https?:/i.test(u) && !u.startsWith(origin)) };
+  return { errors, offSite, offSiteNow: () => offSite.toJSON() };
+}
+
+// Pixels on the plain canvas that are not the stage colour.
+const inkedPixels = p => p.evaluate(() => {
+  const c = document.getElementById('plain');
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 16) {
+    if (Math.abs(d[i] - 0xdf) + Math.abs(d[i + 1] - 0xe6) + Math.abs(d[i + 2] - 0xee) > 30) n += 1;
+  }
+  return n;
+});
+
+test('the viewer opens a .draft and builds the house on the plain canvas', async ({ page: p }) => {
+  const { errors, offSiteNow } = await openViewer(p, 'plain');
+  expect(await p.evaluate(() => document.body.dataset.painter)).toBe('plain');
+  await p.setInputFiles('#file', FIXTURE);
+  await p.waitForFunction(() => document.body.dataset.loaded && Number(document.body.dataset.frames) > 0);
+  const s = await p.evaluate(() => ({ counts: DraftViewer.state.counts, faces: DraftViewer.state.faces.length,
+    kinds: [...new Set(DraftViewer.state.faces.map(f => f.kind))].sort(), drawn: DraftViewer.state.lastDrawn }));
+  // 8 house walls a storey on two storeys, 4 garage walls, 8 foundation walls.
+  expect(s.counts.walls).toBe(12 + 4);
+  expect(s.counts.foundationWalls).toBe(8);
+  expect(s.counts.roofs).toBeGreaterThan(0);
+  expect(s.kinds).toEqual(expect.arrayContaining(['wall', 'garageWall', 'foundation', 'footing', 'floor', 'slab', 'roof']));
+  expect(s.drawn).toBeGreaterThan(20);
+  expect(await inkedPixels(p)).toBeGreaterThan(2000);
+  expect(errors).toEqual([]);
+  expect(offSiteNow()).toEqual([]);
+});
+
+test('the heights are the level stack the elevations use', async ({ page: p }) => {
+  await openViewer(p, 'plain');
+  await p.setInputFiles('#file', FIXTURE);
+  await p.waitForFunction(() => document.body.dataset.loaded);
+  const r = await p.evaluate(() => {
+    const saved = DraftViewer.state;   // faces already built
+    const top = kind => Math.max(...saved.faces.filter(f => f.kind === kind).flatMap(f => f.pts.map(q => q.y)));
+    const low = kind => Math.min(...saved.faces.filter(f => f.kind === kind).flatMap(f => f.pts.map(q => q.y)));
+    return { wallTop: top('wall'), fdnTop: top('foundation'), footingLow: low('footing'), roofLow: low('roof') };
+  });
+  // 2ND FL: main deck at 0, 8'-1 1/8" walls, a 12 5/8" TJI deck, 8' walls on it.
+  expect(r.wallTop).toBeGreaterThan(17);
+  expect(r.wallTop).toBeLessThan(17.3);
+  // The concrete stops a plate under the main floor's bearing line.
+  expect(r.fdnTop).toBeCloseTo(-1.177, 2);
+  expect(r.footingLow).toBeLessThan(-9.5);
+  // The roof's eave is above the garage's own plate, not on the ground.
+  expect(r.roofLow).toBeGreaterThan(8);
+});
+
+test('the viewer opens a SAVE AS ZIP and finds the drawing inside it', async ({ page: p }) => {
+  const { errors } = await openViewer(p, 'plain');
+  const text = fs.readFileSync(FIXTURE, 'utf8');
+  const built = await p.evaluate(async drawingText => {
+    const blob = await DraftZipBundle.writeZip([
+      { name: 'house.draft', data: drawingText },
+      { name: 'holograms/', data: '' },
+      { name: 'notes/house NOTES.txt', data: 'CALL THE ENGINEER' },
+    ]);
+    const file = new File([blob], 'house.zip', { type: 'application/zip' });
+    const result = await DraftViewer.openFile(file);
+    return { faces: result ? result.faces.length : 0, name: DraftViewer.state.name };
+  }, text);
+  expect(built.name).toBe('house.draft');
+  expect(built.faces).toBeGreaterThan(100);
+  expect(errors).toEqual([]);
+});
+
+test('a file that is not a drawing says so instead of breaking', async ({ page: p }) => {
+  const { errors } = await openViewer(p, 'plain');
+  await p.setInputFiles('#file', { name: 'junk.draft', mimeType: 'application/json', buffer: Buffer.from('not json') });
+  await p.waitForFunction(() => document.body.dataset.loaded === 'error');
+  await expect(p.locator('#status')).toContainText('Could not open junk.draft');
+  expect(errors).toEqual([]);
+});
+
+test('the mouse turns and zooms the house, and FIT brings it back', async ({ page: p }) => {
+  await openViewer(p, 'plain');
+  await p.setInputFiles('#file', FIXTURE);
+  await p.waitForFunction(() => document.body.dataset.loaded);
+  const cam = () => p.evaluate(() => ({ ...DraftViewer.state.camera }));
+  const before = await cam();
+  const box = await p.locator('#stage').boundingBox();
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await p.mouse.down();
+  await p.mouse.move(box.x + box.width / 2 + 100, box.y + box.height / 2 + 40, { steps: 5 });
+  await p.mouse.up();
+  const turned = await cam();
+  expect(turned.yaw).not.toBeCloseTo(before.yaw, 1);
+  expect(turned.pitch).not.toBeCloseTo(before.pitch, 1);
+  await p.mouse.wheel(0, 400);
+  expect((await cam()).dist).toBeGreaterThan(turned.dist);
+  await p.keyboard.press('ArrowLeft');
+  await p.click('#fit');
+  const back = await cam();
+  expect(back.yaw).toBeCloseTo(before.yaw, 5);
+  expect(back.dist).toBeCloseTo(before.dist, 5);
+});
+
+test('WEBGL is used when the browser has it, and PLAIN can always be picked', async ({ page: p }) => {
+  const { errors } = await openViewer(p, 'auto');
+  const ok = await p.evaluate(() => DraftViewer.state.webglOk);
+  expect(await p.evaluate(() => document.body.dataset.painter)).toBe(ok ? 'webgl' : 'plain');
+  await p.setInputFiles('#file', FIXTURE);
+  await p.waitForFunction(() => document.body.dataset.loaded);
+  await p.click('[data-painter="plain"]');
+  await p.waitForFunction(() => document.body.dataset.painter === 'plain');
+  await p.waitForFunction(() => DraftViewer.state.lastDrawn > 20);
+  expect(await inkedPixels(p)).toBeGreaterThan(2000);
+  expect(errors).toEqual([]);
+});
+
+test('with no WebGL at all the viewer falls back to the plain canvas', async ({ page: p }) => {
+  // What jb's PC does: no context to be had.
+  await p.addInitScript(() => {
+    const real = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+      if (/webgl/i.test(kind)) return null;
+      return real.call(this, kind, ...rest);
+    };
+  });
+  const { errors } = await openViewer(p, 'auto');
+  expect(await p.evaluate(() => DraftViewer.state.webglOk)).toBe(false);
+  expect(await p.evaluate(() => document.body.dataset.painter)).toBe('plain');
+  await expect(p.locator('#painter-note')).toContainText('no WebGL');
+  await expect(p.locator('[data-painter="webgl"]')).toBeDisabled();
+  await p.setInputFiles('#file', FIXTURE);
+  await p.waitForFunction(() => document.body.dataset.loaded && DraftViewer.state.lastDrawn > 20);
+  expect(await inkedPixels(p)).toBeGreaterThan(2000);
+  expect(errors).toEqual([]);
+});
