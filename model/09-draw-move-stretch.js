@@ -1618,10 +1618,18 @@
       const ux = lone.end.x - lone.start.x, uz = lone.end.z - lone.start.z, len = Math.hypot(ux, uz);
       return len > 1e-6 ? { x: -uz / len, z: ux / len } : null;
     })() : null;
+    // THE ROW'S LINE AS IT STANDS AT THE PRESS, for beamSlideSeek: a point
+    // on it, its run and across units, and how far along it the pieces go.
+    const beamLine = across ? (() => {
+      const s = { x: lone.start.x, z: lone.start.z }, u = { x: across.z, z: -across.x };
+      const ts = entries.flatMap(e => [e.item.start, e.item.end]).filter(Boolean)
+        .map(p => (p.x - s.x) * u.x + (p.z - s.z) * u.z);
+      return { s, u, n: across, lo: Math.min(...ts), hi: Math.max(...ts) };
+    })() : null;
     const wells = entries.filter(e => e.type === 'stair').map(({ item }) => stairWellOf(item))
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
     return { points, detached, wells, run: across ? entries.map(e => e.item) : null,
-      across: across || colSlide?.across || null, range: colSlide?.range || null, slide,
+      across: across || colSlide?.across || null, range: colSlide?.range || null, slide, beamLine,
       column: colSlide,
       stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
       // ITS OUTLINE AS IT STOOD, for stairSeek: corners and edges onto
@@ -2065,6 +2073,18 @@
       // the beams are placed and moved by hand); every other selection
       // SEEKS by every point it carries (SNAP lit, off TOY).
       if (d.set.across) ({ dx, dz } = alongLine(d.set, dx, dz));
+      // A BEAM ROW SLID ACROSS ITSELF CATCHES A NODE (jb, 25 Nov 2026: the
+      // stair opening's corner, then a typed 2" push for 4" of bearing).
+      // The line lines up through the node; it still goes across only.
+      if (d.set.beamLine) {
+        d.lit = null;
+        if (snapLive()) {
+          d.magnet ||= beamSlideMagnet(d.set.points);
+          const n = d.set.beamLine.n;
+          const hit = beamSlideSeek(d.set.beamLine, dx * n.x + dz * n.z, d.magnet);
+          if (hit) { dx = n.x * hit.k; dz = n.z * hit.k; d.lit = hit.lit; }
+        }
+      }
       // THE T-SQUARE HOLDS IT SQUARE (Movie, 19 Oct: "i'm trying to move this
       // ASSEMBLY of WALLS and the T SQUARE isn't keeping it at 90 degrees it
       // is freemoving"). The hand's larger travel wins and the other is
