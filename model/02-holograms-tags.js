@@ -72,8 +72,11 @@
   // nodes on the hologram site plan"): picked by it, its corners nodes, so a
   // MOVE takes the hologram by a lot corner and lands it on this file's.
   // Only while its lot line shows (REGISTRATION's box).
-  const hologramLotHere = holo => {
-    if (!H() || holo?.hidden || activeLevelId() !== SITE_LEVEL_ID || !H().lotShown(String(holo.id), drawing)) return [];
+  // ON A NAMED LEVEL (hologramLotOn / hologramWallsOn): the ALL LEVELS box
+  // (jb, 25 Nov 2026) asks every level in turn, not only the one in view.
+  const hologramLotHere = holo => hologramLotOn(holo, activeLevelId());
+  const hologramLotOn = (holo, levelId) => {
+    if (!H() || holo?.hidden || Number(levelId) !== SITE_LEVEL_ID || !H().lotShown(String(holo.id), drawing)) return [];
     const lot = window.DraftLotSizes?.siteOutlineOf(holo.source?.outlines);
     if (!lot) return [];
     const pts = H().placed(holo, lot.points);
@@ -82,10 +85,11 @@
   // EVERY EDGE IT DRAWS HERE (hologram.js edgesOn): walls, lines, outlines
   // and shapes, so a hologram with no walls -- a shape and two lines on the
   // SITE plan -- is grabbed where it is seen (jb, 10 Nov 2026).
-  const hologramWallsHere = holo => (H() && !holo?.hidden
-    ? [...(H().edgesOn ? H().edgesOn(holo, activeLevelId())
-      : H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === activeLevelId())))
-      .filter(w => w?.start && w?.end), ...hologramLotHere(holo)] : []);
+  const hologramWallsHere = holo => hologramWallsOn(holo, activeLevelId());
+  const hologramWallsOn = (holo, levelId) => (H() && !holo?.hidden
+    ? [...(H().edgesOn ? H().edgesOn(holo, levelId)
+      : H().placed(holo, (H().parts(holo).existing.walls || []).filter(w => w?.levelId === levelId)))
+      .filter(w => w?.start && w?.end), ...hologramLotOn(holo, levelId)] : []);
   // AND ITS GREEN TARGET, a node of its own where the lot is out of square.
   const hologramGreenHere = holo => {
     const edges = hologramLotHere(holo);

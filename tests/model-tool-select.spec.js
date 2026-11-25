@@ -185,11 +185,13 @@ test('the mode help says exactly what the old page says', async ({ page }) => {
   // ITEMS' line is this page's own since 4 Oct: the drag in ITEMS is a box.
   await expect(help).toHaveText('Click items to select; Shift adds or removes. '
     + 'Drag left to right for a blue box of what it encloses, right to left for '
-    + 'a green box of what it crosses. Right-drag (two fingers) pans.');
+    + 'a green box of what it crosses. Right-drag (two fingers) pans. Hold Ctrl '
+    + 'or Shift (Cmd on a Mac) while dragging to SELECT ALL LEVELS.');
 
   await page.locator('[data-sel-mode="window"]').click();
   await expect(help).toHaveText(
-    'Drag a blue box to select fully enclosed items on the current level.');
+    'Drag a blue box to select fully enclosed items on the current level. '
+    + 'Hold Ctrl or Shift (Cmd on a Mac) for every level.');
 
   await page.locator('[data-sel-mode="window-all"]').click();
   await expect(help).toHaveText(
@@ -609,9 +611,12 @@ test('shift-drag adds to the selection instead of replacing it',
     await page.waitForTimeout(60);
     expect(await selCount(page)).toBe(1);
 
+    // SHIFT IS ALSO SELECT ALL LEVELS now (jb, 25 Nov 2026), so the shift box
+    // adds from every level: the line here, the line upstairs and the floor
+    // join the wall.
     await page.locator('[data-sel-mode="window"]').click();
     await dragBox(page, [-6, -6], [6, 6], { shift: true });
-    expect(await selCount(page), 'the wall stays, the line joins it').toBe(2);
+    expect(await selCount(page), 'the wall stays, three join it from every level').toBe(4);
 
     // And without shift it replaces, or "adds" is indistinguishable from
     // "always adds".
