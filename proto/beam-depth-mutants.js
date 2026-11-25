@@ -16,7 +16,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/beam-depth.spec.js tests/beam-ask.spec.js';
 const MUTANTS = [
   { file: 'model/09-draw-move-stretch.js', name: 'a moved row never asks its floor again',
-    find: "    const stepped = set.run ? stepUpJoists(set.run[0].levelId) : { edits: [], said: [] };\n",
+    find: "    const stepped = runLevel != null ? stepUpJoists(runLevel) : { edits: [], said: [] };\n",
     with: "    const stepped = { edits: [], said: [] };\n",
     test: 'a row moved to leave a 28 ft bay steps the OWJ up to 23-1/4" @ 16"; one UNDO puts the row and the floor back' },
   { file: 'model/09-draw-move-stretch.js', name: 'the step-up is an UNDO of its own',
