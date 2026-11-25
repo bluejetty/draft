@@ -566,16 +566,22 @@
       ctx.globalAlpha = 1;
     }
     ctx.strokeRect(x, y, w, h);
-    if (held) {
-      ctx.shadowBlur = 0;
-      ctx.setLineDash([]);
-      ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
-      ctx.textBaseline = 'bottom';
-      ctx.fillStyle = skin['draw-selected-all'];
-      ctx.fillText('SELECT ALL LEVELS', x + 2, y - 3);
-    }
+    // THE BOX SAYS WHAT IT TAKES, along its top in its own ink (jb, 25 Nov
+    // 2026: "on the GREEN DOTTED lets put text there"): the solid blue box
+    // takes what is wholly inside, the green crossing box what it touches
+    // too, and with Ctrl or Shift held the red one says so for every level.
+    const all = held || selectionMode === 'window-all';
+    const label = `${all ? 'SELECT ALL LEVELS \u2014 ' : ''}${crossing
+      ? 'SELECT ALL IN AND PARTIALLY WITHIN BOX' : 'SELECT FULLY WITHIN BOX'}`;
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([]);
+    ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fillText(label, x + 2, y - 3);
     ctx.restore();
     canvas.setAttribute('data-box-all-levels', held ? 'on' : 'off');
+    canvas.setAttribute('data-box-label', label);
   };
 
   // ── assemblies ────────────────────────────────────────────────────────────

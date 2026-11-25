@@ -141,3 +141,29 @@ test('DELETE takes every level in one press, and one UNDO brings it all back', a
   await page.waitForTimeout(100);
   expect(await count(), 'one UNDO, all back').toBe(before);
 });
+
+// THE BOX SAYS WHAT IT TAKES (jb, 25 Nov 2026): solid blue left to right is
+// SELECT FULLY WITHIN BOX, green dotted right to left SELECT ALL IN AND
+// PARTIALLY WITHIN BOX, and the red one leads with SELECT ALL LEVELS.
+test('each box wears its label along the top', async ({ page }) => {
+  await open(page);
+  const plan = page.locator('#plan');
+  const labelOf = async (from, to, key) => {
+    const a = await at(page, ...from);
+    const b = await at(page, ...to);
+    await page.mouse.move(...a);
+    await page.mouse.down();
+    await page.mouse.move((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+    if (key) await page.keyboard.down(key);
+    await page.mouse.move(...b);
+    const label = await plan.getAttribute('data-box-label');
+    await page.mouse.up();
+    if (key) await page.keyboard.up(key);
+    await page.waitForTimeout(80);
+    return label;
+  };
+  expect(await labelOf([-8, -8], [8, 8])).toBe('SELECT FULLY WITHIN BOX');
+  expect(await labelOf([8, -8], [-8, 8])).toBe('SELECT ALL IN AND PARTIALLY WITHIN BOX');
+  expect(await labelOf([-8, -8], [8, 8], 'Control')).toBe('SELECT ALL LEVELS — SELECT FULLY WITHIN BOX');
+  expect(await labelOf([8, -8], [-8, 8], 'Control')).toBe('SELECT ALL LEVELS — SELECT ALL IN AND PARTIALLY WITHIN BOX');
+});
