@@ -59,7 +59,7 @@ test('the listing plan draws its stairs', async ({ page }) => {
 
   const ink = await page.evaluate(() => window.__ink);
   expect(ink.length, 'the sheet was painted').toBeGreaterThan(0);
-  expect(ink.filter(t => /^DN — \d+R @ /.test(t)),
+  expect(ink.filter(t => t === 'DN'),
     'every stair note is missing: layout-plan built no stair stage, which is '
     + 'what a missing layer-views.js looks like from the sheet').not.toHaveLength(0);
 });

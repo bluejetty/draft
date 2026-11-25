@@ -33,9 +33,9 @@ const OVER_GARAGE = 4;
 const OVER_GARAGE_JOIST_IN = 19.25;
 const HOUSE_JOIST_IN = 11.875;
 
-// The painter's legend, recorded from THE LAST FRAME ONLY. drawStairs2D writes
-// `DN — {risers}R @ {riser}` under every stair it draws, so the legend is both
-// the proof it ran and the layout it used, in one string.
+// The painter's DN tags, recorded from THE LAST FRAME ONLY. drawStairs2D
+// writes one under every stair it draws -- the proof it ran. (Until 25 Nov
+// 2026 it carried `{risers}R @ {riser}` too; see stairLegends for those.)
 //
 // THE FRAME RESET IS NOT TIDINESS. Recording every fillText since page load
 // counts each stair once PER PAINT, and paint() runs again on any resize, font
@@ -93,7 +93,26 @@ async function loadWith(page, src, { level = null } = {}) {
 }
 
 const legends = page => page.evaluate(
-  () => window.__painted.filter(t => t.startsWith('DN')));
+  () => window.__painted.filter(t => t === 'DN'));
+
+// THE PLAN SAYS ONLY DN (jb, 25 Nov 2026) -- the riser count and height went
+// to the stair section -- so the numbers are read off the very call the
+// painter's `layoutFor` makes on this page, SG.stairCurrentLayout(stair,
+// stairLevels()), written the way the legend used to write them. One entry
+// per stair the plan painted a DN for, so the `toHaveLength(1)` guards below
+// still mean "painted".
+const stairLegends = page => page.evaluate(() => {
+  if (!window.__painted.some(t => t === 'DN')) return [];
+  const SG = window.DraftStairGeometry;
+  const F = window.DraftFormatters;
+  // eslint-disable-next-line no-undef
+  const levels = stairLevels();
+  // eslint-disable-next-line no-undef
+  return (drawing.stairs || []).map(st => {
+    const layout = SG.stairCurrentLayout(st, levels);
+    return `DN — ${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)}`;
+  });
+});
 
 // A STORED RISE OF 3'-0" is deliberately absurd for a storey, and that is the
 // control: 36" at the 7 7/8" maximum is 5 risers, a number the real level
@@ -122,7 +141,7 @@ test.describe('MODEL.html stairs', () => {
       .toHaveLength(1);
     // The shape of the legend, not its numbers -- those are the next test's
     // subject and pinning them here would make this fail for the wrong reason.
-    expect(dn[0]).toMatch(/^DN — \d+R @ /);
+    expect(dn[0], 'and it says DN, no riser count or height').toBe('DN');
   });
 
   test('the riser count comes from the LEVEL HEIGHTS, not the stored rise',
@@ -141,11 +160,11 @@ test.describe('MODEL.html stairs', () => {
           d.levelAssemblies[${FOUNDATION}], { slabThicknessIn: 3 });`);
 
       await loadWith(page, withJoist(11.875));
-      const shallow = (await legends(page))[0];
+      const shallow = (await stairLegends(page))[0];
 
       await page.evaluate(() => { window.__painted = []; });
       await loadWith(page, withJoist(23.875));
-      const deep = (await legends(page))[0];
+      const deep = (await stairLegends(page))[0];
 
       const risersIn = legend => Number(legend.match(/(\d+)R/)[1]);
 
@@ -263,9 +282,9 @@ test.describe('MODEL.html stairs', () => {
       // sharp, not infinitely sharp -- but three and a quarter inches of joist
       // is nowhere near the rounding.
       const legend = async () => {
-        const dn = await legends(page);
-        expect(dn, 'the OVER GARAGE stair has to paint before it can be measured')
+        expect(await legends(page), 'the OVER GARAGE stair has to paint before it can be measured')
           .toHaveLength(1);
+        const dn = await stairLegends(page);
         // PARSED, NOT SUBSTRING-MATCHED. `expect(dn[0]).not.toContain('5R')`
         // is the obvious way to write this and it is wrong: the real answer
         // is 15R, which contains '5R', so the guard fired on a correct run.

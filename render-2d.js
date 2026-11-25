@@ -3142,6 +3142,22 @@ if (!window.DraftRender2D) {
     return out;
   }
 
+  // The walk line cut back from its labelled end -- the top for DN, the foot
+  // for UP -- so the word sits clear of it. Only the end segment is cut, and
+  // only when it is long enough to keep some of itself; a short one is left.
+  function trimWalkEnd2D(walk, fromFoot, px) {
+    if (!(px > 0) || walk.length < 2) return walk;
+    const out = walk.slice();
+    const i = fromFoot ? out.length - 1 : 0;
+    const j = fromFoot ? out.length - 2 : 1;
+    const p = out[i], q = out[j];
+    const len = Math.hypot(q.x - p.x, q.y - p.y);
+    if (len <= px + 4) return walk;
+    const t = px / len;
+    out[i] = { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t };
+    return out;
+  }
+
   function drawStairs2D(ctx, toS, env) {
     const std = env.layer;
     if (!std.visible || (env.isPrinting && !std.printable)) return;
@@ -3256,15 +3272,46 @@ if (!window.DraftRender2D) {
       }
       // A STAIR UNDER THIS FLOOR CARRIES NO WALK LINE AND NO TAG.
       if (role === 'below') { ctx.restore(); return; }
-      // Walk-line arrow with the DN label and riser count -- downhill on the
-      // floor the stair leaves, and UP, the arrow turned round, on the floor
-      // it lands on.
-      const walk = (brk && brk.walk && brk.walk.length >= 2 ? brk.walk : parts.walk).map(pt);
+      // Walk-line arrow and a bare DN or UP -- downhill on the floor the
+      // stair leaves, and UP, the arrow turned round, on the floor it lands
+      // on.
+      //
+      // JUST THE WORD (jb, 25 Nov 2026: "don't show the text number and
+      // heights dimension, they can get that on the stair section. just show
+      // DN in the middle at the top of the stairs, or UP in the middle at the
+      // bottom of the stairs ... centered within the stair width, parallel
+      // to the tread"). DN sits in the SECOND tread down -- the first is
+      // MODEL's width mark (model/03 stairWidthMarks) -- and UP in the last
+      // tread at the foot. The walk line stops short of the word so the two
+      // never cross.
+      const up = role === 'lands';
+      const tag = (() => {
+        const runs = parts.runs || [];
+        const run = up ? runs[runs.length - 1] : runs[0];
+        if (!run || !(run.lenFt > 0)) return null;
+        const step = (env.treadRunIn || 10) / 12;
+        const treads = Math.max(1, Math.round(run.lenFt / step));
+        // Along the flight from its top, in feet: the middle of tread 2
+        // (tread 1 when the flight is one tread long) or of the last one.
+        const along = up ? run.lenFt - step / 2 : (treads >= 2 ? step * 1.5 : step / 2);
+        const c = { x: run.start.x + run.dir.x * along, z: run.start.z + run.dir.z * along };
+        const w = (Number(run.widthFt) || stair.widthFt || 3) / 2;
+        const side = { x: -run.dir.z * w, z: run.dir.x * w };
+        // How far in from the labelled end of the walk the word reaches.
+        const clear = up ? step : (treads >= 2 ? step * 2 : step);
+        return {
+          a: pt({ x: c.x - side.x, z: c.z - side.z }),
+          b: pt({ x: c.x + side.x, z: c.z + side.z }),
+          clearPx: clear * pxPerFt,
+        };
+      })();
+      const showTag = !!tag && (!env.isPrinting || std.printable);
+      let walk = (brk && brk.walk && brk.walk.length >= 2 ? brk.walk : parts.walk).map(pt);
+      if (showTag) walk = trimWalkEnd2D(walk, up, tag.clearPx);
       ctx.lineWidth = 1;
       ctx.beginPath();
       walk.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
       ctx.stroke();
-      const up = role === 'lands';
       const wa = up ? walk[1] : walk[walk.length - 2];
       const wb = up ? walk[0] : walk[walk.length - 1];
       const wd = Math.hypot(wb.x - wa.x, wb.y - wa.y) || 1;
@@ -3274,16 +3321,7 @@ if (!window.DraftRender2D) {
       ctx.moveTo(wb.x - wux * 8 - wpx * 4, wb.y - wuy * 8 - wpy * 4); ctx.lineTo(wb.x, wb.y);
       ctx.lineTo(wb.x - wux * 8 + wpx * 4, wb.y - wuy * 8 + wpy * 4);
       ctx.stroke();
-      if (!env.isPrinting || std.printable) {
-        // The walk line is a line with a label on it, same as a beam. THE UP
-        // TAG TAKES THE OTHER SIDE OF THE LINE: a storey's stair down and the
-        // next storey's stair up share one well (they stack), so on the
-        // floor between them both tags ride one walk line -- DN on the side
-        // it always had, UP hung from the line's other side.
-        labelAlongLine2D(ctx, walk[0], walk[1],
-          `${up ? 'UP' : 'DN'} — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`,
-          up ? { font, offset: -3, baseline: 'top' } : { font, offset: 3 });
-      }
+      if (showTag) labelAlongLine2D(ctx, tag.a, tag.b, up ? 'UP' : 'DN', { font, offset: 0 });
       ctx.restore();
     });
   }
