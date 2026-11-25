@@ -504,6 +504,42 @@ test('NEW off leaves the existing house alone in the elevation', async ({ page }
   expect(await dark()).toBeLessThan(both.dark);
 });
 
+// ZOOMED, THE HOLOGRAM STOPS AT THE EDGE THE HOUSE DOES (jb, 25 Nov 2026:
+// "when i zoom in and out of the elevations weird stuff happens ... on the
+// edges left and right"). A zoomed elevation clips its own building to the
+// room inside the margins; the holograms behind it were drawn before that
+// clip and ran on under the level readings and the rails, so each zoom
+// showed a different set of walls and openings at the sides.
+test('zoomed in, a hologram behind the house is clipped where the house is', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await openE1(page, { ...BLANK, walls: box('n', 0, 0, 16, 16),
+    holograms: [{ id: 'hologram-1', name: 'existing', x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0,
+      source: { ...BLANK, walls: box('e', -60, -60, 76, -30) } }] });
+  const f = await page.evaluate(() => window.__elevFrame);
+  const r = await page.locator('#plan').boundingBox();
+  await page.mouse.move(r.x + f.x0 + 8 * f.pxPerFt, r.y + f.y0 + (f.yTop - 4) * f.pxPerFt);
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(300);
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(300);
+  const counts = await page.evaluate(() => {
+    const z = window.__elevFrame;
+    const c = document.getElementById('plan');
+    const k = c.width / c.getBoundingClientRect().width;
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const n = { inside: 0, outside: 0 };
+    for (let i = 0; i < d.length; i += 4) {
+      if (!(d[i + 2] > 150 && d[i + 2] - d[i] > 50)) continue;
+      const x = ((i / 4) % c.width) / k;
+      if (x >= z.marginL - 1 && x <= z.w - z.marginR + 1) n.inside += 1; else n.outside += 1;
+    }
+    return { ...n, pinned: z.pxPerFt };
+  });
+  expect(counts.pinned, 'zoomed in').toBeGreaterThan(f.pxPerFt);
+  expect(counts.inside, 'the hologram still shows inside the room').toBeGreaterThan(200);
+  expect(counts.outside, 'and none of it under the readings or the rails').toBe(0);
+});
+
 // PICTURES ONLY ON THE PHOTO CARD (Movie, 26 Oct: "can the IMAGE Loading
 // area ONLY show images (not holograms) i think the HOLOGRAM area only shows
 // hologram"). The holograms' rows and BRING IN are on the HOLOGRAM card.
