@@ -1307,7 +1307,9 @@ if (!window.DraftRender2D) {
     return { a, b };
   }
   // The callout under a screen point (within `tol` px of its shaft), or null.
-  function joistCalloutAt(hits, sx, sy, tol = 6) {
+  // TIGHT, 4 px: a callout stands inside the floor it calls out, and a press
+  // meant for the floor beside its shaft must still reach the floor.
+  function joistCalloutAt(hits, sx, sy, tol = 4) {
     let best = null, bestD = Infinity;
     (Array.isArray(hits) ? hits : []).forEach(hit => {
       const { a, b } = hit;
