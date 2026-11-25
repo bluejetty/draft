@@ -1274,18 +1274,50 @@
   // lengthens it to the walls it now meets -- or shortens it, though never
   // past the first post-to-post joint, so no piece of it is driven to
   // nothing. A row that has left every footprint keeps the length it had.
-  const reclipRun = run => {
+  // A ROW'S END THAT STANDS SHORT OF THE WALLS STAYS SHORT (jb, 25 Nov
+  // 2026: "i'd like to bring it in about 3'6 for the stair it doesn't need to
+  // go all the way to the foundation"). Which of the row's two ends (lo / hi
+  // along its first piece) sits inside the floor it carries, clear of every
+  // edge of it by more than 3" -- read before a slide, so reclipRun leaves
+  // that end where the drafter put it and runs only the other to the wall.
+  const runEndsFree = run => {
+    const beam = run?.[0];
+    if (!beam?.start || !beam?.end) return null;
+    const ux = beam.end.x - beam.start.x, uz = beam.end.z - beam.start.z, len = Math.hypot(ux, uz);
+    if (len < 1e-6) return null;
+    const u = { x: ux / len, z: uz / len }, o = beam.start;
+    const ends = run.flatMap(b => [b.start, b.end]);
+    const params = ends.map(p => (p.x - o.x) * u.x + (p.z - o.z) * u.z);
+    const lo = ends[params.indexOf(Math.min(...params))], hi = ends[params.indexOf(Math.max(...params))];
+    const rings = storeyBodiesOver(Number(beam.levelId)).map(b => b.outline?.points || [])
+      .filter(ring => ring.length >= 3);
+    const edgeGap = (ring, p) => Math.min(...ring.map((a, i) => {
+      const b = ring[(i + 1) % ring.length];
+      const ex = b.x - a.x, ez = b.z - a.z, el = ex * ex + ez * ez;
+      const t = el < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * ex + (p.z - a.z) * ez) / el));
+      return Math.hypot(p.x - a.x - ex * t, p.z - a.z - ez * t);
+    }));
+    const free = p => rings.some(ring => pointInRing(ring, p) && edgeGap(ring, p) > 0.25);
+    return { lo: free(lo), hi: free(hi) };
+  };
+  // A ROW ALONG ITS OWN LINE: `o` its first piece's start, `u` the way it
+  // runs, each piece end's distance along it (`params`), the row's two ends
+  // (`lo`, `hi`), its post-to-post joints, and where the walls of the floor
+  // it carries stop it each way (`wallLo`, `wallHi`; null off every floor).
+  const runGeometry = run => {
     const beam = run[0];
     const ux = beam.end.x - beam.start.x, uz = beam.end.z - beam.start.z, len = Math.hypot(ux, uz);
-    if (len < 1e-6) return;
+    if (len < 1e-6) return null;
     const u = { x: ux / len, z: uz / len };
-    const o = beam.start;
+    // A COPY: the start may be an end that is about to be set.
+    const o = { x: beam.start.x, z: beam.start.z };
     const at = p => (p.x - o.x) * u.x + (p.z - o.z) * u.z;
     const ends = run.flatMap(b => [b.start, b.end]);
     const params = ends.map(at);
     const lo = Math.min(...params), hi = Math.max(...params);
     const joints = [...new Set(params.map(p => Math.round(p * 1000) / 1000))]
       .filter(p => p > lo + 1e-3 && p < hi - 1e-3);
+    const out = { u, o, ends, params, lo, hi, joints, wallLo: null, wallHi: null };
     const rings = storeyBodiesOver(Number(beam.levelId)).map(b => b.outline?.points || [])
       .filter(ring => ring.length >= 3);
     // FROM A POINT OF THE ROW THAT IS OVER THE FLOOR: its middle first, then
@@ -1299,7 +1331,7 @@
       if (hit) { from = { pt, p }; ring = hit; }
       return !!hit;
     });
-    if (!ring) return;
+    if (!ring) return out;
     const reach = sign => {
       let best = Infinity;
       ring.forEach((a, i) => {
@@ -1315,17 +1347,94 @@
       return best;
     };
     const back = reach(-1), fwd = reach(1);
-    if (!Number.isFinite(back) || !Number.isFinite(fwd)) return;
-    const newLo = Math.min(from.p - back, joints.length ? joints[0] - 0.5 : hi - 0.5);
-    const newHi = Math.max(from.p + fwd, joints.length ? joints[joints.length - 1] + 0.5 : lo + 0.5);
-    ends.forEach((pt, i) => {
+    if (Number.isFinite(back) && Number.isFinite(fwd)) { out.wallLo = from.p - back; out.wallHi = from.p + fwd; }
+    return out;
+  };
+  // Sets a row's end point to `to` along its line, keeping it on the line.
+  const setAlongRun = (g, pt, to) => {
+    const across = (pt.x - g.o.x) * -g.u.z + (pt.z - g.o.z) * g.u.x;
+    pt.x = g.o.x + g.u.x * to - g.u.z * across;
+    pt.z = g.o.z + g.u.z * to + g.u.x * across;
+  };
+  const reclipRun = (run, free = null) => {
+    const g = runGeometry(run);
+    if (!g || g.wallLo == null) return;
+    const { params, lo, hi, joints } = g;
+    const newLo = Math.min(g.wallLo, joints.length ? joints[0] - 0.5 : hi - 0.5);
+    const newHi = Math.max(g.wallHi, joints.length ? joints[joints.length - 1] + 0.5 : lo + 0.5);
+    g.ends.forEach((pt, i) => {
       const p = params[i];
-      const to = Math.abs(p - lo) < 1e-6 ? newLo : Math.abs(p - hi) < 1e-6 ? newHi : null;
-      if (to == null) return;
-      const across = (pt.x - o.x) * -u.z + (pt.z - o.z) * u.x;
-      pt.x = o.x + u.x * to - u.z * across;
-      pt.z = o.z + u.z * to + u.x * across;
+      const to = Math.abs(p - lo) < 1e-6 ? (free?.lo ? null : newLo)
+        : Math.abs(p - hi) < 1e-6 ? (free?.hi ? null : newHi) : null;
+      if (to != null) setAlongRun(g, pt, to);
     });
+  };
+  // ── A PICKED ROW'S END PULLS IN OFF THE WALL (jb, 25 Nov 2026) ───────────
+  //
+  // "i'm having a hard time disconnecting the beam from the foundation
+  // wall.. i'd like to bring it in about 3'6 for the stair it doesn't need to
+  // go all the way to the foundation" -- "maybe once the beam is selected
+  // the beam nodes seperate from any nodes which may be in the same
+  // location". With a row picked its two ends wear squares, and a press on
+  // one takes THAT END ONLY, never the wall corner under it: it slides along
+  // the row's line, out no further than the wall and in no further than 6"
+  // short of the next post-to-post joint, and catches a node lined up across
+  // from it (a stair opening's corner) as the slide does. A typed length
+  // after the drag puts it exactly that far from where it was.
+  const pickedBeamRow = () => {
+    if (!selection.length || !selection.every(e => e.type === 'beam')) return null;
+    const run = beamRun(selection[0].item);
+    if (!selection.every(e => run.includes(e.item))) return null;
+    const g = runGeometry(run);
+    if (!g) return null;
+    const endAt = p => g.ends[g.params.findIndex(q => Math.abs(q - p) < 1e-6)];
+    return { run, g, lo: endAt(g.lo), hi: endAt(g.hi) };
+  };
+  const BEAM_END_GRAB_PX = 12;
+  const beamEndAt = at => {
+    const row = pickedBeamRow();
+    if (!row) return null;
+    const here = toS(at);
+    const near = pt => { const s = toS(pt); return Math.hypot(s.x - here.x, s.y - here.y); };
+    const pick = ['lo', 'hi'].map(side => ({ side, d: near(row[side]) }))
+      .filter(c => c.d <= BEAM_END_GRAB_PX).sort((a, b) => a.d - b.d)[0];
+    if (!pick) return null;
+    const { g } = row, side = pick.side;
+    const inner = side === 'lo'
+      ? (g.joints.length ? g.joints[0] : g.hi) - 0.5
+      : (g.joints.length ? g.joints[g.joints.length - 1] : g.lo) + 0.5;
+    const outer = side === 'lo' ? (g.wallLo ?? g.lo) : (g.wallHi ?? g.hi);
+    const pt = row[side];
+    return { run: row.run, g, side, pt, from: side === 'lo' ? g.lo : g.hi,
+      across: (pt.x - g.o.x) * -g.u.z + (pt.z - g.o.z) * g.u.x,
+      min: Math.min(inner, outer), max: Math.max(inner, outer) };
+  };
+  // Where the grabbed end goes for the hand at `raw`: along the row only,
+  // between its limits, caught by a node lined up across from it. Sets
+  // md.lit for the ring.
+  const beamEndDragTo = (md, raw) => {
+    const { g } = md;
+    let p = md.from + (raw.x - md.grab.x) * g.u.x + (raw.z - md.grab.z) * g.u.z;
+    md.lit = null;
+    if (snapLive()) {
+      md.magnet ||= beamSlideMagnet(md.run.flatMap(b => [b.start, b.end]));
+      const slack = 10;
+      let best = null;
+      md.magnet.nodes.forEach(v => {
+        const rx = v.x - g.o.x, rz = v.z - g.o.z;
+        const off = Math.abs(rx * -g.u.z + rz * g.u.x - md.across);
+        if (off > slack) return;
+        const gap = rx * g.u.x + rz * g.u.z - p;
+        const share = catchShare(Math.abs(gap), NODE_REACH);
+        if (share < Infinity && (!best || share < best.share)) best = { share, gap, v };
+      });
+      if (best) {
+        p += best.gap;
+        md.lit = { pt: { x: best.v.x, y: 0, z: best.v.z }, corner: best.v, node: true };
+      }
+    }
+    p = Math.max(md.min, Math.min(md.max, p));
+    setAlongRun(g, md.pt, p);
   };
   // ── THE FLOOR STEPS UP WHEN A MOVED BEAM LENGTHENS ITS SPAN ──────────────
   //
@@ -1618,10 +1727,19 @@
       const ux = lone.end.x - lone.start.x, uz = lone.end.z - lone.start.z, len = Math.hypot(ux, uz);
       return len > 1e-6 ? { x: -uz / len, z: ux / len } : null;
     })() : null;
+    // THE ROW'S LINE AS IT STANDS AT THE PRESS, for beamSlideSeek: a point
+    // on it, its run and across units, and how far along it the pieces go.
+    const beamLine = across ? (() => {
+      const s = { x: lone.start.x, z: lone.start.z }, u = { x: across.z, z: -across.x };
+      const ts = entries.flatMap(e => [e.item.start, e.item.end]).filter(Boolean)
+        .map(p => (p.x - s.x) * u.x + (p.z - s.z) * u.z);
+      return { s, u, n: across, lo: Math.min(...ts), hi: Math.max(...ts) };
+    })() : null;
     const wells = entries.filter(e => e.type === 'stair').map(({ item }) => stairWellOf(item))
       .filter(w => w.hole && !w.shared).map(w => ({ hole: w.hole, points: w.hole.points }));
     return { points, detached, wells, run: across ? entries.map(e => e.item) : null,
-      across: across || colSlide?.across || null, range: colSlide?.range || null, slide,
+      across: across || colSlide?.across || null, range: colSlide?.range || null, slide, beamLine,
+      runFree: across ? runEndsFree(entries.map(e => e.item)) : null,
       column: colSlide,
       stairs: entries.filter(e => e.type === 'stair').map(e => e.item),
       // ITS OUTLINE AS IT STOOD, for stairSeek: corners and edges onto
@@ -1929,10 +2047,13 @@
     const roof = moveState.roof;
     if (!roof) {
       if (!selection.length) return;
-      event.stopImmediatePropagation();
-      event.preventDefault();
       const r = canvas.getBoundingClientRect();
       const at = toWorld(event.clientX - r.left, event.clientY - r.top);
+      // A PICKED BEAM ROW'S END SQUARE is the SELECT press's (model/16,
+      // beamEndAt): that end alone, MOVE lit or not.
+      if (beamEndAt(at)) return;
+      event.stopImmediatePropagation();
+      event.preventDefault();
       // A DOOR OR WINDOW SLIDES ALONG ITS WALL (Movie, 19 Oct: "i'm trying
       // to select and then MOVE the door to SLIDE it on the wall, but it isn't
       // moving"). An opening is a width and an offset along its host, with no
@@ -2065,6 +2186,18 @@
       // the beams are placed and moved by hand); every other selection
       // SEEKS by every point it carries (SNAP lit, off TOY).
       if (d.set.across) ({ dx, dz } = alongLine(d.set, dx, dz));
+      // A BEAM ROW SLID ACROSS ITSELF CATCHES A NODE (jb, 25 Nov 2026: the
+      // stair opening's corner, then a typed 2" push for 4" of bearing).
+      // The line lines up through the node; it still goes across only.
+      if (d.set.beamLine) {
+        d.lit = null;
+        if (snapLive()) {
+          d.magnet ||= beamSlideMagnet(d.set.points);
+          const n = d.set.beamLine.n;
+          const hit = beamSlideSeek(d.set.beamLine, dx * n.x + dz * n.z, d.magnet);
+          if (hit) { dx = n.x * hit.k; dz = n.z * hit.k; d.lit = hit.lit; }
+        }
+      }
       // THE T-SQUARE HOLDS IT SQUARE (Movie, 19 Oct: "i'm trying to move this
       // ASSEMBLY of WALLS and the T SQUARE isn't keeping it at 90 degrees it
       // is freemoving"). The hand's larger travel wins and the other is
@@ -2095,7 +2228,7 @@
       }
       d.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
       d.dx = dx; d.dz = dz;
-      if (d.set.run) reclipRun(d.set.run);
+      if (d.set.run) reclipRun(d.set.run, d.set.runFree);
       d.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
       paint();
       return;

@@ -638,6 +638,18 @@
     // 2026): filed as a line of the drafter's own (adoptJoistCalloutAt,
     // model/08), and the press carries on to pick and drag it.
     if (activeTool === RESTING_TOOL && !e.shiftKey) adoptJoistCalloutAt(e.clientX - rect.left, e.clientY - rect.top);
+    // A PICKED BEAM ROW'S END SQUARE TAKES THE PRESS (jb, 25 Nov 2026):
+    // that end alone, never the wall corner under it (beamEndAt, model/09).
+    // Under SELECT and with MOVE lit alike.
+    if (activeTool === RESTING_TOOL && !e.shiftKey) {
+      const end = beamEndAt(at);
+      if (end) {
+        moveDrag = { kind: 'beamend', ...end, grab: at, before: [{ vtx: end.pt, x: end.pt.x, z: end.pt.z }],
+          sx: e.clientX, sy: e.clientY, active: false };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
     // body tests too. Otherwise a box begun on a selected wall would grab that
     // wall instead, and the drafter would drag the building across the sheet
@@ -1031,6 +1043,12 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'beamend') {
+          md.cursor = raw;
+          beamEndDragTo(md, raw);
+          paint();
+          return;
+        }
         if (md.kind === 'dimrow') {
           // SQUARE TO THE LINE ONLY, in 3" steps: the row slides nearer or
           // farther and never along itself. New points each event, as the
@@ -1634,6 +1652,28 @@
       if (md.active) {
         // Both halves of a locked move go into ONE history entry: the drafter
         // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        if (md.kind === 'beamend') {
+          // ONE UNDO puts the end back; a typed length after it puts it
+          // exactly that far from where it was (dragByTyped), as a node's.
+          const a = md.before[0];
+          const ddx = md.pt.x - a.x, ddz = md.pt.z - a.z;
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          if (Math.hypot(ddx, ddz) > 1e-6) {
+            // A ROW SHORTENED BY HAND IS THE DRAFTER'S: AUTO BEAM leaves it.
+            md.run.forEach(b => { b.auto = false; });
+            const step = { kind: 'move', before: md.before };
+            undoStack.push(step);
+            markDirty();
+            moveTyped = { drag: true, before: md.before, dx: ddx, dz: ddz, step };
+            stripRefresh();
+            const span = Math.abs(md.g.hi - md.g.lo) + ((md.pt.x - a.x) * md.g.u.x + (md.pt.z - a.z) * md.g.u.z) * (md.side === 'hi' ? 1 : -1);
+            sayOnStrip(`Beam end moved ${feetLabel(Math.hypot(ddx, ddz))} -- row ${feetLabel(span)} long. Type a length for an exact distance; UNDO puts it back.`);
+            finishTypedMidDrag();
+          }
+          paint();
+          return;
+        }
         if (md.kind === 'dimrow') {
           // ONE GESTURE, ONE UNDO for the whole row. And the move is written
           // on each record (`moved`: where the row was first put, and how far
@@ -2201,7 +2241,7 @@
       return true;
     }
     set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
-    if (set.run) reclipRun(set.run);
+    if (set.run) reclipRun(set.run, set.runFree);
     set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
     set.points.forEach(relinkVertex);
     const moveStep = { kind: 'rotate', before: set.before, detached: set.detached, wells: set.wells };

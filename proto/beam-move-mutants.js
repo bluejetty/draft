@@ -30,7 +30,7 @@ const MUTANTS = [
     with: "",
     test: 'a click on one piece picks the row; MOVE slides it across itself only, its posts ride, its far end finds the wall' },
   { file: 'model/09-draw-move-stretch.js', name: 'a moved row keeps its length',
-    find: "      if (d.set.run) reclipRun(d.set.run);\n",
+    find: "      if (d.set.run) reclipRun(d.set.run, d.set.runFree);\n",
     with: "",
     test: 'a click on one piece picks the row; MOVE slides it across itself only, its posts ride, its far end finds the wall' },
   { file: 'model/08-structure-roof.js', name: 'a deleted beam leaves its posts standing',

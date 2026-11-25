@@ -984,7 +984,7 @@
       return;
     }
     // A NODE BEING DRAGGED shows what has it, from the drag's own answer.
-    if ((moveDrag?.kind === 'corner' || moveDrag?.kind === 'wall') && moveDrag.active) {
+    if ((moveDrag?.kind === 'corner' || moveDrag?.kind === 'wall' || moveDrag?.kind === 'beamend') && moveDrag.active) {
       canvas.removeAttribute('data-snap-node');
       paintMagnets(moveDrag.cursor, moveDrag.magnet, moveDrag.lit);
       // A DRAGGED WALL'S OWN FACE GLOWS WITH WHAT CAUGHT IT (Movie, 19 Oct:

@@ -1761,6 +1761,75 @@
     stairNodeCache = { key, nodes };
     return nodes;
   };
+  // ── A BEAM SLID ACROSS ITSELF CATCHES THE NODES (jb, 25 Nov 2026) ────────
+  //
+  // "i'd like to position it using the corner of the int staircase opening
+  // and then add 2 inches push it over so it will have 4" floor bearing ...
+  // just need the node snap". The row still goes across itself only; what
+  // it lines up with is every node on the plan -- the level's own, each
+  // corner a stair draws here (stairsDrawnHere, whatever the tool), and the
+  // corners of the stair holes this plan shows (in its floors, or the
+  // floor it carries, paintOpeningsAbove). Nodes only, no faces or
+  // crossings: jb asked for the node. `pts` are the points the move
+  // carries (the row's own posts), which never catch.
+  const beamSlideMagnet = pts => {
+    const nodes = [];
+    const moving = new Set(pts);
+    // THE PADS UNDER THE ROW'S OWN POSTS ride with it: their corners are
+    // not targets either (a 3' pad's corner is 1'-6" off the line).
+    const B = window.DraftBuildHouse;
+    const ownPosts = (drawing?.columns || []).filter(c => moving.has(c.point));
+    const padCorners = ownPosts.length && B?.padGroups ? B.padGroups(ownPosts)
+      .filter(g => [g.minX, g.minZ, g.maxX, g.maxZ].every(Number.isFinite))
+      .flatMap(g => [[g.minX, g.minZ], [g.maxX, g.minZ], [g.maxX, g.maxZ], [g.minX, g.maxZ]])
+      .map(([x, z]) => ({ x, z })) : [];
+    const skip = [...pts, ...padCorners];
+    const add = v => {
+      if (!v || !Number.isFinite(v.x) || !Number.isFinite(v.z) || moving.has(v)) return;
+      if (skip.some(p => Math.abs(p.x - v.x) < 0.001 && Math.abs(p.z - v.z) < 0.001)) return;
+      if (!nodes.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) nodes.push({ x: v.x, y: 0, z: v.z });
+    };
+    magnetExcluding(pts).nodes.forEach(add);
+    try {
+      const { list, levels } = stairsDrawnHere();
+      list.forEach(stair => {
+        let corners = [];
+        try { corners = stairDrawnCorners(stair, levels); } catch { corners = []; }
+        if (!corners.length) {
+          try { corners = stairOutlineOf(stair).corners || []; } catch { corners = []; }
+        }
+        corners.forEach(add);
+      });
+    } catch { /* no stairs drawn here */ }
+    const floorIds = new Set(floors().map(f => String(f.id)));
+    let carried = null;
+    try { carried = floorCarriedBy(activeLevelId()); } catch { carried = null; }
+    (drawing?.surfaceOpenings || []).filter(o => o.hostType === 'floor' && (o.points || []).length >= 3
+      && (floorIds.has(String(o.hostId)) || (carried && Number(o.levelId) === Number(carried.id))))
+      .forEach(o => o.points.forEach(add));
+    return { nodes, corners: [], segs: [] };
+  };
+  // Where a sliding beam row's line catches a node: `line` is the row as it
+  // stood at the press ({ s, u, n, lo, hi }: a point on it, along and across
+  // units, its extent along u), `k` the travel across so far. A node pulls
+  // the line when it stands across from the row (within its length, a
+  // reach past either end) and within a node's reach of the line. Returns
+  // `{ k, lit }` -- the travel that puts the line through the node -- or null.
+  const beamSlideSeek = (line, k, magnet) => {
+    if (!line || !magnet) return null;
+    const slack = reachFt(NODE_REACH);
+    let best = null;
+    magnet.nodes.forEach(v => {
+      const rx = v.x - line.s.x, rz = v.z - line.s.z;
+      const t = rx * line.u.x + rz * line.u.z;
+      if (t < line.lo - slack || t > line.hi + slack) return;
+      const gap = rx * line.n.x + rz * line.n.z - k;
+      const share = catchShare(Math.abs(gap), NODE_REACH);
+      if (share < Infinity && (!best || share < best.share)) best = { share, gap, v };
+    });
+    if (!best) return null;
+    return { k: k + best.gap, lit: { pt: { x: best.v.x, y: 0, z: best.v.z }, corner: best.v, node: true } };
+  };
   // THE HALF-INCH CORNERS OF EVERY FIXTURE ON THE LEVEL, kept for the frame:
   // nodeEnds is asked on every pointer move, and a fixture's geometry does not
   // change between two paints.

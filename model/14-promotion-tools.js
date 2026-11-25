@@ -305,7 +305,7 @@
     const after = m.step.kind === 'batch' ? m.step.steps.slice(1) : [];
     after.slice().reverse().forEach(step => { undoStack.push(step); undoOnce(); });
     m.set.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
-    if (m.set.run) reclipRun(m.set.run);
+    if (m.set.run) reclipRun(m.set.run, m.set.runFree);
     m.set.wells.forEach(w => { w.hole.points = w.points.map(p => ({ ...p, x: p.x + dx, z: p.z + dz })); });
     m.set.points.forEach(relinkVertex);
     m.dx = dx; m.dz = dz;
