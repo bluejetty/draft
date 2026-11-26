@@ -18,7 +18,7 @@ const MUTANTS = [
     // The lined branch: a foundation type with a lining stands its slices on
     // the slab (jb, 20 Nov 2026), and this spec's 8IN CONC + LINING is one.
     // The lining's slices are laid under a clip off the pour (jb, 22 Nov).
-    find: "        ctx.clip();\n        sectionSlices(ctx, X, Y, pxPerFt, c, top, slabTop, C);",
+    find: "        ctx.clip();\n        sectionSlices(ctx, X, Y, pxPerFt, c, lineTop, slabTop, C);",
     with: "        ctx.clip();",
     test: 'a section cuts a made wall' },
   { file: 'cut-view-env.js', name: 'the sheets\' section env never learns the file\'s made types', spec: 'tests/wall-type-sections.spec.js',

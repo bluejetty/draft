@@ -400,6 +400,32 @@ if (!window.DraftCutView) {
   }
   const envBuildType = env => (env && env.buildType ? env.buildType() : null);
 
+  // HOW A FOUNDATION WALL HOLDS ITS FRAMING DOWN: PROJECT's FND ATTACHMENT
+  // and LADDER DEPTH -- a split's own row, else the drawing's -- for the
+  // house; the DETACHED GARAGE row for a detached garage; an attached garage
+  // is drawn on a sill in PROJECT and so here. An ICF wall takes no ladder
+  // (PROJECT: "the sill plate is the only option for the ICF walls").
+  // Answers the ladder's depth in feet, or 0 for a sill. Shared by the
+  // elevation's plate strip and the section's (jb, 26 Nov 2026).
+  function foundationHoldDownFt(env, wall, garage) {
+    const read = row => {
+      if (!row || row.foundationAttachment !== 'ladder') return 0;
+      const inches = Number(row.foundationLadderIn);
+      return ([3.5, 5.5].includes(inches) ? inches : 3.5) / 12;
+    };
+    if (garage) {
+      return garage.detached && env.sectionRow ? read(env.sectionRow('detachedGarage')) : 0;
+    }
+    if (String(wall?.wallType || '').startsWith('icf')) return 0;
+    const top = env.foundationHoldDown ? env.foundationHoldDown() || {} : {};
+    const split = SPLIT_TYPES.includes(envBuildType(env)) && env.sectionRow
+      ? env.sectionRow(envBuildType(env)) || {} : {};
+    return read({
+      foundationAttachment: split.foundationAttachment ?? top.attachment,
+      foundationLadderIn: split.foundationLadderIn ?? top.ladderIn,
+    });
+  }
+
   // ── WHERE AN ATTACHED GARAGE'S WALLS BEAR: THE TOP OF ITS SILL PLATE ────
   //
   // Movie, 25 Sep, looking at a built attached garage: "wait- the garage
@@ -2783,7 +2809,17 @@ if (!window.DraftCutView) {
       // left under it. The slab poured over it fills the rest and is drawn by
       // the floor pass below, which dips into the same void.
       const buck = doorAt(c) ? buckFloor(c.garage) : null;
-      const top = buck != null ? buck : fdn.wallBottom + c.wall.topHeight;
+      // THE HOUSE'S POUR STOPS A PLATE UNDER ITS BEARING, as on the
+      // elevations (fdnGeoms): a split stores its walls at pour + plate, and
+      // the plate above the pour is wood, drawn below.
+      const stored = fdn.wallBottom + c.wall.topHeight;
+      const top = buck != null ? buck
+        : (c.garage ? stored : Math.min(stored, fdn.wallTop - houseSillPlateFt()));
+      // Where the floor over it bears: the top of the plate (see THE SILL
+      // PLATE ON THE CONCRETE below).
+      const plateTop = c.garage ? garageBearing(env, fdn, c.garage) : fdn.wallTop;
+      const plateFt = buck == null ? plateTop - top : 0;
+      const sill = plateFt > 0.01 && plateFt < 0.5;
       const base = fdn.wallBottom + c.wall.baseHeight;
       ctx.fillStyle = weight(C.concrete, 0.5);
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
@@ -2803,14 +2839,20 @@ if (!window.DraftCutView) {
         && span.hi - span.lo < c.width - 1e-3 && slabTop > base + 1e-3 && slabTop < top - 1e-3;
       if (lined) {
         const cx = X(span.lo), cwid = (span.hi - span.lo) * pxPerFt;
-        ctx.fillRect(x, Y(top), wid, (top - slabTop) * pxPerFt);
+        // THE LINING IS FRAMING AND RUNS UP TO THE JOISTS: only the pour
+        // stops under the sill plate, so beside the plate the stud wall
+        // goes on to where the floor bears (jb, 26 Nov 2026).
+        const lineTop = sill ? plateTop : top;
+        ctx.fillRect(x, Y(lineTop), cx - x, (lineTop - slabTop) * pxPerFt);
+        ctx.fillRect(cx + cwid, Y(lineTop), x + wid - cx - cwid, (lineTop - slabTop) * pxPerFt);
+        ctx.fillRect(cx, Y(top), cwid, (top - slabTop) * pxPerFt);
         // The lining's slices only; the pour's are laid below in one go.
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x, Y(top), cx - x, (top - slabTop) * pxPerFt);
-        ctx.rect(cx + cwid, Y(top), x + wid - cx - cwid, (top - slabTop) * pxPerFt);
+        ctx.rect(x, Y(lineTop), cx - x, (lineTop - slabTop) * pxPerFt);
+        ctx.rect(cx + cwid, Y(lineTop), x + wid - cx - cwid, (lineTop - slabTop) * pxPerFt);
         ctx.clip();
-        sectionSlices(ctx, X, Y, pxPerFt, c, top, slabTop, C);
+        sectionSlices(ctx, X, Y, pxPerFt, c, lineTop, slabTop, C);
         ctx.restore();
         ctx.fillStyle = weight(C.concrete, 0.5);
         ctx.fillRect(cx, Y(slabTop), cwid, (slabTop - base) * pxPerFt);
@@ -2837,13 +2879,48 @@ if (!window.DraftCutView) {
         };
         ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
         const wLo = c.u - c.width / 2, wHi = c.u + c.width / 2;
-        box(wLo, span.lo, top, slabTop);
-        box(span.hi, wHi, top, slabTop);
+        box(wLo, span.lo, lineTop, slabTop);
+        box(span.hi, wHi, lineTop, slabTop);
         box(span.lo, span.hi, top, base);
       } else {
         ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
         sectionSlices(ctx, X, Y, pxPerFt, c, top, base, C);
         ctx.strokeRect(x, Y(top), wid, (top - base) * pxPerFt);
+      }
+      // ── THE SILL PLATE ON THE CONCRETE (jb, 26 Nov 2026) ─────────────
+      //
+      // jb, on S2: "the sill plate doesn't show". The concrete stops a
+      // plate under where the floor bears (fdn.wallTop for the house,
+      // garageBearing for a garage) and nothing drew the 1 1/2" between,
+      // so the section showed a white slot under the rim. The strip is the
+      // plate, as wide as the pour it sits on -- the way PROJECT's wall
+      // section draws it -- or, where PROJECT holds the framing down with a
+      // PT LADDER, the ladder's two members on edge at the concrete faces,
+      // set down into the pour. The cap keeps a real step (feet) from being
+      // drawn as a plate (inches), the elevation's PLATE_CAP_FT.
+      if (sill) {
+        const pLo = X(span.lo), pWid = (span.hi - span.lo) * pxPerFt;
+        const ladderFt = foundationHoldDownFt(env, c.wall, c.garage);
+        // Wood, a shade under the floor band's ink so the two read as two
+        // pieces where the rim lands on the plate.
+        ctx.fillStyle = weight(C.assembly, 0.22);
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        if (ladderFt > plateFt) {
+          const memberFt = 1.5 / 12;
+          [span.lo, span.hi - memberFt].forEach(u => {
+            ctx.fillStyle = C.ground;
+            ctx.fillRect(X(u), Y(plateTop), memberFt * pxPerFt, ladderFt * pxPerFt);
+            ctx.fillStyle = weight(C.assembly, 0.22);
+            ctx.fillRect(X(u), Y(plateTop), memberFt * pxPerFt, ladderFt * pxPerFt);
+            ctx.strokeRect(X(u), Y(plateTop), memberFt * pxPerFt, ladderFt * pxPerFt);
+          });
+          ctx.beginPath();
+          ctx.moveTo(pLo, Y(plateTop)); ctx.lineTo(pLo + pWid, Y(plateTop));
+          ctx.stroke();
+        } else {
+          ctx.fillRect(pLo, Y(plateTop), pWid, plateFt * pxPerFt);
+          ctx.strokeRect(pLo, Y(plateTop), pWid, plateFt * pxPerFt);
+        }
       }
       ctx.fillStyle = weight(C.concrete, 0.5);
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
@@ -3143,7 +3220,15 @@ if (!window.DraftCutView) {
       // between them left as the open air it is.
       const runs = levelRuns(level.id);
       (runs.length ? runs : fdnSpans).forEach(span => {
-        if (span.max - span.min <= 0.5) return;
+        // ── A STRIP UNDER A WALL IS STILL FLOOR (jb, 26 Nov 2026) ────────
+        //
+        // jb, on S2 through the stair: "the section is missing the 2nd floor
+        // floor between main and 2nd floor beside stairs/ext wall". A stair
+        // widened to the wall side opens the upper floor up to the wall's
+        // inside face, so what is left of the deck past the hole is the
+        // strip the wall stands on -- 5 1/2" under a 2x6 -- and a half-foot
+        // floor was thrown away as a sliver. Only true slivers go now.
+        if (span.max - span.min <= 0.1) return;
         ctx.fillStyle = weight(C.assembly, 0.15);
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
@@ -3169,10 +3254,15 @@ if (!window.DraftCutView) {
         // record from before this carried the field would want.
         const joist = (window.DraftLevelAssembly?.JOIST_TYPES || [])
           .find(type => type.id === level.joistType);
-        ctx.fillText(
-          `${formatInchesOnly(level.joistDepthIn)} ${joist?.label || 'TJI'}`
-          + ` + ${formatInchesOnly(level.sheathingIn)} SHTG`,
-          x + 4, Y((level.floorTop + level.floorBottom) / 2));
+        // THE LONGEST THAT FITS IN ITS OWN BOX, as on a deck: the strip
+        // beside a stairwell is a few inches wide and its words otherwise
+        // run out over the wall and the stair.
+        const word = joist?.label || 'TJI';
+        const said = [
+          `${formatInchesOnly(level.joistDepthIn)} ${word} + ${formatInchesOnly(level.sheathingIn)} SHTG`,
+          `${formatInchesOnly(level.joistDepthIn)} ${word}`, word,
+        ].find(text => ctx.measureText(text).width <= wid - 8);
+        if (said) ctx.fillText(said, x + 4, Y((level.floorTop + level.floorBottom) / 2));
       });
       // ── EACH DECK ON THIS STOREY, ITS OWN BAND (jb, 20 Nov 2026) ─────────
       //
@@ -4650,24 +4740,7 @@ if (!window.DraftCutView) {
     // garage is drawn on a sill in PROJECT and so here. An ICF wall takes no
     // ladder (PROJECT: "the sill plate is the only option for the ICF
     // walls"). Answers the ladder's depth in feet, or 0 for a sill.
-    const holdDownOf = g => {
-      const read = row => {
-        if (!row || row.foundationAttachment !== 'ladder') return 0;
-        const inches = Number(row.foundationLadderIn);
-        return ([3.5, 5.5].includes(inches) ? inches : 3.5) / 12;
-      };
-      if (g.garage) {
-        return g.garage.detached && env.sectionRow ? read(env.sectionRow('detachedGarage')) : 0;
-      }
-      if (String(g.wall?.wallType || '').startsWith('icf')) return 0;
-      const top = env.foundationHoldDown ? env.foundationHoldDown() || {} : {};
-      const split = SPLIT_TYPES.includes(envBuildType(env)) && env.sectionRow
-        ? env.sectionRow(envBuildType(env)) || {} : {};
-      return read({
-        foundationAttachment: split.foundationAttachment ?? top.attachment,
-        foundationLadderIn: split.foundationLadderIn ?? top.ladderIn,
-      });
-    };
+    const holdDownOf = g => foundationHoldDownFt(env, g.wall, g.garage);
     const behindFdn = (g, o) => o !== g
       && o.depth > g.depth + 1e-6
       && o.topE + plateOf(o) >= g.topE - 1e-3

@@ -40,7 +40,7 @@ const MUTATIONS = [
   ['a sill plate draws a ladder line too', 'cut-view.js',
     c => c.replace("if (!row || row.foundationAttachment !== 'ladder') return 0;", 'if (!row) return 0;')],
   ['an ICF wall takes a ladder', 'cut-view.js',
-    c => c.replace("if (String(g.wall?.wallType || '').startsWith('icf')) return 0;", '')],
+    c => c.replace("if (String(wall?.wallType || '').startsWith('icf')) return 0;", '')],
   ['the split\'s own row is ignored for the drawing\'s', 'cut-view.js',
     c => c.replace('foundationAttachment: split.foundationAttachment ?? top.attachment,',
       'foundationAttachment: top.attachment,')],

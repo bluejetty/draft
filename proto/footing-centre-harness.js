@@ -30,7 +30,7 @@ const MUTATIONS = [
   ['the section lining runs down to the footing', 'cut-view.js',
     c => c.replace("      const lined = !c.garage && Number.isFinite(slabTop)\n", "      const lined = false && Number.isFinite(slabTop)\n")],
   ['the lining box runs its foot across the concrete at the slab top', 'cut-view.js',
-    c => c.replace('        box(wLo, span.lo, top, slabTop);\n', '        box(wLo, wHi, top, slabTop);\n')],
+    c => c.replace('        box(wLo, span.lo, lineTop, slabTop);\n', '        box(wLo, wHi, lineTop, slabTop);\n')],
 ];
 
 if (MUTATE) {
@@ -144,10 +144,22 @@ const hasLine = (view, u0, e0, u1, e1, tol = 0.25) => segmentsOf(view).some(({ a
     check('section: the slab runs to the inside face of the concrete at both ends',
       innerFaces.some(u => near(u, slab.x)) && innerFaces.some(u => near(u, slab.x + slab.w)),
       `slab ${slab.x.toFixed(2)}..${(slab.x + slab.w).toFixed(2)}"`);
-    const whole = rects.filter(r => near(r.w, 14) && r.h > 3);
+    // The lining is filled on its own (6") since it runs up past the pour
+    // to the joists beside the sill plate (jb, 26 Nov 2026).
+    const whole = rects.filter(r => near(r.w, 6) && r.h > 3);
     check('section: the 2x6 lining stops at the top of the slab',
       whole.length === 2 && whole.every(r => near(r.y + r.h, slab.y)),
       whole.map(r => (r.y + r.h).toFixed(2)).join(', ') + ` vs slab top ${slab.y.toFixed(2)}`);
+    // jb, 26 Nov 2026, on S2: "the sill plate doesn't show". A 1 1/2" plate
+    // on each 8" pour, and the lining beside it runs up to the plate's top.
+    const plates = rects.filter(r => near(r.w, 8) && near(r.h, 1.5));
+    check('section: a 1 1/2" sill plate sits on each 8" pour',
+      plates.length === 2 && plates.every(p => concrete.some(cr => cr !== p && near(cr.x, p.x)
+        && near(cr.y, p.y + p.h) && cr.h > 3)),
+      `${plates.length} plates`);
+    check('section: the lining runs up to the top of the sill plate',
+      plates.length === 2 && whole.every(r => plates.some(p => near(p.y, r.y))),
+      whole.map(r => r.y.toFixed(2)).join(', ') + ' vs ' + plates.map(p => p.y.toFixed(2)).join(', '));
     // jb, 22 Nov 2026: "that slab line shouldn't go through the foundation
     // wall". No ink laid over the 8" concrete runs level at the slab's top
     // inside it (a datum painted before the pour is covered by its fill).
