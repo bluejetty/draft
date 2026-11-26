@@ -170,6 +170,32 @@ test('the WALL SECTION sheet names the made type and lists its slices; the found
   }
 });
 
+// jb, 25 Nov: two 2 ft gable stubs in a made 1FT WALL beside the house's
+// stud walls took the whole WALL SECTION ("1FT WALL / 11 1/4\" WALL"). A
+// made type draws only when it is the level's longest run of wall.
+test('a few short walls in a made type do not take the WALL SECTION from the stud walls', async ({ page }) => {
+  const STUB = { id: 'wt_stub', name: '1FT WALL', kind: 'floor', layers: [
+    { name: 'SHEATHING', in: 0.375, fill: 'siding_h' }, { name: 'WALL', in: 11.25, fill: 'lightgrey' },
+    { name: 'SHEATHING', in: 0.375, fill: 'white' }] };
+  const saved = reproWith(null, null);
+  saved.wallTypes = [STUB];
+  saved.walls = saved.walls.map(w => (Number(w.levelId) === 3 && (w.view || 'plan') === 'plan'
+    ? { ...w, wallType: 'stud_2x6', widthIn: undefined } : w));
+  saved.walls.push(
+    W('stub1', [0, 0], [2, 0], { wallType: STUB.id, widthIn: 12 }),
+    W('stub2', [0, 4], [2, 4], { wallType: STUB.id, widthIn: 12 }));
+  await openLayout(page, saved);
+  const labels = await page.evaluate(() => page._wallSection().labels.map(l => l.text));
+  expect(labels).not.toContain('1FT WALL');
+  expect(labels.some(t => /11 1\/4" WALL/.test(t)), labels.join(' | ')).toBe(false);
+  // Made the level's main wall, the same type does draw.
+  saved.walls = saved.walls.map(w => (Number(w.levelId) === 3 && (w.view || 'plan') === 'plan'
+    ? { ...w, wallType: STUB.id, widthIn: 12 } : w));
+  await openLayout(page, saved);
+  const made = await page.evaluate(() => page._wallSection().labels.map(l => l.text));
+  expect(made).toContain('1FT WALL');
+});
+
 test('the WALL SECTION draws a line between each slice of the wall, and the lining stands inside the pour', async ({ page }) => {
   await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
