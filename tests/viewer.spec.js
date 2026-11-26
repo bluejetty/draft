@@ -190,3 +190,68 @@ test('with no WebGL at all the viewer falls back to the plain canvas', async ({ 
   expect(await inkedPixels(p)).toBeGreaterThan(2000);
   expect(errors).toEqual([]);
 });
+
+// ── PHASE 2: GABLE ENDS AND FASCIA ───────────────────────────────────────
+const WINGS = path.join(ROOT, 'proto', 'repro-movie-roof-wings.draft');
+const HOOD = path.join(ROOT, 'proto', 'repro-movie-roofplan-hood.draft');
+
+async function built(p, file) {
+  await openViewer(p, 'plain');
+  await p.setInputFiles('#file', file);
+  await p.waitForFunction(() => document.body.dataset.loaded);
+  return p.evaluate(() => {
+    const s = DraftViewer.state;
+    const ys = kind => s.faces.filter(f => f.kind === kind).flatMap(f => f.pts.map(q => q.y));
+    return {
+      counts: s.counts,
+      gableTop: Math.max(...ys('gable')), gableLow: Math.min(...ys('gable')),
+      roofTop: Math.max(...ys('roof')), fasciaLow: Math.min(...ys('fascia')), roofLow: Math.min(...ys('roof')),
+    };
+  });
+}
+
+test('a gable end is filled from the plate up to the roof', async ({ page: p }) => {
+  const r = await built(p, WINGS);
+  // roof-108's three gables that stand clear of the main roof.
+  expect(r.counts.gables).toBe(3);
+  // From the plate the roof bears on (cut-view.js roofBaseElev, 9.094 on
+  // this file) up to just under the ridge.
+  expect(r.gableLow).toBeCloseTo(9.094, 2);
+  expect(r.gableTop).toBeGreaterThan(r.gableLow + 3);
+  expect(r.gableTop).toBeLessThan(r.roofTop);
+});
+
+test('every open eave and rake wears a fascia board hung under the roof', async ({ page: p }) => {
+  const r = await built(p, WINGS);
+  expect(r.counts.fascia).toBeGreaterThan(10);
+  // 5 1/2" board: the lowest board edge is that far under the lowest eave.
+  expect(r.fasciaLow).toBeCloseTo(r.roofLow - 5.5 / 12, 2);
+});
+
+test('a gable that butts into a bigger roof gets no wall and no fascia', async ({ page: p }) => {
+  // Every gable on this file is a wing's end dying into the main roof
+  // (overhang 0, the main roof's surface carrying on just outside it), as
+  // the elevations draw it: hidden.
+  const r = await built(p, HOOD);
+  expect(r.counts.gables).toBe(0);
+  expect(r.counts.fascia).toBeGreaterThan(0);
+});
+
+test('the plain painter hides what is behind, whatever order the faces come in', async ({ page: p }) => {
+  await openViewer(p, 'plain');
+  // Two squares, the near one listed FIRST: a far-to-near sort by list order
+  // or a bad middle would paint the far red one over the near green one.
+  const centre = await p.evaluate(() => {
+    const sq = (z, colour) => ({ kind: 'test', colour, twoSided: true,
+      pts: [{ x: -5, y: -5, z }, { x: 5, y: -5, z }, { x: 5, y: 5, z }, { x: -5, y: 5, z }] });
+    const s = DraftViewer.state;
+    s.faces = [sq(4, [0, 200, 0]), { ...sq(-4, [200, 0, 0]), pts: [{ x: -40, y: -40, z: -4 }, { x: 40, y: -40, z: -4 }, { x: 40, y: 40, z: -4 }, { x: -40, y: 40, z: -4 }] }];
+    s.painter.setFaces(s.faces);
+    s.camera = { target: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, dist: 60, fov: 40 };
+    s.painter.render(s.camera, { background: '#dfe6ee', ambient: 1, edges: false });
+    const c = document.getElementById('plain');
+    const d = c.getContext('2d').getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data;
+    return [d[0], d[1], d[2]];
+  });
+  expect(centre).toEqual([0, 200, 0]);
+});

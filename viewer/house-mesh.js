@@ -34,6 +34,8 @@
     floor: [196, 164, 120],
     slab: [184, 184, 178],
     roof: [96, 92, 90],
+    gable: [226, 220, 205],
+    fascia: [238, 236, 228],
   });
 
   const num = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
@@ -133,7 +135,7 @@
     const env = window.DraftCutViewEnv.buildCutViewEnv(saved, levels);
     const stack = CV.sectionLevelStack(env);
     const faces = [];
-    const counts = { walls: 0, foundationWalls: 0, floors: 0, roofs: 0 };
+    const counts = { walls: 0, foundationWalls: 0, floors: 0, roofs: 0, gables: 0, fascia: 0 };
     if (!stack) return { faces, stack: null, counts, bounds: boundsOf(faces) };
 
     const fdn = stack.foundation;
@@ -256,6 +258,7 @@
     });
 
     // ── ROOFS ────────────────────────────────────────────────────────────
+    const solved = [];
     env.roofs().forEach(roof => {
       if (!roof || !Array.isArray(roof.points) || roof.points.length < 3 || roof.levelId < 0) return;
       let list = [];
@@ -269,10 +272,170 @@
           kind: 'roof', colour: COLOURS.roof, twoSided: true,
         });
       });
-      if (list.length) counts.roofs += 1;
+      if (list.length) {
+        counts.roofs += 1;
+        solved.push({ roof, list, eave, base: CV.roofBaseElev(roof, stack, env) });
+      }
     });
+    solved.forEach(item => dressRoof(item, solved, G, faces, counts));
 
     return { faces, stack, counts, bounds: boundsOf(faces) };
+  }
+
+  // ── PHASE 2: WHAT HANGS OFF A ROOF'S EDGES ──────────────────────────────
+  //
+  // A roof record names each edge (roof.edges[i], from points[i] to
+  // points[i+1]): 'eave' sheds water and wears a fascia; 'gable' is a rake,
+  // wearing a fascia up the slope and a wall filling the triangle under it;
+  // 'flush' dies into a wall and 'joint' meets the piece next door, and
+  // neither gets anything -- the elevations' own rule (cut-view.js draws no
+  // fascia and no gable wall under a joint).
+  //
+  // ONE WALK SERVES BOTH. The height of the roof along any line in plan is
+  // the drafter's own roofRiseAt over the solved faces, read at every place
+  // the line crosses a face edge or passes a face corner -- the surface is
+  // flat between those, so that polyline is exact, not sampled. A fascia is
+  // that polyline along the roof's outer edge with its board hung under it
+  // (roof.fascia inches, which "grows down"); a gable wall is the same walk
+  // taken along the wall line -- the edge moved in by its own overhang --
+  // from the plate up to the roof.
+  const FASCIA_THICK_FT = 1.5 / 12;
+  const GABLE_THICK_FT = 5.5 / 12;
+  const roofFasciaFt = roof => (Number(roof.fascia) > 0 ? Number(roof.fascia) : 5.5) / 12;
+
+  // The roof surface's height along a -> b, as runs of {t, y} where the
+  // roof covers the line. `inward` is the unit plan normal into the roof: the
+  // read is taken a hair inside, since a point exactly on a face's boundary
+  // can fall outside every face.
+  function surfaceAlong(roof, list, eave, a, b, inward, G, keep) {
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    if (!(len > 1e-6)) return [];
+    const ts = new Set([0, 1]);
+    const addT = t => { if (t > -1e-9 && t < 1 + 1e-9) ts.add(Math.min(1, Math.max(0, Math.round(t * 1e7) / 1e7))); };
+    list.forEach(face => {
+      const poly = face.points || [];
+      poly.forEach((p, i) => {
+        // A corner on (or within an inch of) the line.
+        const t = ((p.x - a.x) * dx + (p.z - a.z) * dz) / (len * len);
+        const off = Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / len;
+        if (off < 0.1) addT(t);
+        // Where this face edge crosses the line.
+        const q = poly[(i + 1) % poly.length];
+        const ex = q.x - p.x, ez = q.z - p.z;
+        const den = dx * ez - dz * ex;
+        if (Math.abs(den) < 1e-12) return;
+        const tt = ((p.x - a.x) * ez - (p.z - a.z) * ex) / den;
+        const u = ((p.x - a.x) * dz - (p.z - a.z) * dx) / den;
+        if (u > -1e-9 && u < 1 + 1e-9) addT(tt);
+      });
+    });
+    // Every foot as well: the surface is flat between the breakpoints, so
+    // these add nothing to the shape, but they let `keep` cut a run where
+    // another roof takes over part way along.
+    const steps = Math.min(400, Math.floor(len));
+    for (let k = 1; k < steps; k += 1) addT(k / steps);
+    const NUDGE = 0.02;
+    const sorted = [...ts].sort((x, y) => x - y);
+    const runs = [];
+    let run = [];
+    sorted.forEach(t => {
+      // A hair in from each end too, so an end on a corner still reads.
+      const tAt = Math.min(1 - 1e-4, Math.max(1e-4, t));
+      const p = { x: a.x + dx * tAt + inward.x * NUDGE, z: a.z + dz * tAt + inward.z * NUDGE };
+      const rise = G.roofRiseAt(roof, p, list);
+      const p0 = { x: a.x + dx * tAt, z: a.z + dz * tAt };
+      if (rise == null || !Number.isFinite(rise) || (keep && !keep(p0, eave + rise))) {
+        if (run.length > 1) runs.push(run);
+        run = [];
+        return;
+      }
+      run.push({ t, y: eave + rise });
+    });
+    if (run.length > 1) runs.push(run);
+    return runs;
+  }
+
+  // A planar polygon given thickness `depth` along plan direction `dir`,
+  // every face turned to point out of the solid.
+  function slab(front, dir, depth, kind, colour, out) {
+    if (front.length < 3) return;
+    const M = { normalOf };
+    const off = { x: dir.x * depth, y: 0, z: dir.z * depth };
+    let f = front.slice();
+    let n = M.normalOf(f);
+    // The front looks AWAY from the thickness.
+    if (n.x * off.x + n.z * off.z > 0) { f = f.reverse(); }
+    const back = f.map(p => ({ x: p.x + off.x, y: p.y, z: p.z + off.z })).reverse();
+    out.push({ pts: f, kind, colour });
+    out.push({ pts: back, kind, colour });
+    const c = { x: 0, y: 0, z: 0 };
+    f.forEach(p => { c.x += p.x; c.y += p.y; c.z += p.z; });
+    c.x = c.x / f.length + off.x / 2; c.y /= f.length; c.z = c.z / f.length + off.z / 2;
+    for (let i = 0; i < f.length; i += 1) {
+      const p = f[i], q = f[(i + 1) % f.length];
+      let quad = [p, q, { x: q.x + off.x, y: q.y, z: q.z + off.z }, { x: p.x + off.x, y: p.y, z: p.z + off.z }];
+      const qn = normalOf(quad);
+      const mid = { x: (p.x + q.x) / 2 + off.x / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 + off.z / 2 };
+      if (qn.x * (mid.x - c.x) + qn.y * (mid.y - c.y) + qn.z * (mid.z - c.z) < 0) quad = quad.reverse();
+      if (Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z) > 1e-6) out.push({ pts: quad, kind, colour });
+    }
+  }
+
+  function dressRoof(item, solved, G, out, counts) {
+    const { roof, list, eave, base } = item;
+    const pts = roof.points;
+    const n = pts.length;
+    const edges = Array.isArray(roof.edges) ? roof.edges : [];
+    const sign = planArea(pts) > 0 ? 1 : -1;
+    const fasciaFt = roofFasciaFt(roof);
+    for (let i = 0; i < n; i += 1) {
+      const kind = edges[i] || 'eave';
+      if (kind !== 'eave' && kind !== 'gable') continue;
+      const a = pts[i], b = pts[(i + 1) % n];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (!(len > 1e-6)) continue;
+      const inward = { x: -(b.z - a.z) / len * sign, z: (b.x - a.x) / len * sign };
+      // AN EDGE BURIED IN ANOTHER ROOF IS NOT AN EDGE ANYONE SEES. Where a
+      // wing's gable butts into the main roof, the main roof's surface
+      // carries on just outside it at or above the wing's own height; no
+      // fascia hangs there and no gable wall stands there, as on the
+      // elevations, where the bigger roof hides it.
+      const keep = (p, y) => !solved.some(other => {
+        if (other === item) return false;
+        const q = { x: p.x - inward.x * 0.15, z: p.z - inward.z * 0.15 };
+        const rise = G.roofRiseAt(other.roof, q, other.list);
+        // Above the bottom of this edge's own board: the board is buried.
+        return rise != null && other.eave + rise >= y - fasciaFt;
+      });
+      const at = (t, y, shift = 0) => ({
+        x: a.x + (b.x - a.x) * t + inward.x * shift, y, z: a.z + (b.z - a.z) * t + inward.z * shift,
+      });
+      // The fascia board: the surface along the edge, hung down by its depth.
+      surfaceAlong(roof, list, eave, a, b, inward, G, keep).forEach(run => {
+        const top = run.map(s => at(s.t, s.y));
+        const bottom = run.slice().reverse().map(s => at(s.t, s.y - fasciaFt));
+        slab([...top, ...bottom], inward, FASCIA_THICK_FT, 'fascia', COLOURS.fascia, out);
+        counts.fascia = (counts.fascia || 0) + 1;
+      });
+      if (kind !== 'gable') continue;
+      // The gable wall: on the wall line (the edge in by its overhang), from
+      // the plate the roof bears on up to the underside of the roof.
+      const over = Array.isArray(roof.edgeOverhang) && Number.isFinite(Number(roof.edgeOverhang[i]))
+        ? Number(roof.edgeOverhang[i]) : Number(roof.overhang) || 0;
+      const wa = { x: a.x + inward.x * over, z: a.z + inward.z * over };
+      const wb = { x: b.x + inward.x * over, z: b.z + inward.z * over };
+      const wat = (t, y) => ({ x: wa.x + (wb.x - wa.x) * t, y, z: wa.z + (wb.z - wa.z) * t });
+      surfaceAlong(roof, list, eave, wa, wb, inward, G, keep).forEach(run => {
+        // An inch under the roof, so its top never shares a plane with the
+        // roof sheathing (the two would flicker through each other).
+        const top = run.map(s => wat(s.t, s.y - 1 / 12));
+        if (!top.some(p => p.y > base + 0.6)) return;   // nothing to fill under a near-flat run
+        const bottom = [wat(run[run.length - 1].t, base), wat(run[0].t, base)];
+        slab([...top, ...bottom], inward, GABLE_THICK_FT, 'gable', COLOURS.gable, out);
+        counts.gables = (counts.gables || 0) + 1;
+      });
+    }
   }
 
   function boundsOf(faces) {
