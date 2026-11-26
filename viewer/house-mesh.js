@@ -43,6 +43,19 @@
     deck: [176, 150, 116],
     stair: [190, 156, 112],
     landing: [182, 148, 104],
+    drywall: [238, 236, 230],
+    beam: [158, 124, 86],
+    post: [150, 118, 82],
+  });
+  // WHAT EACH EXTERIOR FINISH LOOKS LIKE (wall-types.js EXTERIOR_FINISHES and
+  // the fascia's PFM). The drafter's own colour (finishColor, a band's
+  // color) wins over these -- Movie, 27 Sep: "we don't have 3d Window yet so
+  // COLOR won't show anywhere yet". It shows here.
+  const FINISH_COLOURS = Object.freeze({
+    stucco: [232, 224, 204], siding_v_bb: [208, 202, 184], siding_h: [214, 218, 214],
+    shake: [168, 136, 100], ledgestone: [172, 160, 140], ashlar: [196, 186, 166],
+    roundstone: [164, 158, 148], fieldstone: [152, 142, 126], brick: [166, 88, 66],
+    pfm: [240, 240, 236],
   });
   // What a hologram's faces are mixed toward, by its file's colour (the same
   // order as hologram.js COLOURS: blue first). A suite keeps the house's own.
@@ -52,6 +65,10 @@
   ]);
 
   const num = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+  const hexRgb = hex => {
+    const v = parseInt(String(hex).slice(1), 16);
+    return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  };
 
   // ── A WALL'S BODY IN PLAN ──────────────────────────────────────────────
   // The stored line is the wall's REFERENCE line, not its centre: 'left'
@@ -170,7 +187,11 @@
   // sill and over its head. Each long face is those pieces, joined at seams
   // the painters do not ink, so it reads as one face with holes in it; the
   // jambs, sill and head are the reveals you see into the thickness.
-  function wallWithOpenings(frame, bottom, top, holes, kind, colour, out, counts) {
+  // `paint`, when given, colours the two long faces: { lo, hi } are each a
+  // function from a height to a colour (a wall's finish and its bands on an
+  // outside face, drywall inside), and `cuts` the heights where a band
+  // starts or stops, so each colour is its own piece with a line between.
+  function wallWithOpenings(frame, bottom, top, holes, kind, colour, out, counts, paint) {
     if (!frame || !(top - bottom > 1e-4)) return;
     const { at, t0: T0, t1: T1, lo, hi } = frame;
     const fits = (holes || []).map(h => ({
@@ -181,8 +202,10 @@
     const keep = [];
     fits.forEach(h => { if (!keep.length || h.t0 >= keep[keep.length - 1].t1 + 0.01) keep.push(h); });
     if (!keep.length) {
-      prism([frame.p(T0, lo), frame.p(T1, lo), frame.p(T1, hi), frame.p(T0, hi)], bottom, top, kind, colour, out);
-      return;
+      if (!paint) {
+        prism([frame.p(T0, lo), frame.p(T1, lo), frame.p(T1, hi), frame.p(T0, hi)], bottom, top, kind, colour, out);
+        return;
+      }
     }
     const cols = [];
     let t = T0;
@@ -198,10 +221,17 @@
     const u = frame.u, n = frame.n;
     const atEnd = v => Math.abs(v - T0) < 1e-9 || Math.abs(v - T1) < 1e-9;
     // The two long faces.
-    [{ off: lo, dir: { x: -n.x, y: 0, z: -n.z } }, { off: hi, dir: { x: n.x, y: 0, z: n.z } }].forEach(side => {
-      cols.forEach(c => spans(c).forEach(([y0, y1]) => {
-        facing([at(c.a, side.off, y0), at(c.b, side.off, y0), at(c.b, side.off, y1), at(c.a, side.off, y1)],
-          side.dir, kind, colour, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
+    const cuts = paint && Array.isArray(paint.cuts) ? paint.cuts.filter(y => y > bottom + 1e-4 && y < top - 1e-4) : [];
+    [{ off: lo, dir: { x: -n.x, y: 0, z: -n.z }, tint: paint && paint.lo },
+      { off: hi, dir: { x: n.x, y: 0, z: n.z }, tint: paint && paint.hi }].forEach(side => {
+      cols.forEach(c => spans(c).forEach(([s0, s1]) => {
+        const ys = [s0, ...cuts.filter(y => y > s0 + 1e-4 && y < s1 - 1e-4).sort((a, b) => a - b), s1];
+        for (let i = 0; i + 1 < ys.length; i += 1) {
+          const y0 = ys[i], y1 = ys[i + 1];
+          const col = side.tint ? side.tint((y0 + y1) / 2) : colour;
+          facing([at(c.a, side.off, y0), at(c.b, side.off, y0), at(c.b, side.off, y1), at(c.a, side.off, y1)],
+            side.dir, kind, col, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
+        }
       }));
     });
     // Top and bottom, under each column that reaches them.
@@ -264,8 +294,8 @@
     const stack = CV.sectionLevelStack(env);
     const faces = [];
     const counts = { walls: 0, foundationWalls: 0, floors: 0, roofs: 0, gables: 0, fascia: 0,
-      windows: 0, doors: 0, stairs: 0, decks: 0, holograms: 0 };
-    if (!stack) return { faces, stack: null, counts, bounds: boundsOf(faces) };
+      windows: 0, doors: 0, stairs: 0, decks: 0, holograms: 0, beams: 0, posts: 0 };
+    if (!stack) return { faces, stack: null, counts, groups: [], bounds: boundsOf(faces) };
 
     const fdn = stack.foundation;
     const levelById = {};
@@ -344,9 +374,64 @@
       return !at || storey.floorTop <= at.floorTop + 0.01;
     };
 
+    // ── WHICH LEVEL EACH FACE BELONGS TO, for the viewer's level chips:
+    // 'fdn' (foundation, basement and slabs), 'L<id>' for a storey, 'roof'.
+    const mark = (from, group) => {
+      for (let i = from; i < faces.length; i += 1) if (!faces[i].group) faces[i].group = group;
+    };
+
+    // ── WHAT EACH WALL WEARS ──────────────────────────────────────────────
+    // Outside, its finish (wall-types.js finishAtFt, bands and all, measured
+    // from the same three lines the elevations clad to: the sill, the plate
+    // and the head); inside, drywall. The outside is the side away from every
+    // room its level's walls close (geometry-2d.js roomLoops); a wall with
+    // rooms on neither side, or on both, wears its finish on both faces only
+    // when it was given one.
+    const WT = window.DraftWallTypes;
+    const loopsByLevel = new Map();
+    const loopsOn = (levelId, view) => {
+      const key = `${levelId}/${view}`;
+      if (!loopsByLevel.has(key)) {
+        let loops = [];
+        try {
+          const own = env.walls().filter(w => w && w.levelId === levelId && (w.view || 'plan') === view && w.start && w.end);
+          loops = G.roomLoops ? G.roomLoops(own).map(l => l.points) : [];
+        } catch (e) { loops = []; }
+        loopsByLevel.set(key, loops);
+      }
+      return loopsByLevel.get(key);
+    };
+    const finishColour = (id, own) => {
+      if (typeof own === 'string' && /^#[0-9a-f]{6}$/i.test(own)) return hexRgb(own);
+      return FINISH_COLOURS[id] || FINISH_COLOURS.stucco;
+    };
+    const paintFor = (wall, frame, bottom, top, plate) => {
+      if (!frame || !WT || !WT.finishAtFt) return null;
+      const loops = loopsOn(wall.levelId, wall.view || 'plan');
+      const mid = (frame.t0 + frame.t1) / 2;
+      const inside = off => loops.some(pts => G.pointInLoop(frame.p(mid, off), pts));
+      const inLo = inside(frame.lo - 0.4), inHi = inside(frame.hi + 0.4);
+      const given = !!(wall.finish || wall.finishColor || (wall.finishBands && wall.finishBands.length));
+      let outLo = !inLo, outHi = !inHi;
+      if (outLo === outHi) { outLo = given || outLo; outHi = given || outHi; }
+      const lines = { sill: bottom, plate, head: top };
+      const outside = y => { const f = WT.finishAtFt(wall, y, lines); return finishColour(f.id, f.color); };
+      const cuts = [];
+      (wall.finishBands || []).forEach(band => {
+        const r = WT.bandRange ? WT.bandRange(band, lines) : null;
+        if (r) cuts.push(r.lo, r.hi);
+      });
+      return { lo: outLo ? outside : () => COLOURS.drywall, hi: outHi ? outside : () => COLOURS.drywall, cuts };
+    };
+
     // ── WALLS ─────────────────────────────────────────────────────────────
     env.walls().forEach(wall => {
       if (!wall || !wall.start || !wall.end || wall.levelId < 0) return;
+      const n0 = faces.length;
+      wallOne(wall);
+      mark(n0, (wall.view || 'plan') === 'foundation' || wall.levelId === 1 ? 'fdn' : `L${wall.levelId}`);
+    });
+    function wallOne(wall) {
       const view = wall.view || 'plan';
       if (view === 'foundation') {
         const garage = CV.garageOfWall(wall, env, garageCache);
@@ -379,8 +464,9 @@
       if (wall.levelId === 1) {
         const bottom = fdn.slabTop;
         const top = Math.min(bottom + num(wall.topHeight, 8), fdn.wallTop);
-        wallWithOpenings(wallFrame(wall, thicknessFt(wall, 5.5)), bottom, top,
-          holesFor(wall, bottom, top, null), 'wall', COLOURS.wall, faces, counts);
+        const frame = wallFrame(wall, thicknessFt(wall, 5.5));
+        wallWithOpenings(frame, bottom, top, holesFor(wall, bottom, top, null), 'wall', COLOURS.wall, faces, counts,
+          paintFor(wall, frame, bottom, top, top));
         counts.walls += 1;
         return;
       }
@@ -402,10 +488,12 @@
       if (garage && bearsOnGarage(garage, storey)) {
         try { const b = CV.garageBearing(env, fdn, garage); if (Number.isFinite(b)) floor = b; } catch (e) { /* keep the storey's */ }
       }
-      wallWithOpenings(wallFrame(wall, thicknessFt(wall, 5.5)), bottom, top, holesFor(wall, floor, top, garage),
-        garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces, counts);
+      const frame = wallFrame(wall, thicknessFt(wall, 5.5));
+      wallWithOpenings(frame, bottom, top, holesFor(wall, floor, top, garage),
+        garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces, counts,
+        paintFor(wall, frame, bottom, top, Math.min(top, storey.wallTop)));
       counts.walls += 1;
-    });
+    }
 
     // ── FLOORS AND SLABS ─────────────────────────────────────────────────
     // A DECK stands its own floor type's depth (2x10 + 3/4"), its top a
@@ -413,6 +501,11 @@
     let deckSet = new Set();
     try { deckSet = new Set(G.deckFloors ? G.deckFloors(env.floors(), env.walls()) : []); } catch (e) { deckSet = new Set(); }
     env.floors().forEach(floor => {
+      const n0 = faces.length;
+      floorOne(floor);
+      mark(n0, floor && (floor.view === 'foundation' || floor.levelId === 1) ? 'fdn' : `L${floor && floor.levelId}`);
+    });
+    function floorOne(floor) {
       const pts = (floor && floor.points) || [];
       if (pts.length < 3 || floor.levelId < 0) return;
       const ring = pts.map(p => ({ x: p.x, z: p.z }));
@@ -457,9 +550,10 @@
         prism(insetRing(ring, 0.02), storey.floorBottom, storey.floorTop, 'floor', COLOURS.floor, faces);
       }
       counts.floors += 1;
-    });
+    }
 
     // ── ROOFS ────────────────────────────────────────────────────────────
+    const roofFrom = faces.length;
     const solved = [];
     env.roofs().forEach(roof => {
       if (!roof || !Array.isArray(roof.points) || roof.points.length < 3 || roof.levelId < 0) return;
@@ -480,17 +574,30 @@
       }
     });
     solved.forEach(item => dressRoof(item, solved, G, faces, counts));
+    mark(roofFrom, 'roof');
+
+    // ── BEAMS AND POSTS ──────────────────────────────────────────────────
+    const beamFrom = faces.length;
+    buildFraming(saved, env, stack, levelById, levels, faces, counts);
+    for (let i = beamFrom; i < faces.length; i += 1) if (!faces[i].group) faces[i].group = faces[i].groupHint || 'fdn';
 
     // ── STAIRS ───────────────────────────────────────────────────────────
     const SG = window.DraftStairGeometry;
     if (SG) env.stairs().forEach(stair => {
-      try { if (buildStair(stair, stack, levelById, SG, faces)) counts.stairs += 1; } catch (e) { /* a stair that will not solve is left out */ }
+      const n0 = faces.length;
+      let group = null;
+      try { group = buildStair(stair, stack, levelById, SG, faces); } catch (e) { group = null; /* a stair that will not solve is left out */ }
+      if (group) { counts.stairs += 1; mark(n0, group); }
     });
 
     // ── HOLOGRAMS ────────────────────────────────────────────────────────
     if (!opts.inner) buildHolograms(saved, faces, counts);
 
-    return { faces, stack, counts, bounds: boundsOf(faces) };
+    const groups = [{ id: 'fdn', name: 'FOUNDATION' },
+      ...stack.floors.slice().sort((a, b) => a.floorTop - b.floorTop).map(l => ({
+        id: `L${l.id}`, name: ((levels.find(v => v.id === l.id) || {}).name || `LEVEL ${l.id}`).toUpperCase() })),
+      { id: 'roof', name: 'ROOF' }].filter(g => faces.some(f => f.group === g.id));
+    return { faces, stack, counts, groups, bounds: boundsOf(faces) };
   }
 
   // ── A STAIR, TREAD BY TREAD ─────────────────────────────────────────────
@@ -510,6 +617,8 @@
     const below = stack.floors.filter(l => l.floorTop < storey.floorTop - 0.01)
       .sort((a, b) => b.floorTop - a.floorTop)[0];
     const landOn = below ? below.floorTop : stack.foundation.slabTop;
+    // It stands in the room it comes down into, so it shows with that level.
+    const group = below ? `L${below.id}` : 'fdn';
     const riseFt = storey.floorTop - landOn;
     if (!(riseFt > 0.2)) return false;
     const layout = SG.stairCurrentLayout(stair, { floors: [], riseFtFor: () => ({ riseFt }) });
@@ -554,7 +663,107 @@
         block(landing.poly.map(p => ({ x: p.x, z: p.z })), top, 'landing', COLOURS.landing);
       }
     });
-    return true;
+    return group;
+  }
+
+  // ── BEAMS AND POSTS ─────────────────────────────────────────────────────
+  //
+  // A BEAM carries a floor. One drawn on the FOUNDATION plan carries the
+  // lowest storey; one on a FLOOR LAYOUT sits in that level's own floor; one
+  // on a storey's plan carries the storey above it. FLUSH (the default) sits
+  // in the joist depth, under the sheathing; DROPPED hangs its full depth
+  // under the joists. The model keeps no beam size, so it is drawn a
+  // joist-deep, 3-ply (4 1/2") wide.
+  //
+  // A POST: the drafter's own piles in the open, under a deck or a roof,
+  // as the elevations stand them (cut-view.js pilePosts, 6x6 from the top of
+  // the concrete up to what they carry); a column inside the concrete is a
+  // basement telepost from the slab up under the beam over it, or under the
+  // floor where no beam passes; a column on a storey is a post from that
+  // floor up under the floor or beam above.
+  const BEAM_WIDE_FT = 4.5 / 12;
+  const SHEATHING_FT = 0.75 / 12;
+  function buildFraming(saved, env, stack, levelById, levels, out, counts) {
+    const F = window.DraftDrawingFormat;
+    const CV = window.DraftCutView;
+    const G = window.DraftGeometry2D;
+    const ids = new Set(levels.map(l => l.id));
+    let beams = [];
+    try { beams = F.beams ? F.beams(saved.beams, ids) : (saved.beams || []); } catch (e) { beams = []; }
+    if (beams && !Array.isArray(beams) && Array.isArray(beams.items)) beams = beams.items;
+    if (!Array.isArray(beams)) beams = [];
+    const storeys = stack.floors.slice().sort((a, b) => a.floorTop - b.floorTop);
+    const above = id => {
+      const here = levelById[id];
+      return here ? storeys.find(l => l.floorTop > here.floorTop + 0.01) || null : null;
+    };
+    const carriedBy = beam => {
+      const view = beam.view || 'plan';
+      if (view === 'foundation' || beam.levelId === 1) return storeys[0] || null;
+      if (view === 'floor') return levelById[beam.levelId] || null;
+      return above(beam.levelId);
+    };
+    const solid = [];   // { a, b, bottom, view, levelId } for the posts to find
+    beams.forEach(beam => {
+      if (!beam || !beam.start || !beam.end) return;
+      const storey = carriedBy(beam);
+      if (!storey) return;
+      const deep = Math.max(0.5, storey.floorTop - storey.floorBottom - SHEATHING_FT);
+      const top = beam.mode === 'dropped' ? storey.floorBottom : storey.floorTop - SHEATHING_FT;
+      const bottom = top - deep;
+      const ring = wallFootprint({ start: beam.start, end: beam.end, refLine: 'center' }, BEAM_WIDE_FT);
+      if (!ring) return;
+      const n0 = out.length;
+      prism(ring, bottom, top, 'beam', COLOURS.beam, out);
+      const group = (beam.view === 'foundation' || beam.levelId === 1) ? 'fdn' : `L${beam.levelId}`;
+      for (let i = n0; i < out.length; i += 1) out[i].groupHint = group;
+      solid.push({ a: beam.start, b: beam.end, bottom, view: beam.view || 'plan', levelId: beam.levelId });
+      counts.beams += 1;
+    });
+    const square = (p, sizeFt) => [
+      { x: p.x - sizeFt / 2, z: p.z - sizeFt / 2 }, { x: p.x + sizeFt / 2, z: p.z - sizeFt / 2 },
+      { x: p.x + sizeFt / 2, z: p.z + sizeFt / 2 }, { x: p.x - sizeFt / 2, z: p.z + sizeFt / 2 }];
+    const post = (p, bottom, top, sizeFt, group) => {
+      if (!(top - bottom > 0.2)) return;
+      const n0 = out.length;
+      prism(square(p, sizeFt), bottom, top, 'post', COLOURS.post, out);
+      for (let i = n0; i < out.length; i += 1) out[i].groupHint = group;
+      counts.posts += 1;
+    };
+    const beamOver = (p, pick) => solid.filter(pick).filter(b => {
+      const r = G.pointToSegment ? G.pointToSegment(p, { start: b.a, end: b.b }) : null;
+      return r && r.d <= 0.4;
+    }).reduce((low, b) => (low == null || b.bottom < low ? b.bottom : low), null);
+    // The piles' posts, as the elevations stand them.
+    const done = new Set();
+    let piles = [];
+    try { piles = CV.pilePosts ? CV.pilePosts(env, stack) : []; } catch (e) { piles = []; }
+    piles.forEach(pp => {
+      done.add(pp.column);
+      post(pp.point, pp.foot, pp.top, (pp.sizeIn || 5.5) / 12, pp.levelId != null ? `L${pp.levelId}` : 'fdn');
+    });
+    const fdn = stack.foundation;
+    const concrete = (env.floors() || []).filter(f => f.points && f.points.length >= 3 && (f.view === 'foundation' || f.levelId === 1));
+    (env.columns ? env.columns() : []).forEach(column => {
+      if (!column || !column.point || done.has(column) || column.auto === true) return;
+      const p = column.point;
+      const view = column.view || 'plan';
+      if (view === 'foundation' || column.levelId === 1) {
+        // Only one standing on the slab: a pile out in the open with nothing
+        // over it is all below grade.
+        if (!concrete.some(f => G.pointInLoop(p, f.points))) return;
+        const low = storeys[0];
+        const top = beamOver(p, b => b.view === 'foundation' || b.levelId === 1) ?? (low ? low.floorBottom : fdn.wallTop);
+        post(p, fdn.slabTop, top, 3.5 / 12, 'fdn');
+        return;
+      }
+      const storey = levelById[column.levelId];
+      if (!storey) return;
+      const up = above(column.levelId);
+      const top = beamOver(p, b => b.levelId === column.levelId && b.view === 'plan')
+        ?? (up ? up.floorBottom : storey.wallTop);
+      post(p, storey.floorTop, top, 3.5 / 12, `L${column.levelId}`);
+    });
   }
 
   // ── HOLOGRAMS, STOOD WHERE THE PLAN PUTS THEM ───────────────────────────
@@ -707,6 +916,9 @@
     const edges = Array.isArray(roof.edges) ? roof.edges : [];
     const sign = planArea(pts) > 0 ? 1 : -1;
     const fasciaFt = roofFasciaFt(roof);
+    // What the fascia wears (jb, 13 Nov 2026: FASCIA finish), PFM unless set.
+    const WTs = window.DraftWallTypes;
+    const fasciaColour = FINISH_COLOURS[WTs && WTs.fasciaFinishIdOf ? WTs.fasciaFinishIdOf(roof) : 'pfm'] || COLOURS.fascia;
     for (let i = 0; i < n; i += 1) {
       const kind = edges[i] || 'eave';
       if (kind !== 'eave' && kind !== 'gable') continue;
@@ -733,7 +945,7 @@
       surfaceAlong(roof, list, eave, a, b, inward, G, keep).forEach(run => {
         const top = run.map(s => at(s.t, s.y));
         const bottom = run.slice().reverse().map(s => at(s.t, s.y - fasciaFt));
-        slab([...top, ...bottom], inward, FASCIA_THICK_FT, 'fascia', COLOURS.fascia, out);
+        slab([...top, ...bottom], inward, FASCIA_THICK_FT, 'fascia', fasciaColour, out);
         counts.fascia = (counts.fascia || 0) + 1;
       });
       if (kind !== 'gable') continue;

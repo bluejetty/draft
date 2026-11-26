@@ -377,3 +377,298 @@ test('the name follows the skin: RUFF 3D on RUFF, ROUGH 3D on ROUGH', async ({ p
   await p.waitForSelector('body[data-ready="1"]');
   await expect(p.locator('#brand')).toHaveText('RUFF 3D');
 });
+
+// ── PHASE 4: FINISHES, LEVELS, SECTION, FRAMING, OPEN IN 3D (jb, 26 Nov) ──
+const near = (a, b) => a && b && a.every((v, i) => Math.abs(v - b[i]) <= 1);
+
+test('a wall wears its finish outside, its bands where they lie, drywall inside', async ({ page: p }) => {
+  const r = await build3(p, `
+    s.walls.filter(w => w.levelId === 3 && (w.view || 'plan') === 'plan').forEach(w => {
+      w.finish = 'brick';
+      w.finishBands = [{ finishId: 'ledgestone', lowFt: 0, highFt: 3 }];
+    });
+    return s;`);
+  const faces = await p.evaluate(() => DraftViewer.state.faces
+    .filter(f => f.group === 'L3' && (f.kind === 'wall' || f.kind === 'garageWall'))
+    .map(f => ({ colour: f.colour, lo: Math.min(...f.pts.map(q => q.y)), hi: Math.max(...f.pts.map(q => q.y)) })));
+  const brick = faces.filter(f => near(f.colour, [166, 88, 66]));
+  const stone = faces.filter(f => near(f.colour, [172, 160, 140]));
+  const dry = faces.filter(f => near(f.colour, [238, 236, 230]));
+  expect(brick.length).toBeGreaterThan(10);
+  expect(stone.length).toBeGreaterThan(4);
+  expect(dry.length).toBeGreaterThan(10);
+  // The stone runs 3 ft up from the wall's sill line, the brick above it.
+  const stoneTop = Math.max(...stone.map(f => f.hi)), stoneLow = Math.min(...stone.map(f => f.lo));
+  expect(stoneTop - stoneLow).toBeCloseTo(3, 2);
+  expect(Math.min(...brick.map(f => f.lo))).toBeCloseTo(stoneTop, 2);
+  expect(r.counts.walls).toBe(16);
+});
+
+test('the drafter\'s own colour wins over the finish\'s', async ({ page: p }) => {
+  await build3(p, `
+    s.walls.filter(w => w.levelId === 3).forEach(w => { w.finish = 'siding_h'; w.finishColor = '#336699'; });
+    return s;`);
+  const n = await p.evaluate(() => DraftViewer.state.faces.filter(f => f.group === 'L3'
+    && f.colour[0] === 0x33 && f.colour[1] === 0x66 && f.colour[2] === 0x99).length);
+  expect(n).toBeGreaterThan(10);
+});
+
+test('a level chip takes that level out of the picture and puts it back', async ({ page: p }) => {
+  await build3(p);
+  await expect(p.locator('#levels [data-level]')).toHaveText(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF']);
+  const all = Number(await p.evaluate(() => document.body.dataset.shown));
+  const roofs = await p.evaluate(() => DraftViewer.state.faces.filter(f => f.group === 'roof').length);
+  expect(roofs).toBeGreaterThan(10);
+  await p.locator('[data-level="roof"]').click();
+  await expect(p.locator('[data-level="roof"]')).not.toHaveClass(/lit/);
+  expect(Number(await p.evaluate(() => document.body.dataset.shown))).toBe(all - roofs);
+  expect(await p.evaluate(() => DraftViewer.state.shown.some(f => f.kind === 'roof'))).toBe(false);
+  await p.locator('[data-level="roof"]').click();
+  expect(Number(await p.evaluate(() => document.body.dataset.shown))).toBe(all);
+});
+
+test('a SECTION keeps one side of the cut, and FLIP the other', async ({ page: p }) => {
+  await build3(p);
+  await p.locator('[data-cut="x"]').click();
+  const side = () => p.evaluate(() => {
+    const b = DraftViewer.state.bounds, mid = (b.lo.x + b.hi.x) / 2;
+    const xs = DraftViewer.state.shown.flatMap(f => f.pts.map(q => q.x));
+    return { mid, lo: Math.min(...xs), hi: Math.max(...xs), section: document.body.dataset.shown };
+  });
+  const a = await side();
+  expect(a.hi).toBeLessThanOrEqual(a.mid + 1e-6);
+  await p.locator('#cut-flip').click();
+  const b = await side();
+  expect(b.lo).toBeGreaterThanOrEqual(b.mid - 1e-6);
+  // PLAN takes the top off 4 ft over the lowest storey's floor.
+  await p.locator('[data-cut="y"]').click();
+  const top = await p.evaluate(() => Math.max(...DraftViewer.state.shown.flatMap(f => f.pts.map(q => q.y))));
+  const main = await p.evaluate(() => Math.min(...DraftViewer.state.stack.floors.map(l => l.floorTop)));
+  expect(top).toBeCloseTo(main + 4, 1);
+  await p.locator('[data-cut="off"]').click();
+  expect(await p.evaluate(() => DraftViewer.state.shown.length)).toBe(await p.evaluate(() => DraftViewer.state.faces.length));
+});
+
+test('what a section cuts open is drawn in the cut colour on the plain painter', async ({ page: p }) => {
+  await openViewer(p, 'plain');
+  const centre = await p.evaluate(() => {
+    // A closed 4 ft cube, wound outward, cut through the middle and looked
+    // into from the cut side: what shows is its own inside.
+    const v = (x, y, z) => ({ x: x * 2, y: y * 2, z: z * 2 });
+    const quad = (a, b, c, d) => ({ kind: 'test', colour: [0, 200, 0], pts: [a, b, c, d] });
+    const cube = [
+      quad(v(-1, -1, 1), v(1, -1, 1), v(1, 1, 1), v(-1, 1, 1)), quad(v(1, -1, -1), v(-1, -1, -1), v(-1, 1, -1), v(1, 1, -1)),
+      quad(v(1, -1, 1), v(1, -1, -1), v(1, 1, -1), v(1, 1, 1)), quad(v(-1, -1, -1), v(-1, -1, 1), v(-1, 1, 1), v(-1, 1, -1)),
+      quad(v(-1, 1, 1), v(1, 1, 1), v(1, 1, -1), v(-1, 1, -1)), quad(v(-1, -1, -1), v(1, -1, -1), v(1, -1, 1), v(-1, -1, 1)),
+    ];
+    const s = DraftViewer.state;
+    s.faces = cube;
+    s.bounds = { lo: v(-1, -1, -1), hi: v(1, 1, 1) };
+    s.cut = { axis: 'z', at: 0.5, flip: false };
+    DraftViewer.applyView();
+    s.camera = { target: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, dist: 30, fov: 40 };
+    s.painter.render(s.camera, { background: '#dfe6ee', ambient: 1, edges: false, section: true, cutColour: '#4a4744' });
+    const c = document.getElementById('plain');
+    const d = c.getContext('2d').getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data;
+    return [d[0], d[1], d[2]];
+  });
+  expect(centre).toEqual([0x4a, 0x47, 0x44]);
+});
+
+test('beams carry the floor over them, and a basement column stands up under one', async ({ page: p }) => {
+  const r = await build3(p, `
+    const b = s.beams.find(x => x.view === 'foundation' && x.mode !== 'dropped');
+    s.columns.push({ id: 900, point: { x: (b.start.x + b.end.x) / 2, y: 0, z: (b.start.z + b.end.z) / 2 },
+      levelId: 1, view: 'foundation', footing: 'pad24' });
+    return s;`);
+  expect(r.counts.beams).toBe(8);
+  expect(r.counts.posts).toBe(1);
+  const got = await p.evaluate(() => {
+    const ys = kind => DraftViewer.state.faces.filter(f => f.kind === kind).flatMap(f => f.pts.map(q => q.y));
+    return { beamTop: Math.max(...ys('beam')), postLow: Math.min(...ys('post')), postTop: Math.max(...ys('post')), beamLow: Math.min(...ys('beam')) };
+  });
+  // FLUSH: up under the main floor's sheathing.
+  expect(got.beamTop).toBeCloseTo(r.levels[3] - 0.75 / 12, 3);
+  // The post from the slab up to the beam's underside.
+  expect(got.postLow).toBeCloseTo(r.slabTop, 3);
+  expect(got.postTop).toBeCloseTo(got.beamLow, 3);
+});
+
+test('OPEN IN 3D on the drafter opens the viewer with the drawing as it stands', async ({ page: p }) => {
+  const h = require('./helpers');
+  await h.openModel(p);
+  await h.selectTool(p, 'Outline');
+  for (const [x, z] of [[-12, -9], [12, -9], [12, 9], [-12, 9]]) await h.clickWorld(p, x, z);
+  await p.keyboard.press('Enter');
+  await h.waitForSaved(p);
+  await h.climbTourToMain(p);
+  await p.locator('[data-build-house]').click();
+  await h.waitForSaved(p);
+  await p.goto('/MODEL.html?right=1&left=1&level=3');
+  const chip = p.locator('#strip-3d');
+  await expect(chip).toBeVisible();
+  // Stacked over HOUSE turn, the same size.
+  const [cube, turn] = await Promise.all([chip.boundingBox(), p.locator('#strip-rotate').boundingBox()]);
+  expect(Math.abs(cube.x - turn.x)).toBeLessThanOrEqual(1);
+  expect(cube.y + cube.height).toBeLessThanOrEqual(turn.y);
+  expect(Math.abs(cube.width - turn.width)).toBeLessThanOrEqual(1);
+  // Still nothing 3D on the drafter.
+  expect(await p.evaluate(() => typeof window.THREE)).toBe('undefined');
+  const [tab] = await Promise.all([p.waitForEvent('popup'), chip.click()]);
+  await tab.waitForFunction(() => Number(document.body.dataset.loaded) > 0, null, { timeout: 15000 });
+  const counts = await tab.evaluate(() => DraftViewer.state.counts);
+  expect(counts.walls).toBeGreaterThanOrEqual(4);
+  expect(counts.roofs).toBeGreaterThanOrEqual(1);
+});
+
+// ── PHASE 5: EXPORTS ─────────────────────────────────────────────────────
+//
+// jb, 25 Nov 2026: "ok do as many 'open' filetypes as you can", "cost 1
+// bone, leave it as viewer". Each file is read back here the way the
+// program that opens it would, so a writer that drifts from its format
+// fails here, not on jb's desk.
+
+const wallet = (p, n) => p.evaluate(n => localStorage.setItem('draft-bone-wallet',
+  JSON.stringify({ balance: n, lastDripAt: Date.now(), createdAt: Date.now() })), n);
+const bonesLeft = p => p.evaluate(() => DraftBoneWallet.read().balance);
+
+async function viewerWithPicker(p, mode = 'save') {
+  await p.addInitScript(mode => {
+    window.__files = [];
+    window.showSaveFilePicker = async opts => {
+      if (mode === 'cancel') throw new DOMException('cancelled', 'AbortError');
+      return { kind: 'file', name: opts.suggestedName, createWritable: async () => ({
+        write: async blob => { window.__files.push({ name: opts.suggestedName, size: blob.size }); }, close: async () => {} }) };
+    };
+  }, mode);
+  const v = await openViewer(p, 'plain');
+  await p.setInputFiles('#file', FIXTURE);
+  await p.waitForFunction(() => Number(document.body.dataset.loaded) > 0);
+  return v;
+}
+
+test('every export format writes a file that reads back with the house in it', async ({ page: p }) => {
+  const { errors } = await viewerWithPicker(p);
+  const r = await p.evaluate(async () => {
+    const X = DraftExportWriters, faces = DraftViewer.state.shown;
+    const { triCount, groups } = X.prepare(faces, 'ft', false);
+    const out = { triCount, groups: groups.length, ids: X.FORMATS.map(f => f.id) };
+    const bytes = async b => new Uint8Array(await b.arrayBuffer());
+    const xmlOk = text => !new DOMParser().parseFromString(text, 'application/xml').querySelector('parsererror');
+    // GLB: magic, version, length, the JSON chunk, then BIN.
+    let f = await X.exportAs('glb', faces, 'house');
+    let b = await bytes(f.blob);
+    const dv = new DataView(b.buffer);
+    const jsonLen = dv.getUint32(12, true);
+    const gltf = JSON.parse(new TextDecoder().decode(b.slice(20, 20 + jsonLen)));
+    out.glb = { name: f.name, magic: dv.getUint32(0, true), version: dv.getUint32(4, true), length: dv.getUint32(8, true), size: b.length,
+      jsonType: dv.getUint32(16, true), binType: dv.getUint32(20 + jsonLen + 4, true), asset: gltf.asset.version,
+      tris: gltf.meshes[0].primitives.reduce((s, pr) => s + gltf.accessors[pr.attributes.POSITION].count / 3, 0),
+      materials: gltf.materials.length };
+    // glTF text: the same, the buffer inside as a data URI.
+    f = await X.exportAs('gltf', faces, 'house');
+    const g2 = JSON.parse(await f.blob.text());
+    out.gltf = { name: f.name, dataUri: /^data:application\/octet-stream;base64,/.test(g2.buffers[0].uri) };
+    // OBJ + MTL in a zip.
+    f = await X.exportAs('obj', faces, 'house', 'ft');
+    let z = await DraftZipBundle.readZip(f.blob);
+    const objText = new TextDecoder().decode(z.find(e => e.name.endsWith('.obj')).bytes);
+    const mtlText = new TextDecoder().decode(z.find(e => e.name.endsWith('.mtl')).bytes);
+    out.obj = { name: f.name, files: z.map(e => e.name).sort(), mtllib: /^mtllib house\.mtl$/m.test(objText),
+      v: (objText.match(/^v /gm) || []).length, f: (objText.match(/^f /gm) || []).length,
+      usemtl: (objText.match(/^usemtl /gm) || []).length, newmtl: (mtlText.match(/^newmtl /gm) || []).length };
+    // STL: 80-byte header, a count, 50 bytes a triangle.
+    f = await X.exportAs('stl', faces, 'house', 'ft');
+    b = await bytes(f.blob);
+    out.stl = { name: f.name, count: new DataView(b.buffer).getUint32(80, true), size: b.length };
+    // 3MF: the zip a printer reads.
+    f = await X.exportAs('3mf', faces, 'house', 'mm');
+    z = await DraftZipBundle.readZip(f.blob);
+    const model = new TextDecoder().decode(z.find(e => e.name === '3D/3dmodel.model').bytes);
+    const doc = new DOMParser().parseFromString(model, 'application/xml');
+    out.threeMf = { name: f.name, files: z.map(e => e.name).sort(), xml: xmlOk(model), unit: doc.documentElement.getAttribute('unit'),
+      tris: doc.getElementsByTagName('triangle').length };
+    // PLY: the header says how many faces follow.
+    f = await X.exportAs('ply', faces, 'house', 'ft');
+    const head = new TextDecoder().decode((await bytes(f.blob)).slice(0, 400));
+    out.ply = { name: f.name, binary: /format binary_little_endian 1\.0/.test(head), faces: Number((head.match(/element face (\d+)/) || [])[1]),
+      colour: /property uchar red/.test(head) };
+    // COLLADA, X3D: well-formed XML naming its unit / scene.
+    f = await X.exportAs('dae', faces, 'house', 'in');
+    let t = await f.blob.text();
+    let d = new DOMParser().parseFromString(t, 'application/xml');
+    out.dae = { name: f.name, xml: xmlOk(t), unit: d.getElementsByTagName('unit')[0].getAttribute('name'),
+      up: d.getElementsByTagName('up_axis')[0].textContent, geometries: d.getElementsByTagName('geometry').length };
+    f = await X.exportAs('x3d', faces, 'house', 'ft');
+    t = await f.blob.text();
+    d = new DOMParser().parseFromString(t, 'application/xml');
+    out.x3d = { name: f.name, xml: xmlOk(t), shapes: d.getElementsByTagName('Shape').length };
+    f = await X.exportAs('wrl', faces, 'house', 'ft');
+    t = await f.blob.text();
+    out.wrl = { name: f.name, head: t.split('\n')[0], shapes: (t.match(/Shape \{/g) || []).length };
+    // DXF: R12 3DFACEs, every group code paired with a value.
+    f = await X.exportAs('dxf', faces, 'house', 'ft');
+    t = await f.blob.text();
+    const lines = t.trim().split('\n');
+    out.dxf = { name: f.name, even: lines.length % 2 === 0, ver: lines[lines.indexOf('$ACADVER') + 2], faces: (t.match(/^3DFACE$/gm) || []).length,
+      layers: [...new Set((t.match(/^3D-[A-Z_0-9]+$/gm) || []))].length, eof: lines[lines.length - 1] };
+    return out;
+  });
+  expect(r.ids).toEqual(['glb', 'gltf', 'obj', 'stl', '3mf', 'ply', 'dae', 'x3d', 'wrl', 'dxf']);
+  expect(r.triCount).toBeGreaterThan(500);
+  const T = r.triCount;
+  expect(r.glb).toMatchObject({ name: 'house.glb', magic: 0x46546c67, version: 2, jsonType: 0x4e4f534a, binType: 0x004e4942, asset: '2.0', tris: T });
+  expect(r.glb.length).toBe(r.glb.size);
+  expect(r.glb.materials).toBe(r.groups);
+  expect(r.gltf).toEqual({ name: 'house.gltf', dataUri: true });
+  expect(r.obj).toMatchObject({ name: 'house-obj.zip', files: ['house.mtl', 'house.obj'], mtllib: true, usemtl: r.groups, newmtl: r.groups });
+  expect(r.obj.f).toBeGreaterThan(100);
+  expect(r.stl).toEqual({ name: 'house.stl', count: T, size: 84 + 50 * T });
+  expect(r.threeMf).toEqual({ name: 'house.3mf', files: ['3D/3dmodel.model', '[Content_Types].xml', '_rels/.rels'], xml: true, unit: 'millimeter', tris: T });
+  expect(r.ply).toEqual({ name: 'house.ply', binary: true, faces: T, colour: true });
+  expect(r.dae).toEqual({ name: 'house.dae', xml: true, unit: 'inch', up: 'Y_UP', geometries: r.groups });
+  expect(r.x3d).toEqual({ name: 'house.x3d', xml: true, shapes: r.groups });
+  expect(r.wrl).toEqual({ name: 'house.wrl', head: '#VRML V2.0 utf8', shapes: r.groups });
+  expect(r.dxf).toMatchObject({ name: 'house.dxf', even: true, ver: 'AC1009', eof: 'EOF' });
+  expect(r.dxf.faces).toBeGreaterThan(T / 2);
+  expect(r.dxf.faces).toBeLessThanOrEqual(T);
+  expect(r.dxf.layers).toBeGreaterThan(4);
+  expect(errors).toEqual([]);
+});
+
+test('EXPORT: a file costs 1 bone once written, a cancel is free, and at 0 it is refused', async ({ page: p }) => {
+  await viewerWithPicker(p);
+  await wallet(p, 3);
+  await p.locator('#export-open').click();
+  await expect(p.locator('#export')).toBeVisible();
+  await expect(p.locator('[data-export]')).toHaveCount(10);
+  await expect(p.locator('[data-export-toll]')).toHaveText('Each file costs 1 bone (you have 3).');
+  // Units: the pick sticks, and an STL in mm is 304.8 times one in feet.
+  await p.locator('[data-unit="mm"]').click();
+  await expect(p.locator('[data-unit="mm"]')).toHaveClass(/lit/);
+  await p.locator('[data-export="stl"]').click();
+  await expect(p.locator('[data-export-toll]')).toHaveText('Saved repro-movie-2storey-garage.stl (1 bone, 2 left).');
+  expect(await bonesLeft(p)).toBe(2);
+  expect(await p.evaluate(() => window.__files.map(f => f.name))).toEqual(['repro-movie-2storey-garage.stl']);
+  // A section cut exports cut: fewer triangles than the whole house.
+  const whole = await p.evaluate(() => DraftExportWriters.prepare(DraftViewer.state.shown, 'ft').triCount);
+  await p.locator('[data-cut="x"]').click();
+  const cut = await p.evaluate(() => DraftExportWriters.prepare(DraftViewer.state.shown, 'ft').triCount);
+  expect(cut).toBeLessThan(whole);
+  await p.locator('[data-export="glb"]').click();
+  await expect(p.locator('[data-export-toll]')).toContainText('1 left');
+  await wallet(p, 0);
+  await p.locator('[data-export="obj"]').click();
+  await expect(p.locator('[data-export-toll]')).toHaveText(/An export costs 1 bone and you have 0\. .*Turning the house round is free\./);
+  await expect(p.locator('[data-export-toll]')).toHaveClass(/warn/);
+  expect(await p.evaluate(() => window.__files.length), 'nothing written at 0').toBe(2);
+});
+
+test('EXPORT: a cancelled save picker takes no bone', async ({ page: p }) => {
+  await viewerWithPicker(p, 'cancel');
+  await wallet(p, 2);
+  await p.locator('#export-open').click();
+  await p.locator('[data-export="ply"]').click();
+  await expect(p.locator('[data-export-toll]')).toContainText('the save was cancelled, no bone taken');
+  expect(await bonesLeft(p)).toBe(2);
+});

@@ -133,6 +133,7 @@
      the same green, painted. */
   #north-hit:hover, #north-hit:focus-visible { border-color: var(--draw-site-datum, #6a9a57); }
   #strip-fill:hover, #strip-fill:focus-visible { border-color: var(--accent); color: var(--accent); }
+  #strip-3d:hover, #strip-3d:focus-visible { border-color: var(--accent); color: var(--accent); }
   /* GOLD, AND THE SAME GOLD THE HOUSE MARK WEARS -- draw-origin, read here as
      the CSS twin of the key paintOrigin paints with. The LETTERING is tinted
      and the glow is the colour at strength, which is his "glow from the WHITE

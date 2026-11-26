@@ -7,12 +7,12 @@
 // the PAINTER chips let you force either one.
 //
 // window.DraftViewer is the page's handle, for the spec and for later phases
-// (exports read `state.faces`).
+// (EXPORT writes `state.shown`, what is on screen).
 (function () {
   'use strict';
 
   const $ = id => document.getElementById(id);
-  const LOOK = { background: '#dfe6ee', ambient: 0.42, edges: true };
+  const LOOK = { background: '#dfe6ee', ambient: 0.42, edges: true, section: false, cutColour: '#4a4744' };
   const PAINTER_KEY = 'draft-viewer-painter';
 
   const state = {
@@ -26,6 +26,10 @@
     frames: 0,
     lastDrawn: 0,
     brand: 'RUFF 3D',
+    groups: [],          // [{ id, name }] the level chips, lowest first
+    hidden: new Set(),   // group ids switched off
+    cut: { axis: 'off', at: 0.5, flip: false },
+    shown: [],           // the faces the painter has now (levels and cut applied)
   };
 
   // THE NAME FOLLOWS THE SKIN (jb, 26 Nov 2026: "ROUGH 3D / RUFF 3D"). The
@@ -74,7 +78,7 @@
     } else {
       state.painter = window.DraftPaintCanvas.create($('plain'));
     }
-    if (state.faces.length) state.painter.setFaces(state.faces);
+    if (state.faces.length) state.painter.setFaces(state.shown);
     showPainterChips();
   }
 
@@ -102,6 +106,93 @@
     });
   }
 
+  // ── LEVELS AND THE SECTION CUT ─────────────────────────────────────────
+  //
+  // Neither changes the house: they choose which of its faces go to the
+  // painter. A level chip leaves a whole level out (house-mesh.js tags each
+  // face with its level); the SECTION cuts every face at one plane and keeps
+  // one side, and the painter shows what the cut opens up in the cut colour.
+  function showLevelChips() {
+    const box = $('levels');
+    box.textContent = '';
+    state.groups.forEach(g => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.level = g.id;
+      b.textContent = g.name;
+      b.title = `Show or hide ${g.name}`;
+      b.classList.toggle('lit', !state.hidden.has(g.id));
+      b.addEventListener('click', () => {
+        if (state.hidden.has(g.id)) state.hidden.delete(g.id); else state.hidden.add(g.id);
+        b.classList.toggle('lit', !state.hidden.has(g.id));
+        applyView();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  // The cut plane: keep the side of `axis` at or below `value` (or above,
+  // flipped). x and z cut upright, y takes the top off like a plan.
+  function cutPlane() {
+    const c = state.cut;
+    if (c.axis === 'off' || !state.bounds) return null;
+    const lo = state.bounds.lo[c.axis], hi = state.bounds.hi[c.axis];
+    // PLAN's slider runs from the slab to the ridge; a little in from each
+    // end on the others so the far end still cuts something.
+    const value = lo + (hi - lo) * c.at;
+    return { axis: c.axis, value, keepBelow: !c.flip };
+  }
+
+  // Sutherland-Hodgman against one axis-aligned plane, keeping each kept
+  // edge's seam flag; an edge made along the cut is a real edge (it outlines
+  // the section).
+  function clipFace(f, plane) {
+    const { axis, value, keepBelow } = plane;
+    const inside = p => (keepBelow ? p[axis] <= value + 1e-9 : p[axis] >= value - 1e-9);
+    const pts = f.pts, n = pts.length;
+    if (pts.every(inside)) return f;
+    if (!pts.some(inside)) return null;
+    const out = [], seams = [];
+    const cross = (p, q) => {
+      const t = (value - p[axis]) / (q[axis] - p[axis]);
+      return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t, z: p.z + (q.z - p.z) * t };
+    };
+    for (let i = 0; i < n; i += 1) {
+      const p = pts[i], q = pts[(i + 1) % n];
+      const seam = !!(f.seams && f.seams[i]);
+      const pin = inside(p), qin = inside(q);
+      if (pin) {
+        out.push(p); seams.push(seam);
+        if (!qin) { out.push(cross(p, q)); seams.push(false); }
+      } else if (qin) {
+        out.push(cross(p, q)); seams.push(seam);
+      }
+    }
+    if (out.length < 3) return null;
+    const g = { ...f, pts: out };
+    if (seams.some(Boolean)) g.seams = seams; else delete g.seams;
+    return g;
+  }
+
+  function applyView() {
+    const plane = cutPlane();
+    let list = state.faces.filter(f => !f.group || !state.hidden.has(f.group));
+    if (plane) list = list.map(f => clipFace(f, plane)).filter(Boolean);
+    state.shown = list;
+    LOOK.section = !!plane;
+    if (state.painter) state.painter.setFaces(list);
+    document.body.dataset.shown = String(list.length);
+    $('export-open').disabled = !list.length;
+    redraw();
+  }
+
+  function showCutChips() {
+    document.querySelectorAll('[data-cut]').forEach(b => b.classList.toggle('lit', b.dataset.cut === state.cut.axis));
+    $('cut-at').disabled = state.cut.axis === 'off';
+    $('cut-flip').disabled = state.cut.axis === 'off';
+    $('cut-flip').classList.toggle('lit', state.cut.flip);
+  }
+
   // ── OPENING A FILE ─────────────────────────────────────────────────────
   async function readDrawing(file) {
     const Z = window.DraftZipBundle;
@@ -117,13 +208,18 @@
     const built = window.DraftHouseMesh.build(saved);
     state.faces = built.faces;
     state.counts = built.counts;
+    state.stack = built.stack;
     state.name = name || 'drawing';
     state.camera = window.DraftViewerCamera.fit(built.bounds);
-    if (state.painter) state.painter.setFaces(state.faces);
+    state.bounds = built.bounds;
+    state.groups = built.groups || [];
+    state.hidden = new Set();
+    showLevelChips();
+    applyView();
     $('drop-hint').hidden = state.faces.length > 0;
     document.title = `${state.name} - ${state.brand}`;
     const c = built.counts;
-    const extra = [[c.windows, 'windows'], [c.doors, 'doors'], [c.stairs, 'stairs'], [c.decks, 'decks'], [c.holograms, 'holograms']]
+    const extra = [[c.windows, 'windows'], [c.doors, 'doors'], [c.stairs, 'stairs'], [c.decks, 'decks'], [c.beams, 'beams'], [c.posts, 'posts'], [c.holograms, 'holograms']]
       .filter(([n]) => n > 0).map(([n, w]) => `, ${n} ${n === 1 ? w.replace(/s$/, '') : w}`).join('');
     setStatus(`${state.name}: ${c.walls} walls, ${c.foundationWalls} foundation walls, ${c.floors} floors, ${c.roofs} roofs, ${c.gables} gable ends${extra}`
       + ` (${Math.round(performance.now() - t0)} ms)`, !state.faces.length);
@@ -149,9 +245,11 @@
   function wireControls(stage) {
     const C = window.DraftViewerCamera;
     let drag = null;
-    stage.addEventListener('contextmenu', e => e.preventDefault());
+    // The EXPORT panel floats over the stage: presses on it are its own.
+    const onPanel = e => !!(e.target.closest && e.target.closest('#export'));
+    stage.addEventListener('contextmenu', e => { if (!onPanel(e)) e.preventDefault(); });
     stage.addEventListener('pointerdown', e => {
-      if (!state.camera) return;
+      if (!state.camera || onPanel(e)) return;
       stage.setPointerCapture(e.pointerId);
       drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.button === 1 || e.shiftKey || e.ctrlKey };
     });
@@ -167,7 +265,7 @@
     stage.addEventListener('pointerup', end);
     stage.addEventListener('pointercancel', end);
     stage.addEventListener('wheel', e => {
-      if (!state.camera) return;
+      if (!state.camera || onPanel(e)) return;
       e.preventDefault();
       state.camera = C.zoom(state.camera, Math.exp(e.deltaY * 0.0015));
       redraw();
@@ -214,6 +312,136 @@
     redraw();
   }
 
+  // ── EXPORT ─────────────────────────────────────────────────────────────
+  //
+  // 1 bone a file (jb, 25 Nov 2026), taken once the file is written: a
+  // cancelled save picker costs nothing, and at 0 bones the press is refused
+  // in words. What goes in the file is what is on screen (state.shown), so
+  // a level switched off or a section cut exports that way.
+  const UNIT_KEY = 'draft-viewer-unit';
+  const exportCost = () => {
+    const W = window.DraftBoneWallet;
+    return W && W.COSTS.export3d ? W.COSTS.export3d : 1;
+  };
+  const bonesWord = n => (window.DraftBoneWallet ? window.DraftBoneWallet.bonesWord(n) : `${n} bone${n === 1 ? '' : 's'}`);
+  const held = () => (window.DraftBoneWallet ? window.DraftBoneWallet.read().balance : 0);
+
+  function exportUnit() {
+    let u = null;
+    try { u = localStorage.getItem(UNIT_KEY); } catch (e) { u = null; }
+    return window.DraftExportWriters.UNITS[u] ? u : 'ft';
+  }
+
+  function showExportToll(said) {
+    const el = $('export-toll');
+    const cost = exportCost(), have = held();
+    const short = have < cost;
+    el.textContent = said || (short
+      ? `An export costs ${bonesWord(cost)} and you have ${have}. A free bone drips in every hour. Turning the house round is free.`
+      : `Each file costs ${bonesWord(cost)} (you have ${have}).`);
+    el.classList.toggle('warn', short && !said);
+  }
+
+  function showExportPanel() {
+    const X = window.DraftExportWriters;
+    const unit = exportUnit();
+    document.querySelectorAll('[data-unit]').forEach(b => b.classList.toggle('lit', b.dataset.unit === unit));
+    const box = $('export-formats');
+    box.textContent = '';
+    X.FORMATS.forEach(f => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.export = f.id;
+      const label = document.createElement('b');
+      label.textContent = f.label;
+      const note = document.createElement('span');
+      note.textContent = f.metresOnly || unit === 'm' ? f.note : `${f.note}, ${X.UNITS[unit].label.toLowerCase()}`;
+      b.append(label, note);
+      b.addEventListener('click', () => exportFile(f.id));
+      box.appendChild(b);
+    });
+    showExportToll();
+  }
+
+  // Write the blob where the person says (the save picker), or into the
+  // downloads folder where the browser has no picker. Resolves false when
+  // the picker was cancelled.
+  async function writeOut(file) {
+    if (window.showSaveFilePicker) {
+      let handle;
+      try {
+        const ext = file.name.slice(file.name.lastIndexOf('.'));
+        handle = await window.showSaveFilePicker({
+          suggestedName: file.name,
+          types: [{ description: `${ext.slice(1).toUpperCase()} file`, accept: { [file.mime || 'application/octet-stream']: [ext] } }],
+        });
+      } catch (e) {
+        if (e && e.name === 'AbortError') return false;
+        throw e;
+      }
+      const w = await handle.createWritable();
+      await w.write(file.blob);
+      await w.close();
+      return true;
+    }
+    const url = URL.createObjectURL(file.blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = file.name; a.hidden = true;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return true;
+  }
+
+  let exporting = false;
+  async function exportFile(id) {
+    if (exporting || !state.shown.length) return null;
+    const W = window.DraftBoneWallet;
+    const cost = exportCost();
+    if (!W || held() < cost) { showExportToll(); return null; }
+    const format = window.DraftExportWriters.FORMATS.find(f => f.id === id);
+    const unit = format.metresOnly ? 'm' : exportUnit();
+    const base = String(state.name || 'house').replace(/\.(draft|json|zip)$/i, '').replace(/[\\/:*?"<>|]+/g, '-') || 'house';
+    exporting = true;
+    try {
+      showExportToll(`Writing the ${format.label}...`);
+      const file = await window.DraftExportWriters.exportAs(id, state.shown, base, unit);
+      const written = await writeOut(file);
+      if (!written) { showExportToll(`${format.label} not saved: the save was cancelled, no bone taken. Each file costs ${bonesWord(cost)} (you have ${held()}).`); return null; }
+      W.spend(cost);
+      window.dispatchEvent(new CustomEvent('draft-bones-changed'));
+      showExportToll(`Saved ${file.name} (${bonesWord(cost)}, ${held()} left).`);
+      document.body.dataset.exported = file.name;
+      return file;
+    } catch (e) {
+      showExportToll(`Could not write the ${format.label}: ${e && e.message ? e.message : e}. No bone taken.`);
+      return null;
+    } finally {
+      exporting = false;
+    }
+  }
+
+  function wireExport() {
+    $('export-open').addEventListener('click', () => {
+      const panel = $('export');
+      panel.hidden = !panel.hidden;
+      $('export-open').classList.toggle('lit', !panel.hidden);
+      if (!panel.hidden) showExportPanel();
+    });
+    $('export-close').addEventListener('click', () => {
+      $('export').hidden = true;
+      $('export-open').classList.remove('lit');
+    });
+    document.querySelectorAll('[data-unit]').forEach(b => b.addEventListener('click', () => {
+      try { localStorage.setItem(UNIT_KEY, b.dataset.unit); } catch (e) { /* private window */ }
+      showExportPanel();
+    }));
+    // A bone spent in a drafter tab, or dripped in, shows here too.
+    window.addEventListener('storage', e => { if (e.key === 'draft-bone-wallet' && !$('export').hidden) showExportToll(); });
+    window.addEventListener('draft-bones-changed', () => { if (!$('export').hidden && !exporting) showExportToll(); });
+  }
+
   // ── BOOT ───────────────────────────────────────────────────────────────
   function boot() {
     const brand = brandName();
@@ -242,6 +470,25 @@
       $('edges').classList.toggle('lit', LOOK.edges);
       redraw();
     });
+    document.querySelectorAll('[data-cut]').forEach(btn => btn.addEventListener('click', () => {
+      state.cut.axis = btn.dataset.cut;
+      state.cut.flip = false;
+      // A plan cut starts at about window height on the lowest storey; an
+      // upright one through the middle.
+      state.cut.at = state.cut.axis === 'y' ? planCutStart() : 0.5;
+      $('cut-at').value = String(Math.round(state.cut.at * 1000));
+      showCutChips();
+      applyView();
+    }));
+    $('cut-at').addEventListener('input', e => {
+      state.cut.at = Number(e.target.value) / 1000;
+      applyView();
+    });
+    $('cut-flip').addEventListener('click', () => {
+      state.cut.flip = !state.cut.flip;
+      showCutChips();
+      applyView();
+    });
     document.querySelectorAll('[data-painter]').forEach(btn => btn.addEventListener('click', () => {
       state.painterWanted = btn.dataset.painter;
       writePref(state.painterWanted);
@@ -256,10 +503,48 @@
       if (file) openFile(file);
     });
     setStatus('Open a .draft or a SAVE AS ZIP to see the house.');
+    wireExport();
+    listenForDrafter();
     document.body.dataset.ready = '1';
   }
 
-  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw };
+  // Where PLAN starts: 4 ft over the lowest storey's floor, as a plan cuts.
+  function planCutStart() {
+    if (!state.bounds) return 0.5;
+    const lo = state.bounds.lo.y, hi = state.bounds.hi.y;
+    const floors = state.stack ? state.stack.floors.map(l => l.floorTop) : [];
+    const at = floors.length ? Math.min(...floors) + 4 : lo + (hi - lo) * 0.5;
+    return Math.max(0, Math.min(1, (at - lo) / Math.max(hi - lo, 1e-6)));
+  }
+
+  // ── OPEN IN 3D, FROM THE DRAFTER ───────────────────────────────────────
+  //
+  // MODEL's OPEN IN 3D chip opens this page as a new tab (?from=drafter)
+  // and hands it the drawing as it stands, unsaved edits and all. This page
+  // says it is ready; the drafter answers with the drawing. Same site only,
+  // both ways. Nothing here is loaded by MODEL: it only opens a tab.
+  function listenForDrafter() {
+    const from = new URLSearchParams(location.search).get('from');
+    if (from !== 'drafter') return;
+    window.addEventListener('message', e => {
+      if (e.origin !== location.origin || !e.data || e.data.type !== 'draft-viewer-drawing') return;
+      try {
+        loadDrawing(e.data.drawing, e.data.name || 'drawing');
+      } catch (err) {
+        setStatus(`Could not build the drawing: ${err && err.message ? err.message : err}`, true);
+        document.body.dataset.loaded = 'error';
+      }
+    });
+    const opener = window.opener;
+    if (opener && !opener.closed) {
+      setStatus('Bringing the drawing over from the drafter...');
+      try { opener.postMessage({ type: 'draft-viewer-ready' }, location.origin); } catch (e) { /* the drafter went away */ }
+    } else {
+      setStatus('Open a .draft or a SAVE AS ZIP to see the house. (The drafter tab that opened this one is gone.)');
+    }
+  }
+
+  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView, exportFile };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
