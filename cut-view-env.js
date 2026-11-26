@@ -84,6 +84,7 @@ if (!window.DraftCutViewEnv) {
         ...(wall?.finishColor ? { finishColor: wall.finishColor } : {}),
         ...(Array.isArray(wall?.finishBands) && wall.finishBands.length
           ? { finishBands: wall.finishBands } : {}),
+        ...(wall?.gableFinish ? { gableFinish: wall.gableFinish } : {}),
         // WHICH FACE THE LINE IS. cut-view.js's section stands a wall's band
         // half its thickness inside its reference line, so an exterior wall
         // keeps the outline on its exterior face and lines up with the

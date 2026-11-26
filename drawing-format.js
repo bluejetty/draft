@@ -780,10 +780,15 @@ if (!window.DraftDrawingFormat) {
             wallId: String(wall?.id || '').trim() || null, index, band, reason })
           : null))
       .filter(Boolean);
+    // THE GABLE'S OWN FINISH (jb, 26 Nov 2026): the triangle over this
+    // wall's plate as a separate area. Absent = the wall carries on up.
+    const askedGable = legacy[wall?.gableFinish] || wall?.gableFinish;
+    const gable = ids.includes(askedGable) ? askedGable : null;
     return {
       ...(base ? { finish: base } : {}),
       ...(color ? { finishColor: color } : {}),
       ...(bands.length ? { finishBands: bands } : {}),
+      ...(gable ? { gableFinish: gable } : {}),
     };
   };
 

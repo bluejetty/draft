@@ -270,6 +270,18 @@
           </div>
           <p class="empty" id="dormer-note"></p>
         </div>
+        <!-- A WALL'S GABLE AS ITS OWN AREA (jb, 26 Nov 2026: "the 2nd floor
+             wall and gable are the same BAND, can we make the gable area a
+             seperate BAND area?"). Clicked in the triangle; it carries the
+             wall's finish up until it is given its own. -->
+        <div id="gable-props" hidden>
+          <div class="prop">
+            <label for="gable-finish">Gable</label>
+            <select id="gable-finish"></select>
+          </div>
+          <p class="empty" id="gable-note"></p>
+          <button class="btn" id="gable-wall" style="margin-top:6px; width:100%">The wall under it</button>
+        </div>
         <div id="wall-props" hidden>
           <div class="prop">
             <label for="base-finish">Whole wall</label>
@@ -597,6 +609,8 @@
       document.getElementById('base-finish').innerHTML = finishOptions();
       document.getElementById('band-finish').innerHTML = finishOptions();
       document.getElementById('dormer-finish').innerHTML = finishOptions();
+      document.getElementById('gable-finish').innerHTML =
+        '<option value="">Same as the wall</option>' + finishOptions();
 
       const elevList = document.getElementById('elev-list');
       const paintElevList = () => {
@@ -628,6 +642,12 @@
         if (!faces.length) return null;
         return { sill: Math.min(...faces.map(f => f.foot)), plate: Math.max(...faces.map(f => f.plate)),
           head: Math.max(...faces.map(f => f.head)) };
+      };
+      // A WALL'S GABLE IS PICKED AS `gable:<wall id>`, which no wall id can
+      // be either, so the wall's own rail stays shut while the gable's is open.
+      const storedGableWall = () => {
+        const m = /^gable:(.+)$/.exec(picked || '');
+        return m ? (drawing?.walls || []).find(w => String(w.id) === m[1]) || null : null;
       };
       // A DORMER IS PICKED AS `dormer:<roof id>:<its index>`, which no wall id
       // can be, so storedWall answers nothing while one is in hand.
@@ -818,7 +838,16 @@
         const dormer = storedDormer();
         document.getElementById('wall-props').hidden = !wall;
         document.getElementById('dormer-props').hidden = !dormer;
-        document.getElementById('pick-note').hidden = !!wall || !!dormer;
+        const gableWall = storedGableWall();
+        document.getElementById('gable-props').hidden = !gableWall;
+        document.getElementById('pick-note').hidden = !!wall || !!dormer || !!gableWall;
+        if (gableWall) {
+          document.getElementById('gable-finish').value = gableWall.gableFinish || '';
+          const under = WT.finishById(gableWall.finish || WT.DEFAULT_FINISH_ID).label;
+          document.getElementById('gable-note').textContent = gableWall.gableFinish
+            ? 'Its own finish, separate from the wall\u2019s bands.'
+            : `Carries the wall up (${under} and its bands) until you pick one.`;
+        }
         if (dormer) {
           const under = dormerUnder();
           document.getElementById('dormer-finish').value = dormer.gable.finish || under || WT.DEFAULT_FINISH_ID;
@@ -1033,8 +1062,7 @@
       // painter, then repaint and save. `null` in a patch REMOVES the key --
       // the record's own rule is conditional keys, never invented, and a wall
       // with no bands must not carry an empty list.
-      const writeWall = patch => {
-        const wall = storedWall();
+      const writeWall = (patch, wall = storedWall()) => {
         if (!wall) return;
         Object.entries(patch).forEach(([key, value]) => {
           if (value === null) delete wall[key];
@@ -1054,6 +1082,18 @@
         save();
       };
 
+      document.getElementById('gable-finish').addEventListener('change', event => {
+        const wall = storedGableWall();
+        if (!wall) return;
+        writeWall({ gableFinish: event.target.value || null }, wall);
+      });
+      document.getElementById('gable-wall').addEventListener('click', () => {
+        const wall = storedGableWall();
+        if (!wall) return;
+        picked = String(wall.id);
+        paintElevation();
+        paintProps();
+      });
       document.getElementById('dormer-finish').addEventListener('change', event => {
         const dormer = storedDormer();
         if (!dormer) return;
@@ -1365,6 +1405,8 @@
           const g = list[i];
           if (u < g.lo || u > g.hi) continue;
           if (e < g.foot || e > (g.outlines ? topOfPick(g, u) : g.head)) continue;
+          // OVER THE PLATE, IN THE TRIANGLE: the gable, its own area.
+          if (g.outlines && g.plate != null && e > g.plate + 0.01) return { gable: g };
           return g;
         }
         // THE TRIANGLE BESIDE ITS WALL: a gable infill can run past the
@@ -1373,7 +1415,7 @@
           && e >= o.floor && e <= (topOfOutline(o, u) ?? -Infinity));
         if (inGable) {
           const owner = list.find(g => String(g.wall.id) === inGable.wallId);
-          if (owner) return owner;
+          if (owner) return { gable: owner };
         }
         return null;
       };
@@ -1396,6 +1438,25 @@
           ctx.moveTo(X(dg.lo), Y(dg.base)); ctx.lineTo(X(dg.mid), Y(dg.apex)); ctx.lineTo(X(dg.hi), Y(dg.base));
           ctx.closePath();
           ctx.stroke();
+          ctx.restore();
+          return;
+        }
+        const gableWall = storedGableWall();
+        if (gableWall) {
+          ctx.save();
+          ctx.strokeStyle = window.__reSkin['accent-mark'];
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          pickables(stack).filter(f => String(f.wall.id) === String(gableWall.id)).forEach(f =>
+            (f.outlines || []).forEach(o => {
+              if (!o.tops.some(t => t.top > f.plate + 0.05)) return;
+              ctx.beginPath();
+              ctx.moveTo(X(o.tops[0].u), Y(f.plate));
+              o.tops.forEach(t => ctx.lineTo(X(t.u), Y(Math.max(t.top, f.plate))));
+              ctx.lineTo(X(o.tops[o.tops.length - 1].u), Y(f.plate));
+              ctx.closePath();
+              ctx.stroke();
+            }));
           ctx.restore();
           return;
         }
@@ -1439,6 +1500,13 @@
             say(`Fascia of ${roofLabel(roofs[index], index)}, ${WT.fasciaFinishById(WT.fasciaFinishIdOf(roofs[index])).label}`);
             return;
           }
+        }
+        if (face?.gable) {
+          picked = `gable:${face.gable.wall.id}`;
+          paintElevation();
+          paintProps();
+          say(`Gable over the wall, ${(face.gable.hi - face.gable.lo).toFixed(1)} ft on ${currentElev}`);
+          return;
         }
         if (face?.dormer) {
           const dg = face.dormer;

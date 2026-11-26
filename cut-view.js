@@ -320,9 +320,16 @@ if (!window.DraftCutView) {
   // at 8'-1 1/8" over a 1'-2" floor, and a wainscot that means to stop
   // short stops feet short, not inches.
   const CARRY_EPS_FT = 0.5;
+  // A WALL WHOSE GABLE HAS ITS OWN FINISH (`gableFinish`, jb 26 Nov 2026)
+  // keeps its bands to itself: the gable is a separate area.
+  const gableFinishIdOf = wall => {
+    const id = wall && typeof wall.gableFinish === 'string' ? wall.gableFinish : null;
+    return id && finishById(id)?.id === id ? id : null;
+  };
   const carriedBands = (wall, lines) => {
     const bands = Array.isArray(wall && wall.finishBands) ? wall.finishBands : [];
     if (!lines || !Number.isFinite(lines.plate) || !Number.isFinite(lines.head)) return bands;
+    if (gableFinishIdOf(wall) && lines.head > lines.plate + 0.05) return bands;
     return bands.map(band => {
       if (!band || band.toTop) return band;
       const span = bandRange(band, lines);
@@ -331,6 +338,8 @@ if (!window.DraftCutView) {
     });
   };
   const skinAtFt = (wall, elev, lines) => {
+    if (lines && gableFinishIdOf(wall) && lines.head > lines.plate + 0.05
+      && elev >= lines.plate) return gableFinishIdOf(wall);
     if (!finishAtFt || !lines) return skinOf(wall);
     return finishAtFt({ ...wall, finishBands: carriedBands(wall, lines) }, elev, lines).id
       || skinOf(wall);
@@ -6772,6 +6781,34 @@ if (!window.DraftCutView) {
       // it is the default, and the record's rule is that only a departure from
       // the default is written down.
       paintSillLedges(geom, lines, bands);
+      // ── THE GABLE IS ITS OWN AREA (jb, 26 Nov 2026) ──────────────────
+      //
+      // "the 2nd floor wall and gable are the same BAND, can we make the
+      // gable area a seperate BAND area?" A wall's `gableFinish` clads the
+      // triangle over its plate -- cedar shake in the gable over siding,
+      // say -- painted last, so it wins over the wall's own bands there.
+      // Where it differs from what the wall wears at its plate, the plate
+      // is a seam and gets its line.
+      const gableId = gableFinishIdOf(wall);
+      if (gableId && lines.head > lines.plate + 0.05) {
+        const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb);
+        const yP = Y(lines.plate), yH = Y(lines.head);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x0, yH); ctx.lineTo(x1, yH); ctx.lineTo(x1, yP); ctx.lineTo(x0, yP);
+        ctx.closePath();
+        ctx.clip();
+        ctx.fillStyle = C.face;
+        ctx.fillRect(x0, yH, x1 - x0, yP - yH);
+        FP.drawFinish(ctx, boxAt(lines.plate, lines.head), finishById(gableId), C);
+        ctx.restore();
+        if (!sameSkin(gableId, skinAtFt(wall, lines.plate - 0.01, lines))) {
+          ctx.strokeStyle = INK; ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x0, yP); ctx.lineTo(x1, yP);
+          ctx.stroke();
+        }
+      }
       ctx.restore();
     };
 
