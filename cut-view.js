@@ -1584,6 +1584,117 @@ if (!window.DraftCutView) {
       .filter(Boolean);
   }
 
+  // ── THE BEAMS AND POSTS, STOOD IN ELEVATION (jb, 26 Nov 2026) ──────────
+  //
+  // "we should show the columns on the sections". One answer for every
+  // painter that stands framing up off the plan -- the sections here and the
+  // 3D viewer (viewer/house-mesh.js) -- so the two cannot disagree.
+  //
+  // A BEAM carries a floor. FOUNDATION's (or one filed on level 1) carries
+  // the lowest storey; one on a FLOOR LAYOUT ('floor') sits in that level's
+  // own floor; one on a storey's walls plan ('plan') carries the storey
+  // above it. FLUSH sits in the joist depth under the sheathing; DROPPED
+  // hangs its full depth under the joists. No beam size is stored, so it is
+  // a joist deep and 3-ply (4 1/2") wide.
+  //
+  // A POST is filed with the beam it holds up (stairFrameFiling, the mid-span
+  // pass), so it carries what its beam carries: it runs from the floor it
+  // stands on up to the underside of a beam of the same filing over its
+  // point, else to the underside of that floor. A FOUNDATION post stands on
+  // the slab with its pad footing poured under it; a FLOOR LAYOUT post
+  // stands on the storey below; a walls-plan post stands on its own storey.
+  // A pile in the open is pilePosts' (cap, base and all). A tour-placed pile
+  // under a garage's grade beam and a post built into a wall are left to the
+  // concrete and the wall they stand in.
+  const BEAM_WIDE_IN = 4.5;
+  const FRAMING_SHEATHING_FT = 0.75 / 12;
+  const BEAM_ON_POST_FT = 0.4;
+  // A pad's depth by its footing (build-house COLUMN_FOOTINGS notes: 36x36x8,
+  // 42x42x10); a typed custom pad keeps 8".
+  const PAD_DEPTH_IN = Object.freeze({ pad36: 8, pad42: 10 });
+  function framingPieces(env, stack) {
+    const empty = { beams: [], posts: [] };
+    if (!stack || !env) return empty;
+    const G = geo();
+    const bh = window.DraftBuildHouse;
+    const storeys = stack.floors.slice().sort((a, b) => a.floorTop - b.floorTop);
+    const byId = id => stack.floors.find(level => Number(level.id) === Number(id)) || null;
+    const above = id => {
+      const here = byId(id);
+      return here ? storeys.find(l => l.floorTop > here.floorTop + 0.01) || null : null;
+    };
+    const below = level => (level
+      ? storeys.filter(l => l.floorTop < level.floorTop - 0.5).pop() || null : null);
+    const isFdn = item => (item.view || 'plan') === 'foundation' || Number(item.levelId) === 1;
+    const filing = item => (isFdn(item) ? 'fdn' : `${item.view || 'plan'}:${Number(item.levelId)}`);
+    const carriedBy = item => {
+      if (isFdn(item)) return storeys[0] || null;
+      if ((item.view || 'plan') === 'floor') return byId(item.levelId);
+      return above(item.levelId);
+    };
+    const beams = (typeof env.beams === 'function' ? env.beams() || [] : [])
+      .filter(beam => beam && beam.start && beam.end)
+      .map(beam => {
+        const storey = carriedBy(beam);
+        if (!storey) return null;
+        const deep = Math.max(0.5, storey.floorTop - storey.floorBottom - FRAMING_SHEATHING_FT);
+        const top = beam.mode === 'dropped' ? storey.floorBottom : storey.floorTop - FRAMING_SHEATHING_FT;
+        return { beam, a: beam.start, b: beam.end, top, bottom: top - deep,
+          mode: beam.mode === 'dropped' ? 'dropped' : 'flush', widthIn: BEAM_WIDE_IN,
+          filing: filing(beam), levelId: storey.id };
+      })
+      .filter(Boolean);
+    const beamUnder = (p, key) => beams.filter(b => b.filing === key
+      && G.pointToSegment(p, { start: b.a, end: b.b }).d <= BEAM_ON_POST_FT)
+      .reduce((low, b) => (low == null || b.bottom < low ? b.bottom : low), null);
+    const fdn = stack.foundation;
+    let piles = [];
+    try { piles = pilePosts(env, stack); } catch (e) { piles = []; }
+    const posts = piles.map(pp => ({ ...pp, kind: 'pile', pad: null }));
+    const taken = new Set(piles.map(pp => pp.column));
+    const concrete = (env.floors() || []).filter(f => f.points && f.points.length >= 3
+      && (f.view || 'plan') === 'foundation' && !f.garage);
+    (env.columns ? env.columns() : []).forEach(column => {
+      if (!column || !column.point || taken.has(column) || column.inWall) return;
+      const footing = bh && bh.footingFor ? bh.footingFor(column.footing) : null;
+      if (String(column.footing || '').startsWith('pile') || (footing && footing.post)) return;
+      const p = column.point;
+      const spec = bh && bh.postSpec ? bh.postSpec(column) : null;
+      const sizeIn = spec ? spec.sizeIn : 3;
+      const shape = spec ? spec.shape : 'round';
+      const base = spec && spec.base ? spec.base : null;
+      const key = filing(column);
+      const held = carriedBy(column);
+      let seat, top, pad = null, levelId = null;
+      if (isFdn(column)) {
+        // On the slab, inside the house's concrete; its pad under the slab.
+        if (!concrete.some(f => G.pointInLoop(p, f.points))) return;
+        seat = fdn.slabTop;
+        top = beamUnder(p, key) ?? (held ? held.floorBottom : fdn.wallTop);
+        const padIn = bh && bh.padSizeIn ? bh.padSizeIn(column) : (footing ? footing.sizeIn : 36);
+        const depthIn = PAD_DEPTH_IN[column.footing] || 8;
+        pad = { sizeIn: padIn, top: fdn.wallBottom, bottom: fdn.wallBottom - depthIn / 12 };
+      } else if ((column.view || 'plan') === 'floor') {
+        if (!held) return;
+        const under = below(held);
+        seat = under ? under.floorTop : fdn.slabTop;
+        top = beamUnder(p, key) ?? held.floorBottom;
+        levelId = under ? under.id : null;
+      } else {
+        const storey = byId(column.levelId);
+        if (!storey) return;
+        seat = storey.floorTop;
+        top = beamUnder(p, key) ?? (held ? held.floorBottom : storey.wallTop);
+        levelId = storey.id;
+      }
+      const foot = seat + (base ? base.liftIn / 12 : 0);
+      if (!(top - foot > 0.2)) return;
+      posts.push({ column, point: p, foot, seat, top, sizeIn, shape, cap: null, base,
+        kind: isFdn(column) ? 'telepost' : 'post', pad, levelId });
+    });
+    return { beams, posts };
+  }
+
   // Roof surface height over a plan point, from the roof's REAL face
   // polygons (geometry-2d builds them off the straight skeleton): locate the
   // containing face, evaluate its plane. The old rule — min over every eave
@@ -3403,6 +3514,9 @@ if (!window.DraftCutView) {
     // drive-under roof on posts, its pile caps shown "from under grade to
     // where the wood starts").
     drawSectionPosts(env, ctx, cut, axis, stack, X, Y, C, INK, ink, yBottom);
+    // AND EVERY OTHER POST AND THE BEAMS THEY CARRY (jb, 26 Nov 2026: "we
+    // should show the columns on the sections").
+    drawSectionFraming(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, INK, ink, cutSolids);
 
     // Roof profile over everything: the sampled top chord plus fascia drops.
     const lit = roofSamples.filter(s => s.elev != null);
@@ -3597,6 +3711,181 @@ if (!window.DraftCutView) {
       });
     ctx.restore();
     if (ctx.canvas && ctx.canvas.setAttribute) ctx.canvas.setAttribute('data-section-posts', JSON.stringify(drawn));
+  }
+
+  // ── THE BEAMS AND THE OTHER POSTS A SECTION SEES (jb, 26 Nov 2026) ─────
+  //
+  // "we should show the columns on the sections". framingPieces stands them
+  // up; this draws them the way a section draws anything:
+  //
+  //   CUT -- a post the line passes through is drawn bold and filled; a beam
+  //   the line crosses is its own cross-section, a box with an X (a member
+  //   cut through), flush in the floor or dropped under it. A beam the line
+  //   runs along is drawn bold its whole length.
+  //
+  //   BEYOND -- looking the way the arrow points: posts and DROPPED beams in
+  //   the lighter line of everything seen, hidden behind every wall and floor
+  //   band the cut slices (cutSolids, as the stairs are) and behind a wall
+  //   standing between them and the cut. A FLUSH beam beyond lies inside the
+  //   floor and is not seen.
+  //
+  // A FOUNDATION post's pad is dashed under the slab: it is in the ground.
+  // Pile posts in the open stay drawSectionPosts'.
+  function drawSectionFraming(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, INK, ink, cutSolids = []) {
+    const { beams, posts: all } = framingPieces(env, stack);
+    const posts = all.filter(post => post.kind !== 'pile');
+    if (!beams.length && !posts.length) return;
+    const dir = cut.dirVec || { x: -axis.z, z: axis.x };
+    const depthOf = pt => -((pt.x - cut.startPt.x) * dir.x + (pt.z - cut.startPt.z) * dir.z);
+    const projU = pt => pt.x * axis.x + pt.z * axis.z;
+    const walls = typeof env.walls === 'function' ? env.walls() || [] : [];
+    const wallsOn = levelId => walls.filter(w => (levelId == null
+      ? ((w.view || 'plan') === 'foundation' || Number(w.levelId) === 1)
+      : (Number(w.levelId) === Number(levelId) && (w.view || 'plan') === 'plan')));
+    // Everything the cut slices, taken out of the sheet: what is beyond is
+    // painted only in what is left, ONE BOX AT A TIME (see the stairs' clip).
+    let open = [{ lo: -1e6, hi: 1e6, bottom: -1e6, top: 1e6 }];
+    cutSolids.forEach(box => {
+      open = open.flatMap(r => {
+        if (box.hi <= r.lo || box.lo >= r.hi || box.top <= r.bottom || box.bottom >= r.top) return [r];
+        const out = [];
+        if (box.lo > r.lo) out.push({ ...r, hi: box.lo });
+        if (box.hi < r.hi) out.push({ ...r, lo: box.hi });
+        const lo = Math.max(r.lo, box.lo), hi = Math.min(r.hi, box.hi);
+        if (box.bottom > r.bottom) out.push({ lo, hi, bottom: r.bottom, top: box.bottom });
+        if (box.top < r.top) out.push({ lo, hi, bottom: box.top, top: r.top });
+        return out;
+      });
+    });
+    const beyond = (u0, u1, e0, e1, paint) => {
+      open.forEach(r => {
+        if (r.hi <= u0 || r.lo >= u1 || r.top <= e0 || r.bottom >= e1) return;
+        const xa = Math.max(-1e5, X(r.lo)), xb = Math.min(1e5, X(r.hi));
+        const ya = Math.max(-1e5, Y(r.top)), yb = Math.min(1e5, Y(r.bottom));
+        if (!(xb - xa > 0.01) || !(yb - ya > 0.01)) return;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(xa, ya, xb - xa, yb - ya); ctx.clip();
+        paint();
+        ctx.restore();
+      });
+    };
+    const rect = (u0, u1, e0, e1) => {
+      ctx.beginPath(); ctx.rect(X(u0), Y(e1), X(u1) - X(u0), Y(e0) - Y(e1));
+    };
+    const SEEN = ink(0.55);
+    const said = { posts: [], beams: [] };
+    ctx.save();
+    ctx.setLineDash([]);
+
+    // THE BEAMS. Seen ones first, so a post standing in front of one is
+    // drawn over it.
+    const cutBeams = [];
+    beams.forEach(b => {
+      const half = b.widthIn / 24;
+      const da = depthOf(b.a), db = depthOf(b.b);
+      if (Math.max(da, db) < -half) return;              // behind the viewer
+      const ua = projU(b.a), ub = projU(b.b);
+      if (Math.abs(da) <= half && Math.abs(db) <= half) {
+        cutBeams.push({ b, u0: Math.min(ua, ub), u1: Math.max(ua, ub), x: false });
+        return;
+      }
+      if (Math.min(da, db) <= half) {
+        // Crosses the line: the slice is the beam's width over the angle it
+        // crosses at, capped so a near-parallel beam does not smear.
+        const t = Math.abs(da - db) > 1e-9 ? da / (da - db) : 0.5;
+        if (t < -0.02 || t > 1.02) return;
+        const u = ua + (ub - ua) * Math.max(0, Math.min(1, t));
+        const len = Math.hypot(b.b.x - b.a.x, b.b.z - b.a.z) || 1;
+        const cos = Math.abs(da - db) / len;
+        const wide = Math.min(4, (2 * half) / Math.max(cos, 0.05));
+        cutBeams.push({ b, u0: u - wide / 2, u1: u + wide / 2, x: true });
+        return;
+      }
+      if (b.mode !== 'dropped') return;                  // inside the floor
+      // Seen beyond: in runs, each stretch with no wall of the storey it
+      // hangs in between it and the cut.
+      const storey = stack.floors.find(l => Number(l.id) === Number(b.levelId));
+      const under = storey ? stack.floors.slice().sort((p, q) => p.floorTop - q.floorTop)
+        .filter(l => l.floorTop < storey.floorTop - 0.5).pop() : null;
+      const blockers = wallsOn(under ? under.id : null);
+      const len = Math.hypot(b.b.x - b.a.x, b.b.z - b.a.z);
+      const n = Math.max(1, Math.ceil(len / 0.25));
+      let run = null;
+      const flush = () => {
+        if (!run) return;
+        const { u0, u1 } = run;
+        run = null;
+        if (u1 - u0 < 0.05) return;
+        beyond(u0, u1, b.bottom, b.top, () => {
+          rect(u0, u1, b.bottom, b.top);
+          ctx.fillStyle = C.face; ctx.fill();
+          ctx.strokeStyle = SEEN; ctx.lineWidth = 1; ctx.stroke();
+        });
+        said.beams.push({ u0: Number(u0.toFixed(3)), u1: Number(u1.toFixed(3)),
+          top: Number(b.top.toFixed(4)), bottom: Number(b.bottom.toFixed(4)), cut: false, mode: b.mode });
+      };
+      for (let i = 0; i <= n; i += 1) {
+        const s = i / n;
+        const p = { x: b.a.x + (b.b.x - b.a.x) * s, z: b.a.z + (b.b.z - b.a.z) * s };
+        const u = projU(p);
+        if (sightBlocked(p, depthOf(p), dir, blockers)) { flush(); continue; }
+        run = run ? { u0: Math.min(run.u0, u), u1: Math.max(run.u1, u) } : { u0: u, u1: u };
+      }
+      flush();
+    });
+
+    // THE POSTS: farthest first, so a nearer one stands in front.
+    posts.map(post => ({ post, depth: depthOf(post.point) }))
+      .filter(({ post, depth }) => depth > -post.sizeIn / 24)
+      .sort((a, b) => b.depth - a.depth)
+      .forEach(({ post, depth }) => {
+        const u = projU(post.point);
+        const half = post.sizeIn / 24;
+        const isCut = depth <= half;
+        if (!isCut && sightBlocked(post.point, depth, dir, wallsOn(post.levelId))) return;
+        // The pad, under the slab: dashed, it is in the ground.
+        if (post.pad) {
+          const ph = post.pad.sizeIn / 24;
+          ctx.save();
+          ctx.setLineDash([5, 4]);
+          ctx.strokeStyle = isCut ? ink(0.6) : ink(0.45); ctx.lineWidth = 1;
+          rect(u - ph, u + ph, post.pad.bottom, post.pad.top); ctx.stroke();
+          ctx.restore();
+        }
+        const paint = () => {
+          if (post.base && post.foot > post.seat) {
+            const bh = post.base.widthIn / 24;
+            rect(u - bh, u + bh, post.seat, post.foot);
+            ctx.fillStyle = isCut ? INK : SEEN; ctx.fill();
+          }
+          rect(u - half, u + half, post.foot, post.top);
+          ctx.fillStyle = isCut ? ink(0.35) : C.face; ctx.fill();
+          ctx.strokeStyle = isCut ? INK : SEEN; ctx.lineWidth = isCut ? 1.25 : 1; ctx.stroke();
+        };
+        if (isCut) paint();
+        else beyond(u - half, u + half, post.seat, post.top, paint);
+        said.posts.push({ kind: post.kind, u: Number(u.toFixed(3)), foot: Number(post.foot.toFixed(4)),
+          top: Number(post.top.toFixed(4)), cut: isCut,
+          ...(post.pad ? { padBottom: Number(post.pad.bottom.toFixed(4)) } : {}) });
+      });
+
+    // THE CUT BEAMS LAST: what the line slices is in front of everything.
+    cutBeams.forEach(({ b, u0, u1, x }) => {
+      rect(u0, u1, b.bottom, b.top);
+      ctx.fillStyle = C.face; ctx.fill();
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25; ctx.stroke();
+      if (x) {
+        ctx.lineWidth = 0.75;
+        ctx.beginPath();
+        ctx.moveTo(X(u0), Y(b.top)); ctx.lineTo(X(u1), Y(b.bottom));
+        ctx.moveTo(X(u0), Y(b.bottom)); ctx.lineTo(X(u1), Y(b.top));
+        ctx.stroke();
+      }
+      said.beams.push({ u0: Number(u0.toFixed(3)), u1: Number(u1.toFixed(3)),
+        top: Number(b.top.toFixed(4)), bottom: Number(b.bottom.toFixed(4)), cut: true, mode: b.mode });
+    });
+    ctx.restore();
+    if (ctx.canvas && ctx.canvas.setAttribute) ctx.canvas.setAttribute('data-section-framing', JSON.stringify(said));
   }
 
   function drawSectionFixtures(env, ctx, cut, axis, stack, X, Y, pxPerFt, C) {
@@ -9682,6 +9971,7 @@ if (!window.DraftCutView) {
     roofBaseElev,
     roofEaveElev,
     pilePosts,
+    framingPieces,
     POST_SIZE_IN,
     garageBearing,
     garageConcreteTop,

@@ -150,6 +150,10 @@ if (!window.DraftCutViewEnv) {
     // Columns too: the elevation draws the piles under a grade beam.
     const columns = format.columns
       ? format.columns(saved.columns, levelIds, {}) : (saved.columns || []);
+    // And the beams, so a section stands its posts under them.
+    let beams = [];
+    try { beams = format.beams ? format.beams(saved.beams, levelIds, {}) : (saved.beams || []); } catch (e) { beams = []; }
+    if (!Array.isArray(beams)) beams = [];
     const shelves = format.boneyardShelves(saved.boneyardShelves);
     const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(shelf => shelf.id)));
     const assemblies = saved.levelAssemblies && typeof saved.levelAssemblies === 'object'
@@ -260,6 +264,7 @@ if (!window.DraftCutViewEnv) {
       floorOpenings: floorId => (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
         .filter(o => o.hostType === 'floor' && String(o.hostId) === String(floorId)),
       columns: () => columns,
+      beams: () => beams,
       fenestrations: () => fenestrations,
       garageOutlines: levelId => outlines.filter(outline =>
         outline.levelId === levelId && outline.garage && outline.points.length >= 3),
