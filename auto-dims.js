@@ -160,10 +160,22 @@ if (!window.DraftAutoDims) {
     // delete it"): { side, layer, at } -- `at` the point's place along the
     // string. Its two pieces become one; the ends of a string stay.
     pointsOff,
+    // AND SINGLE PIECES TAKEN OFF A ROW (jb, 25 Nov 2026: "i just want to
+    // delete the 3'-0 but it deleted the whole string and the dim on the line
+    // beneath it"): { side, layer, a, b } -- the piece's two ends along the
+    // string, low then high. The piece is left out and the row stays where
+    // it stands, its other pieces with it.
+    piecesOff,
   }) {
     const exteriorBeamLines = beamLinesOf(beams);
     const offRows = new Set(Array.isArray(rowsOff) ? rowsOff : []);
     const offPoints = Array.isArray(pointsOff) ? pointsOff : [];
+    const offPieces = Array.isArray(piecesOff) ? piecesOff : [];
+    const pieceIsOff = (side, layer, a, b) => {
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      return offPieces.some(p => p && p.side === side && p.layer === layer
+        && Math.abs(Number(p.a) - lo) < 0.01 && Math.abs(Number(p.b) - hi) < 0.01);
+    };
     const withoutPoints = (side, string) => {
       const gone = offPoints.filter(p => p && p.side === side && p.layer === string.layer);
       if (!gone.length) return string;
@@ -527,7 +539,12 @@ if (!window.DraftAutoDims) {
           }
           const roofCoords = uniqSorted(mergeJogs(group.roofFacing[side]))
             .filter(value => value > lo + 0.01 && value < hi - 0.01);
-          if (roofCoords.length) {
+          // ONCE, NOT TWICE: with no overhang on a side the wall faces ARE
+          // the roof edges, and the second row repeated the first figure for
+          // figure (jb's roof plan, 25 Nov 2026: two 40'-6" / 3'-0" rows).
+          const sameAsWalls = wallCoords.length === roofCoords.length
+            && wallCoords.every((value, i) => Math.abs(value - roofCoords[i]) < 0.01);
+          if (roofCoords.length && !sameAsWalls) {
             strings.push({ coords: uniqSorted([lo, ...roofCoords, hi]), layer: DIM_LAYERS.EXTERIOR });
           }
           strings.push({ coords: [lo, hi], layer: DIM_LAYERS.OVERALL });
@@ -658,6 +675,7 @@ if (!window.DraftAutoDims) {
         const coords = printableCoords(string.coords);
         for (let i = 0; i < coords.length - 1; i++) {
           const a = coords[i], b = coords[i + 1];
+          if (pieceIsOff(entry.side, string.layer, a, b)) continue;
           // The rendered dim line offsets to the right of the start→end
           // direction (south for west→east runs, west for north→south), so
           // N and E strings run reversed to keep the ink on the outward side.

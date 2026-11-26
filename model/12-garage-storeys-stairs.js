@@ -1361,6 +1361,45 @@
     markDirty();
     return true;
   };
+  // SINGLE PIECES OFF A ROW (jb, 25 Nov 2026: "i just want to delete the
+  // 3'-0 but it deleted the whole string"), kept beside the points:
+  // `autoDimPiecesOff['7|plan'] = [{ side: 'N', layer: 'A-DIMS-EXT', a, b }]`,
+  // a and b the piece's ends along the string, low then high.
+  const autoPiecesOff = (levelId, view) => {
+    const list = drawing?.autoDimPiecesOff?.[autoRowsKey(levelId, view)];
+    return Array.isArray(list) ? list.map(p => ({ ...p })) : [];
+  };
+  const setAutoPiecesOff = (levelId, view, list) => {
+    const next = { ...(drawing.autoDimPiecesOff || {}) };
+    const key = autoRowsKey(levelId, view);
+    if (list.length) next[key] = list; else delete next[key];
+    if (Object.keys(next).length) drawing.autoDimPiecesOff = next; else delete drawing.autoDimPiecesOff;
+  };
+  const autoPieceAlong = dim => {
+    const side = autoDimSide(dim);
+    if (!side) return null;
+    const horizontal = side === 'N' || side === 'S';
+    const a = horizontal ? dim.start.x : dim.start.z, b = horizontal ? dim.end.x : dim.end.z;
+    return { side, layer: dim.layer, a: Math.min(a, b), b: Math.max(a, b) };
+  };
+  // THE PIECES PICKED TAKEN OFF, nothing else: the level laid again without
+  // them, the rows where they stood. ONE UNDO puts them back.
+  const deleteAutoDimPieces = (levelId, view, dims) => {
+    const before = autoPiecesOff(levelId, view);
+    const add = dims.map(autoPieceAlong).filter(Boolean);
+    if (!add.length) return 0;
+    setAutoPiecesOff(levelId, view, [...before, ...add]);
+    const result = placeAutoDims(levelId, view);
+    const placed = result === -1 ? [] : result.placed;
+    const removed = result === -1 ? [] : result.removed;
+    undoStack.push({ kind: 'node', undo: () => {
+      setAutoPiecesOff(levelId, view, before);
+      drawing.dimensions = (drawing.dimensions || []).filter(d => !placed.includes(d));
+      removed.forEach(d => { if (!drawing.dimensions.includes(d)) drawing.dimensions.push(d); });
+    } });
+    markDirty();
+    return add.length;
+  };
   const isAutoRow = dim => dim?.auto === true && AUTO_ROW_LAYERS.some(([layer]) => layer === dim.layer);
   // Take rows off, or put them back, and lay the level again: ONE UNDO puts
   // the list and the strings back as they were.
@@ -1437,6 +1476,7 @@
       stringSpacingFt: AD.STRING_SPACING_FT * paper,
       rowsOff: autoRowsOff(levelId, view),
       pointsOff: autoPointsOff(levelId, view),
+      piecesOff: autoPiecesOff(levelId, view),
       // THE INTERIOR STRING'S TWO INPUTS, and it draws nothing without them.
       // A wall's FACES are what that string measures to, and a face is the
       // stored line offset by a thickness this module has never known -- the

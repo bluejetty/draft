@@ -390,6 +390,35 @@ function run() {
       && !segs.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 94) < 1e-6));
   }
 
+  // ── NO OVERHANG, ONE ROW NOT TWO (jb, 25 Nov 2026) ──────────────────
+  //
+  // jb's roof plan: two roofs touching, no overhang on the north side, and
+  // the wall-faces row and the roof-edges row came out figure for figure the
+  // same -- two 40'-6" / 3'-0" rows. With nothing between them to tell apart,
+  // the second is not laid. And a PIECE taken off (piecesOff) leaves just that
+  // piece out; the row keeps its place and its other pieces.
+  {
+    const main = { points: rect(-41.5, -19.5, -1, 0), overhang: 0 };
+    const bump = { points: [{ x: -1, z: 0 }, { x: -7.5, z: -6.5 }, { x: -1, z: -13 }, { x: 2, z: -13 }, { x: 2, z: 0 }], overhang: 0 };
+    const segs = strings(win, { roofs: [main, bump] });
+    const northZs = uniqOf(segs.filter(s => Math.abs(s.start.z - s.end.z) < 1e-6 && s.start.z < -19.5)
+      .map(s => s.start.z));
+    ok('NO OVERHANG: the north side lays the roof row once, then the overall (two rows)',
+      northZs.length === 2, `${northZs.length} rows at z ${northZs.join(', ')}`);
+    const AD = win.DraftAutoDims, G = win.DraftGeometry2D;
+    const lay = piecesOff => AD.computeAutoDimStrings({
+      walls: [], outlines: [], roofs: [main, bump], openings: [],
+      offsetOutline: (pts, dist) => G.offsetOutline(pts, dist), firstOffset: 1.5,
+      jogMergeFt: AD.JOG_MERGE_FT, stringSpacingFt: AD.STRING_SPACING_FT, piecesOff }) || [];
+    const north = list => list.filter(s => Math.abs(s.start.z - s.end.z) < 1e-6 && s.start.z < -19.5)
+      .map(s => `${s.layer}@${s.start.z}:${Math.min(s.start.x, s.end.x)}..${Math.max(s.start.x, s.end.x)}`).sort();
+    const all = north(lay([]));
+    const less = north(lay([{ side: 'N', layer: AD.DIM_LAYERS.EXTERIOR, a: -1, b: 2 }]));
+    ok('a piece taken off is the only thing gone, every row where it stood',
+      less.length === all.length - 1 && less.every(x => all.includes(x))
+      && !less.some(x => x.endsWith(':-1..2')), JSON.stringify({ all, less }));
+  }
+
   // ── THE GARAGE OFF THE HOUSE'S CORNER (Movie, 11 Oct) ───────────────
   //
   // "need some dimension lines for the other side of garage too", marked
