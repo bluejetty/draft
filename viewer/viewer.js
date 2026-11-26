@@ -7,7 +7,7 @@
 // the PAINTER chips let you force either one.
 //
 // window.DraftViewer is the page's handle, for the spec and for later phases
-// (exports read `state.faces`).
+// (EXPORT writes `state.shown`, what is on screen).
 (function () {
   'use strict';
 
@@ -182,6 +182,7 @@
     LOOK.section = !!plane;
     if (state.painter) state.painter.setFaces(list);
     document.body.dataset.shown = String(list.length);
+    $('export-open').disabled = !list.length;
     redraw();
   }
 
@@ -244,9 +245,11 @@
   function wireControls(stage) {
     const C = window.DraftViewerCamera;
     let drag = null;
-    stage.addEventListener('contextmenu', e => e.preventDefault());
+    // The EXPORT panel floats over the stage: presses on it are its own.
+    const onPanel = e => !!(e.target.closest && e.target.closest('#export'));
+    stage.addEventListener('contextmenu', e => { if (!onPanel(e)) e.preventDefault(); });
     stage.addEventListener('pointerdown', e => {
-      if (!state.camera) return;
+      if (!state.camera || onPanel(e)) return;
       stage.setPointerCapture(e.pointerId);
       drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.button === 1 || e.shiftKey || e.ctrlKey };
     });
@@ -262,7 +265,7 @@
     stage.addEventListener('pointerup', end);
     stage.addEventListener('pointercancel', end);
     stage.addEventListener('wheel', e => {
-      if (!state.camera) return;
+      if (!state.camera || onPanel(e)) return;
       e.preventDefault();
       state.camera = C.zoom(state.camera, Math.exp(e.deltaY * 0.0015));
       redraw();
@@ -307,6 +310,136 @@
     }));
     state.camera = window.DraftViewerCamera.fit({ lo, hi });
     redraw();
+  }
+
+  // ── EXPORT ─────────────────────────────────────────────────────────────
+  //
+  // 1 bone a file (jb, 25 Nov 2026), taken once the file is written: a
+  // cancelled save picker costs nothing, and at 0 bones the press is refused
+  // in words. What goes in the file is what is on screen (state.shown), so
+  // a level switched off or a section cut exports that way.
+  const UNIT_KEY = 'draft-viewer-unit';
+  const exportCost = () => {
+    const W = window.DraftBoneWallet;
+    return W && W.COSTS.export3d ? W.COSTS.export3d : 1;
+  };
+  const bonesWord = n => (window.DraftBoneWallet ? window.DraftBoneWallet.bonesWord(n) : `${n} bone${n === 1 ? '' : 's'}`);
+  const held = () => (window.DraftBoneWallet ? window.DraftBoneWallet.read().balance : 0);
+
+  function exportUnit() {
+    let u = null;
+    try { u = localStorage.getItem(UNIT_KEY); } catch (e) { u = null; }
+    return window.DraftExportWriters.UNITS[u] ? u : 'ft';
+  }
+
+  function showExportToll(said) {
+    const el = $('export-toll');
+    const cost = exportCost(), have = held();
+    const short = have < cost;
+    el.textContent = said || (short
+      ? `An export costs ${bonesWord(cost)} and you have ${have}. A free bone drips in every hour. Turning the house round is free.`
+      : `Each file costs ${bonesWord(cost)} (you have ${have}).`);
+    el.classList.toggle('warn', short && !said);
+  }
+
+  function showExportPanel() {
+    const X = window.DraftExportWriters;
+    const unit = exportUnit();
+    document.querySelectorAll('[data-unit]').forEach(b => b.classList.toggle('lit', b.dataset.unit === unit));
+    const box = $('export-formats');
+    box.textContent = '';
+    X.FORMATS.forEach(f => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.export = f.id;
+      const label = document.createElement('b');
+      label.textContent = f.label;
+      const note = document.createElement('span');
+      note.textContent = f.metresOnly || unit === 'm' ? f.note : `${f.note}, ${X.UNITS[unit].label.toLowerCase()}`;
+      b.append(label, note);
+      b.addEventListener('click', () => exportFile(f.id));
+      box.appendChild(b);
+    });
+    showExportToll();
+  }
+
+  // Write the blob where the person says (the save picker), or into the
+  // downloads folder where the browser has no picker. Resolves false when
+  // the picker was cancelled.
+  async function writeOut(file) {
+    if (window.showSaveFilePicker) {
+      let handle;
+      try {
+        const ext = file.name.slice(file.name.lastIndexOf('.'));
+        handle = await window.showSaveFilePicker({
+          suggestedName: file.name,
+          types: [{ description: `${ext.slice(1).toUpperCase()} file`, accept: { [file.mime || 'application/octet-stream']: [ext] } }],
+        });
+      } catch (e) {
+        if (e && e.name === 'AbortError') return false;
+        throw e;
+      }
+      const w = await handle.createWritable();
+      await w.write(file.blob);
+      await w.close();
+      return true;
+    }
+    const url = URL.createObjectURL(file.blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = file.name; a.hidden = true;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return true;
+  }
+
+  let exporting = false;
+  async function exportFile(id) {
+    if (exporting || !state.shown.length) return null;
+    const W = window.DraftBoneWallet;
+    const cost = exportCost();
+    if (!W || held() < cost) { showExportToll(); return null; }
+    const format = window.DraftExportWriters.FORMATS.find(f => f.id === id);
+    const unit = format.metresOnly ? 'm' : exportUnit();
+    const base = String(state.name || 'house').replace(/\.(draft|json|zip)$/i, '').replace(/[\\/:*?"<>|]+/g, '-') || 'house';
+    exporting = true;
+    try {
+      showExportToll(`Writing the ${format.label}...`);
+      const file = await window.DraftExportWriters.exportAs(id, state.shown, base, unit);
+      const written = await writeOut(file);
+      if (!written) { showExportToll(`${format.label} not saved: the save was cancelled, no bone taken. Each file costs ${bonesWord(cost)} (you have ${held()}).`); return null; }
+      W.spend(cost);
+      window.dispatchEvent(new CustomEvent('draft-bones-changed'));
+      showExportToll(`Saved ${file.name} (${bonesWord(cost)}, ${held()} left).`);
+      document.body.dataset.exported = file.name;
+      return file;
+    } catch (e) {
+      showExportToll(`Could not write the ${format.label}: ${e && e.message ? e.message : e}. No bone taken.`);
+      return null;
+    } finally {
+      exporting = false;
+    }
+  }
+
+  function wireExport() {
+    $('export-open').addEventListener('click', () => {
+      const panel = $('export');
+      panel.hidden = !panel.hidden;
+      $('export-open').classList.toggle('lit', !panel.hidden);
+      if (!panel.hidden) showExportPanel();
+    });
+    $('export-close').addEventListener('click', () => {
+      $('export').hidden = true;
+      $('export-open').classList.remove('lit');
+    });
+    document.querySelectorAll('[data-unit]').forEach(b => b.addEventListener('click', () => {
+      try { localStorage.setItem(UNIT_KEY, b.dataset.unit); } catch (e) { /* private window */ }
+      showExportPanel();
+    }));
+    // A bone spent in a drafter tab, or dripped in, shows here too.
+    window.addEventListener('storage', e => { if (e.key === 'draft-bone-wallet' && !$('export').hidden) showExportToll(); });
+    window.addEventListener('draft-bones-changed', () => { if (!$('export').hidden && !exporting) showExportToll(); });
   }
 
   // ── BOOT ───────────────────────────────────────────────────────────────
@@ -370,6 +503,7 @@
       if (file) openFile(file);
     });
     setStatus('Open a .draft or a SAVE AS ZIP to see the house.');
+    wireExport();
     listenForDrafter();
     document.body.dataset.ready = '1';
   }
@@ -410,7 +544,7 @@
     }
   }
 
-  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView };
+  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView, exportFile };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
