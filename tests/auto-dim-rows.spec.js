@@ -57,13 +57,13 @@ test('on a shelf the AUTO DIMS chip is there before any strings, and a press lay
   expect(rows.map(r => r[1])).toEqual(['A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS']);
 });
 
-test('DELETE on one piece of a row takes the row off that side, and the rows outside step in', async ({ page }) => {
+test('DELETE on every piece of a row takes the row off that side, and the rows outside step in', async ({ page }) => {
   await onShelf(page);
   await page.locator('[data-dims-show="auto"]').click();
   const before = await westRows(page);
   await page.evaluate(() => {
-    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
-    setSelection([{ type: 'dimension', item: d }]);
+    const row = dimensions().filter(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
+    setSelection(row.map(item => ({ type: 'dimension', item })));
   });
   await page.keyboard.press('Delete');
   const after = await westRows(page);
@@ -78,13 +78,47 @@ test('DELETE on one piece of a row takes the row off that side, and the rows out
   expect((await westRows(page)).map(r => r[1])).toEqual(['A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS']);
 });
 
+// ONE PIECE PICKED IS ONE PIECE OFF (jb, 25 Nov 2026: "i just want to
+// delete the 3'-0 but it deleted the whole string and the dim on the line
+// beneath it"). The row keeps its other pieces and stands where it stood.
+test('DELETE on one piece of a row takes just that piece; the rows stay put; AUTO DIMS keeps it off; UNDO puts it back', async ({ page }) => {
+  await onShelf(page);
+  await page.locator('[data-dims-show="auto"]').click();
+  const before = await westRows(page);
+  const westInt = () => page.evaluate(() => dimensions()
+    .filter(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0)
+    .map(x => [Math.min(x.start.z, x.end.z), Math.max(x.start.z, x.end.z)].map(v => Math.round(v * 100) / 100))
+    .sort((a, b) => a[0] - b[0]));
+  const pieces = await westInt();
+  expect(pieces.length, 'the INT WALLS row has more than one piece').toBeGreaterThan(1);
+  const victim = pieces[0];
+  await page.evaluate(([lo, hi]) => {
+    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0
+      && Math.abs(Math.min(x.start.z, x.end.z) - lo) < 0.01 && Math.abs(Math.max(x.start.z, x.end.z) - hi) < 0.01);
+    setSelection([{ type: 'dimension', item: d }]);
+  }, victim);
+  await page.keyboard.press('Delete');
+  expect(await westInt(), 'only that piece is gone').toEqual(pieces.slice(1));
+  expect(await westRows(page), 'every row stands where it stood').toEqual(before);
+  expect(await page.evaluate(() => drawing.autoDimRowsOff), 'no row is off').toBeUndefined();
+  expect(await page.evaluate(() => stripNotice)).toMatch(/^That piece is off/);
+  await page.evaluate(() => { pressAutoDims(); });
+  expect(await westInt(), 'AUTO DIMS keeps it off').toEqual(pieces.slice(1));
+  await page.evaluate(() => { undoOnce(); undoOnce(); paint(); });
+  expect(await westInt(), 'UNDO puts it back').toEqual(pieces);
+  // And the level forgets it was off, so AUTO DIMS lays it again.
+  await page.evaluate(() => { pressAutoDims(); });
+  expect(await westInt(), 'AUTO DIMS after the UNDO lays it').toEqual(pieces);
+  expect(await page.evaluate(() => drawing.autoDimPiecesOff)).toBeUndefined();
+});
+
 test('ROWS puts it back, the rows step out again; UNDO takes the put-back away', async ({ page }) => {
   await onShelf(page);
   await page.locator('[data-dims-show="auto"]').click();
   const full = await westRows(page);
   await page.evaluate(() => {
-    const d = dimensions().find(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
-    setSelection([{ type: 'dimension', item: d }]);
+    const row = dimensions().filter(x => x.auto && x.layer === 'A-DIMS-INT' && Math.abs(x.start.x - x.end.x) < 1e-6 && x.start.x < 0);
+    setSelection(row.map(item => ({ type: 'dimension', item })));
   });
   await page.keyboard.press('Delete');
   await page.locator('[data-auto-rows]').click();
