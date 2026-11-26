@@ -120,3 +120,55 @@ test('a column standing alone copies alone, onto the plan the paste is made on',
   await expect(page.locator('#paste')).toHaveText('PASTE');
   await expect(page.locator('#paste-level')).toBeHidden();
 });
+
+// PASTED ON ANOTHER FLOOR (jb, 26 Nov 2026): "if i copy a beam and columns
+// from basement i'd like to be able to paste them ... onto the new level main
+// fl and 2nd floor" -- "beam and columns or just beam or just column or
+// columns". A beam or column pasted on another level is filed on the plan
+// showing, as the BEAM / COLUMN tool would file one drawn there.
+const beamDrawing = () => {
+  const f = drawing();
+  f.beams = [{ id: 1, start: P(-20, 8), end: P(0, 8), levelId: 1, view: 'foundation', mode: 'flush' }];
+  f.columns = [
+    { id: 2, point: P(-14, 8), levelId: 1, view: 'foundation', footing: 'pad36' },
+    { id: 3, point: P(-6, 8), levelId: 1, view: 'foundation', footing: 'pad36' },
+  ];
+  return f;
+};
+async function openWith(page, f) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f });
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+}
+for (const [what, pick] of [
+  ['beam and its posts', d => [{ type: 'beam', item: d.beams[0] }]],
+  ['just the beam', null],
+  ['one column', d => [{ type: 'column', item: d.columns[0] }]],
+  ['two columns', d => d.columns.map(item => ({ type: 'column', item }))],
+]) {
+  test(`copied on FOUNDATION, ${what} pastes onto the MAIN FL plan, filed there`, async ({ page }) => {
+    await openWith(page, beamDrawing());
+    await h.pickModelLayer(page, 1, 'foundation');
+    const out = await page.evaluate(src => {
+      const pick = new Function('d', `return (${src})(d)`);
+      setSelection(pick(drawing));
+      copySelection();
+      // 'just the beam': held without its posts, as a box round the beam
+      // alone would leave it after the posts are deleted from the copy.
+      return held.length;
+    }, (pick || (d => [{ type: 'beam', item: d.beams[0] }])).toString());
+    if (!pick) await page.evaluate(() => { held = held.filter(e => e.type === 'beam'); });
+    await h.pickModelLayer(page, 3, 'plan');
+    await page.evaluate(() => pasteHeld());
+    const d = await saved(page);
+    const fresh = [...d.beams.filter(b => Number(b.id) !== 1), ...d.columns.filter(c => ![2, 3].includes(Number(c.id)))];
+    expect(fresh.length).toBe(pick ? out : 1);
+    fresh.forEach(item => expect([Number(item.levelId), item.view || 'plan']).toEqual([3, 'plan']));
+    // The originals stay on FOUNDATION.
+    expect(d.beams.find(b => Number(b.id) === 1).view).toBe('foundation');
+  });
+}

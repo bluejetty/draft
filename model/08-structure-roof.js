@@ -1461,7 +1461,8 @@
     const keep = new Set();
     units.forEach(pieces => {
       const onLevel = pieces.filter(h => Number(h.raw.levelId) === Number(owner));
-      const here = onLevel.find(h => (h.raw.view || 'plan') === (viewNow || 'plan')) || onLevel[0];
+      const home = viewNow ? wallHomeView(viewNow) : 'plan';
+      const here = onLevel.find(h => (h.raw.view || 'plan') === home) || onLevel[0];
       if (here) keep.add(here);
       else {
         const picked = pieces.find(h => h.pickedPiece) || pieces[0];
@@ -1548,6 +1549,18 @@
       // A STACKED COLUMN STAYS ON ITS OWN FLOOR: the 2ND FL post on 2ND FL,
       // the pad on FOUNDATION, whatever plan the paste is made on.
       if (type === 'column' && inStack) copy.levelId = raw.levelId;
+      // ANY OTHER BEAM OR COLUMN IS FILED ON THE PLAN SHOWING, as the BEAM or
+      // COLUMN tool would file one drawn there (jb, 26 Nov 2026: "if i copy a
+      // beam and columns from basement i'd like to be able to paste them
+      // (with adjusted heights for the appropriate floor) ... onto the new
+      // level main fl and 2nd floor" -- "beam and columns or just beam or
+      // just column or columns"). Copied on FOUNDATION and pasted on 2ND FL a
+      // beam kept view 'foundation' on level 2ND FL, a sheet nothing draws,
+      // so it showed nowhere. Its level and view are the plan's now, and its
+      // height is that floor's, read from the level as a drawn one's is.
+      // Pasted back on its own level it keeps the view it had, as before.
+      else if ((type === 'beam' || type === 'column') && pasteWallView
+        && Number(raw.levelId) !== Number(owner)) copy.view = pasteWallView;
       // A HOLOGRAM IS THE SAME FILE AGAIN, as its card's COPY makes it: where
       // it stood, on no level of this drawing's (its own levels say where it
       // stands), with none of the first one's DEMO marks.
