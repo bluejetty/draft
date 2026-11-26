@@ -106,6 +106,10 @@ test('DELETE on one piece of a row takes just that piece; the rows stay put; AUT
   expect(await westInt(), 'AUTO DIMS keeps it off').toEqual(pieces.slice(1));
   await page.evaluate(() => { undoOnce(); undoOnce(); paint(); });
   expect(await westInt(), 'UNDO puts it back').toEqual(pieces);
+  // And the level forgets it was off, so AUTO DIMS lays it again.
+  await page.evaluate(() => { pressAutoDims(); });
+  expect(await westInt(), 'AUTO DIMS after the UNDO lays it').toEqual(pieces);
+  expect(await page.evaluate(() => drawing.autoDimPiecesOff)).toBeUndefined();
 });
 
 test('ROWS puts it back, the rows step out again; UNDO takes the put-back away', async ({ page }) => {
