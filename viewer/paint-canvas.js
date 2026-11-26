@@ -95,7 +95,10 @@
       for (const t of tris) {
         const n = t.n, m = t.mid;
         const facing = n.x * (eye.x - m.x) + n.y * (eye.y - m.y) + n.z * (eye.z - m.z);
-        if (facing < 0 && !t.twoSided) continue;
+        // The inside of a solid is only ever seen through a SECTION cut, and
+        // there it is the solid's own body: drawn flat in the cut colour.
+        const inside = facing < 0 && !t.twoSided;
+        if (inside && !look.section) continue;
         const A = proj(t.a), B = proj(t.b), C = proj(t.c);
         // Behind the eye: left out rather than clipped (only matters with
         // the camera inside the house).
@@ -105,9 +108,10 @@
         const sn = facing < 0 ? -1 : 1;
         const lam = Math.max(0, sn * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z));
         const k = look.ambient + (1 - look.ambient) * lam;
-        const r = Math.min(255, Math.round(t.colour[0] * k));
-        const g = Math.min(255, Math.round(t.colour[1] * k));
-        const b = Math.min(255, Math.round(t.colour[2] * k));
+        const cut = inside ? hexRgb(look.cutColour || '#4a4744') : null;
+        const r = cut ? cut[0] : Math.min(255, Math.round(t.colour[0] * k));
+        const g = cut ? cut[1] : Math.min(255, Math.round(t.colour[1] * k));
+        const b = cut ? cut[2] : Math.min(255, Math.round(t.colour[2] * k));
         const word = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
         const x0 = Math.max(0, Math.floor(Math.min(A.x, B.x, C.x)));
         const x1 = Math.min(W - 1, Math.ceil(Math.max(A.x, B.x, C.x)));
@@ -137,7 +141,7 @@
           }
           w0r += e0dy; w1r += e1dy; w2r += e2dy;
         }
-        if (look.edges) {
+        if (look.edges && !inside) {
           if (t.edges[0]) lines.push(A, B);
           if (t.edges[1]) lines.push(B, C);
           if (t.edges[2]) lines.push(C, A);

@@ -51,6 +51,13 @@
       button:hover:not(:disabled) { filter: brightness(1.2); }
       button.lit { background: var(--chip-lit); color: var(--chip-lit-ink); }
       button:disabled { opacity: 0.4; cursor: not-allowed; }
+      #tools {
+        display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+        padding: 4px 12px; background: #183a63; color: var(--bar-ink);
+      }
+      #tools button { font-size: 14px; padding: 2px 9px; }
+      #levels { display: flex; gap: 4px; flex-wrap: wrap; }
+      #cut-at { width: 180px; accent-color: var(--chip-lit); }
       #status { flex: 1 1 260px; text-align: right; font-size: 15px; opacity: 0.9; min-width: 0; }
       #status.warn { color: var(--warn); opacity: 1; }
       #painter-note { font-size: 13px; opacity: 0.8; }
@@ -91,11 +98,26 @@
       </span>
       <span id="status" role="status"></span>
     </header>
+    <nav id="tools" aria-label="What to show">
+      <span class="chips" role="group" aria-label="Levels">
+        <span class="label">LEVELS</span>
+        <span id="levels"></span>
+      </span>
+      <span class="chips" role="group" aria-label="Section">
+        <span class="label">SECTION</span>
+        <button type="button" data-cut="off" class="lit" title="No section: the whole house">OFF</button>
+        <button type="button" data-cut="x" title="Cut across, front to back (east-west)">ACROSS</button>
+        <button type="button" data-cut="z" title="Cut along, side to side (north-south)">ALONG</button>
+        <button type="button" data-cut="y" title="Take the top off at a height, like a plan">PLAN</button>
+        <input id="cut-at" type="range" min="0" max="1000" value="500" aria-label="Where the section cuts" disabled />
+        <button type="button" id="cut-flip" title="Keep the other side of the cut" disabled>FLIP</button>
+      </span>
+    </nav>
     <main id="stage">
       <canvas id="gl" hidden></canvas>
       <canvas id="plain" hidden></canvas>
       <div id="drop-hint">Drop a .draft or a SAVE AS ZIP here, or press OPEN FILE.</div>
-      <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits</div>
+      <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits · LEVELS hide a floor · SECTION cuts the house</div>
     </main>
 
     <!-- The drafter's own modules, read from the folder above. Order as LAYOUT.html loads them. -->

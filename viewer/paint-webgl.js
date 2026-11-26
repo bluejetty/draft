@@ -28,17 +28,28 @@
     const ambient = new THREE.AmbientLight(0xffffff, 0.45);
     const sun = new THREE.DirectionalLight(0xffffff, 0.75);
     scene.add(ambient, sun);
-    let mesh = null, edges = null;
+    // THREE MESHES FROM ONE LIST. The solids (walls, floors, boards) are
+    // closed and wound outward, so only their fronts are drawn; the thin
+    // sheets (roof planes, glass, door slabs) are seen from both sides; and
+    // with a SECTION on, the INSIDE of every solid is drawn flat in the cut
+    // colour -- what you see through a cut is the wall's own body, poché,
+    // the same rule the plain painter follows.
+    let mesh = null, thin = null, back = null, edges = null;
+    const lambert = side => new THREE.MeshLambertMaterial({
+      vertexColors: true, side, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+    });
+    const backMat = new THREE.MeshBasicMaterial({ color: 0x4a4744, side: THREE.BackSide,
+      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 
     function setFaces(faces) {
       const M = window.DraftHouseMesh;
-      if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
-      if (edges) { scene.remove(edges); edges.geometry.dispose(); }
-      const pos = [], col = [], edgePos = [];
+      [mesh, thin, back, edges].forEach(o => { if (o) { scene.remove(o); o.geometry.dispose(); } });
+      const solid = { pos: [], col: [] }, sheet = { pos: [], col: [] }, edgePos = [];
       faces.forEach(f => {
+        const into = f.twoSided ? sheet : solid;
         const tris = M.triangulate(f.pts);
         const [r, g, b] = f.colour.map(v => v / 255);
-        tris.forEach(t => t.forEach(i => { const p = f.pts[i]; pos.push(p.x, p.y, p.z); col.push(r, g, b); }));
+        tris.forEach(t => t.forEach(i => { const p = f.pts[i]; into.pos.push(p.x, p.y, p.z); into.col.push(r, g, b); }));
         for (let i = 0; i < f.pts.length; i += 1) {
           // A seam (an edge where one wall face meets the next piece of the
           // same face, beside a window) is not a line anyone would draw.
@@ -47,15 +58,18 @@
           edgePos.push(p.x, p.y, p.z, q.x, q.y, q.z);
         }
       });
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-      geo.computeVertexNormals();   // non-indexed: one flat normal per triangle
-      mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
-        vertexColors: true, side: THREE.DoubleSide,
-        polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
-      }));
-      scene.add(mesh);
+      const geoOf = part => {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(part.pos, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(part.col, 3));
+        geo.computeVertexNormals();   // non-indexed: one flat normal per triangle
+        return geo;
+      };
+      mesh = new THREE.Mesh(geoOf(solid), lambert(THREE.FrontSide));
+      thin = new THREE.Mesh(geoOf(sheet), lambert(THREE.DoubleSide));
+      back = new THREE.Mesh(mesh.geometry.clone(), backMat);
+      back.visible = false;
+      scene.add(mesh, thin, back);
       const eg = new THREE.BufferGeometry();
       eg.setAttribute('position', new THREE.Float32BufferAttribute(edgePos, 3));
       edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }));
@@ -71,6 +85,10 @@
       ambient.intensity = look.ambient;
       sun.intensity = 1 - look.ambient;
       if (edges) edges.visible = !!look.edges;
+      if (back) {
+        back.visible = !!look.section;
+        if (look.cutColour) backMat.color.set(look.cutColour);
+      }
       const eye = window.DraftViewerCamera.eyeOf(cam);
       camera.fov = cam.fov;
       camera.aspect = w / Math.max(h, 1);
@@ -84,12 +102,11 @@
       // the viewer's shoulder, so the face turned toward you is never black.
       sun.position.set(eye.x - cam.dist * 0.4, eye.y + cam.dist, eye.z + cam.dist * 0.3);
       renderer.render(scene, camera);
-      return mesh ? mesh.geometry.attributes.position.count / 3 : 0;
+      return (mesh ? mesh.geometry.attributes.position.count / 3 : 0) + (thin ? thin.geometry.attributes.position.count / 3 : 0);
     }
 
     function dispose() {
-      if (mesh) mesh.geometry.dispose();
-      if (edges) edges.geometry.dispose();
+      [mesh, thin, back, edges].forEach(o => { if (o) o.geometry.dispose(); });
       renderer.dispose();
       if (renderer.forceContextLoss) renderer.forceContextLoss();
     }

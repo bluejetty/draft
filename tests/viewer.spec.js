@@ -377,3 +377,146 @@ test('the name follows the skin: RUFF 3D on RUFF, ROUGH 3D on ROUGH', async ({ p
   await p.waitForSelector('body[data-ready="1"]');
   await expect(p.locator('#brand')).toHaveText('RUFF 3D');
 });
+
+// ── PHASE 4: FINISHES, LEVELS, SECTION, FRAMING, OPEN IN 3D (jb, 26 Nov) ──
+const near = (a, b) => a && b && a.every((v, i) => Math.abs(v - b[i]) <= 1);
+
+test('a wall wears its finish outside, its bands where they lie, drywall inside', async ({ page: p }) => {
+  const r = await build3(p, `
+    s.walls.filter(w => w.levelId === 3 && (w.view || 'plan') === 'plan').forEach(w => {
+      w.finish = 'brick';
+      w.finishBands = [{ finishId: 'ledgestone', lowFt: 0, highFt: 3 }];
+    });
+    return s;`);
+  const faces = await p.evaluate(() => DraftViewer.state.faces
+    .filter(f => f.group === 'L3' && (f.kind === 'wall' || f.kind === 'garageWall'))
+    .map(f => ({ colour: f.colour, lo: Math.min(...f.pts.map(q => q.y)), hi: Math.max(...f.pts.map(q => q.y)) })));
+  const brick = faces.filter(f => near(f.colour, [166, 88, 66]));
+  const stone = faces.filter(f => near(f.colour, [172, 160, 140]));
+  const dry = faces.filter(f => near(f.colour, [238, 236, 230]));
+  expect(brick.length).toBeGreaterThan(10);
+  expect(stone.length).toBeGreaterThan(4);
+  expect(dry.length).toBeGreaterThan(10);
+  // The stone runs 3 ft up from the wall's sill line, the brick above it.
+  const stoneTop = Math.max(...stone.map(f => f.hi)), stoneLow = Math.min(...stone.map(f => f.lo));
+  expect(stoneTop - stoneLow).toBeCloseTo(3, 2);
+  expect(Math.min(...brick.map(f => f.lo))).toBeCloseTo(stoneTop, 2);
+  expect(r.counts.walls).toBe(16);
+});
+
+test('the drafter\'s own colour wins over the finish\'s', async ({ page: p }) => {
+  await build3(p, `
+    s.walls.filter(w => w.levelId === 3).forEach(w => { w.finish = 'siding_h'; w.finishColor = '#336699'; });
+    return s;`);
+  const n = await p.evaluate(() => DraftViewer.state.faces.filter(f => f.group === 'L3'
+    && f.colour[0] === 0x33 && f.colour[1] === 0x66 && f.colour[2] === 0x99).length);
+  expect(n).toBeGreaterThan(10);
+});
+
+test('a level chip takes that level out of the picture and puts it back', async ({ page: p }) => {
+  await build3(p);
+  await expect(p.locator('#levels [data-level]')).toHaveText(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF']);
+  const all = Number(await p.evaluate(() => document.body.dataset.shown));
+  const roofs = await p.evaluate(() => DraftViewer.state.faces.filter(f => f.group === 'roof').length);
+  expect(roofs).toBeGreaterThan(10);
+  await p.locator('[data-level="roof"]').click();
+  await expect(p.locator('[data-level="roof"]')).not.toHaveClass(/lit/);
+  expect(Number(await p.evaluate(() => document.body.dataset.shown))).toBe(all - roofs);
+  expect(await p.evaluate(() => DraftViewer.state.shown.some(f => f.kind === 'roof'))).toBe(false);
+  await p.locator('[data-level="roof"]').click();
+  expect(Number(await p.evaluate(() => document.body.dataset.shown))).toBe(all);
+});
+
+test('a SECTION keeps one side of the cut, and FLIP the other', async ({ page: p }) => {
+  await build3(p);
+  await p.locator('[data-cut="x"]').click();
+  const side = () => p.evaluate(() => {
+    const b = DraftViewer.state.bounds, mid = (b.lo.x + b.hi.x) / 2;
+    const xs = DraftViewer.state.shown.flatMap(f => f.pts.map(q => q.x));
+    return { mid, lo: Math.min(...xs), hi: Math.max(...xs), section: document.body.dataset.shown };
+  });
+  const a = await side();
+  expect(a.hi).toBeLessThanOrEqual(a.mid + 1e-6);
+  await p.locator('#cut-flip').click();
+  const b = await side();
+  expect(b.lo).toBeGreaterThanOrEqual(b.mid - 1e-6);
+  // PLAN takes the top off 4 ft over the lowest storey's floor.
+  await p.locator('[data-cut="y"]').click();
+  const top = await p.evaluate(() => Math.max(...DraftViewer.state.shown.flatMap(f => f.pts.map(q => q.y))));
+  const main = await p.evaluate(() => Math.min(...DraftViewer.state.stack.floors.map(l => l.floorTop)));
+  expect(top).toBeCloseTo(main + 4, 1);
+  await p.locator('[data-cut="off"]').click();
+  expect(await p.evaluate(() => DraftViewer.state.shown.length)).toBe(await p.evaluate(() => DraftViewer.state.faces.length));
+});
+
+test('what a section cuts open is drawn in the cut colour on the plain painter', async ({ page: p }) => {
+  await openViewer(p, 'plain');
+  const centre = await p.evaluate(() => {
+    // A closed 4 ft cube, wound outward, cut through the middle and looked
+    // into from the cut side: what shows is its own inside.
+    const v = (x, y, z) => ({ x: x * 2, y: y * 2, z: z * 2 });
+    const quad = (a, b, c, d) => ({ kind: 'test', colour: [0, 200, 0], pts: [a, b, c, d] });
+    const cube = [
+      quad(v(-1, -1, 1), v(1, -1, 1), v(1, 1, 1), v(-1, 1, 1)), quad(v(1, -1, -1), v(-1, -1, -1), v(-1, 1, -1), v(1, 1, -1)),
+      quad(v(1, -1, 1), v(1, -1, -1), v(1, 1, -1), v(1, 1, 1)), quad(v(-1, -1, -1), v(-1, -1, 1), v(-1, 1, 1), v(-1, 1, -1)),
+      quad(v(-1, 1, 1), v(1, 1, 1), v(1, 1, -1), v(-1, 1, -1)), quad(v(-1, -1, -1), v(1, -1, -1), v(1, -1, 1), v(-1, -1, 1)),
+    ];
+    const s = DraftViewer.state;
+    s.faces = cube;
+    s.bounds = { lo: v(-1, -1, -1), hi: v(1, 1, 1) };
+    s.cut = { axis: 'z', at: 0.5, flip: false };
+    DraftViewer.applyView();
+    s.camera = { target: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, dist: 30, fov: 40 };
+    s.painter.render(s.camera, { background: '#dfe6ee', ambient: 1, edges: false, section: true, cutColour: '#4a4744' });
+    const c = document.getElementById('plain');
+    const d = c.getContext('2d').getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data;
+    return [d[0], d[1], d[2]];
+  });
+  expect(centre).toEqual([0x4a, 0x47, 0x44]);
+});
+
+test('beams carry the floor over them, and a basement column stands up under one', async ({ page: p }) => {
+  const r = await build3(p, `
+    const b = s.beams.find(x => x.view === 'foundation' && x.mode !== 'dropped');
+    s.columns.push({ id: 900, point: { x: (b.start.x + b.end.x) / 2, y: 0, z: (b.start.z + b.end.z) / 2 },
+      levelId: 1, view: 'foundation', footing: 'pad24' });
+    return s;`);
+  expect(r.counts.beams).toBe(8);
+  expect(r.counts.posts).toBe(1);
+  const got = await p.evaluate(() => {
+    const ys = kind => DraftViewer.state.faces.filter(f => f.kind === kind).flatMap(f => f.pts.map(q => q.y));
+    return { beamTop: Math.max(...ys('beam')), postLow: Math.min(...ys('post')), postTop: Math.max(...ys('post')), beamLow: Math.min(...ys('beam')) };
+  });
+  // FLUSH: up under the main floor's sheathing.
+  expect(got.beamTop).toBeCloseTo(r.levels[3] - 0.75 / 12, 3);
+  // The post from the slab up to the beam's underside.
+  expect(got.postLow).toBeCloseTo(r.slabTop, 3);
+  expect(got.postTop).toBeCloseTo(got.beamLow, 3);
+});
+
+test('OPEN IN 3D on the drafter opens the viewer with the drawing as it stands', async ({ page: p }) => {
+  const h = require('./helpers');
+  await h.openModel(p);
+  await h.selectTool(p, 'Outline');
+  for (const [x, z] of [[-12, -9], [12, -9], [12, 9], [-12, 9]]) await h.clickWorld(p, x, z);
+  await p.keyboard.press('Enter');
+  await h.waitForSaved(p);
+  await h.climbTourToMain(p);
+  await p.locator('[data-build-house]').click();
+  await h.waitForSaved(p);
+  await p.goto('/MODEL.html?right=1&left=1&level=3');
+  const chip = p.locator('#strip-3d');
+  await expect(chip).toBeVisible();
+  // Stacked over HOUSE turn, the same size.
+  const [cube, turn] = await Promise.all([chip.boundingBox(), p.locator('#strip-rotate').boundingBox()]);
+  expect(Math.abs(cube.x - turn.x)).toBeLessThanOrEqual(1);
+  expect(cube.y + cube.height).toBeLessThanOrEqual(turn.y);
+  expect(Math.abs(cube.width - turn.width)).toBeLessThanOrEqual(1);
+  // Still nothing 3D on the drafter.
+  expect(await p.evaluate(() => typeof window.THREE)).toBe('undefined');
+  const [tab] = await Promise.all([p.waitForEvent('popup'), chip.click()]);
+  await tab.waitForFunction(() => Number(document.body.dataset.loaded) > 0, null, { timeout: 15000 });
+  const counts = await tab.evaluate(() => DraftViewer.state.counts);
+  expect(counts.walls).toBeGreaterThanOrEqual(4);
+  expect(counts.roofs).toBeGreaterThanOrEqual(1);
+});

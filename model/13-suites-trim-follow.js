@@ -4012,6 +4012,37 @@
     });
   }
 
+  // OPEN IN 3D (jb, 26 Nov 2026: "should we do more Rough3D" / "ok lets do
+  // it"). The 3D viewer is its own program in viewer/, and this page never
+  // loads any of it (tests/viewer.spec.js holds that): the chip opens the
+  // viewer in a new tab, which says it is ready, and is answered with the
+  // drawing as it stands -- unsaved edits too, since nothing is written.
+  // Same site only, both ways. Viewing costs nothing; exports will.
+  const open3dChip = document.querySelector('[data-open-3d]');
+  if (open3dChip) {
+    open3dChip.addEventListener('click', () => {
+      if (!drawing) return;
+      const tab = window.open('./viewer/index.html?from=drafter', '_blank');
+      if (!tab) { sayOnStrip('OPEN IN 3D: the browser blocked the new tab. Allow pop-ups for this site and press it again.'); return; }
+      const send = event => {
+        if (event.source !== tab || event.origin !== location.origin
+          || !event.data || event.data.type !== 'draft-viewer-ready') return;
+        window.removeEventListener('message', send);
+        try {
+          tab.postMessage({ type: 'draft-viewer-drawing', name: document.title || 'drawing',
+            drawing: serializeDrawing({ trim: false }) }, location.origin);
+        } catch (error) {
+          sayOnStrip('OPEN IN 3D: the drawing could not be handed over.');
+        }
+      };
+      window.addEventListener('message', send);
+      // Gone after a minute either way: a tab that never says ready is not
+      // waited on for ever.
+      setTimeout(() => window.removeEventListener('message', send), 60000);
+      sayOnStrip('OPEN IN 3D: the house opens in a new tab.');
+    });
+  }
+
   if (rotateChip) {
     rotateChip.addEventListener('click', () => {
       if (!drawing) return;

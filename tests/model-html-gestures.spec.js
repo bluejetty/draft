@@ -800,6 +800,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // AND ZOOM TO FILL (Movie, 23 Oct): it moves the camera to frame
             // what is drawn, and draws nothing.
             'strip-fill',
+            // AND OPEN IN 3D (jb, 26 Nov 2026): it opens the 3D viewer in a
+            // new tab and draws nothing here.
+            'strip-3d',
             // THE NOTES PAD (Movie, 16 Oct): `notes-tab` opens it under
             // LEVELS / LAYERS and its CLEAR wipes the drafter's own notes. A
             // notepad is words for the drafter, never geometry, so no absence
