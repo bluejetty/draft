@@ -137,9 +137,11 @@ check('no type on the storey and no shared type leaves every type alone',
   W => { const d = bungalow(); d.levelAssemblies = { [MAIN]: { wallHeightFt: 9 } };
     const out = run(W, d); return [`${says(out, 'w1')}|${out.retyped}`, 'stud_2x6@9|0']; });
 
-check('the shared exterior type answers for a storey with no type of its own',
+// jb, 26 Nov 2026: a storey with no type of its own keeps the shell it was
+// drawn in; the WALL tool's pick (activeWallType) no longer retypes it.
+check('a storey with no type of its own keeps its drawn shell, not the WALL tool pick',
   W => { const d = bungalow(); d.levelAssemblies = { [MAIN]: { wallHeightFt: 9 } }; d.activeWallType = 'icf_13';
-    return [says(run(W, d), 'w1'), 'icf_13@9']; });
+    return [says(run(W, d), 'w1'), 'stud_2x6@9']; });
 
 check('the storey-s own type beats the shared one',
   W => { const d = bungalow(); d.activeWallType = 'icf_13';
@@ -210,8 +212,8 @@ const MUTATIONS = [
   ['an unchanged house is handed back anyway', 'project-reload.js',
     s => s.replace('    if (!moved && !retyped && nextRoofs === roofs) return null;', '')],
   ['the shared type beats the storey-s own', 'project-reload.js',
-    s => s.replace('      return exteriorIds().includes(asm.wallType) ? asm.wallType : activeType;',
-      '      return activeType || asm.wallType;')],
+    s => s.replace('      if (exteriorIds().includes(asm.wallType)) return asm.wallType;',
+      '      if (activeType) return activeType;')],
   ['any foundation type is poured, a stud wall included', 'project-reload.js',
     s => s.replace('        return foundationIds().includes(asm.wallType) ? asm.wallType : null;',
       '        return asm.wallType;')],

@@ -1300,11 +1300,13 @@
       // footing under a foundation that has none.
       const fdnIsIcf = () => !houseIsGradeBeam() && fdnWallType().startsWith('icf');
       // A floor's exterior wall: its own stored override when it has one,
-      // otherwise the house's shared type — the 99% case.
+      // otherwise the walls drawn round that storey's outline (jb, 26 Nov
+      // 2026), otherwise the house's shared type -- the WALL tool's pick.
       const floorWallType = levelId => {
         const override = assembly(levelId).wallType;
-        return EXTERIOR_CHOICES.includes(override) && WALL_TYPE_VIEW[override]
-          ? override : activeWallType;
+        if (EXTERIOR_CHOICES.includes(override) && WALL_TYPE_VIEW[override]) return override;
+        const drawn = window.DraftLevelAssembly?.drawnShellWallType?.(drawing, levelId, EXTERIOR_CHOICES);
+        return drawn && WALL_TYPE_VIEW[drawn] ? drawn : activeWallType;
       };
       const floorWallIn = levelId => WALL_TYPE_VIEW[floorWallType(levelId)].totalIn;
       // CONCRETE STANDS ON CONCRETE, NOT ON A FLOOR (Movie, 19 Oct: "due to

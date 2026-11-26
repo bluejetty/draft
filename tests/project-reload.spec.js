@@ -135,3 +135,28 @@ test('CANCEL reloads nothing, and a house already at its numbers says so and sta
   d = await stored(page);
   expect(d.walls.find(w => w.id === 'w1').wallType).toBe('stud_2x6');
 });
+
+// AN UNSET FLOOR READS THE SHELL IT WAS DRAWN IN (jb, 26 Nov 2026): "the
+// walls were already 2x6 ... why not 2x4?" -- the WALL tool sat on 2x4, and
+// a floor left unset on PROJECT showed the tool's pick, not the drawn walls.
+// Only the outside walls count: a 2x4 partition does not outvote the shell.
+test('an unset floor on PROJECT shows the outside walls drawn, not the WALL tool pick', async ({ page }) => {
+  const file = drawn();
+  file.activeWallType = 'stud_2x4';
+  file.walls.push(wall('p1', { x: 10, z: 0 }, { x: 10, z: 28 }, { type: 'stud_2x4' }),
+    wall('p2', { x: 30, z: 0 }, { x: 30, z: 28 }, { type: 'stud_2x4' }),
+    wall('p3', { x: 0, z: 14 }, { x: 40, z: 14 }, { type: 'stud_2x4' }));
+  await openProject(page, file);
+  await expect(page.locator('[data-detail-input="wallType-3"]')).toHaveValue('stud_2x6');
+  // A storey with no walls drawn yet still answers the tool's pick.
+  expect(await page.evaluate(() => window.DraftLevelAssembly.drawnShellWallType(
+    { walls: [], outlines: [] }, 3, ['stud_2x4', 'stud_2x6']))).toBe(null);
+  // And the BONE leaves the shell in the 2x6 it was drawn in.
+  await page.locator('#bone').click();
+  await expect(page.locator('#project-reload-ask')).toBeVisible();
+  await page.locator('[data-reload-ask="go"]').click();
+  await page.waitForURL(/MODEL\.html/);
+  const d = await stored(page);
+  ['w1', 'w2', 'w3', 'w4'].forEach(id => expect(d.walls.find(w => w.id === id).wallType).toBe('stud_2x6'));
+  expect(d.walls.find(w => w.id === 'p1').wallType).toBe('stud_2x4');
+});

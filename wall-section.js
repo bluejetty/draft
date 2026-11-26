@@ -50,16 +50,24 @@ if (!window.DraftWallSection) {
       : WT.WALL_TYPES.find(type => type.id === id)) || null;
     // THE MADE TYPE THE DRAWN WALLS OF A LEVEL ARE MOSTLY BUILT IN, if any:
     // the section shows the wall the drafter drew, slice by slice.
+    // "MOSTLY" IS BY RUN OF WALL, STOCK TYPES COUNTED TOO (jb, 25 Nov): two
+    // 2 ft gable stubs in a made 1FT WALL beside 120 ft of 2x6 stud took
+    // the whole WALL SECTION, because only made walls were counted. A made
+    // type now draws only when it is the level's longest run of wall.
     const madeTypeOn = (levelId, view, kind) => {
       if (!WT.isUserWallTypeId) return null;
-      const count = new Map();
+      const run = new Map();
       (Array.isArray(saved.walls) ? saved.walls : []).forEach(wall => {
         if (Number(wall?.levelId) !== levelId || (wall.view || 'plan') !== view) return;
-        const type = WT.isUserWallTypeId(wall.wallType) ? WT.userWallTypeById(wall.wallType) : null;
-        if (type && type.kind === kind) count.set(type.id, (count.get(type.id) || 0) + 1);
+        const dx = Number(wall.end?.x) - Number(wall.start?.x);
+        const dz = Number(wall.end?.z) - Number(wall.start?.z);
+        const length = Math.hypot(dx, dz);
+        const key = String(wall.wallType || '');
+        run.set(key, (run.get(key) || 0) + (Number.isFinite(length) ? length : 0));
       });
-      const best = [...count.entries()].sort((a, b) => b[1] - a[1])[0];
-      return best ? WT.userWallTypeById(best[0]) : null;
+      const best = [...run.entries()].sort((a, b) => b[1] - a[1])[0];
+      const type = best && WT.isUserWallTypeId(best[0]) ? WT.userWallTypeById(best[0]) : null;
+      return type && type.kind === kind ? type : null;
     };
     const slicesOf = layers => layers.map(layer => ({ in: layer.in, name: layer.name || '' }));
     const levels = format.levels(saved.levels);
@@ -79,7 +87,10 @@ if (!window.DraftWallSection) {
       const made = madeTypeOn(levelId, 'plan', 'floor');
       if (made) return made.id;
       const override = assembly(levelId).wallType;
-      return WT.EXTERIOR_WALL_TYPE_IDS.includes(override) && wallType(override) ? override : activeWallType;
+      if (WT.EXTERIOR_WALL_TYPE_IDS.includes(override) && wallType(override)) return override;
+      // PROJECT: else the walls drawn round the storey's outline (jb, 26 Nov).
+      const drawn = LA.drawnShellWallType ? LA.drawnShellWallType(saved, levelId, WT.EXTERIOR_WALL_TYPE_IDS) : null;
+      return drawn && wallType(drawn) ? drawn : activeWallType;
     };
     // PROJECT: fdnWallType -- the FOUNDATION assembly's choice, else the
     // drawn foundation walls, else 8" concrete.

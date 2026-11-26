@@ -133,7 +133,10 @@ if (!window.DraftProjectReload) {
         if (asm.wallType === 'concrete_8' && window.DraftWallTypes?.isStockWallType?.(wall.wallType)) return null;
         return foundationIds().includes(asm.wallType) ? asm.wallType : null;
       }
-      return exteriorIds().includes(asm.wallType) ? asm.wallType : activeType;
+      if (exteriorIds().includes(asm.wallType)) return asm.wallType;
+      // AN UNSET STOREY KEEPS THE SHELL IT WAS DRAWN IN (jb, 26 Nov 2026),
+      // as PROJECT now reads it; the WALL tool's pick only when none stands.
+      return (L.drawnShellWallType && L.drawnShellWallType(drawing, wall.levelId, exteriorIds())) || activeType;
     };
 
     let moved = 0, retyped = 0;
