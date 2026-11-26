@@ -5,8 +5,8 @@
     <meta name="draft-build" content="dev">
     <script src="../build-id.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VIEWER - Rough Drafter 3D</title>
-    <meta name="description" content="Rough Drafter VIEWER: open a .draft or a SAVE AS ZIP and see the house in 3D." />
+    <title>RUFF 3D</title>
+    <meta name="description" content="RUFF 3D / ROUGH 3D: open a .draft or a SAVE AS ZIP and see the house in 3D." />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
     <link rel="stylesheet" href="../vendor/fonts.css" />
     <!--
@@ -77,7 +77,7 @@
   <body>
     <header>
       <a href="../index.html" title="Back to Rough Drafter"><img src="../assets/bluejetty.png" alt="Rough Drafter" /></a>
-      <h1>VIEWER</h1>
+      <h1 id="brand">RUFF 3D</h1>
       <button id="open" type="button">OPEN FILE</button>
       <input id="file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
       <button id="fit" type="button" title="Fit the house to the window (F)">FIT</button>
@@ -99,6 +99,7 @@
     </main>
 
     <!-- The drafter's own modules, read from the folder above. Order as LAYOUT.html loads them. -->
+    <script src="../palette.js"></script>
     <script src="../profile-manager.js"></script>
     <script src="../formatters.js"></script>
     <script src="../wall-types.js"></script>
@@ -111,6 +112,8 @@
     <script src="../building-bodies.js"></script>
     <script src="../cut-view.js"></script>
     <script src="../cut-view-env.js"></script>
+    <script src="../stair-geometry.js"></script>
+    <script src="../hologram.js"></script>
     <script src="../zip-bundle.js"></script>
     <!-- 3D only from here down: never loaded by any 2D page. -->
     <script src="../vendor/three-0.128.0.min.js"></script>

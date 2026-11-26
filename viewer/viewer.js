@@ -25,7 +25,22 @@
     webglOk: false,
     frames: 0,
     lastDrawn: 0,
+    brand: 'RUFF 3D',
   };
+
+  // THE NAME FOLLOWS THE SKIN (jb, 26 Nov 2026: "ROUGH 3D / RUFF 3D"). The
+  // same pick MODEL makes: ?theme= first, then the skin the drafter chose
+  // (localStorage 'draft-skin'), then the door the visit came in by.
+  function brandName() {
+    const P = window.DraftPalette;
+    const themes = P ? P.THEMES : ['ruff', 'rough'];
+    let theme = new URLSearchParams(location.search).get('theme');
+    if (!themes.includes(theme)) {
+      try { theme = (JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}).theme; } catch (e) { theme = null; }
+    }
+    if (!themes.includes(theme)) theme = P ? P.homeTheme() : 'ruff';
+    return { theme, name: theme === 'rough' ? 'ROUGH 3D' : 'RUFF 3D' };
+  }
 
   const readPref = () => { try { return localStorage.getItem(PAINTER_KEY); } catch (e) { return null; } };
   const writePref = v => { try { localStorage.setItem(PAINTER_KEY, v); } catch (e) { /* private window */ } };
@@ -106,9 +121,11 @@
     state.camera = window.DraftViewerCamera.fit(built.bounds);
     if (state.painter) state.painter.setFaces(state.faces);
     $('drop-hint').hidden = state.faces.length > 0;
-    document.title = `${state.name} - VIEWER`;
+    document.title = `${state.name} - ${state.brand}`;
     const c = built.counts;
-    setStatus(`${state.name}: ${c.walls} walls, ${c.foundationWalls} foundation walls, ${c.floors} floors, ${c.roofs} roofs, ${c.gables} gable ends`
+    const extra = [[c.windows, 'windows'], [c.doors, 'doors'], [c.stairs, 'stairs'], [c.decks, 'decks'], [c.holograms, 'holograms']]
+      .filter(([n]) => n > 0).map(([n, w]) => `, ${n} ${n === 1 ? w.replace(/s$/, '') : w}`).join('');
+    setStatus(`${state.name}: ${c.walls} walls, ${c.foundationWalls} foundation walls, ${c.floors} floors, ${c.roofs} roofs, ${c.gables} gable ends${extra}`
       + ` (${Math.round(performance.now() - t0)} ms)`, !state.faces.length);
     document.body.dataset.loaded = String(state.faces.length);
     redraw();
@@ -199,6 +216,11 @@
 
   // ── BOOT ───────────────────────────────────────────────────────────────
   function boot() {
+    const brand = brandName();
+    state.brand = brand.name;
+    $('brand').textContent = brand.name;
+    document.title = brand.name;
+    document.body.dataset.theme = brand.theme;
     state.webglOk = window.DraftPaintWebGL.available();
     const pref = readPref();
     if (pref === 'auto' || pref === 'webgl' || pref === 'plain') state.painterWanted = pref;
