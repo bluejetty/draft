@@ -289,8 +289,11 @@ const MUTATIONS = [
     c => c.replace("(['S-BEAM', 'S-COL-FOOTING', 'S-SLAB',", "(['S-BEAM', 'S-SLAB',")],
 
   ['the stair view cannot be written on', 'layer-views.js',
-    c => c.replace("(['A-STR', 'A-FL', 'STAIR SECTION', 'A-ANNO-NOTE'])",
-      "(['A-STR', 'A-FL', 'STAIR SECTION'])")],
+    c => c.replace("(['A-STR', 'A-FL', 'STAIR SECTION', 'A-ANNO-NOTE', 'draft'])",
+      "(['A-STR', 'A-FL', 'STAIR SECTION', 'draft'])")],
+
+  ['the floor layout drops the lines drawn on it', 'layer-views.js',
+    c => c.replace("'A-DIMS-INT', 'A-DIMS-COLS', 'A-ANNO-NOTE', 'draft'])", "'A-DIMS-INT', 'A-DIMS-COLS', 'A-ANNO-NOTE'])")],
 
   ['a handed-out layer list is the table-s own, editable', 'layer-views.js',
     // Every copy, not the first: the freeze is per view, and one list left
