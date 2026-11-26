@@ -3278,7 +3278,7 @@
   };
   // The cut itself, no UNDO of its own: `kinds` are the roof's kinds with
   // the press in; `index` the edge pressed (null: any stepped end).
-  const cutJogEnd = (roof, kinds, index = null) => {
+  const cutJogEnd = (roof, kinds, index = null, wantId = null) => {
     const G = window.DraftGeometry2D;
     const all = drawing?.roofs || [];
     const at = all.indexOf(roof);
@@ -3295,7 +3295,9 @@
     const flush = { ...flat, edges: baseKinds };
     Object.keys(roof).forEach(key => { if (key !== 'id') delete roof[key]; });
     Object.assign(roof, pieces.big, { id: before.id, follows: 'none', flushOf: flush });
-    let smallId = newDrawingItemId('roof');
+    // `wantId`: a re-cut hands the small piece its old id back (keepJogSmall).
+    let smallId = wantId != null && !all.some(r => String(r.id) === String(wantId))
+      ? String(wantId) : newDrawingItemId('roof');
     while (all.some(r => String(r.id) === smallId)) smallId = newDrawingItemId('roof');
     const small = { ...pieces.small, id: smallId, follows: 'none', jogOf: before.id };
     all.splice(at + 1, 0, small);
@@ -3377,6 +3379,41 @@
   // press on the edge that came from either part re-cuts it from the roof
   // it came from, both back to eaves joining it whole -- one UNDO each time.
   // Returns true when it took the press.
+  //
+  // ── THE SMALL PIECE STAYS HIS (jb, 26 Nov 2026) ───────────────────────
+  //
+  // "i'm trying to change the roof from hip to gable and then the front
+  // gable gets deleted": the small gable over the part that sticks out was
+  // a SPECIAL CASE piece (an 18" fascia of its own, its front pulled out
+  // past the step), and the re-cut threw it away for a plain new one. A
+  // re-cut piece now takes over the old one's id (cutJogEnd), what it keeps for itself
+  // (`own`: pitch, fascia, overhang, fascia finish), its seat and layer, and
+  // every corner he moved: a corner of the new piece standing where the
+  // old cut put one goes where he took that one. MAIN ROOF's values on the
+  // assembly ride along too.
+  const keepJogSmall = (small, was, cutWas) => {
+    if (!small || !was) return;
+    ['sourceLevelId', 'drawnOn', 'layer', 'plateHeightFt', 'fasciaFinish'].forEach(key => {
+      if (key in was) small[key] = was[key]; else delete small[key];
+    });
+    const own = (Array.isArray(was.own) ? was.own : []).filter(k => [...ROOF_OWN_KEYS, 'fasciaFinish'].includes(k));
+    own.forEach(key => {
+      if (!ROOF_SETTING[key]) return;
+      const v = ROOF_SETTING[key].read(was);
+      if (v != null && Number.isFinite(Number(v))) ROOF_SETTING[key].write(small, v);
+    });
+    if (own.length) small.own = own.slice(); else delete small.own;
+    const from = Array.isArray(cutWas?.points) ? cutWas.points : [];
+    const to = Array.isArray(was.points) ? was.points : [];
+    if (from.length !== to.length || !Array.isArray(small.points)) return;
+    const same = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 1e-6;
+    const moved = from.map((p, i) => [p, to[i]]).filter(([p, q]) => !same(p, q));
+    if (!moved.length) return;
+    small.points = small.points.map(p => {
+      const hit = moved.find(([q]) => same(p, q));
+      return hit ? { ...p, x: hit[1].x, z: hit[1].z } : p;
+    });
+  };
   const jogEndPress = (roof, index, now) => {
     const G = window.DraftGeometry2D;
     if (!G?.gableJogPieces || (now !== 'gable' && now !== 'eave')) return false;
@@ -3396,9 +3433,18 @@
       kinds[e] = now;
       kinds[S] = solid(kinds[P]) && solid(kinds[Q]) ? 'gable' : 'eave';
       const undo = roofsSnapshot([pair.big, pair.small]);
+      const was = JSON.parse(JSON.stringify(pair.small));
+      const mainWas = groupOf({ type: 'roof', item: pair.big })?.roofMain;
       const big = joinInPlace(pair.big, pair.small);
       big.edges = kinds;
-      const made = solid(kinds[P]) || solid(kinds[Q]) ? cutJogEnd(big, kinds, e) : null;
+      const made = solid(kinds[P]) || solid(kinds[Q]) ? cutJogEnd(big, kinds, e, was.id) : null;
+      if (made) {
+        keepJogSmall(made.small, was, pieces.small);
+        const owner = groupOf({ type: 'roof', item: big });
+        if (owner && mainWas && !owner.roofMain) {
+          drawing.groups = groups().map(group => (group === owner ? { ...group, roofMain: { ...mainWas } } : group));
+        }
+      }
       undoStack.push({ kind: 'assembly', undo });
       roofEdgeIdx = null;
       setSelection([{ type: 'roof', item: big }]);
