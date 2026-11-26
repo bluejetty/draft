@@ -672,3 +672,140 @@ test('EXPORT: a cancelled save picker takes no bone', async ({ page: p }) => {
   await expect(p.locator('[data-export-toll]')).toContainText('the save was cancelled, no bone taken');
   expect(await bonesLeft(p)).toBe(2);
 });
+
+// ── PHASE 6: PRINT MODEL ─────────────────────────────────────────────────
+//
+// jb, 26 Nov 2026: "go Sir !!" on the planned print phase: a scale, the thin
+// parts thickened, the house in lift-off pieces, a file a slicer fills. A
+// slicer fills only CLOSED shells, so every edge of the print house must be
+// met by the same edge running the other way.
+
+// Edges left open, per kind: 0 everywhere means every part is a closed,
+// consistently wound solid.
+const openEdges = faces => {
+  const key = q => q.map(v => Math.round(v * 1000)).join(',');
+  const m = new Map();
+  faces.forEach(pts => pts.forEach((a, i) => {
+    const b = pts[(i + 1) % pts.length];
+    const ka = key(a), kb = key(b);
+    if (ka === kb) return;
+    const back = `${kb}>${ka}`;
+    if (m.get(back) > 0) m.set(back, m.get(back) - 1); else m.set(`${ka}>${kb}`, (m.get(`${ka}>${kb}`) || 0) + 1);
+  }));
+  let open = 0;
+  m.forEach(v => { open += v; });
+  return open;
+};
+
+test('the print house is closed solids: openings open, roofs slabs, walls thickened to the minimum', async ({ page: p }) => {
+  await viewerWithPicker(p);
+  const r = await p.evaluate(() => {
+    const s = DraftViewer.state;
+    const minFt = DraftPrintModel.minFtAt(200);
+    const b = DraftHouseMesh.build(s.saved, { print: { minFt } });
+    const kinds = {};
+    b.faces.forEach(f => { (kinds[f.kind] = kinds[f.kind] || []).push(f.pts.map(q => [q.x, q.y, q.z])); });
+    // The screen build is untouched by a print build.
+    const again = DraftHouseMesh.build(s.saved);
+    return { kinds, twoSided: b.faces.filter(f => f.twoSided).length, counts: b.counts,
+      screenGlass: again.faces.filter(f => f.kind === 'glass').length, minFt };
+  });
+  expect(r.twoSided).toBe(0);
+  expect(Object.keys(r.kinds)).not.toContain('glass');
+  expect(Object.keys(r.kinds)).not.toContain('door');
+  expect(r.counts.windows).toBe(21);
+  expect(r.screenGlass).toBe(21);
+  const open = Object.fromEntries(Object.entries(r.kinds).map(([k, list]) => [k, openEdges(list)]));
+  expect(Object.values(open).every(v => v === 0), JSON.stringify(open)).toBe(true);
+});
+
+test('PRINT MODEL lists the lift-off pieces at the scale, writes a 3MF a slicer reads, and takes 1 bone', async ({ page: p }) => {
+  await viewerWithPicker(p);
+  await wallet(p, 3);
+  await p.locator('#print-open').click();
+  await expect(p.locator('#print')).toBeVisible();
+  // Defaults: 1/8" = 1', LIFT-OFF, 3MF.
+  await expect(p.locator('[data-scale="96"]')).toHaveClass(/lit/);
+  await expect(p.locator('[data-split="lift"]')).toHaveClass(/lit/);
+  await expect(p.locator('[data-piece]')).toHaveText([/^FOUNDATION: /, /^MAIN FL: /, /^2ND FL: /, /^ROOF: /]);
+  await expect(p.locator('[data-print-fit]')).toHaveText('At 1/8" = 1\' every piece fits a 250 mm bed.');
+  await expect(p.locator('[data-print-toll]')).toHaveText('Costs 1 bone (you have 3).');
+  const at96 = await p.evaluate(() => DraftViewer.state.printPlaced.map(pc => pc.size));
+  // Twice the scale, twice the size, and too big for the bed.
+  await p.locator('[data-scale="48"]').click();
+  const at48 = await p.evaluate(() => DraftViewer.state.printPlaced.map(pc => pc.size));
+  at48.forEach((s, i) => s.forEach((v, j) => expect(v).toBeCloseTo(at96[i][j] * 2, 0)));
+  await expect(p.locator('[data-print-fit]')).toContainText('bigger than a 250 mm bed');
+  await expect(p.locator('[data-print-fit]')).toHaveClass(/warn/);
+  await p.locator('[data-scale="96"]').click();
+  // A level switched off does not print.
+  await p.locator('[data-level="roof"]').click();
+  await expect(p.locator('[data-piece]')).toHaveCount(3);
+  await p.locator('[data-level="roof"]').click();
+  await expect(p.locator('[data-piece]')).toHaveCount(4);
+  // Save: the bone goes once the file is written.
+  const blob = p.evaluate(() => new Promise(res => {
+    const real = window.showSaveFilePicker;
+    window.showSaveFilePicker = async o => { const h = await real(o); const w = await h.createWritable();
+      return { ...h, createWritable: async () => ({ write: async b => { await w.write(b); res(Array.from(new Uint8Array(await b.arrayBuffer()))); }, close: async () => {} }) }; };
+  }));
+  await p.locator('#print-go').click();
+  await expect(p.locator('[data-print-toll]')).toHaveText('Saved repro-movie-2storey-garage-print.3mf (1 bone, 2 left).');
+  expect(await bonesLeft(p)).toBe(2);
+  const bytes = await blob;
+  const r = await p.evaluate(async bytes => {
+    const z = await DraftZipBundle.readZip(new Blob([new Uint8Array(bytes)]));
+    const text = new TextDecoder().decode(z.find(e => e.name === '3D/3dmodel.model').bytes);
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const objects = [...doc.getElementsByTagName('object')].map(o => {
+      const v = [...o.getElementsByTagName('vertex')].map(e => ['x', 'y', 'z'].map(a => Number(e.getAttribute(a))));
+      const t = [...o.getElementsByTagName('triangle')].map(e => ['v1', 'v2', 'v3'].map(a => Number(e.getAttribute(a))));
+      // Welded and closed: every directed edge a->b has its b->a.
+      const edges = new Map();
+      t.forEach(([a, b, c]) => [[a, b], [b, c], [c, a]].forEach(([x, y]) => edges.set(`${x}>${y}`, (edges.get(`${x}>${y}`) || 0) + 1)));
+      let open = 0;
+      edges.forEach((n, k) => { const [x, y] = k.split('>'); open += Math.abs(n - (edges.get(`${y}>${x}`) || 0)); });
+      const zMin = Math.min(...v.map(q => q[2]));
+      const box = [0, 1].map(i => [Math.min(...v.map(q => q[i])), Math.max(...v.map(q => q[i]))]);
+      return { name: o.getAttribute('name'), tris: t.length, open, zMin, box };
+    });
+    return { unit: doc.documentElement.getAttribute('unit'), items: doc.getElementsByTagName('item').length,
+      parse: !doc.querySelector('parsererror'), objects };
+  }, bytes);
+  expect(r).toMatchObject({ unit: 'millimeter', items: 4, parse: true });
+  expect(r.objects.map(o => o.name)).toEqual(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF']);
+  r.objects.forEach(o => {
+    expect(o.tris, o.name).toBeGreaterThan(20);
+    expect(o.open, `${o.name} is closed`).toBe(0);
+    expect(o.zMin, `${o.name} stands on the bed`).toBeCloseTo(0, 3);
+  });
+  // Packed on the bed: no two pieces overlap, each row within 250 mm.
+  r.objects.forEach((a, i) => r.objects.slice(i + 1).forEach(b => {
+    const apart = a.box[0][1] <= b.box[0][0] || b.box[0][1] <= a.box[0][0] || a.box[1][1] <= b.box[1][0] || b.box[1][1] <= a.box[1][0];
+    expect(apart, `${a.name} and ${b.name} apart`).toBe(true);
+  }));
+  r.objects.forEach(o => expect(o.box[0][1]).toBeLessThanOrEqual(250));
+});
+
+test('PRINT MODEL: STL pieces in a zip, ONE PIECE as one STL, refused at 0 bones', async ({ page: p }) => {
+  await viewerWithPicker(p);
+  await wallet(p, 2);
+  await p.locator('#print-open').click();
+  await p.locator('[data-print-format="stl"]').click();
+  await p.locator('#print-go').click();
+  await expect(p.locator('[data-print-toll]')).toContainText('Saved repro-movie-2storey-garage-print-stl.zip');
+  const pieces = await p.evaluate(async () => {
+    const f = await DraftPrintModel.write(DraftViewer.state.printPlaced, 'house', 'stl');
+    const z = await DraftZipBundle.readZip(f.blob);
+    return z.map(e => ({ name: e.name, count: new DataView(e.bytes.buffer, e.bytes.byteOffset).getUint32(80, true), size: e.bytes.length }));
+  });
+  expect(pieces.map(e => e.name)).toEqual(['house-01-foundation.stl', 'house-02-main-fl.stl', 'house-03-2nd-fl.stl', 'house-04-roof.stl']);
+  pieces.forEach(e => expect(e.size).toBe(84 + 50 * e.count));
+  await p.locator('[data-split="one"]').click();
+  await expect(p.locator('[data-piece]')).toHaveText([/^HOUSE: /]);
+  await p.locator('#print-go').click();
+  await expect(p.locator('[data-print-toll]')).toHaveText('Saved repro-movie-2storey-garage-print.stl (1 bone, 0 left).');
+  await p.locator('#print-go').click();
+  await expect(p.locator('[data-print-toll]')).toHaveText(/A print file costs 1 bone and you have 0\./);
+  expect(await p.evaluate(() => window.__files.length), 'nothing written at 0').toBe(2);
+});

@@ -53,11 +53,11 @@ if (!window.DraftBoneWallet) {
   // to the downloads folder. Above DRIP_CAP, so the free drip alone never
   // reaches it: a DXF waits on a bought wallet (the server ledger, #52).
   // A 3D EXPORT from the viewer (viewer/, jb, 25 Nov 2026: "cost 1 bone")
-  // is 1 a file, taken once the file is written; turning the house round
-  // on screen is free.
+  // is 1 a file, taken once the file is written, and a PRINT MODEL file
+  // (phase 6) the same; turning the house round on screen is free.
   const COSTS = Object.freeze({
     buildHouse: 1, saveToComputer: 1, saveZip: 5, emailBackup: 1, printPackage: 2, savePdf: 5, saveDxf: 15,
-    export3d: 1,
+    export3d: 1, printModel: 1,
   });
   const STORAGE_KEY = 'draft-bone-wallet';
 

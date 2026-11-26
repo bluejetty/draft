@@ -183,6 +183,8 @@
     if (state.painter) state.painter.setFaces(list);
     document.body.dataset.shown = String(list.length);
     $('export-open').disabled = !list.length;
+    $('print-open').disabled = !list.length;
+    if (!$('print').hidden) showPrintPanel();
     redraw();
   }
 
@@ -206,6 +208,7 @@
   function loadDrawing(saved, name) {
     const t0 = performance.now();
     const built = window.DraftHouseMesh.build(saved);
+    state.saved = saved;
     state.faces = built.faces;
     state.counts = built.counts;
     state.stack = built.stack;
@@ -246,7 +249,7 @@
     const C = window.DraftViewerCamera;
     let drag = null;
     // The EXPORT panel floats over the stage: presses on it are its own.
-    const onPanel = e => !!(e.target.closest && e.target.closest('#export'));
+    const onPanel = e => !!(e.target.closest && e.target.closest('.panel'));
     stage.addEventListener('contextmenu', e => { if (!onPanel(e)) e.preventDefault(); });
     stage.addEventListener('pointerdown', e => {
       if (!state.camera || onPanel(e)) return;
@@ -425,14 +428,12 @@
   function wireExport() {
     $('export-open').addEventListener('click', () => {
       const panel = $('export');
+      closePanel('print');
       panel.hidden = !panel.hidden;
       $('export-open').classList.toggle('lit', !panel.hidden);
       if (!panel.hidden) showExportPanel();
     });
-    $('export-close').addEventListener('click', () => {
-      $('export').hidden = true;
-      $('export-open').classList.remove('lit');
-    });
+    $('export-close').addEventListener('click', () => closePanel('export'));
     document.querySelectorAll('[data-unit]').forEach(b => b.addEventListener('click', () => {
       try { localStorage.setItem(UNIT_KEY, b.dataset.unit); } catch (e) { /* private window */ }
       showExportPanel();
@@ -440,6 +441,142 @@
     // A bone spent in a drafter tab, or dripped in, shows here too.
     window.addEventListener('storage', e => { if (e.key === 'draft-bone-wallet' && !$('export').hidden) showExportToll(); });
     window.addEventListener('draft-bones-changed', () => { if (!$('export').hidden && !exporting) showExportToll(); });
+  }
+
+  // ── PRINT MODEL ────────────────────────────────────────────────────────
+  //
+  // Phase 6 (jb, 26 Nov 2026: "go Sir !!"). The panel builds the print house
+  // (print-model.js) at the scale picked, lists each piece's size on the bed,
+  // and writes a 3MF or STL for 1 bone, taken once the file is written, the
+  // same rule as EXPORT. What prints is the levels switched on.
+  const PRINT_KEY = 'draft-viewer-print';
+  const printCost = () => {
+    const W = window.DraftBoneWallet;
+    return W && W.COSTS.printModel ? W.COSTS.printModel : 1;
+  };
+  function printPrefs() {
+    let got = {};
+    try { got = JSON.parse(localStorage.getItem(PRINT_KEY) || '{}') || {}; } catch (e) { got = {}; }
+    const P = window.DraftPrintModel;
+    return {
+      scale: P.SCALES.some(sc => sc.id === got.scale) ? got.scale : '96',
+      split: got.split === 'one' ? 'one' : 'lift',
+      format: got.format === 'stl' ? 'stl' : '3mf',
+    };
+  }
+  function setPrintPref(key, value) {
+    const next = { ...printPrefs(), [key]: value };
+    try { localStorage.setItem(PRINT_KEY, JSON.stringify(next)); } catch (e) { /* private window */ }
+  }
+
+  function closePanel(id) {
+    $(id).hidden = true;
+    $(`${id}-open`).classList.remove('lit');
+  }
+
+  const sizeWords = ([w, d, h]) => {
+    const mm = [w, d, h].map(v => Math.round(v)).join(' × ');
+    const inch = [w, d, h].map(v => (v / 25.4).toFixed(1)).join(' × ');
+    return `${mm} mm (${inch} in)`;
+  };
+
+  // The pieces as they stand for the chips picked: built fresh each time,
+  // so a level switched off drops out of the list.
+  function printPlan() {
+    const P = window.DraftPrintModel, pref = printPrefs();
+    const scale = P.SCALES.find(sc => sc.id === pref.scale);
+    const placed = state.saved ? P.prepare(state.saved, { ratio: scale.ratio, split: pref.split, hidden: state.hidden }) : [];
+    return { pref, scale, placed };
+  }
+
+  function showPrintToll(said) {
+    const el = $('print-toll');
+    const cost = printCost(), have = held();
+    const short = have < cost;
+    el.textContent = said || (short
+      ? `A print file costs ${bonesWord(cost)} and you have ${have}. A free bone drips in every hour. Turning the house round is free.`
+      : `Costs ${bonesWord(cost)} (you have ${have}).`);
+    el.classList.toggle('warn', short && !said);
+  }
+
+  function showPrintPanel() {
+    const P = window.DraftPrintModel;
+    const { pref, scale, placed } = printPlan();
+    const box = $('print-scales');
+    box.textContent = '';
+    P.SCALES.forEach(sc => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.scale = sc.id;
+      b.textContent = sc.label;
+      b.classList.toggle('lit', sc.id === pref.scale);
+      b.addEventListener('click', () => { setPrintPref('scale', sc.id); showPrintPanel(); });
+      box.appendChild(b);
+    });
+    document.querySelectorAll('[data-split]').forEach(b => b.classList.toggle('lit', b.dataset.split === pref.split));
+    document.querySelectorAll('[data-print-format]').forEach(b => b.classList.toggle('lit', b.dataset.printFormat === pref.format));
+    const list = $('print-pieces');
+    list.textContent = '';
+    placed.forEach(pc => {
+      const li = document.createElement('li');
+      li.dataset.piece = pc.id;
+      li.textContent = `${pc.name}: ${sizeWords(pc.size)}`;
+      li.classList.toggle('big', !pc.fits);
+      list.appendChild(li);
+    });
+    const big = placed.filter(pc => !pc.fits);
+    const fit = $('print-fit');
+    fit.textContent = !placed.length ? 'Nothing to print: switch a level on.'
+      : big.length ? `${big.map(pc => pc.name).join(', ')} ${big.length === 1 ? 'is' : 'are'} bigger than a ${P.BED_MM} mm bed. Pick a smaller scale${pref.split === 'one' ? ' or LIFT-OFF' : ''}, or split it in the slicer.`
+        : `At ${scale.label} every piece fits a ${P.BED_MM} mm bed.`;
+    fit.classList.toggle('warn', !placed.length || big.length > 0);
+    $('print-go').disabled = !placed.length;
+    showPrintToll();
+    state.printPlaced = placed;
+  }
+
+  let printing = false;
+  async function savePrint() {
+    if (printing || !state.saved) return null;
+    const W = window.DraftBoneWallet;
+    const cost = printCost();
+    if (!W || held() < cost) { showPrintToll(); return null; }
+    const { pref, placed } = printPlan();
+    if (!placed.length) return null;
+    const base = String(state.name || 'house').replace(/\.(draft|json|zip)$/i, '').replace(/[\\/:*?"<>|]+/g, '-') || 'house';
+    printing = true;
+    try {
+      showPrintToll('Writing the print file...');
+      const file = await window.DraftPrintModel.write(placed, base, pref.format);
+      const written = await writeOut(file);
+      if (!written) { showPrintToll(`Not saved: the save was cancelled, no bone taken. Costs ${bonesWord(cost)} (you have ${held()}).`); return null; }
+      W.spend(cost);
+      window.dispatchEvent(new CustomEvent('draft-bones-changed'));
+      showPrintToll(`Saved ${file.name} (${bonesWord(cost)}, ${held()} left).`);
+      document.body.dataset.printed = file.name;
+      return file;
+    } catch (e) {
+      showPrintToll(`Could not write the print file: ${e && e.message ? e.message : e}. No bone taken.`);
+      return null;
+    } finally {
+      printing = false;
+    }
+  }
+
+  function wirePrint() {
+    $('print-open').addEventListener('click', () => {
+      const panel = $('print');
+      closePanel('export');
+      panel.hidden = !panel.hidden;
+      $('print-open').classList.toggle('lit', !panel.hidden);
+      if (!panel.hidden) showPrintPanel();
+    });
+    $('print-close').addEventListener('click', () => closePanel('print'));
+    document.querySelectorAll('[data-split]').forEach(b => b.addEventListener('click', () => { setPrintPref('split', b.dataset.split); showPrintPanel(); }));
+    document.querySelectorAll('[data-print-format]').forEach(b => b.addEventListener('click', () => { setPrintPref('format', b.dataset.printFormat); showPrintPanel(); }));
+    $('print-go').addEventListener('click', savePrint);
+    window.addEventListener('storage', e => { if (e.key === 'draft-bone-wallet' && !$('print').hidden) showPrintToll(); });
+    window.addEventListener('draft-bones-changed', () => { if (!$('print').hidden && !printing) showPrintToll(); });
   }
 
   // ── BOOT ───────────────────────────────────────────────────────────────
@@ -504,6 +641,7 @@
     });
     setStatus('Open a .draft or a SAVE AS ZIP to see the house.');
     wireExport();
+    wirePrint();
     listenForDrafter();
     document.body.dataset.ready = '1';
   }
@@ -544,7 +682,7 @@
     }
   }
 
-  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView, exportFile };
+  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView, exportFile, savePrint };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
