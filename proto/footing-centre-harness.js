@@ -30,7 +30,7 @@ const MUTATIONS = [
   ['the section lining runs down to the footing', 'cut-view.js',
     c => c.replace("      const lined = !c.garage && Number.isFinite(slabTop)\n", "      const lined = false && Number.isFinite(slabTop)\n")],
   ['the lining box runs its foot across the concrete at the slab top', 'cut-view.js',
-    c => c.replace('        box(wLo, span.lo, top, slabTop);\n', '        box(wLo, wHi, top, slabTop);\n')],
+    c => c.replace('        box(wLo, span.lo, lineTop, slabTop);\n', '        box(wLo, wHi, lineTop, slabTop);\n')],
 ];
 
 if (MUTATE) {

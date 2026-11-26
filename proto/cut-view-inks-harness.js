@@ -109,7 +109,8 @@ const WEIGHTS = Object.freeze({
   ink: [0.12, 0.25, 0.35, 0.45, 0.5, 0.55, 0.6],
   concrete: [0.35, 0.5],
   // 0.3: a stair's tread and stringers where a section slices across them.
-  assembly: [0.15, 0.3],
+  // 0.22: the sill plate / PT ladder on a section's foundation wall.
+  assembly: [0.15, 0.22, 0.3],
 });
 const expectedFrom = (C) => new Set([
   C.ground, C.line, C.face, C.faceShade, C.recess,
