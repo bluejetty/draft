@@ -4456,7 +4456,7 @@ function coverage() {
   const labelNotOffset = src => src.replace(
     "ctx.fillText(text, 0, -offset);", 'ctx.fillText(text, 0, 0);');
   const columnShapeIgnored = src => src.replace(
-    'if (pile) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);\n      else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);',
+    'if (round) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);\n      else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);',
     'ctx.rect(c.x - half, c.y - half, half * 2, half * 2);');
   // EVERY COPY, and the `g` is the point. `ctx.strokeStyle = env.columnColor;`
   // occurs TWICE in render-2d.js -- once in drawColumn2D and once in the group
@@ -4597,8 +4597,8 @@ function coverage() {
     ['drawBeam2D tags a piece told to say nothing',
       src => src.replace('const silent = tag === 0 || tag === false || tag === null;', 'const silent = false;')],
     ['drawColumn2D draws a post below at full weight',
-      src => src.replace('    if (below) ctx.globalAlpha = 0.45;\n    if (!centreOnly) {',
-        '    if (!centreOnly) {')],
+      src => src.replace('    if (below) ctx.globalAlpha = 0.45;\n    if (!centreOnly && cap) {',
+        '    if (!centreOnly && cap) {')],
     ['drawDimension2D leaves the stepped-down figure on its line',
       src => src.replace('const push = overflows ? 26 * k * t : tight ? 10 * k * t : 0;', 'const push = 0;')],
     ['drawDimension2D steps the tight figure toward the house',

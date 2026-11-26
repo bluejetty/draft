@@ -1281,6 +1281,11 @@ if (!window.DraftDrawingFormat) {
       return { id, point: centre, levelId: nodeLevelId, view };
     }).filter(Boolean);
   };
+  // A typed inch value inside [min, max], or null. Not rounded: 5 1/2 stays.
+  const inchesIn = (value, min, max) => {
+    const n = Number(value);
+    return value != null && value !== '' && Number.isFinite(n) && n >= min && n <= max ? n : null;
+  };
   const columns = (rawColumns, levelIds, env = {}) => {
     const seen = new Set();
     const raw = Array.isArray(rawColumns) ? rawColumns : [];
@@ -1328,6 +1333,18 @@ if (!window.DraftDrawingFormat) {
           ? { pileMark: String(column.pileMark).trim() } : {}),
         ...(pullSrcId && pullLevelId != null
           ? { pullSrcId, pullLevelId } : {}),
+        // THE POST, ITS PILE CAP AND ITS BASE (jb, 25-26 Nov 2026), each
+        // ABSENT WHEN UNSET so an older drawing round-trips byte for byte.
+        // build-house.js postSpec owns the defaults and the cap's limits.
+        ...(column?.postShape === 'round' ? { postShape: 'round' } : {}),
+        ...(inchesIn(column?.postIn, 1, 48) != null ? { postIn: inchesIn(column.postIn, 1, 48) } : {}),
+        ...(footing.startsWith('pile') && inchesIn(column?.capIn, 4, 96) != null
+          ? {
+            capIn: inchesIn(column.capIn, 4, 96),
+            ...(inchesIn(column?.capTallIn, 12, 96) != null ? { capTallIn: inchesIn(column.capTallIn, 12, 96) } : {}),
+            ...(inchesIn(column?.capAboveIn, 0, 48) != null ? { capAboveIn: inchesIn(column.capAboveIn, 0, 48) } : {}),
+          } : {}),
+        ...(['standoff', 'plate'].includes(column?.postBase) ? { postBase: column.postBase } : {}),
         layer: 'S-COL-FOOTING',
       };
     }), env.drops).filter(Boolean);

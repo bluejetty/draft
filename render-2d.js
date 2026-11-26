@@ -1751,14 +1751,26 @@ if (!window.DraftRender2D) {
     if (!column?.point) return;
     const { footing = null, centreOnly = false, preview = false, below = false,
       sizeIn: ownSizeIn = null, mark = null } = options;
+    // A REAL RECORD RESOLVES ITS OWN POST when the caller has not, so every
+    // sheet that paints columns (MODEL, LAYOUT, the composed plans) draws
+    // the same post without each learning the rule.
+    const BH = typeof window !== 'undefined' ? window.DraftBuildHouse : null;
+    const post = options.post
+      || (column.id != null && BH && typeof BH.postSpec === 'function' ? BH.postSpec(column) : null);
     const origin = toS({ x: 0, y: column.point.y || 0, z: 0 });
     const unit = toS({ x: 1, y: column.point.y || 0, z: 0 });
     const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
     const c = toS(column.point);
     const pile = footing?.pile === true;
     // A post on a pile (cut-view.js pilePosts) is a 6x6, not a telepost.
-    const sizeIn = pile ? (footing.sizeIn || 6) : (ownSizeIn || COLUMN_SIZE_IN);
+    // `post` (build-house.js postSpec, resolved by the caller) gives the
+    // post's own shape and width, and a pile's square cap (jb, 25 Nov 2026).
+    const sizeIn = pile ? (footing.sizeIn || 6) : (post?.sizeIn || ownSizeIn || COLUMN_SIZE_IN);
     const half = Math.max(2.5, (sizeIn / 12) * pxPerFt / 2);
+    const round = pile || post?.shape === 'round';
+    const cap = pile && post?.cap ? post.cap : null;
+    const capHalf = cap ? Math.max(half + 1, (cap.sizeIn / 12) * pxPerFt / 2) : 0;
+    const postHalf = cap ? Math.max(1.5, (post.sizeIn / 12) * pxPerFt / 2) : 0;
 
     ctx.save();
     ctx.strokeStyle = env.columnColor;
@@ -1768,13 +1780,29 @@ if (!window.DraftRender2D) {
     // nothing holding it up is half a drawing, so `below` reaches the posts
     // too and at the same weight -- see drawBeam2D.
     if (below) ctx.globalAlpha = 0.45;
-    if (!centreOnly) {
+    if (!centreOnly && cap) {
+      // THE CAP IS WHAT YOU SEE FROM ABOVE: its square solid, the round pile
+      // under it dashed, and the post standing on it.
       ctx.beginPath();
-      if (pile) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);
+      ctx.rect(c.x - capHalf, c.y - capHalf, capHalf * 2, capHalf * 2);
+      ctx.stroke();
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, half, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.beginPath();
+      if (post.shape === 'round') ctx.arc(c.x, c.y, postHalf, 0, Math.PI * 2);
+      else ctx.rect(c.x - postHalf, c.y - postHalf, postHalf * 2, postHalf * 2);
+      ctx.stroke();
+    } else if (!centreOnly) {
+      ctx.beginPath();
+      if (round) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);
       else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);
       ctx.stroke();
     }
-    const cross = half + 4;
+    const cross = Math.max(half, capHalf) + 4;
     ctx.beginPath();
     ctx.moveTo(c.x - cross, c.y); ctx.lineTo(c.x + cross, c.y);
     ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
@@ -1792,7 +1820,7 @@ if (!window.DraftRender2D) {
       ctx.font = env.labelFont;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(tag, c.x, c.y + half + 3);
+      ctx.fillText(tag, c.x, c.y + Math.max(half, capHalf) + 3);
     }
     ctx.restore();
   }
