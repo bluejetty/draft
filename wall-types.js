@@ -116,6 +116,15 @@ if (!window.DraftWallTypes) {
     // answer, rather than a fudge factor.
     { id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0.5,
       params: Object.freeze([]) },
+    // STUCCO DARK (jb, 26 Nov 2026): "a 2nd STUCCO version called STUCCO
+    // DARK ... (for white reg STUCCO no dots) but for DARK STUCCO make a
+    // random dot/scratch type stucco pattern which will cause a shaded look".
+    // The same material as the row above -- half an inch of coat -- drawn
+    // as a stipple so a dark coat reads darker than a white one on the
+    // sheet. A different WORD, so the seam rule keeps the line where dark
+    // stucco meets white.
+    { id: 'stucco_dark', label: 'Stucco Dark', pattern: 'stipple', axis: 'horizontal', thicknessIn: 0.5,
+      params: Object.freeze([{ key: 'grainIn', label: 'Grain', in: 2 }]) },
     // ── VERTICAL SIDING IS BOARD AND BATTEN ────────────────────────────
     //
     // Movie, 27 Sep: *"i made a mistake in my Vertical Siding / Horizontal

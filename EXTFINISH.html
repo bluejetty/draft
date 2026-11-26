@@ -617,6 +617,18 @@
       // The wall a pick landed on, as it sits in the drawing -- the object the
       // save writes, not the painter's copy of it.
       const storedWall = () => (drawing?.walls || []).find(w => String(w.id) === picked);
+      // THE PICKED WALL'S THREE LINES on the elevation showing, as the
+      // painter measures a band from them: sill, plate, head (the apex of a
+      // gable over it). Null for the concrete and when nothing is drawn.
+      const pickedLines = () => {
+        if (!env || !frame || !picked) return null;
+        const stack = CV.sectionLevelStack(env);
+        if (!stack) return null;
+        const faces = pickables(stack).filter(f => String(f.wall.id) === picked && f.plate != null);
+        if (!faces.length) return null;
+        return { sill: Math.min(...faces.map(f => f.foot)), plate: Math.max(...faces.map(f => f.plate)),
+          head: Math.max(...faces.map(f => f.head)) };
+      };
       // A DORMER IS PICKED AS `dormer:<roof id>:<its index>`, which no wall id
       // can be, so storedWall answers nothing while one is in hand.
       const storedDormer = () => {
@@ -833,6 +845,13 @@
         document.getElementById('fdn-note').hidden = !onFoundation;
         document.getElementById('base-finish').value = wall.finish || WT.DEFAULT_FINISH_ID;
         document.getElementById('base-color').value = wall.finishColor || '#ffffff';
+        // THE TO BOX'S SPINNER STOPS AT THE WALL'S HEIGHT (sill to head).
+        {
+          const lines = pickedLines();
+          const box = document.getElementById('band-high');
+          if (lines) box.max = (lines.head - lines.sill).toFixed(2);
+          else box.removeAttribute('max');
+        }
         const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
         // A DROPPED BAND TAKES THE SELECTION WITH IT rather than leaving it
         // pointing at whatever slid into that index.
@@ -969,8 +988,36 @@
           if (!band) return;
           const by = Number(btn.dataset.by) * STEP;
           const which = btn.dataset.nudge;
-          if (which === 'low') { patchBand({ lowFt: (Number(band.lowFt) || 0) + by }); return; }
-          if (which === 'high') { patchBand({ highFt: (Number(band.highFt) || 0) + by }); return; }
+          // ── NO TALLER THAN THE WALL (jb, 26 Nov 2026) ─────────────────
+          //
+          // "the number that can be entered could be a lot more than you
+          // need and would just get cut off anyway". The wall's HEAD is the
+          // most a band can show -- the plate, or the apex of a gable over
+          // it -- so a top pushed to it or past it turns into FILL TO THE
+          // TOP, which is what it meant and which follows the wall if the
+          // roof changes. A bottom can't climb to the head either. The
+          // bottom may still go DOWN past the sill, over the concrete.
+          const lines = pickedLines();
+          const at = lines ? lines[band.anchor || WT.DEFAULT_FINISH_ANCHOR] : NaN;
+          if (which === 'low') {
+            const next = (Number(band.lowFt) || 0) + by;
+            if (by > 0 && Number.isFinite(at) && at + next > lines.head - 0.25) {
+              say('That is the top of the wall \u2014 the bottom can\u2019t go any higher.');
+              return;
+            }
+            patchBand({ lowFt: next });
+            return;
+          }
+          if (which === 'high') {
+            const next = (Number(band.highFt) || 0) + by;
+            if (by > 0 && Number.isFinite(at) && at + next >= lines.head - 0.01) {
+              patchBand({ toTop: true, highFt: null });
+              say('That reaches the top of the wall \u2014 the band now fills to the top.');
+              return;
+            }
+            patchBand({ highFt: next });
+            return;
+          }
           // THE INSETS AND THE WRAP ARE DISTANCES, not positions: below zero
           // is not "the other way", it is nothing. Clamped, and a clamp to
           // zero on an inset means the band runs to the corner again, so the
@@ -1034,12 +1081,25 @@
         // APPENDED, NOT INSERTED IN ORDER. The list is paint order: the band
         // just added is the one on top where it overlaps an older one, which
         // is what a drafter laying stone over shake means by doing it second.
+        const lowFt = Number(document.getElementById('band-low').value);
+        let highFt = Number(document.getElementById('band-high').value);
+        // HELD TO THE WALL (jb, 26 Nov 2026): a TO past the wall's head is
+        // stored as FILL TO THE TOP, which is what it meant -- the most a
+        // band can show -- and it follows the wall if the roof changes.
+        const lines = pickedLines();
+        const room = lines ? lines.head - lines.sill : Infinity;
+        if (Number.isFinite(room) && lowFt >= room - 0.01) {
+          say(`That starts above the top of the wall \u2014 it is ${ft(room)} from the sill to the top.`);
+          return;
+        }
+        const toTop = Number.isFinite(room) && highFt >= room - 0.01;
         bands.push({
           finishId: document.getElementById('band-finish').value,
-          lowFt: Number(document.getElementById('band-low').value),
-          highFt: Number(document.getElementById('band-high').value),
+          lowFt,
+          ...(toTop ? { toTop: true } : { highFt }),
         });
         writeWall({ finishBands: bands });
+        if (toTop) say(`That reaches the top of the wall (${ft(room)} from the sill) \u2014 the band fills to the top.`);
       });
 
       // ── SAVING ────────────────────────────────────────────────────────
@@ -1138,13 +1198,15 @@
         // THE FASCIA BANDS COME BACK OUT with the frame: every eave foot and
         // rake board the painter drew, by roof, so a click can land on one.
         fasciaBands = [];
+        faceOutlines = [];
         CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
-          { colors, finishes: true, cushion: ELEVATION_CUSHION, fasciaBands,
+          { colors, finishes: true, cushion: ELEVATION_CUSHION, fasciaBands, faceOutlines,
             onFrame: f => { frame = { ...f, cut, axis }; } });
         if (!frame) return;
         // Read by the specs, which aim clicks at what was drawn.
         window.__extFinishFrame = frame;
         window.__extFinishFasciaBands = () => fasciaBands.map(b => ({ ...b, roofId: String(b.roofId) }));
+        window.__extFinishFaceOutlines = () => faceOutlines.map(o => ({ ...o, tops: o.tops.slice() }));
         if (roofPicked && !picked) paintFasciaMark(ctx);
         window.__extFinishDormers = () => (CV.dormerGables && env && CV.sectionLevelStack(env)
           ? CV.dormerGables(env, cut, CV.sectionLevelStack(env), axis)
@@ -1169,14 +1231,53 @@
       // THE CONCRETE'S FOOT IS GRADE, NOT ITS BASE. What is buried is not on
       // the sheet, so it is not clickable either: a click lands on what the
       // drafter can see, which is the same rule the painter draws by.
+      // ── AND THE GABLE OVER A WALL IS THAT WALL ────────────────────────
+      //
+      // jb, 26 Nov 2026: "i can't select the GABLE area to put ext finish".
+      // A wall's pick box stopped at its plate, and the triangle over it is
+      // drawn as a face of its own (a gable infill) or as the wall's own top
+      // climbing -- neither of which this page could see. The painter hands
+      // its face outlines out (`faceOutlines`), so a wall's TOP here is the
+      // highest of its outlines at that spot: a click in the triangle picks
+      // the wall, and the wall's HEAD is the apex -- which is also the most a
+      // band's top can be.
+      let faceOutlines = [];
+      const topOfOutline = (o, u) => {
+        const t = o.tops;
+        if (!t || !t.length || u < o.lo - 1e-6 || u > o.hi + 1e-6) return null;
+        for (let i = 1; i < t.length; i += 1) {
+          const a = t[i - 1], b = t[i];
+          const lo = Math.min(a.u, b.u), hi = Math.max(a.u, b.u);
+          if (u >= lo - 1e-6 && u <= hi + 1e-6) {
+            return Math.abs(b.u - a.u) < 1e-9 ? Math.max(a.top, b.top)
+              : a.top + (b.top - a.top) * (u - a.u) / (b.u - a.u);
+          }
+        }
+        return Math.max(...t.map(p => p.top));
+      };
+      const outlinesOf = (wall, lo, hi) => faceOutlines.filter(o => o.wallId === String(wall.id)
+        && o.hi > lo - 0.05 && o.lo < hi + 0.05);
+      // The top of a picked wall's face at u: its plate, or the gable over it.
+      const topOfPick = (g, u) => {
+        let top = g.plate;
+        (g.outlines || []).forEach(o => {
+          const at = topOfOutline(o, u);
+          if (at != null && at > top) top = at;
+        });
+        return top;
+      };
+
       const pickables = stack => {
         const out = [];
         const { faces, fdnFaces } = CV.elevationFaces(env, frame.cut, stack, frame.axis);
-        faces.forEach(face => out.push({
-          wall: face.wall, depth: face.depth,
-          lo: Math.min(face.u1, face.u2), hi: Math.max(face.u1, face.u2),
-          foot: wallFootFt(face, stack), head: wallHeadFt(face),
-        }));
+        faces.forEach(face => {
+          const lo = Math.min(face.u1, face.u2), hi = Math.max(face.u1, face.u2);
+          const plate = wallHeadFt(face);
+          const outlines = outlinesOf(face.wall, lo, hi);
+          const head = Math.max(plate, ...outlines.flatMap(o => o.tops.map(t => t.top)));
+          out.push({ wall: face.wall, depth: face.depth, lo, hi,
+            foot: wallFootFt(face, stack), plate, head, outlines });
+        });
         const fdn = stack.foundation;
         if (fdn) {
           fdnFaces.forEach(face => {
@@ -1263,8 +1364,16 @@
         for (let i = list.length - 1; i >= 0; i -= 1) {
           const g = list[i];
           if (u < g.lo || u > g.hi) continue;
-          if (e < g.foot || e > g.head) continue;
+          if (e < g.foot || e > (g.outlines ? topOfPick(g, u) : g.head)) continue;
           return g;
+        }
+        // THE TRIANGLE BESIDE ITS WALL: a gable infill can run past the
+        // wall it was cloned from (it fills the whole run under the rake).
+        const inGable = faceOutlines.find(o => o.gable && u >= o.lo && u <= o.hi
+          && e >= o.floor && e <= (topOfOutline(o, u) ?? -Infinity));
+        if (inGable) {
+          const owner = list.find(g => String(g.wall.id) === inGable.wallId);
+          if (owner) return owner;
         }
         return null;
       };
@@ -1296,8 +1405,19 @@
         ctx.strokeStyle = window.__reSkin['accent-mark'];
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
-        ctx.strokeRect(X(g.lo), Y(g.head),
-          (g.hi - g.lo) * frame.pxPerFt, (g.head - g.foot) * frame.pxPerFt);
+        const plateTop = g.plate ?? g.head;
+        ctx.strokeRect(X(g.lo), Y(plateTop),
+          (g.hi - g.lo) * frame.pxPerFt, (plateTop - g.foot) * frame.pxPerFt);
+        // AND ROUND THE GABLE OVER IT, so the mark says the triangle is
+        // part of what was picked.
+        (g.outlines || []).forEach(o => {
+          if (!o.tops.some(t => t.top > plateTop + 0.05)) return;
+          ctx.beginPath();
+          ctx.moveTo(X(o.tops[0].u), Y(plateTop));
+          o.tops.forEach(t => ctx.lineTo(X(t.u), Y(Math.max(t.top, plateTop))));
+          ctx.lineTo(X(o.tops[o.tops.length - 1].u), Y(plateTop));
+          ctx.stroke();
+        });
         ctx.restore();
       };
 

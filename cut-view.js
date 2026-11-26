@@ -65,7 +65,7 @@ if (!window.DraftCutView) {
     return false;
   };
   const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped,
-    bandRange, bandSpan, fasciaFinishIdOf } = window.DraftWallTypes;
+    bandRange, bandSpan, fasciaFinishIdOf, finishAtFt } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
 
   // Physical drafting standards, shared with the Model Space via STANDARDS.
@@ -298,6 +298,43 @@ if (!window.DraftCutView) {
   // which is the one case this misses. Three readers, one comparison.
   const skinOf = wall => (wall && wall.finish) || DEFAULT_FINISH_ID;
   const fasciaSkinOf = roof => fasciaFinishIdOf(roof);
+  // ── AND THE BANDS COUNT (jb, 26 Nov 2026) ──────────────────────────────
+  //
+  // jb clads with BANDS -- vinyl from the sill, 0 to whatever -- on walls
+  // whose base is still the default stucco. Read off the base alone, the
+  // rule above saw stucco everywhere: the floor strip between storeys stayed
+  // bare white ("a gap in the vinyl siding at the floor level") and a stucco
+  // fascia over the vinyl lost its foot line, so the board read as a gap
+  // under the roof. So a seam asks what the wall WEARS AT THAT HEIGHT, bands
+  // included -- the case the note above said it missed.
+  //
+  // A BAND THAT REACHES THE PLATE CARRIES ON TO THE HEAD. jb: siding "should
+  // fill in" -- a gable triangle over a band that stops at the plate stayed
+  // plain, and a drafter cannot be expected to know the gable's height to
+  // type it. A band that covers the top of the wall is that wall's skin, and
+  // the gable is that wall carried up; a gable that wants its own finish
+  // gets its own band (anchored at PLATE, filled to the top), which is laid
+  // after and wins.
+  // WITHIN HALF A FOOT OF THE PLATE COUNTS AS REACHING IT: a band typed to
+  // "about the wall height" lands an inch or two short of a plate that sits
+  // at 8'-1 1/8" over a 1'-2" floor, and a wainscot that means to stop
+  // short stops feet short, not inches.
+  const CARRY_EPS_FT = 0.5;
+  const carriedBands = (wall, lines) => {
+    const bands = Array.isArray(wall && wall.finishBands) ? wall.finishBands : [];
+    if (!lines || !Number.isFinite(lines.plate) || !Number.isFinite(lines.head)) return bands;
+    return bands.map(band => {
+      if (!band || band.toTop) return band;
+      const span = bandRange(band, lines);
+      return span && span.lo < lines.plate - CARRY_EPS_FT && span.hi >= lines.plate - CARRY_EPS_FT
+        ? { ...band, toTop: true } : band;
+    });
+  };
+  const skinAtFt = (wall, elev, lines) => {
+    if (!finishAtFt || !lines) return skinOf(wall);
+    return finishAtFt({ ...wall, finishBands: carriedBands(wall, lines) }, elev, lines).id
+      || skinOf(wall);
+  };
   const sameSkin = (a, b) => a === b;
   // HOW FAR OFF A WALL'S FACE AN EAVE STILL STANDS "FLUSH". A wall is
   // 5 1/2" to a foot thick and a roof outline sits on its reference line, so
@@ -6356,7 +6393,12 @@ if (!window.DraftCutView) {
                 - Math.min(Math.abs(q.loU - u0), Math.abs(q.hiU - u1)))[0] || {}).face?.wall;
             if (!donor) return;
             const start = at(u0), end = at(u1);
-            const wall = { ...donor, id: `${donor.id}:gable:${roof.id}:${i}`, finishBands: [],
+            // THE DONOR'S BANDS COME WITH IT (jb, 26 Nov 2026): the gable is
+            // that wall carried up, so vinyl laid as a band on the wall runs
+            // up the triangle too (carriedBands) instead of stopping at the
+            // plate under a plain gable. `gableOf` names the wall a click on
+            // the triangle picks.
+            const wall = { ...donor, id: `${donor.id}:gable:${roof.id}:${i}`, gableOf: donor.id,
               start: { x: start.x, y: 0, z: start.z }, end: { x: end.x, y: 0, z: end.z },
               hoodOf: null, gableInfill: true };
             const level = donorFace ? donorFace.face.level : storey.level;
@@ -6369,6 +6411,21 @@ if (!window.DraftCutView) {
       return out;
     };
     gableInfills().forEach(g => faceGeoms.push(g));
+    // THE HOUSE'S COURSING DATUM: the bottom of the sill plate on the storey
+    // that bears on the concrete, where the first course of siding starts.
+    const houseCourseFt = stack.floors[0].floorBottom - houseSillPlateFt();
+    // THE FACES' OUTLINES, HANDED OUT like the fascia bands: EXT. FINISH
+    // reads them so a click inside a gable triangle picks the wall under it
+    // (jb, 26 Nov 2026: "i can't select the GABLE area"), and so a band's
+    // top can be held to the face's real head. A gable infill answers for
+    // the wall it was cloned from.
+    if (opts && Array.isArray(opts.faceOutlines)) {
+      faceGeoms.forEach(g => opts.faceOutlines.push({
+        wallId: String(g.face.wall.gableOf ?? g.face.wall.id),
+        lo: g.loU, hi: g.hiU, floor: g.floor, gable: !!g.face.gableInfill,
+        tops: g.tops.map(t => ({ u: t.u, top: t.top })),
+      }));
+    }
     // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
     //
     // A BASE OVER THE WHOLE FACE, THEN THE BANDS OVER THAT, in the order they
@@ -6409,8 +6466,10 @@ if (!window.DraftCutView) {
     // same env and the same stack.foundation, so this is the number it always
     // was and not a second opinion about it.
     const faceLines = geom => {
+      // Asked per station by the seam rule now, so kept on the geom.
+      if (geom.lines) return geom.lines;
       const { face, floor, tops } = geom;
-      return {
+      return geom.lines = {
         sill: faceSillFt(env, face, stack),
         plate: face.level.wallTop,
         head: Math.max(...tops.map(t => t.top)),
@@ -6520,8 +6579,20 @@ if (!window.DraftCutView) {
         }
         return;
       }
+      // ── ONE COURSING FOR THE WHOLE HOUSE (jb, 26 Nov 2026) ───────────
+      //
+      // Lap siding ran its courses off each storey's own sill, so where the
+      // main floor's last course and the second floor's first met at the floor
+      // line there was a strip a course and a half tall with no line in it --
+      // read on his E2 as a gap in the vinyl. A sider carries one coursing up
+      // the house, so every house face counts its courses from the house's
+      // sill (`courseFrom`); a band that starts part way up a wall (siding
+      // over a stone wainscot) still starts on its own bottom, which is where
+      // a sider starts over a water table. A garage keeps its own.
+      const courseFrom = face.garage ? null : Y(houseCourseFt);
       const boxAt = (lo, hi, x0 = Math.min(xa, xb), x1 = Math.max(xa, xb)) => ({
         x0, x1, yTop: Y(hi), yBottom: Y(lo), pxPerFt,
+        ...(courseFrom != null && lo <= lines.sill + 0.05 ? { courseFrom } : {}),
       });
       ctx.save();
       // ── CLIPPED TO THE SILL, NOT TO THE FLOOR ────────────────────────
@@ -6571,7 +6642,8 @@ if (!window.DraftCutView) {
       // band of bare white a drafter could see under the stone.
       FP.drawFinish(ctx, boxAt(lines.sill, lines.head),
         finishById(wall.finish || DEFAULT_FINISH_ID), C);
-      const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
+      // A band reaching the plate runs on up the gable (carriedBands).
+      const bands = carriedBands(wall, lines);
       // ── ONE PAINTER FOR A RUN OF BAND MATERIAL ───────────────────────
       //
       // Between two screen x's, whatever decided them. A band's own run
@@ -7713,7 +7785,14 @@ if (!window.DraftCutView) {
           && (side > 0 ? f.level.id === level.id
             : Math.abs(f.level.wallTop - level.floorBottom) < 0.02))
         .filter(f => { const s = spanOf(f); return s.hi > part.lo + 0.05 && s.lo < part.hi - 0.05; })
-        .map(f => skinOf(f.wall));
+        // WHAT SHOWS AT THE BAND'S EDGE, bands included (skinAtFt): the
+        // top of the wall under it, the foot of the wall over it.
+        .map(f => {
+          const geom = faceGeoms.find(g => g.face === f);
+          if (!geom) return skinOf(f.wall);
+          const lines = faceLines(geom);
+          return skinAtFt(f.wall, side > 0 ? level.floorTop + 0.01 : lines.plate - 0.01, lines);
+        });
       const above = skins(1), below = skins(-1);
       if (!above.length || !below.length) return null;
       return new Set([...above, ...below]).size === 1 ? above[0] : null;
@@ -7835,7 +7914,7 @@ if (!window.DraftCutView) {
         ctx.moveTo(x0, yTopPx); ctx.lineTo(x1, yTopPx); ctx.lineTo(x1, yBotPx); ctx.lineTo(x0, yBotPx);
         ctx.closePath();
         ctx.clip();
-        FP.drawFinish(ctx, { x0, x1, yTop: yTopPx, yBottom: yBotPx, pxPerFt },
+        FP.drawFinish(ctx, { x0, x1, yTop: yTopPx, yBottom: yBotPx, pxPerFt, courseFrom: Y(houseCourseFt) },
           finishById(oneSkin), C);
         ctx.restore();
       }
@@ -8448,6 +8527,42 @@ if (!window.DraftCutView) {
         ctx.lineTo(X(u1), Y(pen.base));
         pen = null;
       };
+      // ── A STRAIGHT RAKE IS ONE LINE (jb, 26 Nov 2026) ─────────────────
+      //
+      // "the fascia boards look wobbly": the outline is 240 stations, and X()
+      // and Y() land each on a pixel's centre, so a sloped rake came out as a
+      // stair of one-pixel jogs beside the board's own two-point lines under
+      // it. A station that lies on the line between the last one kept and the
+      // next is not drawn; the pen goes straight through. Only the middle of
+      // a run in one roof's base: the ends, steps and grown ends stay.
+      // EVERY station passed over is held to the one chord that replaces it,
+      // not only to its neighbours, so a gentle drift cannot add up into a
+      // line that is neither level nor on the roof.
+      const STRAIGHT_FT = 0.01;
+      const skipStation = new Set();
+      {
+        let kept = null;
+        let pending = [];
+        const onChord = (a, b, p) => {
+          const t = (p.u - a.u) / (b.u - a.u);
+          return t > 0 && t < 1 && Math.abs(a.elev + (b.elev - a.elev) * t - p.elev) < STRAIGHT_FT;
+        };
+        silhouette.forEach((st, i) => {
+          const next = silhouette[i + 1];
+          if (st.elev == null || !kept || kept.elev == null || !next || next.elev == null
+            || kept.base !== st.base || next.base !== st.base
+            || grownAt.has(i) || Math.abs(next.u - kept.u) < 1e-9) {
+            pending.forEach(j => skipStation.add(j));
+            kept = st; pending = [];
+            return;
+          }
+          if ([...pending, i].every(j => onChord(kept, next, silhouette[j]))) pending.push(i);
+          else {
+            pending.forEach(j => skipStation.add(j));
+            kept = st; pending = [];
+          }
+        });
+      }
       silhouette.forEach((s, i) => {
         if (s.elev == null) {
           closePen();
@@ -8455,6 +8570,7 @@ if (!window.DraftCutView) {
           return;
         }
         if (pen && pen.base !== s.base) closePen(false);
+        if (pen && prevLit && skipStation.has(i)) { pen = s; penI = i; return; }
         // A roof taking over from another — a garage roof running on under
         // the house's overhang — has no vertical edge, so it starts at its
         // surface.
@@ -8976,7 +9092,9 @@ if (!window.DraftCutView) {
                   u > g.loU - 0.01 && u < g.hiU + 0.01
                   && Math.abs(g.face.depth - edgeDepth) < FLUSH_FT
                   && underBoard(topAtU(g, u), footE, roofFasciaFt(roof))
-                  && sameSkin(skinOf(g.face.wall), fasciaSkin));
+                  // What the wall wears at its head, bands included: vinyl
+                  // laid as a band under a stucco board keeps the line.
+                  && sameSkin(skinAtFt(g.face.wall, topAtU(g, u) - 0.01, faceLines(g)), fasciaSkin));
                 const lined = [];
                 shownFeet.forEach(f => {
                   const n = Math.max(1, Math.ceil((f.u1 - f.u0) / 0.25));
@@ -9096,7 +9214,7 @@ if (!window.DraftCutView) {
                     q.u > g.loU - 0.01 && q.u < g.hiU + 0.01
                     && Math.abs(g.face.depth - rakeDepth) < FLUSH_FT
                     && underBoard(topAtU(g, q.u), q.e, drop)
-                    && sameSkin(skinOf(g.face.wall), rakeSkin));
+                    && sameSkin(skinAtFt(g.face.wall, topAtU(g, q.u) - 0.01, faceLines(g)), rakeSkin));
                   const lined = [];
                   feet.forEach(f => {
                     const n = Math.max(1, Math.ceil(Math.abs(at(f.t1).u - at(f.t0).u) / 0.25));
