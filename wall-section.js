@@ -87,7 +87,10 @@ if (!window.DraftWallSection) {
       const made = madeTypeOn(levelId, 'plan', 'floor');
       if (made) return made.id;
       const override = assembly(levelId).wallType;
-      return WT.EXTERIOR_WALL_TYPE_IDS.includes(override) && wallType(override) ? override : activeWallType;
+      if (WT.EXTERIOR_WALL_TYPE_IDS.includes(override) && wallType(override)) return override;
+      // PROJECT: else the walls drawn round the storey's outline (jb, 26 Nov).
+      const drawn = LA.drawnShellWallType ? LA.drawnShellWallType(saved, levelId, WT.EXTERIOR_WALL_TYPE_IDS) : null;
+      return drawn && wallType(drawn) ? drawn : activeWallType;
     };
     // PROJECT: fdnWallType -- the FOUNDATION assembly's choice, else the
     // drawn foundation walls, else 8" concrete.

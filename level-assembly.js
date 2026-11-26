@@ -723,7 +723,42 @@ if (!window.DraftLevelAssembly) {
     return reshapedAny ? following : null;
   };
 
+  // THE WALL A STOREY'S SHELL IS DRAWN IN (jb, 26 Nov 2026). A floor left
+  // unset on PROJECT used to read the WALL tool's last pick (activeWallType),
+  // so a file drawn all in 2x6 read 2x4 the moment the tool was set to 2x4.
+  // Now it reads the outside walls drawn on that storey: plan walls lying
+  // along a house outline of the level (both ends and the middle on it, so a
+  // partition run wall to wall is not counted), garage walls left out, the
+  // longest run of an exterior type winning. Null when none stand there (no
+  // outline, nothing drawn yet), and the caller falls back to the tool pick.
+  const SHELL_ON_OUTLINE_FT = 0.6;
+  const drawnShellWallType = (drawing, levelId, exteriorIds) => {
+    const G = window.DraftGeometry2D;
+    if (!G || !drawing || !Array.isArray(exteriorIds)) return null;
+    const rings = (Array.isArray(drawing.outlines) ? drawing.outlines : [])
+      .filter(outline => outline && !outline.garage && Number(outline.levelId) === Number(levelId)
+        && Array.isArray(outline.points) && outline.points.length >= 3)
+      .map(outline => G.loopSegments(outline.points.map(pt => ({ x: Number(pt.x), z: Number(pt.z) }))));
+    if (!rings.length) return null;
+    const near = pt => rings.some(ring => ring.some(seg => G.pointToSegment(pt, seg).d < SHELL_ON_OUTLINE_FT));
+    const run = new Map();
+    (Array.isArray(drawing.walls) ? drawing.walls : []).forEach(wall => {
+      if (!wall || !wall.start || !wall.end || Number(wall.levelId) !== Number(levelId)) return;
+      if ((wall.view || 'plan') !== 'plan' || wall.body === 'garage') return;
+      if (!exteriorIds.includes(wall.wallType)) return;
+      const a = { x: Number(wall.start.x), z: Number(wall.start.z) };
+      const b = { x: Number(wall.end.x), z: Number(wall.end.z) };
+      const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+      if (!near(a) || !near(b) || !near(mid)) return;
+      const length = Math.hypot(b.x - a.x, b.z - a.z);
+      if (Number.isFinite(length)) run.set(wall.wallType, (run.get(wall.wallType) || 0) + length);
+    });
+    const best = [...run.entries()].sort((x, y) => y[1] - x[1])[0];
+    return best && best[1] > 0 ? best[0] : null;
+  };
+
   window.DraftLevelAssembly = Object.freeze({
+    drawnShellWallType,
     DEFAULT_ATTACHED_GARAGE_WALL_FT,
     attachedGarageWallFt,
     houseWallTopFt,
