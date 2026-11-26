@@ -38,6 +38,7 @@
 <script src="./fen-labels.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
+<script src="./footing-outline.js"></script>
 <script src="./tour.js"></script>
 <script src="./boneyard-edit.js"></script>
 <script src="./boneyard-beams.js"></script>
@@ -801,6 +802,67 @@
           });
           ctx.restore();
         }
+        // ── THE FOOTINGS (jb, 26 Nov 2026: "show where the pad footing would
+        // be located and their sizes show all the edge lines of the footing
+        // (i may change it back but would like to see how it looks)") ──────
+        // Under the FOUNDATION bone, in its colour and thin: the strip footing
+        // under the concrete walls (footing-outline.js, the same outline the
+        // foundation plan dashes) drawn top and bottom with an upright at each
+        // corner, and every pad column's pad as a box at its own size --
+        // build-house.js padSizeIn, 8" deep (10" for the 42" pad) -- its top
+        // at the underside of the slab. Piles and in-wall posts carry no pad.
+        // TO TAKE IT BACK OUT: delete this block (and the footing-outline.js
+        // script tag); nothing else reads it.
+        const footings3d = { strip: 0, pads: [] };
+        const fdnBone = laid.at && stack && stack.foundation
+          ? laid.levels.find(l => l.kind === 'foundation') : null;
+        if (fdnBone) {
+          const d3 = preview ? preview.drawing : raw;
+          const fdn = stack.foundation;
+          const topE = fdn.wallBottom, botE = fdn.footingBottom;
+          const seg = (a, ea, b, eb) => {
+            const qa = laid.at(a, ea), qb = laid.at(b, eb);
+            ctx.moveTo(qa.x, qa.y); ctx.lineTo(qb.x, qb.y);
+          };
+          ctx.save();
+          ctx.strokeStyle = fdnBone.color;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          let segs = [];
+          try {
+            segs = window.DraftFootingOutline ? window.DraftFootingOutline.footingOutline({
+              walls: (d3 && d3.walls) || [], levelId: 1, levelAssemblies: d3 && d3.levelAssemblies }) : [];
+          } catch { segs = []; }
+          const corners = new Map();
+          segs.forEach(sg => {
+            seg(sg.start, topE, sg.end, topE);
+            seg(sg.start, botE, sg.end, botE);
+            [sg.start, sg.end].forEach(p => corners.set(`${p.x.toFixed(3)},${p.z.toFixed(3)}`, p));
+          });
+          corners.forEach(p => seg(p, topE, p, botE));
+          footings3d.strip = segs.length;
+          const BH = window.DraftBuildHouse;
+          ((d3 && d3.columns) || []).forEach(col => {
+            if (!col || !col.point || Number(col.levelId) !== 1 || !BH || !BH.footingFor) return;
+            const kind = BH.footingFor(col.footing);
+            if (kind.pile || kind.post) return;
+            const half = BH.padSizeIn(col) / 24;
+            const deep = (kind.id === 'pad42' ? 10 : 8) / 12;
+            const c = col.point;
+            const ring = [[-1, -1], [1, -1], [1, 1], [-1, 1]]
+              .map(([u, v]) => ({ x: c.x + u * half, z: c.z + v * half }));
+            ring.forEach((p, i) => {
+              const q = ring[(i + 1) % 4];
+              seg(p, topE, q, topE);
+              seg(p, topE - deep, q, topE - deep);
+              seg(p, topE, p, topE - deep);
+            });
+            footings3d.pads.push({ x: c.x, z: c.z, sizeIn: half * 24, deepIn: deep * 12 });
+          });
+          ctx.stroke();
+          ctx.restore();
+        }
+        c3.setAttribute('data-footings', JSON.stringify(footings3d));
         c3.setAttribute('data-floor-openings', JSON.stringify(holes3d));
         c3.setAttribute('data-stairs', JSON.stringify(stairs3d));
         c3.setAttribute('data-thin', thinAttr(laid.levels.map(l =>
