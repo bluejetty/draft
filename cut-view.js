@@ -1705,6 +1705,9 @@ if (!window.DraftCutView) {
   const inksFor = (opts) => {
     const out = { ...PAPER_INKS, ...(opts && opts.colors) };
     if (opts && opts.paperColor) out.ground = opts.paperColor;
+    // THE HATCH GATE, when the caller sets its own (finish-patterns.js
+    // MIN_SPACING_PX): LAYOUT's sheets, whose 1/8" scale is a drawing.
+    if (opts && Number(opts.finishMinPx) > 0) out.minSpacingPx = Number(opts.finishMinPx);
     return out;
   };
   const weight = (triple, a) => `rgba(${triple},${a})`;
@@ -7704,7 +7707,7 @@ if (!window.DraftCutView) {
       for (let i = 1; i < parts[0].length; i++) ctx.lineTo(parts[0][i].x, parts[0][i].y);
       ctx.closePath();
       ctx.clip();
-      RP.drawRoofing(ctx, frame, RT.roofingById(roof.roofing), { hatch: INK });
+      RP.drawRoofing(ctx, frame, RT.roofingById(roof.roofing), { hatch: INK, minSpacingPx: C.minSpacingPx });
       ctx.restore();
     };
     const spanOf = face => ({
