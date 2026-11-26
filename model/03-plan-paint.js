@@ -1033,6 +1033,8 @@
       // elevation draws the piles under a grade beam, and they are filed on
       // FOUNDATION while the drafter may be looking at any level.
       columns: () => drawing?.columns || [],
+      // AND THE BEAMS THEY HOLD UP, for the sections (cut-view.js framingPieces).
+      beams: () => drawing?.beams || [],
       fenestrations: () => shellOpenings(),
       garageOutlines: levelId => (drawing?.outlines || [])
         .filter(outline => outline.levelId === levelId && outline.garage),

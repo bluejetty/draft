@@ -480,12 +480,21 @@ test('beams carry the floor over them, and a basement column stands up under one
     const b = s.beams.find(x => x.view === 'foundation' && x.mode !== 'dropped');
     s.columns.push({ id: 900, point: { x: (b.start.x + b.end.x) / 2, y: 0, z: (b.start.z + b.end.z) / 2 },
       levelId: 1, view: 'foundation', footing: 'pad24' });
+    window.__post900 = s.columns[s.columns.length - 1].point;
     return s;`);
   expect(r.counts.beams).toBe(8);
-  expect(r.counts.posts).toBe(1);
+  // The added one, and the AUTO BEAM's own teleposts (cut-view.js
+  // framingPieces, shared with the sections since 26 Nov 2026), 6 of them.
+  expect(r.counts.posts).toBe(7);
   const got = await p.evaluate(() => {
-    const ys = kind => DraftViewer.state.faces.filter(f => f.kind === kind).flatMap(f => f.pts.map(q => q.y));
-    return { beamTop: Math.max(...ys('beam')), postLow: Math.min(...ys('post')), postTop: Math.max(...ys('post')), beamLow: Math.min(...ys('beam')) };
+    const s = DraftViewer.state;
+    const ys = kind => s.faces.filter(f => f.kind === kind).flatMap(f => f.pts.map(q => q.y));
+    // The added post: the faces nearest the middle of the first flush foundation beam.
+    const posts = s.faces.filter(f => f.kind === 'post');
+    const mid = f => ({ x: f.pts.reduce((a, q) => a + q.x, 0) / f.pts.length, z: f.pts.reduce((a, q) => a + q.z, 0) / f.pts.length });
+    const at = window.__post900;
+    const own = posts.filter(f => Math.hypot(mid(f).x - at.x, mid(f).z - at.z) < 0.3).flatMap(f => f.pts.map(q => q.y));
+    return { beamTop: Math.max(...ys('beam')), postLow: Math.min(...own), postTop: Math.max(...own), beamLow: Math.min(...ys('beam')) };
   });
   // FLUSH: up under the main floor's sheathing.
   expect(got.beamTop).toBeCloseTo(r.levels[3] - 0.75 / 12, 3);

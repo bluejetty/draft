@@ -749,87 +749,38 @@
   // floor where no beam passes; a column on a storey is a post from that
   // floor up under the floor or beam above.
   const BEAM_WIDE_FT = 4.5 / 12;
-  const SHEATHING_FT = 0.75 / 12;
   function buildFraming(saved, env, stack, levelById, levels, out, counts) {
     const F = window.DraftDrawingFormat;
     const CV = window.DraftCutView;
-    const G = window.DraftGeometry2D;
     const ids = new Set(levels.map(l => l.id));
     let beams = [];
     try { beams = F.beams ? F.beams(saved.beams, ids) : (saved.beams || []); } catch (e) { beams = []; }
     if (beams && !Array.isArray(beams) && Array.isArray(beams.items)) beams = beams.items;
     if (!Array.isArray(beams)) beams = [];
-    const storeys = stack.floors.slice().sort((a, b) => a.floorTop - b.floorTop);
-    const above = id => {
-      const here = levelById[id];
-      return here ? storeys.find(l => l.floorTop > here.floorTop + 0.01) || null : null;
-    };
-    const carriedBy = beam => {
-      const view = beam.view || 'plan';
-      if (view === 'foundation' || beam.levelId === 1) return storeys[0] || null;
-      if (view === 'floor') return levelById[beam.levelId] || null;
-      return above(beam.levelId);
-    };
-    const solid = [];   // { a, b, bottom, view, levelId } for the posts to find
-    beams.forEach(beam => {
-      if (!beam || !beam.start || !beam.end) return;
-      const storey = carriedBy(beam);
-      if (!storey) return;
-      const deep = Math.max(0.5, storey.floorTop - storey.floorBottom - SHEATHING_FT);
-      const top = beam.mode === 'dropped' ? storey.floorBottom : storey.floorTop - SHEATHING_FT;
-      const bottom = top - deep;
-      const ring = wallFootprint({ start: beam.start, end: beam.end, refLine: 'center' }, BEAM_WIDE_FT);
+    // ONE ANSWER WITH THE SECTIONS: cut-view.js framingPieces stands every
+    // beam and post up, and this only builds the solids.
+    const framing = CV.framingPieces
+      ? CV.framingPieces(Object.assign(Object.create(env), { beams: () => beams }), stack)
+      : { beams: [], posts: [] };
+    framing.beams.forEach(b => {
+      const ring = wallFootprint({ start: b.a, end: b.b, refLine: 'center' }, BEAM_WIDE_FT);
       if (!ring) return;
       const n0 = out.length;
-      prism(ring, bottom, top, 'beam', COLOURS.beam, out);
-      const group = (beam.view === 'foundation' || beam.levelId === 1) ? 'fdn' : `L${beam.levelId}`;
+      prism(ring, b.bottom, b.top, 'beam', COLOURS.beam, out);
+      const group = b.filing === 'fdn' ? 'fdn' : `L${b.beam.levelId}`;
       for (let i = n0; i < out.length; i += 1) out[i].groupHint = group;
-      solid.push({ a: beam.start, b: beam.end, bottom, view: beam.view || 'plan', levelId: beam.levelId });
       counts.beams += 1;
     });
     const square = (p, sizeFt) => [
       { x: p.x - sizeFt / 2, z: p.z - sizeFt / 2 }, { x: p.x + sizeFt / 2, z: p.z - sizeFt / 2 },
       { x: p.x + sizeFt / 2, z: p.z + sizeFt / 2 }, { x: p.x - sizeFt / 2, z: p.z + sizeFt / 2 }];
-    const post = (p, bottom, top, sizeFt, group) => {
-      if (!(top - bottom > 0.2)) return;
+    framing.posts.forEach(pp => {
+      if (!(pp.top - pp.foot > 0.2)) return;
+      const group = pp.kind === 'telepost' ? 'fdn' : (pp.levelId != null ? `L${pp.levelId}` : 'fdn');
       const n0 = out.length;
-      prism(square(p, sizeFt), bottom, top, 'post', COLOURS.post, out);
+      prism(square(pp.point, (pp.sizeIn || 3.5) / 12), pp.foot, pp.top, 'post', COLOURS.post, out);
       for (let i = n0; i < out.length; i += 1) out[i].groupHint = group;
       counts.posts += 1;
-    };
-    const beamOver = (p, pick) => solid.filter(pick).filter(b => {
-      const r = G.pointToSegment ? G.pointToSegment(p, { start: b.a, end: b.b }) : null;
-      return r && r.d <= 0.4;
-    }).reduce((low, b) => (low == null || b.bottom < low ? b.bottom : low), null);
-    // The piles' posts, as the elevations stand them.
-    const done = new Set();
-    let piles = [];
-    try { piles = CV.pilePosts ? CV.pilePosts(env, stack) : []; } catch (e) { piles = []; }
-    piles.forEach(pp => {
-      done.add(pp.column);
-      post(pp.point, pp.foot, pp.top, (pp.sizeIn || 5.5) / 12, pp.levelId != null ? `L${pp.levelId}` : 'fdn');
-    });
-    const fdn = stack.foundation;
-    const concrete = (env.floors() || []).filter(f => f.points && f.points.length >= 3 && (f.view === 'foundation' || f.levelId === 1));
-    (env.columns ? env.columns() : []).forEach(column => {
-      if (!column || !column.point || done.has(column) || column.auto === true) return;
-      const p = column.point;
-      const view = column.view || 'plan';
-      if (view === 'foundation' || column.levelId === 1) {
-        // Only one standing on the slab: a pile out in the open with nothing
-        // over it is all below grade.
-        if (!concrete.some(f => G.pointInLoop(p, f.points))) return;
-        const low = storeys[0];
-        const top = beamOver(p, b => b.view === 'foundation' || b.levelId === 1) ?? (low ? low.floorBottom : fdn.wallTop);
-        post(p, fdn.slabTop, top, 3.5 / 12, 'fdn');
-        return;
-      }
-      const storey = levelById[column.levelId];
-      if (!storey) return;
-      const up = above(column.levelId);
-      const top = beamOver(p, b => b.levelId === column.levelId && b.view === 'plan')
-        ?? (up ? up.floorBottom : storey.wallTop);
-      post(p, storey.floorTop, top, 3.5 / 12, `L${column.levelId}`);
     });
   }
 
