@@ -71,6 +71,10 @@ test('the floor line: one coursing up the house, no strip without a course', () 
   // and the 2ND FL's first were 0.45 ft apart (a course and a half).
   expect(Math.max(...gaps), `course spacing ${gaps.map(g => g.toFixed(3)).join(' ')}`)
     .toBeLessThan(EXPOSURE_FT + 0.03);
+  // AND ON ONE GRID: two storeys coursed apart and a floor strip coursed on
+  // a third put lines a fraction of a course apart.
+  expect(Math.min(...gaps), `course spacing ${gaps.map(g => g.toFixed(3)).join(' ')}`)
+    .toBeGreaterThan(EXPOSURE_FT - 0.03);
 });
 
 test('the eave: a stucco board over a vinyl BAND keeps its foot line', () => {
