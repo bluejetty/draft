@@ -463,7 +463,7 @@ test('a method chosen elsewhere is not clobbered by an unrelated PROJECT save',
     // that picks a bungalow and waits on the pitch input -- and it never
     // touches the identity fields, so patching the OTHER file's helper did
     // not reach this test. I assumed it did and the run said otherwise.
-    await page.locator('#left-tab').click();
+    await page.locator('#projinfo-tab').click();
     const name = page.locator('[data-project-name]');
     await name.fill('BONEYARD ROAD');
     await name.dispatchEvent('change');

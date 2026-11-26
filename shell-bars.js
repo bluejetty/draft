@@ -1551,54 +1551,80 @@ ${trio(true)}
       return { refresh };
     },
 
-    // A PULL-OUT RAIL: the tab, the panel, and the toggle between them.
+    // PROJECT INFO, THE DROP-DOWN TAB (jb, 26 Nov 2026): "a tab that comes
+    // down off the top bar like the OBJ PROP tab except on the left side",
+    // in the same place on PROJECT and CONSTRUCTION LAYOUT. One markup for
+    // both pages, so the boxes are the same boxes wherever it is opened; the
+    // data-* names are the ones PROJECT has always wired by. (It replaces
+    // the side rail() PROJECT used to pull out, which had no other caller.)
     //
-    // Movie asked for one on PROJECT -- "the PROJECT INFO area with the drop
-    // zone should be on the first tab top left" -- and the rail's STYLING
-    // already moved into shell-bars.css, so this is the markup and the one
-    // behaviour that goes with it.
+    // THE STATE LIVES IN THE URL, the rail's rule kept: ?info=1 means open.
     //
-    // MODEL IS NOT POINTED AT THIS, deliberately. Its rails carry two sides,
-    // a pane switcher and two different collapse rules, and its setRail()
-    // ends in syncShell() and paint() -- a drawing page's business. Re-routing
-    // that would be a behaviour change to the page people draw on, dressed up
-    // as a refactor, and today has already shown what a 1px difference there
-    // costs. The two share a stylesheet now; converging the wiring is its own
-    // job with its own proof.
+    // opts.top       markup above the fields (PROJECT: the drop zone).
+    // opts.bottom    markup under them (PROJECT: the room counts).
+    // opts.drafter   true adds DRAFT BY / PHONE, which are SETTINGS', not the
+    //                project's -- marked so on the panel.
+    // opts.onToggle  told on every open and shut, and on load for ?info=1.
     //
-    // THE STATE LIVES IN THE URL, which is MODEL's rule and worth keeping:
-    // what the drafter has open survives a reload and can be sent to someone
-    // else. ?left=1 means open, absent means shut.
-    //
-    // opts.side      'left' or 'right'.
-    // opts.label     the word down the tab.
-    // opts.title     the tab's tooltip.
-    // opts.html      what goes in the panel -- the page's own, always.
-    // opts.onToggle  optional; a page with something to repaint says so.
-    rail: (opts = {}) => {
-      const side = opts.side === 'right' ? 'right' : 'left';
-      const label = opts.label || 'INFO';
-      put(`<button class="rail-tab" id="${side}-tab" type="button"\n`
-        + `  aria-expanded="false" aria-controls="${side}-rail"\n`
-        + `  title="${opts.title || label}"><span class="rail-tab-text">${label}</span></button>\n`
-        + `<aside id="${side}-rail" hidden>${opts.html || ''}</aside>`);
-      const tab = document.getElementById(`${side}-tab`);
-      const panel = document.getElementById(`${side}-rail`);
+    // Returns { show(open), focus(key), tab, panel }: focus opens the tab on
+    // one box, key being a projectInfo key ('name', 'address', 'client', ...)
+    // or 'drafterName' / 'drafterPhone'.
+    projectInfoTab: (opts = {}) => {
+      const box = (key, label, extra = '') => `<label class="pi-label">${label}`
+        + `<input class="pi-field" data-pi="${key}" ${extra} aria-label="${label}" /></label>`;
+      const legal = (key, word) => `<input class="pi-field" data-pi="${key}" data-legal-${word.toLowerCase()} placeholder="${word}" aria-label="Legal ${word.toLowerCase()}" />`;
+      const drafter = opts.drafter
+        ? `<div class="pi-settings"><div class="pi-head">FROM SETTINGS &middot; EVERY PROJECT</div>`
+          + box('drafterName', 'Draft by', 'data-pi-drafter="name" maxlength="80"')
+          + box('drafterPhone', 'Drafter phone', 'data-pi-drafter="phone" maxlength="80"')
+          + `</div>`
+        : '';
+      put(`<button id="projinfo-tab" type="button" data-projinfo-tab aria-expanded="false" aria-controls="projinfo"\n`
+        + `  title="The project: who it is for, where it is, and the site’s own papers">PROJECT INFO ▾</button>\n`
+        + `<section id="projinfo" data-projinfo aria-label="PROJECT INFO" hidden>`
+        + (opts.top || '')
+        + `<div class="pi-grid">`
+        + box('name', 'Project name', 'data-project-name')
+        + box('projectNumber', 'Project no.', 'data-project-number placeholder="2026-014"')
+        + box('client', 'Owner', 'data-project-owner')
+        + box('contractor', 'Contractor', 'data-project-contractor')
+        + box('address', 'Civic address', 'data-project-civic')
+        + box('checkedBy', 'Checked by', 'data-project-checked')
+        + `<div class="pi-label">Legal land description<div class="pi-legal">`
+        + legal('legalBlock', 'BLOCK') + legal('legalLot', 'LOT') + legal('legalPlan', 'PLAN') + legal('legalParcel', 'PARCEL')
+        + `</div>`
+        + `<input class="pi-field" data-pi="legalOther" data-legal-other placeholder="OTHER ID" aria-label="Legal other id" />`
+        + `<textarea class="pi-field" data-pi="legal" data-project-legal rows="2" placeholder="Freeform description, if the lot needs one" aria-label="Legal land description freeform"></textarea>`
+        + `</div></div>`
+        + drafter
+        + (opts.bottom || '')
+        + `</section>`);
+      const tab = document.getElementById('projinfo-tab');
+      const panel = document.getElementById('projinfo');
       const params = () => new URLSearchParams(location.search);
       const show = open => {
         panel.hidden = !open;
         tab.setAttribute('aria-expanded', String(open));
         const p = params();
-        if (open) p.set(side, '1'); else p.delete(side);
+        if (open) p.set('info', '1'); else p.delete('info');
         const q = p.toString();
-        history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+        history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
         if (opts.onToggle) opts.onToggle(open);
       };
       tab.addEventListener('click', () => show(panel.hidden));
-      // OPENS ON LOAD IF THE URL SAYS SO, which is what putting it in the URL
-      // was for. A link that says ?left=1 and opens shut is a link that lied.
-      if (params().get(side) === '1') show(true);
-      return show;
+      // A PRESS OUTSIDE NEVER SHUTS IT: on LAYOUT the press that opened it on
+      // a titleblock word is outside, and so is the sheet it is being typed
+      // against. The tab is what shuts it, as with OBJ / PROP.
+      const focus = key => {
+        if (panel.hidden) show(true);
+        const input = panel.querySelector(`[data-pi="${key}"]`);
+        if (!input) return;
+        input.focus();
+        if (input.select) input.select();
+        input.scrollIntoView?.({ block: 'nearest' });
+      };
+      if (params().get('info') === '1') show(true);
+      return { show, focus, tab, panel };
     },
 
     // THE TAB IS THE ONLY THING THAT MOVES THE PANEL. Nothing else opens or

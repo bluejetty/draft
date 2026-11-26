@@ -394,6 +394,9 @@
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     color: var(--ink-primary); font-size:13px; }
   .lay-section { padding:12px 14px; border-bottom:1px solid var(--edge-panel); }
+  /* THE PROJECT INFO TAB HANGS OVER THE PANEL'S TOP (16px, from the bar), so
+     the first heading starts under it rather than behind it. */
+  #lay-panel > .lay-section:first-child { padding-top:24px; }
   .lay-section-title { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
     color: var(--ink-quiet); margin-bottom:8px; }
@@ -804,6 +807,11 @@
      block at the foot of the page script, which says which controls are
      honest here and which are not. -->
 <script>window.DraftShellBars.topBar({ instruments: true });</script>
+<!-- PROJECT INFO ▾ (jb, 26 Nov 2026): the same tab, in the same place, as on
+     PROJECT -- off the top bar on the left. A press on a titleblock word that
+     comes from it opens it on that box; typing repaints the sheet. DRAFT BY
+     and the phone are SETTINGS', so they sit under their own heading. -->
+<script>window.DraftLayoutProjectInfo = window.DraftShellBars.projectInfoTab({ drafter: true });</script>
 
 <!-- THE PROFILE DIALOG: personal settings and company standards, saved to a
      portable file or read back from one. -->
@@ -1717,6 +1725,7 @@ class Component extends PageLogic {
     this._canvas = document.querySelector('[data-layout-canvas]');
     this._ctx = this._canvas ? this._canvas.getContext('2d') : null;
     if (!this._canvas) return;
+    this._wireProjectInfo();
 
     // The four shipped marks and whatever this office uploaded — see
     // _loadTitleblockLogos, which is also what an import calls.
@@ -1877,6 +1886,7 @@ class Component extends PageLogic {
     if (saved && !format.checkEnvelope(saved).ok) saved = null;
     this._saved = saved;
     this._drawingChecked = true;
+    this._fillProjectInfo();
     this._drawingGen = (this._drawingGen || 0) + 1;
     this._levels = saved ? format.levels(saved.levels) : [];
     // A STANDALONE FILE (Movie, 6 Nov: DRAW STANDALONE SITE PLAN -- "that
@@ -3081,9 +3091,11 @@ class Component extends PageLogic {
     if (!base || typeof base !== 'object') base = this._saved;
     if (!base) return;
     const merged = { ...base, layout: this._layoutKey() };
-    // A PROJECT NAME TYPED ON THE TITLEBLOCK goes into the drawing itself.
-    if (this._projectNameToWrite != null) {
-      merged.projectInfo = { ...(base.projectInfo || {}), name: this._projectNameToWrite };
+    // PROJECT INFO TYPED ON THIS PAGE (the PROJECT INFO tab) goes into the
+    // drawing itself, key by key, so a box PROJECT changed meanwhile and this
+    // page did not touch is not put back.
+    if (this._projectInfoToWrite) {
+      merged.projectInfo = { ...(base.projectInfo || {}), ...this._projectInfoToWrite };
     }
     const file = new File([JSON.stringify(merged)], 'model-drawing.json', { type: 'application/json' });
     try {
@@ -3093,7 +3105,8 @@ class Component extends PageLogic {
       return this._writeLayoutToStore(triesLeft - 1);
     }
     this._saved = merged;
-    this._projectNameToWrite = null;
+    this._projectInfoToWrite = null;
+    this._fillProjectInfo();
   }
 
   // ─── Personal settings and company standards packages ───────────────────────
@@ -3386,6 +3399,7 @@ class Component extends PageLogic {
     // picker, which a check can find no other way.
     document.body.dataset.layoutTitleHit = JSON.stringify(this._titleHitIn || null);
     document.body.dataset.layoutProjectHit = JSON.stringify(this._projectHitIn || null);
+    document.body.dataset.layoutFieldHits = JSON.stringify(this._fieldHitsIn || []);
     document.body.dataset.layoutLogoHit = JSON.stringify(this._logoHitIn || null);
     // THE LAYERS CARD FOLLOWS THE SHEET: an UNDO that puts a layer back, or
     // takes the viewport away, is seen on the card at once.
@@ -3496,11 +3510,12 @@ class Component extends PageLogic {
       // THE PAGE TITLE IS PRESSABLE ON THE DESK: the titleblock says where
       // it drew it, in paper inches, for _onMouseDown to rename from.
       const desk = !print;
-      if (desk) { this._titleHitIn = null; this._logoHitIn = null; this._projectHitIn = null; }
+      if (desk) { this._titleHitIn = null; this._logoHitIn = null; this._projectHitIn = null; this._fieldHitsIn = []; }
       const inches = r => ({ xIn: (r.x - panX) / zoom, yIn: (r.y - panY) / zoom, wIn: r.w / zoom, hIn: r.h / zoom });
       const info = { ...this._titleblockInfo(sheet),
         ...(desk ? { onPageTitle: r => { this._titleHitIn = inches(r); },
           onProjectName: r => { this._projectHitIn = inches(r); },
+          onField: (key, r) => { this._fieldHitsIn.push({ key, ...inches(r) }); },
           onLogoCell: r => { this._logoHitIn = inches(r); } } : {}) };
       window.DraftTitleblock.draw(ctx, tbBox, style, info, this._logos?.[style.markId] || null);
     } else {
@@ -4038,8 +4053,10 @@ class Component extends PageLogic {
   _titleblockInfo(sheet = this.state.activeSheet) {
     const format = window.DraftDrawingFormat;
     const project = format.projectInfo(this._saved?.projectInfo);
-    const drafter = window.DraftDrafter.normaliseDrafter(
-      window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter);
+    // A NAME BEING TYPED in the PROJECT INFO tab shows as it is typed.
+    const drafter = window.DraftDrafter.normaliseDrafter({
+      ...(window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter || {}),
+      ...(this._liveDrafter || {}) });
     const sheetViewports = this._sheetViewports(sheet);
     // A SCHEDULE HAS NO SCALE: a sheet of schedules alone reads NTS, and a
     // schedule beside a drawing does not make the sheet AS NOTED.
@@ -4212,12 +4229,16 @@ class Component extends PageLogic {
     const t = this._titleHitIn;
     const pj = this._projectHitIn;
     const inside = r => r && ptIn.xIn >= r.xIn && ptIn.xIn <= r.xIn + r.wIn && ptIn.yIn >= r.yIn && ptIn.yIn <= r.yIn + r.hIn;
-    if (!hit && inside(pj)) {
+    // A PROJECT INFO WORD OPENS THE PROJECT INFO TAB ON ITS BOX (jb, 26 Nov
+    // 2026), the project name included -- one place to change them, the
+    // same place PROJECT changes them.
+    const field = !hit && (inside(pj) ? { key: 'name' } : (this._fieldHitsIn || []).find(inside));
+    if (field) {
       e.preventDefault();
-      const r = this._canvas.getBoundingClientRect();
-      const { zoom, panX, panY } = this.state;
-      this._openProjectRename({ left: r.left + pj.xIn * zoom + panX - 40,
-        top: r.top + (pj.yIn + pj.hIn / 2) * zoom + panY, width: 200, height: 0 });
+      this._closeRenameBox();
+      // After the press is done, or the mousedown's own focus lands on the
+      // canvas and takes it straight back off the box.
+      setTimeout(() => window.DraftLayoutProjectInfo?.focus(field.key), 0);
       return;
     }
     if (hit) {
@@ -5861,46 +5882,73 @@ class Component extends PageLogic {
     input.select();
   }
 
-  // THE PROJECT'S NAME, pressed on the titleblock (Movie, 26 Oct: "allow the
-  // user to click on it to change it, and also change it in the project
-  // information area too"). One name: the drawing's projectInfo.name, which
-  // the PROJECT page's NAME box and every sheet's titleblock both read.
-  _openProjectRename(rect) {
-    this._closeRenameBox();
-    const input = document.createElement('input');
-    input.id = 'lay-rename';
-    input.dataset.projectRename = '';
-    input.value = String(this._saved?.projectInfo?.name || '');
-    input.placeholder = 'NEW HOME';
-    input.maxLength = 200;
-    Object.assign(input.style, { left: `${rect.left}px`, top: `${rect.top + rect.height / 2 - 12}px`,
-      width: `${Math.max(160, rect.width)}px` });
-    let done = false;
-    const close = keep => {
-      if (done) return;
-      done = true;
-      const name = input.value.replace(/\s+/g, ' ').trim();
-      input.remove();
-      if (keep) this._renameProject(name);
-    };
-    input.closeRename = close;
-    input.addEventListener('keydown', e => {
-      e.stopPropagation();
-      if (e.key === 'Enter') { e.preventDefault(); close(true); }
-      if (e.key === 'Escape') { e.preventDefault(); close(false); }
+  // ── THE PROJECT INFO TAB (jb, 26 Nov 2026) ─────────────────────────────
+  // The same boxes as PROJECT's, in the same place. The project's words ride
+  // the drawing's projectInfo (the titleblock and the PROJECT page both read
+  // it); DRAFT BY and the phone ride the SETTINGS package, every project.
+  // Typing repaints the sheet as it goes; letting go of a box saves.
+  // (This replaces the little rename box the project name opened, Movie 26
+  // Oct: "allow the user to click on it to change it, and also change it in
+  // the project information area too" -- now it IS the project information
+  // area.)
+  _wireProjectInfo() {
+    const panel = window.DraftLayoutProjectInfo?.panel;
+    if (!panel || this._projectInfoWired) return;
+    this._projectInfoWired = true;
+    panel.querySelectorAll('[data-pi]').forEach(input => {
+      const key = input.dataset.pi;
+      const drafterKey = input.dataset.piDrafter;
+      // The page's own keys (Delete, arrows, Ctrl+Z) are not for a box.
+      input.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter' && input.tagName === 'INPUT') { e.preventDefault(); input.blur(); }
+      });
+      input.addEventListener('input', () => {
+        if (drafterKey) this._liveDrafter = { ...(this._liveDrafter || {}), [drafterKey]: input.value };
+        else if (this._saved) {
+          this._saved = { ...this._saved, projectInfo: { ...(this._saved.projectInfo || {}), [key]: input.value } };
+        }
+        this._draw();
+      });
+      input.addEventListener('change', () => {
+        if (drafterKey) {
+          const M = window.DraftProfileManager;
+          const active = M?.getActive('settings');
+          const drafter = window.DraftDrafter.normaliseDrafter({
+            ...(active?.content?.model?.drafter || {}), [drafterKey]: input.value });
+          if (M) M.saveActive(M.createPackage('settings', active?.name, { model: { drafter } }));
+          this._liveDrafter = null;
+          this._fillProjectInfo();
+          this._draw();
+          return;
+        }
+        if (!this._saved) return;
+        const clean = window.DraftDrawingFormat.projectInfo(this._saved.projectInfo);
+        this._saved = { ...this._saved, projectInfo: { ...(this._saved.projectInfo || {}), [key]: clean[key] } };
+        input.value = clean[key];
+        this._projectInfoToWrite = { ...(this._projectInfoToWrite || {}), [key]: clean[key] };
+        this._persistLayout();
+        this._draw();
+      });
     });
-    input.addEventListener('blur', () => close(true));
-    document.body.appendChild(input);
-    input.focus();
-    input.select();
+    this._fillProjectInfo();
   }
 
-  _renameProject(name) {
-    if (!this._saved || name === String(this._saved.projectInfo?.name || '')) return;
-    this._saved = { ...this._saved, projectInfo: { ...(this._saved.projectInfo || {}), name } };
-    this._projectNameToWrite = name;
-    this._persistLayout();
-    this._draw();
+  _fillProjectInfo() {
+    const panel = window.DraftLayoutProjectInfo?.panel;
+    if (!panel) return;
+    const project = window.DraftDrawingFormat.projectInfo(this._saved?.projectInfo);
+    const drafter = window.DraftDrafter.normaliseDrafter(
+      window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter);
+    panel.querySelectorAll('[data-pi]').forEach(input => {
+      // NOT UNDER THE DRAFTER'S HANDS: a save landing mid-word must not put
+      // the box back to what it was a keystroke ago.
+      if (document.activeElement === input) return;
+      const drafterKey = input.dataset.piDrafter;
+      input.value = drafterKey ? drafter[drafterKey] : (project[input.dataset.pi] ?? '');
+      // No drawing, nothing to write the project's words into.
+      input.disabled = !drafterKey && !this._saved;
+    });
   }
 
   _renameSheet(n, title) {

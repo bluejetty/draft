@@ -26,11 +26,14 @@ const MUTANTS = [
     find: 'data-left-pane-tab="drafting" hidden><span class="rail-tab-text">DRAFTING</span></button>',
     with: 'data-left-pane-tab="drafting" hidden>DRAFTING</button>',
     test: 'MODEL: each of the six tabs' },
+  // PROJECT'S SIDE TAB WENT UP TO THE BAR (26 Nov 2026): the shared rail()
+  // it was built by is gone, so what is guarded now is that PROJECT INFO
+  // does not come back as a side tab.
   { file: 'shell-bars.js',
-    name: 'the shared bars build a tab with bare text',
-    find: '        + `  title="${opts.title || label}"><span class="rail-tab-text">${label}</span></button>\\n`',
-    with: '        + `  title="${opts.title || label}">${label}</button>\\n`',
-    test: 'a page whose tab the shared bars build' },
+    name: 'PROJECT INFO is built as a side tab again',
+    find: '      put(`<button id="projinfo-tab" type="button"',
+    with: '      put(`<button id="projinfo-tab" class="rail-tab" type="button"',
+    test: 'PROJECT has no side tab' },
   { file: 'MODEL.dc.html',
     name: 'the old page\'s left tab is bare text',
     find: 'title="{{ leftRailTabTitle }}"><span class="rail-tab-text">ROUGHDRAFTER - LITE - DRAFTING TOOLS</span></button>',

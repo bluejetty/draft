@@ -15,7 +15,7 @@ async function openProjectPage(page) {
   // them, so a spec that wants them does the same -- asserting the field is
   // visible without opening the tab is asserting the page works the way it
   // used to.
-  await page.locator('#left-tab').click();
+  await page.locator('#projinfo-tab').click();
   await expect(page.locator('[data-project-name]')).toBeVisible();
 }
 

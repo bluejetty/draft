@@ -1338,3 +1338,39 @@
      the middle of the face clear. That gap is deliberate: the old page's keys
      carry an icon there and this page has none yet, so the space is held open
      rather than closed up and re-opened later at every caller. */
+
+  /* PROJECT INFO ▾ (jb, 26 Nov 2026): OBJ / PROP's tab mirrored to the LEFT,
+     hanging under the top bar, in the same place on PROJECT and on
+     CONSTRUCTION LAYOUT. The same chip, the same 16px, the same open/shut
+     accent; the panel it drops is solid for OBJ / PROP's reason -- whatever
+     is under it (the type cards, the paper rack) must not read through. */
+  #projinfo-tab { position:fixed; z-index:45; top:var(--strip-h, 44px); left:8px; height:16px;
+    box-sizing:border-box; padding:0 10px; font-family: var(--font-ui); font-size:8px; font-weight:600;
+    letter-spacing:.08em; line-height:14px; cursor:pointer; white-space:nowrap;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-top:none; border-radius:0 0 6px 6px; }
+  #projinfo-tab:hover, #projinfo-tab[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+  #projinfo[hidden] { display:none; }
+  #projinfo { position:fixed; z-index:45; left:0; top:calc(var(--strip-h, 44px) + 16px);
+    width:320px; box-sizing:border-box; padding:8px 10px;
+    max-height:calc(100vh - var(--strip-h, 44px) - 80px); overflow:auto;
+    background-color: var(--surface-page);
+    background-image: linear-gradient(var(--surface-panel), var(--surface-panel));
+    border:1px solid var(--accent); border-radius:0 0 4px 4px;
+    font-family: var(--font-ui); color: var(--ink-primary); }
+  #projinfo .pi-grid { display:flex; flex-direction:column; gap:7px; }
+  #projinfo .pi-label { display:block; font-size:10px; font-weight:600; letter-spacing:.07em;
+    text-transform:uppercase; color: var(--ink-secondary); }
+  #projinfo .pi-field { display:block; width:100%; box-sizing:border-box; height:26px; margin-top:3px;
+    border:1px solid var(--edge-panel); background: var(--surface-chip); padding:4px 7px;
+    color: var(--ink-primary); font-family:'Barlow', system-ui, sans-serif; font-size:12px;
+    font-weight:400; letter-spacing:0; text-transform:none; outline:none; }
+  #projinfo .pi-field:hover, #projinfo .pi-field:focus { border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface-chip)); }
+  #projinfo textarea.pi-field { height:auto; min-height:54px; resize:vertical; line-height:1.4; }
+  #projinfo .pi-legal { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:3px; }
+  #projinfo .pi-legal .pi-field { margin-top:0; }
+  #projinfo .pi-settings { margin-top:10px; padding-top:8px; border-top:1px solid var(--edge-panel);
+    display:flex; flex-direction:column; gap:7px; }
+  #projinfo .pi-head { font-size:9px; font-weight:600; letter-spacing:.1em; color: var(--ink-quiet); }

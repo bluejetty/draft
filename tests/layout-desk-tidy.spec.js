@@ -150,15 +150,16 @@ test('a page let go on itself goes nowhere', async ({ page }) => {
   expect(await titles(page)).toEqual(before);
 });
 
-test('the project name on the titleblock is a text box on a press, and the drawing -- so PROJECT -- takes it', async ({ page }) => {
+test('the project name on the titleblock opens PROJECT INFO on a press, and the drawing -- so PROJECT -- takes it', async ({ page }) => {
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
   const hit = await hitOf(page, 'layoutProjectHit');
   expect(hit, 'the strip says where the project name is').toBeTruthy();
   await page.mouse.click(...await deskPoint(page, ...centre(hit)));
-  await expect(page.locator('#lay-rename[data-project-rename]')).toBeVisible();
+  // jb, 26 Nov 2026: the PROJECT INFO tab, not a box over the sheet.
+  await expect(page.locator('#projinfo [data-pi="name"]')).toBeFocused();
   const seq = await saveSeq(page);
-  await page.locator('#lay-rename').fill('Maple Court');
+  await page.locator('#projinfo [data-pi="name"]').fill('Maple Court');
   await page.keyboard.press('Enter');
   await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
   const stored = await page.evaluate(async bucket => {

@@ -548,6 +548,14 @@ if (!window.DraftTitleblock) {
     rot(info.address, x + w * 0.4, titleB, wordsB, w * 0.14, 400, plain, INK);
     rot('BUILDING OWNER', x + w * 0.64, titleB, wordsB, w * 0.13, 600, condensed, FAINT);
     rot(info.owner, x + w * 0.82, titleB, wordsB, w * 0.14, 400, plain, INK);
+    // WHERE EACH PROJECT INFO WORD STANDS, for a page that opens the PROJECT
+    // INFO tab on it (LAYOUT, jb 26 Nov 2026: "when the user clicks on
+    // anything in the titleblock that is referenced from the project info
+    // tab, open the tab"). Keys are projectInfo's own; drafterName is
+    // SETTINGS'.
+    const field = (key, rect) => { if (typeof info.onField === 'function') info.onField(key, rect); };
+    field('address', { x, y: titleB, w: w * 0.5, h: wordsB - titleB });
+    field('client', { x: x + w * 0.5, y: titleB, w: w * 0.5, h: wordsB - titleB });
     divider(wordsB);
 
     // The record rows, horizontal: PROJECT NO. / REVISION / DATE / SCALE /
@@ -555,16 +563,17 @@ if (!window.DraftTitleblock) {
     // has checked print their rows empty under the label, the way a
     // printed form does: the cell is there to be filled in by hand.
     const rows = [
-      ['PROJECT NO.', info.projectNumber],
+      ['PROJECT NO.', info.projectNumber, 'projectNumber'],
       ['REVISION', info.revision || '—'],
       ['DATE', info.date],
       ['SCALE', info.scale],
-      ['DRAFT BY', info.drafterName],
-      ['CHECKED BY', info.checkedBy],
+      ['DRAFT BY', info.drafterName, 'drafterName'],
+      ['CHECKED BY', info.checkedBy, 'checkedBy'],
     ];
     const rowH = (rowsB - wordsB) / rows.length;
-    rows.forEach(([labelText, value], i) => {
+    rows.forEach(([labelText, value, key], i) => {
       const top = wordsB + rowH * i;
+      if (key) field(key, { x, y: top, w, h: rowH });
       if (i) {
         ctx.strokeStyle = INK;
         ctx.lineWidth = 0.5;
@@ -723,6 +732,7 @@ if (!window.DraftTitleblock) {
 
     // Drafter cell, with the checker under the drafter when there is one.
     label(cells[2], 'DRAWN BY');
+    if (typeof info.onField === 'function') info.onField('drafterName', { x: cells[2].x, y, w: cells[2].w, h });
     lines(cells[2], [info.drafterName, info.drafterPhone,
       info.checkedBy ? `CHECKED BY ${info.checkedBy}` : ''], h * 0.14);
 
