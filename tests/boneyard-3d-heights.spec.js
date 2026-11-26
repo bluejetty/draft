@@ -100,3 +100,28 @@ test('pad footings, the strip footing, the stair opening and the stair are drawn
   expect(stairs.length, 'the stair').toBe(d.stairs.length);
   expect(stairs[0].top).toBeGreaterThan(stairs[0].bottom);
 });
+
+// jb, 26 Nov 2026: "the extra roof i drew 'special' at the front of the gable
+// with different fascia doesn't show ... maybe we should show it in a
+// different linetype or weight". Every piece of the house's roof is drawn
+// now, and a SPECIAL CASE piece (one with its own settings) comes dashed.
+test('a second roof piece is drawn, and a special-case one is marked special', async ({ page }) => {
+  await boneyard(page, d => {
+    const main = d.roofs[0];
+    const xs = main.points.map(p => p.x), zs = main.points.map(p => p.z);
+    const x1 = Math.max(...xs), z0 = Math.min(...zs);
+    const piece = { ...main, id: `${main.id}-front`, own: ['fascia'], fascia: 12,
+      points: [{ x: x1, y: 0, z: z0 + 2 }, { x: x1 + 6, y: 0, z: z0 + 2 },
+        { x: x1 + 6, y: 0, z: z0 + 10 }, { x: x1, y: 0, z: z0 + 10 }] };
+    piece.edges = piece.points.map(() => 'eave');
+    delete piece.edgeOverhang; delete piece.edgeHeelIn;
+    d.roofs.push(piece);
+    return d;
+  });
+  const lines = await attr(page, 'data-thin');
+  const eaves = lines.filter(l => l.kind === 'eave');
+  expect(eaves.length, 'both pieces\' eaves').toBe(2);
+  expect(eaves.filter(l => l.special).length, 'one of them the special case').toBe(1);
+  expect(lines.filter(l => l.kind === 'skeleton' && l.special).length,
+    'with its own hips and ridge').toBeGreaterThan(0);
+});

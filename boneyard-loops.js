@@ -227,7 +227,11 @@ if (!window.DraftBoneyardLoops) {
     // measured from the plate, not one fascia board up, so a hip's foot lands
     // on the eave line it starts from. The 2D window reads x/z only.
     const roofThin = [];
+    // A SPECIAL CASE piece (one with its own pitch / fascia / overhang /
+    // fascia finish, `roof.own`) carries `special`, which the page draws in
+    // its own linetype.
     const thinOf = (roof, elev) => {
+      const special = Array.isArray(roof.own) && roof.own.length > 0 ? { special: true } : {};
       const pts = (roof.points || []).map(p => ({ x: Number(p.x), z: Number(p.z) }));
       if (pts.length < 3) return;
       const arcs = ((G && G.roofSkeleton) ? G.roofSkeleton(roof) || [] : [])
@@ -271,14 +275,16 @@ if (!window.DraftBoneyardLoops) {
           .filter((e, k, all) => !k || e.t - all[k - 1].t > 1e-4)
           .forEach(e => { const q = at(e.p); if (q.elev > elev + 1e-6) eave.push(q); });
       });
-      roofThin.push({ kind: 'eave', closed: true, points: eave, elev });
+      roofThin.push({ kind: 'eave', closed: true, points: eave, elev, ...special });
       arcs.forEach(arc => {
-        roofThin.push({ kind: 'skeleton', closed: false, elev,
+        roofThin.push({ kind: 'skeleton', closed: false, elev, ...special,
           points: [at(arc.a), at(arc.b)] });
       });
     };
-    const ownRoof = ((drawing && drawing.roofs) || []).find(r => r.sourceLevelId == null
+    const houseRoofs = ((drawing && drawing.roofs) || []).filter(r => r.sourceLevelId == null
       && !r.garage && (r.points || []).length >= 3);
+    // THE MAIN ROOF is the first piece that is not a special case.
+    const ownRoof = houseRoofs.find(r => !(Array.isArray(r.own) && r.own.length)) || houseRoofs[0];
     const inset = ownRoof ? footprint(ownRoof) : null;
     // The top floor's loop stands in only where NO roof of the house's was
     // drawn: a roof made off a floor's outline is that floor's roof, below.
@@ -290,6 +296,14 @@ if (!window.DraftBoneyardLoops) {
     // One ROOF level still -- one button, one colour -- with each loop
     // carrying the height and the floor it stands on.
     if (ownRoof && inset && inset.length >= 3) thinOf(ownRoof, top.floor.wallTop);
+    // AND EVERY OTHER PIECE OF THE HOUSE'S ROOF (jb, 26 Nov 2026: "the extra
+    // roof i drew 'special' at the front of the gable with different fascia
+    // doesn't show"). Only the first was ever drawn; the rest stand on the
+    // same plate and come in as thin lines -- the bone stays the main roof's.
+    // A piece that cannot be worked out is left off, never the page.
+    houseRoofs.filter(r => r !== ownRoof).forEach(r => {
+      try { thinOf(r, top.floor.wallTop); } catch { /* left off */ }
+    });
     // A ROOF BUILT FROM THE LOT is no roof (Movie's PHASE2, 28 Oct): MODEL
     // drops it on open, but a file not saved since still carries it.
     const lots = new Set(((drawing && drawing.outlines) || [])

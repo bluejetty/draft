@@ -425,6 +425,8 @@
       // `to` is what puts a point on the screen -- identity in the 3D window,
       // where layout has already done it, and toScreen in the 2D one.
       const THIN_PX = 0.6;
+      const SPECIAL_PX = 1.1;
+      const SPECIAL_DASH = [5, 3];
       const strokeThin = (ctx, lines, color, to) => {
         if (!lines || !lines.length) return;
         ctx.save();
@@ -433,6 +435,10 @@
         lines.forEach(line => {
           const pts = (line.points || []).map(to);
           if (pts.length < 2) return;
+          // A SPECIAL CASE roof piece: dashed and a touch heavier, so it reads
+          // apart from the main roof in the same orange.
+          ctx.setLineDash(line.special ? SPECIAL_DASH : []);
+          ctx.lineWidth = line.special ? SPECIAL_PX : THIN_PX;
           ctx.beginPath();
           pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
           if (line.closed) ctx.closePath();
@@ -483,7 +489,7 @@
       const thinAttr = shownLines => JSON.stringify(shownLines.flatMap(({ name, lines, to }) =>
         (lines || []).map(line => {
           const plan = line.points[0] && line.points[0].z !== undefined;
-          return { level: name, kind: line.kind,
+          return { level: name, kind: line.kind, ...(line.special ? { special: true } : {}),
             points: line.points.map(p => {
               const q = to(p);
               return [Number(q.x.toFixed(1)), Number(q.y.toFixed(1))];
