@@ -18,10 +18,11 @@
 // and reference side from wall-types.js. Fix a roof once and both programs
 // see it -- RD-DOCUMENTS/RULING-a-ported-rule-keeps-one-home.md.
 //
-// PHASE 1 (this file today): walls on every storey, the garage on its own
-// plate, foundation walls and footings, floor decks and slabs, and the roof
-// planes. Gable-end infill, fascia, openings, stairs, decks and holograms are
-// the later phases in the plan.
+// PHASE 1: walls on every storey, the garage on its own plate, foundation
+// walls and footings, floor decks and slabs, and the roof planes. PHASE 2:
+// gable-end walls and fascia. PHASE 3: doors and windows cut through the
+// walls (glass and door panels in them), stairs, decks at their own height,
+// and holograms stood where the plan puts them.
 (function () {
   'use strict';
   if (window.DraftHouseMesh) return;
@@ -36,7 +37,19 @@
     roof: [96, 92, 90],
     gable: [226, 220, 205],
     fascia: [238, 236, 228],
+    glass: [138, 178, 204],
+    door: [150, 106, 72],
+    overhead: [232, 232, 226],
+    deck: [176, 150, 116],
+    stair: [190, 156, 112],
+    landing: [182, 148, 104],
   });
+  // What a hologram's faces are mixed toward, by its file's colour (the same
+  // order as hologram.js COLOURS: blue first). A suite keeps the house's own.
+  const HOLO_TINTS = Object.freeze([
+    [82, 151, 218], [222, 140, 60], [84, 178, 104], [186, 96, 196],
+    [206, 182, 48], [56, 176, 176], [214, 92, 92],
+  ]);
 
   const num = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
 
@@ -45,7 +58,7 @@
   // keeps the body on the +normal side (-dz, dx), 'right' on the other, and
   // an OFFSET FROM LINE moves the whole body (wall-types.js). The same rule
   // cut-view.js's sectionWallCrossings reads.
-  function wallFootprint(wall, thickFt) {
+  function wallFrame(wall, thickFt) {
     const a = wall.start, b = wall.end;
     const dx = b.x - a.x, dz = b.z - a.z;
     const len = Math.hypot(dx, dz);
@@ -61,8 +74,16 @@
     // meets at the face: no stretch, or the corner would poke out.
     const ext = ref === 'center' ? thickFt / 2 : 0;
     const lo = mid - thickFt / 2, hi = mid + thickFt / 2;
+    // `t` is feet along the stored line from its start -- the same measure a
+    // door's or window's `offset` is kept in -- and `off` feet across it.
     const p = (t, off) => ({ x: a.x + ux * t + nx * off, z: a.z + uz * t + nz * off });
-    return [p(-ext, lo), p(len + ext, lo), p(len + ext, hi), p(-ext, hi)];
+    const at = (t, off, y) => ({ x: a.x + ux * t + nx * off, y, z: a.z + uz * t + nz * off });
+    return { p, at, t0: -ext, t1: len + ext, lo, hi, len, u: { x: ux, z: uz }, n: { x: nx, z: nz } };
+  }
+  function wallFootprint(wall, thickFt) {
+    const f = wallFrame(wall, thickFt);
+    if (!f) return null;
+    return [f.p(f.t0, f.lo), f.p(f.t1, f.lo), f.p(f.t1, f.hi), f.p(f.t0, f.hi)];
   }
 
   // Signed area in plan (x, z), for winding.
@@ -123,19 +144,127 @@
     return (type && type.totalIn ? type.totalIn : fallbackIn) / 12;
   }
 
+  // ── PHASE 3: A WALL WITH ITS DOORS AND WINDOWS CUT THROUGH ─────────────
+  //
+  // A face turned so its normal points along `outward` (any vector), its
+  // seams kept on the same edges when the corners are turned round.
+  function facing(pts, outward, kind, colour, seams, out, twoSided) {
+    let p = pts, sm = seams || null;
+    const n = normalOf(p);
+    if (n.x * outward.x + n.y * outward.y + n.z * outward.z < 0) {
+      const k = p.length;
+      p = p.slice().reverse();
+      // Reversed, new edge i joins old corners k-1-i and k-2-i: old edge k-2-i.
+      if (sm) sm = p.map((_, i) => !!seams[((k - 2 - i) % k + k) % k]);
+    }
+    const face = { pts: p, kind, colour };
+    if (sm && sm.some(Boolean)) face.seams = sm;
+    if (twoSided) face.twoSided = true;
+    out.push(face);
+  }
+
+  // The wall body between `bottom` and `top`, less its openings. `holes` are
+  // { t0, t1, y0, y1, type } in the frame's own measure (feet along the line,
+  // feet up). The wall is cut into upright columns at every jamb: a plain
+  // column is the full height, an opening's column keeps what is under its
+  // sill and over its head. Each long face is those pieces, joined at seams
+  // the painters do not ink, so it reads as one face with holes in it; the
+  // jambs, sill and head are the reveals you see into the thickness.
+  function wallWithOpenings(frame, bottom, top, holes, kind, colour, out, counts) {
+    if (!frame || !(top - bottom > 1e-4)) return;
+    const { at, t0: T0, t1: T1, lo, hi } = frame;
+    const fits = (holes || []).map(h => ({
+      ...h, t0: Math.max(h.t0, T0 + 0.02), t1: Math.min(h.t1, T1 - 0.02),
+      y0: Math.max(h.y0, bottom), y1: Math.min(h.y1, top),
+    })).filter(h => h.t1 - h.t0 > 0.05 && h.y1 - h.y0 > 0.05).sort((x, y) => x.t0 - y.t0);
+    // Two openings that overlap (a drafting slip) keep the first.
+    const keep = [];
+    fits.forEach(h => { if (!keep.length || h.t0 >= keep[keep.length - 1].t1 + 0.01) keep.push(h); });
+    if (!keep.length) {
+      prism([frame.p(T0, lo), frame.p(T1, lo), frame.p(T1, hi), frame.p(T0, hi)], bottom, top, kind, colour, out);
+      return;
+    }
+    const cols = [];
+    let t = T0;
+    keep.forEach(h => {
+      if (h.t0 > t + 1e-6) cols.push({ a: t, b: h.t0, hole: null });
+      cols.push({ a: h.t0, b: h.t1, hole: h });
+      t = h.t1;
+    });
+    if (T1 > t + 1e-6) cols.push({ a: t, b: T1, hole: null });
+    const spans = c => (c.hole
+      ? [[bottom, c.hole.y0], [c.hole.y1, top]].filter(([y0, y1]) => y1 - y0 > 1e-4)
+      : [[bottom, top]]);
+    const u = frame.u, n = frame.n;
+    const atEnd = v => Math.abs(v - T0) < 1e-9 || Math.abs(v - T1) < 1e-9;
+    // The two long faces.
+    [{ off: lo, dir: { x: -n.x, y: 0, z: -n.z } }, { off: hi, dir: { x: n.x, y: 0, z: n.z } }].forEach(side => {
+      cols.forEach(c => spans(c).forEach(([y0, y1]) => {
+        facing([at(c.a, side.off, y0), at(c.b, side.off, y0), at(c.b, side.off, y1), at(c.a, side.off, y1)],
+          side.dir, kind, colour, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
+      }));
+    });
+    // Top and bottom, under each column that reaches them.
+    cols.forEach(c => {
+      const sp = spans(c);
+      if (sp.some(([, y1]) => Math.abs(y1 - top) < 1e-6)) {
+        facing([at(c.a, lo, top), at(c.b, lo, top), at(c.b, hi, top), at(c.a, hi, top)],
+          { x: 0, y: 1, z: 0 }, kind, colour, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
+      }
+      if (sp.some(([y0]) => Math.abs(y0 - bottom) < 1e-6)) {
+        facing([at(c.a, lo, bottom), at(c.b, lo, bottom), at(c.b, hi, bottom), at(c.a, hi, bottom)],
+          { x: 0, y: -1, z: 0 }, kind, colour, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
+      }
+    });
+    // The two ends.
+    [[T0, -1], [T1, 1]].forEach(([tt, sg]) => {
+      facing([at(tt, lo, bottom), at(tt, hi, bottom), at(tt, hi, top), at(tt, lo, top)],
+        { x: u.x * sg, y: 0, z: u.z * sg }, kind, colour, null, out);
+    });
+    // Each opening: its reveals, and what fills it.
+    const mid = (lo + hi) / 2;
+    keep.forEach(h => {
+      facing([at(h.t0, lo, h.y0), at(h.t0, hi, h.y0), at(h.t0, hi, h.y1), at(h.t0, lo, h.y1)],
+        { x: u.x, y: 0, z: u.z }, kind, colour, null, out);
+      facing([at(h.t1, lo, h.y0), at(h.t1, hi, h.y0), at(h.t1, hi, h.y1), at(h.t1, lo, h.y1)],
+        { x: -u.x, y: 0, z: -u.z }, kind, colour, null, out);
+      if (h.y0 > bottom + 1e-6) {
+        facing([at(h.t0, lo, h.y0), at(h.t1, lo, h.y0), at(h.t1, hi, h.y0), at(h.t0, hi, h.y0)],
+          { x: 0, y: 1, z: 0 }, kind, colour, null, out);
+      }
+      if (h.y1 < top - 1e-6) {
+        facing([at(h.t0, lo, h.y1), at(h.t1, lo, h.y1), at(h.t1, hi, h.y1), at(h.t0, hi, h.y1)],
+          { x: 0, y: -1, z: 0 }, kind, colour, null, out);
+      }
+      // Glass in a window, a slab in a door: one sheet down the middle of
+      // the wall, seen from both sides.
+      const fill = h.type === 'window' ? ['glass', COLOURS.glass]
+        : h.type === 'overhead' ? ['overhead', COLOURS.overhead] : ['door', COLOURS.door];
+      const pane = [at(h.t0, mid, h.y0), at(h.t1, mid, h.y0), at(h.t1, mid, h.y1), at(h.t0, mid, h.y1)];
+      out.push({ pts: pane, kind: fill[0], colour: fill[1], twoSided: true });
+      if (counts) {
+        if (h.type === 'window') counts.windows += 1; else counts.doors += 1;
+      }
+    });
+  }
+
   // ── THE BUILD ──────────────────────────────────────────────────────────
   // `saved` is the parsed .draft. Returns { faces, stack, counts, bounds }.
-  function build(saved) {
+  // `opts.levels` stands the drawing on other levels than its own (a suite
+  // on its shell's floors); `opts.inner` builds a hologram's drawing, which
+  // brings no holograms of its own (hologram.js drawn() has flattened them).
+  function build(saved, opts = {}) {
     const format = window.DraftDrawingFormat;
     const CV = window.DraftCutView;
     const G = window.DraftGeometry2D;
     if (!format || !CV || !G || !window.DraftCutViewEnv) throw new Error('The drafter modules did not load.');
     if (window.DraftWallTypes && window.DraftWallTypes.adoptDrawing) window.DraftWallTypes.adoptDrawing(saved);
-    const levels = format.levels(saved.levels);
+    const levels = opts.levels || format.levels(saved.levels);
     const env = window.DraftCutViewEnv.buildCutViewEnv(saved, levels);
     const stack = CV.sectionLevelStack(env);
     const faces = [];
-    const counts = { walls: 0, foundationWalls: 0, floors: 0, roofs: 0, gables: 0, fascia: 0 };
+    const counts = { walls: 0, foundationWalls: 0, floors: 0, roofs: 0, gables: 0, fascia: 0,
+      windows: 0, doors: 0, stairs: 0, decks: 0, holograms: 0 };
     if (!stack) return { faces, stack: null, counts, bounds: boundsOf(faces) };
 
     const fdn = stack.foundation;
@@ -162,6 +291,59 @@
       return garageRoofBase.get(garage);
     };
 
+    // ── THE OPENINGS IN EACH WALL ─────────────────────────────────────────
+    // Heights as the elevations stand them (cut-view.js drawElevationView):
+    // a window from its floor + sill to floor + head, a door from the floor
+    // (on a 1/2" threshold; an OVERHEAD door seals to the slab) to the head,
+    // the head never above the wall's top. A garage wall's floor is the
+    // garage's bearing on its lowest storey, and a garage door stands on the
+    // slab where it is.
+    const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
+    const THRESHOLD_FT = ((CV.STANDARDS && CV.STANDARDS.DOOR_THRESHOLD_IN) || 0.5) / 12;
+    const fenByWall = new Map();
+    (env.fenestrations ? env.fenestrations() : []).forEach(f => {
+      if (!f || f.wallId == null) return;
+      const key = String(f.wallId);
+      if (!fenByWall.has(key)) fenByWall.set(key, []);
+      fenByWall.get(key).push(f);
+    });
+    const holesFor = (wall, floor, top, garage) => (fenByWall.get(String(wall.id)) || []).map(f => {
+      const width = num(f.width);
+      if (!(width > 0)) return null;
+      const head = f.headHeight > 0 ? f.headHeight : HEAD_FT;
+      const sill = f.sillHeight > 0 ? f.sillHeight : SILL_FT;
+      let y0 = floor + sill;
+      if (f.type === 'door') {
+        let stands = floor;
+        if (garage) {
+          try {
+            const at = CV.garageFloorAt(env, fdn, garage, CV.doorPoint(wall, f));
+            if (Number.isFinite(at)) stands = at;
+          } catch (e) { stands = floor; }
+        }
+        y0 = stands + (f.garage ? 0 : THRESHOLD_FT);
+      }
+      const c = num(f.offset);
+      return { t0: c - width / 2, t1: c + width / 2, y0, y1: Math.min(floor + head, top),
+        type: f.type === 'door' ? (f.garage ? 'overhead' : 'door') : 'window' };
+    }).filter(Boolean);
+    // A garage's lowest storey, where its walls bear on the garage's own
+    // foundation (cut-view.js bearsOnGarage).
+    const garageGround = [];
+    env.walls().forEach(wall => {
+      const storey = wall && levelById[wall.levelId];
+      if (!storey || (wall.view || 'plan') !== 'plan' || !wall.start || !wall.end) return;
+      const garage = CV.garageOfWall(wall, env, garageCache);
+      if (!garage) return;
+      const at = garageGround.find(g => CV.sameGarageBody(g.garage, garage));
+      if (!at) garageGround.push({ garage, floorTop: storey.floorTop });
+      else if (storey.floorTop < at.floorTop) at.floorTop = storey.floorTop;
+    });
+    const bearsOnGarage = (garage, storey) => {
+      const at = garageGround.find(g => CV.sameGarageBody(g.garage, garage));
+      return !at || storey.floorTop <= at.floorTop + 0.01;
+    };
+
     // ── WALLS ─────────────────────────────────────────────────────────────
     env.walls().forEach(wall => {
       if (!wall || !wall.start || !wall.end || wall.levelId < 0) return;
@@ -172,7 +354,10 @@
           : Math.min(fdn.wallBottom + num(wall.topHeight, 8), fdn.wallTop - plateFt);
         const bottom = fdn.wallBottom + num(wall.baseHeight);
         const t = thicknessFt(wall, 8);
-        prism(wallFootprint(wall, t), bottom, top, 'foundation', COLOURS.foundation, faces);
+        // A door drawn in a foundation wall (a detached garage's frost wall)
+        // is cut down to the slab it closes onto.
+        wallWithOpenings(wallFrame(wall, t), bottom, top, holesFor(wall, bottom, top, garage),
+          'foundation', COLOURS.foundation, faces, counts);
         // The strip footing under a wall that bears on one (base at 0).
         if (num(wall.baseHeight) <= 0.01) {
           const wide = Math.max(t, num(fdn.footingWidthIn, 20) / 12);
@@ -194,7 +379,8 @@
       if (wall.levelId === 1) {
         const bottom = fdn.slabTop;
         const top = Math.min(bottom + num(wall.topHeight, 8), fdn.wallTop);
-        prism(wallFootprint(wall, thicknessFt(wall, 5.5)), bottom, top, 'wall', COLOURS.wall, faces);
+        wallWithOpenings(wallFrame(wall, thicknessFt(wall, 5.5)), bottom, top,
+          holesFor(wall, bottom, top, null), 'wall', COLOURS.wall, faces, counts);
         counts.walls += 1;
         return;
       }
@@ -212,12 +398,20 @@
         // storey), as the cladding runs on the elevations.
         bottom = CV.faceSillFt(env, { level: storey, garage: null }, stack);
       }
-      prism(wallFootprint(wall, thicknessFt(wall, 5.5)), bottom, top,
-        garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces);
+      let floor = storey.floorTop + (wall.hoodOf ? Math.max(0, num(wall.baseHeight)) : 0);
+      if (garage && bearsOnGarage(garage, storey)) {
+        try { const b = CV.garageBearing(env, fdn, garage); if (Number.isFinite(b)) floor = b; } catch (e) { /* keep the storey's */ }
+      }
+      wallWithOpenings(wallFrame(wall, thicknessFt(wall, 5.5)), bottom, top, holesFor(wall, floor, top, garage),
+        garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces, counts);
       counts.walls += 1;
     });
 
     // ── FLOORS AND SLABS ─────────────────────────────────────────────────
+    // A DECK stands its own floor type's depth (2x10 + 3/4"), its top a
+    // little under its storey's floor (geometry-2d.js deckSpec, jb 20 Nov).
+    let deckSet = new Set();
+    try { deckSet = new Set(G.deckFloors ? G.deckFloors(env.floors(), env.walls()) : []); } catch (e) { deckSet = new Set(); }
     env.floors().forEach(floor => {
       const pts = (floor && floor.points) || [];
       if (pts.length < 3 || floor.levelId < 0) return;
@@ -247,6 +441,14 @@
       }
       const storey = levelById[floor.levelId];
       if (!storey) return;
+      if (deckSet.has(floor)) {
+        const spec = G.deckSpec(floor);
+        const top = storey.floorTop - spec.dropFt;
+        prism(ring, top - spec.thickFt, top, 'deck', COLOURS.deck, faces);
+        counts.decks += 1;
+        counts.floors += 1;
+        return;
+      }
       if (garage || floor.garage === true) {
         let top = storey.floorTop;
         try { if (garage) top = CV.garageSlabTop(env, fdn, garage); } catch (e) { top = storey.floorTop; }
@@ -279,7 +481,123 @@
     });
     solved.forEach(item => dressRoof(item, solved, G, faces, counts));
 
+    // ── STAIRS ───────────────────────────────────────────────────────────
+    const SG = window.DraftStairGeometry;
+    if (SG) env.stairs().forEach(stair => {
+      try { if (buildStair(stair, stack, levelById, SG, faces)) counts.stairs += 1; } catch (e) { /* a stair that will not solve is left out */ }
+    });
+
+    // ── HOLOGRAMS ────────────────────────────────────────────────────────
+    if (!opts.inner) buildHolograms(saved, faces, counts);
+
     return { faces, stack, counts, bounds: boundsOf(faces) };
+  }
+
+  // ── A STAIR, TREAD BY TREAD ─────────────────────────────────────────────
+  //
+  // Filed on the floor it goes DOWN from (stair-geometry.js stairDescent):
+  // it starts at that storey's floor and lands on the storey below it, or on
+  // the basement slab under the lowest. The plan parts (stairPlanParts) give
+  // each flight's centre line, direction walking down and width, and each
+  // landing's outline; stairSequence gives the order they come in. Every
+  // tread is one riser lower than the last; a flat landing is one riser, a
+  // landing of winders as many risers as it has winders. The upper floor is
+  // the top tread, so the first tread already stands one riser down.
+  function buildStair(stair, stack, levelById, SG, out) {
+    if (!stair || !stair.start || !stair.end) return false;
+    const storey = levelById[stair.levelId];
+    if (!storey) return false;
+    const below = stack.floors.filter(l => l.floorTop < storey.floorTop - 0.01)
+      .sort((a, b) => b.floorTop - a.floorTop)[0];
+    const landOn = below ? below.floorTop : stack.foundation.slabTop;
+    const riseFt = storey.floorTop - landOn;
+    if (!(riseFt > 0.2)) return false;
+    const layout = SG.stairCurrentLayout(stair, { floors: [], riseFtFor: () => ({ riseFt }) });
+    const parts = SG.stairPlanParts(stair, layout);
+    if (!parts || !parts.runs || !parts.runs.length) return false;
+    const riser = layout.riseFt / layout.risers;
+    const step = SG.stairStandards().treadRunIn / 12;
+    // In descending order: flights and landings as stairSequence lays them.
+    const seq = parts.split ? SG.stairSequence(parts.split) : [{ treads: layout.treads }];
+    const flights = [parts.runs[0], ...(parts.middle ? [parts.middle] : []), ...parts.runs.slice(1)];
+    const landings = parts.landings && parts.landings.length ? parts.landings : (parts.landing ? [parts.landing] : []);
+    const landingCount = seq.length - 2 - (parts.middle ? 1 : 0);
+    const landingList = landingCount === 1 && landings.length > 1 && parts.landing ? [parts.landing] : landings;
+    let y = storey.floorTop;
+    let fi = 0, li = 0;
+    const block = (ring, top, kind, colour) => prism(ring, top - Math.min(riser, 0.75), top, kind, colour, out);
+    // seq is [flight] straight, [flight, landing, flight] for an L (or a U
+    // whose landings merge), [flight, landing, (middle flight), landing,
+    // flight] for a U. A landing of winders carries `treads` too, so a
+    // flight is known by its place, not by its fields.
+    seq.forEach((item, idx) => {
+      const isFlight = idx === 0 || idx === seq.length - 1 || (seq.length === 5 && idx === 2);
+      if (isFlight) {
+        const run = flights[fi++];
+        if (!run) return;
+        const d = run.dir, side = { x: -d.z, z: d.x }, half = run.widthFt / 2;
+        const count = Math.max(0, Math.round(run.treads != null ? run.treads : item.treads));
+        for (let k = 0; k < count; k += 1) {
+          y -= riser;
+          const a = k * step, b = (k + 1) * step;
+          const at = (u, v) => ({ x: run.start.x + d.x * u + side.x * v, z: run.start.z + d.z * u + side.z * v });
+          block([at(a, -half), at(b, -half), at(b, half), at(a, half)], y, 'stair', COLOURS.stair);
+        }
+        return;
+      }
+      const landing = landingList[li++];
+      const drops = item.treads > 0 ? item.treads : 1;
+      // A landing of winders stands at the middle of its fall.
+      const top = y - riser * Math.ceil(drops / 2);
+      y -= riser * drops;
+      if (landing && landing.poly && landing.poly.length >= 3) {
+        block(landing.poly.map(p => ({ x: p.x, z: p.z })), top, 'landing', COLOURS.landing);
+      }
+    });
+    return true;
+  }
+
+  // ── HOLOGRAMS, STOOD WHERE THE PLAN PUTS THEM ───────────────────────────
+  //
+  // Each hologram as hologram.js draws it (drawn(): its own holograms come
+  // with it), less its DEMO parts (parts().existing), moved, turned and
+  // mirrored by placed(). A SUITE, or a suite file, stands on the shell's
+  // floors at the shell's heights (hologram.js shellLevels / shellHeights,
+  // copied rule for rule from paintCut); any other hologram on its own.
+  // A blue hologram is mixed toward its file's colour; a suite keeps the
+  // house's own colours, as it does on the plan.
+  const SHELL_HEIGHT_KEYS = ['levelAssemblies', 'sectionTable', 'buildType', 'zoneHeights',
+    'foundationAttachment', 'foundationAttachmentIn', 'foundationLadderIn', 'elevationDatum'];
+  function buildHolograms(saved, out, counts) {
+    const H = window.DraftHologram;
+    const F = window.DraftDrawingFormat;
+    if (!H || !Array.isArray(saved.holograms) || !saved.holograms.length) return;
+    let list = [];
+    try { list = H.drawn(saved); } catch (e) { list = []; }
+    const hostLevels = F.levels(saved.levels);
+    list.forEach((holo, index) => {
+      try {
+        const source = holo.source || {};
+        const suite = H.isSuite(holo);
+        const fits = suite || Boolean(F.suiteKind && F.suiteKind(source.suiteKind));
+        const own = F.levels(source.levels);
+        const levels = fits ? [...hostLevels, ...own.filter(l => !hostLevels.some(h => h.id === l.id))] : own;
+        const heights = {};
+        if (fits) SHELL_HEIGHT_KEYS.forEach(key => { heights[key] = saved[key]; });
+        const moved = H.placed(holo, H.parts(holo).existing);
+        const built = build({ ...moved, holograms: [], ...heights }, { inner: true, levels });
+        const tint = suite ? null
+          : HOLO_TINTS[(Number.isInteger(holo.colour) ? holo.colour : index) % HOLO_TINTS.length];
+        built.faces.forEach(f => {
+          if (tint) f.colour = f.colour.map((v, i) => Math.round(v * 0.45 + tint[i] * 0.55));
+          f.hologram = holo.id;
+          out.push(f);
+        });
+        counts.holograms += 1;
+      } catch (e) {
+        if (typeof console !== 'undefined') console.warn(`hologram ${holo.name || holo.id} could not be built`, e);
+      }
+    });
   }
 
   // ── PHASE 2: WHAT HANGS OFF A ROOF'S EDGES ──────────────────────────────
@@ -503,5 +821,5 @@
     return tris;
   }
 
-  window.DraftHouseMesh = Object.freeze({ build, normalOf, triangulate, COLOURS, wallFootprint });
+  window.DraftHouseMesh = Object.freeze({ build, normalOf, triangulate, COLOURS, wallFootprint, wallFrame });
 })();

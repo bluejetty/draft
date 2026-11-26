@@ -255,3 +255,125 @@ test('the plain painter hides what is behind, whatever order the faces come in',
   });
   expect(centre).toEqual([0, 200, 0]);
 });
+
+// ── PHASE 3: OPENINGS, STAIRS, DECKS, HOLOGRAMS (jb, 26 Nov 2026) ─────────
+//
+// Built straight from the parsed drawing in the page, so a test can change
+// the drawing first (a deck, a hologram) without a file of its own.
+async function build3(p, change = null) {
+  await openViewer(p, 'plain');
+  const saved = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+  return p.evaluate(([s, src]) => {
+    if (src) s = (new Function('s', src))(s) || s;
+    const built = DraftViewer.loadDrawing(s, 'test');
+    const levels = {};
+    built.stack.floors.forEach(l => { levels[l.id] = l.floorTop; });
+    // The fill (glass or door slab) standing in an opening: the one whose
+    // middle is nearest the opening's centre on its wall.
+    const fill = id => {
+      const f = s.fenestrations.find(o => o.id === id);
+      const w = s.walls.find(x => x.id === f.wallId);
+      const len = Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z);
+      const c = { x: w.start.x + (w.end.x - w.start.x) * f.offset / len, z: w.start.z + (w.end.z - w.start.z) * f.offset / len };
+      const mid = face => ({ x: face.pts.reduce((a, q) => a + q.x, 0) / 4, z: face.pts.reduce((a, q) => a + q.z, 0) / 4 });
+      const near = built.faces.filter(face => ['glass', 'door', 'overhead'].includes(face.kind) && !face.hologram)
+        .map(face => ({ face, d: Math.hypot(mid(face).x - c.x, mid(face).z - c.z) }))
+        .filter(o => o.d < 0.6)
+        .sort((a, b) => Math.min(...a.face.pts.map(q => q.y)) - Math.min(...b.face.pts.map(q => q.y)));
+      if (!near.length) return null;
+      const face = near[0].face;
+      return { kind: face.kind, y0: Math.min(...face.pts.map(q => q.y)), y1: Math.max(...face.pts.map(q => q.y)),
+        // Measured along the wall: the pane stands mid-thickness, off the line.
+        wide: (() => { const t = face.pts.map(q => ((q.x - w.start.x) * (w.end.x - w.start.x) + (q.z - w.start.z) * (w.end.z - w.start.z)) / len);
+          return Math.max(...t) - Math.min(...t); })() };
+    };
+    const ys = kind => built.faces.filter(f => f.kind === kind && !f.hologram).flatMap(f => f.pts.map(q => q.y));
+    const xs = pred => built.faces.filter(pred).flatMap(f => f.pts.map(q => q.x));
+    return {
+      counts: built.counts, levels, slabTop: built.stack.foundation.slabTop,
+      win7: fill('fenestration-7'), win20: fill('fenestration-20'), door6: fill('fenestration-6'), garage36: fill('fenestration-36'),
+      seams: built.faces.filter(f => f.seams).length,
+      stairTop: Math.max(...ys('stair')), stairLow: Math.min(...ys('stair')),
+      deckTop: ys('deck').length ? Math.max(...ys('deck')) : null, deckLow: ys('deck').length ? Math.min(...ys('deck')) : null,
+      holoFaces: built.faces.filter(f => f.hologram).length,
+      holoColour: (built.faces.find(f => f.hologram && f.kind === 'wall') || {}).colour || null,
+      houseX: [Math.min(...xs(f => !f.hologram)), Math.max(...xs(f => !f.hologram))],
+      holoX: built.faces.some(f => f.hologram) ? [Math.min(...xs(f => f.hologram)), Math.max(...xs(f => f.hologram))] : null,
+      status: document.getElementById('status').textContent,
+    };
+  }, [saved, change]);
+}
+
+test('every door and window is cut through its wall at the elevation heights', async ({ page: p }) => {
+  const r = await build3(p);
+  // The 24 openings on this file: 21 windows, 2 doors and the overhead.
+  expect(r.counts.windows).toBe(21);
+  expect(r.counts.doors).toBe(3);
+  expect(r.status).toContain('21 windows, 3 doors');
+  // MAIN FL window: sill 2'-10", head 7'-0", 4' wide, glass in it.
+  expect(r.win7.kind).toBe('glass');
+  expect(r.win7.y0).toBeCloseTo(r.levels[3] + 2.8333, 3);
+  expect(r.win7.y1).toBeCloseTo(r.levels[3] + 7, 3);
+  expect(r.win7.wide).toBeCloseTo(4, 2);
+  // 2ND FL window stands on the 2ND FL.
+  expect(r.win20.y0).toBeCloseTo(r.levels[5] + 2.8333, 3);
+  // A house door on its 1/2" threshold, up to its 6'-8" head.
+  expect(r.door6.kind).toBe('door');
+  expect(r.door6.y0).toBeCloseTo(r.levels[3] + 0.5 / 12, 3);
+  expect(r.door6.y1).toBeCloseTo(r.levels[3] + 6.6667, 3);
+  // The overhead door seals to the garage slab: well under the house floor.
+  expect(r.garage36.kind).toBe('overhead');
+  expect(r.garage36.y0).toBeLessThan(r.levels[3] - 0.5);
+  // The wall faces round each opening are joined at seams, never inked.
+  expect(r.seams).toBeGreaterThan(48);
+});
+
+test('a stair steps down one riser a tread from its floor to the one below', async ({ page: p }) => {
+  const r = await build3(p);
+  expect(r.counts.stairs).toBe(2);
+  // MAIN FL -> slab, 2ND FL -> MAIN FL: the top tread one riser under the
+  // 2ND FL, the lowest one riser over the slab.
+  const riserUp = (r.levels[5] - r.levels[3]) / 14;
+  expect(r.stairTop).toBeCloseTo(r.levels[5] - riserUp, 1);
+  expect(r.stairTop).toBeLessThan(r.levels[5]);
+  expect(r.stairLow).toBeGreaterThan(r.slabTop - 0.01);
+  expect(r.stairLow).toBeLessThan(r.slabTop + 1);
+});
+
+test('a deck stands under its floor by its drop, 2x10 + 3/4" deep', async ({ page: p }) => {
+  const r = await build3(p, `
+    s.floors.push({ id: 'deck-t', levelId: 3, view: 'plan', deck: true,
+      points: [{ x: 40, y: 0, z: 0 }, { x: 50, y: 0, z: 0 }, { x: 50, y: 0, z: 10 }, { x: 40, y: 0, z: 10 }] });
+    return s;`);
+  expect(r.counts.decks).toBe(1);
+  expect(r.deckTop).toBeCloseTo(r.levels[3] - 2 / 12, 3);
+  expect(r.deckLow).toBeCloseTo(r.deckTop - 10 / 12, 3);
+});
+
+test('a hologram is built where the plan puts it, in its file colour', async ({ page: p }) => {
+  const r = await build3(p, `
+    const copy = JSON.parse(JSON.stringify(s));
+    s.holograms = [{ id: 'h1', name: 'NEXT DOOR', x: 100, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0, source: copy }];
+    return s;`);
+  expect(r.counts.holograms).toBe(1);
+  expect(r.holoFaces).toBeGreaterThan(500);
+  // Slid 100 ft along x, the same width as the house.
+  expect(r.holoX[0]).toBeCloseTo(r.houseX[0] + 100, 1);
+  expect(r.holoX[1]).toBeCloseTo(r.houseX[1] + 100, 1);
+  // Mixed toward the first file's blue.
+  expect(r.holoColour[2]).toBeGreaterThan(r.holoColour[0]);
+});
+
+test('the name follows the skin: RUFF 3D on RUFF, ROUGH 3D on ROUGH', async ({ page: p }) => {
+  await p.goto('/viewer/index.html?theme=rough');
+  await p.waitForSelector('body[data-ready="1"]');
+  await expect(p.locator('#brand')).toHaveText('ROUGH 3D');
+  await expect(p).toHaveTitle('ROUGH 3D');
+  await p.goto('/viewer/index.html?theme=ruff');
+  await p.waitForSelector('body[data-ready="1"]');
+  await expect(p.locator('#brand')).toHaveText('RUFF 3D');
+  // A desk (localhost) with nothing chosen is RUFF, as MODEL is.
+  await p.goto('/viewer/index.html');
+  await p.waitForSelector('body[data-ready="1"]');
+  await expect(p.locator('#brand')).toHaveText('RUFF 3D');
+});

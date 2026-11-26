@@ -40,7 +40,16 @@
         const count = f.pts.length;
         // A triangle edge is one of the face's own edges when its corners
         // are neighbours round the polygon; the rest are cuts, never drawn.
-        const real = (i, j) => Math.abs(i - j) === 1 || Math.abs(i - j) === count - 1;
+        // A face may also mark some of its own edges as seams (f.seams[i]
+        // for the edge from corner i to i+1): a wall face cut in pieces round
+        // a window is one face to the eye, so the joins are not drawn.
+        const seam = i => !!(f.seams && f.seams[i]);
+        const real = (i, j) => {
+          const d = Math.abs(i - j);
+          if (d === 1) return !seam(Math.min(i, j));
+          if (d === count - 1) return !seam(count - 1);
+          return false;
+        };
         M.triangulate(f.pts).forEach(([i, j, k]) => {
           const a = f.pts[i], b = f.pts[j], c = f.pts[k];
           tris.push({

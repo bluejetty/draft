@@ -40,6 +40,9 @@
         const [r, g, b] = f.colour.map(v => v / 255);
         tris.forEach(t => t.forEach(i => { const p = f.pts[i]; pos.push(p.x, p.y, p.z); col.push(r, g, b); }));
         for (let i = 0; i < f.pts.length; i += 1) {
+          // A seam (an edge where one wall face meets the next piece of the
+          // same face, beside a window) is not a line anyone would draw.
+          if (f.seams && f.seams[i]) continue;
           const p = f.pts[i], q = f.pts[(i + 1) % f.pts.length];
           edgePos.push(p.x, p.y, p.z, q.x, q.y, q.z);
         }
