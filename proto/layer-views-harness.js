@@ -178,6 +178,12 @@ function runChecks() {
     // A note belongs on every drawing: it is how the drafter writes on one.
     check(`level ${id} / ${v.id} can be written on`,
       v.contents.includes('A-ANNO-NOTE'));
+    // And so does a LINE (jb, 26 Nov 2026): 'draft' is the line tool's
+    // layer, and a view not carrying it dropped every line -- a picked-up
+    // joist callout among them -- off its sheet. The format folds a line's
+    // unknown layer to 'draft' in a ternary the scan below cannot read.
+    check(`level ${id} / ${v.id} prints the lines drawn on it`,
+      v.contents.includes('draft'));
     // Frozen per view, not once at the top: layersFor hands the live array
     // out of the shared table, so ONE unfrozen list is a way to edit what
     // every floor level draws.
