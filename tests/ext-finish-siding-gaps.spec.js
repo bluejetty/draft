@@ -161,8 +161,10 @@ const storedBands = (page, wallId) => page.evaluate(async ({ bucket, wallId }) =
   return w ? (w.finishBands || []) : null;
 }, { bucket: BUCKET, wallId });
 
-test('a click in the gable triangle picks the wall under it, and a band\'s top stops at the apex',
+test('a click in the gable triangle picks THE GABLE, its own area; a band\'s top stops at the apex',
   async ({ page }) => {
+    // jb, 26 Nov 2026: "the 2nd floor wall and gable are the same BAND, can
+    // we make the gable area a seperate BAND area?"
     await openPage(page);
     const gable = await page.evaluate(() => {
       const o = window.__extFinishFaceOutlines();
@@ -171,14 +173,33 @@ test('a click in the gable triangle picks the wall under it, and a band\'s top s
       const climbing = o.filter(x => x.tops.some(t => t.top > 20));
       const g = climbing[climbing.length - 1];
       const apex = g.tops.reduce((a, t) => (t.top > a.top ? t : a));
-      return { wallIds: [...new Set(climbing.map(x => x.wallId))], u: apex.u, e: apex.top - 1.5 };
+      return { wallIds: [...new Set(climbing.map(x => x.wallId))], u: apex.u, e: apex.top - 1.5,
+        wallE: g.floor + 3 };
     });
-    const at = await screenAt(page, gable.u, gable.e);
+    let at = await screenAt(page, gable.u, gable.e);
     await page.mouse.click(at.x, at.y);
-    await expect(page.locator('#status')).not.toContainText('Nothing there');
+    await expect(page.locator('#status')).toContainText('Gable');
+    await expect(page.locator('#gable-props')).toBeVisible();
+    await expect(page.locator('#wall-props')).toBeHidden();
+    await expect(page.locator('#gable-finish')).toHaveValue('');
+    await page.locator('#gable-finish').selectOption('shake');
+    const gableOwners = () => page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      return JSON.parse(await file.text()).walls.filter(w => w.gableFinish)
+        .map(w => ({ id: String(w.id), gableFinish: w.gableFinish, bands: (w.finishBands || []).length }));
+    }, BUCKET);
+    await expect.poll(gableOwners).toEqual([expect.objectContaining({ gableFinish: 'shake', bands: 1 })]);
+    const owner = (await gableOwners())[0].id;
+    expect(gable.wallIds, 'the gable picked is over a wall with a gable').toContain(owner);
+    // BACK TO "SAME AS THE WALL" TAKES THE KEY OFF.
+    await page.locator('#gable-finish').selectOption('');
+    await expect.poll(gableOwners).toEqual([]);
+
+    // THE WALL UNDER IT, below the plate, is still the wall -- and its TO box
+    // is held to the wall: past the apex it is stored as FILL TO THE TOP.
+    at = await screenAt(page, gable.u, gable.wallE);
+    await page.mouse.click(at.x, at.y);
     await expect(page.locator('#band-area')).toBeVisible();
-    // THE TO BOX IS HELD TO THE WALL: past the apex it is stored as FILL TO
-    // THE TOP, not as a number that gets cut off.
     await page.locator('#band-finish').selectOption('stucco_dark');
     await page.fill('#band-low', '0');
     await page.fill('#band-high', '40');
@@ -187,14 +208,26 @@ test('a click in the gable triangle picks the wall under it, and a band\'s top s
       const file = await window.SharedFileStore.loadSharedFile(bucket);
       return JSON.parse(await file.text()).walls
         .filter(w => (w.finishBands || []).some(b => b.finishId === 'stucco_dark'))
-        .map(w => ({ id: String(w.id), band: w.finishBands.slice(-1)[0] }));
-    }, BUCKET)).toEqual([expect.objectContaining({ band: { finishId: 'stucco_dark', lowFt: 0, toTop: true } })]);
-    const owner = await page.evaluate(async bucket => {
-      const file = await window.SharedFileStore.loadSharedFile(bucket);
-      return String(JSON.parse(await file.text()).walls
-        .find(w => (w.finishBands || []).some(b => b.finishId === 'stucco_dark')).id);
-    }, BUCKET);
-    expect(gable.wallIds, 'the wall picked is one with a gable over it').toContain(owner);
+        .map(w => w.finishBands.slice(-1)[0]);
+    }, BUCKET)).toEqual([{ finishId: 'stucco_dark', lowFt: 0, toTop: true }]);
+  });
+
+test('a gable with its own finish: shake in the triangle, the wall\'s siding stops at the plate, a seam between',
+  () => {
+    const plate = 17.427;
+    const own = paint(copy(c => c.walls.forEach(w => {
+      if (w.levelId === 5 && w.view === 'plan') w.gableFinish = 'shake';
+    })), 'E4');
+    // NO SIDING COURSES IN THE GABLE: the band is not carried up any more.
+    expect(coursesAt(own, 9.75).filter(e => e > plate + 0.2), 'no lap siding in the gable').toEqual([]);
+    // SHAKE IN IT: courses of 7" with their stubs, clipped to the triangle.
+    const shake = own.strokes.filter(s => s.ink === HATCH && s.clip
+      && Math.min(...s.clip.map(p => p.e)) >= plate - 0.05 && s.pts.some(p => p.e > plate + 1));
+    expect(shake.length, 'shake drawn over the plate').toBeGreaterThan(0);
+    // AND THE PLATE IS A SEAM: one ink line along it.
+    const seam = own.strokes.filter(s => s.w === 1 && s.pts.length === 2
+      && s.pts.every(p => Math.abs(p.e - plate) < 0.03) && Math.abs(s.pts[0].u - s.pts[1].u) > 10);
+    expect(seam.length, 'the seam line at the plate').toBeGreaterThan(0);
   });
 
 test('nudging a band\'s top past the wall\'s head turns on FILL TO THE TOP', async ({ page }) => {
