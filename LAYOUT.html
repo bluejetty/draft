@@ -70,6 +70,11 @@
      roofing choice is dropped on load and the roof comes back as asphalt,
      silently. #533's warning says so out loud -- this is the tag it asks for. -->
 <script src="./roof-types.js"></script>
+<!-- THE EXT. FINISH HATCHES ON THE ELEVATION VIEWPORTS (jb, 26 Nov: "i also
+     need the elevation hatches to show in the construction plan too").
+     cut-view reaches for both off `window` when `finishes` is asked for. -->
+<script src="./finish-patterns.js"></script>
+<script src="./roof-patterns.js"></script>
 <script src="./level-assembly.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
@@ -3763,6 +3768,16 @@ class Component extends PageLogic {
           inkScale: zoom / PRINT_PX_PER_IN,
           extents,
           paperColor: '#ffffff',
+          // THE FINISHES SET ON EXT. FINISH -- siding, shake, stucco, bands,
+          // gable, roofing -- on an ELEVATION viewport, drawn by the same
+          // painter EXT. FINISH uses so the sheet matches that page. jb, 26
+          // Nov: "i also need the elevation hatches to show in the
+          // construction plan too". Sections stay line work.
+          finishes: viewport.kind === 'elevation' && opts.thumb !== true,
+          // A SHEET IS A DRAWING, NOT A THUMBNAIL: the painters' own gate
+          // (3px between lines) drops 4" siding at 1/8" = 1'-0" on screen,
+          // so on paper the gate is 1/48" of sheet, never under 1.5px.
+          finishMinPx: Math.max(1.5, zoom / 48),
           // THE EXISTING HOUSE UNDER IT (hologram PR 5), in this viewport's
           // EXISTING, DEMO and NEW.
           ...(window.DraftHologram ? window.DraftHologram.cutOptions(ctx, full.wIn * zoom, full.hIn * zoom,

@@ -591,8 +591,8 @@ const MUTATIONS = [
       + '          rake(ctx, frame, s);')],
   ['the tile loses its courses, so a pan tile roof has no rows',
     s => sub(s, F, '        if (c.line !== null) course(ctx, frame, c.line);\n'
-      + "        if (cover < MIN_SPACING_PX) continue;",
-      "        if (cover < MIN_SPACING_PX) continue;")],
+      + "        if (cover < minPx) continue;",
+      "        if (cover < minPx) continue;")],
 
   ['the shake stops wandering, so a split shake is drawn as a sawn one',
     s => sub(s, F, '          s += nominal * (0.55 + jitter(c.row, i) * 0.9);',

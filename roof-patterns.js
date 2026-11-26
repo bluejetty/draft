@@ -35,6 +35,11 @@ if (!window.DraftRoofPatterns) {
   // hides the roof's own outline while saying a material is there without
   // saying which. A thumbnail shows the house, not its shingles.
   const MIN_SPACING_PX = 3;
+  // THE GATE IN FORCE for the call being painted: MIN_SPACING_PX unless
+  // the caller hands its own as `inks.minSpacingPx`. LAYOUT does, because
+  // a sheet at 1/8" = 1'-0" is a drawing, not a thumbnail, and a drafter
+  // hatches siding at that scale (jb, 26 Nov 2026).
+  let minPx = MIN_SPACING_PX;
 
   // Position-hashed, in [0,1). Two numbers in, the same number out, forever.
   const jitter = (a, b) => {
@@ -117,11 +122,11 @@ if (!window.DraftRoofPatterns) {
     tab: (ctx, frame, roofing) => {
       const step = upFt(frame, paramOf(roofing, 'exposureIn', 5.625));
       const tab = upFt(frame, paramOf(roofing, 'tabIn', 12));
-      if (step < MIN_SPACING_PX) return;
+      if (step < minPx) return;
       ctx.beginPath();
       for (const c of coursesTo(frame, step, step * 0.55)) {
         if (c.line !== null) course(ctx, frame, c.line);
-        if (tab < MIN_SPACING_PX) continue;
+        if (tab < minPx) continue;
         const shift = (c.row % 2) * tab / 2;
         for (let s = shift; s < frame.wide; s += tab) {
           rake(ctx, frame, s, c.from, c.top);
@@ -137,7 +142,7 @@ if (!window.DraftRoofPatterns) {
     // roof does not have.
     seam: (ctx, frame, roofing) => {
       const pan = upFt(frame, paramOf(roofing, 'panIn', 16));
-      if (pan < MIN_SPACING_PX) return;
+      if (pan < minPx) return;
       ctx.beginPath();
       for (let s = pan; s < frame.wide; s += pan) rake(ctx, frame, s);
       ctx.stroke();
@@ -149,7 +154,7 @@ if (!window.DraftRoofPatterns) {
     // because of one number, and that is exactly what a parameter is for.
     rib: (ctx, frame, roofing) => {
       const step = upFt(frame, paramOf(roofing, 'ribIn', 9));
-      if (step < MIN_SPACING_PX) return;
+      if (step < minPx) return;
       ctx.beginPath();
       for (let s = step; s < frame.wide; s += step) rake(ctx, frame, s);
       ctx.stroke();
@@ -170,10 +175,10 @@ if (!window.DraftRoofPatterns) {
     panel: (ctx, frame, roofing) => {
       const step = upFt(frame, paramOf(roofing, 'exposureIn', 15));
       const wide = upFt(frame, paramOf(roofing, 'widthIn', 24));
-      if (step < MIN_SPACING_PX) return;
+      if (step < minPx) return;
       ctx.beginPath();
       for (let t = step; t < frame.high; t += step) course(ctx, frame, t);
-      if (wide >= MIN_SPACING_PX) {
+      if (wide >= minPx) {
         for (let s = wide; s < frame.wide; s += wide) rake(ctx, frame, s);
       }
       ctx.stroke();
@@ -191,12 +196,12 @@ if (!window.DraftRoofPatterns) {
     // pattern was caught with on a swatch sheet: it read as coursed ashlar.
     shake: (ctx, frame, roofing) => {
       const step = upFt(frame, paramOf(roofing, 'exposureIn', 10));
-      if (step < MIN_SPACING_PX) return;
+      if (step < minPx) return;
       const nominal = step * 0.9;
       ctx.beginPath();
       for (const c of coursesTo(frame, step, step)) {
         if (c.line !== null) course(ctx, frame, c.line);
-        if (nominal < MIN_SPACING_PX) continue;
+        if (nominal < minPx) continue;
         let s = 0, i = 0;
         while (s < frame.wide) {
           s += nominal * (0.55 + jitter(c.row, i) * 0.9);
@@ -217,11 +222,11 @@ if (!window.DraftRoofPatterns) {
     barrel: (ctx, frame, roofing) => {
       const step = upFt(frame, paramOf(roofing, 'exposureIn', 13));
       const cover = upFt(frame, paramOf(roofing, 'coverIn', 13));
-      if (step < MIN_SPACING_PX) return;
+      if (step < minPx) return;
       ctx.beginPath();
       for (const c of coursesTo(frame, step, step * 0.45)) {
         if (c.line !== null) course(ctx, frame, c.line);
-        if (cover < MIN_SPACING_PX) continue;
+        if (cover < minPx) continue;
         for (let s = cover / 2; s < frame.wide; s += cover) {
           rake(ctx, frame, s, c.from, c.top);
         }
@@ -236,11 +241,11 @@ if (!window.DraftRoofPatterns) {
     slate: (ctx, frame, roofing) => {
       const step = upFt(frame, paramOf(roofing, 'exposureIn', 7.5));
       const wide = upFt(frame, paramOf(roofing, 'widthIn', 12));
-      if (step < MIN_SPACING_PX) return;
+      if (step < minPx) return;
       ctx.beginPath();
       for (const c of coursesTo(frame, step, step)) {
         if (c.line !== null) course(ctx, frame, c.line);
-        if (wide < MIN_SPACING_PX) continue;
+        if (wide < minPx) continue;
         const shift = (c.row % 2) * wide / 2;
         for (let s = shift; s < frame.wide; s += wide) {
           if (s <= 0) continue;
@@ -273,6 +278,9 @@ if (!window.DraftRoofPatterns) {
     if (!pattern) return false;
     if (!(frame.wide > 0) || !(frame.high > 0) || !(frame.pxPerFt > 0)) return false;
     const line = (inks && inks.hatch) || '#1d1f20';
+    const gate = Number(inks && inks.minSpacingPx);
+    minPx = gate > 0 ? gate : MIN_SPACING_PX;
+    try {
     ctx.save();
     if (roofing.relief) {
       const off = reliefOffset(roofing, frame.pxPerFt);
@@ -293,6 +301,7 @@ if (!window.DraftRoofPatterns) {
     pattern(ctx, frame, roofing);
     ctx.restore();
     return true;
+    } finally { minPx = MIN_SPACING_PX; }
   }
 
   // ── THE FRAME, OFF A PROJECTED ROOF FACE ──────────────────────────────
