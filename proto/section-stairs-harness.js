@@ -43,6 +43,9 @@ const MUTATIONS = [
     c => c.replace('        if (!spans.length && !seen) return;', '        if (!spans.length) return;')],
   ['the floor band runs straight over the stairwell', 'cut-view.js',
     c => c.replace('return holes.length ? subtractRuns(runs, floorRuns(cut, axis, holes)) : runs;', 'return runs;')],
+  ['a floor strip under 6" beside a stairwell is thrown away', 'cut-view.js',
+    c => c.replace('        if (span.max - span.min <= 0.1) return;\n        ctx.fillStyle = weight(C.assembly, 0.15);',
+      '        if (span.max - span.min <= 0.5) return;\n        ctx.fillStyle = weight(C.assembly, 0.15);')],
   ['the steps beyond are drawn on the viewer\'s side', 'cut-view.js',
     c => c.replace('const far = (depthOf(at(lenFt, 0)) > depthOf(at(0, 0))) ? 1 : -1;',
       'const far = (depthOf(at(lenFt, 0)) > depthOf(at(0, 0))) ? -1 : 1;')],
@@ -147,6 +150,28 @@ const check = (label, got, want) => {
     plumb ? r2(p.eOf(plumb.y)) : 'none', r2(upper.floorTop - riserFt - 7 / 12));
   check('the floor bands open over both stairwells',
     count(p, BAND) - count(paint(SAVED, ALONG, noHoles), BAND), 2);
+}
+
+// ── THE STRIP A WALL STANDS ON BESIDE A STAIRWELL IS STILL FLOOR ───────────
+//
+// jb, 26 Nov 2026, on S2: "the section is missing the 2nd floor floor between
+// main and 2nd floor beside stairs/ext wall". A stair widened to the wall side
+// opens the upper floor to the wall's inside face, leaving the 5 1/2" the 2x6
+// stands on -- and the band painter threw away any run under 6".
+{
+  const edgeZ = Math.max(...SAVED.floors.find(f => f.id === 'floor-23').points.map(pt => pt.z));
+  const stripFt = 5.5 / 12;
+  const widened = {
+    ...SAVED,
+    surfaceOpenings: SAVED.surfaceOpenings.map(o => (o.hostId !== 'floor-23' ? o : {
+      ...o, points: o.points.map(pt => (pt.z > -30 ? { ...pt, z: edgeZ - stripFt } : pt)),
+    })),
+  };
+  const p = paint(widened, ALONG);
+  const upper = p.stack.floors.find(l => l.id === 5);
+  const strips = rects(p, BAND).filter(r => Math.abs(Math.abs(r.w) / PX - stripFt) < 0.01
+    && Math.abs(p.eOf(r.y) - upper.floorTop) < 0.01);
+  check('the 5 1/2" of 2ND FL floor between the stairwell and the wall is drawn', strips.length, 1);
 }
 
 // ── ACROSS THE RUN: the slice, the steps beyond, the rail end-on ───────────
