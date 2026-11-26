@@ -615,7 +615,8 @@
       const from = framesFrom(levelId);
       if (from != null && Number(from) !== levelId) {
         const view = Number(from) === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
-        (drawing.columns || []).filter(c => Number(c.levelId) === Number(from) && c.view === view && !isPile(c))
+        (drawing.columns || []).filter(c => Number(c.levelId) === Number(from)
+          && (c.view === view || (c.view || 'plan') === 'plan') && !isPile(c))
           .forEach(c => add(c.point));
       }
     }
@@ -2155,13 +2156,21 @@
   const paintBeamsBelow = () => {
     const R = window.DraftRender2D;
     const B = window.DraftBuildHouse;
+    canvas.setAttribute('data-beams-below', '0');
+    canvas.setAttribute('data-posts-below', '0');
     if (activeViewId() !== 'floor') return;
     const from = framesFrom(activeLevelId());
     const framed = from != null && Number(from) !== Number(activeLevelId());
     const view = Number(from) === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
     const env = paintEnv();
-    const mine = item => framed && Number(item.levelId) === Number(from) && item.view === view;
+    // EITHER VIEW OF THE LEVEL UNDER (jb, 26 Nov 2026): AUTO BEAM files on
+    // its floor view, the BEAM / COLUMN tools and PASTE on its walls plan
+    // ('plan'); both stand on that floor and hold this one up (layout-plan
+    // heldByUnder, the sheet's same rule).
+    const mine = item => framed && Number(item.levelId) === Number(from)
+      && (item.view === view || (item.view || 'plan') === 'plan');
     const belowBeams = (drawing?.beams || []).filter(mine);
+    canvas.setAttribute('data-beams-below', String(belowBeams.length));
     const tags = R.beamTagSides(belowBeams, (drawing?.dimensions || []).filter(mine));
     belowBeams.forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true, tag: tags.get(beam.id),
       spanTags: true, depthLabel: B ? flushDepthLabel(beam) : null }, env));
@@ -2170,9 +2179,10 @@
     if (!framed) return;
     // The posts with it, and NOT the piles: a pile is concrete in the ground
     // under a garage slab, which is not what this floor stands on.
-    (drawing?.columns || []).filter(column => mine(column)
-      && !String(column.footing || '').startsWith('pile'))
-      .forEach(column => R.drawColumn2D(ctx, toS, column, {
+    const belowPosts = (drawing?.columns || []).filter(column => mine(column)
+      && !String(column.footing || '').startsWith('pile'));
+    canvas.setAttribute('data-posts-below', String(belowPosts.length));
+    belowPosts.forEach(column => R.drawColumn2D(ctx, toS, column, {
         below: true, footing: B ? B.footingFor(column.footing) : null,
         // `below` FIRST, and not for style: pad-footing-mutants anchors on
         // the footing line as the structure pass writes it, and that string

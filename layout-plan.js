@@ -194,7 +194,7 @@ if (!window.DraftLayoutPlan) {
     const under = structureUnder(saved, levelId);
     if (under) {
       (Array.isArray(saved?.dimensions) ? saved.dimensions : [])
-        .filter(item => item?.levelId === under.levelId && item.view === under.view
+        .filter(item => heldByUnder(item, under)
           && item.layer === COLUMN_DIM_LAYER)
         .forEach(eatDimension);
     }
@@ -726,7 +726,7 @@ if (!window.DraftLayoutPlan) {
     const B = window.DraftBuildHouse;
     if (!B || typeof B.joistCalloutSeeds !== 'function') return [];
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
-    const beams = under ? of('beams').filter(beam => Number(beam?.levelId) === Number(under.levelId) && beam.view === under.view) : [];
+    const beams = under ? of('beams').filter(beam => heldByUnder(beam, under)) : [];
     return B.joistCalloutSeeds(saved, levelId, beams);
   }
 
@@ -763,6 +763,20 @@ if (!window.DraftLayoutPlan) {
     if (at < 0) return null;
     if (at === 0) return { levelId: BASEMENT_LEVEL_ID, view: 'foundation' };
     return { levelId: Number(floors[at - 1].id), view: 'floor' };
+  }
+
+  // AND WHAT WAS DRAWN OR PASTED ON THAT LEVEL'S WALLS PLAN (jb, 26 Nov
+  // 2026: "the main floor beam and column should show on the 2nd floor
+  // layout ... like how it shows the foundation beam and columns on the main
+  // floor layout"). AUTO BEAM files a storey's beam on its 'floor' view, but
+  // the BEAM / COLUMN tools and PASTE on the walls plan file it on 'plan'
+  // (model/08 pasteHeld) -- the same level, standing on the same floor,
+  // holding up the same deck -- and the floor layout above never saw it.
+  // Either view of the level under is structure under this floor.
+  function heldByUnder(item, under) {
+    if (!under || Number(item?.levelId) !== Number(under.levelId)) return false;
+    const view = item.view || 'plan';
+    return view === under.view || view === 'plan';
   }
 
   function ridesOnFullFloor(saved, levelId) {
@@ -1300,7 +1314,7 @@ if (!window.DraftLayoutPlan) {
     // the garage's footings and stay on the foundation.
     const under = view === 'floor' && !halfLevel ? structureUnder(saved, levelId) : null;
     const borrowed = (key, keep) => (Array.isArray(saved?.[key]) ? saved[key] : [])
-      .filter(item => item?.levelId === under.levelId && item.view === under.view && keep(item))
+      .filter(item => heldByUnder(item, under) && keep(item))
       .map(item => ({ ...item, levelId, view }));
     const notPile = column => !/pile/i.test(String(column.footing || ''));
     const beamRow = dimension => dimension.layer === COLUMN_DIM_LAYER;
@@ -1813,6 +1827,7 @@ if (!window.DraftLayoutPlan) {
     fullFloorOver,
     hasFloorLayout,
     structureUnder,
+    heldByUnder,
     drawPlan,
     sitePlanParts,
     drawSitePlan,

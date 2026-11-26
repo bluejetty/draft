@@ -711,6 +711,25 @@ function run(label) {
     check('the 2nd floor sheet shows the main floor beam, posts and beam row',
       sheet(5) === 'b3,c3,d3', sheet(5));
     check('the foundation sheet keeps its own', sheet(1, 'foundation') === 'b1,c1,d1,d1x,p1', sheet(1, 'foundation'));
+    // A BEAM DRAWN OR PASTED ON A WALLS PLAN (jb, 26 Nov 2026: "the main
+    // floor beam and column should show on the 2nd floor layout"): filed on
+    // 'plan', not AUTO BEAM's 'floor', and the floor layout above draws it
+    // all the same -- the main floor's on 2ND FL, BASEMENT (WALLS)'s on MAIN FL.
+    const handDrawn = { ...framed,
+      beams: [...framed.beams, beam('h3', 3, 'plan'), beam('h1', 1, 'plan')],
+      columns: [...framed.columns, post('k3', 3, 'plan', 'pad24'), post('k1', 1, undefined, 'pad24')],
+      dimensions: [...framed.dimensions, dim('m3', 3, 'plan', 'A-DIMS-COLS', 90)] };
+    check('the 2nd floor sheet shows a main floor beam and post drawn on the walls plan',
+      sheet(5, 'floor', {}, handDrawn) === 'b3,c3,d3,h3,k3,m3', sheet(5, 'floor', {}, handDrawn));
+    check('the main floor sheet shows a beam and post drawn on BASEMENT (WALLS)',
+      sheet(3, 'floor', {}, handDrawn) === 'b1,c1,d1,d3x,h1,k1', sheet(3, 'floor', {}, handDrawn));
+    check('heldByUnder takes the level under\'s floor view and walls plan, nothing else',
+      LP.heldByUnder({ levelId: 3, view: 'plan' }, { levelId: 3, view: 'floor' })
+      && LP.heldByUnder({ levelId: 3 }, { levelId: 3, view: 'floor' })
+      && LP.heldByUnder({ levelId: 3, view: 'floor' }, { levelId: 3, view: 'floor' })
+      && !LP.heldByUnder({ levelId: 3, view: 'foundation' }, { levelId: 3, view: 'floor' })
+      && !LP.heldByUnder({ levelId: 5, view: 'plan' }, { levelId: 3, view: 'floor' })
+      && !LP.heldByUnder({ levelId: 3, view: 'plan' }, null));
     // THE WALLS PLAN SHOWS THE POSTS STANDING ON THAT FLOOR (Movie, 12 Oct:
     // "show columns on main that will support 2nd floor"), and a listing none.
     const walled = { ...framed, walls: [...framed.walls, { id: 'w3', levelId: 3, view: 'plan',
@@ -1187,6 +1206,10 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace("if (at === 0) return { levelId: BASEMENT_LEVEL_ID, view: 'foundation' };", 'if (at === 0) return null;')],
   ['a floor borrows from the floor above',
     'layout-plan.js', c => c.replace('return { levelId: Number(floors[at - 1].id), view: \'floor\' };', 'return { levelId: Number((floors[at + 1] || floors[at]).id), view: \'floor\' };')],
+  ['a beam drawn on the walls plan under stays off the floor layout',
+    'layout-plan.js', c => c.replace("return view === under.view || view === 'plan';", 'return view === under.view;')],
+  ['a view-less beam under is not a walls plan one',
+    'layout-plan.js', c => c.replace("const view = item.view || 'plan';", 'const view = item.view;')],
   ['the piles come up onto the floor',
     'layout-plan.js', c => c.replace("under ? borrowed('columns', notPile)", "under ? borrowed('columns', () => true)")],
   ['the borrowed beam rows are left behind',
