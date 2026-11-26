@@ -3848,7 +3848,7 @@ if (!window.DraftCutView) {
           const ph = post.pad.sizeIn / 24;
           ctx.save();
           ctx.setLineDash([5, 4]);
-          ctx.strokeStyle = isCut ? ink(0.7) : ink(0.45); ctx.lineWidth = 1;
+          ctx.strokeStyle = isCut ? ink(0.6) : ink(0.45); ctx.lineWidth = 1;
           rect(u - ph, u + ph, post.pad.bottom, post.pad.top); ctx.stroke();
           ctx.restore();
         }
