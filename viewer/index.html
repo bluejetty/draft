@@ -73,16 +73,16 @@
         position: absolute; left: 10px; bottom: 8px; font-size: 13px; color: #34506f;
         pointer-events: none; opacity: 0.85;
       }
-      #export {
+      .panel {
         position: absolute; top: 10px; right: 10px; z-index: 5; width: min(440px, calc(100% - 32px));
         max-height: calc(100% - 20px); overflow: auto; box-sizing: border-box;
         background: var(--bar); color: var(--bar-ink); border-radius: 6px; padding: 10px 14px 12px;
         box-shadow: 0 6px 24px rgba(0,0,0,0.35);
       }
-      #export h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: 0.06em; }
-      #export .note { margin: 0 0 8px; font-size: 14px; opacity: 0.85; }
-      #export .chips { margin-bottom: 8px; }
-      #export .chips button { font-size: 14px; padding: 2px 9px; }
+      .panel h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: 0.06em; }
+      .panel .note { margin: 0 0 8px; font-size: 14px; opacity: 0.85; }
+      .panel .chips { margin-bottom: 8px; }
+      .panel .chips button { font-size: 14px; padding: 2px 9px; }
       #export-formats { display: grid; gap: 4px; }
       #export-formats button {
         display: flex; gap: 10px; align-items: baseline; text-align: left; width: 100%; font-size: 15px;
@@ -91,7 +91,13 @@
       #export-formats button span { font-weight: 400; font-size: 14px; opacity: 0.85; }
       #export-toll { margin: 8px 0 0; font-size: 15px; }
       #export-toll.warn { color: var(--warn); }
-      #export .foot { margin-top: 8px; text-align: right; }
+      #print-pieces { list-style: none; margin: 6px 0 0; padding: 0; font-size: 15px; }
+      #print-pieces li { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.12); }
+      #print-pieces li.big { color: var(--warn); }
+      #print-fit, #print-toll { margin: 8px 0 0; font-size: 15px; }
+      #print-fit.warn, #print-toll.warn { color: var(--warn); }
+      .panel .foot button { margin-left: 6px; }
+      .panel .foot { margin-top: 8px; text-align: right; }
       [hidden] { display: none !important; }
       @media (max-width: 600px) {
         header h1 { font-size: 20px; }
@@ -109,6 +115,7 @@
       <button id="fit" type="button" title="Fit the house to the window (F)">FIT</button>
       <button id="edges" type="button" class="lit" title="Draw the edges of every face">EDGES</button>
       <button id="export-open" type="button" title="Save the house as a 3D file other programs open (1 bone a file)" disabled>EXPORT</button>
+      <button id="print-open" type="button" title="Make the house ready for a 3D printer: scale, thickness, lift-off pieces (1 bone a file)" disabled>PRINT MODEL</button>
       <span class="chips" role="group" aria-label="Painter">
         <span class="label">PAINTER</span>
         <button type="button" data-painter="auto" title="WebGL when this computer has it, plain canvas when it does not">AUTO</button>
@@ -137,7 +144,7 @@
       <canvas id="gl" hidden></canvas>
       <canvas id="plain" hidden></canvas>
       <div id="drop-hint">Drop a .draft or a SAVE AS ZIP here, or press OPEN FILE.</div>
-      <section id="export" role="dialog" aria-label="Export the house" hidden>
+      <section id="export" class="panel" role="dialog" aria-label="Export the house" hidden>
         <h2>EXPORT THE HOUSE</h2>
         <p class="note">Writes what is on screen: the levels that are on, and the section as it is cut. Open formats only.</p>
         <div class="chips" role="group" aria-label="Units">
@@ -150,6 +157,31 @@
         <div id="export-formats"></div>
         <p id="export-toll" data-export-toll></p>
         <div class="foot"><button type="button" id="export-close">CLOSE</button></div>
+      </section>
+      <section id="print" class="panel" role="dialog" aria-label="Print model" hidden>
+        <h2>PRINT MODEL</h2>
+        <p class="note">For a 3D printer: every part a closed solid, the windows and doors open, walls and roofs at least 1.2&nbsp;mm thick. Prints the levels that are on; a SECTION cut is not printed.</p>
+        <div class="chips" role="group" aria-label="Scale">
+          <span class="label">SCALE</span>
+          <span id="print-scales"></span>
+        </div>
+        <div class="chips" role="group" aria-label="Pieces">
+          <span class="label">PIECES</span>
+          <button type="button" data-split="lift" title="The foundation, each storey and the roof print apart and stack, so the floors lift off">LIFT-OFF</button>
+          <button type="button" data-split="one" title="The whole house as one piece">ONE PIECE</button>
+        </div>
+        <div class="chips" role="group" aria-label="File">
+          <span class="label">FILE</span>
+          <button type="button" data-print-format="3mf" title="One file, a piece per object, in colour: PrusaSlicer, Bambu Studio, Cura, OrcaSlicer">3MF</button>
+          <button type="button" data-print-format="stl" title="An STL for each piece (in a zip when there is more than one)">STL</button>
+        </div>
+        <ul id="print-pieces"></ul>
+        <p id="print-fit" data-print-fit></p>
+        <div class="foot">
+          <button type="button" id="print-go" class="lit">SAVE PRINT FILE</button>
+          <button type="button" id="print-close">CLOSE</button>
+        </div>
+        <p id="print-toll" data-print-toll></p>
       </section>
       <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits · LEVELS hide a floor · SECTION cuts the house</div>
     </main>
@@ -176,6 +208,7 @@
     <script src="../vendor/three-0.128.0.min.js"></script>
     <script src="house-mesh.js"></script>
     <script src="export-writers.js"></script>
+    <script src="print-model.js"></script>
     <script src="viewer-camera.js"></script>
     <script src="paint-canvas.js"></script>
     <script src="paint-webgl.js"></script>
