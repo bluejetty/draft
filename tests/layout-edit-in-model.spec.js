@@ -83,6 +83,8 @@ async function openLayout(page, drawing) {
     sessionStorage.setItem('draft-test-storage-cleared', '1');
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
+    // A TABLET THAT HAS ALREADY ANSWERED the touch-device note (touch-device.js).
+    localStorage.setItem('draft-device', JSON.stringify({ mode: 'touch', noted: true }));
   });
   await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');

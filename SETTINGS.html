@@ -50,6 +50,7 @@
        touch device this covers the page until the tablet is turned. ENTRY
        is the one screen that does not load it. -->
   <script src="orientation-guard.js"></script>
+  <script src="./touch-device.js"></script>
   <style>
     * { box-sizing:border-box; }
     /* NO min-height, for SPECS.html's reason -- see the block over its own
@@ -173,6 +174,20 @@
       <div class="drafter-title">Bone reveal</div>
       <p class="drafter-note">Every BUILD HOUSE bone press that grows the house jumps to the front elevation and the house rises out of the ground. Turn it off to stay on the plan after a build.</p>
       <div class="snap-row"><label for="bone-reveal">Rising reveal</label><input type="checkbox" id="bone-reveal" style="width:auto;"></div>
+    </section>
+    <!-- PHONES AND TABLETS (jb, 26 Nov 2026): touch-device.js asks once on a
+         touch-only device; this is where the answer is changed. -->
+    <section class="drafter" aria-label="This device" data-device-settings>
+      <div class="drafter-title">This device</div>
+      <p class="drafter-note" data-device-says></p>
+      <div class="snap-row" data-device-row hidden>
+        <label for="device-mode">Use it as</label>
+        <select id="device-mode" data-device-mode-select style="width:auto;">
+          <option value="touch">TOUCH (look, print, fill in)</option>
+          <option value="pc">PC MODE (keyboard &amp; mouse)</option>
+        </select>
+        <button class="action" type="button" data-device-note-again>SHOW THE NOTE AGAIN</button>
+      </div>
     </section>
     <div class="notice">Commands are grouped by purpose. A key can include modifiers such as <strong>Shift+W</strong>, <strong>Ctrl+L</strong>, or <strong>Alt+1</strong>. Some shortcuts reserved by your browser or operating system may not be available.</div>
     <div class="layouts">
@@ -516,6 +531,28 @@
     })();
   </script>
   <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script>
+    (() => {
+      const TD = window.DraftTouchDevice;
+      const says = document.querySelector('[data-device-says]');
+      const row = document.querySelector('[data-device-row]');
+      const pick = document.querySelector('[data-device-mode-select]');
+      const paint = () => {
+        if (!TD || !TD.touchOnly()) {
+          says.textContent = 'This is a computer (it has a mouse or trackpad), so everything is open. Nothing to set here.';
+          row.hidden = true;
+          return;
+        }
+        says.textContent = 'This ' + TD.kind() + ' has no mouse or trackpad. TOUCH keeps to looking, printing and filling in; PC MODE opens everything for a keyboard and mouse.';
+        row.hidden = false;
+        pick.value = TD.mode() === 'pc' ? 'pc' : 'touch';
+      };
+      pick.addEventListener('change', () => { TD.setMode(pick.value); paint(); });
+      document.querySelector('[data-device-note-again]').addEventListener('click', () => TD.showNote());
+      window.addEventListener('draft-device-mode', paint);
+      paint();
+    })();
+  </script>
   <script src="./traffic-counter.js" defer></script>
 </body>
 </html>

@@ -67,6 +67,10 @@ async function openModel(page, {
     // would be; tests/lights-on-by-default.spec.js forgets this and pins the
     // fresh-browser default, and a spec that wants a light presses its chip.
     localStorage.setItem('draft-skin', JSON.stringify({ tsquare: false, footLight: false }));
+    // THE TOUCH-DEVICE NOTE (touch-device.js, 26 Nov 2026) is answered PC MODE:
+    // the suite's finger specs draft with a finger on purpose, as a tablet
+    // with PC MODE on would. tests/touch-device-note.spec.js owns the card.
+    localStorage.setItem('draft-device', JSON.stringify({ mode: 'pc', noted: true }));
     if (seedWallet) {
       localStorage.setItem('draft-bone-wallet',
         JSON.stringify({ balance: 999, lastDripAt: Date.now(), createdAt: Date.now() }));

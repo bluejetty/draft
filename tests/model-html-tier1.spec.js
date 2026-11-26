@@ -307,6 +307,9 @@ test.describe('MODEL.html tier 1', () => {
       // pays the parse and nothing else, and tests/model-portrait-guard.spec.js
       // holds it to that: a tall desktop window must never see it.
       './orientation-guard.js',
+      // PHONES AND TABLETS (jb, 26 Nov 2026): the note a touch-only device
+      // sees once, and PC MODE. Inert on a computer, like the guard above.
+      './touch-device.js',
       './layer-views.js', './geometry-2d.js',
       // A LINE'S WEIGHTS, COLOURS AND DASHES (Movie, 19 Oct), one table
       // the painter, the panel, the format and the DXF all read.
