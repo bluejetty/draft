@@ -42,7 +42,7 @@ const MUTATIONS = [
   ['the floor window stands above the sill it is meant to show', 'wall-section.js',
     c => c.replace("        minY: concTop - 1.3, maxY: concTop - 1.3 + DETAIL_H_FT },", "        minY: concTop + 0.2, maxY: concTop + 0.2 + DETAIL_H_FT },")],
   ['a storey\'s own wall type is ignored for the house\'s', 'wall-section.js',
-    c => c.replace("      return WT.EXTERIOR_WALL_TYPE_IDS.includes(override) && wallType(override) ? override : activeWallType;", "      return activeWallType;")],
+    c => c.replace("      if (WT.EXTERIOR_WALL_TYPE_IDS.includes(override) && wallType(override)) return override;", "")],
 ];
 
 if (MUTATE) {
