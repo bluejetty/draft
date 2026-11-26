@@ -2096,13 +2096,14 @@ const dimLabelAt = (R, dim, env = dimEnv) => {
   return calls(ctx, 'translate').pop();
 };
 suite('drawDimension2D', 'a stepped-down figure sits off the line, away from what it measures', R => {
-  const TIGHT = { start: { x: 0, z: 0 }, end: { x: 0.3, z: 0 } };
+  // 3.5 ft: too tight for the full figure, room for the stepped-down one.
+  const TIGHT = { start: { x: 0, z: 0 }, end: { x: 3.5, z: 0 } };
   const ROOMY = { start: { x: 0, z: 0 }, end: { x: 12, z: 0 } };
   expect('a full-size figure is still on its line', dimLabelAt(R, ROOMY)[1], 319);
   expect('the stepped-down one is off it', dimLabelAt(R, TIGHT)[1], 329);
   expect('on the far side of the line from what it measures',
     dimLabelAt(R, TIGHT)[1] > 319, true);
-  expect('and still centred on its run', dimLabelAt(R, TIGHT)[0], 401.5);
+  expect('and still centred on its run', dimLabelAt(R, TIGHT)[0], 417.5);
 
   const sheet = { ...dimEnv, atLine: true };
   expect('a sheet puts the full-size figure on the record',
@@ -2112,8 +2113,23 @@ suite('drawDimension2D', 'a stepped-down figure sits off the line, away from wha
 
   // IN PAPER UNITS like the rest of this painter's ink, so a zoomed sheet
   // holds the gap instead of closing it.
+  // (4.2 ft, since the arrowheads double too and this ctx's figure does not.)
   expect('twice the zoom is twice the step',
-    dimLabelAt(R, TIGHT, { ...dimEnv, atLine: true, inkScale: 2 })[1], 320);
+    dimLabelAt(R, { start: { x: 0, z: 0 }, end: { x: 4.2, z: 0 } }, { ...dimEnv, atLine: true, inkScale: 2 })[1], 320);
+});
+
+// AND ONE THAT STILL OVERFLOWS STEPS OUT A SECOND ROW (jb, 25 Nov 2026, the
+// ROOF plan zoomed right in: a 15/16" piece's figure lay across its
+// 1'-11 3/8" neighbour's, both on the stepped-down row). A stepped-down
+// figure wider than its own run stands one plate further out, 26 rather than
+// 10, clear of the row the fitting figures use; one that fits stays at 10.
+suite('drawDimension2D', 'a figure too wide even stepped down stands a second row out', R => {
+  const OVER = { start: { x: 0, z: 0 }, end: { x: 0.3, z: 0 } };
+  expect('a second row off the line', dimLabelAt(R, OVER)[1], 345);
+  expect('beyond the stepped-down row', dimLabelAt(R, OVER)[1] > 329, true);
+  expect('still centred on its run', dimLabelAt(R, OVER)[0], 401.5);
+  expect('on a sheet, away from the ticks', dimLabelAt(R, OVER, { ...dimEnv, atLine: true })[1], 326);
+  expect('in paper units', dimLabelAt(R, OVER, { ...dimEnv, atLine: true, inkScale: 2 })[1], 352);
 });
 
 // AND IT IS STILL PRINTED. Stepping down is not hiding: a figure too big
@@ -4584,9 +4600,11 @@ function coverage() {
       src => src.replace('    if (below) ctx.globalAlpha = 0.45;\n    if (!centreOnly) {',
         '    if (!centreOnly) {')],
     ['drawDimension2D leaves the stepped-down figure on its line',
-      src => src.replace('const push = tight ? 10 * k * t : 0;', 'const push = 0;')],
+      src => src.replace('const push = overflows ? 26 * k * t : tight ? 10 * k * t : 0;', 'const push = 0;')],
     ['drawDimension2D steps the tight figure toward the house',
-      src => src.replace('const push = tight ? 10 * k * t : 0;', 'const push = tight ? -10 * k * t : 0;')],
+      src => src.replace('const push = overflows ? 26 * k * t : tight ? 10 * k * t : 0;', 'const push = overflows ? 26 * k * t : tight ? -10 * k * t : 0;')],
+    ['drawDimension2D leaves an overflowing figure on the stepped-down row',
+      src => src.replace('const push = overflows ? 26 * k * t : tight ? 10 * k * t : 0;', 'const push = tight ? 10 * k * t : 0;')],
     ['strokeSegPath2D bulge branch', dropBulge],
     ['drawWallSeg2D mitre path', dropMitre],
     ['drawOrigin2D env colour', dropOriginEnvColour],

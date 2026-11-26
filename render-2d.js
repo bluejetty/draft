@@ -3838,8 +3838,9 @@ if (!window.DraftRender2D) {
     // overflows its run stands one plate further out: the tight row's plate
     // runs 2..17 off the line, so 26 puts this one's 3px clear beyond it.
     // A figure that fits stays exactly where the 13 Oct rule put it.
-    ctx.font = TIGHT_FONT;
-    const overflows = tight && ctx.measureText(label).width > room;
+    // The figure is measured at the full size above; the stepped-down one is
+    // the same text at 8/11 of it.
+    const overflows = tight && ctx.measureText(label).width * 8 / 11 > room;
     const push = overflows ? 26 * k * t : tight ? 10 * k * t : 0;
     labelAlongLine2D(ctx,
       { x: da.x + nx * push, y: da.y + ny * push },
