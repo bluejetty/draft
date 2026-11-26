@@ -1580,6 +1580,19 @@
         delete copy.drawnOn;
         if (k > 0) setRoofSitsOn(copy, storeys[k - 1].id, storeys);
         else if (storeys.length) copy.sourceLevelId = storeys[storeys.length - 1].id;
+        // THE SMALL PIECE OF A STEPPED END PAIRS WITH ITS BIG ONE ONCE (jb,
+        // 26 Nov 2026: "when i paste it the main roof seems to disappear").
+        // The copy kept `jogOf`, so the big roof had two small pieces, read
+        // the copy's valley tail as a hole out of the gable end it had been
+        // re-cut to, and lost its planes. A pasted piece stays paired only
+        // when the big one is still there and has no small piece of its own
+        // (a CUT piece pasted back); any other paste is a roof of its own.
+        if (copy.jogOf != null) {
+          const all = drawing.roofs || [];
+          const bigOne = all.find(r => String(r.id) === String(copy.jogOf));
+          const taken = all.some(r => r.jogOf != null && String(r.jogOf) === String(copy.jogOf));
+          if (!bigOne || !bigOne.flushOf || taken) delete copy.jogOf;
+        }
       }
       if (type === 'wall') {
         if (pasteWallView) copy.view = pasteWallView;

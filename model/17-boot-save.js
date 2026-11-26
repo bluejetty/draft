@@ -603,6 +603,16 @@
     // THE SMALL GABLE'S TAIL OUT OF THE HIP (jb, 15 Nov 2026; geometry-2d
     // refreshJogCuts): a file cut before the rule gets it, and a valley
     // dragged since takes the cut with it.
+    // ONE SMALL PIECE TO A BIG ONE (jb, 26 Nov 2026): a file saved after a
+    // pasted copy kept its `jogOf` has two, and the big roof took both tails
+    // out of itself and showed no planes. The first stays its partner; a
+    // later one is a roof of its own.
+    const paired = new Set();
+    (drawing.roofs || []).forEach(roof => {
+      if (roof?.jogOf == null) return;
+      const key = String(roof.jogOf);
+      if (paired.has(key)) { delete roof.jogOf; trimmed += 1; } else paired.add(key);
+    });
     if (G.refreshJogCuts) trimmed += G.refreshJogCuts(drawing.roofs || []);
     ['floors', 'shapes', 'outlines'].forEach(key => (drawing[key] || []).forEach(item => {
       if (!Array.isArray(item?.points) || item.points.length < 4) return;
