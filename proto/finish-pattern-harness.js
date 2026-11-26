@@ -500,7 +500,7 @@ const MUTATIONS = [
     s => sub(s, '    const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;',
       '    const n = Math.random() * 43758.5453;')],
   ['lap siding is stood on end, which is the ninety degrees Movie caught',
-    s => sub(s, `      for (let y = box.yBottom - step; y > box.yTop; y -= step) {
+    s => sub(s, `      for (let y = firstCourse(box, step).y; y > box.yTop; y -= step) {
         lineAcross(ctx, box.x0, box.x1, y);
       }`, `      for (let x = box.x0 + step; x < box.x1; x += step) {
         ctx.moveTo(x, box.yTop); ctx.lineTo(x, box.yBottom);
