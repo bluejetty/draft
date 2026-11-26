@@ -2041,7 +2041,7 @@
         CV.pilePosts(cEnv, stack)
           .filter(post => post.top > level.floorTop + 0.01 && post.foot < level.wallTop - 0.01)
           .forEach(post => R.drawColumn2D(ctx, toS, { point: post.point },
-            { sizeIn: post.sizeIn }, env));
+            { sizeIn: post.sizeIn, post: { shape: post.shape, sizeIn: post.sizeIn } }, env));
       }
     }
   };

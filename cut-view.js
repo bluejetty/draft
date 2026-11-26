@@ -1489,9 +1489,25 @@ if (!window.DraftCutView) {
         ];
         if (!carried.length) return null;
         const held = carried.reduce((low, c) => (c.top < low.top ? c : low));
-        if (held.top <= foot + 0.01) return null;
-        return { column, point: p, foot, top: held.top, sizeIn: POST_SIZE_IN,
-          carries: held.roof ? 'roof' : 'floor', levelId: held.levelId ?? null };
+        // THE POST'S OWN SHAPE AND WIDTH, AND A SQUARE CAP UNDER IT (jb, 25-26
+        // Nov 2026: "square pile cap on the top of the round pile from under
+        // grade to where the wood starts"). With a cap the wood starts at the
+        // cap's top, set from GRADE, not from the house's concrete; a post
+        // base lifts it a little more. build-house.js postSpec owns the numbers.
+        const bh = window.DraftBuildHouse;
+        const spec = bh && bh.postSpec ? bh.postSpec(column) : null;
+        const grade = stack.foundation.grade;
+        const cap = spec && spec.cap && Number.isFinite(grade)
+          ? { ...spec.cap, top: grade + spec.cap.aboveIn / 12,
+            bottom: grade + spec.cap.aboveIn / 12 - spec.cap.tallIn / 12 }
+          : null;
+        const base = spec && spec.base ? spec.base : null;
+        const seat = cap ? cap.top : foot;
+        const postFoot = seat + (base ? base.liftIn / 12 : 0);
+        if (held.top <= postFoot + 0.01) return null;
+        return { column, point: p, foot: postFoot, seat, top: held.top,
+          sizeIn: spec ? spec.sizeIn : POST_SIZE_IN, shape: spec ? spec.shape : 'square',
+          cap, base, carries: held.roof ? 'roof' : 'floor', levelId: held.levelId ?? null };
       })
       .filter(Boolean);
   }
@@ -3244,6 +3260,10 @@ if (!window.DraftCutView) {
     drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU, cutSolids);
     // AND THE BATH FIXTURES BEYOND THE CUT (Movie, 9 Oct: "redraw all").
     drawSectionFixtures(env, ctx, cut, axis, stack, X, Y, pxPerFt, C);
+    // AND THE POSTS ON PILES, cut or seen beyond (jb, 25 Nov 2026: a
+    // drive-under roof on posts, its pile caps shown "from under grade to
+    // where the wood starts").
+    drawSectionPosts(env, ctx, cut, axis, stack, X, Y, C, INK, ink, yBottom);
 
     // Roof profile over everything: the sampled top chord plus fascia drops.
     const lit = roofSamples.filter(s => s.elev != null);
@@ -3410,6 +3430,34 @@ if (!window.DraftCutView) {
       const v = ((a.x - pt.x) * d1z - (a.z - pt.z) * d1x) / den;
       return t > 0.02 && t < 1 && v >= 0 && v <= 1;
     });
+  }
+
+  // THE POSTS A SECTION SEES: every pile post (pilePosts) the cut runs
+  // through or looks at, with no ground-floor wall between it and the cut,
+  // farthest first so a nearer post stands in front. Drawn as the
+  // elevation draws them (paintPostStack).
+  function drawSectionPosts(env, ctx, cut, axis, stack, X, Y, C, INK, ink, yBottom) {
+    const posts = pilePosts(env, stack);
+    if (!posts.length) return;
+    const dir = cut.dirVec || { x: -axis.z, z: axis.x };
+    const depthOf = pt => -((pt.x - cut.startPt.x) * dir.x + (pt.z - cut.startPt.z) * dir.z);
+    const ground = stack.floors[0];
+    const walls = (typeof env.walls === 'function' ? env.walls() || [] : [])
+      .filter(w => ground && Number(w.levelId) === Number(ground.id) && (w.view || 'plan') === 'plan');
+    const drawn = [];
+    ctx.save();
+    posts.map(post => ({ post, depth: depthOf(post.point) }))
+      .filter(({ post, depth }) => depth > -Math.max(post.sizeIn, post.cap ? post.cap.sizeIn : 0) / 24)
+      .filter(({ post, depth }) => depth <= 0 || !sightBlocked(post.point, depth, dir, walls))
+      .sort((a, b) => b.depth - a.depth)
+      .forEach(({ post }) => {
+        const u = post.point.x * axis.x + post.point.z * axis.z;
+        paintPostStack(ctx, X, Y, post, u, stack.foundation.grade, yBottom, C, INK, ink);
+        drawn.push({ u: Number(u.toFixed(3)), foot: Number(post.foot.toFixed(4)), top: Number(post.top.toFixed(4)),
+          ...(post.cap ? { capTop: Number(post.cap.top.toFixed(4)) } : {}) });
+      });
+    ctx.restore();
+    if (ctx.canvas && ctx.canvas.setAttribute) ctx.canvas.setAttribute('data-section-posts', JSON.stringify(drawn));
   }
 
   function drawSectionFixtures(env, ctx, cut, axis, stack, X, Y, pxPerFt, C) {
@@ -4057,6 +4105,58 @@ if (!window.DraftCutView) {
   // openings on each face, the roof silhouette, a grade line, and the
   // below-grade foundation dashed. Returns false when nothing projects
   // into the cut's span, so the caller can fall back to the guidance text.
+  // ── ONE POST AS AN ELEVATION OR A SECTION SEES IT ───────────────────────
+  //
+  // Bottom up: the pile, dashed below grade off the sheet; the square cap
+  // (jb, 25-26 Nov 2026) solid above grade and dashed below; the post base;
+  // the post, its own width (a round post reads the same width on the side).
+  // Without a cap the pile's head shows above grade to the house's concrete,
+  // as it always has.
+  function paintPostStack(ctx, X, Y, post, u, grade, yBottom, C, INK, ink) {
+    const bh = window.DraftBuildHouse;
+    const pileHalf = ((bh && bh.footingFor(post.column.footing).sizeIn) || 12) / 24;
+    const half = post.sizeIn / 24;
+    const box = (u0, u1, e0, e1, fill) => {
+      ctx.beginPath();
+      ctx.moveTo(X(u0), Y(e0)); ctx.lineTo(X(u1), Y(e0));
+      ctx.lineTo(X(u1), Y(e1)); ctx.lineTo(X(u0), Y(e1));
+      ctx.closePath();
+      ctx.fillStyle = fill; ctx.fill();
+      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
+    };
+    const dashed = (u0, u1, e0, e1, sides) => {
+      ctx.strokeStyle = ink(0.5); ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      // One stroke per edge: the harnesses read a shaft as a two-point path.
+      [u0, u1].forEach(edge => {
+        ctx.beginPath(); ctx.moveTo(X(edge), Y(e0)); ctx.lineTo(X(edge), Y(e1)); ctx.stroke();
+      });
+      if (sides === 'bottom') {
+        ctx.beginPath(); ctx.moveTo(X(u0), Y(e1)); ctx.lineTo(X(u1), Y(e1)); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    };
+    ctx.setLineDash([]);
+    const cap = post.cap;
+    if (cap) {
+      const capHalf = cap.sizeIn / 24;
+      // The pile from under the cap down off the sheet.
+      dashed(u - pileHalf, u + pileHalf, cap.bottom, yBottom);
+      // The cap: buried part dashed (with its bottom), exposed part solid.
+      const groundTop = Math.min(grade, cap.top);
+      if (groundTop > cap.bottom) dashed(u - capHalf, u + capHalf, groundTop, cap.bottom, 'bottom');
+      if (cap.top > grade) box(u - capHalf, u + capHalf, Math.max(grade, cap.bottom), cap.top, C.faceShade);
+    } else {
+      if (post.seat > grade) box(u - pileHalf, u + pileHalf, grade, post.seat, C.faceShade);
+      dashed(u - pileHalf, u + pileHalf, Math.min(grade, post.seat), yBottom);
+    }
+    if (post.base && post.foot > post.seat) {
+      const bHalf = post.base.widthIn / 24;
+      box(u - bHalf, u + bHalf, post.seat, post.foot, INK);
+    }
+    box(u - half, u + half, post.foot, post.top, C.face);
+  }
+
   function drawElevationView(env, ctx, w, h, cut, stack, axis, header, opts) {
     const fit = externalFit(opts);
     const C = inksFor(opts);
@@ -9268,33 +9368,12 @@ if (!window.DraftCutView) {
       if (u < uMin - 0.5 || u > uMax + 0.5) return;
       const depth = post.point.x * dir.x + post.point.z * dir.z;
       if (fdnGeoms.some(g => g.depth > depth + 1 && u > g.lo + 0.05 && u < g.hi - 0.05)) return;
-      const bh = window.DraftBuildHouse;
-      const pileHalf = ((bh && bh.footingFor(post.column.footing).sizeIn) || 12) / 24;
-      const half = post.sizeIn / 24;
-      // A box in model feet, filled and outlined as one path.
-      const box = (u0, u1, e0, e1, fill) => {
-        ctx.beginPath();
-        ctx.moveTo(X(u0), Y(e0)); ctx.lineTo(X(u1), Y(e0));
-        ctx.lineTo(X(u1), Y(e1)); ctx.lineTo(X(u0), Y(e1));
-        ctx.closePath();
-        ctx.fillStyle = fill; ctx.fill();
-        ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
-      };
-      ctx.setLineDash([]);
-      // The pile's head above grade, then its shaft below, dashed.
-      if (post.foot > fdn.grade) box(u - pileHalf, u + pileHalf, fdn.grade, post.foot, C.faceShade);
-      ctx.strokeStyle = ink(0.5); ctx.lineWidth = 1;
-      ctx.setLineDash([5, 4]);
-      [u - pileHalf, u + pileHalf].forEach(edge => {
-        ctx.beginPath();
-        ctx.moveTo(X(edge), Y(Math.min(fdn.grade, post.foot)));
-        ctx.lineTo(X(edge), Y(yBottom));
-        ctx.stroke();
-      });
-      ctx.setLineDash([]);
-      box(u - half, u + half, post.foot, post.top, C.face);
+      paintPostStack(ctx, X, Y, post, u, fdn.grade, yBottom, C, INK, ink);
       drawn.push({ u: Number(u.toFixed(3)), foot: Number(post.foot.toFixed(4)),
-        top: Number(post.top.toFixed(4)), carries: post.carries });
+        top: Number(post.top.toFixed(4)), carries: post.carries,
+        ...(post.cap ? { capTop: Number(post.cap.top.toFixed(4)), capBottom: Number(post.cap.bottom.toFixed(4)),
+          capIn: post.cap.sizeIn } : {}),
+        sizeIn: post.sizeIn, shape: post.shape, ...(post.base ? { base: post.base.kind } : {}) });
     });
     if (ctx.canvas && ctx.canvas.setAttribute) ctx.canvas.setAttribute('data-posts', JSON.stringify(drawn));
 

@@ -688,6 +688,73 @@ if (!window.DraftBuildHouse) {
       ? custom : footing.sizeIn;
   };
 
+  // ── THE POST, THE PILE CAP AND THE POST BASE ──────────────────────────
+  //
+  // jb, 25 Nov 2026, on a drive-under roof between two buildings: "make more
+  // OBJ PROP options for the columns so can change the width of the upper
+  // column and also make circle column also available (DIA.)", and "square
+  // pile cap on the top of the round pile from under grade to where the wood
+  // starts". On the numbers (26 Nov): "20" pile cap sounds good. lets go 8"
+  // min. from grade to top of conc. and put the rest underground it can drop
+  // from 8" to 12" ... leave only 8" cover on the bottom if sloping".
+  //
+  // ONE TABLE, so the numbers jb tests are one edit away. Every field on the
+  // record is optional and absent means "today's default", so a drawing made
+  // before this reads and draws exactly as it did.
+  const POST_DEFAULTS = Object.freeze({
+    teleIn: 3,          // a pad column's 3" telepost (render-2d COLUMN_SIZE_IN)
+    pileIn: 5.5,        // a pile's post: 6x6 (cut-view POST_SIZE_IN)
+    capOverPileIn: 4,   // cap width = pile diameter + 4"
+    capOverPostIn: 4,   // ... and never less than the post + 4"
+    capTallIn: 20,      // whole cap height
+    capAboveIn: 8,      // grade to top of concrete, at least
+    capAboveMaxIn: 12,  // more on a sloping lot ...
+    capCoverMinIn: 8,   // ... as long as 8" of it stays in the ground
+    standoffIn: 1,      // a standoff post base lifts the wood 1"
+    plateIn: 0.5,       // a steel bearing plate, 1/2" thick
+    plateOverIn: 2,     // ... 1" past the post each side
+  });
+  // Quick picks on OBJ / PROP: [id, face, inches].
+  const POST_SQUARE_PICKS = Object.freeze([['4x4', '4x4', 3.5], ['6x6', '6x6', 5.5], ['8x8', '8x8', 7.5]]);
+  const POST_ROUND_PICKS = Object.freeze([['r6', '6"', 6], ['r8', '8"', 8], ['r10', '10"', 10], ['r12', '12"', 12]]);
+
+  const capAboveRange = tallIn => {
+    const D = POST_DEFAULTS;
+    const most = Math.min(D.capAboveMaxIn, tallIn - D.capCoverMinIn);
+    return { least: Math.min(D.capAboveIn, most), most };
+  };
+
+  // EVERYTHING A PAINTER NEEDS, RESOLVED. The record says what was picked;
+  // this says what that means in inches, so the plan, the elevations, the
+  // sections and the panel all read one answer.
+  const postSpec = column => {
+    const D = POST_DEFAULTS;
+    const footing = footingFor(column?.footing);
+    const pile = footing.pile === true;
+    const shape = column?.postShape === 'round' ? 'round' : 'square';
+    const own = Number(column?.postIn);
+    const sizeIn = Number.isFinite(own) && own > 0 ? own : (pile ? D.pileIn : footing.post ? footing.sizeIn : D.teleIn);
+    let cap = null;
+    if (pile && Number(column?.capIn) > 0) {
+      const tallIn = Number(column?.capTallIn) > 0 ? Number(column.capTallIn) : D.capTallIn;
+      const { least, most } = capAboveRange(tallIn);
+      const asked = Number(column?.capAboveIn);
+      const aboveIn = Math.max(least, Math.min(most, Number.isFinite(asked) ? asked : D.capAboveIn));
+      cap = { sizeIn: Number(column.capIn), tallIn, aboveIn, belowIn: tallIn - aboveIn };
+    }
+    const kind = ['standoff', 'plate'].includes(column?.postBase) ? column.postBase : null;
+    const base = kind === 'standoff' ? { kind, liftIn: D.standoffIn, widthIn: sizeIn + 0.5 }
+      : kind === 'plate' ? { kind, liftIn: D.plateIn, widthIn: sizeIn + D.plateOverIn }
+        : null;
+    return { shape, sizeIn, pile, pileIn: pile ? footing.sizeIn : null, cap, base };
+  };
+  // The cap a pile gets when CAP is first pressed.
+  const defaultCapIn = column => {
+    const D = POST_DEFAULTS;
+    const spec = postSpec(column);
+    return Math.max((spec.pileIn || 12) + D.capOverPileIn, spec.sizeIn + D.capOverPostIn);
+  };
+
   // PADS THAT TOUCH POUR AS ONE FOOTING, and the gap is why this is union-find
   // rather than a pairwise sweep: three pads in a row where only the
   // neighbours touch are still ONE pour, and a pairwise pass would emit two
@@ -1477,6 +1544,12 @@ if (!window.DraftBuildHouse) {
     footingFor,
     pileMark,
     padSizeIn,
+    POST_DEFAULTS,
+    POST_SQUARE_PICKS,
+    POST_ROUND_PICKS,
+    capAboveRange,
+    postSpec,
+    defaultCapIn,
     padGroups,
   });
 })();

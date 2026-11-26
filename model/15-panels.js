@@ -463,11 +463,78 @@
       // on one. The format drops padIn for piles anyway (:534); dropping it
       // here too keeps the page's record and the reader's identical.
       if (id.startsWith('pile')) delete item.padIn;
+      else { delete item.capIn; delete item.capTallIn; delete item.capAboveIn; }
       markDirty();
       showSelectionProps();
       paint();
     }));
+    appendPostRows(box, item);
     return box;
+  };
+
+  // ── POST SHAPE / WIDTH, PILE CAP, POST BASE ──────────────────────────────
+  //
+  // jb, 25 Nov 2026: "make more OBJ PROP options for the columns so can
+  // change the width of the upper column and also make circle column also
+  // available (DIA.) would be WIDTH ... i like to have square pile cap on the
+  // top of the round pile from under grade to where the wood starts".
+  // The defaults and the cap's limits are build-house.js postSpec's.
+  const appendPostRows = (box, item) => {
+    const B = window.DraftBuildHouse;
+    if (!B || !B.postSpec) return;
+    const spec = B.postSpec(item);
+    const D = B.POST_DEFAULTS;
+    const edit = change => {
+      undoStack.push({ kind: 'props', edits: [{ item, before: { ...item } }] });
+      change();
+      markDirty();
+      showSelectionProps();
+      paint();
+    };
+    box.append(propRow('POST', [['square', 'SQUARE'], ['round', 'ROUND']], spec.shape, id => edit(() => {
+      if (id === 'round') item.postShape = 'round'; else delete item.postShape;
+    })));
+    const picks = spec.shape === 'round' ? B.POST_ROUND_PICKS : B.POST_SQUARE_PICKS;
+    const picked = (picks.find(p => Math.abs(p[2] - spec.sizeIn) < 0.01) || [])[0] || null;
+    box.append(propRow(spec.shape === 'round' ? 'POST DIA.' : 'POST SIZE',
+      picks.map(([id, face]) => [id, face]), picked, id => edit(() => {
+        item.postIn = picks.find(p => p[0] === id)[2];
+      })));
+    box.append(numberField(spec.shape === 'round' ? 'DIA. IN' : 'WIDTH IN', spec.sizeIn, 1, 48, 0.5, v => {
+      if (v !== null && Math.abs(v - spec.sizeIn) > 1e-9) edit(() => { item.postIn = v; });
+      return B.postSpec(item).sizeIn;
+    }, { fractions: true }));
+    if (spec.pile) {
+      box.append(propRow('PILE CAP', [['none', 'NONE'], ['cap', 'SQUARE CAP']], spec.cap ? 'cap' : 'none', id => edit(() => {
+        if (id === 'cap') item.capIn = B.defaultCapIn(item);
+        else { delete item.capIn; delete item.capTallIn; delete item.capAboveIn; }
+      })));
+      if (spec.cap) {
+        const cap = spec.cap;
+        box.append(numberField('CAP WIDTH IN', cap.sizeIn, 4, 96, 0.5, v => {
+          if (v !== null && v !== cap.sizeIn) edit(() => { item.capIn = v; });
+          return B.postSpec(item).cap.sizeIn;
+        }, { fractions: true }));
+        box.append(numberField('CAP HEIGHT IN', cap.tallIn, 12, 96, 0.5, v => {
+          if (v !== null && v !== cap.tallIn) edit(() => { item.capTallIn = v; });
+          return B.postSpec(item).cap.tallIn;
+        }, { fractions: true }));
+        const range = B.capAboveRange(cap.tallIn);
+        box.append(numberField(`ABOVE GRADE IN (${range.least}-${range.most})`, cap.aboveIn, 0, 48, 0.5, v => {
+          if (v !== null && v !== cap.aboveIn) edit(() => { item.capAboveIn = Math.max(range.least, Math.min(range.most, v)); });
+          return B.postSpec(item).cap.aboveIn;
+        }, { fractions: true }));
+        const note = document.createElement('div');
+        note.className = 'props-title';
+        note.dataset.capBelow = '';
+        note.textContent = `${B.postSpec(item).cap.belowIn}" BELOW GRADE (MIN ${D.capCoverMinIn}")`;
+        box.append(note);
+      }
+    }
+    box.append(propRow('POST BASE', [['none', 'NONE'], ['standoff', 'STANDOFF'], ['plate', 'STEEL PLATE']],
+      spec.base ? spec.base.kind : 'none', id => edit(() => {
+        if (id === 'none') delete item.postBase; else item.postBase = id;
+      })));
   };
 
   const beamPropsNode = list => {
