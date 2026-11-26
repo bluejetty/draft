@@ -125,19 +125,25 @@ test('AUTO DIMS run again keeps a moved row where it was left', async ({ page })
     'nothing left on the old line').toBe(false);
 });
 
-// AN AUTO STRING TAKES ITS ROW (Movie, 26 Oct: "allow the user to be able to
-// DELETE a string ... when the line is deleted i'd like the other lines to
-// re-adjust"): the whole row on that side goes, and the level remembers it.
-test('a selected auto dimension deletes its row on that side', async ({ page }) => {
+// ONE PIECE CLICKED IS ONE PIECE OFF (jb, 25 Nov 2026: "i just want to
+// delete the 3'-0 but it deleted the whole string and the dim on the line
+// beneath it"). Until then a click and DELETE took the whole row on that side
+// (Movie, 26 Oct); a row with every piece picked still does
+// (tests/auto-dim-rows.spec.js). The level remembers the piece.
+test('a selected auto dimension deletes just that piece; its row stays', async ({ page }) => {
   await openBuilt(page);
   const before = await saved(page);
   const row = frontRow(before);
+  expect(row.length, 'the front row has more than one piece').toBeGreaterThan(1);
   const [x, y] = await onLine(page, row[0]);
   await page.mouse.click(x, y);
   await page.keyboard.press('Delete');
   await save(page);
   const after = await saved(page);
-  expect(after.dimensions.length).toBeLessThanOrEqual(before.dimensions.length - row.length);
   expect(after.dimensions.some(d => d.id === row[0].id), 'the picked one went').toBe(false);
-  expect(Object.values(after.autoDimRowsOff || {}).flat(), 'and the level remembers the row').toHaveLength(1);
+  row.slice(1).forEach(d => expect(after.dimensions.some(a => a.auto && a.layer === d.layer
+    && Math.abs(a.start.x - d.start.x) < 1e-6 && Math.abs(a.start.z - d.start.z) < 1e-6
+    && Math.abs(a.end.x - d.end.x) < 1e-6 && Math.abs(a.end.z - d.end.z) < 1e-6), 'the rest of the row stands where it stood').toBe(true));
+  expect(after.autoDimRowsOff, 'no row is off').toBeUndefined();
+  expect(Object.values(after.autoDimPiecesOff || {}).flat(), 'and the level remembers the piece').toHaveLength(1);
 });
