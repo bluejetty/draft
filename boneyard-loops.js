@@ -216,24 +216,75 @@ if (!window.DraftBoneyardLoops) {
     // worked out again here, so the boneyard cannot come to disagree with the
     // sheet about where a hip runs.
     //
-    // FLAT, AT THE ROOF'S OWN HEIGHT. Every bone in this window is a plan loop
-    // stood at an elevation; a ridge drawn at its true height would be the one
-    // line in the drawing that is not, and the thing being looked for here is
-    // how the lines sit over the floor below.
+    // AT THEIR TRUE HEIGHTS (jb, 26 Nov 2026: "make the 'valley/ridge' peak
+    // lines of the roof look like they are in the proper location 3D wise
+    // (not flat on the orange layer)"). This used to draw them flat at the
+    // plate; now every point carries its own `elev` -- the plate plus the
+    // roof's rise there, geometry-2d's roofFaceRise over the same faces the
+    // roof plan and the elevations use -- so a ridge stands at the peak and a
+    // hip or valley climbs to it. The eave keeps the plate, and a gable's
+    // ridge end is put into the eave line so its rakes climb too. The rise is
+    // measured from the plate, not one fascia board up, so a hip's foot lands
+    // on the eave line it starts from. The 2D window reads x/z only.
     const roofThin = [];
+    // A SPECIAL CASE piece (one with its own pitch / fascia / overhang /
+    // fascia finish, `roof.own`) carries `special`, which the page draws in
+    // its own linetype.
     const thinOf = (roof, elev) => {
+      const special = Array.isArray(roof.own) && roof.own.length > 0 ? { special: true } : {};
       const pts = (roof.points || []).map(p => ({ x: Number(p.x), z: Number(p.z) }));
       if (pts.length < 3) return;
-      roofThin.push({ kind: 'eave', closed: true, points: pts, elev });
-      const arcs = (G && G.roofSkeleton) ? G.roofSkeleton(roof) || [] : [];
+      const arcs = ((G && G.roofSkeleton) ? G.roofSkeleton(roof) || [] : [])
+        .filter(arc => arc && arc.a && arc.b);
+      let faces = [];
+      try { faces = (G && G.roofFaces) ? G.roofFaces(roof, arcs) || [] : []; } catch { faces = []; }
+      const pitch = Number(roof.pitch) || 4;
+      const near = (a, b) => Math.hypot(a.x - b.x, a.z - b.z) < 1e-4;
+      // A skeleton node is a corner of the faces either side of it; its rise
+      // is that face's at that corner. Off every face, the plate.
+      const riseAt = p => {
+        if (!G || !G.roofFaceRise) return 0;
+        let best = null;
+        faces.forEach(face => {
+          if (!face || !face.eave || !(face.points || []).some(q => near(q, p))) return;
+          const r = G.roofFaceRise(face, p, pitch);
+          if (Number.isFinite(r) && (best === null || r > best)) best = r;
+        });
+        if (best === null && G.roofRiseAt) {
+          try { best = G.roofRiseAt(roof, p, faces); } catch { best = null; }
+        }
+        return Number.isFinite(best) && best > 0 ? best : 0;
+      };
+      const at = p => ({ x: p.x, z: p.z, elev: elev + riseAt(p) });
+      // THE EAVE, with every skeleton end that lands on it (a gable's ridge
+      // end, a rake's top) put in along its edge, so a gable end reads as
+      // its triangle and not as a flat line under the ridge.
+      const ends = arcs.flatMap(arc => [arc.a, arc.b]).map(p => ({ x: p.x, z: p.z }));
+      const eave = [];
+      pts.forEach((a, i) => {
+        const b = pts[(i + 1) % pts.length];
+        eave.push({ x: a.x, z: a.z, elev });
+        const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz;
+        if (!(L2 > 1e-9)) return;
+        ends.map(p => {
+          const t = ((p.x - a.x) * dx + (p.z - a.z) * dz) / L2;
+          const off = Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / Math.sqrt(L2);
+          return { p, t, off };
+        }).filter(e => e.t > 1e-4 && e.t < 1 - 1e-4 && e.off < 1e-3)
+          .sort((u, v) => u.t - v.t)
+          .filter((e, k, all) => !k || e.t - all[k - 1].t > 1e-4)
+          .forEach(e => { const q = at(e.p); if (q.elev > elev + 1e-6) eave.push(q); });
+      });
+      roofThin.push({ kind: 'eave', closed: true, points: eave, elev, ...special });
       arcs.forEach(arc => {
-        if (!arc || !arc.a || !arc.b) return;
-        roofThin.push({ kind: 'skeleton', closed: false, elev,
-          points: [{ x: arc.a.x, z: arc.a.z }, { x: arc.b.x, z: arc.b.z }] });
+        roofThin.push({ kind: 'skeleton', closed: false, elev, ...special,
+          points: [at(arc.a), at(arc.b)] });
       });
     };
-    const ownRoof = ((drawing && drawing.roofs) || []).find(r => r.sourceLevelId == null
+    const houseRoofs = ((drawing && drawing.roofs) || []).filter(r => r.sourceLevelId == null
       && !r.garage && (r.points || []).length >= 3);
+    // THE MAIN ROOF is the first piece that is not a special case.
+    const ownRoof = houseRoofs.find(r => !(Array.isArray(r.own) && r.own.length)) || houseRoofs[0];
     const inset = ownRoof ? footprint(ownRoof) : null;
     // The top floor's loop stands in only where NO roof of the house's was
     // drawn: a roof made off a floor's outline is that floor's roof, below.
@@ -245,6 +296,14 @@ if (!window.DraftBoneyardLoops) {
     // One ROOF level still -- one button, one colour -- with each loop
     // carrying the height and the floor it stands on.
     if (ownRoof && inset && inset.length >= 3) thinOf(ownRoof, top.floor.wallTop);
+    // AND EVERY OTHER PIECE OF THE HOUSE'S ROOF (jb, 26 Nov 2026: "the extra
+    // roof i drew 'special' at the front of the gable with different fascia
+    // doesn't show"). Only the first was ever drawn; the rest stand on the
+    // same plate and come in as thin lines -- the bone stays the main roof's.
+    // A piece that cannot be worked out is left off, never the page.
+    houseRoofs.filter(r => r !== ownRoof).forEach(r => {
+      try { thinOf(r, top.floor.wallTop); } catch { /* left off */ }
+    });
     // A ROOF BUILT FROM THE LOT is no roof (Movie's PHASE2, 28 Oct): MODEL
     // drops it on open, but a file not saved since still carries it.
     const lots = new Set(((drawing && drawing.outlines) || [])
@@ -315,7 +374,7 @@ if (!window.DraftBoneyardLoops) {
       // The very thin lines ride with the bone: same projection, same frame,
       // so a hip cannot land somewhere the roof it belongs to is not.
       thinPolys: (level.thin || []).map(line => ({ ...line,
-        points: line.points.map(p => project(p, line.elev ?? level.elev, deg, tiltDeg)) })),
+        points: line.points.map(p => project(p, p.elev ?? line.elev ?? level.elev, deg, tiltDeg)) })),
       cut: level.loops.map(loop => {
         const { runs, dots } = runsOf(loop);
         const e = loop.elev ?? level.elev;

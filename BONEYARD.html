@@ -38,6 +38,7 @@
 <script src="./fen-labels.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
+<script src="./footing-outline.js"></script>
 <script src="./tour.js"></script>
 <script src="./boneyard-edit.js"></script>
 <script src="./boneyard-beams.js"></script>
@@ -424,6 +425,8 @@
       // `to` is what puts a point on the screen -- identity in the 3D window,
       // where layout has already done it, and toScreen in the 2D one.
       const THIN_PX = 0.6;
+      const SPECIAL_PX = 1.1;
+      const SPECIAL_DASH = [5, 3];
       const strokeThin = (ctx, lines, color, to) => {
         if (!lines || !lines.length) return;
         ctx.save();
@@ -432,6 +435,10 @@
         lines.forEach(line => {
           const pts = (line.points || []).map(to);
           if (pts.length < 2) return;
+          // A SPECIAL CASE roof piece: dashed and a touch heavier, so it reads
+          // apart from the main roof in the same orange.
+          ctx.setLineDash(line.special ? SPECIAL_DASH : []);
+          ctx.lineWidth = line.special ? SPECIAL_PX : THIN_PX;
           ctx.beginPath();
           pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
           if (line.closed) ctx.closePath();
@@ -482,7 +489,7 @@
       const thinAttr = shownLines => JSON.stringify(shownLines.flatMap(({ name, lines, to }) =>
         (lines || []).map(line => {
           const plan = line.points[0] && line.points[0].z !== undefined;
-          return { level: name, kind: line.kind,
+          return { level: name, kind: line.kind, ...(line.special ? { special: true } : {}),
             points: line.points.map(p => {
               const q = to(p);
               return [Number(q.x.toFixed(1)), Number(q.y.toFixed(1))];
@@ -619,6 +626,73 @@
         }));
       };
 
+      // ── A STAIR AS EDGES IN 3D (jb, 26 Nov 2026: "a 50% opaque stair
+      // outline") ─────────────────────────────────────────────────────────
+      // Filed on the floor it goes DOWN from and landing on the storey below
+      // (or the basement slab), as the 3D viewer builds it (viewer/
+      // house-mesh.js buildStair): stair-geometry's plan parts and sequence,
+      // a riser at a time. Each flight comes back as a sloping box -- its two
+      // stringer lines from the top tread to the bottom and the ends across
+      // -- and each landing as its outline at its height. Edges carry `elev`.
+      const stairOutlines3d = d => {
+        const SG = window.DraftStairGeometry;
+        if (!d || !SG || !stack || !stack.floors) return [];
+        const out = [];
+        (d.stairs || []).forEach(stair => {
+          if (!stair || !stair.start || !stair.end || !(stair.widthFt > 0)) return;
+          const storey = stack.floors.find(f => Number(f.id) === Number(stair.levelId));
+          if (!storey) return;
+          const below = stack.floors.filter(f => f.floorTop < storey.floorTop - 0.01)
+            .sort((a, b) => b.floorTop - a.floorTop)[0];
+          const landOn = below ? below.floorTop : (stack.foundation ? stack.foundation.slabTop : storey.floorTop - 8);
+          const riseFt = storey.floorTop - landOn;
+          if (!(riseFt > 0.2)) return;
+          let layout, parts;
+          try {
+            layout = SG.stairCurrentLayout(stair, { floors: [], riseFtFor: () => ({ riseFt }) });
+            parts = SG.stairPlanParts(stair, layout);
+          } catch { return; }
+          if (!parts || !parts.runs || !parts.runs.length || !(layout.risers > 0)) return;
+          const riser = layout.riseFt / layout.risers;
+          const step = SG.stairStandards().treadRunIn / 12;
+          const seq = parts.split ? SG.stairSequence(parts.split) : [{ treads: layout.treads }];
+          const flights = [parts.runs[0], ...(parts.middle ? [parts.middle] : []), ...parts.runs.slice(1)];
+          const landings = parts.landings && parts.landings.length ? parts.landings : (parts.landing ? [parts.landing] : []);
+          const landingCount = seq.length - 2 - (parts.middle ? 1 : 0);
+          const landingList = landingCount === 1 && landings.length > 1 && parts.landing ? [parts.landing] : landings;
+          const edges = [];
+          const P = (p, elev) => ({ x: p.x, z: p.z, elev });
+          let y = storey.floorTop, fi = 0, li = 0;
+          seq.forEach((item, idx) => {
+            const isFlight = idx === 0 || idx === seq.length - 1 || (seq.length === 5 && idx === 2);
+            if (isFlight) {
+              const run = flights[fi++];
+              if (!run) return;
+              const dd = run.dir, side = { x: -dd.z, z: dd.x }, half = run.widthFt / 2;
+              const count = Math.max(0, Math.round(run.treads != null ? run.treads : item.treads));
+              if (!count) return;
+              const at = (u, v) => ({ x: run.start.x + dd.x * u + side.x * v, z: run.start.z + dd.z * u + side.z * v });
+              const top = y, len = count * step;
+              y -= riser * count;
+              const a0 = P(at(0, -half), top), a1 = P(at(0, half), top);
+              const b0 = P(at(len, -half), y), b1 = P(at(len, half), y);
+              edges.push([a0, a1], [a0, b0], [a1, b1], [b0, b1]);
+              return;
+            }
+            const landing = landingList[li++];
+            const drops = item.treads > 0 ? item.treads : 1;
+            const top = y - riser * Math.ceil(drops / 2);
+            y -= riser * drops;
+            const ring = landing && landing.poly;
+            if (ring && ring.length >= 3) {
+              ring.forEach((p, i) => edges.push([P(p, top), P(ring[(i + 1) % ring.length], top)]));
+            }
+          });
+          if (edges.length) out.push({ levelId: stair.levelId, edges, top: storey.floorTop, bottom: landOn });
+        });
+        return out;
+      };
+
       // ── THE 3D WINDOW ───────────────────────────────────────────────
       const paint3d = () => {
         const { ctx, w, h } = sized(c3);
@@ -693,6 +767,110 @@
           });
         }
         c3.setAttribute('data-beams', JSON.stringify(beams3d));
+        // ── THE STAIR OPENINGS AND THE STAIRS (jb, 26 Nov 2026) ─────────────
+        //
+        // "the Stair Opening (it isn't showing or is it ?)" -- it was not: the
+        // hole in a floor (surfaceOpenings, hostType floor) is drawn now on
+        // that floor's bone, dashed, in the floor's colour. And "a 50% opaque
+        // stair outline": each flight a sloping box outline from the floor it
+        // goes down from to the one it lands on, each landing flat at its
+        // height, half see-through so it sits behind the bones.
+        const holes3d = [], stairs3d = [];
+        if (laid.at) {
+          const d3 = preview ? preview.drawing : raw;
+          const floorLevel = id => laid.levels.find(l => l.kind === 'floor' && Number(l.levelId) === Number(id));
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([6, 3]);
+          ((d3 && d3.surfaceOpenings) || []).forEach(o => {
+            if (!o || o.hostType !== 'floor' || !(o.points || []).length) return;
+            const level = floorLevel(o.levelId);
+            if (!level) return;
+            ctx.strokeStyle = level.color;
+            ctx.beginPath();
+            o.points.forEach((pt, i) => { const q = laid.at(pt, level.elev); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+            ctx.closePath(); ctx.stroke();
+            holes3d.push({ level: level.name, points: o.points.length });
+          });
+          ctx.setLineDash([]);
+          ctx.save();
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = 1;
+          stairOutlines3d(d3).forEach(st => {
+            const level = laid.levels.find(l => l.kind !== 'roof' && Number(l.levelId) === Number(st.levelId));
+            if (!level) return;
+            ctx.strokeStyle = level.color;
+            st.edges.forEach(([a, b]) => {
+              const qa = laid.at(a, a.elev), qb = laid.at(b, b.elev);
+              ctx.beginPath(); ctx.moveTo(qa.x, qa.y); ctx.lineTo(qb.x, qb.y); ctx.stroke();
+            });
+            stairs3d.push({ level: level.name, edges: st.edges.length,
+              top: Number(st.top.toFixed(4)), bottom: Number(st.bottom.toFixed(4)) });
+          });
+          ctx.restore();
+        }
+        // ── THE FOOTINGS (jb, 26 Nov 2026: "show where the pad footing would
+        // be located and their sizes show all the edge lines of the footing
+        // (i may change it back but would like to see how it looks)") ──────
+        // Under the FOUNDATION bone, in its colour and thin: the strip footing
+        // under the concrete walls (footing-outline.js, the same outline the
+        // foundation plan dashes) drawn top and bottom with an upright at each
+        // corner, and every pad column's pad as a box at its own size --
+        // build-house.js padSizeIn, 8" deep (10" for the 42" pad) -- its top
+        // at the underside of the slab. Piles and in-wall posts carry no pad.
+        // TO TAKE IT BACK OUT: delete this block (and the footing-outline.js
+        // script tag); nothing else reads it.
+        const footings3d = { strip: 0, pads: [] };
+        const fdnBone = laid.at && stack && stack.foundation
+          ? laid.levels.find(l => l.kind === 'foundation') : null;
+        if (fdnBone) {
+          const d3 = preview ? preview.drawing : raw;
+          const fdn = stack.foundation;
+          const topE = fdn.wallBottom, botE = fdn.footingBottom;
+          const seg = (a, ea, b, eb) => {
+            const qa = laid.at(a, ea), qb = laid.at(b, eb);
+            ctx.moveTo(qa.x, qa.y); ctx.lineTo(qb.x, qb.y);
+          };
+          ctx.save();
+          ctx.strokeStyle = fdnBone.color;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          let segs = [];
+          try {
+            segs = window.DraftFootingOutline ? window.DraftFootingOutline.footingOutline({
+              walls: (d3 && d3.walls) || [], levelId: 1, levelAssemblies: d3 && d3.levelAssemblies }) : [];
+          } catch { segs = []; }
+          const corners = new Map();
+          segs.forEach(sg => {
+            seg(sg.start, topE, sg.end, topE);
+            seg(sg.start, botE, sg.end, botE);
+            [sg.start, sg.end].forEach(p => corners.set(`${p.x.toFixed(3)},${p.z.toFixed(3)}`, p));
+          });
+          corners.forEach(p => seg(p, topE, p, botE));
+          footings3d.strip = segs.length;
+          const BH = window.DraftBuildHouse;
+          ((d3 && d3.columns) || []).forEach(col => {
+            if (!col || !col.point || Number(col.levelId) !== 1 || !BH || !BH.footingFor) return;
+            const kind = BH.footingFor(col.footing);
+            if (kind.pile || kind.post) return;
+            const half = BH.padSizeIn(col) / 24;
+            const deep = (kind.id === 'pad42' ? 10 : 8) / 12;
+            const c = col.point;
+            const ring = [[-1, -1], [1, -1], [1, 1], [-1, 1]]
+              .map(([u, v]) => ({ x: c.x + u * half, z: c.z + v * half }));
+            ring.forEach((p, i) => {
+              const q = ring[(i + 1) % 4];
+              seg(p, topE, q, topE);
+              seg(p, topE - deep, q, topE - deep);
+              seg(p, topE, p, topE - deep);
+            });
+            footings3d.pads.push({ x: c.x, z: c.z, sizeIn: half * 24, deepIn: deep * 12 });
+          });
+          ctx.stroke();
+          ctx.restore();
+        }
+        c3.setAttribute('data-footings', JSON.stringify(footings3d));
+        c3.setAttribute('data-floor-openings', JSON.stringify(holes3d));
+        c3.setAttribute('data-stairs', JSON.stringify(stairs3d));
         c3.setAttribute('data-thin', thinAttr(laid.levels.map(l =>
           ({ name: l.name, lines: l.thinPolys, to: same }))));
         document.getElementById('angle').textContent = `${angle}°`;

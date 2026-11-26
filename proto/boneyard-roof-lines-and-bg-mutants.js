@@ -25,7 +25,7 @@ const MUTANTS = [
   { file: 'boneyard-loops.js',
     name: 'the overhang is never drawn: the roof shows where its walls are '
       + 'and not where its edge is',
-    find: "      roofThin.push({ kind: 'eave', closed: true, points: pts, elev });",
+    find: "      roofThin.push({ kind: 'eave', closed: true, points: eave, elev, ...special });",
     with: '',
     test: 'the roof\'s overhang and the lines where its planes meet are drawn in the 3D' },
 
@@ -39,7 +39,8 @@ const MUTANTS = [
   { file: 'boneyard-loops.js',
     name: 'the hips, valleys and ridges are left out, so the roof is an '
       + 'outline with nothing happening inside it',
-    find: '      const arcs = (G && G.roofSkeleton) ? G.roofSkeleton(roof) || [] : [];',
+    find: '      const arcs = ((G && G.roofSkeleton) ? G.roofSkeleton(roof) || [] : [])\n'
+      + '        .filter(arc => arc && arc.a && arc.b);',
     with: '      const arcs = [];',
     test: 'the roof\'s overhang and the lines where its planes meet are drawn in the 3D' },
 
