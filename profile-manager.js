@@ -411,6 +411,20 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'A-ROOF', name: 'A-ROOF', use: 'Roof footprints, ridges, hips, and valleys (Roof tool on ROOF), with the holes cut into it.', printable: true })
       ]),
     }),
+    // ── THE EXT. FINISH HATCHES ON THE ELEVATIONS (jb, 26 Nov 2026: "can
+    // you show the ext finish that is applied in the model area too ?") ──
+    //
+    // Siding, shake, stucco, bands, the gable's own finish and the roofing,
+    // all set on EXT. FINISH. MODEL's elevation views draw them and the
+    // CONSTRUCTION LAYOUT's elevation viewports print them. The two ticks
+    // split exactly that way: VISIBLE is the MODEL view, PRINTED the sheet.
+    // EXT. FINISH itself always shows them -- it is the page that sets them.
+    Object.freeze({
+      group: 'Architectural — ELEVATIONS',
+      layers: Object.freeze([
+        Object.freeze({ id: 'A-ELEV-FIN', name: 'A-ELEV-FIN', use: 'Exterior finish hatches on elevations — siding, shake, stucco, bands, gables and roofing, as set on EXT. FINISH. Visible = MODEL elevation views; Printed = CONSTRUCTION LAYOUT sheets.', printable: true, visibility: true }),
+      ]),
+    }),
     Object.freeze({
       group: 'Electrical — ELECTRIC',
       layers: Object.freeze([

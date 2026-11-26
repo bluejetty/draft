@@ -28,6 +28,9 @@ const ALL_LAYER_IDS = [
   'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-DIMS-EQUIP',
   'S-BEAM', 'S-SLAB', 'S-FDN', 'S-COL-FOOTING', 'S-FOOTING',
   'E-POWER',
+  // THE EXT. FINISH HATCHES ON ELEVATIONS (26 Nov 2026): Visible = MODEL,
+  // Printed = CONSTRUCTION LAYOUT.
+  'A-ELEV-FIN',
 ];
 
 // Only these offer a Visible tick. Everything else renders a blank cell, and
@@ -38,6 +41,7 @@ const SWITCHABLE_LAYER_IDS = [
   'draft', 'no-draft',
   'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-HAND',
   'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-DIMS-EQUIP',
+  'A-ELEV-FIN',
 ];
 
 async function openStandards(page) {
@@ -48,7 +52,7 @@ async function openStandards(page) {
     localStorage.clear();
   });
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(7);
+  await expect(page.locator('#groups .group')).toHaveCount(8);
 }
 
 async function drawLine(page, x1, z1, x2, z2) {
