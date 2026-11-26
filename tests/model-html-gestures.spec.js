@@ -666,6 +666,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // it authors no entity, so no absence row moves.
             'DRAW DETAILS LIBRARY',
             'copy', 'paste',
+            // PASTE THIS LEVEL (jb, 25 Nov 2026): the other half of PASTE
+            // while a column stack is held; it pastes, it authors nothing new.
+            'paste-level',
             // THE STOREY ARROWS (Movie, 12 Oct: "id like UP and DOWN arrows
             // and when they are pressed the LEVEL goes either to the next one
             // up or the next one down"). They MOVE WHERE THE DRAFTER IS

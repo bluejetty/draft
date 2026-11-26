@@ -34,6 +34,7 @@
   if (levelDownButton) levelDownButton.title = 'Go down to the next level';
   const copyButton = document.getElementById('copy');
   const pasteButton = document.getElementById('paste');
+  const pasteLevelButton = document.getElementById('paste-level');
 
   // WHAT IS HELD. Not the selection, and not a reference to it: raw snapshots
   // taken at COPY, so an edit or a delete between the copy and the paste
@@ -426,7 +427,7 @@
     orderBar.hidden = !orderState.open;
     // OVER THE OTHER VERBS while it is up, as FLIP's row is.
     if (orderState.open) {
-      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; }); // ORDER's row
+      [deleteButton, undoButton, copyButton, pasteButton, pasteLevelButton].forEach(b => { if (b) b.hidden = true; }); // ORDER's row
     }
   }
   if (orderButton) orderButton.addEventListener('click', () => setOrderOpen(true));
@@ -443,7 +444,7 @@
     flipBar.hidden = !flipState.open;
     // OVER THE OTHER VERBS while it is up, as ROTATE's row is.
     if (flipState.open) {
-      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; }); // FLIP's row
+      [deleteButton, undoButton, copyButton, pasteButton, pasteLevelButton].forEach(b => { if (b) b.hidden = true; }); // FLIP's row
     }
   }
   // ── RESCALE (Movie, 23 Oct) ─────────────────────────────────────────────
@@ -485,7 +486,7 @@
     rescaleButton.hidden = !able || rescaleState.open || !!rotateState?.open || !!flipState?.open || !!orderState?.open;
     rescaleBar.hidden = !rescaleState.open;
     if (rescaleState.open) {
-      [deleteButton, undoButton, copyButton, pasteButton, rotateButton, flipButton, moveButton].forEach(b => { if (b) b.hidden = true; });
+      [deleteButton, undoButton, copyButton, pasteButton, pasteLevelButton, rotateButton, flipButton, moveButton].forEach(b => { if (b) b.hidden = true; });
     }
   }
   if (rescaleButton) rescaleButton.addEventListener('click', () => setRescaleOpen(true));
@@ -598,7 +599,7 @@
     rotateBar.hidden = !rotateState.open;
     // OVER THE OTHER VERBS while it is up.
     if (rotateState.open) {
-      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; });
+      [deleteButton, undoButton, copyButton, pasteButton, pasteLevelButton].forEach(b => { if (b) b.hidden = true; });
     }
   }
   if (rotateButton) rotateButton.addEventListener('click', () => setRotateOpen(true));
@@ -1616,8 +1617,15 @@
     // THE STACK: the same spot on every other level and view, while locked.
     const stack = [];
     if (drawing?.beamLock !== false) {
+      // ONE POST PER SHEET: where a picked column already stands on o's
+      // level and view, o is not the stack's -- it is the one the pick was
+      // laid on. A pasted stack lands on its original; dragged off, the
+      // copies go and the originals stay (jb, 25 Nov 2026).
+      const sheetOf = c => `${Number(c.levelId)}|${c.view || 'plan'}`;
+      const pickedSheets = new Set(picked.map(sheetOf));
       picked.forEach(c => (drawing.columns || []).forEach(o => {
         if (!o.point || picked.includes(o) || stack.includes(o)) return;
+        if (pickedSheets.has(sheetOf(o))) return;
         if (Math.hypot(o.point.x - c.point.x, o.point.z - c.point.z) <= COLUMN_STACK_FT) stack.push(o);
       }));
     }

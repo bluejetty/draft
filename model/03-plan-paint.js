@@ -2846,6 +2846,9 @@
       // pastes. If PASTE read the selection it would be dead exactly when it
       // is wanted.
       pasteButton.hidden = !held.length || !!activeCut() || modalUp();
+      const stack = !pasteButton.hidden && heldHasStack();
+      pasteButton.textContent = stack ? 'PASTE ALL LEVELS' : 'PASTE';
+      if (pasteLevelButton) pasteLevelButton.hidden = !stack;
     }
     syncRotateVerbs();
     syncFlipVerbs();

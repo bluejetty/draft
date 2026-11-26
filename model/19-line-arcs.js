@@ -673,7 +673,7 @@
     // THE ROW STANDS OVER THE VERBS, as OFFSET's and ARRAY's do (Movie, 18
     // Oct: "i like how those little commands cover the other ones when they
     // are active"); eleven verbs and five chips do not fit the foot.
-    [deleteButton, undoButton, copyButton, pasteButton, rotateButton, flipButton, orderButton, moveButton, breakButton, rescaleButton, wallOffButton]
+    [deleteButton, undoButton, copyButton, pasteButton, pasteLevelButton, rotateButton, flipButton, orderButton, moveButton, breakButton, rescaleButton, wallOffButton]
       .forEach(b => { if (b) b.hidden = true; });
     [rotateBar, flipBar, orderBar, rescaleBar].forEach(b => { if (b) b.hidden = true; });
     lineBar.querySelectorAll('[data-line-mode]').forEach(chip => {

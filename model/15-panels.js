@@ -5708,4 +5708,5 @@
   if (levelDownButton) levelDownButton.addEventListener('click', () => { if (!modalUp()) levelStep(LEVEL_DOWN); });
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
   if (pasteButton) pasteButton.addEventListener('click', () => { pasteHeld(); });
+  if (pasteLevelButton) pasteLevelButton.addEventListener('click', () => { pasteHeld({ thisLevel: true }); });
 

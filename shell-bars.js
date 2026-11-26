@@ -683,6 +683,12 @@ ${trio(true)}
     title="Copy what is selected — paste it on any level or shelf">COPY</button>
   <button id="paste" type="button" data-paste hidden
     title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
+  <!-- PASTE THIS LEVEL (jb, 25 Nov 2026): a copied column carries its whole
+       stack, footing to top floor; PASTE (then reading ALL LEVELS) puts it
+       all down, this one only the piece on the plan showing. Up only while a
+       stack is held. -->
+  <button id="paste-level" type="button" data-paste-level hidden
+    title="Paste only the column on the plan showing, not the whole stack">PASTE THIS LEVEL</button>
   <!-- ROTATE (Movie, 18 Oct): "i also need a ROTATE command (for items that
        are selected like the stiarcase which i'd like to rotate 90)", down
        here "with the DEL COPY ROTATE commands in that lower area" -- and "i

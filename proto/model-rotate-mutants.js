@@ -14,7 +14,7 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-html-rotate.spec.js';
 const MUTANTS = [
   { file: 'model/09-draw-move-stretch.js', name: 'the bar does not cover the other verbs',
-    find: '      [deleteButton, undoButton, copyButton, pasteButton].forEach(b => { if (b) b.hidden = true; });\n',
+    find: '      [deleteButton, undoButton, copyButton, pasteButton, pasteLevelButton].forEach(b => { if (b) b.hidden = true; });\n',
     with: '', test: 'a stair selected: ROTATE in the foot, its row over the verbs, a quarter turn clockwise on screen about its middle' },
   { file: 'model/09-draw-move-stretch.js', name: 'turned anticlockwise on screen',
     find: '      pt.x = cx + dx * cos - dz * sin;\n      pt.z = cz + dx * sin + dz * cos;\n',
