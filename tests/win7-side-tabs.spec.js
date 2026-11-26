@@ -52,12 +52,14 @@ test('MODEL: each of the six tabs holds its word in a block that declares the tu
   await expect(page.locator('#notes-tab')).toHaveText('NOTES / CALC');
 });
 
-test('a page whose tab the shared bars build gets the block too', async ({ page }) => {
+// PROJECT'S SIDE TAB WENT UP TO THE BAR (jb, 26 Nov 2026): PROJECT INFO is a
+// drop-down off the top bar now, like OBJ / PROP, so PROJECT has no side tab
+// left for the block to sit in -- and must not grow one back beside it.
+test('PROJECT has no side tab; PROJECT INFO drops from the top bar', async ({ page }) => {
   await page.goto('/PROJECT.html');
-  const blocks = page.locator('.rail-tab > .rail-tab-text');
-  await expect(blocks.first()).toBeAttached();
-  expect(await blocks.count()).toBeGreaterThan(0);
-  expect(await page.locator('.rail-tab').count(), 'every tab has one').toBe(await blocks.count());
+  await expect(page.locator('.rail-tab')).toHaveCount(0);
+  await expect(page.locator('#projinfo-tab')).toBeVisible();
+  await expect(page.locator('#projinfo-tab')).toHaveCSS('writing-mode', 'horizontal-tb');
 });
 
 test('the old page\'s two tabs hold their words in blocks', async ({ page }) => {
