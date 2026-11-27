@@ -298,6 +298,7 @@
         const envelope = FORMAT.checkEnvelope(parsed);
         // The wall types this file made, for its walls' widths and slices.
         if (envelope.ok) window.DraftWallTypes?.adoptDrawing?.(parsed);
+        if (envelope.ok) window.DraftWallTypes?.adoptFinishSettings?.(parsed);
         return envelope.ok ? parsed : null;
       };
 

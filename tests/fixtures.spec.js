@@ -36,7 +36,7 @@ test('FIXTURE is a rail command with KITCHEN / BATH / LAUNDRY catalog options', 
   await expect(rail).toBeVisible();
 
   await h.selectTool(page, 'Fixture');
-  for (const label of ['CABINET', 'SINK', 'FRIDGE', 'STOVE', 'TUB', 'TOILET', 'SHOWER', 'STALL', 'VANITY', 'WASHER', 'DRYER']) {
+  for (const label of ['CABINET', 'SINK APRON', 'FRIDGE', 'STOVE', 'TUB', 'TOILET', 'SHOWER', 'STALL', 'VANITY', 'WASHER', 'DRYER']) {
     await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
   }
 });

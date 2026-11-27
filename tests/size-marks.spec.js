@@ -167,7 +167,8 @@ test('the vanity\'s mark is at its front left; the pedestal sinks are 22" deep, 
   await open(page);
   const c = await cornersOf(page, 'van');
   const tag = (await fixtureTags(page)).find(t => t.id === 'van');
-  expect(tag.label).toBe('24X60');
+  // WIDTH ONLY, as the kitchen cabinets say it (jb, 27 Nov).
+  expect(tag.label).toBe('60');
   expect(inside({ x: tag.cx, y: tag.cy }, c), 'inside the vanity').toBe(true);
   const left = leftOf(c);
   const lc = dot(c[3], left) > dot(c[2], left) ? c[3] : c[2];

@@ -52,7 +52,7 @@ test('the tab hangs under the top bar; a click on a sink base opens the window o
   await page.mouse.click(...at(7, z));
   const win = page.locator('#objprop');
   await expect(win).toBeVisible();
-  await expect(win.locator('[data-objprop-title]')).toHaveText('SINK BASE');
+  await expect(win.locator('[data-objprop-title]')).toHaveText('SINK CABINET');
   expect(await inked(page)).toEqual([['top', true], ['front', true], ['left', true], ['right', true]]);
   for (const field of ['width', 'depth']) await expect(win.locator(`[data-prop-field="${field}"]`)).toBeVisible();
   for (const pick of ['bowls', 'uppers']) await expect(win.locator(`[data-prop-select="${pick}"]`)).toBeVisible();
@@ -92,6 +92,37 @@ test('the faces: a run tiled in 24" bays, the sides mirrored, a kind with no tra
     };
   });
   expect(got).toEqual({ runWide: 96, runBays: 4, mirrored: true, deep: 24, plain: [false, 60, 80] });
+});
+
+// "on the DOUBLE CABINET the 2 door handles should meet in the middle"
+// (jb, 27 Nov): a 3'-0" CABINET is two 18" bays; the left bay's handle by
+// its right edge, the right bay's mirrored by its left edge.
+test('a double cabinet\'s two door handles meet in the middle', async ({ page }) => {
+  await open(page);
+  const got = await page.evaluate(() => {
+    const V = window.DraftObjViews, FP = window.DraftFixtureProfiles;
+    const traced = FP.profileFor('cabinet', 'front').polys;
+    // The door handle: the little ring low on the traced door, right of centre.
+    const knob = traced.map((p, i) => ({ p, i })).filter(({ p }) => p.every((v, j) => (j % 2 === 0 ? v > 9 && v < 10.5 : v > 23.5 && v < 25.5))).map(({ i }) => i);
+    const handles = width => {
+      const face = V.faceOf({ kind: 'cabinet', width, depth: 2 }, 'front', FP);
+      const bays = face.polys.length / traced.length;
+      return Array.from({ length: bays }, (_, b) => {
+        const xs = knob.flatMap(i => face.polys[b * traced.length + i].filter((v, j) => j % 2 === 0));
+        return Math.round((xs.reduce((t, v) => t + v, 0) / xs.length) * 10) / 10;
+      });
+    };
+    return { knobs: knob.length, three: handles(3), eight: handles(8) };
+  });
+  expect(got.knobs).toBeGreaterThan(0);
+  const [l, r] = got.three;
+  expect(l, 'left door handle by the middle').toBeGreaterThan(12);
+  expect(r, 'right door handle by the middle').toBeLessThan(24);
+  expect(Math.abs((l + r) / 2 - 18), 'the pair sits either side of the middle').toBeLessThan(0.05);
+  // A run of four bays: two pairs, each meeting at its own middle.
+  const [a, b, c, d] = got.eight;
+  expect(Math.abs((a + b) / 2 - 24)).toBeLessThan(0.05);
+  expect(Math.abs((c + d) / 2 - 72)).toBeLessThan(0.05);
 });
 
 // "can we show the properties for AREA ROOM TAGs, and anything else that has

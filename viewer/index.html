@@ -124,6 +124,7 @@
       <input id="file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
       <button id="fit" type="button" title="Fit the house to the window (F)">FIT</button>
       <button id="edges" type="button" class="lit" title="Draw the edges of every face">EDGES</button>
+      <button id="textures" type="button" class="lit" title="Brick joints, siding laps, battens, shake and stone on the walls (each finish can be turned off in its THICKNESS &amp; TEXTURE section)">TEXTURES</button>
       <button id="export-open" type="button" title="Save the house as a 3D file other programs open (1 bone a file)" disabled>EXPORT</button>
       <button id="print-open" type="button" title="Make the house ready for a 3D printer: scale, thickness, lift-off pieces (1 bone a file)" disabled>PRINT MODEL</button>
       <span class="chips" role="group" aria-label="Painter">
@@ -227,6 +228,7 @@
     <!-- 3D only from here down: never loaded by any 2D page. -->
     <script src="../vendor/three-0.128.0.min.js"></script>
     <script src="house-mesh.js"></script>
+    <script src="finish-texture.js"></script>
     <script src="export-writers.js"></script>
     <script src="print-model.js"></script>
     <script src="viewer-camera.js"></script>

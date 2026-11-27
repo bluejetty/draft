@@ -18,10 +18,11 @@ const FX = (id, kind, wallId, offset, width, depth, more = {}) => ({ id, wallId,
 const drawing = () => ({
   version: 1, board: 'drafting', levels: LEVELS, activeLevelIdx: 2, nextDrawingItemId: 50, nextGroupId: 2,
   walls: [W('back', [0, 0], [8, 0]), W('left', [0, 0], [0, 8]), W('far', [0, 8], [8, 8]),
-    W('short', [20, 0], [23, 0]),
+    W('short', [20, 0], [23, 0]), W('van', [20, 10], [30, 10]),
     W('tb', [0, 20], [10, 20]), W('te', [10, 20], [10, 30])],
   fixtures: [FX('sh', 'shower', 'back', 4, 5, 2.5), FX('st', 'stall', 'short', 1.5, 4, 8 / 3),
-    FX('tb', 'tub', 'tb', 0, 5, 2.5, { endWallId: 'te', dir: -1 })],
+    FX('tb', 'tub', 'tb', 0, 5, 2.5, { endWallId: 'te', dir: -1 }),
+    FX('vn', 'vanity', 'van', 5, 2.5, 22 / 12)],
   groups: [{ id: 'group-1', name: 'WC 1', fixed: true, stretchBehavior: 'rigid',
     members: [{ type: 'wall', id: 'back' }, { type: 'wall', id: 'left' }, { type: 'fixture', id: 'sh' }] }],
   lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [], outlines: [], shapes: [],
@@ -117,6 +118,29 @@ test('the shower carries its size, depth X width in inches; the mark typed into 
   sh = after.fixtures.find(f => f.id === 'sh');
   expect([sh.depth, sh.width]).toEqual([2.5, 5]);
   expect(after.walls.map(w => w.id), 'the wall\'s step under it still stands').not.toContain('far');
+});
+
+test('the vanity says its width only, like a kitchen cabinet; one number typed sets the width and keeps the depth', async ({ page }) => {
+  // jb, 27 Nov: "we don't need the depth of the vanity the width should be
+  // good enough (like on the kitchen cabinets)".
+  await open(page);
+  const tag = await pressTag(page, 'vn');
+  expect(tag.label).toBe('30');
+  const box = page.locator('[data-fixture-size-entry="vn"]');
+  await expect(box).toHaveValue('30');
+  await box.fill('48');
+  await box.press('Enter');
+  await expect(page.locator('#strip-message')).toContainText('48 wide');
+  let vn = (await saved(page)).fixtures.find(f => f.id === 'vn');
+  expect([vn.depth, vn.width], 'the 22" depth kept exactly, not rounded').toEqual([22 / 12, 4]);
+  expect((await tags(page)).find(t => t.id === 'vn').label).toBe('48');
+  // Depth X width still works for a drafter who types both.
+  await pressTag(page, 'vn');
+  await box.fill('21X36');
+  await box.press('Enter');
+  vn = (await saved(page)).fixtures.find(f => f.id === 'vn');
+  expect(vn.depth).toBeCloseTo(21 / 12, 3);
+  expect(vn.width).toBeCloseTo(3, 3);
 });
 
 test('a size that cannot be read is refused, and the fixture stays as it was', async ({ page }) => {

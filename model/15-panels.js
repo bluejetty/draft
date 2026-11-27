@@ -35,6 +35,88 @@
     // the FIXTURE tool places from, and FIXTURE is a BUILD key.
     const home = leftPane(paneForBlock('fixtures')) || slot;
 
+    // ── THE SINK CHIP AND ITS POP-UP ───────────────────────────────────
+    //
+    // jb, 27 Nov 2026: "lets have one SINK button but when user scolls over
+    // offers the 4 buttons (or more)" and "make the SINK CABINET the default
+    // it they don't select any of the 4". The FLOOR key's pop-up (model/14)
+    // is the pattern: hovering the chip shows the sinks beside it; it goes
+    // when the pointer leaves the chip and the pop-up both, on Esc, or on a
+    // press anywhere else. A press on the chip itself arms the SINK CABINET;
+    // a tablet's press does that AND puts the pop-up up.
+    const SINK_IDS = K.SINK_KIND_IDS || [];
+    let sinkChipLaid = false;
+    const sinkPop = document.createElement('div');
+    sinkPop.id = 'sink-pop';
+    sinkPop.dataset.sinkPop = '';
+    sinkPop.setAttribute('role', 'menu');
+    sinkPop.setAttribute('aria-label', 'Sinks');
+    sinkPop.hidden = true;
+    document.body.append(sinkPop);
+    let sinkPopTimer = null;
+    let sinkChipEl = null;
+    const armFixtureKind = id => {
+      if (selectPicking) { pickKind('fixture', id); return; }
+      fixtureKindId = id;
+      washroomPreset = null;
+      kitchenPreset = null;
+      fixtureRunStart = null;
+      setTool('fixture');
+      syncFixturePanel();
+    };
+    const closeSinkPop = () => { clearTimeout(sinkPopTimer); sinkPop.hidden = true; };
+    const leaveSinkPop = () => { clearTimeout(sinkPopTimer); sinkPopTimer = setTimeout(closeSinkPop, 250); };
+    const openSinkPop = () => {
+      clearTimeout(sinkPopTimer);
+      if (!sinkChipEl || sinkChipEl.disabled || !sinkChipEl.isConnected) return;
+      sinkPop.hidden = false;
+      // BESIDE THE CHIP, toward the drawing, where it covers no other chip.
+      const r = sinkChipEl.getBoundingClientRect();
+      const w = sinkPop.offsetWidth, hh = sinkPop.offsetHeight;
+      const right = r.right + 4 + w <= window.innerWidth - 4;
+      sinkPop.style.left = `${Math.max(4, right ? r.right + 4 : r.left - w - 4)}px`;
+      sinkPop.style.top = `${Math.max(4, Math.min(r.top + r.height / 2 - hh / 2, window.innerHeight - hh - 4))}px`;
+    };
+    SINK_IDS.forEach(id => {
+      const kind = K.kindFor(id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.fixtureKind = id;
+      btn.setAttribute('role', 'menuitem');
+      btn.textContent = kind.label;
+      btn.title = kind.note;
+      btn.addEventListener('click', () => { closeSinkPop(); armFixtureKind(id); });
+      sinkPop.append(btn);
+    });
+    sinkPop.addEventListener('pointerenter', () => clearTimeout(sinkPopTimer));
+    sinkPop.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') leaveSinkPop(); });
+    window.addEventListener('pointerdown', e => {
+      if (sinkPop.hidden || sinkPop.contains(e.target) || (sinkChipEl && sinkChipEl.contains(e.target))) return;
+      closeSinkPop();
+    }, true);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !sinkPop.hidden) { closeSinkPop(); e.stopPropagation(); }
+    }, true);
+    const sinkChip = () => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.fixturePop = 'sink';
+      btn.setAttribute('aria-haspopup', 'menu');
+      btn.textContent = 'SINK';
+      btn.title = `SINK — press for a ${K.kindFor(SINK_IDS[0]).label}, or hover for ${SINK_IDS.map(id => K.kindFor(id).label).join(', ')}`;
+      btn.addEventListener('pointerenter', e => { if (e.pointerType !== 'touch') openSinkPop(); });
+      btn.addEventListener('pointerleave', e => {
+        if (e.pointerType === 'touch') return;
+        if (e.relatedTarget instanceof Element && sinkPop.contains(e.relatedTarget)) return;
+        leaveSinkPop();
+      });
+      btn.addEventListener('pointerup', e => { if (e.pointerType === 'touch') setTimeout(openSinkPop, 0); });
+      btn.addEventListener('click', () => armFixtureKind(SINK_IDS[0]));
+      sinkChipEl = btn;
+      return btn;
+    };
+
     K.GROUPS.forEach(group => {
       const box = document.createElement('div');
       box.dataset.toolGroup = `fixture-${group.toLowerCase()}`;
@@ -63,6 +145,12 @@
       // stays in the shared catalogue, where MODEL.dc.html still builds it;
       // this page only ever answered it with "not on this page yet".
       K.kindsInGroup(group).filter(kind => kind.preset !== true).forEach(kind => {
+        // THE SINKS ARE ONE CHIP: the first sink met lays the SINK chip, the
+        // rest are its pop-up's (sinkChip).
+        if (SINK_IDS.includes(kind.id)) {
+          if (!sinkChipLaid) { sinkChipLaid = true; row.append(sinkChip()); }
+          return;
+        }
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `sel-chip${kind.preset ? ' assembled' : ''}`;
@@ -147,6 +235,19 @@
           String(activeTool === 'fixture' && !washroomPreset && !kitchenPreset && btn.dataset.fixtureKind === fixtureKindId));
         btn.disabled = !on;
       });
+      // THE SINK CHIP IS LIT for whichever sink is armed, and so is that
+      // sink in its pop-up.
+      const sinkArmed = activeTool === 'fixture' && !washroomPreset && !kitchenPreset && SINK_IDS.includes(fixtureKindId);
+      slot.querySelectorAll('[data-fixture-pop="sink"]').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(sinkArmed));
+        btn.disabled = !on;
+      });
+      sinkPop.querySelectorAll('[data-fixture-kind]').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(sinkArmed && btn.dataset.fixtureKind === fixtureKindId));
+        btn.classList.toggle('lit', sinkArmed && btn.dataset.fixtureKind === fixtureKindId);
+        btn.disabled = !on;
+      });
+      if (!on) closeSinkPop();
       slot.querySelectorAll('[data-washroom]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(activeTool === 'fixture' && btn.dataset.washroom === washroomPreset));
@@ -1302,7 +1403,49 @@
           return null;
         }, showSelectionProps));
     }
+    box.append(...finishSettingsNodes(walls));
     return box;
+  };
+
+  // ── FINISH THICKNESS & TEXTURE (jb, 27 Nov 2026) ──────────────────────
+  //
+  // "add a section in the OBJ PROP to allow the user to change the thickness
+  // and texture". The finishes the picked walls wear (as EXT. FINISH laid
+  // them), each with its thickness and texture sizes -- the section EXT.
+  // FINISH shows for the same wall (finish-settings-panel.js), writing the
+  // same record. Laying a finish on a wall is still EXT. FINISH's job (jb,
+  // 26 Nov: no finish editing on MODEL yet); this is the material's own
+  // numbers, for the whole house. One 'props' step, so UNDO puts it back.
+  const finishSettingsNodes = walls => {
+    const P = window.DraftFinishSettingsPanel;
+    const WT = window.DraftWallTypes;
+    if (!P || !WT || !WT.finishesOnWall || !drawing) return [];
+    const ids = [];
+    walls.forEach(wall => {
+      WT.finishesOnWall(wall).forEach(id => ids.push(id));
+      if (wall.gableFinish) ids.push(wall.gableFinish);
+    });
+    return [P.node({
+      ids,
+      settings: drawing.finishSettings || null,
+      titleClass: 'props-title',
+      inputClass: 'roof-field',
+      buttonClass: 'sel-chip',
+      say: text => sayOnStrip(text),
+      onChange: (id, record) => {
+        if (!drawing.finishSettings || typeof drawing.finishSettings !== 'object') {
+          if (!record) return;
+          drawing.finishSettings = {};
+        }
+        const before = { ...drawing.finishSettings };
+        P.store(drawing, id, record);
+        undoStack.push({ kind: 'props', edits: [{ item: drawing.finishSettings, before }] });
+        markDirty();
+        showSelectionProps();
+        renderObjProp();
+        paint();
+      },
+    })];
   };
 
   // ── FENESTRATION PROPERTIES ───────────────────────────────────────────
@@ -3911,7 +4054,39 @@
       commitFixtureEdits(items.map(f => ({ item: f, patch: { depth: feet } })));
       return null;
     }));
-    // A SINK BASE'S BOWLS (Movie, 24 Oct: "add double sink right bowl
+    // A SINK IN THE CABINET OR NOT (jb, 27 Nov 2026: "allow the user to
+    // either ADD a sink to a CABINET or REMOVE a sink from a SINK CABINET").
+    // The two are one piece with the sink on or off: the kind changes in
+    // place, same width, depth and spot on the wall, one UNDO.
+    const sinkOn = items.every(f => f.kind === 'sinkbase'), sinkOff = items.every(f => f.kind === 'cabinet');
+    if (sinkOn || sinkOff) {
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.sinkToggle = sinkOn ? 'remove' : 'add';
+      btn.textContent = sinkOn ? 'REMOVE SINK' : 'ADD SINK';
+      btn.title = sinkOn ? 'Take the sink out: this becomes a plain CABINET (UNDO puts it back)'
+        : 'Drop a sink into this cabinet: it becomes a SINK CABINET (UNDO takes it out)';
+      btn.addEventListener('click', () => commitFixtureEdits(items.map(f => ({ item: f,
+        patch: sinkOn ? { kind: 'cabinet', bowls: null } : { kind: 'sinkbase' } }))));
+      row.append(btn);
+      box.append(row);
+    }
+    // WHICH SINK (jb, 27 Nov 2026: "allow them to change it later in OBJ
+    // PROP"): any sink can be any other, in place -- same width, depth and
+    // spot on the wall. Only the drop-in and the apron sink have BOWLS, so
+    // the others shed theirs.
+    const SINKS = window.DraftFixtureKinds?.SINK_KIND_IDS || [];
+    if (SINKS.length && items.every(f => SINKS.includes(f.kind))) {
+      box.append(propSelect('SINK TYPE', SINKS.map(id => [id, fixtureLabel({ kind: id })]),
+        agreedOn(items, f => f.kind), id => {
+          commitFixtureEdits(items.map(f => ({ item: f,
+            patch: { kind: id, ...(id === 'sink' || id === 'sinkbase' ? {} : { bowls: null }) } })));
+        }));
+    }
+    // A SINK CABINET'S BOWLS (Movie, 24 Oct: "add double sink right bowl
     // option"): one bowl, two equal, or two with the bigger, 60/40, on the
     // right. The equal double is what a sink base always was.
     const R2 = window.DraftRender2D;
@@ -3929,6 +4104,16 @@
       box.append(propSelect('UPPERS', [['on', 'ON'], ['off', 'OFF']],
         agreedOn(items, f => (f.uppers === false ? 'off' : 'on')), id => {
           commitFixtureEdits(items.map(f => ({ item: f, patch: { uppers: id === 'off' ? false : null } })));
+        }));
+    }
+    // WHICH SIDE IS ON THE WALL (jb, 27 Nov 2026: "once its placed also have
+    // an option in the OBJ PROP to allow the user to repostion to R / L or
+    // BACK when its already stuck"). A piece on a wall that can stand on
+    // its side; one UNDO puts the old side back.
+    if (FG?.canAttachSide && items.every(f => f.wallId != null && FG.canAttachSide(f))) {
+      box.append(propRow('ATTACH TO', [['back', 'BACK'], ['left', 'L'], ['right', 'R']],
+        agreedOn(items, f => FG.attachOf(f)), id => {
+          if (setFixtureAttach(items, id)) renderObjProp();
         }));
     }
     if (items.every(f => f.kind === 'island')) {
@@ -4220,6 +4405,53 @@
         + (dim.auto ? ' \u00b7 AUTO' : ' \u00b7 HAND');
       box.append(row);
     });
+    // TYPE THE FIGURE AND WHAT IT MEASURES MOVES (jb, 27 Nov 2026: "could
+    // you allow the user to type in and change the dimension and move the
+    // window to that new dimension. in the OBJ PROP"). One dimension only;
+    // ENTER runs the same driveDimension the LENGTH box does, so the two
+    // boxes can never disagree -- a window or door slides along its wall, its
+    // own width resizes it, and anything else moves as the LENGTH box moves it.
+    if (dims.length === 1) {
+      const dim = dims[0];
+      const ft = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+      const sTitle = document.createElement('div');
+      sTitle.className = 'props-title';
+      sTitle.textContent = 'SET TO';
+      box.append(sTitle);
+      const sRow = document.createElement('div');
+      sRow.className = 'chip-row';
+      const field = document.createElement('input');
+      field.type = 'text';
+      field.className = 'roof-field';
+      field.dataset.dimSetTo = '';
+      field.style.width = '8em';
+      field.value = feetLabel(ft);
+      field.title = 'Type a length (6, 6-0 1/2, 72", 1.83m) and press ENTER: the window, door or wall at one end moves to make it so';
+      const go = () => {
+        const parsed = readLength(field.value);
+        if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+        if (driveDimension(parsed.inches / 12, dim)) { showSelectionProps(); renderObjProp(); }
+        else field.value = feetLabel(ft);
+      };
+      field.addEventListener('keydown', ev => {
+        ev.stopPropagation();
+        if (ev.key === 'Enter') { ev.preventDefault(); go(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); field.value = feetLabel(ft); field.blur(); }
+      });
+      const set = document.createElement('button');
+      set.type = 'button';
+      set.className = 'sel-chip';
+      set.dataset.dimSetGo = '';
+      set.textContent = 'SET';
+      set.addEventListener('click', go);
+      sRow.append(field, set);
+      box.append(sRow);
+      const sHint = document.createElement('div');
+      sHint.className = 'sel-help';
+      sHint.dataset.propRow = 'set-to-hint';
+      sHint.textContent = 'THE WINDOW OR DOOR MOVES; THE WALL CORNER STAYS';
+      box.append(sHint);
+    }
     const title = document.createElement('div');
     title.className = 'props-title';
     title.textContent = 'UNITS';

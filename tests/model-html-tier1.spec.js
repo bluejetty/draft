@@ -341,6 +341,7 @@ test.describe('MODEL.html tier 1', () => {
       // a shape, which is exactly the reading the note above says was
       // missing. The roof patterns stay off: nothing on this page asks.
       './finish-patterns.js',
+      './finish-settings-panel.js',   // jb, 27 Nov 2026: FINISH THICKNESS & TEXTURE on OBJ / PROP
       // AND THE ROOF PATTERNS ARE BACK TOO, WITH THEIR READING (jb, 26 Nov
       // 2026: "can you show the ext finish that is applied in the model area
       // too ?"): E1-E4 ask cut-view for `finishes` now, and its paintRoof

@@ -1695,6 +1695,7 @@ if (!window.DraftRender2D) {
     if (env.meldCounters === true) return;
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo || geo.tub) return;
+    if (geo.piece) return;
     const dirC = geo.frontOff >= geo.backOff ? 1 : -1;
     const depth = Math.min(upperDepthFt(fixture), Math.abs(geo.frontOff - geo.backOff));
     const front = geo.backOff + dirC * depth;
@@ -2408,8 +2409,9 @@ if (!window.DraftRender2D) {
         && (o.side === -1 ? -1 : 1) === (fx.side === -1 ? -1 : 1))
         .map(o => env.fixtureGeometry(o)).filter(Boolean).map(g => [g.alongStart, g.alongEnd]);
       list.forEach(fx => {
-        const geo = env.fixtureGeometry(fx);
-        const cuts = spansOn(fx, NO_COUNTER_KINDS);
+        const wallGeo = env.fixtureGeometry(fx);
+        const geo = asPiece(wallGeo);
+        const cuts = wallGeo && wallGeo.piece ? [] : spansOn(fx, NO_COUNTER_KINDS);
         counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT, cuts));
         if (typeof env.hasUppers === 'function' && env.hasUppers(fx)) uppers.push(...upperRings(fx, geo, upperCutsOn(fx, list, env)));
       });
@@ -2454,8 +2456,15 @@ if (!window.DraftRender2D) {
     return fixture.bowls
       || (fixture.kind === 'sink' && (Number(fixture.width) || 0) <= 2.2 ? 'single' : 'double');
   }
-  // `inset` set, the bowls fill the piece to that margin (the drop-in SINK);
-  // unset, they are the sink base's, centred at most 18" each.
+  // `inset` set, the bowls fill the piece to that margin (the SINK APRON);
+  // unset, they are the SINK CABINET's, inside a drop-in sink centred on the
+  // cabinet (jb, 27 Nov 2026: "a smaller sink size that will be dropped into
+  // a CABINET"): 33" wide for a double, 25" for a single, never closer than
+  // 3" to the cabinet's ends -- so a 36" cabinet takes a 30" double and the
+  // box always shows round it -- the bowls 1 1/2" inside its rim and 2"
+  // apart. `rim` is the sink's own span along the wall.
+  const SINK_RIM_DOUBLE_FT = 33 / 12, SINK_RIM_SINGLE_FT = 25 / 12;
+  const SINK_RIM_DEPTH_FT = 22 / 12, SINK_LIP_FT = 1.5 / 12, SINK_DIVIDER_FT = 2 / 12, SINK_END_FT = 3 / 12;
   function sinkBowlSpans(a0, a1, bowls, leftIsLow, inset) {
     if (inset != null) {
       const lo = a0 + inset, hi = a1 - inset, w = hi - lo;
@@ -2464,23 +2473,22 @@ if (!window.DraftRender2D) {
       return { spans: [[lo, cut - 0.05], [cut + 0.05, hi]],
         mark: bowls === 'right' ? (leftIsLow ? 1 : 0) : (leftIsLow ? 0 : 1) };
     }
-    const mid = (a0 + a1) / 2, w = a1 - a0;
-    if (bowls === 'single') {
-      const h = Math.max(0.2, Math.min(1.25, w / 2 - 0.25));
-      return { spans: [[mid - h, mid + h]], mark: 0 };
-    }
-    const half = Math.max(0.1, Math.min(0.75, w / 4 - 0.05));
-    const total = 4 * half, s0 = mid - 2 * half - 0.04;
-    if (bowls === 'right') {
-      const small = 0.4 * total, big = 0.6 * total;
-      const first = leftIsLow ? small : big;
-      return { spans: [[s0, s0 + first], [s0 + first + 0.08, s0 + total + 0.08]], mark: leftIsLow ? 1 : 0 };
-    }
-    return { spans: [[s0, mid - 0.04], [mid + 0.04, s0 + total + 0.08]], mark: leftIsLow ? 0 : 1 };
+    const mid = (a0 + a1) / 2;
+    const rimW = Math.max(0.5, Math.min(bowls === 'single' ? SINK_RIM_SINGLE_FT : SINK_RIM_DOUBLE_FT, (a1 - a0) - 2 * SINK_END_FT));
+    const rim = [mid - rimW / 2, mid + rimW / 2];
+    const lo = rim[0] + SINK_LIP_FT, hi = rim[1] - SINK_LIP_FT, w = hi - lo;
+    if (bowls === 'single') return { spans: [[lo, hi]], mark: 0, rim };
+    const gap = Math.min(SINK_DIVIDER_FT, w / 6) / 2;
+    const cut = lo + w * (bowls === 'right' ? (leftIsLow ? 0.4 : 0.6) : 0.5);
+    return { spans: [[lo, cut - gap], [cut + gap, hi]],
+      mark: bowls === 'right' ? (leftIsLow ? 1 : 0) : (leftIsLow ? 0 : 1), rim };
   }
 
+  // A PIECE ATTACHED BY ITS SIDE (fixture-geometry's sideGeometry) is drawn
+  // by its own axes, so its symbol faces its front and not the wall.
+  const asPiece = geo => (geo && geo.piece ? { ...geo, ...geo.piece } : geo);
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
-    const geo = env.fixtureGeometry(fixture, wall);
+    const geo = asPiece(env.fixtureGeometry(fixture, wall));
     if (!geo) return;
     const P = (along, across) => toS(geo.frame.at(along, across));
     const poly = pts => {
@@ -2496,6 +2504,20 @@ if (!window.DraftRender2D) {
         const p = P(alongC + Math.cos(t) * ra, acrossC + Math.sin(t) * rc);
         if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
       }
+      ctx.closePath();
+    };
+    // A box with its corners rounded to `r` feet, for the drop-in sink.
+    const roundRect = (b0, b1, c0, c1, r) => {
+      const ra = Math.min(r, (b1 - b0) / 2), rc = Math.min(r, (c1 - c0) / 2);
+      const corners = [[b1 - ra, c1 - rc, 0], [b0 + ra, c1 - rc, 0.5], [b0 + ra, c0 + rc, 1], [b1 - ra, c0 + rc, 1.5]];
+      ctx.beginPath();
+      corners.forEach(([ca, cc, t0]) => {
+        for (let i = 0; i <= 6; i += 1) {
+          const t = (t0 + i / 12) * Math.PI;
+          const p = P(ca + Math.cos(t) * ra, cc + Math.sin(t) * rc);
+          ctx.lineTo(p.x, p.y);
+        }
+      });
       ctx.closePath();
     };
     const sa = P(0, 0), sb = P(1, 0);
@@ -2545,7 +2567,7 @@ if (!window.DraftRender2D) {
     // MELDED (env.meldCounters): a piece under the counter is its box filled
     // and stroked light, and drawCounters2D draws the counter over the lot.
     const melded = env.meldCounters === true && MELD_KINDS.includes(kind);
-    const joined = !melded && COUNTER_KINDS.includes(kind) ? counterJoints(fixture, geo, a0, a1, env) : null;
+    const joined = !melded && !geo.piece && COUNTER_KINDS.includes(kind) ? counterJoints(fixture, geo, a0, a1, env) : null;
     if (melded) {
       const c = kind === 'cornerbase' && geo.cornerAlong != null ? (geo.cornerAlong > geo.legAlong ? 1 : -1) : 0;
       const far = c > 0 ? a0 : a1;
@@ -2627,11 +2649,20 @@ if (!window.DraftRender2D) {
         ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
       }
       if (kind === 'sinkbase') {
-        // The bowls, centred: an equal double unless the piece says one bowl
-        // or the bigger on the right (sinkBowlSpans).
+        // THE DROP-IN SINK: its rim -- the hole in the counter -- centred on
+        // the cabinet, the bowls inside it (an equal double unless the piece
+        // says one bowl or the bigger on the right, sinkBowlSpans), and a
+        // drain in each. The cabinet's own box and counter line stay round it.
         const left = viewerLeftIsLow(P, a0, a1, cBack, cFront);
-        sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left).spans.forEach(([b0, b1]) => {
-          rect(b0, b1, cMin + 0.25, cMax - 0.2); ctx.stroke();
+        const sink = sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left);
+        const rimD = Math.max(0.3, Math.min(SINK_RIM_DEPTH_FT, (cMax - cMin) - 2 / 12));
+        const r0 = mid - rimD / 2, r1 = mid + rimD / 2;
+        roundRect(sink.rim[0], sink.rim[1], r0, r1, 1.5 / 12); ctx.stroke();
+        sink.spans.forEach(([b0, b1]) => {
+          const c0 = r0 + SINK_LIP_FT, c1 = r1 - SINK_LIP_FT;
+          roundRect(b0, b1, c0, c1, 2 / 12); ctx.stroke();
+          // The drain toward the back, clear of the size mark at the middle.
+          oval((b0 + b1) / 2, (c0 + c1) / 2 - dirC * (c1 - c0) * 0.25, 1.75 / 12, 1.75 / 12); ctx.stroke();
         });
       }
     } else if (kind === 'tallcab') {
@@ -2645,6 +2676,29 @@ if (!window.DraftRender2D) {
       sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left, inset).spans.forEach(([b0, b1]) => {
         rect(b0, b1, cMin + inset, cMax - inset); ctx.stroke();
       });
+    } else if (kind === 'laundrysink') {
+      // THE LAUNDRY TUB: one deep bowl inside its rim, a ledge at the back
+      // for the faucet, and the drain.
+      const lip = Math.min(2 / 12, (a1 - a0) / 6), back = Math.min(3.5 / 12, (cMax - cMin) / 4);
+      const b0 = a0 + lip, b1 = a1 - lip;
+      const c0 = cBack + dirC * back, c1 = cFront - dirC * lip;
+      roundRect(b0, b1, Math.min(c0, c1), Math.max(c0, c1), 2.5 / 12); ctx.stroke();
+      oval((b0 + b1) / 2, (c0 + c1) / 2, 1.75 / 12, 1.75 / 12); ctx.stroke();
+    } else if (kind === 'mopsink') {
+      // THE MOP SINK: a basin at the floor inside its curb, the floor of it
+      // falling to the drain -- drawn as the lines from its corners in.
+      const curb = Math.min(3 / 12, (a1 - a0) / 5, (cMax - cMin) / 5);
+      const b0 = a0 + curb, b1 = a1 - curb, c0 = cMin + curb, c1 = cMax - curb;
+      rect(b0, b1, c0, c1); ctx.stroke();
+      const ac = (b0 + b1) / 2, cc = (c0 + c1) / 2, r = 1.75 / 12;
+      oval(ac, cc, r, r); ctx.stroke();
+      ctx.beginPath();
+      [[b0, c0], [b1, c0], [b1, c1], [b0, c1]].forEach(([ea, ec]) => {
+        const len = Math.hypot(ac - ea, cc - ec) || 1;
+        const p = P(ea, ec), q = P(ac - (ac - ea) * r / len, cc - (cc - ec) * r / len);
+        ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
+      });
+      ctx.stroke();
     } else if (kind === 'stove') {
       const w = a1 - a0, d = cMax - cMin;
       [[0.28, 0.3], [0.72, 0.3], [0.28, 0.7], [0.72, 0.7]].forEach(([fa, fc]) => {
@@ -4787,7 +4841,111 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // ── MASONRY ON THE PLAN (jb, 27 Nov 2026) ──────────────────────────────
+  //
+  // A plan is cut about four feet up, and what it cuts through outside an
+  // outside wall is the cladding. Siding and stucco are half an inch, which no
+  // plan scale shows and no drafter draws; brick and stone are two to five
+  // inches and are drawn, as a second line outside the wall with the space
+  // between hatched. So: any finish 2" or thicker that the wall wears at the
+  // cut height (its base or a band reaching it), from the wall's outside
+  // face outward, its own thickness (the house's, wall-types.js finishById).
+  //
+  // THE OUTSIDE IS THE REFERENCE LINE: an outside wall keeps its drawn line
+  // on its exterior face (refLine 'left' / 'right'); a centre-line partition
+  // wears none. At an OUTSIDE corner the veneer runs on past the wall's end by
+  // its own thickness so the two meet square; at an inside corner it stops.
+  const VENEER_MIN_IN = 2;
+  const PLAN_CUT_FT = 4;
+  const PLAN_SILL_FT = -1.1;   // under the floor package, where the cladding starts
+  function drawFinishVeneer2D(ctx, toS, walls, env, openings) {
+    const WT = window.DraftWallTypes;
+    if (!WT || !WT.finishAtFt || !Array.isArray(walls)) return;
+    const list = walls.filter(w => w && w.start && w.end && (w.view || 'plan') === 'plan'
+      && (w.refLine === 'left' || w.refLine === 'right'));
+    if (!list.length) return;
+    const colors = (env && env.colors) || {};
+    const edge = colors.wallEdge || '#1d1f20';
+    const same = (a, b) => Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.z - b.z) < 1e-3;
+    list.forEach(wall => {
+      const top = Number(wall.topHeight) > 0 ? Number(wall.topHeight) : 8;
+      const lines = { sill: PLAN_SILL_FT, plate: top, head: top };
+      if (PLAN_CUT_FT >= top) return;
+      const f = WT.finishAtFt(wall, PLAN_CUT_FT, lines);
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (!(len > 0.01)) return;
+      // A band that does not reach this part of the wall (its side insets)
+      // is not cut here; the cut is taken at the wall's middle.
+      let id = f.id;
+      if (f.band && WT.bandSpan) {
+        const sp = WT.bandSpan(f.band, 0, len);
+        if (!sp || sp.lo > 0.01 || sp.hi < len - 0.01) id = wall.finish || WT.DEFAULT_FINISH_ID;
+      }
+      const finish = WT.finishById(id);
+      const thIn = Number(finish.thicknessIn) || 0;
+      if (thIn < VENEER_MIN_IN) return;
+      const th = thIn / 12;
+      const ux = (wall.end.x - wall.start.x) / len, uz = (wall.end.z - wall.start.z) / len;
+      const nx = -uz, nz = ux;
+      const shift = WT.wallLineShiftFt ? WT.wallLineShiftFt(wall) : 0;
+      // The body runs +n from a 'left' line and -n from a 'right' one; the
+      // veneer runs the other way from the face.
+      const out = wall.refLine === 'left' ? -1 : 1;
+      const face = shift;   // the line, moved with the body if offset
+      const body = -out;
+      const outsideCornerAt = end => {
+        const far = list.concat(walls).find(o => o !== wall && o && o.start && o.end
+          && o.levelId === wall.levelId && (o.view || 'plan') === (wall.view || 'plan')
+          && (same(o.start, end) || same(o.end, end)));
+        if (!far) return false;
+        const other = same(far.start, end) ? far.end : far.start;
+        const along = (other.x - end.x) * nx + (other.z - end.z) * nz;
+        return along * body > 0.05;   // it turns towards the body: an outside corner
+      };
+      const extA = outsideCornerAt(wall.start) ? th : 0;
+      const extB = outsideCornerAt(wall.end) ? th : 0;
+      const at = (t, off) => toS({ x: wall.start.x + ux * t + nx * off, z: wall.start.z + uz * t + nz * off });
+      const o0 = face, o1 = face + out * th;
+      // CUT AT EVERY DOOR AND WINDOW in the wall, the way the wall is.
+      const holes = (Array.isArray(openings) ? openings : [])
+        .filter(o => o && o.wallId === wall.id && Number(o.width) > 0)
+        .map(o => [Number(o.offset) - Number(o.width) / 2, Number(o.offset) + Number(o.width) / 2])
+        .sort((x, y) => x[0] - y[0]);
+      const pieces = [];
+      let t = -extA;
+      holes.forEach(([h0, h1]) => { if (h0 > t + 0.01) pieces.push([t, h0]); t = Math.max(t, h1); });
+      if (len + extB > t + 0.01) pieces.push([t, len + extB]);
+      pieces.forEach(([ta, tb]) => {
+        const pts = [at(ta, o0), at(tb, o0), at(tb, o1), at(ta, o1)];
+        ctx.save();
+        ctx.beginPath();
+        pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+        ctx.closePath();
+        ctx.fillStyle = colors.wall || '#ffffff';
+        ctx.fill();
+        ctx.save();
+        ctx.clip();
+        // Masonry's section hatch: close diagonals.
+        const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
+        const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+        ctx.strokeStyle = edge; ctx.globalAlpha = 0.45; ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (let k = x0 - (y1 - y0); k < x1; k += 4) { ctx.moveTo(k, y1); ctx.lineTo(k + (y1 - y0), y0); }
+        ctx.stroke();
+        ctx.restore();
+        ctx.strokeStyle = edge; ctx.lineWidth = 1;
+        ctx.beginPath();
+        // The outer line and the two ends; the inner line is the wall's own.
+        ctx.moveTo(pts[0].x, pts[0].y);
+        [3, 2, 1].forEach(i => ctx.lineTo(pts[i].x, pts[i].y));
+        ctx.stroke();
+        ctx.restore();
+      });
+    });
+  }
+
   window.DraftRender2D = Object.freeze({
+    drawFinishVeneer2D,
     snapCounterOffset,
     drawCounters2D,
     drawWallSeg2D,

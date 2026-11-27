@@ -410,6 +410,63 @@
     e.stopImmediatePropagation();
     editStairWidthAt(mark, e.clientX, e.clientY);
   });
+  // A DIMENSION'S FIGURE, TYPED ON THE PLAN (jb, 27 Nov 2026: "if the user
+  // clicks directly on the dimension text it would be cool to change it
+  // directly there too"). A double-click on a dimension opens a box over the
+  // figure; ENTER runs driveDimension -- the same as the LENGTH box and OBJ /
+  // PROP's SET TO -- and Esc or a click away leaves it. A double-click, not a
+  // click: one click picks the dimension, and a second on the same spot
+  // steps down to what is under it, so the dimension is taken back first.
+  const editDimensionAt = (dim, clientX, clientY) => {
+    document.getElementById('dim-figure-edit')?.remove();
+    const box = document.createElement('input');
+    box.type = 'text';
+    box.id = 'dim-figure-edit';
+    box.dataset.dimFigureEdit = '';
+    const was = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+    box.value = feetLabel(was);
+    box.title = 'Type the new figure and press ENTER (Esc leaves it)';
+    box.style.cssText = `position:fixed;left:${clientX - 55}px;top:${clientY - 14}px;width:110px;z-index:60;`
+      + 'font:inherit;text-align:center;padding:3px 4px;';
+    let done = false;
+    const settle = keep => {
+      if (done) return;
+      done = true;
+      const value = box.value;
+      box.remove();
+      if (keep && value.trim() && value.trim() !== feetLabel(was)) {
+        const parsed = readLength(value);
+        if (!parsed.ok) sayOnStrip(parsed.error);
+        else if ((drawing.dimensions || []).includes(dim)) driveDimension(parsed.inches / 12, dim);
+      }
+      showSelectionProps();
+      renderObjProp();
+      stripRefresh();
+      paint();
+    };
+    box.addEventListener('keydown', ev => {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { ev.preventDefault(); settle(true); }
+      if (ev.key === 'Escape') { ev.preventDefault(); settle(false); }
+    });
+    box.addEventListener('blur', () => settle(false));
+    document.body.appendChild(box);
+    box.focus();
+    box.select();
+  };
+  canvas.addEventListener('dblclick', e => {
+    if (!drawing || activeTool !== RESTING_TOOL || activeCut() || stairWorkspaceOn()) return;
+    if (!filterAllows('dimension')) return;
+    const rect = canvas.getBoundingClientRect();
+    const dim = dimensionAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+    if (!dim) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    moveDrag = null;
+    setSelection([{ type: 'dimension', item: dim }]);
+    paint();
+    editDimensionAt(dim, e.clientX, e.clientY);
+  });
   canvas.addEventListener('dblclick', e => {
     if (!drawing || activeTool !== RESTING_TOOL || activeCut() || stairWorkspaceOn()) return;
     const rect = canvas.getBoundingClientRect();
@@ -2760,6 +2817,9 @@
         Object.assign(item, before);
       });
       showSelectionProps();
+      // OBJ / PROP shows the piece in hand too: an undone ADD SINK must not
+      // leave the window calling it a SINK CABINET.
+      if (typeof renderObjProp === 'function') renderObjProp();
     } else if (step.kind === 'remove-items') {
       // Put back in the reverse of the order they came out, so every index
       // recorded at removal is the right one again when it is used.

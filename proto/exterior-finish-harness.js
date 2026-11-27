@@ -339,13 +339,13 @@ const MUTATIONS = [
     s => s.replace("const DEFAULT_FINISH_ID = 'stucco';",
       "const DEFAULT_FINISH_ID = 'brick';")],
   ['an unknown finish id answers nothing, so an old drawing cannot draw its walls',
-    s => s.replace("  const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)\n"
+    s => s.replace("  const stockFinishById = id => EXTERIOR_FINISHES.find(f => f.id === id)\n"
       + "    || EXTERIOR_FINISHES.find(f => f.id === LEGACY_FINISH_IDS[id])\n"
       + "    || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);",
-      '  const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id) || null;')],
+      '  const stockFinishById = id => EXTERIOR_FINISHES.find(f => f.id === id) || null;')],
   ['the fallback swallows a KNOWN id too, so every wall draws as stucco',
-    s => s.replace('  const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)',
-      '  const finishById = () => EXTERIOR_FINISHES.find(f => f.id === id)'.replace('id)', 'DEFAULT_FINISH_ID)')
+    s => s.replace('  const stockFinishById = id => EXTERIOR_FINISHES.find(f => f.id === id)',
+      '  const stockFinishById = () => EXTERIOR_FINISHES.find(f => f.id === id)'.replace('id)', 'DEFAULT_FINISH_ID)')
       + ' || (() => EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID))()')],
   ['stucco grows a pattern, so the ground the others read against is hatched too',
     s => s.replace("{ id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0.5,",
