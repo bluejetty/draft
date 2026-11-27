@@ -115,8 +115,21 @@ test('E2: the same, and no stray stubs where two faces meet flush', async ({ pag
   // right, and MAIN's floor package is the seven rows immediately above the
   // band's own bottom line -- which is the single light row the search just
   // handed back. Two offsets instead of two more window-bound constants.
-  expect(line.light.length, 'no band line to measure the floor package from').toBe(1);
-  const floor = line.light[0];
-  const band = await lightRows(page, line.x + 87, floor - 7, floor - 1);
-  expect(band.length, 'nothing drawn across the floor band here').toBe(7);
+  //
+  // AND WITH NO BREAK AT ALL (27 Nov 2026): once the floor strip is cut per
+  // wall plane (jb's jog took its neighbour's finish), the band's piece ends
+  // at the corner and the corner line runs through unbroken -- no light row
+  // to measure from. Then the whole column 87px over, from the top of the
+  // span down to the sill line, must be clear: band and wall, no stub.
+  if (line.light.length === 1) {
+    const floor = line.light[0];
+    const band = await lightRows(page, line.x + 87, floor - 7, floor - 1);
+    expect(band.length, 'nothing drawn across the floor band here').toBe(7);
+  } else {
+    const col = await lightRows(page, line.x + 87, SPAN[0], SPAN[1]);
+    const sill = SPAN[0] + col.findIndex((y, i) => y !== SPAN[0] + i);
+    // The band's rows sit ~20px over the sill line: a stub across them
+    // would end the clear run well short of it.
+    expect(sill - SPAN[0], 'nothing drawn across the floor band here').toBeGreaterThan(40);
+  }
 });

@@ -130,6 +130,18 @@ near('a typed WOOD FILL moves ENTRY with it', floor(typed, 2).floorBottom, -1.05
   const entryTop = Math.max(...fills.filter(f => f.pts.some(p => Math.abs(p.u + 4) < 6))
     .flatMap(f => f.pts.filter(p => p.u > -9.5 && p.u < 1.5).map(p => p.e)));
   near('a BILEVEL front: the entry\'s wall climbs to MAIN FL\'s ceiling', entryTop, 109.125 / 12, 0.1);
+
+  // AND IN ITS OWN PLANE. Since the floor strip is cut per wall plane (jb,
+  // 27 Nov 2026), the band over the entry above is the BACK wall's piece,
+  // and `uncovered` already keeps it off the nearer entry wall. The guard
+  // that reads walls running past this floor is still what holds when a
+  // MAIN wall is drawn in the entry's own plane, across it.
+  const across = { ...saved, walls: [front(3, 'mainL', -16, 2), ...saved.walls.slice(1)] };
+  const env2 = H.buildEnv(win, across);
+  const out2 = H.paintElevation(win, env2, H.standardElevationCuts(env2).find(c => c.id === 'E1'), {});
+  const band2 = u => (out2.modelFills || []).filter(f => f.ink === '#fff' && spans(f, u, -1.2, 0.2)).length;
+  near('a BILEVEL front: a MAIN wall in the entry\'s plane bands its own stretch', band2(-13) > 0 ? 1 : 0, 1);
+  near('a BILEVEL front: but not across the entry\'s wall in that plane', band2(-4) > 0 ? 1 : 0, 0);
 }
 
 // ── THE MOD BILEVEL'S GARAGE, ON ITS OWN BEAM AND UNDER ITS OWN ROOF ─────

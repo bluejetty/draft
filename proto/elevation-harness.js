@@ -86,8 +86,14 @@ const MUTATIONS = [
   ['the sky above a roof is cut short', 'cut-view.js',
     c => c.replace('  const SKY_ABOVE_ROOF_FT = 10;', '  const SKY_ABOVE_ROOF_FT = 0;')],
   // Movie, 12 Oct -- the last block in this file.
-  ['a band joint takes the first wall listed there, not the nearest', 'cut-view.js',
-    c => c.replace('else if (span.depth > edges.get(key)) edges.set(key, span.depth);', '')],
+  // RETIRED 27 Nov 2026: 'a band joint takes the first wall listed there,
+  // not the nearest'. Its crease broke because ONE strip ran across the
+  // joint at the nearest wall's depth and hid an edge recorded deeper. The
+  // strip is now cut per wall plane (jb, a jog taking its neighbour's
+  // finish), so no band of the floor spans a joint between two planes and
+  // the edge shows whichever wall claims it -- the E4 2 STOREY + ROOM OVER
+  // crease checks below still hold that the line is drawn. The nearest rule
+  // is kept in cut-view.js; it no longer changes a pixel of this drawing.
   ['a house\'s band on its sill paints its plate top out again', 'cut-view.js',
     c => c.replace('const onSill = Math.abs(level.floorBottom - fdn.wallTop) < 0.01;',
       'const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;')],

@@ -53,6 +53,14 @@ const MUTANTS = [
     find: "            if (by > 0 && Number.isFinite(at) && at + next >= lines.head - 0.01) {",
     with: "            if (false) {",
     test: "nudging a band" },
+  { file: "cut-view.js", name: "the floor strip is one piece per run again, at the nearest depth", spec: 'tests/ext-finish-siding-gaps.spec.js',
+    find: "      runs.forEach(whole => planesOf(whole).forEach(run => {",
+    with: "      runs.forEach(whole => [{ ...whole, depth: Math.max(...spans.filter(sp => sp.hi > whole.lo && sp.lo < whole.hi).map(sp => sp.depth)) }].forEach(run => {",
+    test: "the floor strip takes the finish" },
+  { file: "cut-view.js", name: "the floor strip is cut at a jog but not where the finish changes", spec: 'tests/ext-finish-siding-gaps.spec.js',
+    find: "            || (Math.abs(last.depth - depth) < 0.05 && last.skin === skin))) last.hi = cuts[i + 1];",
+    with: "            || (Math.abs(last.depth - depth) < 0.05))) last.hi = cuts[i + 1];",
+    test: "the floor strip takes the finish" },
 ];
 
 const run = (name, spec) => {
