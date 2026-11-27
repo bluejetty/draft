@@ -500,7 +500,7 @@ if (!window.DraftDrawingFormat) {
   // the island's near edge, so it stands free of the wall but still rides it.
   // The last five are Movie's kitchen pieces (KITCHENITEMS1/2.DXF, 9 Oct).
   const SINK_BOWLS = ['single', 'double', 'right'];
-  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'sinkbase', 'drawerbase', 'doorbase', 'cornerbase', 'tallcab', 'fridge30', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet', 'pedestal', 'pedestal30'];
+  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'sinkbase', 'drawerbase', 'doorbase', 'cornerbase', 'tallcab', 'fridge30', 'washer', 'dryer', 'fireplace', 'toilet', 'tub', 'shower', 'stall', 'closet', 'pedestal', 'pedestal30'];
   // `env.drops` like walls, lines, floors and dimensions: a refused record is
   // REPORTED rather than silently gone. MODEL.html re-emits what it refused
   // on save (withRefused), so without this sink a caller that normalises
@@ -559,6 +559,11 @@ if (!window.DraftDrawingFormat) {
         // ITS UPPERS SWITCHED OFF (Movie, 24 Oct: "allow the lower cabinets
         // to turn on or off upper cabinet"). Only OFF is written; no key is ON.
         ...(fixture?.uppers === false ? { uppers: false } : {}),
+        // A FIREPLACE'S OPENING (the glass, along the wall) and THRESHOLD
+        // (the hearth strip in front, 0 for none) -- jb, 27 Nov 2026. No key
+        // is the catalogue's 3'-0" and 4".
+        ...(kind === 'fireplace' && positive(fixture?.opening, null) != null ? { opening: positive(fixture.opening, null) } : {}),
+        ...(kind === 'fireplace' && num(fixture?.hearth) !== null && num(fixture.hearth) >= 0 ? { hearth: num(fixture.hearth) } : {}),
       };
     }), env.drops).filter(Boolean);
 

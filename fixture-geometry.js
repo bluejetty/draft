@@ -62,7 +62,7 @@ if (!window.DraftFixtureGeometry) {
   // wall (settleWallGaps). A toilet, an island (its aisle is its standoff)
   // and a closet (its own walls) take none.
   const WALL_GAP_FT = 0.5 / 12;
-  const NO_WALL_GAP = new Set(['toilet', 'island', 'closet']);
+  const NO_WALL_GAP = new Set(['toilet', 'island', 'closet', 'fireplace']);
   const wallGapOf = fixture => (!fixture || NO_WALL_GAP.has(fixture.kind) || (Number(fixture.standoff) || 0) > 0
     ? 0 : WALL_GAP_FT);
   // ROOM BEHIND THE LAUNDRY (Movie, 25 Oct: "the LAUDRY Washer and Dryer,
@@ -419,7 +419,44 @@ if (!window.DraftFixtureGeometry) {
     return out.map(p => ({ x: p.x, z: p.z, end: p.end }));
   };
 
+  // ── THE FIREPLACE'S PARTS (jb, 27 Nov 2026) ──────────────────────────
+  //
+  // A gas unit on plan, as jb's construction set draws its GAS FP: the box
+  // against the wall, the FRAME (surround) round the opening at the front,
+  // the GLASS across the opening, the firebox tapering back from it, and a
+  // THRESHOLD (hearth) strip on the floor in front. The drafter sets the
+  // OPENING (glass width) and THRESHOLD (hearth depth, 0 for none) in OBJ /
+  // PROP; the rest follows from them and the box. Everything is in feet, the
+  // opening held inside the box less its frame so a narrowed box never draws
+  // glass past its own sides.
+  const FIREPLACE_OPENING_FT = 3;
+  const FIREPLACE_HEARTH_FT = 4 / 12;
+  const FIREPLACE_FRAME_FT = 3 / 12;       // the surround each side of the glass
+  const FIREPLACE_FRAME_DEPTH_FT = 2 / 12; // and its thickness at the front
+  const FIREPLACE_HEARTH_PAST_FT = 4 / 12; // the hearth runs past the frame each side
+  const fireplaceParts = fixture => {
+    const width = Math.max(0, Number(fixture?.width) || 0);
+    const depth = Math.max(0, Number(fixture?.depth) || 0);
+    const frame = Math.min(FIREPLACE_FRAME_FT, width / 6);
+    const asked = Number(fixture?.opening) > 0 ? Number(fixture.opening) : FIREPLACE_OPENING_FT;
+    const opening = Math.max(0, Math.min(asked, width - 2 * frame));
+    const hearthAsked = Number(fixture?.hearth);
+    const hearth = Number.isFinite(hearthAsked) && hearthAsked >= 0 ? hearthAsked : FIREPLACE_HEARTH_FT;
+    const frameDepth = Math.min(FIREPLACE_FRAME_DEPTH_FT, depth / 4);
+    // The firebox's back: half the opening, 3" in from the box's back.
+    const backInset = Math.min(3 / 12, depth / 5);
+    return {
+      width, depth, opening, frame, frameDepth, hearth, backInset,
+      fireboxBack: opening / 2,
+      hearthWidth: Math.min(width, opening + 2 * (frame + FIREPLACE_HEARTH_PAST_FT)),
+      maxOpening: Math.max(0, width - 2 * frame),
+    };
+  };
+
   window.DraftFixtureGeometry = Object.freeze({
+    fireplaceParts,
+    FIREPLACE_OPENING_FT,
+    FIREPLACE_HEARTH_FT,
     gapCorners,
     WALL_GAP_FT,
     snapToWallGap,

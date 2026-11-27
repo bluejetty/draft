@@ -3931,6 +3931,24 @@
           commitFixtureEdits(items.map(f => ({ item: f, patch: { uppers: id === 'off' ? false : null } })));
         }));
     }
+    // A FIREPLACE'S OPENING AND THRESHOLD (jb, 27 Nov 2026: "allow the user
+    // to change the dimensions in the 'OBJ' PROP/ area"): the glass width
+    // along the wall, held inside the box less its frame, and the hearth
+    // strip's depth in front -- 0 takes it away.
+    if (FG?.fireplaceParts && items.every(f => f.kind === 'fireplace')) {
+      box.append(field('OPENING', f => FG.fireplaceParts(f).opening, feet => {
+        if (!(feet > 0)) return 'The opening needs a width greater than zero.';
+        const tight = items.find(f => feet > FG.fireplaceParts(f).maxOpening + 1e-6);
+        if (tight) return `${sizeText(feet)} is wider than the fireplace less its frame (${sizeText(FG.fireplaceParts(tight).maxOpening)}).`;
+        commitFixtureEdits(items.map(f => ({ item: f, patch: { opening: feet } })));
+        return null;
+      }));
+      box.append(field('THRESHOLD', f => FG.fireplaceParts(f).hearth, feet => {
+        if (!(feet >= 0)) return 'The threshold is the hearth depth in front: zero or more.';
+        commitFixtureEdits(items.map(f => ({ item: f, patch: { hearth: feet } })));
+        return null;
+      }));
+    }
     if (items.every(f => f.kind === 'island')) {
       box.append(field('AISLE', f => Number(f.standoff) || 0, feet => {
         if (!(feet >= 0)) return 'The aisle is the clear run from the wall: zero or more.';

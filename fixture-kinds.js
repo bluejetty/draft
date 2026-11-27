@@ -107,6 +107,16 @@ if (!window.DraftFixtureKinds) {
       note: 'Dryer box — click it onto a wall.' },
     { id: 'closet',  label: 'CLOSET',  group: 'BEDROOM',  widthFt: 4,      depthFt: CLOSET_INSIDE_DEPTH_FT + CLOSET_WALL_FT, casework: false, run: true,
       note: 'Closet — two clicks along a wall set the width; 2\'-1" inside with 2x4 closet walls, rod + shelf, and the door picked from the DD/D ladder.' },
+    // THE FIREPLACE (jb, 27 Nov 2026: "i need a 'fireplace' ... 'attach'
+    // itself to a 2x4 or 2x6 wall so the front will show the opening and
+    // frame / glass and small threshold and allow the user to change the
+    // dimensions in the 'OBJ' PROP/ area"). A gas unit drawn the way jb's
+    // construction set draws its GAS FP: a 5'-0" box 1'-7" deep against the
+    // room face of any wall, firebox and glass inside, a hearth strip in
+    // front. Its OPENING and THRESHOLD are its own (fixture-geometry.js
+    // fireplaceParts); it sits tight to the framing, no half inch.
+    { id: 'fireplace', label: 'FIREPLACE', group: 'LIVING', widthFt: 5, depthFt: 19 / 12, casework: false, run: false,
+      note: 'Gas fireplace — click it onto a 2x4 or 2x6 wall; the front faces the room with the opening, frame, glass and threshold. Change WIDTH, DEPTH, OPENING and THRESHOLD in OBJ / PROP.' },
   ];
 
   // The old page's own fallback, carried with it: an unknown id answers with
