@@ -1665,6 +1665,9 @@ const SHELF_PIF = 1 / 4;
 // even; SITE and ROOF sit outside it). It is the level the AUTOSITE rectangle
 // is filed on, so the two pages put the lot in the same place.
 const SITE_LEVEL_ID = 8;
+const ROOF_LEVEL_ID = 7;
+// THE PADLOCK on a lockable plan's frame, in screen pixels (jb, 27 Nov 2026).
+const LOCK_ICON_PX = 14;
 
 class Component extends PageLogic {
   state = {
@@ -1846,6 +1849,8 @@ class Component extends PageLogic {
         return;
       }
       if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
+      // Two quick presses on a padlock are two lock presses, not EDIT IN MODEL.
+      if (this._lockIconAt(pt)) { e.preventDefault(); return; }
       const hit = this._viewportAt(pt);
       if (!hit) return;
       this._draggingViewport = null;
@@ -1966,6 +1971,10 @@ class Component extends PageLogic {
       // Anything on the sheets -- a dealt set, a viewport placed by hand --
       // loads exactly as saved.
       if (this.state.auto || this._blankOverHouse()) this._composeDefaultSet();
+      // A SET LAID OUT BEFORE THE LOCK, or one whose house has changed since,
+      // comes in lined up: each locked plan's drawing slides inside its
+      // window onto the group's spot. Saved with the next change.
+      else this.state.viewports = this._alignLocked();
       this._fitPaper();
       this._draw();
       // The sheet as it arrived is the state the first change undoes TO.
@@ -2521,6 +2530,258 @@ class Component extends PageLogic {
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
   }
 
+  // ── THE PLAN LOCK (jb, 27 Nov 2026) ──────────────────────────────────────
+  //
+  // "all the same scale plans (usually floor plans / floor layouts,
+  // foundation, and basement plan) ... can you make a LOCK that starts
+  // default LOCKED for all these viewport windows and has them all lined up
+  // perfectly. if the user need to move it they all move and stay lined up
+  // perfectly on each page (or ... unlock a page to move it as needed (if
+  // they press lock again go back to the position of the other LOCKED items
+  // or if none, lock the next item based on its position". Not the site,
+  // roof or electric plans, and not elevations or sections.
+  //
+  // LINED UP = REGISTERED: one point of the house sits on the same paper
+  // point on every locked sheet, so the sheets flip over one another. A plan
+  // is drawn with its bounds' centre on xIn / yIn (_drawViewport), so the
+  // paper point of the model's origin -- xIn - cx * pif -- is what the
+  // locked plans share. Nothing new is kept for it: `unlocked: true` marks
+  // the exception, absent is locked, and the group's spot is read off its
+  // first member (sheet order) whenever it is wanted.
+  //
+  // ONE PER SHEET: two plans on one sheet registered would draw on top of
+  // each other, so only a sheet's first lockable plan joins; the rest are
+  // free. ONE SCALE: a plan at another scale than the group's is free too.
+  _lockable(viewport, sheets = this.state.sheets) {
+    if (!viewport || viewport.kind !== 'plan' || viewport.source != null) return false;
+    const levelId = Number(viewport.levelId);
+    if (!(levelId > 0) || levelId === SITE_LEVEL_ID || levelId === ROOF_LEVEL_ID) return false;
+    const title = String(sheets?.[(viewport.sheet || 1) - 1]?.title || '');
+    if (/ELECTRIC/i.test(title)) return false;
+    return Boolean(this._planBounds(levelId));
+  }
+
+  // Where the model's origin lands on the paper for this plan.
+  _lockOrigin(viewport) {
+    const b = this._planBounds(viewport.levelId);
+    return { xIn: viewport.xIn - (b.minX + b.maxX) / 2 * viewport.pif,
+      yIn: viewport.yIn - (b.minZ + b.maxZ) / 2 * viewport.pif };
+  }
+
+  // The locked group as the list stands: { ids, pif, origin } or null.
+  // Its spot is its first member's, in sheet order then list order.
+  _lockGroup(viewports = this.state.viewports, sheets = this.state.sheets, exceptId = null) {
+    const candidates = viewports
+      .map((viewport, at) => ({ viewport, at }))
+      .filter(({ viewport }) => viewport.id !== exceptId && viewport.unlocked !== true
+        && this._lockable(viewport, sheets))
+      .sort((a, b) => ((a.viewport.sheet || 1) - (b.viewport.sheet || 1)) || (a.at - b.at));
+    if (!candidates.length) return null;
+    const ref = candidates[0].viewport;
+    const ids = new Set();
+    const sheetsTaken = new Set();
+    candidates.forEach(({ viewport }) => {
+      const sheet = viewport.sheet || 1;
+      if (sheetsTaken.has(sheet) || Math.abs(viewport.pif - ref.pif) > 1e-9) return;
+      sheetsTaken.add(sheet);
+      ids.add(viewport.id);
+    });
+    return { ids, sheets: sheetsTaken, pif: ref.pif, origin: this._lockOrigin(ref) };
+  }
+
+  _isLocked(viewport) {
+    const group = this._lockGroup();
+    return Boolean(group && group.ids.has(viewport.id));
+  }
+
+  // The OTHER locked plans a press on this one carries along, as they stand
+  // at the press: [] for a plan that is not locked.
+  _lockMates(viewport) {
+    const group = this._lockGroup();
+    if (!group || !group.ids.has(viewport.id)) return [];
+    return this.state.viewports.filter(v => v.id !== viewport.id && group.ids.has(v.id))
+      .map(v => ({ id: v.id, xIn: v.xIn, yIn: v.yIn, crop: v.crop ? { ...v.crop } : null }));
+  }
+
+  // One plan put on the group's spot. KEEP THE WINDOW slides the drawing in
+  // its window the way a pan does (the set as it was laid out stays laid
+  // out); otherwise the whole viewport travels, window and all, which is
+  // what puts a moved-away sheet back where it was.
+  _lockShift(viewport, origin, keepWindow) {
+    const here = this._lockOrigin(viewport);
+    const dx = origin.xIn - here.xIn, dy = origin.yIn - here.yIn;
+    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return viewport;
+    const moved = { ...viewport, xIn: viewport.xIn + dx, yIn: viewport.yIn + dy };
+    if (!keepWindow) return moved;
+    const c = { l: 0, t: 0, r: 0, b: 0, ...(viewport.crop || {}) };
+    return { ...moved, crop: { l: c.l - dx, r: c.r + dx, t: c.t - dy, b: c.b + dy } };
+  }
+
+  // THE SET LINED UP: every member of the group on the group's spot.
+  // `origin` overrides the
+  // group's own spot (the deal centres the set on all its plans together).
+  _alignLocked(viewports = this.state.viewports, sheets = this.state.sheets, origin = null) {
+    const group = this._lockGroup(viewports, sheets);
+    if (!group) return viewports;
+    const spot = origin || group.origin;
+    // A WINDOW GROWN OR CROPPED (a dealt plan's is the whole sheet) stays
+    // where it was laid and the drawing slides in it; a window that is just
+    // its drawing's frame travels with the drawing, or the drawing would
+    // slide out of it.
+    return viewports.map(viewport => (group.ids.has(viewport.id)
+      ? this._lockShift(viewport, spot, Boolean(viewport.crop)) : viewport));
+  }
+
+  // THE DEAL'S SPOT: the locked plans' outlines together, centred where the
+  // first of them was centred -- so the set reads as one building, centred,
+  // and not on whichever storey came first.
+  _dealLockOrigin(viewports, sheets) {
+    const group = this._lockGroup(viewports, sheets);
+    if (!group) return null;
+    const members = viewports.filter(viewport => group.ids.has(viewport.id));
+    const box = members.reduce((acc, viewport) => {
+      const b = this._planBounds(viewport.levelId);
+      return { minX: Math.min(acc.minX, b.minX), maxX: Math.max(acc.maxX, b.maxX),
+        minZ: Math.min(acc.minZ, b.minZ), maxZ: Math.max(acc.maxZ, b.maxZ) };
+    }, { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+    const first = members[0];
+    return { xIn: first.xIn - (box.minX + box.maxX) / 2 * group.pif,
+      yIn: first.yIn - (box.minZ + box.maxZ) / 2 * group.pif };
+  }
+
+  // A NEW PLAN ON THE SET (placed or pasted): onto the group's spot if it
+  // can join, whole -- window and drawing -- since nothing was laid out for
+  // it yet. One that cannot join (another scale, or its sheet already has a
+  // locked plan) comes in unlocked, so its padlock says so.
+  _lockNewViewport(viewport, viewports = this.state.viewports) {
+    if (!this._lockable(viewport)) return viewport;
+    const group = this._lockGroup(viewports);
+    if (!group) return viewport;
+    if (Math.abs(group.pif - viewport.pif) > 1e-9 || group.sheets.has(viewport.sheet || 1)) {
+      return { ...viewport, unlocked: true };
+    }
+    return this._lockShift(viewport, group.origin, false);
+  }
+
+  // A NEW SCALE ON ONE PLAN: it leaves a group it can no longer line up
+  // with. Alone, it is the group, and stays locked.
+  _withScale(viewport, pif) {
+    const next = { ...viewport, pif };
+    if (!this._isLocked(viewport)) return next;
+    const rest = this._lockGroup(this.state.viewports, this.state.sheets, viewport.id);
+    return rest ? { ...next, unlocked: true } : next;
+  }
+
+  // LOCK / UNLOCK, from the padlock or the right-click menu. Locking again
+  // puts it back on the other locked plans' spot, whole, taking their scale
+  // (the lock is for plans at one scale); with none locked it stays where it
+  // is and is the spot the next one locks to.
+  _toggleLock(id) {
+    const viewport = this.state.viewports.find(v => v.id === id);
+    if (!viewport || !this._lockable(viewport)) return;
+    let viewports;
+    if (this._isLocked(viewport)) {
+      viewports = this.state.viewports.map(v => (v.id === id ? { ...v, unlocked: true } : v));
+    } else {
+      const { unlocked, ...rest } = viewport;
+      const group = this._lockGroup(this.state.viewports, this.state.sheets, id);
+      let next = rest;
+      if (group) {
+        // A sheet holds one locked plan: the one there now lets go.
+        const holder = this.state.viewports.find(v => v.id !== id && group.ids.has(v.id)
+          && (v.sheet || 1) === (viewport.sheet || 1));
+        next = this._relockTo({ ...rest, pif: group.pif }, group);
+        viewports = this.state.viewports.map(v => (v.id === id ? next
+          : holder && v.id === holder.id ? { ...v, unlocked: true } : v));
+      } else {
+        viewports = this.state.viewports.map(v => (v.id === id ? next : v));
+      }
+    }
+    this.setState({ viewports, selectedViewportId: id, auto: false }, () => { this._persistLayout(); this._draw(); });
+  }
+
+  // BACK ON THE GROUP'S SPOT. A window that is just its drawing's frame
+  // goes with the drawing. A grown one (a dealt plan's is the whole sheet)
+  // could have been moved by its border or panned inside while it was let
+  // go, so the drawing goes back on the spot and the window goes back where
+  // the other locked plans' windows are, when one of them is the same size
+  // -- the sheets are one paper, so that is where it was. Otherwise the
+  // window stays put.
+  _relockTo(viewport, group) {
+    if (!viewport.crop) return this._lockShift(viewport, group.origin, false);
+    const placed = this._lockShift(viewport, group.origin, true);
+    const mine = this._viewportRectIn(placed);
+    const twin = this.state.viewports.filter(v => group.ids.has(v.id)).map(v => this._viewportRectIn(v))
+      .find(r => Math.abs(r.wIn - mine.wIn) < 0.01 && Math.abs(r.hIn - mine.hIn) < 0.01);
+    if (!twin) return placed;
+    const nat = this._naturalRectIn(placed);
+    return { ...placed, crop: { l: twin.xIn - nat.xIn, t: twin.yIn - nat.yIn,
+      r: nat.xIn + nat.wIn - (twin.xIn + twin.wIn), b: nat.yIn + nat.hIn - (twin.yIn + twin.hIn) } };
+  }
+
+  // THE PADLOCK on a lockable plan's frame, top right inside it, in screen
+  // pixels so it reads the same at any zoom. Desk furniture: never printed.
+  _lockIconPx(viewport, view = this.state) {
+    const r = this._viewportRectIn(viewport);
+    const { zoom, panX, panY } = view;
+    const x1 = panX + (r.xIn + r.wIn) * zoom, y0 = panY + r.yIn * zoom;
+    return { x: x1 - LOCK_ICON_PX - 8, y: y0 + 8, w: LOCK_ICON_PX, h: LOCK_ICON_PX };
+  }
+
+  // A WINDOW TOO SMALL ON SCREEN FOR A PADLOCK BESIDE ITS DRAWING wears
+  // none: the padlock would cover the body a press pans or double-clicks.
+  // The right-click menu's LOCK / UNLOCK still reaches it.
+  _lockIconShown(viewport) {
+    if (!this._lockable(viewport)) return false;
+    const r = this._viewportRectIn(viewport);
+    const zoom = this.state.zoom || 1;
+    return r.wIn * zoom >= LOCK_ICON_PX * 5 && r.hIn * zoom >= LOCK_ICON_PX * 4;
+  }
+
+  // Which plan's padlock is under a sheet point, on the open sheet.
+  _lockIconAt(ptIn) {
+    const { zoom, panX, panY } = this.state;
+    const sx = panX + ptIn.xIn * zoom, sy = panY + ptIn.yIn * zoom;
+    const slack = 3;
+    return this._sheetViewports(this.state.activeSheet).slice().reverse().find(viewport => {
+      if (!this._lockIconShown(viewport)) return false;
+      const box = this._lockIconPx(viewport);
+      return sx >= box.x - slack && sx <= box.x + box.w + slack && sy >= box.y - slack && sy <= box.y + box.h + slack;
+    }) || null;
+  }
+
+  _paintLockIcon(ctx, viewport, locked) {
+    const box = this._lockIconPx(viewport);
+    const s = box.w;
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(box.x - 2, box.y - 2, s + 4, s + 4);
+    // Sheet ink when shut; the drafting blue when open, to be seen. Both
+    // are the painter's own allowed colours (proto/skinned-page-harness.js).
+    const ink = locked ? '#1d1f20' : '#5980a6';
+    ctx.strokeStyle = ink;
+    ctx.fillStyle = ink;
+    ctx.lineWidth = 1.6;
+    const bodyY = box.y + s * 0.45;
+    ctx.fillRect(box.x + s * 0.12, bodyY, s * 0.76, s * 0.55);
+    ctx.beginPath();
+    const cx = box.x + s / 2, r = s * 0.24;
+    if (locked) {
+      ctx.moveTo(cx - r, bodyY);
+      ctx.lineTo(cx - r, box.y + s * 0.3);
+      ctx.arc(cx, box.y + s * 0.3, r, Math.PI, 0);
+      ctx.lineTo(cx + r, bodyY);
+    } else {
+      // The shackle swung up and off to the right.
+      ctx.moveTo(cx + r, bodyY);
+      ctx.lineTo(cx + r, box.y + s * 0.22);
+      ctx.arc(cx + r * 2, box.y + s * 0.22, r, Math.PI, 0);
+      ctx.lineTo(cx + r * 3, box.y + s * 0.36);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // THE WINDOW, as the drafter has cropped or grown it (Movie, 1 Oct: "the
   // user should be allowed to adjust the window size and position of the
   // layouts on the page", and "the scale should stay the same unless they
@@ -2588,6 +2849,7 @@ class Component extends PageLogic {
     if (this.state.addingViewport) return '';
     const grip = this._cropHandleAt(ptIn);
     if (grip) return GRIP_CURSORS[grip.handle];
+    if (this._lockIconAt(ptIn)) return 'pointer';
     const hit = this._viewportAt(ptIn);
     if (!hit) return '';
     return this._viewportEdgeAt(hit, ptIn, e) ? 'move' : 'grab';
@@ -2959,9 +3221,12 @@ class Component extends PageLogic {
         y += tall(view) + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
       });
     });
+    const sheets = sheetPlan.map(({ title }) => ({ title, ...(ownByTitle.has(title) ? { titleblock: ownByTitle.get(title) } : {}) }));
+    // THE LOCKED PLANS LINED UP (jb, 27 Nov 2026), centred on all of them.
+    const lined = this._alignLocked(viewports, sheets, this._dealLockOrigin(viewports, sheets));
     this.setState({
-      viewports,
-      sheets: sheetPlan.map(({ title }) => ({ title, ...(ownByTitle.has(title) ? { titleblock: ownByTitle.get(title) } : {}) })),
+      viewports: lined,
+      sheets,
       nextViewportId: nextId,
       selectedViewportId: null,
       activeSheet: 1,
@@ -3881,6 +4146,11 @@ class Component extends PageLogic {
         holoOffCount ? `${holoOffCount} HOLOGRAM${holoOffCount === 1 ? '' : 'S'} OFF` : '',
       ].filter(Boolean).join(' · '), px.x + 16, px.y + 9);
     }
+    // THE PADLOCK (jb, 27 Nov 2026): blue and shut when the plan is locked
+    // to the others, orange and open when it moves on its own.
+    if (!opts.print && !opts.export && !opts.thumb && this._lockIconShown(viewport)) {
+      this._paintLockIcon(ctx, viewport, this._isLocked(viewport));
+    }
     // WHERE IT CAME FROM, on the desk only: a window from another file says
     // which, and when it was copied, so a stale one can be seen.
     const src = viewport.source != null ? this._sourceById(viewport.source) : null;
@@ -4144,7 +4414,7 @@ class Component extends PageLogic {
     const msg = document.querySelector('[data-edit-scale-msg]');
     if (msg) msg.textContent = `Now ${scaleLabelOf(pif)}.`;
     this.setState({
-      viewports: this.state.viewports.map(viewport => (viewport.id === id ? { ...viewport, pif } : viewport)),
+      viewports: this.state.viewports.map(viewport => (viewport.id === id ? this._withScale(viewport, pif) : viewport)),
       auto: false,
     }, () => { this._persistLayout(); this._draw(); });
   }
@@ -4374,6 +4644,13 @@ class Component extends PageLogic {
       e.preventDefault();
       return;
     }
+    // THE PADLOCK, before the frame it sits in.
+    const padlock = this._lockIconAt(ptIn);
+    if (padlock) {
+      e.preventDefault();
+      this._toggleLock(padlock.id);
+      return;
+    }
     const hit = this._viewportAt(ptIn);
     const t = this._titleHitIn;
     const pj = this._projectHitIn;
@@ -4392,7 +4669,8 @@ class Component extends PageLogic {
     }
     if (hit) {
       if (this._viewportEdgeAt(hit, ptIn, e)) {
-        this._draggingViewport = { id: hit.id, dxIn: hit.xIn - ptIn.xIn, dyIn: hit.yIn - ptIn.yIn };
+        this._draggingViewport = { id: hit.id, dxIn: hit.xIn - ptIn.xIn, dyIn: hit.yIn - ptIn.yIn,
+          from: ptIn, mates: this._lockMates(hit) };
       } else {
         // PAN THE DRAWING, NOT THE WINDOW. The drawing is laid out on the
         // natural frame and clipped to the window (_viewportRectIn), so the
@@ -4404,6 +4682,7 @@ class Component extends PageLogic {
         this._panningViewport = {
           id: hit.id, from: ptIn, xIn: hit.xIn, yIn: hit.yIn,
           crop: { l: 0, t: 0, r: 0, b: 0, ...(hit.crop || {}) },
+          mates: this._lockMates(hit),
         };
         this._canvas.style.cursor = 'grabbing';
       }
@@ -4447,8 +4726,16 @@ class Component extends PageLogic {
       const pan = this._panningViewport;
       const dx = ptIn.xIn - pan.from.xIn, dy = ptIn.yIn - pan.from.yIn;
       const crop = { l: pan.crop.l - dx, r: pan.crop.r + dx, t: pan.crop.t - dy, b: pan.crop.b + dy };
-      this.state.viewports = this.state.viewports.map(viewport =>
-        (viewport.id === pan.id ? { ...viewport, xIn: pan.xIn + dx, yIn: pan.yIn + dy, crop } : viewport));
+      // A LOCKED PLAN PANS THEM ALL, each in its own window.
+      const mate = new Map((pan.mates || []).map(m => [m.id, m]));
+      this.state.viewports = this.state.viewports.map(viewport => {
+        if (viewport.id === pan.id) return { ...viewport, xIn: pan.xIn + dx, yIn: pan.yIn + dy, crop };
+        const m = mate.get(viewport.id);
+        if (!m) return viewport;
+        const c = { l: 0, t: 0, r: 0, b: 0, ...(m.crop || {}) };
+        return { ...viewport, xIn: m.xIn + dx, yIn: m.yIn + dy,
+          crop: { l: c.l - dx, r: c.r + dx, t: c.t - dy, b: c.b + dy } };
+      });
       pan.moved = true;
       this._draw();
       return;
@@ -4456,10 +4743,14 @@ class Component extends PageLogic {
     if (this._draggingViewport) {
       const ptIn = this._sheetPointIn(e);
       const drag = this._draggingViewport;
-      this.state.viewports = this.state.viewports.map(viewport =>
-        (viewport.id === drag.id
-          ? { ...viewport, xIn: ptIn.xIn + drag.dxIn, yIn: ptIn.yIn + drag.dyIn }
-          : viewport));
+      // A LOCKED PLAN MOVES THEM ALL, each on its own sheet.
+      const dx = ptIn.xIn - drag.from.xIn, dy = ptIn.yIn - drag.from.yIn;
+      const mate = new Map((drag.mates || []).map(m => [m.id, m]));
+      this.state.viewports = this.state.viewports.map(viewport => {
+        if (viewport.id === drag.id) return { ...viewport, xIn: ptIn.xIn + drag.dxIn, yIn: ptIn.yIn + drag.dyIn };
+        const m = mate.get(viewport.id);
+        return m ? { ...viewport, xIn: m.xIn + dx, yIn: m.yIn + dy } : viewport;
+      });
       drag.moved = true;
       this._draw();
     }
@@ -4621,6 +4912,13 @@ class Component extends PageLogic {
         run: () => this._turnView3d(id) },
       { key: 'reset-3d', label: 'RESET 3D VIEW', on: Boolean(viewport.camera),
         title: 'Back to the front-left corner', run: () => this._setView3dCamera(id, null) }] : []),
+      ...(this._lockable(viewport) ? [this._isLocked(viewport)
+        ? { key: 'unlock', label: 'UNLOCK', on: true,
+          title: 'Let this plan move on its own; the other locked plans stay lined up',
+          run: () => this._toggleLock(id) }
+        : { key: 'lock', label: 'LOCK', on: true,
+          title: 'Line this plan up with the other locked plans again, and move with them',
+          run: () => this._toggleLock(id) }] : []),
       { key: 'change-scale', label: 'CHANGE SCALE', on: !isSchedule(viewport) && !isView3d(viewport),
         title: 'Pick or type a scale for this viewport', run: () => this._openChangeScale(id) },
       { key: 'fit-window', label: 'FIT WINDOW', on: Boolean(viewport.crop),
@@ -5056,7 +5354,10 @@ class Component extends PageLogic {
     let { xIn, yIn } = held;
     const taken = (x, y) => this._sheetViewports(sheet).some(v => Math.abs(v.xIn - x) < 1e-6 && Math.abs(v.yIn - y) < 1e-6);
     while (Number.isFinite(xIn) && Number.isFinite(yIn) && taken(xIn, yIn)) { xIn += STEP_IN; yIn += STEP_IN; }
-    const viewport = { ...JSON.parse(JSON.stringify(held)), id: this.state.nextViewportId, sheet, xIn, yIn };
+    const { unlocked, ...copy } = JSON.parse(JSON.stringify(held));
+    // A PASTED PLAN is a new one on the set: locked, onto the group's spot,
+    // when it can join it (jb, 27 Nov 2026).
+    const viewport = this._lockNewViewport({ ...copy, id: this.state.nextViewportId, sheet, xIn, yIn });
     this.setState({
       viewports: [...this.state.viewports, viewport],
       nextViewportId: viewport.id + 1,
@@ -5622,7 +5923,7 @@ class Component extends PageLogic {
       })() : {}),
     };
     this.setState({
-      viewports: [...this.state.viewports, viewport],
+      viewports: [...this.state.viewports, this._lockNewViewport(viewport)],
       nextViewportId: viewport.id + 1,
       selectedViewportId: viewport.id,
       addingViewport: false,
@@ -5699,7 +6000,7 @@ class Component extends PageLogic {
       if (selected.pif === pif) return;
       this.setState({
         viewports: this.state.viewports.map(viewport =>
-          viewport.id === selected.id ? { ...viewport, pif } : viewport),
+          viewport.id === selected.id ? this._withScale(viewport, pif) : viewport),
         auto: false,
       }, () => { this._persistLayout(); this._draw(); });
       return;

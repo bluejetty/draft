@@ -32,8 +32,8 @@ const MUTANTS = [
     test: 'THIS SHEET ONLY gives one sheet its own frame; the rest keep the main one' },
   { file: 'LAYOUT.html',
     name: 'a re-deal drops the sheet\'s own frame',
-    find: "      sheets: sheetPlan.map(({ title }) => ({ title, ...(ownByTitle.has(title) ? { titleblock: ownByTitle.get(title) } : {}) })),\n",
-    with: "      sheets: sheetPlan.map(({ title }) => ({ title })),\n",
+    find: "    const sheets = sheetPlan.map(({ title }) => ({ title, ...(ownByTitle.has(title) ? { titleblock: ownByTitle.get(title) } : {}) }));\n",
+    with: "    const sheets = sheetPlan.map(({ title }) => ({ title }));\n",
     test: 'THIS SHEET ONLY gives one sheet its own frame; the rest keep the main one' },
 ];
 
