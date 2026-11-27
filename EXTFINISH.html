@@ -139,7 +139,17 @@
     background: var(--surface-chip); border: var(--sheet-edge);
     width: 100%; height: 100%; display: block;
   }
-  canvas#elev { cursor: crosshair; }
+  canvas#elev { cursor: crosshair; touch-action: none; }
+  canvas#elev.panning { cursor: grabbing; }
+  .sheet-wrap { position: relative; }
+  .elev-fit {
+    position: absolute; top: 18px; right: 18px;
+    font: inherit; font-size: 11px; letter-spacing: .09em;
+    padding: 5px 12px; cursor: pointer;
+    background: var(--surface-chip); color: var(--ink-primary);
+    border: 1px solid var(--accent-mark);
+  }
+  .elev-fit[hidden] { display: none; }
 
   .prop { display: flex; flex-direction: column; gap: 4px; }
   .prop label {
@@ -256,7 +266,10 @@
         <p class="rail-title">Elevations</p>
         <div id="elev-list"></div>
       </div>
-      <div class="sheet-wrap"><canvas id="elev" width="900" height="560"></canvas></div>
+      <div class="sheet-wrap"><canvas id="elev" width="900" height="560"
+        title="Wheel to zoom, drag to pan, 0 for the whole house"></canvas>
+        <button type="button" id="elev-fit" class="elev-fit" hidden
+          title="FIT — show the whole house again (0)">FIT</button></div>
       <div class="rail right">
         <p class="rail-title">Wall finish</p>
         <p class="empty" id="pick-note">Click a wall on the elevation.</p>
@@ -1185,6 +1198,19 @@
       // on a wall the drafter is not looking at.
       const canvas = document.getElementById('elev');
       let frame = null;    // the mapping the last paint used, for the inverse
+      // ── ZOOM AND PAN (jb, 27 Nov 2026: "it seems it only wants to show
+      // the entire house, doesn't want to zoom to a smaller section of the
+      // house") ─────────────────────────────────────────────────────────────
+      //
+      // The page opens each elevation at the painter's own fit, and used to
+      // have nothing else: no wheel, no drag. Now it works as MODEL's
+      // elevations do -- the wheel zooms about the cursor, a drag pans, 0
+      // (or FIT) brings the whole house back -- by handing the painter a
+      // pinned frame (`opts.frame`), never a second fit of this page's own.
+      // ONE PIN PER ELEVATION, kept while finishes are picked and changed
+      // and while E1-E4 are flipped between: a repaint never throws it away.
+      const elevPins = new Map();   // elevation id -> { pxPerFt, uMin, yTop, x0, y0 }
+      const elevFitPx = new Map();  // elevation id -> the fit's own scale
       // A tenth of the drawing of air on every side of it (Movie, 23 Oct:
       // "about 10% extra cushion"); cut-view's screenCushion says how.
       const ELEVATION_CUSHION = 0.1;
@@ -1192,10 +1218,15 @@
       // pick inverts the frame this paint used, so the backing store and the
       // box on screen have to be the same number or every click is off by the
       // ratio between them.
+      //
+      // THE CANVAS'S OWN BOX, NOT ITS PARENT'S (27 Nov 2026). This measured
+      // the sheet-wrap, padding and all, so the backing store came out 20 px
+      // wider and taller than the box it was shown in and the browser squeezed
+      // it back -- by a different ratio across than down, so the house drew
+      // a few percent out of true. clientWidth is the room inside the border.
       const fitCanvas = cv => {
-        const box = cv.parentElement.getBoundingClientRect();
-        const w = Math.max(320, Math.floor(box.width));
-        const h = Math.max(240, Math.floor(box.height));
+        const w = Math.max(320, Math.floor(cv.clientWidth));
+        const h = Math.max(240, Math.floor(cv.clientHeight));
         if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
       };
 
@@ -1240,9 +1271,16 @@
         // rake board the painter drew, by roof, so a click can land on one.
         fasciaBands = [];
         faceOutlines = [];
+        // ZOOMED OR PANNED BY HAND (jb, 27 Nov 2026), the painter draws in
+        // the frame it was handed -- the same pinned pass MODEL zooms with.
+        const pin = elevPins.get(currentElev) || null;
         CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
           { colors, finishes: true, cushion: ELEVATION_CUSHION, fasciaBands, faceOutlines,
-            onFrame: f => { frame = { ...f, cut, axis }; } });
+            ...(pin ? { frame: pin } : {}),
+            onFrame: f => {
+              frame = { ...f, cut, axis };
+              if (!pin) elevFitPx.set(currentElev, f.pxPerFt);
+            } });
         if (!frame) return;
         // Read by the specs, which aim clicks at what was drawn.
         window.__extFinishFrame = frame;
@@ -1253,6 +1291,7 @@
           ? CV.dormerGables(env, cut, CV.sectionLevelStack(env), axis)
             .map(dg => ({ lo: dg.lo, hi: dg.hi, mid: dg.mid, base: dg.base, apex: dg.apex, finish: dg.finish })) : []);
         if (picked) paintPickMark(ctx);
+        showFitButton();
       };
 
       // ── WHAT CAN BE CLICKED, WALLS AND CONCRETE ALIKE ─────────────────
@@ -1483,11 +1522,95 @@
         ctx.restore();
       };
 
-      canvas.addEventListener('click', event => {
+      // ── THE WHEEL ZOOMS, A DRAG PANS, 0 FITS ──────────────────────────
+      const canvasPoint = event => {
         const box = canvas.getBoundingClientRect();
-        const face = faceAt(
-          (event.clientX - box.left) * canvas.width / box.width,
-          (event.clientY - box.top) * canvas.height / box.height);
+        return { x: (event.clientX - box.left) * canvas.width / box.width,
+          y: (event.clientY - box.top) * canvas.height / box.height };
+      };
+      const fitButton = document.getElementById('elev-fit');
+      // A DECLARATION, hoisted, because paintElevation (above) calls it.
+      function showFitButton() {
+        const b = document.getElementById('elev-fit');
+        if (b) b.hidden = !elevPins.has(currentElev);
+      }
+      const fitElevation = () => {
+        if (!elevPins.delete(currentElev)) return false;
+        paintElevation();
+        return true;
+      };
+      // From half the fit out to 800 px a foot in, MODEL's own limits.
+      const zoomElevation = (x, y, factor) => {
+        if (!frame) return;
+        const u = frame.uMin + (x - frame.x0) / frame.pxPerFt;
+        const e = frame.yTop - (y - frame.y0) / frame.pxPerFt;
+        const fitPx = elevFitPx.get(currentElev);
+        const floor = fitPx ? fitPx * 0.5 : 0.25;
+        const px = Math.max(floor, Math.min(frame.pxPerFt * factor, 800));
+        elevPins.set(currentElev, {
+          pxPerFt: px, uMin: frame.uMin, yTop: frame.yTop,
+          x0: x - (u - frame.uMin) * px,
+          y0: y - (frame.yTop - e) * px,
+        });
+        paintElevation();
+      };
+      canvas.addEventListener('wheel', event => {
+        if (!frame) return;
+        event.preventDefault();
+        const at = canvasPoint(event);
+        zoomElevation(at.x, at.y, Math.exp(-event.deltaY * 0.0015));
+      }, { passive: false });
+      // A PRESS THAT TRAVELS IS A PAN; one that stays put is still a click,
+      // which picks. Any button drags (left, middle, or right as on MODEL);
+      // the click a left drag ends on is swallowed so a pan never picks.
+      let pan = null;
+      let swallowClick = false;
+      canvas.addEventListener('pointerdown', event => {
+        if (!frame) return;
+        if (event.button === 1) event.preventDefault();
+        const at = canvasPoint(event);
+        pan = { id: event.pointerId, sx: at.x, sy: at.y, from: { ...frame }, moving: false };
+      });
+      canvas.addEventListener('pointermove', event => {
+        if (!pan || event.pointerId !== pan.id) return;
+        const at = canvasPoint(event);
+        const dx = at.x - pan.sx, dy = at.y - pan.sy;
+        if (!pan.moving) {
+          if (Math.hypot(dx, dy) < 4) return;
+          pan.moving = true;
+          try { canvas.setPointerCapture(event.pointerId); } catch { /* gone already */ }
+          canvas.classList.add('panning');
+        }
+        const f = pan.from;
+        elevPins.set(currentElev, { pxPerFt: f.pxPerFt, uMin: f.uMin, yTop: f.yTop,
+          x0: f.x0 + dx, y0: f.y0 + dy });
+        paintElevation();
+      });
+      const endPan = event => {
+        if (!pan || event.pointerId !== pan.id) return;
+        if (pan.moving) swallowClick = true;
+        pan = null;
+        canvas.classList.remove('panning');
+      };
+      canvas.addEventListener('pointerup', endPan);
+      canvas.addEventListener('pointercancel', endPan);
+      canvas.addEventListener('contextmenu', event => event.preventDefault());
+      canvas.addEventListener('dblclick', event => event.preventDefault());
+      if (fitButton) fitButton.addEventListener('click', () => { fitElevation(); });
+      window.addEventListener('keydown', event => {
+        if (event.key !== '0' || event.ctrlKey || event.metaKey || event.altKey) return;
+        const t = event.target;
+        if (t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+        if (fitElevation()) event.preventDefault();
+      });
+      // Read by the specs.
+      window.__extFinishZoom = { zoom: zoomElevation, fit: fitElevation,
+        pinned: () => elevPins.has(currentElev) };
+
+      canvas.addEventListener('click', event => {
+        if (swallowClick) { swallowClick = false; return; }
+        const at = canvasPoint(event);
+        const face = faceAt(at.x, at.y);
         if (face?.fascia) {
           const roofs = Array.isArray(drawing?.roofs) ? drawing.roofs : [];
           const index = roofs.findIndex(r => String(r.id) === String(face.fascia.roofId));
