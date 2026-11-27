@@ -8176,11 +8176,51 @@ if (!window.DraftCutView) {
       });
       const paintedOf = new Map();
       const bandFills = [];
-      runs.forEach(run => {
+      // ONE STRIP PER WALL PLANE, NOT ONE PER RUN (jb, 27 Nov 2026, E3/E4:
+      // "at floor the fill sometimes goes to other type? how come"). A run
+      // is every face of the storey end to end, and a jog -- a wall set
+      // back a foot -- is in the same run. The whole run used to take the
+      // NEAREST face's depth, so the seam rule read only that plane's
+      // finish and painted it across the jog too: his siding ran through
+      // the floor strip of a STUCCO DARK jog. So the run is cut where the
+      // nearest wall standing over it changes depth, and each piece is a
+      // band in its own plane, reading its own walls.
+      const planesOf = run => {
+        const over = spans.filter(span => span.hi > run.lo && span.lo < run.hi);
+        const cuts = [...new Set([run.lo, run.hi, ...over.flatMap(span => [span.lo, span.hi])
+          .filter(u => u > run.lo + 1e-6 && u < run.hi - 1e-6)])].sort((a, b) => a - b);
+        const pieces = [];
+        for (let i = 0; i + 1 < cuts.length; i++) {
+          const mid = (cuts[i] + cuts[i + 1]) / 2;
+          const at = over.filter(span => span.lo <= mid && span.hi >= mid);
+          const depth = at.length ? Math.max(...at.map(span => span.depth)) : null;
+          // AND WHERE THE FINISH CHANGES IN ONE PLANE: a 2' stucco column
+          // beside the siding is the same wall plane, so the piece is cut
+          // there too and each side reads its own walls over and under.
+          const skin = depth == null ? undefined
+            : skinsAtBand(level, { lo: cuts[i], hi: cuts[i + 1] }, depth);
+          const last = pieces[pieces.length - 1];
+          if (last && (depth == null
+            || (Math.abs(last.depth - depth) < 0.05 && last.skin === skin))) last.hi = cuts[i + 1];
+          else pieces.push({ lo: cuts[i], hi: cuts[i + 1], depth, skin });
+        }
+        // A gap with no face over it (under half a foot -- see `runs`)
+        // that opens the run goes with the piece after it.
+        if (pieces.length > 1 && pieces[0].depth == null) pieces[1].lo = pieces.shift().lo;
+        if (pieces.length === 1 && pieces[0].depth == null)
+          pieces[0].depth = Math.max(...over.map(span => span.depth));
+        // A sliver under half a foot is no plane to paint on its own: it
+        // goes with the piece before it (after it, at the run's start).
+        for (let i = 0; i < pieces.length && pieces.length > 1;) {
+          if (pieces[i].hi - pieces[i].lo >= 0.5) { i++; continue; }
+          if (i > 0) pieces[i - 1].hi = pieces[i].hi; else pieces[1].lo = pieces[0].lo;
+          pieces.splice(i, 1);
+        }
+        return pieces;
+      };
+      runs.forEach(whole => planesOf(whole).forEach(run => {
         if (run.hi - run.lo < 0.5) return;
-        const depth = Math.max(...spans
-          .filter(span => span.hi > run.lo && span.lo < run.hi)
-          .map(span => span.depth));
+        const depth = run.depth;
         // ONLY WHERE NOTHING NEARER STANDS. The band is the house's floor
         // package seen flat, and a garage in front of it is a wall, not a
         // window. What is pushed to rimBands is what was PAINTED, so the roof
@@ -8201,7 +8241,7 @@ if (!window.DraftCutView) {
             return [{ lo: piece.lo, hi: through.lo }, { lo: through.hi, hi: piece.hi }]
               .filter(bit => bit.hi - bit.lo >= 0.5);
           }), [part]));
-        paintedOf.set(run, shown);
+        paintedOf.set(whole, [...(paintedOf.get(whole) || []), ...shown]);
         shown.forEach(part => {
           bandFills.push({ part, depth });
           rimBands.push({
@@ -8214,7 +8254,7 @@ if (!window.DraftCutView) {
             oneSkin: skinsAtBand(level, part, depth),
           });
         });
-      });
+      }));
       bandLevels.push({ level, spans, runs, paintedOf, bandFills });
     });
     const paintRimBand = (level, part, depth) => {

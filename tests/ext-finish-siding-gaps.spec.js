@@ -77,6 +77,37 @@ test('the floor line: one coursing up the house, no strip without a course', () 
     .toBeGreaterThan(EXPOSURE_FT - 0.03);
 });
 
+// THE FLOOR STRIP TAKES EACH WALL'S OWN FINISH (jb, 27 Nov 2026, E3/E4:
+// "at floor the fill sometimes goes to other type? how come"; then "left
+// also have the problem"). His TIMBERHOUSE: siding walls, a 1' jog set back
+// in STUCCO DARK, 2' STUCCO DARK stubs at the front corner, and a plain
+// stucco end wall. The strip between storeys was one piece per run at the
+// nearest wall's depth, so a jog took its neighbour's finish and a column
+// in the same plane left the whole strip bare.
+const STRIP = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '..', 'proto', 'repro-jb-floor-strip-jog.draft'), 'utf8'));
+// The floor strip's hatch strokes: [lo, hi, 'lines' | 'dots'].
+const stripOf = view => view.strokes
+  .filter(s => s.ink === HATCH && s.clip && s.pts.length)
+  .filter(s => { const ce = s.clip.map(p => p.e); return Math.min(...ce) > 7.9 && Math.max(...ce) < 9.5; })
+  .map(s => {
+    const cu = s.clip.map(p => p.u);
+    const flat = s.pts.every((p, i) => !i || p.move || Math.abs(p.e - s.pts[i - 1].e) < 1e-6);
+    const long = s.pts.some((p, i) => i && !p.move && Math.abs(p.u - s.pts[i - 1].u) > 1);
+    return [+Math.min(...cu).toFixed(2), +Math.max(...cu).toFixed(2), flat && long ? 'lines' : 'dots'];
+  })
+  .sort((a, b) => a[0] - b[0]);
+
+test('the floor strip takes the finish of the walls over and under it, piece by piece', () => {
+  // E1, the front: siding, then a 2' STUCCO DARK column in the same plane.
+  expect(stripOf(paint(STRIP, 'E1'))).toEqual([[-41.5, 0, 'lines'], [0, 2, 'dots']]);
+  // The back: a 1' STUCCO DARK jog (with its 2' stubs) beside the siding.
+  expect(stripOf(paint(STRIP, 'E3'))).toEqual([[-2, 1, 'dots'], [1, 41.5, 'lines']]);
+  // E4: the siding jog set back a foot, and the near wall plain stucco --
+  // the jog keeps its siding, the stucco wall's strip stays blank.
+  expect(stripOf(paint(STRIP, 'E4'))).toEqual([[13, 19.5, 'lines']]);
+});
+
 test('the eave: a stucco board over a vinyl BAND keeps its foot line', () => {
   // His roof: 0" overhang, 5 1/2" stucco fascia, base finish stucco, vinyl band.
   const footAt = v => v.strokes.filter(s => s.w === 2.25 && s.pts.every(p => Math.abs(p.e - 17.42) < 0.02)
