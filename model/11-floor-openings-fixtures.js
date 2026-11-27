@@ -390,7 +390,7 @@
   // "CASEMENT: SINGLE | DOUBLE" in a rail that is 277px at its widest. The
   // VOCABULARY behind them is drawing-format.js's -- these are only what the
   // drafter sees.
-  const CASEMENT_CHIPS = Object.freeze([['single', 'SINGLE'], ['double', 'DOUBLE']]);
+  const CASEMENT_CHIPS = Object.freeze([['single', 'SINGLE'], ['double', 'DOUBLE'], ['triple', 'TRIPLE']]);
 
   // A TYPED DIMENSION, parsed by the app's own reader. formatters.js's
   // parseArchitecturalLength takes 3, 3', 3-6, 3'-6", 42" and the rest, and
@@ -1353,7 +1353,7 @@
     const island = fixture.kind === 'island' ? null : FG.islandHolding(all, fixture);
     const riders = fixture.kind === 'island' ? FG.islandPieces(all, fixture) : [];
     return {
-      fixture, host, frame, local, grab: local(at), island,
+      fixture, host, frame, local, grab: local(at), grabWorld: { x: at.x, z: at.z }, island,
       was: { offset: Number(fixture.offset) || 0, standoff: Number(fixture.standoff) || 0 },
       riders: riders.map(item => ({ item, offset: Number(item.offset) || 0 })),
       edits: [fixture, ...riders].map(item => ({ item, before: { ...item } })),
@@ -1372,7 +1372,8 @@
     if (!snapLive()) return target;
     let best = target, bestD = SIDE_SNAP_FT + 1e-9;
     window.DraftFixtureGeometry.runMates(fixtures(), fixture).filter(o => o.kind !== 'island').forEach(o => {
-      const o0 = Number(o.offset) - Number(o.width) / 2, o1 = Number(o.offset) + Number(o.width) / 2;
+      const ow = window.DraftFixtureGeometry.alongWidth(o);
+      const o0 = Number(o.offset) - ow / 2, o1 = Number(o.offset) + ow / 2;
       [[o1 + half, o1], [o0 - half, o0]].forEach(([t, edge]) => {
         const d = Math.abs(t - target);
         if (d < bestD) { bestD = d; best = t; md.joint = edge; }
@@ -1390,6 +1391,39 @@
     if (!geo) return null;
     const p = md.frame.at(md.joint, geo.frontOff);
     return { pt: { x: p.x, y: 0, z: p.z }, node: true };
+  };
+  // ── PULLED OFF ITS WALL (jb, 27 Nov 2026) ──────────────────────────────
+  //
+  // "the cabinets stick to the wall but a user can pull it away from the
+  // wall with an EXAGGERATED pull away it will become unstuck and the user
+  // can position on the floor or choose a new wall to 'stick too'". A piece
+  // still slides along its wall however the hand wanders off it; only a pull
+  // of PULL_FREE_FT square off the wall lets it go. From there it is a free
+  // piece for the rest of the drag -- standing on a line of its own where
+  // its wall stood, as a piece kept when its wall went does -- and the
+  // release puts it on whatever wall its back is let go against
+  // (freeFixtureLand), the one it came off included, or leaves it free on
+  // the floor. Its `before` has no `host`, so one UNDO puts it back on its
+  // wall whole. Not a piece inside an island (it lives in the island), and
+  // not a tub held in its alcove (its own branch above).
+  const PULL_FREE_FT = 3;
+  const pullFixtureFree = md => {
+    const { fixture, host } = md;
+    if (!host?.start || !host?.end || md.island) return false;
+    fixture.offset = md.was.offset;
+    fixture.host = { id: `free:${fixture.id}`,
+      start: { x: host.start.x, y: 0, z: host.start.z }, end: { x: host.end.x, y: 0, z: host.end.z },
+      wallType: host.wallType, refLine: host.refLine || 'center' };
+    fixture.wallId = null;
+    md.free = true;
+    md.pulled = true;
+    md.lit = null;
+    md.joint = null;
+    md.hostsWas = new Map([[fixture, hostCopy(fixture.host)]]);
+    md.riders = [];
+    sayOnStrip(`${fixtureLabel(fixture)} pulled off its wall -- let go on the floor to leave it free, `
+      + 'or against a wall to stick it there.');
+    return true;
   };
   const setStandoff = (item, standoff) => { if (standoff > 0) item.standoff = standoff; else delete item.standoff; };
   const fixtureMoveTo = (md, raw) => {
@@ -1412,7 +1446,7 @@
     const { fixture, frame } = md;
     const here = md.local(raw);
     let dAlong = here.along - md.grab.along, dAcross = here.across - md.grab.across;
-    const half = Math.min(Number(fixture.width) || 0, frame.len) / 2;
+    const half = Math.min(FG.alongWidth(fixture), frame.len) / 2;
     if (fixture.kind === 'island') {
       // ANYWHERE: along the wall and off it, held square by the T-SQUARE as
       // the MOVE verb is -- the larger travel wins.
@@ -1426,6 +1460,9 @@
     } else if (fixture.kind === 'tub' && fixture.endWallId) {
       const geo = FG.tubGeometry(walls(), fixture, md.host, frame);
       if (geo) fixture.offset = Math.min(Math.max(geo.dir * (here.along - geo.face) - geo.tubLen / 2, 0), geo.gap);
+    } else if (Math.abs(dAcross) > PULL_FREE_FT && pullFixtureFree(md)) {
+      fixtureMoveTo(md, raw);
+      return;
     } else {
       // ALONG ITS WALL ONLY, inside its island when it has one, and never
       // over a run mate. A counter run (cabinet, vanity) is what pieces sit
@@ -1436,7 +1473,7 @@
         : [0, frame.len];
       const blocks = runs(fixture) ? []
         : FG.runMates(fixtures(), fixture).filter(o => o.kind !== 'island' && !runs(o))
-          .map(o => [Number(o.offset) - Number(o.width) / 2, Number(o.offset) + Number(o.width) / 2]);
+          .map(o => [Number(o.offset) - FG.alongWidth(o) / 2, Number(o.offset) + FG.alongWidth(o) / 2]);
       const caught = sideSnap(fixture, md.was.offset + dAlong, half, md);
       const at = FG.slideClamp(caught, half, bounds, blocks);
       if (at != null) fixture.offset = at;
@@ -1560,8 +1597,9 @@
       carryFixtureLinks(md);
       undoStack.push(withLinks({ kind: 'props', edits: [...md.edits] }));
       markDirty();
-      sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now. UNDO puts it back.`
+      sayOnStrip(onto ? `${fixtureLabel(md.fixture)} is on that wall now -- ATTACH TO: B, L or R. UNDO puts it back.`
         : `${fixtureLabel(md.fixture)} moved, on no wall -- let it go against one to put it on it. UNDO puts it back.`);
+      if (onto && !md.riders.length) offerAttach(md.fixture);
     } else if (md.moved) {
       undoStack.push(withLinks({ kind: 'props', edits: md.edits }));
       markDirty();
@@ -1570,6 +1608,83 @@
         : `${fixtureLabel(md.fixture)} slid ${md.island ? 'inside its island' : 'along its wall'}. UNDO puts it back.`);
     }
   };
+  // ── ATTACH TO BACK / LEFT / RIGHT (jb, 27 Nov 2026) ─────────────────────
+  //
+  // "when it attached to the wall can we have a popup that says ATTACH TO
+  // BACK / LEFT / RIGHT" -- "and if they press thru button mouse click or
+  // space enter it will take BACK as default" -- "they will need to press R
+  // or L to choose side" -- "or press the onscreen button in the popup".
+  // Shown by the piece when it goes onto a wall: pressed onto one, or let go
+  // against one. B, L or R, or a button, answers; Space, Enter, Escape or a
+  // press anywhere else is BACK. Any other key is BACK too, and goes on to do
+  // what it does. A side changed is its own 'props' step, after the one that
+  // put the piece on the wall.
+  const attachCard = document.getElementById('attach-ask');
+  let attachPending = null;
+  const ATTACH_WORD = { back: 'its BACK', left: 'its LEFT side', right: 'its RIGHT side' };
+  // THE SIDE A PIECE STANDS AGAINST ITS WALL BY, as one undo step; its run
+  // settles its half inches round it in the same step.
+  const setFixtureAttach = (items, attach) => {
+    const FG = window.DraftFixtureGeometry;
+    const list = items.filter(f => f && FG.canAttachSide(f) && FG.attachOf(f) !== attach);
+    if (!list.length) return false;
+    const edits = list.map(item => ({ item, before: { ...item } }));
+    list.forEach(item => { if (attach === 'back') delete item.attach; else item.attach = attach; });
+    settleFixtureGaps().forEach(e => { if (!edits.some(x => x.item === e.item)) edits.push(e); });
+    undoStack.push({ kind: 'props', edits });
+    markDirty();
+    showSelectionProps();
+    paint();
+    return true;
+  };
+  const closeAttach = choice => {
+    const fixture = attachPending;
+    attachPending = null;
+    if (attachCard) attachCard.hidden = true;
+    if (!fixture || !(drawing?.fixtures || []).includes(fixture)) return;
+    if (setFixtureAttach([fixture], choice)) {
+      sayOnStrip(`${fixtureLabel(fixture)} is on its wall by ${ATTACH_WORD[choice]}. UNDO puts it back.`);
+    }
+  };
+  const offerAttach = fixture => {
+    const FG = window.DraftFixtureGeometry;
+    if (!attachCard || !fixture || fixture.wallId == null || !FG?.canAttachSide(fixture)) return;
+    if (attachPending) closeAttach('back');
+    attachPending = fixture;
+    const what = attachCard.querySelector('[data-attach-what]');
+    if (what) what.textContent = fixtureLabel(fixture);
+    attachCard.querySelectorAll('[data-attach]').forEach(b => b.setAttribute('aria-pressed',
+      String(b.dataset.attach === FG.attachOf(fixture))));
+    attachCard.hidden = false;
+    // BY THE PIECE: just under its middle on the sheet, kept on screen.
+    const geo = FG.fixtureGeometry(drawing.walls || [], fixture);
+    const rect = canvas.getBoundingClientRect();
+    const p = geo?.center ? toS(geo.center) : { x: rect.width / 2, y: rect.height / 2 };
+    const w = attachCard.offsetWidth || 260, h = attachCard.offsetHeight || 90;
+    const x = Math.min(Math.max(rect.left + p.x - w / 2, 8), window.innerWidth - w - 8);
+    const y = Math.min(Math.max(rect.top + p.y + 28, 8), window.innerHeight - h - 8);
+    attachCard.style.left = `${Math.round(x)}px`;
+    attachCard.style.top = `${Math.round(y)}px`;
+  };
+  if (attachCard) {
+    attachCard.querySelectorAll('[data-attach]').forEach(b => b.addEventListener('click', event => {
+      event.stopPropagation();
+      closeAttach(b.dataset.attach);
+    }));
+    window.addEventListener('keydown', event => {
+      if (!attachPending) return;
+      const key = String(event.key || '').toLowerCase();
+      const pick = { b: 'back', l: 'left', r: 'right', ' ': 'back', enter: 'back', escape: 'back' }[key];
+      if (event.ctrlKey || event.metaKey || event.altKey || !pick) { closeAttach('back'); return; }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeAttach(pick);
+    }, true);
+    window.addEventListener('pointerdown', event => {
+      if (!attachPending || attachCard.contains(event.target)) return;
+      closeAttach('back');
+    }, true);
+  }
   const fixturePress = at => {
     if (washroomPreset) return dropWashroom(at);
     if (kitchenPreset) return dropKitchen(at);
@@ -1638,9 +1753,11 @@
       kind: kind.id, wallId: placement.wall.id, side: placement.side,
       offset: clamped.offset, width: kind.widthFt,
     }), kind);
-    return addFixture(kind, placement.wall, {
+    const placed = addFixture(kind, placement.wall, {
       offset, width: kind.widthFt, side: placement.side,
     });
+    offerAttach(placed);
+    return placed;
   };
 
   const freeFixturePress = (kind, at) => {

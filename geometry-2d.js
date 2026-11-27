@@ -4575,7 +4575,14 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
       heightFt: DEFAULT_WINDOW_HEIGHT_FT,
     }),
     double: Object.freeze({ widthFt: 66 / 12, heightFt: 36 / 12 }),
+    // THREE 24" PANES, 4'-0" TALL (jb, 27 Nov 2026), a stock triple, so it
+    // sits on a 3'-0" sill under the 7'-0" head. A default like the others.
+    triple: Object.freeze({ widthFt: 72 / 12, heightFt: 48 / 12 }),
   });
+  // HOW MANY PANES EACH CASEMENT IS, and so how many mullions divide it
+  // (panes - 1, at equal spacing). The plan and elevation painters keep
+  // their own copy of this because each loads with nothing else.
+  const CASEMENT_PANES = Object.freeze({ single: 1, double: 2, triple: 3 });
   // An unknown casement reads as a single rather than as nothing: this answers
   // the PLACER, and a placer with no size places no window at all.
   const casementSizeFt = kind => CASEMENT_SIZES_FT[kind] || CASEMENT_SIZES_FT.single;
@@ -5319,6 +5326,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     DEFAULT_WINDOW_HEIGHT_FT,
     CASEMENT_SIZES_FT,
     casementSizeFt,
+    CASEMENT_PANES,
     DOOR_CATALOG,
     doorCatalogEntry,
     gardenSplitFt,
