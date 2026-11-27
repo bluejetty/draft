@@ -137,7 +137,10 @@ test('the gable wall is clad, and a line runs along its foot where it stands on 
   await page.locator('#dormer-finish').selectOption('stucco');
   await expect.poll(async () => (await stored(page)).finish).toBe('stucco');
   const fascia = 5.5 / 12;
-  const board = await at(dg.mid, dg.apex - fascia);
+  // WITHIN A PIXEL of where it should be: a one-pixel line lands on one row
+  // or the next by the rounding of the frame, which moves with the canvas.
+  const near = [];
+  for (const k of [-1, 0, 1]) near.push(lum(await at(dg.mid, dg.apex - fascia + k / f.pxPerFt)));
   const wall = await at(dg.mid, dg.apex - fascia - 1);
-  expect(Math.abs(lum(board) - lum(wall)), 'the rake board\'s lower edge').toBeGreaterThan(90);
+  expect(Math.max(...near.map(v => Math.abs(v - lum(wall)))), 'the rake board\'s lower edge').toBeGreaterThan(90);
 });
