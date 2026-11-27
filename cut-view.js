@@ -7311,7 +7311,9 @@ if (!window.DraftCutView) {
           }
           runs.forEach(run => {
             const wPx = run.th / 12 * across * pxPerFt;
-            if (!(run.th >= PROUD_MIN_IN) || wPx < 1) return;
+            // An inch or more: shakes, stone, brick. A half inch of siding
+            // or stucco is the corner's own line at any scale on the sheet.
+            if (!(run.th >= CORNER_MIN_IN) || wPx < 1) return;
             const x0 = xEdge, x1 = xEdge + xDir * wPx;
             const y0 = Y(run.b), y1 = Y(run.a);
             ctx.save();
@@ -7345,6 +7347,7 @@ if (!window.DraftCutView) {
     // and two finishes of one thickness meet with no step at all. The shade
     // is as deep as the difference at 45 degrees, held to a few pixels.
     const PROUD_MIN_IN = 0.25;
+    const CORNER_MIN_IN = 1;
     const paintProudEdges = (geom, lines, bands) => {
       const { face, loU, hiU } = geom;
       const wall = face.wall;
