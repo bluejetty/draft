@@ -300,7 +300,7 @@ async function build3(p, change = null) {
       deckTop: ys('deck').length ? Math.max(...ys('deck')) : null, deckLow: ys('deck').length ? Math.min(...ys('deck')) : null,
       holoFaces: built.faces.filter(f => f.hologram).length,
       holoColour: (built.faces.find(f => f.hologram && f.kind === 'wall') || {}).colour || null,
-      houseX: [Math.min(...xs(f => !f.hologram)), Math.max(...xs(f => !f.hologram))],
+      houseX: [Math.min(...xs(f => !f.hologram && f.kind !== 'ground')), Math.max(...xs(f => !f.hologram && f.kind !== 'ground'))],
       holoX: built.faces.some(f => f.hologram) ? [Math.min(...xs(f => f.hologram)), Math.max(...xs(f => f.hologram))] : null,
       status: document.getElementById('status').textContent,
     };
@@ -418,7 +418,7 @@ test('the drafter\'s own colour wins over the finish\'s', async ({ page: p }) =>
 
 test('a level chip takes that level out of the picture and puts it back', async ({ page: p }) => {
   await build3(p);
-  await expect(p.locator('#levels [data-level]')).toHaveText(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF']);
+  await expect(p.locator('#levels [data-level]')).toHaveText(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF', 'GROUND']);
   const all = Number(await p.evaluate(() => document.body.dataset.shown));
   const roofs = await p.evaluate(() => DraftViewer.state.faces.filter(f => f.group === 'roof').length);
   expect(roofs).toBeGreaterThan(10);

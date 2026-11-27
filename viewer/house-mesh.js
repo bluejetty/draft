@@ -41,6 +41,8 @@
     door: [150, 106, 72],
     overhead: [232, 232, 226],
     deck: [176, 150, 116],
+    ground: [139, 156, 104],
+    stringer: [196, 170, 128],
     stair: [190, 156, 112],
     landing: [182, 148, 104],
     drywall: [238, 236, 230],
@@ -444,6 +446,10 @@
 
     // ── WHICH LEVEL EACH FACE BELONGS TO, for the viewer's level chips:
     // 'fdn' (foundation, basement and slabs), 'L<id>' for a storey, 'roof'.
+    // WHAT STANDS IN THE GROUND, in plan, for the GROUND to leave a hole
+    // round: the foundation walls' bodies and the slabs and first floors
+    // inside them.
+    const footprints = [];
     const mark = (from, group) => {
       for (let i = from; i < faces.length; i += 1) if (!faces[i].group) faces[i].group = group;
     };
@@ -513,16 +519,19 @@
           'foundation', COLOURS.foundation, faces, counts);
         // The strip footing under a wall that bears on one (base at 0).
         if (num(wall.baseHeight) <= 0.01) {
+          // THE WALL'S OWN BODY GROWN BY THE SAME AMOUNT ON EVERY SIDE (jb,
+          // 27 Nov 2026: "the footing look a bit funny"). It was the wall
+          // re-drawn centre-line at the footing's width, which runs each end
+          // on half a footing past the corner -- an ear at every corner of a
+          // face-line wall. Grown from the body, the two footings at a corner
+          // end on each other's outer edge, square.
           const wide = Math.max(t, num(fdn.footingWidthIn, 20) / 12);
-          const centred = { ...wall, refLine: 'center', offsetFt: 0 };
-          const ring = wallFootprint(centred, wide);
-          // Shifted to sit under the wall's own centre.
-          const body = wallFootprint(wall, t);
-          if (ring && body) {
-            const cx = (body[0].x + body[2].x) / 2 - (ring[0].x + ring[2].x) / 2;
-            const cz = (body[0].z + body[2].z) / 2 - (ring[0].z + ring[2].z) / 2;
-            prism(ring.map(p => ({ x: p.x + cx, z: p.z + cz })), fdn.footingBottom, bottom,
-              'footing', COLOURS.footing, faces);
+          const f = wallFrame(wall, t);
+          if (f) footprints.push([f.p(f.t0, f.lo), f.p(f.t1, f.lo), f.p(f.t1, f.hi), f.p(f.t0, f.hi)]);
+          if (f) {
+            const d = (wide - t) / 2;
+            const ring = [f.p(f.t0 - d, f.lo - d), f.p(f.t1 + d, f.lo - d), f.p(f.t1 + d, f.hi + d), f.p(f.t0 - d, f.hi + d)];
+            prism(ring, fdn.footingBottom, bottom, 'footing', COLOURS.footing, faces);
           }
         }
         counts.foundationWalls += 1;
@@ -566,6 +575,7 @@
     // ── FLOORS AND SLABS ─────────────────────────────────────────────────
     // A DECK stands its own floor type's depth (2x10 + 3/4"), its top a
     // little under its storey's floor (geometry-2d.js deckSpec, jb 20 Nov).
+    const lowestStorey = stack.floors.slice().sort((a, b) => a.floorTop - b.floorTop)[0] || null;
     let deckSet = new Set();
     try { deckSet = new Set(G.deckFloors ? G.deckFloors(env.floors(), env.walls()) : []); } catch (e) { deckSet = new Set(); }
     env.floors().forEach(floor => {
@@ -590,6 +600,7 @@
         });
       }
       if (floor.view === 'foundation' || floor.levelId === 1 || floor.structure === 'slab') {
+        footprints.push(ring);
         let top = null;
         if (garage) { try { top = CV.garageSlabTop(env, fdn, garage); } catch (e) { top = null; } }
         if (Number.isFinite(top)) {
@@ -610,12 +621,18 @@
         counts.floors += 1;
         return;
       }
+      if (storey === lowestStorey) footprints.push(ring);
       if (garage || floor.garage === true) {
         let top = storey.floorTop;
         try { if (garage) top = CV.garageSlabTop(env, fdn, garage); } catch (e) { top = storey.floorTop; }
         prism(ring, top - 4 / 12, top, 'slab', COLOURS.slab, faces);
       } else {
-        prism(insetRing(ring, 0.02), storey.floorBottom, storey.floorTop, 'floor', COLOURS.floor, faces);
+        // THE STAIR'S HOLE (jb, 27 Nov 2026: "no stair opening holes in the
+        // floor"): the drafter's floor openings hosted on this floor.
+        const holes = (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
+          .filter(o => o && o.hostType === 'floor' && o.hostId === floor.id && Array.isArray(o.points) && o.points.length >= 3)
+          .map(o => o.points.map(p => ({ x: p.x, z: p.z })));
+        holedSlab(insetRing(ring, 0.02), holes, storey.floorBottom, storey.floorTop, 'floor', COLOURS.floor, faces);
       }
       counts.floors += 1;
     }
@@ -657,14 +674,183 @@
       if (group) { counts.stairs += 1; mark(n0, group); }
     });
 
+    // ── THE GROUND (jb, 27 Nov 2026: "ground at grad nice idea") ────────
+    // A plain at grade round the house, 15' past it on every side, with the
+    // house's own footprint left open, so what is below grade (footings, the
+    // basement's outside) is under ground as on the elevations. Its own
+    // LEVELS chip, GROUND, takes it away. Not on a print model or a hologram.
+    if (!PRINT && !opts.inner && Number.isFinite(fdn.grade) && footprints.length) {
+      const b = boundsOf(faces);
+      if (b) {
+        const n0 = faces.length;
+        groundFaces(footprints, { minX: b.lo.x - 15, maxX: b.hi.x + 15, minZ: b.lo.z - 15, maxZ: b.hi.z + 15 },
+          fdn.grade, faces);
+        mark(n0, 'ground');
+        counts.ground = faces.length > n0 ? 1 : 0;
+      }
+    }
+
     // ── HOLOGRAMS ────────────────────────────────────────────────────────
     if (!opts.inner) buildHolograms(saved, faces, counts);
 
     const groups = [{ id: 'fdn', name: 'FOUNDATION' },
       ...stack.floors.slice().sort((a, b) => a.floorTop - b.floorTop).map(l => ({
         id: `L${l.id}`, name: ((levels.find(v => v.id === l.id) || {}).name || `LEVEL ${l.id}`).toUpperCase() })),
-      { id: 'roof', name: 'ROOF' }].filter(g => faces.some(f => f.group === g.id));
-    return { faces, stack, counts, groups, bounds: boundsOf(faces) };
+      { id: 'roof', name: 'ROOF' }, { id: 'ground', name: 'GROUND' }].filter(g => faces.some(f => f.group === g.id));
+    // Framed on the house: the ground is 15' of margin, not part of it.
+    return { faces, stack, counts, groups, bounds: boundsOf(faces.filter(f => f.kind !== 'ground')) };
+  }
+
+  // ── A PLAN REGION: SOME RINGS LESS OTHERS ───────────────────────────────
+  //
+  // Cut in bands across z: a band runs between two of the z's where
+  // anything changes (a corner, or two edges crossing), so inside it every
+  // edge is one straight line and the region is trapezoids between them.
+  // A point is in the region where any of `outers` covers it and none of
+  // `holes` does (each ring counted the same way round, non-zero), so
+  // overlapping rings are one shape. Returns plan trapezoids [{x, z}...].
+  function planRegion(outers, holes) {
+    const edges = [];
+    const add = (rings, tag) => rings.forEach(raw => {
+      if (!raw || raw.length < 3) return;
+      const ring = planArea(raw) > 0 ? raw : raw.slice().reverse();
+      ring.forEach((a, i) => {
+        const c = ring[(i + 1) % ring.length];
+        if (Math.abs(a.z - c.z) < 1e-9) return;
+        edges.push(a.z < c.z ? { a, b: c, w: 1, tag } : { a: c, b: a, w: -1, tag });
+      });
+    });
+    add(outers, 'o');
+    add(holes, 'h');
+    const xAt = (e, z) => e.a.x + (e.b.x - e.a.x) * (z - e.a.z) / (e.b.z - e.a.z);
+    const zs = new Set();
+    edges.forEach(e => { zs.add(e.a.z); zs.add(e.b.z); });
+    for (let i = 0; i < edges.length; i += 1) {
+      for (let j = i + 1; j < edges.length; j += 1) {
+        const p = edges[i], q = edges[j];
+        const lo = Math.max(p.a.z, q.a.z), hi = Math.min(p.b.z, q.b.z);
+        if (!(hi > lo)) continue;
+        const d0 = xAt(p, lo) - xAt(q, lo), d1 = xAt(p, hi) - xAt(q, hi);
+        if (d0 * d1 < 0) zs.add(lo + (hi - lo) * d0 / (d0 - d1));
+      }
+    }
+    const cuts = [...zs].sort((a, b) => a - b);
+    const traps = [];
+    for (let k = 0; k + 1 < cuts.length; k += 1) {
+      const z0 = cuts[k], z1 = cuts[k + 1];
+      if (!(z1 - z0 > 1e-6)) continue;
+      const zm = (z0 + z1) / 2;
+      const across = edges.filter(e => e.a.z <= zm && e.b.z >= zm)
+        .map(e => ({ e, xm: xAt(e, zm) })).sort((p, q) => p.xm - q.xm);
+      let wo = 0, wh = 0, open = null;
+      across.forEach(({ e }) => {
+        const was = wo !== 0 && wh === 0;
+        if (e.tag === 'o') wo += e.w; else wh += e.w;
+        const now = wo !== 0 && wh === 0;
+        const at = { x0: xAt(e, z0), x1: xAt(e, z1) };
+        if (!was && now) open = at;
+        else if (was && !now && open) {
+          if (at.x0 - open.x0 > 1e-7 || at.x1 - open.x1 > 1e-7) {
+            const q = [{ x: open.x0, z: z0 }, { x: at.x0, z: z0 }, { x: at.x1, z: z1 }, { x: open.x1, z: z1 }];
+            traps.push(q.filter((p, n) => Math.hypot(p.x - q[(n + 1) % 4].x, p.z - q[(n + 1) % 4].z) > 1e-7));
+          }
+          open = null;
+        }
+      });
+    }
+    return traps.filter(t => t.length >= 3);
+  }
+
+  // A plan trapezoid laid flat at y, facing up (or down), its edges seams:
+  // the bands are one surface to the eye.
+  function flatFace(trap, y, up, kind, colour) {
+    const ring = trap.map(p => ({ x: p.x, y, z: p.z }));
+    // Facing up is counter-clockwise from above: a NEGATIVE planArea.
+    const facesUp = planArea(ring) < 0;
+    const pts = facesUp === up ? ring : ring.reverse();
+    return { pts, kind, colour, seams: pts.map(() => true) };
+  }
+
+  // THE GROUND: a rectangle less the house, flat at grade, facing up.
+  function groundFaces(rings, box, y, out) {
+    const rect = [{ x: box.minX, z: box.minZ }, { x: box.maxX, z: box.minZ }, { x: box.maxX, z: box.maxZ }, { x: box.minX, z: box.maxZ }];
+    planRegion([rect], rings).forEach(t => out.push(flatFace(t, y, true, 'ground', COLOURS.ground)));
+  }
+
+  // A SLAB WITH HOLES IN IT (a floor with its stair opening): the top and
+  // bottom cut in bands, and a side on every edge of the ring and of each
+  // hole, turned to face out of the solid.
+  function holedSlab(ring, holes, bottom, top, kind, colour, out) {
+    if (!holes.length) { prism(ring, bottom, top, kind, colour, out); return; }
+    const traps = planRegion([ring], holes);
+    if (!traps.length) return;
+    // WELDED: a band corner that lands part way along a neighbour's edge (or
+    // a side's) is put into that edge too, so the solid has no T-joints and
+    // closes for PRINT.
+    const pool = [];
+    traps.forEach(t => t.forEach(p => { if (!pool.some(q => Math.hypot(q.x - p.x, q.z - p.z) < 1e-7)) pool.push(p); }));
+    const between = (a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz;
+      if (!(L2 > 1e-14)) return [];
+      return pool.map(p => ({ p, t: ((p.x - a.x) * dx + (p.z - a.z) * dz) / L2 }))
+        .filter(({ p, t }) => t > 1e-7 && t < 1 - 1e-7
+          && Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / Math.sqrt(L2) < 1e-6)
+        .sort((m, n) => m.t - n.t).map(m => m.p);
+    };
+    const welded = t => t.flatMap((a, i) => [a, ...between(a, t[(i + 1) % t.length])]);
+    traps.forEach(t => {
+      const w = welded(t);
+      out.push(flatFace(w, top, true, kind, colour));
+      out.push(flatFace(w, bottom, false, kind, colour));
+    });
+    const inLoop = (p, loop) => {
+      let c = false;
+      for (let i = 0, j = loop.length - 1; i < loop.length; j = i, i += 1) {
+        const a = loop[i], b = loop[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) c = !c;
+      }
+      return c;
+    };
+    const solid = p => inLoop(p, ring) && !holes.some(h => inLoop(p, h));
+    [ring, ...holes].map(welded).forEach(loop => loop.forEach((a, i) => {
+      const b = loop[(i + 1) % loop.length];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (!(len > 1e-6)) return;
+      // Out of the solid is the side of the edge the solid is not on.
+      const nx = (b.z - a.z) / len, nz = -(b.x - a.x) / len;
+      const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+      const probe = { x: mid.x + nx * 0.01, z: mid.z + nz * 0.01 };
+      const back = { x: mid.x - nx * 0.01, z: mid.z - nz * 0.01 };
+      if (solid(probe) === solid(back)) return;   // an edge with solid both sides, or neither
+      const outN = solid(probe) ? { x: -nx, z: -nz } : { x: nx, z: nz };
+      const pts = [{ x: a.x, y: bottom, z: a.z }, { x: b.x, y: bottom, z: b.z }, { x: b.x, y: top, z: b.z }, { x: a.x, y: top, z: a.z }];
+      const n = normalOf(pts);
+      out.push({ pts: n.x * outN.x + n.z * outN.z >= 0 ? pts : pts.reverse(), kind, colour });
+    }));
+  }
+
+  // A PROFILE IN A FLIGHT'S UPRIGHT PLANE, made solid across it: `prof` is
+  // [u, y] round the outline (u along the flight walking down), stood at
+  // across-offsets v0..v1 by `at(u, v, y)`. Each face turned out.
+  function extrudeProfile(prof, at, v0, v1, kind, colour, out) {
+    let area = 0;
+    prof.forEach((p, i) => { const q = prof[(i + 1) % prof.length]; area += p[0] * q[1] - q[0] * p[1]; });
+    const P = area > 0 ? prof : prof.slice().reverse();   // counter-clockwise in (u, y)
+    const o = at(0, 0, 0), du = at(1, 0, 0), dv = at(0, 1, 0);
+    const U = { x: du.x - o.x, y: du.y - o.y, z: du.z - o.z }, V = { x: dv.x - o.x, y: dv.y - o.y, z: dv.z - o.z };
+    const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+    const turned = (pts, want) => (dot(normalOf(pts), want) >= 0 ? pts : pts.slice().reverse());
+    const side0 = P.map(([u, y]) => at(u, v0, y)), side1 = P.map(([u, y]) => at(u, v1, y));
+    out.push({ pts: turned(side0, { x: -V.x, y: -V.y, z: -V.z }), kind, colour });
+    out.push({ pts: turned(side1, V), kind, colour });
+    P.forEach(([u, y], i) => {
+      const [u2, y2] = P[(i + 1) % P.length];
+      if (Math.hypot(u2 - u, y2 - y) < 1e-7) return;
+      // Out of a counter-clockwise outline is to the right of each edge.
+      const ou = y2 - y, oy = -(u2 - u);
+      const want = { x: U.x * ou, y: oy + U.y * ou, z: U.z * ou };
+      out.push({ pts: turned([at(u, v0, y), at(u2, v0, y2), at(u2, v1, y2), at(u, v1, y)], want), kind, colour });
+    });
   }
 
   // ── A STAIR, TREAD BY TREAD ─────────────────────────────────────────────
@@ -702,6 +888,17 @@
     let y = storey.floorTop;
     let fi = 0, li = 0;
     const block = (ring, top, kind, colour) => prism(ring, top - Math.min(riser, 0.75), top, kind, colour, out);
+    // AS A STAIR IS BUILT (jb, 27 Nov 2026): 2x12 stringers notched to the
+    // steps -- 11 1/4" measured square from the outer corner of a notch to
+    // the back edge -- at no more than 16" apart across the width, the two
+    // outside ones at its edges, wherever they fall (against a wall too);
+    // and on them thin tread boards, 1" with a 1" nosing. The stringers make
+    // the saw-tooth; nothing under the treads is solid.
+    const TREAD_FT = Math.max(1 / 12, PRINT ? PRINT.minFt : 0);
+    const NOSE_FT = 1 / 12;
+    const STRINGER_T = Math.max(1.5 / 12, PRINT ? PRINT.minFt : 0);
+    const STRINGER_D = 11.25 / 12;
+    const MAX_OC = 16 / 12;
     // seq is [flight] straight, [flight, landing, flight] for an L (or a U
     // whose landings merge), [flight, landing, (middle flight), landing,
     // flight] for a U. A landing of winders carries `treads` too, so a
@@ -713,11 +910,42 @@
         if (!run) return;
         const d = run.dir, side = { x: -d.z, z: d.x }, half = run.widthFt / 2;
         const count = Math.max(0, Math.round(run.treads != null ? run.treads : item.treads));
+        if (!count) return;
+        const at3 = (u, v, yy) => ({ x: run.start.x + d.x * u + side.x * v, y: yy, z: run.start.z + d.z * u + side.z * v });
+        const at = (u, v) => ({ x: run.start.x + d.x * u + side.x * v, z: run.start.z + d.z * u + side.z * v });
+        const yTop = y;
+        const tops = [];
         for (let k = 0; k < count; k += 1) {
           y -= riser;
-          const a = k * step, b = (k + 1) * step;
-          const at = (u, v) => ({ x: run.start.x + d.x * u + side.x * v, z: run.start.z + d.z * u + side.z * v });
-          block([at(a, -half), at(b, -half), at(b, half), at(a, half)], y, 'stair', COLOURS.stair);
+          tops.push(y);
+          // The board, its nosing over the step below.
+          const a = k * step, b = (k + 1) * step + NOSE_FT;
+          prism([at(a, -half), at(b, -half), at(b, half), at(a, half)], y - TREAD_FT, y, 'stair', COLOURS.stair, out);
+        }
+        // Where the flight lands: the next landing's top, or the floor.
+        const yFoot = y - riser;
+        const runEnd = count * step;
+        // The saw-tooth the treads sit on, walking down.
+        const teeth = [];
+        tops.forEach((t, k) => { teeth.push([k * step, t - TREAD_FT], [(k + 1) * step, t - TREAD_FT]); });
+        const m = -riser / step;
+        const drop = STRINGER_D * Math.sqrt(1 + m * m);
+        // The back edge, parallel to the line of the outer notch corners.
+        const back = u => (tops[0] - TREAD_FT) + m * (u - step) - drop;
+        const uFoot = (yFoot - (tops[0] - TREAD_FT) + drop) / m + step;
+        let prof;
+        if (back(0) <= yFoot || uFoot <= 0) {
+          prof = [[0, yFoot], ...teeth, [runEnd, yFoot]];
+        } else {
+          prof = [[0, back(0)], ...teeth, [runEnd, yFoot], [Math.min(runEnd, uFoot), yFoot]];
+        }
+        void yTop;
+        // How many, evenly spaced, no more than 16" apart, centred 3/4" in.
+        const span = Math.max(0, run.widthFt - STRINGER_T);
+        const n = Math.max(2, Math.ceil(span / MAX_OC - 1e-6) + 1);
+        for (let s = 0; s < n; s += 1) {
+          const vc = -half + STRINGER_T / 2 + (n > 1 ? span * s / (n - 1) : 0);
+          extrudeProfile(prof, at3, vc - STRINGER_T / 2, vc + STRINGER_T / 2, 'stringer', COLOURS.stringer, out);
         }
         return;
       }
@@ -779,6 +1007,23 @@
       const group = pp.kind === 'telepost' ? 'fdn' : (pp.levelId != null ? `L${pp.levelId}` : 'fdn');
       const n0 = out.length;
       prism(square(pp.point, (pp.sizeIn || 3.5) / 12), pp.foot, pp.top, 'post', COLOURS.post, out);
+      // WHAT IT STANDS ON: a pile's square cap and the round pile under it
+      // (drawn 4' into the ground; its depth is the soils report's), or a
+      // basement post's pad under the slab.
+      const BH = window.DraftBuildHouse;
+      if (pp.kind === 'pile') {
+        const pile = BH && BH.footingFor ? BH.footingFor(pp.column.footing) : null;
+        const dia = ((pile && pile.sizeIn) || 12) / 12;
+        const round = Array.from({ length: 12 }, (_, i) => ({
+          x: pp.point.x + Math.cos(i * Math.PI / 6) * dia / 2, z: pp.point.z + Math.sin(i * Math.PI / 6) * dia / 2 }));
+        const capOn = pp.cap && Number.isFinite(pp.cap.top) && Number.isFinite(pp.cap.bottom);
+        const pileTop = capOn ? pp.cap.bottom : pp.seat;
+        prism(round, Math.min(pileTop, (Number.isFinite(stack.foundation.grade) ? stack.foundation.grade : pileTop)) - 4,
+          pileTop, 'footing', COLOURS.footing, out);
+        if (capOn) prism(square(pp.point, (pp.cap.sizeIn || 16) / 12), pp.cap.bottom, pp.cap.top, 'footing', COLOURS.footing, out);
+      } else if (pp.pad && Number.isFinite(pp.pad.top) && Number.isFinite(pp.pad.bottom)) {
+        prism(square(pp.point, (pp.pad.sizeIn || 36) / 12), pp.pad.bottom, pp.pad.top, 'footing', COLOURS.footing, out);
+      }
       for (let i = n0; i < out.length; i += 1) out[i].groupHint = group;
       counts.posts += 1;
     });
