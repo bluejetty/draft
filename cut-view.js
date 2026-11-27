@@ -3961,7 +3961,10 @@ if (!window.DraftCutView) {
         const k = stretch ? bayIn / profile.w : 1;
         for (let i = 0; i < n; i += 1) {
           const cu = projU(f.at(a0 + ((i + 0.5) * bayIn) / 12, 0));
-          bays.push(a => cu + sign * (a * k) / 12);
+          // Every second bay mirrored, so a pair of doors' handles meet in
+          // the middle (as objprop-views.js draws the front).
+          const m = i % 2 === 1 ? -k : k;
+          bays.push(a => cu + sign * (a * m) / 12);
         }
       } else {
         // Out from the wall: the back at the wall face, the front into the

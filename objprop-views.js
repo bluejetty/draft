@@ -41,7 +41,14 @@ if (!window.DraftObjViews) {
       const n = tile ? Math.max(1, Math.round(widthIn / tile)) : 1;
       const bayIn = widthIn / n;
       const k = stretch ? bayIn / profile.w : 1;
-      for (let i = 0; i < n; i += 1) map.push(a => (i + 0.5) * bayIn + a * k);
+      // DOORS IN PAIRS MEET IN THE MIDDLE (jb, 27 Nov: "on the DOUBLE
+      // CABINET the 2 door handles should meet in the middle"): the traced
+      // door base has its handle on the right, so every second bay is drawn
+      // mirrored and its handle lands on its left, against its neighbour's.
+      for (let i = 0; i < n; i += 1) {
+        const m = i % 2 === 1 ? -k : k;
+        map.push(a => (i + 0.5) * bayIn + a * m);
+      }
     } else {
       const k = stretch ? depthIn / profile.w : 1;
       // From the RIGHT the wall is on the left; from the LEFT, mirrored.
