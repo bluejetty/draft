@@ -34,6 +34,7 @@
 <script src="./build-house.js"></script>
 <script src="./formatters.js"></script>
 <script src="./finish-patterns.js"></script>
+<script src="./finish-settings-panel.js"></script>
 <!-- THE ROOF'S HATCHES, beside the wall's. cut-view reaches for both off
      `window` when finishes are asked for and warns rather than throwing when
      either is missing -- which is a page that draws every roof plain with one
@@ -176,6 +177,21 @@
   .btn:disabled { cursor: default; color: var(--ink-quiet); opacity: .5; }
   .empty { font-size: 11px; color: var(--ink-quiet); line-height: 1.45; margin: 0; }
   .band-list { display: flex; flex-direction: column; gap: 4px; }
+  /* FINISH THICKNESS & TEXTURE */
+  .finish-settings { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .finish-settings-title {
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-quiet);
+    border-top: 1px solid var(--edge-panel); padding-top: 10px;
+  }
+  .finish-set { border: 1px solid var(--edge-panel); padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .finish-set-name { font-size: 11px; letter-spacing: .07em; color: var(--ink-primary); }
+  .finish-set-row { display: grid; grid-template-columns: 1fr 72px; align-items: center; gap: 2px 6px; font-size: 10px;
+    letter-spacing: .06em; color: var(--ink-quiet); }
+  .finish-set-row input[type="text"] { appearance: none; background: var(--surface-chip); color: var(--ink-primary);
+    border: 1px solid var(--edge-panel); font: inherit; font-size: 12px; padding: 3px 5px; width: 100%; }
+  .finish-set-default { grid-column: 2; font-size: 9px; color: var(--ink-quiet); }
+  .finish-set-tick { display: flex; gap: 6px; cursor: pointer; }
+  .finish-settings-note { font-size: 10px; color: var(--ink-quiet); line-height: 1.4; }
   .band {
     display: flex; align-items: center; gap: 5px; font-size: 11px;
     border: 1px solid var(--edge-panel); padding: 4px 5px; background: var(--surface-chip);
@@ -412,6 +428,10 @@
           </div>
           <button class="btn" id="band-add" style="margin-top:6px; width:100%">Add band</button>
           </div>
+          <!-- FINISH THICKNESS & TEXTURE (jb, 27 Nov 2026): one block per
+               finish on the picked wall, built by finish-settings-panel.js,
+               the same section MODEL's OBJ / PROP shows. -->
+          <div id="finish-settings-box"></div>
         </div>
         <!-- ── THE ROOF AREA ──────────────────────────────────
              Movie, 27 Sep: "we should make a special ROOF area with the roof
@@ -504,6 +524,7 @@
         const envelope = FORMAT.checkEnvelope(parsed);
         // The wall types this file made, for its walls' widths and slices.
         if (envelope.ok) window.DraftWallTypes?.adoptDrawing?.(parsed);
+        if (envelope.ok) window.DraftWallTypes?.adoptFinishSettings?.(parsed);
         return envelope.ok ? parsed : null;
       };
 
@@ -924,6 +945,31 @@
             paintProps();
           }));
         paintBandEdit(bands);
+        paintFinishSettings(wall);
+      };
+
+      // ── FINISH THICKNESS & TEXTURE (jb, 27 Nov 2026) ──────────────
+      // Every finish the picked wall wears -- base, bands, its gable -- with
+      // its thickness and texture sizes. One record per finish for the whole
+      // house (wall-types.js finishSettings), so the redraw is of everything.
+      const paintFinishSettings = wall => {
+        const host = document.getElementById('finish-settings-box');
+        const P = window.DraftFinishSettingsPanel;
+        if (!host || !P) return;
+        const ids = [...WT.finishesOnWall(wall), ...(wall.gableFinish ? [wall.gableFinish] : [])];
+        host.replaceChildren(P.node({
+          ids,
+          settings: drawing.finishSettings || null,
+          buttonClass: 'btn',
+          say,
+          onChange: (id, record) => {
+            P.store(drawing, id, record);
+            env = null;
+            rebuild();
+            paintProps();
+            save();
+          },
+        }));
       };
 
       // ── WHAT ONE BAND'S CONTROLS READ ──────────────────────────
@@ -1176,7 +1222,9 @@
           // long as walls were all the page touched; the ROOF area edits the
           // roofs, and a merge that left them out would show the change on
           // screen and lose it on reload.
-          const merged = { ...base, walls: drawing.walls, roofs: drawing.roofs };
+          const merged = { ...base, walls: drawing.walls, roofs: drawing.roofs,
+            // Each finish's thickness and texture (jb, 27 Nov 2026).
+            ...(drawing.finishSettings ? { finishSettings: drawing.finishSettings } : {}) };
           const file = new File([JSON.stringify(merged)], 'drawing.json',
             { type: 'application/json' });
           try { await store.saveSharedFile(file, BUCKET, { ifRev: at.rev }); }

@@ -279,6 +279,11 @@ if (!window.DraftPlanComposition) {
     const drawnPieces = pieces.filter(wall => !off(wallLayer(wall)));
     drawnPieces.forEach(wall => { if (off('A-WALL-PATT')) return; onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
     drawnPieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });
+    // BRICK AND STONE OUTSIDE THE WALL (jb, 27 Nov 2026), on the wall's layer.
+    if (render.drawFinishVeneer2D && viewId !== 'foundation') {
+      const clad = walls.filter(wall => Number(wall.levelId) > 1 && !off(wallLayer(wall)));
+      if (clad.length) { onLayer(ctx, wallLayer(clad[0])); render.drawFinishVeneer2D(ctx, toS, clad, env.wallEnv, list(env.fenestrations)); }
+    }
 
     // THE STRIP FOOTING'S OUTLINE (jb, 16 Nov 2026), dashed, worked out by
     // the caller (footing-outline.js through layout-plan) on S-FOOTING.

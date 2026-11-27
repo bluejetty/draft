@@ -83,11 +83,12 @@ if (!window.DraftWallTypes) {
   // carry that weight. Writing `thicknessIn` in now costs a word per row;
   // adding it once drawings are saved costs a migration.
   //
-  // WHAT IT DOES NOT DO YET IS MOVE ANYTHING. Nothing reads this field, and
-  // a non-zero one is not drawable until the ledge, the air gap and the face
-  // offset are designed -- that is masonry's own piece of work, not a number
-  // typed into a row. Said here so a later reader does not mistake a present
-  // field for a working one.
+  // AND SINCE 27 NOV 2026 IT IS READ (jb: brick "a few inches thicker than
+  // siding" on the elevations, the sheets and in 3D). The finish stands its
+  // thickness OUTWARD off the sheathing: the framing, its dimensions and the
+  // roof overhangs stay measured from the wall, and only the finish moves.
+  // The number here is the default; a drawing may carry its own
+  // (finishSettings below).
   //
   // COLOUR IS NOT IN THIS TABLE EITHER. Movie: *"the 'color' of stucco might
   // not be white"*. Colour is orthogonal to material -- any of these comes in
@@ -385,9 +386,93 @@ if (!window.DraftWallTypes) {
   const fasciaFinishIdOf = roof => (typeof roof?.fasciaFinish === 'string'
     && FASCIA_FINISHES.some(f => f.id === roof.fasciaFinish))
     ? roof.fasciaFinish : DEFAULT_FASCIA_FINISH_ID;
-  const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)
+  const stockFinishById = id => EXTERIOR_FINISHES.find(f => f.id === id)
     || EXTERIOR_FINISHES.find(f => f.id === LEGACY_FINISH_IDS[id])
     || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);
+
+  // ── THICKNESS AND TEXTURE, PER FINISH, PER HOUSE (jb, 27 Nov 2026) ──────
+  //
+  // jb: *"add a section in the OBJ PROP to allow the user to change the
+  // thickness and texture. but place the textures and thicknesses to
+  // appropriate thickness and texture"*. The rows above ARE the appropriate
+  // defaults; what a drafter changes is kept on the drawing as
+  // `drawing.finishSettings`, keyed by finish id:
+  //
+  //   { brick: { thicknessIn: 3.625, params: { jointIn: 0.5 }, texture: false } }
+  //
+  // ONE BRICK PER HOUSE, not one per wall: a mason buys one brick for the
+  // job, so changing its size or depth on one wall changes it on all of
+  // them, which is also what keeps the elevations, the sheets and the 3D
+  // agreeing without each asking a wall. A record holds departures from the
+  // row and nothing else -- a finish at its defaults has no entry, and a
+  // drawing nobody touched has no key.
+  //
+  // HELD HERE, LIVE, the way the made wall types are (adoptDrawing above):
+  // each page that opens a drawing hands it over once (adoptFinishSettings),
+  // and finishById answers with the row as this house has it. Every painter
+  // already asks finishById, so none of them learns a new question. The
+  // object is held BY REFERENCE, so a page that edits it in place (MODEL's
+  // OBJ / PROP, and UNDO putting it back) is read on the very next paint.
+  const FINISH_THICKNESS_MAX_IN = 12;
+  const FINISH_PARAM_MAX_IN = 120;
+  const finishSettingRecord = (id, raw) => {
+    const row = EXTERIOR_FINISHES.find(f => f.id === id);
+    if (!row || !raw || typeof raw !== 'object') return null;
+    const out = {};
+    const th = Number(raw.thicknessIn);
+    if (Number.isFinite(th) && th >= 0 && th <= FINISH_THICKNESS_MAX_IN
+      && Math.abs(th - row.thicknessIn) > 1e-6) out.thicknessIn = th;
+    const params = {};
+    (row.params || []).forEach(p => {
+      const v = Number(raw.params && raw.params[p.key]);
+      if (Number.isFinite(v) && v > 0 && v <= FINISH_PARAM_MAX_IN && Math.abs(v - p.in) > 1e-6) params[p.key] = v;
+    });
+    if (Object.keys(params).length) out.params = params;
+    if (raw.texture === false) out.texture = false;
+    return Object.keys(out).length ? out : null;
+  };
+  const normalizeFinishSettings = raw => {
+    const out = {};
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      Object.keys(raw).forEach(key => {
+        const id = LEGACY_FINISH_IDS[key] || key;
+        const rec = finishSettingRecord(id, raw[key]);
+        if (rec) out[id] = rec;
+      });
+    }
+    return out;
+  };
+  let finishSettings = null;   // the drawing's own object, by reference
+  const finishMerged = new Map(); // id -> { stamp, row }
+  const adoptFinishSettings = saved => {
+    finishSettings = saved && typeof saved === 'object'
+      && saved.finishSettings && typeof saved.finishSettings === 'object'
+      ? saved.finishSettings : null;
+  };
+  const finishSettingOf = id => {
+    if (!finishSettings) return null;
+    return finishSettingRecord(id, finishSettings[id]);
+  };
+  const finishById = id => {
+    const row = stockFinishById(id);
+    if (!row) return row;
+    const rec = finishSettingOf(row.id);
+    if (!rec) return row;
+    const stamp = JSON.stringify(rec);
+    const hit = finishMerged.get(row.id);
+    if (hit && hit.stamp === stamp) return hit.row;
+    const merged = Object.freeze({
+      ...row,
+      ...(rec.thicknessIn !== undefined ? { thicknessIn: rec.thicknessIn } : {}),
+      ...(rec.texture === false ? { texture: false } : {}),
+      params: Object.freeze((row.params || []).map(p => (rec.params && rec.params[p.key] !== undefined
+        ? Object.freeze({ ...p, in: rec.params[p.key] }) : p))),
+    });
+    finishMerged.set(row.id, { stamp, row: merged });
+    return merged;
+  };
+  // Does this finish draw its texture in 3D? On unless the drafter said no.
+  const finishTextureOn = id => finishById(id).texture !== false;
 
   // ── WHAT A WALL WEARS, AND WHERE ──────────────────────────────────────
   //
@@ -812,6 +897,14 @@ if (!window.DraftWallTypes) {
     LEGACY_FINISH_IDS,
     DEFAULT_FINISH_ID,
     finishById,
+    stockFinishById,
+    finishSettingRecord,
+    normalizeFinishSettings,
+    adoptFinishSettings,
+    finishSettingOf,
+    finishTextureOn,
+    FINISH_THICKNESS_MAX_IN,
+    FINISH_PARAM_MAX_IN,
     FASCIA_FINISHES,
     DEFAULT_FASCIA_FINISH_ID,
     fasciaFinishById,

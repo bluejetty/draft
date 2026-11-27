@@ -470,6 +470,8 @@
       if (!wall.start || !wall.end) return;
       R.drawWallSeg2D(ctx, toS, wall, false, joins, 'both', wallEnv());
     });
+    // BRICK AND STONE OUTSIDE THE WALL at the plan's cut (jb, 27 Nov 2026).
+    if (R.drawFinishVeneer2D) R.drawFinishVeneer2D(ctx, toS, shown.filter(wall => Number(wall.levelId) > 1), wallEnv(), drawing?.fenestrations || []);
     // THE DRAWN LINE OF A WALL SET OFF IT (OFFSET, jb 16 Nov 2026): a thin
     // dash where the line was traced, so the drafter still sees what the
     // wall is measured from. MODEL only -- sheets print the wall, not this.

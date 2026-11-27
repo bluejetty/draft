@@ -12,7 +12,7 @@
   'use strict';
 
   const $ = id => document.getElementById(id);
-  const LOOK = { background: '#dfe6ee', ambient: 0.42, edges: true, section: false, cutColour: '#4a4744' };
+  const LOOK = { background: '#dfe6ee', ambient: 0.42, edges: true, textures: true, section: false, cutColour: '#4a4744' };
   const PAINTER_KEY = 'draft-viewer-painter';
 
   const state = {
@@ -700,6 +700,14 @@
     $('edges').addEventListener('click', () => {
       LOOK.edges = !LOOK.edges;
       $('edges').classList.toggle('lit', LOOK.edges);
+      redraw();
+    });
+    // THE FINISHES' TEXTURES (jb, 27 Nov 2026): on by default, off here for
+    // the whole view (each finish can be turned off for good in its
+    // THICKNESS & TEXTURE section on EXT. FINISH / OBJ / PROP).
+    if ($('textures')) $('textures').addEventListener('click', () => {
+      LOOK.textures = !LOOK.textures;
+      $('textures').classList.toggle('lit', LOOK.textures);
       redraw();
     });
     document.querySelectorAll('[data-cut]').forEach(btn => btn.addEventListener('click', () => {

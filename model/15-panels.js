@@ -1403,7 +1403,49 @@
           return null;
         }, showSelectionProps));
     }
+    box.append(...finishSettingsNodes(walls));
     return box;
+  };
+
+  // ── FINISH THICKNESS & TEXTURE (jb, 27 Nov 2026) ──────────────────────
+  //
+  // "add a section in the OBJ PROP to allow the user to change the thickness
+  // and texture". The finishes the picked walls wear (as EXT. FINISH laid
+  // them), each with its thickness and texture sizes -- the section EXT.
+  // FINISH shows for the same wall (finish-settings-panel.js), writing the
+  // same record. Laying a finish on a wall is still EXT. FINISH's job (jb,
+  // 26 Nov: no finish editing on MODEL yet); this is the material's own
+  // numbers, for the whole house. One 'props' step, so UNDO puts it back.
+  const finishSettingsNodes = walls => {
+    const P = window.DraftFinishSettingsPanel;
+    const WT = window.DraftWallTypes;
+    if (!P || !WT || !WT.finishesOnWall || !drawing) return [];
+    const ids = [];
+    walls.forEach(wall => {
+      WT.finishesOnWall(wall).forEach(id => ids.push(id));
+      if (wall.gableFinish) ids.push(wall.gableFinish);
+    });
+    return [P.node({
+      ids,
+      settings: drawing.finishSettings || null,
+      titleClass: 'props-title',
+      inputClass: 'roof-field',
+      buttonClass: 'sel-chip',
+      say: text => sayOnStrip(text),
+      onChange: (id, record) => {
+        if (!drawing.finishSettings || typeof drawing.finishSettings !== 'object') {
+          if (!record) return;
+          drawing.finishSettings = {};
+        }
+        const before = { ...drawing.finishSettings };
+        P.store(drawing, id, record);
+        undoStack.push({ kind: 'props', edits: [{ item: drawing.finishSettings, before }] });
+        markDirty();
+        showSelectionProps();
+        renderObjProp();
+        paint();
+      },
+    })];
   };
 
   // ── FENESTRATION PROPERTIES ───────────────────────────────────────────

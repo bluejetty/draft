@@ -4454,6 +4454,89 @@ if (!window.DraftCutView) {
     ctx.restore();
   }
 
+  // ── THE FINISH, CUT (jb, 27 Nov 2026) ─────────────────────────────────
+  //
+  // A section through an outside wall cuts its cladding too: a layer its own
+  // thickness (wall-types.js finishById, the house's number) standing off the
+  // wall's outside face, from the sill -- over the rim, as the elevations
+  // clad it -- to the plate, each finish its own piece. Masonry is hatched;
+  // the thin finishes are a line's width at any scale a section is drawn at.
+  //
+  // THE OUTSIDE IS THE REFERENCE LINE'S SIDE: an outside wall keeps its
+  // outline on its exterior face (refLine 'left' / 'right'); a centre-line
+  // wall is a partition and wears no cladding here. Where the cut goes
+  // through an opening the layer stops at the head and the sill, as the
+  // cladding does round a window.
+  function sectionFinishLayer(ctx, X, Y, pxPerFt, crossing, level, bottom, top, opening, fdn, C) {
+    const WT = window.DraftWallTypes;
+    const { wall } = crossing;
+    if (!WT || !WT.finishAtFt || !wall || !wall.start || !wall.end) return;
+    const ref = wall.refLine || 'center';
+    if (ref !== 'left' && ref !== 'right') return;
+    if ((wall.view || 'plan') !== 'plan') return;
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    if (!(len > 1e-6)) return;
+    const nx = -(wall.end.z - wall.start.z) / len, nz = (wall.end.x - wall.start.x) / len;
+    // The crossing's axis is not handed in; the slice sign carries its side.
+    const axisDotNSign = crossing.sliceSign === -1 ? -1 : 1;
+    const outN = ref === 'left' ? -1 : 1;           // the outside, in +n units
+    const outU = outN * axisDotNSign;               // ... and along the cut
+    const faceU = crossing.u + outU * crossing.width / 2;
+    const stretch = crossing.width / ((WT.wallThicknessFt ? WT.wallThicknessFt(wall) : 5.5 / 12) || crossing.width);
+    const firstStorey = fdn && Number.isFinite(fdn.wallTop) && level.floorBottom <= fdn.wallTop + 0.6;
+    const sill = crossing.garage ? bottom - GARAGE_BEAM_PLATE_IN / 12
+      : (Number.isFinite(level.floorBottom) ? level.floorBottom - (firstStorey ? houseSillPlateFt() : 0) : bottom);
+    const lines = { sill, plate: top, head: top };
+    const finishAt = e => {
+      const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
+      for (let i = bands.length - 1; i >= 0; i -= 1) {
+        const r = WT.bandRange(bands[i], lines);
+        const sp = WT.bandSpan(bands[i], 0, len);
+        if (r && sp && e >= r.lo && e < r.hi && crossing.alongWall >= sp.lo && crossing.alongWall < sp.hi) return bands[i].finishId;
+      }
+      return wall.finish || WT.DEFAULT_FINISH_ID;
+    };
+    let gap = null;
+    if (opening) {
+      const headFt = opening.headHeight > 0 ? opening.headHeight : 6 + 10 / 12;
+      const sillFt = opening.sillHeight > 0 ? opening.sillHeight : 3;
+      gap = { lo: opening.type === 'window' ? bottom + sillFt : sill, hi: Math.min(bottom + headFt, top) };
+    }
+    const STEPS = 48;
+    const runs = [];
+    for (let i = 0; i < STEPS; i += 1) {
+      const a = sill + (top - sill) * i / STEPS, b = sill + (top - sill) * (i + 1) / STEPS;
+      const m = (a + b) / 2;
+      const id = gap && m > gap.lo && m < gap.hi ? null : finishAt(m);
+      const last = runs[runs.length - 1];
+      if (last && last.id === id) last.b = b; else runs.push({ a, b, id });
+    }
+    ctx.save();
+    runs.forEach(run => {
+      if (!run.id) return;
+      const finish = WT.finishById(run.id);
+      const th = (Number(finish.thicknessIn) || 0) / 12 * stretch;
+      if (!(th * pxPerFt >= 0.75)) return;
+      const u0 = faceU, u1 = faceU + outU * th;
+      const x0 = Math.min(X(u0), X(u1)), w = Math.abs(X(u1) - X(u0));
+      const yTop = Y(run.b), h = (run.b - run.a) * pxPerFt;
+      ctx.fillStyle = finish.masonry ? weight(C.ink, 0.14) : weight(C.ink, 0.06);
+      ctx.fillRect(x0, yTop, w, h);
+      if (finish.masonry && w >= 3) {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x0, yTop, w, h); ctx.clip();
+        ctx.strokeStyle = weight(C.ink, 0.45); ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (let k = -w; k < h + w; k += 4) { ctx.moveTo(x0, yTop + k); ctx.lineTo(x0 + w, yTop + k - w); }
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.strokeStyle = C.line; ctx.lineWidth = 0.75;
+      ctx.strokeRect(x0, yTop, w, h);
+    });
+    ctx.restore();
+  }
+
   function drawSectionWall(env, ctx, X, Y, pxPerFt, crossing, level, opts, inks, fdn) {
     const C = inks || inksFor(opts);
     const ink = a => weight(C.ink, a);
@@ -4489,6 +4572,7 @@ if (!window.DraftCutView) {
     const top = level.wallTop;
     const opening = env.fenestrations().find(f => f.wallId === wall.id
       && Math.abs(alongWall - f.offset) < f.width / 2);
+    sectionFinishLayer(ctx, X, Y, pxPerFt, crossing, level, bottom, top, opening, fdn, C);
     ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
     ctx.fillStyle = ink(0.12);
     if (!opening) {
@@ -7159,6 +7243,8 @@ if (!window.DraftCutView) {
       // it is the default, and the record's rule is that only a departure from
       // the default is written down.
       paintSillLedges(geom, lines, bands);
+      // ── WHERE A THICKER FINISH STANDS PROUD OF A THINNER ONE ─────────
+      paintProudEdges(geom, lines, bands);
       // ── THE GABLE IS ITS OWN AREA (jb, 26 Nov 2026) ──────────────────
       //
       // "the 2nd floor wall and gable are the same BAND, can we make the
@@ -7188,6 +7274,199 @@ if (!window.DraftCutView) {
         }
       }
       ctx.restore();
+      paintCornerSteps(geom, lines);
+    };
+
+    // ── AND ROUND AN OUTSIDE CORNER, SEEN SIDE ON (jb, 27 Nov 2026) ────────
+    //
+    // The finish on the wall that turns away from us at a corner stands its
+    // thickness out past this face's end: brick on the side wall is a strip
+    // 4 5/8" wide beside the corner of the front elevation, siding beside it
+    // a half inch that no scale shows. Drawn outside this face, after it, so
+    // any nearer face painted later still covers it.
+    //
+    // ONLY AN OUTSIDE CORNER, the other wall running AWAY from the viewer:
+    // its outside face is then flush with this face's end, and its cladding
+    // is what sticks out. A wall coming towards the viewer is an inside
+    // corner, where the step is on the face of that wall and hidden from here.
+    const paintCornerSteps = (geom, lines) => {
+      const { face, loU, hiU } = geom;
+      const wall = face.wall;
+      if (!wall || !wall.start || !wall.end || face.endCap) return;
+      const dir = cut.dirVec;
+      if (!dir) return;
+      const dOf = p => Number(p.x) * dir.x + Number(p.z) * dir.z;
+      const uOf = p => Number(p.x) * axis.x + Number(p.z) * axis.z;
+      const top = Math.min(lines.plate, lines.head);
+      if (!(top - lines.sill > 0.05)) return;
+      (env.walls() || []).forEach(other => {
+        if (other === wall || !other.start || !other.end) return;
+        if (other.id === wall.id) return;
+        if (Number(other.levelId) !== Number(wall.levelId)) return;
+        if ((other.view || 'plan') !== (wall.view || 'plan')) return;
+        if (String(other.body || '') !== String(wall.body || '')) return;
+        [[wall.start, face.u1], [wall.end, face.u2]].forEach(([corner, cornerU]) => {
+          let far = null;
+          if (sameCorner(other.start, corner)) far = other.end;
+          else if (sameCorner(other.end, corner)) far = other.start;
+          if (!far) return;
+          const dd = dOf(far) - dOf(corner), du = uOf(far) - uOf(corner);
+          // Turning away (further from the viewer, who sits on +dir) and
+          // more across the view than along it.
+          if (!(dd < -0.1) || Math.abs(du) > Math.abs(dd)) return;
+          const len = Math.hypot(Number(far.x) - Number(corner.x), Number(far.z) - Number(corner.z));
+          if (!(len > 0.01)) return;
+          // How much of its thickness shows across the paper.
+          const nx = -(Number(far.z) - Number(corner.z)) / len, nz = (Number(far.x) - Number(corner.x)) / len;
+          const across = Math.abs(nx * axis.x + nz * axis.z);
+          const outward = Math.sign(cornerU - (cornerU === face.u1 ? face.u2 : face.u1)) || 1;
+          const xEdge = X(Math.abs(cornerU - loU) < Math.abs(cornerU - hiU) ? loU : hiU);
+          const xDir = Math.sign(X(cornerU + outward) - X(cornerU)) || 1;
+          const thAt = e => {
+            const f = finishAtFt(other, e, lines);
+            return Number(finishById(f.id).thicknessIn) || 0;
+          };
+          const STEPS = 32;
+          const runs = [];
+          for (let i = 0; i < STEPS; i += 1) {
+            const a = lines.sill + (top - lines.sill) * i / STEPS;
+            const b = lines.sill + (top - lines.sill) * (i + 1) / STEPS;
+            const th = thAt((a + b) / 2);
+            const last = runs[runs.length - 1];
+            if (last && Math.abs(last.th - th) < 1e-6) last.b = b;
+            else runs.push({ a, b, th });
+          }
+          runs.forEach(run => {
+            const wPx = run.th / 12 * across * pxPerFt;
+            // An inch or more: shakes, stone, brick. A half inch of siding
+            // or stucco is the corner's own line at any scale on the sheet.
+            if (!(run.th >= CORNER_MIN_IN) || wPx < 1) return;
+            const x0 = xEdge, x1 = xEdge + xDir * wPx;
+            const y0 = Y(run.b), y1 = Y(run.a);
+            ctx.save();
+            ctx.fillStyle = C.face;
+            ctx.fillRect(Math.min(x0, x1), y0, Math.abs(x1 - x0), y1 - y0);
+            ctx.strokeStyle = INK; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y1); ctx.lineTo(x0, y1);
+            ctx.stroke();
+            ctx.restore();
+          });
+        });
+      });
+    };
+
+    // ── THE STEP WHERE ONE FINISH STANDS PROUD OF ANOTHER (jb, 27 Nov 2026) ──
+    //
+    // jb: brick "a few inches thicker than siding" should show on the
+    // elevations. Looking straight at a wall, thickness has no width of its
+    // own: what shows is the EDGE where the thick finish stops and the thin
+    // one carries on -- a firmer line there, and a shadow off it, light from
+    // the upper left as the stone relief already has it (finish-patterns.js).
+    // So the underside of a proud band throws a strip of shade down onto the
+    // wall below, and its right-hand end throws one to the right; the top and
+    // the left end catch the light and get the line alone.
+    //
+    // MEASURED, NOT ASSUMED. Each edge of every band is walked in short
+    // pieces and the finish on each side asked for its thickness (the
+    // house's own, wall-types.js finishById), so a band that is thinner than
+    // the wall under it (siding laid over a brick wall) steps the other way,
+    // and two finishes of one thickness meet with no step at all. The shade
+    // is as deep as the difference at 45 degrees, held to a few pixels.
+    const PROUD_MIN_IN = 0.25;
+    const CORNER_MIN_IN = 1;
+    const paintProudEdges = (geom, lines, bands) => {
+      const { face, loU, hiU } = geom;
+      const wall = face.wall;
+      const uLo = Math.min(loU, hiU), uHi = Math.max(loU, hiU);
+      if (!(uHi - uLo > 0) || !bands.length) return;
+      const thickOf = id => Number(finishById(id || DEFAULT_FINISH_ID).thicknessIn) || 0;
+      const thAt = (u, e) => {
+        for (let i = bands.length - 1; i >= 0; i -= 1) {
+          const band = bands[i];
+          const r = bandRange(band, lines);
+          const sp = bandSpan(band, uLo, uHi);
+          if (r && sp && e >= r.lo && e < Math.min(lines.head, r.hi) && u >= sp.lo && u < sp.hi) return thickOf(band.finishId);
+        }
+        return thickOf(wall.finish);
+      };
+      const epsE = 0.5 / pxPerFt;
+      const du = Math.abs(X(uLo + 1) - X(uLo)) || 1;   // px per u
+      const epsU = 0.5 / du;
+      const rightIsHigherU = X(uLo + 1) > X(uLo);
+      const ink = (x0, y0, x1, y1, diffIn) => {
+        ctx.save();
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = Math.min(2.5, 1 + Math.abs(diffIn) / 4);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        ctx.restore();
+      };
+      const shade = (x, y, w, h) => {
+        if (!(w > 0.5 && h > 0.5)) return;
+        ctx.save();
+        ctx.fillStyle = INK;
+        ctx.globalAlpha = 0.16;
+        ctx.fillRect(x, y, w, h);
+        ctx.restore();
+      };
+      const depthPx = diffIn => Math.min(10, Math.abs(diffIn) / 12 * pxPerFt);
+      const edgesE = new Set(), edgesU = new Set();
+      bands.forEach(band => {
+        const r = bandRange(band, lines);
+        const sp = bandSpan(band, uLo, uHi);
+        if (!r || !sp) return;
+        const capped = bandIsCapped(band, lines) && !!finishById(band.finishId).cap;
+        if (r.lo > lines.sill + 0.02 && r.lo < lines.head - 0.02) edgesE.add(r.lo);
+        if (!capped && r.hi > lines.sill + 0.02 && r.hi < lines.head - 0.02) edgesE.add(r.hi);
+        if (sp.lo > uLo + 0.02) edgesU.add(sp.lo);
+        if (sp.hi < uHi - 0.02) edgesU.add(sp.hi);
+      });
+      const STEPS = 32;
+      // Across the face at height e: the piece above against the piece below.
+      edgesE.forEach(e => {
+        let run = null;
+        const flush = () => {
+          if (!run) return;
+          const xa0 = X(run.a), xa1 = X(run.b);
+          const x0 = Math.min(xa0, xa1), x1 = Math.max(xa0, xa1);
+          ink(x0, Y(e), x1, Y(e), run.diff);
+          if (run.diff > 0) shade(x0, Y(e), x1 - x0, depthPx(run.diff));
+          run = null;
+        };
+        for (let i = 0; i < STEPS; i += 1) {
+          const a = uLo + (uHi - uLo) * i / STEPS, b = uLo + (uHi - uLo) * (i + 1) / STEPS;
+          const m = (a + b) / 2;
+          const diff = thAt(m, e + epsE) - thAt(m, e - epsE);   // above less below
+          if (Math.abs(diff) < PROUD_MIN_IN) { flush(); continue; }
+          if (run && Math.abs(run.diff - diff) < 1e-6) run.b = b;
+          else { flush(); run = { a, b, diff }; }
+        }
+        flush();
+      });
+      // Up the face at u: the piece on the left against the piece on the right.
+      edgesU.forEach(u => {
+        let run = null;
+        const xEdge = X(u);
+        const leftU = rightIsHigherU ? u - epsU : u + epsU;
+        const rightU = rightIsHigherU ? u + epsU : u - epsU;
+        const flush = () => {
+          if (!run) return;
+          const y0 = Y(run.b), y1 = Y(run.a);
+          ink(xEdge, y0, xEdge, y1, run.diff);
+          if (run.diff > 0) shade(xEdge, y0, depthPx(run.diff), y1 - y0);
+          run = null;
+        };
+        for (let i = 0; i < STEPS; i += 1) {
+          const a = lines.sill + (lines.head - lines.sill) * i / STEPS;
+          const b = lines.sill + (lines.head - lines.sill) * (i + 1) / STEPS;
+          const m = (a + b) / 2;
+          const diff = thAt(leftU, m) - thAt(rightU, m);   // left less right
+          if (Math.abs(diff) < PROUD_MIN_IN) { flush(); continue; }
+          if (run && Math.abs(run.diff - diff) < 1e-6) run.b = b;
+          else { flush(); run = { a, b, diff }; }
+        }
+        flush();
+      });
     };
 
     // THE HORN IS THE CAP'S OWN PROJECTION, each side, which is what a sill

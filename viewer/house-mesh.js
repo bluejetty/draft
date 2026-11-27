@@ -384,7 +384,9 @@
       const fill = h.type === 'window' ? ['glass', COLOURS.glass]
         : h.type === 'overhead' ? ['overhead', COLOURS.overhead] : ['door', COLOURS.door];
       const pane = [at(h.t0, mid, h.y0), at(h.t1, mid, h.y0), at(h.t1, mid, h.y1), at(h.t0, mid, h.y1)];
-      out.push({ pts: pane, kind: fill[0], colour: fill[1], twoSided: true });
+      // A finish skin (finishSkin) has the hole and its reveals, not a
+      // second pane: the wall behind it already glazed the opening.
+      if (!frame.noFill) out.push({ pts: pane, kind: fill[0], colour: fill[1], twoSided: true });
       if (counts) {
         if (h.type === 'window') counts.windows += 1; else counts.doors += 1;
       }
@@ -451,6 +453,9 @@
     const G = window.DraftGeometry2D;
     if (!format || !CV || !G || !window.DraftCutViewEnv) throw new Error('The drafter modules did not load.');
     if (window.DraftWallTypes && window.DraftWallTypes.adoptDrawing) window.DraftWallTypes.adoptDrawing(saved);
+    // Each finish's thickness and texture as THIS house has them (a
+    // hologram's file is built inside its host and wears the host's).
+    if (!opts.inner && window.DraftWallTypes && window.DraftWallTypes.adoptFinishSettings) window.DraftWallTypes.adoptFinishSettings(saved);
     const levels = opts.levels || format.levels(saved.levels);
     const env = window.DraftCutViewEnv.buildCutViewEnv(saved, levels);
     const stack = CV.sectionLevelStack(env);
@@ -587,8 +592,102 @@
         const r = WT.bandRange ? WT.bandRange(band, lines) : null;
         if (r) cuts.push(r.lo, r.hi);
       });
-      return { lo: outLo ? outside : () => COLOURS.drywall, hi: outHi ? outside : () => COLOURS.drywall, cuts };
+      return { lo: outLo ? outside : () => COLOURS.drywall, hi: outHi ? outside : () => COLOURS.drywall, cuts,
+        outLo, outHi, lines };
     };
+
+    // ── THE FINISH STANDS OUT OFF THE WALL (jb, 27 Nov 2026) ──────────────
+    //
+    // jb: brick "a few inches thicker than siding" should show in 3D. Each
+    // outside face gets a SKIN: the finish's own thickness (wall-types.js
+    // finishById, the house's setting or the catalogue's) standing OUTWARD
+    // off the wall, so the framing stays where it was drawn and only the
+    // cladding moves. Cut where a band starts or stops, up the wall and
+    // along it (its side insets), so a brick wainscot is a slab proud of the
+    // siding above it, its top a ledge you can see. The openings go through
+    // it, with reveals.
+    //
+    // AT AN OUTSIDE CORNER the skin runs on past the wall's corner by its
+    // own thickness, so the two skins close the corner square between them
+    // and, where brick meets siding round a corner, the brick's end stands
+    // proud of the siding on the other face -- the step jb asked to see.
+    // At an inside corner it stops at the face; the neighbour's skin closes
+    // it.
+    const SKIN_MIN_FT = 1 / 96;   // an eighth of an inch: below it, no skin
+    function finishSkin(wall, frame, bottom, top, paint, holes) {
+      if (PRINT || !frame || !paint || !WT || !WT.finishById) return;
+      const lines = paint.lines;
+      const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
+      const E = frame.ends || { lo: [frame.t0, frame.t1], hi: [frame.t0, frame.t1] };
+      [['lo', 'hi', -1, paint.outLo], ['hi', 'lo', 1, paint.outHi]].forEach(([side, other, sg, out]) => {
+        if (!out) return;
+        const ta = E[side][0], tb = E[side][1];
+        if (!(tb - ta > 0.05)) return;
+        // Is each end an OUTSIDE corner (this face runs past the other)?
+        const outerA = E[side][0] < E[other][0] - 1e-3;
+        const outerB = E[side][1] > E[other][1] + 1e-3;
+        // The cells: up the wall at every band edge, along it at every inset.
+        const ys = [bottom, top];
+        const ts = [ta, tb];
+        bands.forEach(band => {
+          const r = WT.bandRange ? WT.bandRange(band, lines) : null;
+          if (r) { ys.push(r.lo, r.hi); }
+          const sp = WT.bandSpan ? WT.bandSpan(band, ta, tb) : null;
+          if (sp) ts.push(sp.lo, sp.hi);
+        });
+        const clean = (list, lo, hi) => [...new Set(list.filter(v => Number.isFinite(v) && v >= lo - 1e-6 && v <= hi + 1e-6)
+          .map(v => Math.round(v * 1e4) / 1e4))].sort((a, b) => a - b);
+        const Y = clean(ys, bottom, top), T = clean(ts, ta, tb);
+        const finishAt = (t, y) => {
+          for (let i = bands.length - 1; i >= 0; i -= 1) {
+            const band = bands[i];
+            const r = WT.bandRange ? WT.bandRange(band, lines) : null;
+            const sp = WT.bandSpan ? WT.bandSpan(band, ta, tb) : { lo: ta, hi: tb };
+            if (r && sp && y >= r.lo && y < r.hi && t >= sp.lo && t < sp.hi) {
+              return { id: band.finishId, color: band.color || wall.finishColor || null };
+            }
+          }
+          return { id: wall.finish || WT.DEFAULT_FINISH_ID, color: wall.finishColor || null };
+        };
+        for (let j = 0; j + 1 < Y.length; j += 1) {
+          const y0 = Y[j], y1 = Y[j + 1];
+          if (!(y1 - y0 > 1e-3)) continue;
+          // Along the row, neighbouring cells of one finish are one piece.
+          const runs = [];
+          for (let i = 0; i + 1 < T.length; i += 1) {
+            const a = T[i], b = T[i + 1];
+            if (!(b - a > 1e-3)) continue;
+            const f = finishAt((a + b) / 2, (y0 + y1) / 2);
+            const last = runs[runs.length - 1];
+            if (last && last.id === f.id && last.color === f.color) last.b = b;
+            else runs.push({ a, b, id: f.id, color: f.color });
+          }
+          runs.forEach(run => {
+            const th = (Number(WT.finishById(run.id).thicknessIn) || 0) / 12;
+            if (!(th >= SKIN_MIN_FT)) return;
+            const a = run.a - (outerA && Math.abs(run.a - ta) < 1e-3 ? th : 0);
+            const b = run.b + (outerB && Math.abs(run.b - tb) < 1e-3 ? th : 0);
+            const face = frame[side];
+            const lo = sg < 0 ? face - th : face, hi = sg < 0 ? face : face + th;
+            const sub = { ...frame, lo, hi, t0: a, t1: b, ends: { lo: [a, b], hi: [a, b] }, noFill: true };
+            const n0 = faces.length;
+            wallWithOpenings(sub, y0, y1, holes, 'finish', finishColour(run.id, run.color), faces, null, null);
+            // THE TEXTURE'S CO-ORDINATES (step 3): feet along the wall from
+            // its start, feet up. A reveal or an end runs across the wall,
+            // so it measures across instead; a ledge or soffit has none.
+            const textured = WT.finishTextureOn ? WT.finishTextureOn(run.id) : true;
+            for (let k = n0; k < faces.length; k += 1) {
+              faces[k].finish = run.id;
+              if (!textured) continue;
+              const nn = normalOf(faces[k].pts);
+              if (Math.abs(nn.y) > 0.7) continue;
+              const alongN = Math.abs(nn.x * frame.n.x + nn.z * frame.n.z) > 0.7;
+              faces[k].tex = { ax: alongN ? frame.u : frame.n, ox: wall.start.x, oz: wall.start.z };
+            }
+          });
+        }
+      });
+    }
 
     // ── WALLS ─────────────────────────────────────────────────────────────
     // The walls each one can meet at a corner: same level, same view.
@@ -646,8 +745,9 @@
         const bottom = fdn.slabTop;
         const top = Math.min(bottom + num(wall.topHeight, 8), fdn.wallTop);
         const frame = joined(wall);
-        wallWithOpenings(frame, bottom, top, holesFor(wall, bottom, top, null), 'wall', COLOURS.wall, faces, counts,
-          paintFor(wall, frame, bottom, top, top));
+        const holes = holesFor(wall, bottom, top, null);
+        const paint = paintFor(wall, frame, bottom, top, top);
+        wallWithOpenings(frame, bottom, top, holes, 'wall', COLOURS.wall, faces, counts, paint);
         counts.walls += 1;
         return;
       }
@@ -670,9 +770,11 @@
         try { const b = CV.garageBearing(env, fdn, garage); if (Number.isFinite(b)) floor = b; } catch (e) { /* keep the storey's */ }
       }
       const frame = joined(wall);
-      wallWithOpenings(frame, bottom, top, holesFor(wall, floor, top, garage),
-        garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces, counts,
-        paintFor(wall, frame, bottom, top, Math.min(top, storey.wallTop)));
+      const holes = holesFor(wall, floor, top, garage);
+      const paint = paintFor(wall, frame, bottom, top, Math.min(top, storey.wallTop));
+      wallWithOpenings(frame, bottom, top, holes,
+        garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces, counts, paint);
+      finishSkin(wall, frame, bottom, top, paint, holes);
       counts.walls += 1;
     }
 
