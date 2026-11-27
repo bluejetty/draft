@@ -98,6 +98,16 @@
       #print-fit.warn, #print-toll.warn { color: var(--warn); }
       .panel .foot button { margin-left: 6px; }
       .panel .foot { margin-top: 8px; text-align: right; }
+      /* ON A SHEET (?embed=1): only the house, the view buttons while it is
+         being turned, nothing else of the program. */
+      body[data-embed="1"] header, body[data-embed="1"] #tools, body[data-embed="1"] #help,
+      body[data-embed="1"] #drop-hint, body[data-embed="1"] .panel { display: none !important; }
+      body[data-embed="1"] { background: #ffffff; }
+      #embed-bar {
+        position: absolute; left: 4px; right: 4px; top: 4px; z-index: 6;
+        display: flex; flex-wrap: wrap; gap: 3px; justify-content: center;
+      }
+      #embed-bar button { font-size: 11px; padding: 1px 6px; line-height: 1.4; }
       [hidden] { display: none !important; }
       @media (max-width: 600px) {
         header h1 { font-size: 20px; }
@@ -183,6 +193,15 @@
         </div>
         <p id="print-toll" data-print-toll></p>
       </section>
+      <div id="embed-bar" hidden>
+        <button type="button" data-preset="front-left" title="From the front, the left corner">FRONT-LEFT</button>
+        <button type="button" data-preset="front" title="The front, square on">FRONT</button>
+        <button type="button" data-preset="front-right" title="From the front, the right corner">FRONT-RIGHT</button>
+        <button type="button" data-preset="side" title="The right side, square on">SIDE</button>
+        <button type="button" data-preset="back" title="From the back corner">BACK</button>
+        <button type="button" data-preset="top" title="Straight down">TOP</button>
+        <button type="button" id="embed-done" class="lit" title="Keep this view on the sheet">DONE</button>
+      </div>
       <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits · LEVELS hide a floor · SECTION cuts the house</div>
     </main>
 

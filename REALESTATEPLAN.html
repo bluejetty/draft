@@ -116,6 +116,8 @@
 <script src="./cut-view.js"></script>
 <script src="./orientation-guard.js"></script>
 <script src="./touch-device.js"></script>
+<!-- The 3D tile: a frame on viewer/, no 3D code on this page (view3d-host.js). -->
+<script src="./view3d-host.js"></script>
 <script>
   // THE SKIN IS ONE CHOICE ACROSS THE WHOLE APP, read off the same
   // `draft-skin` key MODEL writes. Synchronous and in the head: a page written
@@ -191,6 +193,12 @@
     border: 1px solid var(--edge-panel); font: inherit; font-size: 12px;
     padding: 5px 6px; width: 100%;
   }
+  .rail-btn {
+    background: var(--surface-chip); color: var(--ink-primary); font: inherit;
+    font-size: 12px; letter-spacing: .05em; border: 1px solid var(--edge-panel);
+    padding: 5px 6px; cursor: pointer; text-align: left;
+  }
+  .rail-btn:hover { border-color: var(--accent-mark); }
   .empty { font-size: 11px; color: var(--ink-quiet); line-height: 1.45; margin: 0; }
 
   /* THE DESK, AND THE PAPER ON IT. The sheet is white in every skin: it is
@@ -231,6 +239,8 @@
              starts OFF for the same reason he wrote the word. The 3D seat is
              held open and says so: nothing can draw it yet. -->
         <div id="seat-list"></div>
+        <button type="button" id="view3d-reset" class="rail-btn" hidden
+          title="Put the 3D view back to the front-left corner">RESET 3D VIEW</button>
         <p class="rail-title">Sheet</p>
         <div class="prop">
           <label for="paper">Paper</label>
@@ -291,7 +301,7 @@
         return envelope.ok ? parsed : null;
       };
 
-      let drawing = null, levels = [];
+      let drawing = null, levels = [], raw = null;
 
       // A LEVEL EARNS A SEAT BY HAVING WALLS ON IT. layout-plan's own
       // auto-layout works the same way, and for the same reason Movie gave on
@@ -318,16 +328,14 @@
           optional: withWalls.length > 1 && level === lowest && (level.elev || 0) < 0,
           on: !(withWalls.length > 1 && level === lowest && (level.elev || 0) < 0),
         }));
-        // THE 3D SEAT, HELD OPEN. "will have main front 3D View (once
-        // available)" -- so it is on the sheet as a reserved rectangle with its
-        // own label, not as a silence. It cannot be ticked on, because there is
-        // nothing to tick on yet.
         // THE AREAS, as a seat of their own so they can be ticked off like a
         // plan (Movie, 1 Oct: "the floor areas and total house area on main
         // and above levels and area for foundation area").
         seats.push({ kind: 'areas', id: null, label: 'FLOOR AREAS', on: true });
-        seats.push({ kind: 'view3d', id: null, label: 'FRONT 3D VIEW',
-          waiting: true, on: true });
+        // THE 3D VIEW, MADE BY ITSELF (jb, 27 Nov 2026: "automatically
+        // generate one for Real Estate Plans please"): the house from the
+        // front-left corner, turned by a double-click on the tile.
+        seats.push({ kind: 'view3d', id: null, label: 'FRONT 3D VIEW', on: true });
       };
 
       const paintSeats = () => {
@@ -515,13 +523,12 @@
           ctx.restore();
           return;
         }
-        if (seat.kind !== 'plan') {
-          ctx.fillStyle = skin['ink-quiet'];
-          ctx.textAlign = 'center';
-          ctx.fillText('3D VIEW — once available', box.x + box.w / 2, box.y + box.h / 2);
+        if (seat.kind === 'view3d') {
+          drawView3d(ctx, box);
           ctx.restore();
           return;
         }
+        if (seat.kind !== 'plan') { ctx.restore(); return; }
 
         // FRAMED OVER WHAT IS DRAWN, NOT OVER THE WALLS. This asked
         // `wallBounds` until now, and every dimension string on the sheet paid
@@ -604,6 +611,139 @@
         ctx.restore();
       };
 
+      // ── THE 3D VIEW ───────────────────────────────────────────────────
+      //
+      // A PICTURE, NOT A LIVE WINDOW: the house is drawn once by the 3D
+      // viewer (in a frame, view3d-host.js) at the tile's size and kept here
+      // as an image, so the sheet paints and prints it like any other ink.
+      // DOUBLE-CLICK the tile and the live viewer opens over it to be turned;
+      // DONE or a click off it keeps that view, saved for this house.
+      const V3_KEY = 'draft-realestate-3d';
+      const view3d = {
+        camera: null,       // the kept camera, or null for the front-left preset
+        image: null,        // the last picture, an <img>
+        made: null,         // { w, h, camera } the picture was made for
+        box: null,          // the tile in canvas pixels, last paint
+        asking: false, again: false, timer: 0, missing: false,
+      };
+      // WHICH HOUSE: its project block and its first wall, hashed -- the
+      // sheet reads whatever drawing is in storage, and another house must
+      // not open on this one's camera.
+      const houseKey = () => {
+        const d = raw || {};
+        const w = (d.walls || [])[0] || {};
+        const text = JSON.stringify([d.projectInfo || null, w.id, w.start, w.end, w.x1, w.z1, w.x2, w.z2]);
+        let hsh = 5381;
+        for (let i = 0; i < text.length; i += 1) hsh = ((hsh * 33) ^ text.charCodeAt(i)) >>> 0;
+        return hsh.toString(36);
+      };
+      const readCamera = () => {
+        try {
+          const all = JSON.parse(localStorage.getItem(V3_KEY) || '{}');
+          return all[houseKey()] || null;
+        } catch { return null; }
+      };
+      const writeCamera = camera => {
+        try {
+          const all = JSON.parse(localStorage.getItem(V3_KEY) || '{}');
+          if (camera) all[houseKey()] = camera; else delete all[houseKey()];
+          localStorage.setItem(V3_KEY, JSON.stringify(all));
+        } catch { /* storage off: the view lasts as long as the page */ }
+      };
+      const sameCamera = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
+
+      // Contained in the tile, above the label line.
+      const drawView3d = (ctx, box) => {
+        view3d.box = box;
+        const skin = window.__rpSkin;
+        const area = { x: box.x + 2, y: box.y + 2, w: box.w - 4, h: box.h - 18 };
+        if (view3d.image && view3d.image.complete && view3d.image.naturalWidth) {
+          const img = view3d.image;
+          const k = Math.min(area.w / img.naturalWidth, area.h / img.naturalHeight);
+          const w = img.naturalWidth * k, h = img.naturalHeight * k;
+          ctx.drawImage(img, area.x + (area.w - w) / 2, area.y + (area.h - h) / 2, w, h);
+          ctx.fillStyle = skin['ink-quiet'];
+          ctx.font = '600 10px "Barlow Condensed", system-ui, sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText('DOUBLE-CLICK TO TURN', box.x + box.w - 4, box.y + box.h - 5);
+        } else {
+          ctx.fillStyle = skin['ink-quiet'];
+          ctx.textAlign = 'center';
+          ctx.fillText(view3d.missing ? '3D VIEWER NOT INSTALLED' : 'DRAWING THE 3D VIEW…',
+            box.x + box.w / 2, box.y + box.h / 2);
+        }
+        queuePicture();
+      };
+
+      // A new picture when the tile changed size by more than a tenth, or
+      // the camera changed. Made 1.5 times the tile so it prints sharp.
+      const pictureSize = () => {
+        const b = view3d.box;
+        if (!b) return null;
+        const k = Math.min(1.5, 2400 / Math.max(b.w, b.h));
+        return { w: Math.round((b.w - 4) * k), h: Math.round((b.h - 18) * k) };
+      };
+      const wantsPicture = () => {
+        const size = pictureSize();
+        if (!size || !raw || view3d.missing || window.DraftView3dHost?.editing) return false;
+        const made = view3d.made;
+        if (!made) return true;
+        if (!sameCamera(made.camera, view3d.camera)) return true;
+        return Math.abs(made.w - size.w) > made.w * 0.1 || Math.abs(made.h - size.h) > made.h * 0.1;
+      };
+      const queuePicture = () => {
+        if (!wantsPicture()) return;
+        clearTimeout(view3d.timer);
+        view3d.timer = setTimeout(makePicture, 120);
+      };
+      const makePicture = async () => {
+        if (view3d.asking) { view3d.again = true; return; }
+        const host = window.DraftView3dHost;
+        if (!host) { view3d.missing = true; paintSheet(); return; }
+        const size = pictureSize();
+        if (!size) return;
+        view3d.asking = true;
+        const camera = view3d.camera;
+        const out = await host.picture({ drawing: raw, camera, preset: 'front-left', w: size.w, h: size.h });
+        view3d.asking = false;
+        if (!out) {
+          view3d.missing = host.missing;
+          if (view3d.missing) say('3D viewer not installed — the 3D view is left empty.');
+          paintSheet();
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          view3d.image = img;
+          view3d.made = { w: size.w, h: size.h, camera };
+          document.body.dataset.view3d = 'drawn';
+          paintSheet();
+          if (view3d.again) { view3d.again = false; queuePicture(); }
+        };
+        img.src = out.png;
+      };
+
+      // Double-click on the tile: the live viewer over it.
+      const turnView3d = async () => {
+        const host = window.DraftView3dHost;
+        const b = view3d.box;
+        if (!host || !b || !raw || host.editing) return;
+        const cv = document.getElementById('sheet');
+        const r = cv.getBoundingClientRect();
+        const sx = r.width / cv.width, sy = r.height / cv.height;
+        say('Turn the house: drag, wheel to zoom, or a view button. DONE or a click off it keeps the view.');
+        const camera = await host.edit({
+          drawing: raw, camera: view3d.camera, preset: 'front-left',
+          rect: { left: r.left + b.x * sx, top: r.top + b.y * sy, width: b.w * sx, height: (b.h - 16) * sy },
+        });
+        if (!camera) { say('The 3D view is as it was.'); return; }
+        view3d.camera = camera;
+        writeCamera(camera);
+        document.getElementById('view3d-reset').hidden = false;
+        say('3D view kept.');
+        paintSheet();
+      };
+
       const paintSheet = () => {
         const cv = document.getElementById('sheet');
         fitCanvas(cv);
@@ -651,6 +791,7 @@
             x + w / 2, y + h / 2);
           return;
         }
+        view3d.box = null;
         boxesFor(showing.length, inner.x, inner.y, inner.w, inner.h)
           .forEach((box, i) => drawSeat(ctx, showing[i], box));
       };
@@ -674,7 +815,7 @@
         'Drawn the way Construction Layout draws a plan, for now \u2014 say how you '
         + 'want it presented and this is the page it changes on.';
 
-      const raw = await load();
+      raw = await load();
       if (!raw) {
         say('No drawing in browser storage — draw a house in the Model Space first.');
         paintSeats();
@@ -692,6 +833,8 @@
             defaultWallTopFt: 8,
           }),
         };
+        view3d.camera = readCamera();
+        document.getElementById('view3d-reset').hidden = !view3d.camera;
         buildSeats();
         paintSeats();
         paintSheet();
@@ -700,7 +843,26 @@
           : 'This drawing has no plans to lay out yet.');
       }
 
-      window.addEventListener('resize', () => paintSheet());
+      window.addEventListener('resize', () => {
+        window.DraftView3dHost?.stopEditing();
+        paintSheet();
+      });
+      document.getElementById('sheet').addEventListener('dblclick', e => {
+        const b = view3d.box;
+        if (!b) return;
+        const cv = e.currentTarget;
+        const r = cv.getBoundingClientRect();
+        const x = (e.clientX - r.left) * (cv.width / r.width);
+        const y = (e.clientY - r.top) * (cv.height / r.height);
+        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) turnView3d();
+      });
+      document.getElementById('view3d-reset').addEventListener('click', e => {
+        view3d.camera = null;
+        writeCamera(null);
+        e.currentTarget.hidden = true;
+        say('3D view back to the front-left corner.');
+        paintSheet();
+      });
 
       window.DraftShellBars.wireSkin({
         theme: window.__rpTheme.theme,

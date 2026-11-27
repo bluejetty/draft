@@ -2763,7 +2763,7 @@ if (!window.DraftDrawingFormat) {
       const levelIds = refs ? refs.levelIds : hostLevelIds;
       const cutIds = refs ? refs.cutIds : hostCutIds;
       const id = Number(viewport?.id);
-      const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation', 'schedule', 'detail', 'libdetail'], viewport?.kind == null ? 'plan' : null);
+      const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation', 'schedule', 'detail', 'libdetail', 'view3d'], viewport?.kind == null ? 'plan' : null);
       const pif = positive(viewport?.pif, null);
       const xIn = num(viewport?.xIn);
       const yIn = num(viewport?.yIn);
@@ -2851,6 +2851,22 @@ if (!window.DraftDrawingFormat) {
         if (!refs || !Number.isInteger(shelfId) || !refs.detailShelfIds.has(shelfId)) return null;
         seen.add(id);
         return { ...base, shelfId };
+      }
+      // A 3D VIEW (jb, 27 Nov 2026: "the user can put them in Construction
+      // plans too"): the house as the 3D viewer draws it from the camera
+      // kept here, in a window `frameW` x `frameH` paper inches. This
+      // drawing's own house only, for now.
+      if (kind === 'view3d') {
+        if (sourceId) return null;
+        const side = (v, d) => Math.max(1, Math.min(40, positive(v, d)));
+        const c = viewport?.camera;
+        const camera = c && c.target && [c.target.x, c.target.y, c.target.z, c.yaw, c.pitch, c.dist, c.fov]
+          .every(v => typeof v === 'number' && Number.isFinite(v))
+          ? { target: { x: c.target.x, y: c.target.y, z: c.target.z }, yaw: c.yaw, pitch: c.pitch, dist: c.dist, fov: c.fov }
+          : null;
+        seen.add(id);
+        return { ...base, frameW: side(viewport?.frameW, 6), frameH: side(viewport?.frameH, 4.5),
+          ...(camera ? { camera } : {}) };
       }
       if (kind === 'detail') {
         const detail = oneOf(viewport?.detail, LAYOUT_DETAIL_IDS, null);

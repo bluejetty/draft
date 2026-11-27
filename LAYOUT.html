@@ -121,6 +121,8 @@
 <!-- SAVE DXF: the sheets as AutoCAD files for an engineer. -->
 <script src="./dxf-writer.js"></script>
 <script src="./pdf-writer.js"></script>
+<!-- A 3D VIEW viewport: a frame on viewer/, no 3D code on this page. -->
+<script src="./view3d-host.js"></script>
 <!-- HOLOGRAMS (8 Oct): another .draft under this one, its DEMO dashed --
      the same painter the Model Space draws them with. -->
 <script src="./hologram.js"></script>
@@ -1479,6 +1481,11 @@ const isDetail = view => !!view && view.kind === 'detail';
 // detail drawn in a details .draft, placed here at its own scale with its
 // bubble under it. Always from another file -- the library.
 const isLibDetail = view => !!view && view.kind === 'libdetail';
+// A 3D VIEW (jb, 27 Nov 2026): a picture of the house, sized in paper
+// inches like a schedule, so it has no scale either.
+const isView3d = view => !!view && view.kind === 'view3d';
+const VIEW3D_DPI = 150;      // the picture on the desk
+const VIEW3D_PRINT_DPI = 300; // and on paper
 const DETAILS_LIBRARY_BUCKET = 'details-libraries';
 // THE BUBBLE: its circle, in paper inches, and the gap under the frame.
 const LIB_BUBBLE_R_IN = 0.24;
@@ -1845,6 +1852,8 @@ class Component extends PageLogic {
       this._panningViewport = null;
       this._croppingViewport = null;
       e.preventDefault();
+      // A 3D VIEW IS TURNED WHERE IT IS: the live viewer over the window.
+      if (isView3d(hit)) { this._turnView3d(hit.id); return; }
       this._goToModel(hit.id);
     });
     // THE RESIZE ARROW over a grip, so a drafter can see where the window
@@ -2454,6 +2463,7 @@ class Component extends PageLogic {
       const size = this._scheduleSizeIn(view.table);
       return { wFt: size.wIn, hFt: size.hIn, padIn: 0 };
     }
+    if (isView3d(view)) return { wFt: view.frameW || 6, hFt: view.frameH || 4.5, padIn: 0 };
     // A LIBRARY DETAIL is its frame, in real feet: what is inside it prints.
     if (isLibDetail(view)) {
       const found = this._libDetail(view);
@@ -2497,6 +2507,10 @@ class Component extends PageLogic {
     if (isSchedule(viewport)) {
       const size = this._scheduleSizeIn(viewport.table);
       return { xIn: viewport.xIn - size.wIn / 2, yIn: viewport.yIn - size.hIn / 2, wIn: size.wIn, hIn: size.hIn };
+    }
+    if (isView3d(viewport)) {
+      const w = viewport.frameW || 6, h = viewport.frameH || 4.5;
+      return { xIn: viewport.xIn - w / 2, yIn: viewport.yIn - h / 2, wIn: w, hIn: h };
     }
     const foot = this._viewFootprintFt(viewport);
     const wFt = foot ? foot.wFt : null;
@@ -2559,7 +2573,7 @@ class Component extends PageLogic {
   // a finger, which cannot see a cursor and lands less exactly than a mouse.
   // A schedule is a table with nothing behind it to pan, so its body moves.
   _viewportEdgeAt(viewport, ptIn, e) {
-    if (isSchedule(viewport)) return true;
+    if (isSchedule(viewport) || isView3d(viewport)) return true;
     const px = e && e.pointerType === 'touch' ? EDGE_BAND_TOUCH_PX : EDGE_BAND_PX;
     const band = px / (this.state.zoom || 1);
     const r = this._viewportRectIn(viewport);
@@ -3725,6 +3739,10 @@ class Component extends PageLogic {
         });
         ctx.restore();
       }
+    } else if (isView3d(viewport)) {
+      // THE HOUSE IN 3D: the picture the viewer drew for this window,
+      // fitted inside it. Not in a DXF: it is a picture, not line work.
+      if (!('dxfLayer' in ctx) && !opts.export) this._paintView3d(ctx, viewport, px, opts);
     } else if (isSchedule(viewport)) {
       // THE TABLE, laid out on its natural frame and clipped to the window.
       const full = this._naturalRectIn(viewport);
@@ -3814,7 +3832,7 @@ class Component extends PageLogic {
     if (opts.print) {
       // ON PAPER, only the caption: in ink, centred under the drawing.
       // A SCHEDULE HAS NO SCALE, so its caption is its name alone.
-      const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
+      const scale = isSchedule(viewport) || isView3d(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
       ctx.fillStyle = '#1d1f20';
       ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'center';
@@ -3878,7 +3896,7 @@ class Component extends PageLogic {
       this._paintLibBubble(ctx, viewport, px, zoom, selected ? '#5980a6' : '#1d1f20');
       return;
     }
-    const scale = isSchedule(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
+    const scale = isSchedule(viewport) || isView3d(viewport) ? null : { label: scaleLabelOf(viewport.pif) };
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
     ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
     ctx.textAlign = 'center';
@@ -3889,9 +3907,133 @@ class Component extends PageLogic {
     );
   }
 
+  // ── THE 3D VIEW (jb, 27 Nov 2026) ────────────────────────────────────
+  //
+  // A PICTURE OF THE HOUSE, made by the 3D viewer in a frame
+  // (view3d-host.js) and kept here per viewport: one at desk resolution,
+  // asked for whenever the window or the camera changes, and one at print
+  // resolution made just before a PRINT or SAVE PDF. The camera rides on
+  // the viewport (viewport.camera), so it is saved with the sheet.
+  _view3dCache(id) {
+    if (!this._v3) this._v3 = new Map();
+    if (!this._v3.has(id)) this._v3.set(id, { desk: null, print: null, asking: false, again: false });
+    return this._v3.get(id);
+  }
+
+  _view3dSize(viewport, dpi) {
+    const r = this._viewportRectIn(viewport);
+    const k = Math.min(dpi, 4096 / Math.max(r.wIn, r.hIn, 0.1));
+    return { w: Math.max(16, Math.round(r.wIn * k)), h: Math.max(16, Math.round(r.hIn * k)),
+      key: JSON.stringify(viewport.camera || null) };
+  }
+
+  // Ask the viewer for a picture; resolves { img, w, h, key } or null.
+  async _view3dPicture(viewport, size) {
+    const host = window.DraftView3dHost;
+    if (!host || !this._saved) return null;
+    const out = await host.picture({ drawing: this._saved, camera: viewport.camera || null,
+      preset: 'front-left', w: size.w, h: size.h });
+    if (!out) { this._view3dMissing = host.missing; return null; }
+    const img = new Image();
+    await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; img.src = out.png; });
+    return img.naturalWidth ? { img, w: size.w, h: size.h, key: size.key } : null;
+  }
+
+  _queueView3d(viewport) {
+    if (this._view3dMissing || window.DraftView3dHost?.editing) return;
+    const cache = this._view3dCache(viewport.id);
+    const size = this._view3dSize(viewport, VIEW3D_DPI);
+    const have = cache.desk;
+    const close = (a, b) => Math.abs(a - b) <= a * 0.1;
+    if (have && have.key === size.key && close(have.w, size.w) && close(have.h, size.h)) return;
+    if (cache.asking) { cache.again = true; return; }
+    cache.asking = true;
+    this._view3dPicture(viewport, size).then(pic => {
+      cache.asking = false;
+      if (pic) cache.desk = pic;
+      else if (!this._view3dMissing) cache.desk = { failed: true, ...size };
+      document.body.dataset.view3dPictures = String(Number(document.body.dataset.view3dPictures || 0) + 1);
+      // The sheet thumbnails draw it too, and their keys cannot see it come.
+      if (this._thumbKeys) this._thumbKeys.clear();
+      const again = cache.again;
+      cache.again = false;
+      this.setState({ view3dTick: (this.state.view3dTick || 0) + 1 }, () => this._draw());
+      if (again) {
+        const now = this.state.viewports.find(v => v.id === viewport.id);
+        if (now) this._queueView3d(now);
+      }
+    });
+  }
+
+  // The print-sharp pictures for every 3D VIEW on these sheets.
+  async _view3dForPrint(sheets) {
+    const list = this.state.viewports.filter(v => isView3d(v) && sheets.includes(v.sheet || 1));
+    for (const viewport of list) {
+      const size = this._view3dSize(viewport, VIEW3D_PRINT_DPI);
+      const cache = this._view3dCache(viewport.id);
+      if (cache.print && cache.print.key === size.key && cache.print.w === size.w && cache.print.h === size.h) continue;
+      const pic = await this._view3dPicture(viewport, size);
+      if (pic) cache.print = pic;
+    }
+  }
+
+  _paintView3d(ctx, viewport, px, opts) {
+    const cache = this._view3dCache(viewport.id);
+    const key = JSON.stringify(viewport.camera || null);
+    const pic = (opts.print && cache.print && cache.print.key === key && cache.print)
+      || (cache.desk && cache.desk.img && cache.desk);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px.x, px.y, px.w, px.h);
+    ctx.clip();
+    if (pic) {
+      const k = Math.min(px.w / pic.img.naturalWidth, px.h / pic.img.naturalHeight);
+      const w = pic.img.naturalWidth * k, h = pic.img.naturalHeight * k;
+      ctx.drawImage(pic.img, px.x + (px.w - w) / 2, px.y + (px.h - h) / 2, w, h);
+    } else if (!opts.print) {
+      ctx.fillStyle = 'rgba(29,31,32,0.45)';
+      ctx.font = `600 ${Math.max(8, Math.min(14, px.h / 8))}px 'Barlow Condensed', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this._view3dMissing ? '3D VIEWER NOT INSTALLED'
+        : cache.desk && cache.desk.failed ? 'NO 3D VIEW OF THIS DRAWING' : 'DRAWING THE 3D VIEW\u2026',
+      px.x + px.w / 2, px.y + px.h / 2);
+    }
+    ctx.restore();
+    if (!opts.print && !opts.thumb) this._queueView3d(viewport);
+  }
+
+  // DOUBLE-CLICK (or TURN 3D VIEW): the live viewer laid over the window,
+  // with its view buttons and DONE. DONE, or a press anywhere else, keeps
+  // the view.
+  async _turnView3d(id) {
+    const host = window.DraftView3dHost;
+    const viewport = this.state.viewports.find(v => v.id === id);
+    if (!host || !viewport || !this._saved || host.editing) return;
+    const r = this._viewportRectIn(viewport);
+    const c = this._canvas.getBoundingClientRect();
+    const { zoom, panX, panY } = this.state;
+    const camera = await host.edit({
+      drawing: this._saved, camera: viewport.camera || null, preset: 'front-left',
+      rect: { left: c.left + panX + r.xIn * zoom, top: c.top + panY + r.yIn * zoom,
+        width: r.wIn * zoom, height: r.hIn * zoom },
+    });
+    if (camera) this._setView3dCamera(id, camera);
+  }
+
+  _setView3dCamera(id, camera) {
+    const viewports = this.state.viewports.map(v => {
+      if (v.id !== id) return v;
+      const { camera: _old, ...rest } = v;
+      return camera ? { ...rest, camera } : rest;
+    });
+    this.setState({ viewports }, () => { this._persistLayout(); this._draw(); });
+  }
+
   _viewportTitle(viewport) {
     if (this._foreign(viewport)) return this._inSource(viewport.source, () => this._viewportTitle(viewport));
     if (isSchedule(viewport)) return viewport.table === 'door' ? 'DOOR SCHEDULE' : 'WINDOW SCHEDULE';
+    if (isView3d(viewport)) return '3D VIEW';
     if (isLibDetail(viewport)) {
       const found = this._libDetail(viewport);
       return found ? found.shelf.name || `DETAIL ${found.shelf.id}` : 'DETAIL';
@@ -4062,7 +4204,7 @@ class Component extends PageLogic {
     const sheetViewports = this._sheetViewports(sheet);
     // A SCHEDULE HAS NO SCALE: a sheet of schedules alone reads NTS, and a
     // schedule beside a drawing does not make the sheet AS NOTED.
-    const scaled = sheetViewports.filter(viewport => !isSchedule(viewport));
+    const scaled = sheetViewports.filter(viewport => !isSchedule(viewport) && !isView3d(viewport));
     const pifs = [...new Set(scaled.map(viewport => viewport.pif))];
     const scale = pifs.length === 1
       ? (scaleLabelOf(pifs[0]) || 'AS NOTED')
@@ -4096,6 +4238,11 @@ class Component extends PageLogic {
   // the kinds joined when the sheet mixes them.
   _pageTitle(sheetViewports = this._sheetViewports()) {
     if (!sheetViewports.length) return '';
+    // A 3D VIEW names a sheet only when it is alone there: beside a plan it
+    // is a picture of the house that plan is of.
+    const drawn = sheetViewports.filter(viewport => !isView3d(viewport));
+    if (!drawn.length) return '3D VIEW';
+    sheetViewports = drawn;
     const kinds = [...new Set(sheetViewports.map(viewport => viewport.kind))];
     if (kinds.length > 1) {
       // A SHEET OF SCHEDULES AND DETAILS TOGETHER reads SCHEDULES · DETAILS;
@@ -4469,7 +4616,12 @@ class Component extends PageLogic {
       ...(src && !src.library ? [{ key: 'reload-from-file', label: 'RELOAD FROM FILE', on: true,
         title: `Pick ${src.name} again to bring its changes onto every window from it`,
         run: () => this._askSourceFile(src.id) }] : []),
-      { key: 'change-scale', label: 'CHANGE SCALE', on: !isSchedule(viewport),
+      ...(isView3d(viewport) ? [{ key: 'turn-3d', label: 'TURN 3D VIEW', on: Boolean(window.DraftView3dHost),
+        title: 'Turn the house in this window (or double-click it); DONE keeps the view',
+        run: () => this._turnView3d(id) },
+      { key: 'reset-3d', label: 'RESET 3D VIEW', on: Boolean(viewport.camera),
+        title: 'Back to the front-left corner', run: () => this._setView3dCamera(id, null) }] : []),
+      { key: 'change-scale', label: 'CHANGE SCALE', on: !isSchedule(viewport) && !isView3d(viewport),
         title: 'Pick or type a scale for this viewport', run: () => this._openChangeScale(id) },
       { key: 'fit-window', label: 'FIT WINDOW', on: Boolean(viewport.crop),
         title: viewport.crop ? 'Put the window back to fit its drawing' : 'The window already fits its drawing',
@@ -5011,7 +5163,9 @@ class Component extends PageLogic {
       ({ kind: 'detail', detail, label: WS.DETAIL_TITLES[detail] }));
     return [['PLANS', this._saved ? plans : []], ['FLOOR LAYOUTS', this._saved ? floors : []],
       ['SHELVES', shelves], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections],
-      ['SCHEDULES', schedules], ['DETAILS', details]]
+      ['SCHEDULES', schedules], ['DETAILS', details],
+      // THE HOUSE IN 3D (jb, 27 Nov 2026), turned to taste once placed.
+      ['3D VIEW', siteOnly || !this._saved ? [] : [{ kind: 'view3d', label: '3D VIEW' }]]]
       .filter(([, list]) => list.length);
   }
 
@@ -5026,6 +5180,7 @@ class Component extends PageLogic {
       : view.kind === 'elevation' ? `elevation:${view.elevId}`
         : view.kind === 'schedule' ? `schedule:${view.table}`
           : view.kind === 'detail' ? `detail:${view.detail}`
+            : view.kind === 'view3d' ? 'view3d'
             : view.kind === 'libdetail' ? `libdetail:${view.shelfId}` : `section:${view.cutId}`;
     return view.source != null ? `${view.source}|${own}` : own;
   }
@@ -5293,7 +5448,7 @@ class Component extends PageLogic {
       const levelIds = new Set([...this._levels, ...(this._shelfLevels || [])].map(level => level.id));
       const cutIds = new Set(this._cuts.map(cut => cut.id));
       const record = format.layout(raw, levelIds, cutIds);
-      return record.viewports.filter(viewport => viewport.source == null)
+      return record.viewports.filter(viewport => viewport.source == null && !isView3d(viewport))
         .sort((a, b) => (a.sheet - b.sheet) || (a.id - b.id))
         .map(viewport => {
           const { id, xIn: _x, yIn: _y, sheet, ...view } = viewport;
@@ -5426,6 +5581,7 @@ class Component extends PageLogic {
 
   _pickedPif(view) {
     // A SCHEDULE HAS NO SCALE; a detail walks its own ladder.
+    if (isView3d(view)) return SCHEDULE_PIF;
     if (isSchedule(view)) return SCHEDULE_PIF;
     if (isDetail(view)) return this._detailPif(view);
     // A LIBRARY DETAIL COMES AT THE SCALE IT WAS DRAWN AT (its card).
@@ -5458,6 +5614,12 @@ class Component extends PageLogic {
       xIn: ptIn.xIn,
       yIn: ptIn.yIn,
       sheet: this.state.activeSheet,
+      // A 3D VIEW comes 6" x 4.5", or a third of the paper if that is less.
+      ...(isView3d(view) ? (() => {
+        const region = this._composeRegionIn();
+        const w = Math.max(2, Math.min(6, region.w / 2));
+        return { frameW: +w.toFixed(2), frameH: +(w * 0.75).toFixed(2) };
+      })() : {}),
     };
     this.setState({
       viewports: [...this.state.viewports, viewport],
@@ -6591,6 +6753,12 @@ class Component extends PageLogic {
       canvases.forEach(canvas => { canvas.width = canvas.height = 0; });
     };
     try {
+      // THE 3D VIEWS, drawn sharp for paper before the sheets are.
+      if (this.state.viewports.some(v => isView3d(v) && sheets.includes(v.sheet || 1))) {
+        this._printMessage = 'Drawing the 3D views\u2026';
+        this._paintPrintDialog();
+        await this._view3dForPrint(sheets);
+      }
       for (let i = 0; i < sheets.length; i += 1) {
         this._printMessage = `Drawing sheet ${sheets[i]} (${i + 1} of ${sheets.length})\u2026`;
         this._paintPrintDialog();

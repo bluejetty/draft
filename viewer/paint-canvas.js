@@ -69,10 +69,13 @@
       }
     }
 
-    function render(camera, look) {
+    // `size` ({ W, H } in pixels) draws at that exact size instead of the
+    // canvas's size on screen: a picture for a sheet, made off screen.
+    function render(camera, look, size) {
       const dpr = window.devicePixelRatio || 1;
       const w = canvas.clientWidth, h = canvas.clientHeight;
-      const W = Math.max(1, Math.round(w * dpr)), H = Math.max(1, Math.round(h * dpr));
+      const W = size ? Math.max(1, Math.round(size.W)) : Math.max(1, Math.round(w * dpr));
+      const H = size ? Math.max(1, Math.round(size.H)) : Math.max(1, Math.round(h * dpr));
       if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
       buffers(W, H);
       const [br, bg, bb] = hexRgb(look.background);
@@ -151,7 +154,7 @@
       // The edges, darkened in where nothing nearer covers them. A pixel on
       // an edge is shared with the face it bounds, so the test allows a
       // little slack toward the eye.
-      const thick = Math.max(1, Math.round(dpr));
+      const thick = size ? Math.max(1, Math.round(Math.min(W, H) / 500)) : Math.max(1, Math.round(dpr));
       for (let i = 0; i < lines.length; i += 2) {
         const P = lines[i], Q = lines[i + 1];
         const steps = Math.ceil(Math.max(Math.abs(Q.x - P.x), Math.abs(Q.y - P.y)));
