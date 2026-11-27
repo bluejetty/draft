@@ -110,8 +110,12 @@ test('the area box starts off, goes on with a tick, and comes off like a plan', 
   await expect(box).not.toBeChecked();
   await areasOn(page);
   await expect(box).toBeChecked();
-  await page.evaluate(() => { window.__rpAreas = null; });
   await box.uncheck();
+  // A paint already on its way when the tick came off (the 3D views land
+  // late) may still carry the box; what counts is every paint after it.
+  // So the record is cleared AFTER the untick and a paint is asked for.
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { window.__rpAreas = null; window.dispatchEvent(new Event('resize')); });
   await page.waitForTimeout(200);
   expect(await page.evaluate(() => window.__rpAreas)).toBe(null);
 });
