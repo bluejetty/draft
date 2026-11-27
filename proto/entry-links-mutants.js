@@ -22,8 +22,9 @@ const MUTANTS = [
     test: 'INTERNET LINKS stands under REFERENCES, below the codes link, and opens the links page' },
   { file: 'index.html',
     name: 'INTERNET LINKS lands in the BOOKS column',
-    find: '            <a class="ring-link" href="LINKS.html" data-box="11">INTERNET LINKS</a>\n          </div>\n          <div class="ring-column ring-column-right">\n            <span class="ring-title">Books</span>\n',
-    with: '          </div>\n          <div class="ring-column ring-column-right">\n            <span class="ring-title">Books</span>\n            <a class="ring-link" href="LINKS.html" data-box="11">INTERNET LINKS</a>\n',
+    // Past RUFF LANDSCAPE (27 Nov 2026), which stands under it in the column.
+    find: "            <a class=\"ring-link\" href=\"LINKS.html\" data-box=\"11\">INTERNET LINKS</a>\n            <!-- THE LANDSCAPE PROGRAM (jb, 27 Nov 2026: \"can you put it above\n                 Rough 3D under REFERENCES stuff and internet links\"). Named by\n                 the skin as RUFF 3D is (the script at the foot). A link only:\n                 this page loads nothing of landscape/ (tests/landscape.spec.js). -->\n            <a class=\"ring-link\" href=\"landscape/\" data-landscape-link\n               title=\"Open a .draft and grade the lot round the house\">RUFF LANDSCAPE</a>\n          </div>\n          <div class=\"ring-column ring-column-right\">\n            <span class=\"ring-title\">Books</span>\n",
+    with: "            <!-- THE LANDSCAPE PROGRAM (jb, 27 Nov 2026: \"can you put it above\n                 Rough 3D under REFERENCES stuff and internet links\"). Named by\n                 the skin as RUFF 3D is (the script at the foot). A link only:\n                 this page loads nothing of landscape/ (tests/landscape.spec.js). -->\n            <a class=\"ring-link\" href=\"landscape/\" data-landscape-link\n               title=\"Open a .draft and grade the lot round the house\">RUFF LANDSCAPE</a>\n          </div>\n          <div class=\"ring-column ring-column-right\">\n            <span class=\"ring-title\">Books</span>\n            <a class=\"ring-link\" href=\"LINKS.html\" data-box=\"11\">INTERNET LINKS</a>\n",
     test: 'INTERNET LINKS stands under REFERENCES, below the codes link, and opens the links page' },
   { file: 'links-catalog.js',
     name: 'the converter is not the first link',

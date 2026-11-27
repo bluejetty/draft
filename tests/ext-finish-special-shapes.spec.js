@@ -228,3 +228,44 @@ test('+ Special shape: click the corners, the first again closes it; corners sna
   [sp[0].pts[0].s, sp[0].pts[0].h].forEach(v => expect(Math.abs(v * 12 - Math.round(v * 12))).toBeLessThan(0.005));
   expect(Math.abs(sp[0].pts[0].h - 1)).toBeLessThan(0.09);
 });
+
+test('zoomed in: a special lands where the mouse is, and dragging it moves the special, not the view', async ({ page }) => {
+  // PR #1148 gave EXT. FINISH a wheel zoom and a drag pan; a special is
+  // placed and dragged in the zoomed frame, and a left drag on the picked
+  // special is the special's, not a pan.
+  await openPage(page);
+  const centre = await page.evaluate(() => {
+    const f = window.__extFinishFrame;
+    return { x: f.x0 + (6.5 - f.uMin) * f.pxPerFt, y: f.y0 + (f.yTop - 3) * f.pxPerFt };
+  });
+  await page.evaluate(c => window.__extFinishZoom.zoom(c.x, c.y, 3), centre);
+  await expect.poll(() => page.evaluate(() => window.__extFinishZoom.pinned())).toBe(true);
+  await pick(page, 6.5, 3);
+  await page.locator('#special-finish').selectOption('shake');
+  await page.fill('#special-w', '3');
+  await page.fill('#special-h', '2');
+  await page.click('#special-rect');
+  const at = await screenAt(page, 8, 2);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.click(at.x, at.y);
+  await expect.poll(async () => (await stored(page)).length).toBe(1);
+  const a = (await stored(page))[0].pts[0];
+  // Three times the pixels, so good to a third of an inch's worth of error.
+  expect(Math.abs(a.s - 2)).toBeLessThan(0.05);
+  expect(Math.abs(a.h - 2)).toBeLessThan(0.05);
+
+  const before = await page.evaluate(() => ({ x0: window.__extFinishFrame.x0, y0: window.__extFinishFrame.y0 }));
+  // Inside it (s 2..5 is u 11..8), 1 ft left on screen: s +1.
+  const from = await screenAt(page, 9.5, 3);
+  const to = await screenAt(page, 8.5, 3);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + to.x) / 2, from.y);
+  await page.mouse.move(to.x, to.y);
+  await page.mouse.up();
+  await expect.poll(async () => (await stored(page))[0].pts[0].s).not.toBe(a.s);
+  const moved = (await stored(page))[0].pts[0].s - a.s;
+  expect(Math.abs(moved - 1), 'moved 1 ft along the wall').toBeLessThan(0.05);
+  const after = await page.evaluate(() => ({ x0: window.__extFinishFrame.x0, y0: window.__extFinishFrame.y0 }));
+  expect(after, 'the view did not pan').toEqual(before);
+});
