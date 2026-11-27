@@ -60,5 +60,32 @@
     } };
   }
 
-  window.DraftViewerCamera = Object.freeze({ fit, eyeOf, basis, orbit, zoom, pan });
+  // The camera pulled in or out (and its target centred) so the whole box
+  // `bounds` fills `fill` of a picture `aspect` wide per unit high, seen
+  // from the camera's own yaw and pitch. For a view made for a sheet, where
+  // the picture's shape is the tile's, not the window's.
+  function frame(c, bounds, aspect = 1, fill = 0.9) {
+    const { lo, hi } = bounds;
+    const target = { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2, z: (lo.z + hi.z) / 2 };
+    const corners = [];
+    [lo.x, hi.x].forEach(x => [lo.y, hi.y].forEach(y => [lo.z, hi.z].forEach(z => corners.push({ x, y, z }))));
+    const tanV = Math.tan(rad(c.fov / 2)), tanH = tanV * Math.max(aspect, 0.05);
+    let cam = { ...c, target, dist: Math.max(hi.x - lo.x, hi.y - lo.y, hi.z - lo.z, 10) * 2 };
+    for (let i = 0; i < 8; i += 1) {
+      const b = basis(cam);
+      let need = 0;
+      corners.forEach(p => {
+        const q = b.toCamera(p);
+        const z = Math.max(q.z, 1e-3);
+        need = Math.max(need, Math.abs(q.x) / (z * tanH), Math.abs(q.y) / (z * tanV));
+      });
+      if (!(need > 0)) break;
+      const next = cam.dist * need / fill;
+      if (Math.abs(next - cam.dist) < cam.dist * 0.002) { cam = { ...cam, dist: next }; break; }
+      cam = { ...cam, dist: next };
+    }
+    return cam;
+  }
+
+  window.DraftViewerCamera = Object.freeze({ fit, frame, eyeOf, basis, orbit, zoom, pan });
 })();

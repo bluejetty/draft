@@ -8,6 +8,9 @@
 //    no-third-party.spec.js does), so a page added tomorrow is covered.
 //    MODEL.dc.html is the one exception: the OLD editor has always loaded
 //    three.js for its own wireframe, and it is not the page jb draws on.
+//    The sheet pages' 3D tiles (view3d-host.js, 27 Nov 2026) open viewer/
+//    in a FRAME, a separate page: none of its code runs in the sheet, and
+//    with viewer/ gone the tile says so (tests/realestate-3d.spec.js).
 //
 // 2. THE VIEWER BUILDS THE HOUSE from a .draft and from a SAVE AS ZIP, with
 //    the plain-canvas painter jb's own PC (no graphics card, no WebGL) uses.

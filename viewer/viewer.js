@@ -102,6 +102,7 @@
       if (!state.painter || !state.camera) return;
       state.lastDrawn = state.painter.render(state.camera, LOOK);
       state.frames += 1;
+      if (EMBED) toParent({ type: 'draft-viewer-camera', camera: state.camera });
       document.body.dataset.frames = String(state.frames);
     });
   }
@@ -249,7 +250,8 @@
     const C = window.DraftViewerCamera;
     let drag = null;
     // The EXPORT panel floats over the stage: presses on it are its own.
-    const onPanel = e => !!(e.target.closest && e.target.closest('.panel'));
+    // So is the view-button bar on a sheet (?embed=1).
+    const onPanel = e => !!(e.target.closest && e.target.closest('.panel, #embed-bar'));
     stage.addEventListener('contextmenu', e => { if (!onPanel(e)) e.preventDefault(); });
     stage.addEventListener('pointerdown', e => {
       if (!state.camera || onPanel(e)) return;
@@ -579,6 +581,98 @@
     window.addEventListener('draft-bones-changed', () => { if (!$('print').hidden && !printing) showPrintToll(); });
   }
 
+  // ── EMBEDDED ON A SHEET (?embed=1) ─────────────────────────────────────
+  //
+  // jb, 27 Nov 2026: a 3D window on the REAL ESTATE PLAN (made by itself)
+  // and on CONSTRUCTION LAYOUT (added by the drafter), with the camera his
+  // to turn. The sheet pages are 2D and load none of this: view3d-host.js
+  // opens this page in a frame and talks to it by message, same site only.
+  //   in   draft-viewer-drawing  { drawing, name, camera?, preset? }
+  //   in   draft-viewer-preset   { preset }
+  //   in   draft-viewer-edit     { on }       the view buttons and DONE show
+  //   in   draft-viewer-picture  { id, w, h, camera?, preset?, look? }
+  //   out  draft-viewer-ready, draft-viewer-loaded { camera },
+  //        draft-viewer-camera { camera }, draft-viewer-done { camera },
+  //        draft-viewer-picture { id, png, camera }
+  const EMBED = new URLSearchParams(location.search).get('embed') === '1';
+  const PRESETS = Object.freeze({
+    'front-left': { turn: -35, pitch: 20 },
+    'front': { turn: 0, pitch: 8 },
+    'front-right': { turn: 35, pitch: 20 },
+    'side': { turn: 90, pitch: 8 },
+    'back': { turn: 180 + 35, pitch: 20 },
+    'top': { turn: 0, pitch: 89 },
+  });
+  // The yaw that looks at E1, the front, square on. E1 follows the house
+  // turn round the plan (cut-marks.js): south, west, north, east for a turn
+  // of 0, 1, 2, 3 -- and yaw 0 has the eye to the south (+z).
+  function frontYaw() {
+    const turn = ((Math.round(Number(state.saved && state.saved.planTurn) || 0) % 4) + 4) % 4;
+    return [0, 270, 180, 90][turn];
+  }
+  function presetCamera(name, aspect) {
+    const p = PRESETS[name] || PRESETS['front-left'];
+    const base = { target: { x: 0, y: 0, z: 0 }, yaw: (frontYaw() + p.turn + 360) % 360, pitch: p.pitch, dist: 100, fov: 40 };
+    return state.bounds ? window.DraftViewerCamera.frame(base, state.bounds, aspect) : base;
+  }
+  const stageAspect = () => {
+    const st = $('stage');
+    return st && st.clientHeight ? st.clientWidth / st.clientHeight : 4 / 3;
+  };
+  const toParent = msg => {
+    if (!EMBED || window.parent === window) return;
+    try { window.parent.postMessage(msg, location.origin); } catch (e) { /* the sheet went away */ }
+  };
+  const goodCamera = c => !!(c && c.target && [c.target.x, c.target.y, c.target.z, c.yaw, c.pitch, c.dist, c.fov].every(Number.isFinite));
+
+  // A picture of the house for a sheet: the plain painter, off screen, at
+  // the size asked, on white paper with the edges inked.
+  function picture(w, h, camera, preset, look) {
+    const W = Math.max(16, Math.min(4096, Math.round(w))), H = Math.max(16, Math.min(4096, Math.round(h)));
+    const cam = goodCamera(camera) ? camera : presetCamera(preset || 'front-left', W / H);
+    const canvas = document.createElement('canvas');
+    const painter = window.DraftPaintCanvas.create(canvas);
+    painter.setFaces(state.shown);
+    painter.render(cam, { ...LOOK, background: '#ffffff', edges: true, ambient: 0.5, ...(look || {}) }, { W, H });
+    return { png: canvas.toDataURL('image/png'), camera: cam };
+  }
+
+  function listenForHost() {
+    document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
+      state.camera = presetCamera(b.dataset.preset, stageAspect());
+      redraw();
+    }));
+    $('embed-done').addEventListener('click', () => toParent({ type: 'draft-viewer-done', camera: state.camera }));
+    window.addEventListener('message', e => {
+      if (e.origin !== location.origin || e.source !== window.parent || !e.data) return;
+      const m = e.data;
+      try {
+        if (m.type === 'draft-viewer-drawing') {
+          loadDrawing(m.drawing, m.name || 'drawing');
+          state.camera = goodCamera(m.camera) ? m.camera : presetCamera(m.preset || 'front-left', stageAspect());
+          redraw();
+          toParent({ type: 'draft-viewer-loaded', camera: state.camera, faces: state.faces.length });
+        } else if (m.type === 'draft-viewer-preset') {
+          state.camera = presetCamera(m.preset, stageAspect());
+          redraw();
+        } else if (m.type === 'draft-viewer-edit') {
+          const was = document.body.dataset.editing === '1';
+          document.body.dataset.editing = m.on ? '1' : '';
+          $('embed-bar').hidden = !m.on;
+          // Switched off by the sheet (a click off the frame): the camera
+          // as it is now, which the trailing redraw reports may not have yet.
+          if (was && !m.on) toParent({ type: 'draft-viewer-done', camera: state.camera });
+        } else if (m.type === 'draft-viewer-picture') {
+          const out = picture(m.w, m.h, m.camera, m.preset, m.look);
+          toParent({ type: 'draft-viewer-picture', id: m.id, png: out.png, camera: out.camera });
+        }
+      } catch (err) {
+        toParent({ type: 'draft-viewer-error', id: m.id, message: String(err && err.message ? err.message : err) });
+      }
+    });
+    toParent({ type: 'draft-viewer-ready' });
+  }
+
   // ── BOOT ───────────────────────────────────────────────────────────────
   function boot() {
     const brand = brandName();
@@ -642,7 +736,15 @@
     setStatus('Open a .draft or a SAVE AS ZIP to see the house.');
     wireExport();
     wirePrint();
-    listenForDrafter();
+    if (EMBED) {
+      document.body.dataset.embed = '1';
+      // On a sheet the house stands on the paper: white, edges inked, as
+      // the picture the sheet keeps is drawn.
+      LOOK.background = '#ffffff';
+      LOOK.edges = true;
+      LOOK.ambient = 0.5;
+      listenForHost();
+    } else listenForDrafter();
     document.body.dataset.ready = '1';
   }
 
@@ -682,7 +784,7 @@
     }
   }
 
-  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView, exportFile, savePrint };
+  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView, exportFile, savePrint, presetCamera, picture };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
