@@ -2153,13 +2153,36 @@ suite('drawDimension2D', 'a stepped-down figure sits off the line, away from wha
 // 1'-11 3/8" neighbour's, both on the stepped-down row). A stepped-down
 // figure wider than its own run stands one plate further out, 26 rather than
 // 10, clear of the row the fitting figures use; one that fits stays at 10.
-suite('drawDimension2D', 'a figure too wide even stepped down stands a second row out', R => {
+// THE SECOND ROW IS EARNED (jb, 27 Nov 2026: "the SMALLER 5 1/2" 3 1/2" etc
+// dimensions go too far up or too far down away from the dimension"). A
+// figure too wide even stepped down stays on the close row unless a plate
+// already drawn this paint is in the way (jb, 25 Nov: a 15/16" piece beside
+// its 1'-11 3/8" neighbour); only then does it stand a row further out.
+suite('drawDimension2D', 'an overflowing figure with nothing beside it stays close to its line', R => {
   const OVER = { start: { x: 0, z: 0 }, end: { x: 0.3, z: 0 } };
-  expect('a second row off the line', dimLabelAt(R, OVER)[1], 345);
-  expect('beyond the stepped-down row', dimLabelAt(R, OVER)[1] > 329, true);
+  expect('on the close row, no env list', dimLabelAt(R, OVER)[1], 329);
+  expect('on the close row, empty list', dimLabelAt(R, OVER, { ...dimEnv, placedPlates: [] })[1], 329);
   expect('still centred on its run', dimLabelAt(R, OVER)[0], 401.5);
-  expect('on a sheet, away from the ticks', dimLabelAt(R, OVER, { ...dimEnv, atLine: true })[1], 326);
-  expect('in paper units', dimLabelAt(R, OVER, { ...dimEnv, atLine: true, inkScale: 2 })[1], 352);
+  expect('on a sheet, away from the ticks', dimLabelAt(R, OVER, { ...dimEnv, atLine: true, placedPlates: [] })[1], 310);
+});
+
+suite('drawDimension2D', 'an overflowing figure steps a row out only past a figure in the way', R => {
+  const OVER = { start: { x: 0, z: 0 }, end: { x: 0.3, z: 0 } };
+  // A neighbour stepped down and outboard on the same row, just to the right.
+  const NEXT = { start: { x: 0.3, z: 0 }, end: { x: 3.5, z: 0 } };
+  const placedPlates = [];
+  const env = { ...dimEnv, placedPlates };
+  dimLabelAt(R, NEXT, env);
+  expect('the neighbour is recorded', placedPlates.length, 1);
+  expect('a second row off the line', dimLabelAt(R, OVER, env)[1], 345);
+  expect('on a sheet, away from the ticks', dimLabelAt(R, OVER, { ...dimEnv, atLine: true, placedPlates: (() => {
+    const p = []; dimLabelAt(R, NEXT, { ...dimEnv, atLine: true, placedPlates: p }); return p; })() })[1], 326);
+  expect('in paper units', dimLabelAt(R, OVER, { ...dimEnv, atLine: true, inkScale: 2, placedPlates: (() => {
+    const p = []; dimLabelAt(R, NEXT, { ...dimEnv, atLine: true, inkScale: 2, placedPlates: p }); return p; })() })[1], 352);
+  // A figure far along the line is no obstacle.
+  const far = [];
+  dimLabelAt(R, { start: { x: 20, z: 0 }, end: { x: 23.2, z: 0 } }, { ...dimEnv, placedPlates: far });
+  expect('a figure far away leaves it on the close row', dimLabelAt(R, OVER, { ...dimEnv, placedPlates: far })[1], 329);
 });
 
 // AND IT IS STILL PRINTED. Stepping down is not hiding: a figure too big

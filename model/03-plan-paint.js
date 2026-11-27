@@ -191,6 +191,9 @@
 
   const dimensionEnv = () => ({
     textScale: dimTextScale(),
+    // Figures placed so far this paint (render-2d: an overflowing figure
+    // steps out a row only past one of these). Fresh per paint.
+    placedPlates: [],
     // IMPERIAL IS THE FALL-THROUGH, DELIBERATELY -- MODEL.dc.html:8058 reads
     // `units !== 'metric'`, not `units === 'imperial'`. Nothing normalises
     // `units`: drawing-format.js has no rule for it, so it arrives here raw

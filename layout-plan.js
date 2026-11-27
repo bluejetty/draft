@@ -504,6 +504,9 @@ if (!window.DraftLayoutPlan) {
         label: dimLabel(saved),
         colors: DIMENSION_COLORS,
         atLine: true,
+        // Figures placed so far this draw (render-2d: an overflowing figure
+        // steps out a row only past one of these).
+        placedPlates: [],
         // Paper units: the sheet zoom over its print zoom (render-2d).
         inkScale: env.inkScale,
       };
@@ -1053,6 +1056,9 @@ if (!window.DraftLayoutPlan) {
         label: dimLabel(saved),
         colors: DIMENSION_COLORS,
         atLine: true,
+        // Figures placed so far this draw (render-2d: an overflowing figure
+        // steps out a row only past one of these).
+        placedPlates: [],
         inkScale: env.inkScale,
       },
       noteEnv: { color: '#1d1f20', fillColor: env.paperColor || '#ffffff', inkScale: env.inkScale },
@@ -1194,6 +1200,9 @@ if (!window.DraftLayoutPlan) {
         // 19px stand-off would add a second offset in a different unit on top
         // of it -- the two rows would sit at a different spacing on every zoom.
         atLine: true,
+        // Figures placed so far this draw (render-2d: an overflowing figure
+        // steps out a row only past one of these).
+        placedPlates: [],
         inkScale: env.inkScale,
       };
       rows.forEach(row => render.drawDimension2D(ctx, toS, row, {}, dimensionEnv));
@@ -1799,6 +1808,9 @@ if (!window.DraftLayoutPlan) {
         // THE LINE WHERE IT IS STORED, so the frame (sized to the records)
         // holds every row of a stack (render-2d drawDimension2D).
         atLine: true,
+        // Figures placed so far this draw (render-2d: an overflowing figure
+        // steps out a row only past one of these).
+        placedPlates: [],
         // AND ITS INK IN PAPER UNITS: ticks and figures scale with the sheet
         // when it zooms instead of holding their screen size (Movie, 11 Oct).
         inkScale: env.inkScale,

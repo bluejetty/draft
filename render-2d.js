@@ -3968,12 +3968,52 @@ if (!window.DraftRender2D) {
     // short piece's figure is many times wider than its own run, so it
     // sprawled across its neighbour's. A stepped-down figure that still
     // overflows its run stands one plate further out: the tight row's plate
-    // runs 2..17 off the line, so 26 puts this one's 3px clear beyond it.
-    // A figure that fits stays exactly where the 13 Oct rule put it.
+    // runs 2..17 off the line, so a row 16 further (26) puts this one's 3px
+    // clear beyond it. A figure that fits stays where the 13 Oct rule put it.
     // The figure is measured at the full size above; the stepped-down one is
     // the same text at 8/11 of it.
     const overflows = tight && ctx.measureText(label).width * 8 / 11 > room;
-    const push = overflows ? 26 * k * t : tight ? 10 * k * t : 0;
+    // ── BUT ONLY WHEN SOMETHING IS ACTUALLY IN THE WAY ───────────────────
+    //
+    // jb, 27 Nov 2026, on TIMBERHOUSE's main floor: "the SMALLER 5 1/2"
+    // 3 1/2" etc dimensions go too far up or too far down away from the
+    // dimension". The second row above went to EVERY figure that overflowed
+    // -- which is every wall thickness at plan scale -- so a 5 1/2" figure
+    // with nothing beside it stood a whole row out, level with the next
+    // string, and read as part of that string instead of its own.
+    //
+    // SO THE SECOND ROW IS EARNED. An overflowing figure tries the tight row
+    // first, right against its line, and steps out a row only if its plate
+    // there would land on a plate already drawn this paint (the 25 Nov
+    // 15/16" beside its 1'-11 3/8"). The caller hands a fresh `placedPlates`
+    // array per paint; a caller that hands none gets the close row.
+    const plates = env && Array.isArray(env.placedPlates) ? env.placedPlates : null;
+    const angleT = (() => {
+      let a = Math.atan2(db.y - da.y, db.x - da.x);
+      while (a >= Math.PI / 2) a -= Math.PI;
+      while (a < -Math.PI / 2) a += Math.PI;
+      return a;
+    })();
+    ctx.font = labelFont;
+    const plateW = ctx.measureText(label).width + 6 * k * t;
+    const plateH = 15 * k * t;
+    // The plate as an axis-aligned box on screen, its centre `push` out.
+    const plateAt = push => {
+      const cx = (da.x + db.x) / 2 + nx * push, cy = (da.y + db.y) / 2 + ny * push;
+      const c = Math.abs(Math.cos(angleT)), s = Math.abs(Math.sin(angleT));
+      const hw = (plateW * c + plateH * s) / 2, hh = (plateW * s + plateH * c) / 2;
+      return { x0: cx - hw, x1: cx + hw, y0: cy - hh, y1: cy + hh };
+    };
+    const hits = box => plates && plates.some(o =>
+      box.x0 < o.x1 - 0.5 && o.x0 < box.x1 - 0.5 && box.y0 < o.y1 - 0.5 && o.y0 < box.y1 - 0.5);
+    // At most three rows out; if every one is taken (a busy corner where the
+    // next string's figures sit) the close row is the least wrong place.
+    let push = tight ? 10 * k * t : 0;
+    if (overflows && hits(plateAt(push))) {
+      const free = [1, 2, 3].map(row => push + row * 16 * k * t).find(p => !hits(plateAt(p)));
+      if (free !== undefined) push = free;
+    }
+    if (plates) plates.push(plateAt(push));
     labelAlongLine2D(ctx,
       { x: da.x + nx * push, y: da.y + ny * push },
       { x: db.x + nx * push, y: db.y + ny * push },
