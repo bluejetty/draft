@@ -48,6 +48,70 @@ if (!window.DraftCutView) {
   // reads. If this file is ever refactored, make it an argument.
   let TEXT_SCALE = 1;
   const textPx = px => px * TEXT_SCALE;
+  // ── LEVEL READINGS THAT WOULD PRINT ON TOP OF EACH OTHER ──────────────
+  //
+  // Audit, 27 Nov 2026, the corner-garage house's E1: +10'-1 3/4" printed
+  // over +9'-1 1/8", and 0'-0" over -1'-0 5/8". Two levels a foot apart are
+  // nine or ten pixels apart at an elevation's fit, and a reading is about
+  // that tall, so the two figures ran into one smudge.
+  //
+  // THE LINES STAY WHERE THE LEVELS ARE; ONLY THE FIGURES MOVE. Each group
+  // of readings that would touch is spread to `gap` apart about the middle
+  // of where they wanted to be, and spreading again until nothing touches
+  // (a spread group can run into its neighbour). Returns the y each reading
+  // is printed at, in the order handed in. Readings with room are untouched.
+  const spreadReadings = (ys, gap) => {
+    const order = ys.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
+    let groups = order.map(o => ({ items: [o], top: o.y }));
+    for (let pass = 0; pass < ys.length + 1; pass += 1) {
+      let merged = false;
+      const next = [];
+      groups.forEach(g => {
+        const last = next[next.length - 1];
+        if (last && g.top < last.top + last.items.length * gap - 0.01) {
+          last.items.push(...g.items);
+          const mean = last.items.reduce((sum, o) => sum + o.y, 0) / last.items.length;
+          last.top = mean - (last.items.length - 1) * gap / 2;
+          merged = true;
+        } else next.push({ items: [...g.items], top: g.top });
+      });
+      groups = next;
+      if (!merged) break;
+    }
+    const out = new Array(ys.length);
+    groups.forEach(g => g.items.forEach((o, k) => { out[o.i] = g.top + k * gap; }));
+    return out;
+  };
+  // Print the level readings down the left margin, right-aligned at
+  // `marginL - 22`, spread so none prints over another. The same figure at
+  // the same height twice (a wall top that is the next floor's top) prints
+  // once. A reading moved off its line gets a short leader back to it.
+  const printReadings = (ctx, readings, marginL, ink) => {
+    if (!readings.length) return;
+    const seen = new Set();
+    const list = readings.filter(r => {
+      const key = `${r.text}@${Math.round(r.y)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const px = textPx(9);
+    const at = spreadReadings(list.map(r => r.y), px + 2);
+    ctx.save();
+    ctx.font = `600 ${px}px 'Barlow Condensed', system-ui, sans-serif`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    list.forEach((r, i) => {
+      if (Math.abs(at[i] - r.y) > 0.5) {
+        ctx.strokeStyle = ink(0.25); ctx.lineWidth = 0.75;
+        ctx.beginPath();
+        ctx.moveTo(marginL - 21, at[i]); ctx.lineTo(marginL - 18, r.y);
+        ctx.stroke();
+      }
+      ctx.fillStyle = ink(0.6);
+      ctx.fillText(r.text, marginL - 22, at[i]);
+    });
+    ctx.restore();
+  };
   let warnedNoPatterns = false;
   let warnedNoRoofPatterns = false;
   let warnedNoFootings = false;
@@ -2895,21 +2959,22 @@ if (!window.DraftCutView) {
 
     // Elevation marks down the left margin, on the level-card datum.
     const datum = env.elevationDatum();
+    // The lines go down as each level is met; the readings wait for
+    // printReadings, which spreads any that would touch (spreadReadings).
+    const readings = [];
     const mark = (elevFt, label) => {
       if (hologramPass(opts)) return;
       ctx.strokeStyle = ink(0.25); ctx.lineWidth = 0.75;
       ctx.beginPath();
       ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
       ctx.stroke();
-      ctx.fillStyle = ink(0.6);
-      ctx.font = `600 ${textPx(9)}px 'Barlow Condensed', system-ui, sans-serif`;
-      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillText(label ?? env.elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
+      readings.push({ text: label ?? env.elevLabel(elevFt + datum), y: Y(elevFt) });
     };
     stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
     mark(stack.foundation.grade, 'GRADE');
     mark(stack.foundation.slabTop);
     mark(stack.foundation.footingBottom);
+    printReadings(ctx, readings, marginL, ink);
 
     // Level extents: the floor-assembly band spans the outermost walls of
     // the HOUSE it crosses — never the garage's (audit C5). A garage is a
@@ -5037,11 +5102,11 @@ if (!window.DraftCutView) {
       // off the glass and the line ran on under the rails.
       ctx.lineTo(uEnd == null ? w - marginR : Math.min(X(uEnd), w - marginR), Y(elevFt));
       ctx.stroke();
-      ctx.fillStyle = ink(0.6);
-      ctx.font = `600 ${textPx(9)}px 'Barlow Condensed', system-ui, sans-serif`;
-      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillText(env.elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
+      readings.push({ text: env.elevLabel(elevFt + datum), y: Y(elevFt) });
     };
+    // The readings wait for printReadings, which spreads any that would
+    // touch (spreadReadings); the lines above stay on their levels.
+    const readings = [];
     // House level lines stop at the house face — a garage hangs off grade
     // and never carries the house datums across its front.
     const houseFaces = faces.filter(face => !face.garage);
@@ -5050,6 +5115,7 @@ if (!window.DraftCutView) {
       : uMax;
     stack.floors.forEach(level => { mark(level.floorTop, houseHi); mark(level.wallTop, houseHi); });
     mark(fdn.grade);
+    printReadings(ctx, readings, marginL, ink);
     // ── A ZOOMED ELEVATION STAYS INSIDE ITS MARGINS ──────────────────────
     //
     // Pinned by hand (MODEL's wheel and pan, Movie 23 Oct), the drawing can
