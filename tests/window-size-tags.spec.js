@@ -201,7 +201,7 @@ test('unticking A-DIMS-WIN takes every size tag off the plan', async ({ page }) 
     .toBeGreaterThan(0);
 
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(7);
+  await expect(page.locator('#groups .group')).toHaveCount(8);
   await page.locator('[data-layer-visible="A-DIMS-WIN"]').uncheck();
   await expect(page.locator('#status')).toContainText('hidden');
 
@@ -222,7 +222,7 @@ test('and the corner-string layer does not take them with it', async ({ page }) 
   // from the corners; dropping it must leave the sizes exactly where they
   // were, which is the whole reason the two are different layers.
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(7);
+  await expect(page.locator('#groups .group')).toHaveCount(8);
   await page.locator('[data-layer-visible="A-DIMS-FENS"]').uncheck();
   await expect(page.locator('#status')).toContainText('hidden');
 
@@ -269,7 +269,7 @@ test('the elevation this page draws honours the same tick', async ({ page }) => 
     .toBeGreaterThan(0);
 
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(7);
+  await expect(page.locator('#groups .group')).toHaveCount(8);
   await page.locator('[data-layer-visible="A-DIMS-WIN"]').uncheck();
   await expect(page.locator('#status')).toContainText('hidden');
 

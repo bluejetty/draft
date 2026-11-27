@@ -642,6 +642,9 @@
   // offering a view the lookup cannot resolve is a dead option; a rail seating
   // one is a dead card.
   const allCuts = () => [...autoElevationCuts(), ...cuts()];
+  // E1-E4 wear their EXT. FINISH hatches unless A-ELEV-FIN is ticked off.
+  const elevFinishesOn = cut => !!cut && autoElevationCuts().includes(cut)
+    && (layerStandardOf('A-ELEV-FIN') || {}).visible !== false;
   // THE E MARKS AS DRAWN: a ring round the LOT on the site level, round the
   // house elsewhere -- and NONE ON THE SHELF (Movie, 22 Oct: "lets take off
   // the E1-E4 from the SHELF don't think its needed there"). The record
@@ -2310,6 +2313,18 @@
           // sure it zooms out to show the entire building in addition to
           // the ELEVATION marks on the side ... about 10% extra cushion").
           { margins: rails, cushion: 0.1, colors: window.DraftCutView.inksFromSkin(skin),
+            // THE EXT. FINISH HATCHES (jb, 26 Nov 2026: "can you show the
+            // ext finish that is applied in the model area too ?" ... "but
+            // don't allow editing of it in the model area yet"). The same
+            // painter EXT. FINISH and the Construction Layout use, on an
+            // ELEVATION only -- sections stay line work, as on the sheet.
+            // SHOWN, NOT EDITED: nothing here hands out the face outlines or
+            // fascia bands EXT. FINISH picks with, and elev-snap ignores
+            // hatch (it is drawn inside a face clip), so a press here does
+            // what it did. Layer A-ELEV-FIN's Visible tick on STANDARDS turns
+            // it off; the painters' own 3px gate drops a hatch too fine to
+            // read when zoomed out.
+            finishes: elevFinishesOn(cut),
             // THE EXISTING HOUSE UNDER IT (hologram PR 5): called back with
             // the frame, before this drawing's own lines.
             ...(window.DraftHologram ? window.DraftHologram.cutOptions(ctx, cssW, cssH, cut, drawing,

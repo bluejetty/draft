@@ -341,6 +341,12 @@ test.describe('MODEL.html tier 1', () => {
       // a shape, which is exactly the reading the note above says was
       // missing. The roof patterns stay off: nothing on this page asks.
       './finish-patterns.js',
+      // AND THE ROOF PATTERNS ARE BACK TOO, WITH THEIR READING (jb, 26 Nov
+      // 2026: "can you show the ext finish that is applied in the model area
+      // too ?"): E1-E4 ask cut-view for `finishes` now, and its paintRoof
+      // reaches for DraftRoofTypes + DraftRoofPatterns when they do.
+      './roof-types.js',
+      './roof-patterns.js',
       './formatters.js',
       './cut-view.js',
       // elev-snap.js (jb, 14 Nov 2026: "node snap on the corners

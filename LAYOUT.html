@@ -3789,7 +3789,9 @@ class Component extends PageLogic {
           // painter EXT. FINISH uses so the sheet matches that page. jb, 26
           // Nov: "i also need the elevation hatches to show in the
           // construction plan too". Sections stay line work.
-          finishes: viewport.kind === 'elevation' && opts.thumb !== true,
+          // Layer A-ELEV-FIN's PRINTED tick on STANDARDS turns them off.
+          finishes: viewport.kind === 'elevation' && opts.thumb !== true
+            && ((env.layerStandard && env.layerStandard('A-ELEV-FIN')) || {}).printable !== false,
           // A SHEET IS A DRAWING, NOT A THUMBNAIL: the painters' own gate
           // (3px between lines) drops 4" siding at 1/8" = 1'-0" on screen,
           // so on paper the gate is 1/48" of sheet, never under 1.5px.
