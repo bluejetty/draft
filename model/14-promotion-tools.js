@@ -1140,11 +1140,14 @@
         && (overFloorKey({ target: e.relatedTarget }) || floorPop.contains(e.relatedTarget))) return;
       leaveFloorPop();
     });
-    // A TABLET'S PRESS: the key has armed FLOOR (or put it down); the
-    // pop-up comes up beside it so DECK and FLOORING are a tap away.
+    // A PRESS ON THE KEY IS THE FLOOR CHOICE MADE: with a mouse the pop-up
+    // goes at once, so the drafter's first corner on the sheet beside the key
+    // never lands on it. On a tablet the key has armed FLOOR (or put it
+    // down) and the pop-up comes up beside it, so DECK and FLOORING are a
+    // tap away.
     document.addEventListener('pointerup', e => {
-      if (e.pointerType !== 'touch' || !overFloorKey(e)) return;
-      setTimeout(openFloorPop, 0);
+      if (!overFloorKey(e)) return;
+      if (e.pointerType === 'touch') setTimeout(openFloorPop, 0); else closeFloorPop();
     });
     window.addEventListener('pointerdown', e => {
       if (floorPop.hidden || floorPop.contains(e.target) || overFloorKey(e)) return;
