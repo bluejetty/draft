@@ -145,10 +145,10 @@ test('a washroom draws its three pieces on the sheet', async ({ page }) => {
   expect(withFixtures).toBeGreaterThan(without);  // and the fixtures are extra ink
 });
 
-// THE WC FLOOR IS 1'-0" TILE, in the fixture ink made faint (Movie, 9 Oct:
-// "the floor in the WC should be 1ft tile, and lighter line at joints"). The
-// room is a WC because a toilet, tub or shower stands in it -- so the same
-// four walls round only a vanity lay no tile.
+// NO FLOOR LAID BY A TOILET (jb, 27 Nov 2026). The WC used to tile itself in
+// the fixture ink made faint because a toilet, tub or shower stood in it -- a
+// grid nobody could pick, change or clear. Flooring is a room tag's or a
+// shape's now, so the same WC prints with no tile ink at all.
 const TILE_INK = '#1d1f2055';
 async function recordStrokes(page) {
   await page.addInitScript(() => {
@@ -162,16 +162,9 @@ async function recordStrokes(page) {
   });
 }
 
-test('a WC on the sheet is tiled; a room with only a vanity is not', async ({ page }) => {
+test('a WC on the sheet lays no tile of its own', async ({ page }) => {
   await recordStrokes(page);
   await openLayout(page, washroomDrawing());
-  await placeViewport(page, 8, 5);
-  expect(await page.evaluate(ink => window.__strokes.includes(ink), TILE_INK)).toBe(true);
-
-  const vanityOnly = washroomDrawing();
-  vanityOnly.fixtures = vanityOnly.fixtures.filter(f => f.kind === 'vanity');
-  await openLayout(page, vanityOnly);
-  await page.evaluate(() => { window.__strokes = []; });
   await placeViewport(page, 8, 5);
   const strokes = await page.evaluate(() => window.__strokes);
   expect(strokes.length).toBeGreaterThan(0);

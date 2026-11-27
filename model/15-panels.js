@@ -1697,6 +1697,19 @@
         if (tag.areaShown === false) delete tag.areaShown; else tag.areaShown = false;
       }));
       chips.append(show);
+      // SHOW TAG: the name itself, off so only the floor shows (jb, 27 Nov
+      // 2026: "allow either the tag or flooring or both be turned off").
+      // NO FLOORING below is the other half; both off leaves the outline.
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'sel-chip';
+      name.dataset.roomNameShown = '';
+      name.textContent = 'SHOW TAG';
+      name.setAttribute('aria-pressed', String(tag.nameShown !== false));
+      name.addEventListener('click', () => edit(() => {
+        if (tag.nameShown === false) delete tag.nameShown; else tag.nameShown = false;
+      }));
+      chips.append(name);
       box.append(chips);
       const floorRow = document.createElement('div');
       floorRow.className = 'chip-row';

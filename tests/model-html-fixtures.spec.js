@@ -191,10 +191,11 @@ test('the day page paints them in the day ground and the day ink', async ({ page
   expect(fills).not.toContain(OLD_LITERAL);
 });
 
-// THE WC FLOOR: 1'-0" tile in a room the walls close round a toilet, tub or
-// shower, in the fixture ink made faint (Movie, 9 Oct). Three walls stood off
-// the bone's longest wall make the room; the toilet goes on one of them.
-test('a room with a toilet in it is tiled in the faint fixture ink', async ({ page }) => {
+// NO FLOOR LAID BY A TOILET (jb, 27 Nov 2026): the room the walls close round
+// a toilet used to tile itself in the faint fixture ink, a grid nobody could
+// pick or clear. Three walls stood off the bone's longest wall make the room;
+// the toilet goes on one of them, and the room stays untiled.
+test('a room with a toilet in it lays no tile of its own', async ({ page }) => {
   await recordPaint(page);
   await houseOnOldPage(page);
   const room = (withToilet) => `${HOST}
@@ -218,6 +219,8 @@ test('a room with a toilet in it is tiled in the faint fixture ink', async ({ pa
   await page.waitForTimeout(300);
   expect(await page.evaluate(ink => window.__strokes.includes(ink), `${NIGHT_INK}55`)).toBe(false);
   await loadWith(page, room(true));
-  await expect.poll(() => page.evaluate(ink => window.__strokes.includes(ink), `${NIGHT_INK}55`)).toBe(true);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__strokes.length)).toBeGreaterThan(0);
+  expect(await page.evaluate(ink => window.__strokes.includes(ink), `${NIGHT_INK}55`)).toBe(false);
 });
 
