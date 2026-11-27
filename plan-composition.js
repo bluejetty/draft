@@ -211,7 +211,11 @@ if (!window.DraftPlanComposition) {
       && shows(shape.layer) && !off(shape.layer || 'SHAPE'));
     const roofs = pick(env.roofs, { views: false }).filter(roof => !off(roof.layer || 'A-ROOF'));
     const walls = pick(env.walls);
-    const lines = pick(env.lines).filter(line => shows(line.layer) && !off(line.layer || 'draft'));
+    // A JOIST CALLOUT PICKED UP AS A LINE is still a joist callout: it goes
+    // off with STRUCTURE / ROOF as the drawn ones do, as well as with its
+    // line layer.
+    const lines = pick(env.lines).filter(line => shows(line.layer) && !off(line.layer || 'draft')
+      && !(line.joist && off('S-BEAM')));
     const dimensions = pick(env.dimensions).filter(dimension => shows(dimension.layer) && !off(dimension.layer || 'A-DIMS'));
     // A STAIR NOTE BELONGS TO THE STAIR WORKSPACE, which is a separate
     // surface with its own painter -- and the exclusion sits ON TOP of the
@@ -460,7 +464,9 @@ if (!window.DraftPlanComposition) {
       // line of their own (those print with the lines). Worked out by the
       // caller (layout-plan joistCalloutsFor, build-house joistCalloutSeeds);
       // this only paints them, over the beams they span between.
-      if (Array.isArray(env.joistCallouts) && typeof render.drawJoistCallout2D === 'function') {
+      // THEY GO WITH THE STRUCTURE (jb, 26 Nov 2026): STRUCTURE / ROOF off on
+      // a viewport's SHOW LAYERS takes them off with the beams they span.
+      if (Array.isArray(env.joistCallouts) && typeof render.drawJoistCallout2D === 'function' && !off('S-BEAM')) {
         env.joistCallouts.forEach(callout => { onLayer(ctx, 'S-BEAM'); render.drawJoistCallout2D(ctx, toS, callout, env.structureEnv, { inkScale: env.inkScale }); });
       }
     });

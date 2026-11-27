@@ -187,3 +187,44 @@ test('every plan page carries the faded footprint, and the building\'s plan shee
   const faded = onSheet.filter(e => e.op === 'stroke' && Math.abs(e.alpha - 0.3) < 0.02);
   expect(faded.length, 'the faded footprint under the foundation').toBeGreaterThan(0);
 });
+
+// A CALLOUT THE DRAFTER PICKED UP PRINTS TOO (jb, 26 Nov 2026: "on the
+// construction layout the joist text isn't showing"). A Select press on a
+// drawn callout files it as a LINE on 'draft' (model/08 adoptJoistCalloutAt),
+// and no floor view's layer list named 'draft', so the 2ND FLOOR sheet
+// dropped it -- and every other line on a floor level. And STRUCTURE / ROOF
+// off on SHOW LAYERS takes both kinds of callout off with the beams.
+test('a picked-up joist callout prints on the floor sheet, and STRUCTURE off takes callouts off', async ({ page }) => {
+  const picked = fixture();
+  picked.lines.push({ id: 2, levelId: 5, view: 'floor', layer: 'draft', bulge: 0,
+    start: point(4, 2), end: point(4, 20),
+    joist: { seed: 'body:3', text: 'TJI 210 14"', defaultText: 'TJI 210 14"', side: 'above' } });
+  picked.joistCalloutsTaken = ['body:3'];
+  const layout = await openLayout(page, picked);
+  const sheet = sheetTitled(layout, '2ND FLOOR');
+  expect(sheet, 'the 2ND FLOOR sheet was dealt').toBeGreaterThan(0);
+  await spy(page);
+  await page.locator(`[data-layout-sheet="${sheet}"]`).click();
+  await page.waitForTimeout(400);
+  let onSheet = await lastPaint(page, 'lay-canvas');
+  expect(onSheet.filter(e => e.op === 'text' && JOIST.test(e.text)).map(e => e.text),
+    'the picked-up callout, and no drawn one under it').toEqual(['TJI 210 14"']);
+
+  // STRUCTURE / ROOF OFF on both floor sheets' viewports.
+  const off = { ...layout, auto: false, viewports: layout.viewports.map(v => (v.kind === 'plan' && v.view === 'floor'
+    ? { ...v, layersOff: ['S-BEAM', 'S-SLAB', 'S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'A-STR', 'A-STR-DECK', 'A-ROOF'] } : v)) };
+  for (const file of [{ ...picked, layout: off }, { ...fixture(), layout: off }]) {
+    await page.evaluate(async ({ bucket, f }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(f)], 'model-drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, f: file });
+    await page.reload();
+    await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+    await spy(page);
+    await page.locator(`[data-layout-sheet="${sheet}"]`).click();
+    await page.waitForTimeout(400);
+    onSheet = await lastPaint(page, 'lay-canvas');
+    expect(onSheet.filter(e => e.op === 'text' && JOIST.test(e.text)).map(e => e.text),
+      `STRUCTURE off, ${file.lines.length > 1 ? 'picked-up' : 'drawn'} callout`).toEqual([]);
+  }
+});

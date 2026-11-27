@@ -37,8 +37,14 @@
 // would have left the table lying about layers that no longer exist.
 if (!window.DraftLayerViews) {
 (() => {
+  // 'draft' -- THE LINE TOOL'S LAYER -- RIDES WITH A-ANNO-NOTE ON EVERY VIEW
+  // (jb, 26 Nov 2026: "on the construction layout the joist text isn't
+  // showing"). A LINE is filed on 'draft', and no list here named it, so
+  // every line on a floor level -- a joist callout the drafter picked up
+  // among them -- was in the file and on no sheet a view was named for.
+  // SITE and ROOF name no views, which is why their lines always printed.
   const FLOOR_LEVEL_VIEWS = Object.freeze([
-    Object.freeze({ id:'e-power', label:'ELECTRIC', contents: Object.freeze(['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE']) }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents: Object.freeze(['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE', 'draft']) }),
     // A-FIXT JOINS THE WALLS PLAN (1 Oct). Every fixture -- casework too, now
     // that A-CASE folded into it -- is drawn on the floor plan, and a sheet
     // naming this view hid them all while no view listed the layer.
@@ -47,7 +53,7 @@ if (!window.DraftLayerViews) {
     // floor layout in MODEL, and a sheet of either showed none while no view
     // named the layer -- the same fault A-FIXT had above. A NO-DRAFT shape
     // is kept off by plan-composition, not by this list.
-    Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'SHAPE', 'A-STR', 'A-FIXT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'A-DIMS-DOOR', 'ROOM-IDS-AREA', 'A-ANNO-NOTE']) }),
+    Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'SHAPE', 'A-STR', 'A-FIXT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'A-DIMS-DOOR', 'ROOM-IDS-AREA', 'A-ANNO-NOTE', 'draft']) }),
     // S-COL-FOOTING JOINS S-BEAM HERE (Movie, 25 Sep). A floor's beam was
     // already on this view and what holds it up was on none: S-COL-FOOTING
     // appeared only in the FOUNDATION set below, so a post on MAIN FL was a
@@ -58,18 +64,18 @@ if (!window.DraftLayerViews) {
     // (drawing-format.js:657) whether it stands on a pad or on the beam
     // below, so a floor view that wants to draw posts has to name that layer.
     // Renaming it would be a format change for a word.
-    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents: Object.freeze(['S-BEAM', 'S-COL-FOOTING', 'S-SLAB', 'A-FL', 'SHAPE', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-COLS', 'A-ANNO-NOTE']) }),
-    Object.freeze({ id:'stair', label:'STAIR', contents: Object.freeze(['A-STR', 'A-FL', 'STAIR SECTION', 'A-ANNO-NOTE']) }),
+    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents: Object.freeze(['S-BEAM', 'S-COL-FOOTING', 'S-SLAB', 'A-FL', 'SHAPE', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-COLS', 'A-ANNO-NOTE', 'draft']) }),
+    Object.freeze({ id:'stair', label:'STAIR', contents: Object.freeze(['A-STR', 'A-FL', 'STAIR SECTION', 'A-ANNO-NOTE', 'draft']) }),
   ]);
   const LEVEL_LAYER_VIEWS = Object.freeze({
     5: FLOOR_LEVEL_VIEWS,
     3: FLOOR_LEVEL_VIEWS,
     1: Object.freeze([
-      Object.freeze({ id:'e-power', label:'ELECTRIC', contents: Object.freeze(['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE']) }),
+      Object.freeze({ id:'e-power', label:'ELECTRIC', contents: Object.freeze(['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE', 'draft']) }),
       // THE BASEMENT PLAN IS DIMENSIONED TOO (Movie, 12 Oct: dimensions on
       // every plan but the electric one).
-      Object.freeze({ id:'plan', label:'BASEMENT (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'SHAPE', 'ROOM-IDS-AREA', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-ANNO-NOTE']) }),
-      Object.freeze({ id:'foundation', label:'FOUNDATION', contents: Object.freeze(['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'SHAPE', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-COLS', 'A-ANNO-NOTE']) }),
+      Object.freeze({ id:'plan', label:'BASEMENT (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'SHAPE', 'ROOM-IDS-AREA', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-ANNO-NOTE', 'draft']) }),
+      Object.freeze({ id:'foundation', label:'FOUNDATION', contents: Object.freeze(['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'SHAPE', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-COLS', 'A-ANNO-NOTE', 'draft']) }),
     ]),
   });
   // SITE and ROOF are whole-level drafting contexts; every other positive
