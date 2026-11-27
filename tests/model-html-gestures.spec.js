@@ -1115,6 +1115,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // nothing and changes nothing on the plan, so no absence row
             // moves.
             'REPORT A PROBLEM',
+            // AND ATTACH TO (jb, 27 Nov 2026): which side of a cabinet stands
+            // on the wall it just went onto. It turns a piece already made,
+            // so no absence row moves.
+            'BACK (B)', 'LEFT (L)', 'RIGHT (R)',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a
