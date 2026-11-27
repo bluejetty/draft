@@ -52,10 +52,15 @@
           return false;
         };
         const clear = f.kind === 'glass';
+        // A FINISH'S TEXTURE (finish-texture.js): its row as the house has
+        // it, and the way along the wall its pattern runs.
+        const WT = window.DraftWallTypes;
+        const tex = f.tex && f.finish && WT && window.DraftFinishTexture
+          ? { ...f.tex, finish: WT.finishById(f.finish) } : null;
         M.triangulate(f.pts).forEach(([i, j, k]) => {
           const a = f.pts[i], b = f.pts[j], c = f.pts[k];
           (clear ? late : tris).push({
-            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour, clear,
+            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour, clear, tex,
             edges: [real(i, j), real(j, k), real(k, i)],
             mid: { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3, z: (a.z + b.z + c.z) / 3 },
           });
@@ -126,6 +131,22 @@
         if (x0 > x1 || y0 > y1) continue;
         drawn += 1;
         const inv = 1 / area;
+        // TEXTURED: feet along the wall and feet up at each corner, over z,
+        // so the pattern stays put in perspective; and how many feet a pixel
+        // covers here, so a far wall's joints fade instead of shimmering.
+        const tx = !inside && look.textures !== false && t.tex ? t.tex : null;
+        let sA = 0, sB = 0, sC = 0, yA = 0, yB = 0, yC = 0, ftPx = 0, shadeAt = null;
+        if (tx) {
+          const sOf = p => (p.x - tx.ox) * tx.ax.x + (p.z - tx.oz) * tx.ax.z;
+          sA = sOf(t.a) * A.iz; sB = sOf(t.b) * B.iz; sC = sOf(t.c) * C.iz;
+          yA = t.a.y * A.iz; yB = t.b.y * B.iz; yC = t.c.y * C.iz;
+          const mz = view.toCamera(t.mid).z;
+          // Seen at a slant a pixel covers more of the wall.
+          const toEye = { x: eye.x - m.x, y: eye.y - m.y, z: eye.z - m.z };
+          const cos = Math.abs(facing) / (Math.hypot(toEye.x, toEye.y, toEye.z) || 1);
+          ftPx = mz / focal / Math.max(0.25, cos);
+          shadeAt = window.DraftFinishTexture.shadeAt;
+        }
         // Barycentric weights from the edge functions, stepped a pixel at a time.
         const e0dx = (B.y - C.y) * inv, e0dy = (C.x - B.x) * inv;
         const e1dx = (C.y - A.y) * inv, e1dy = (A.x - C.x) * inv;
@@ -142,7 +163,11 @@
             if (w0 >= EPS && w1 >= EPS && w2 >= EPS) {
               const iz = w0 * A.iz + w1 * B.iz + w2 * C.iz;
               if (iz > depth[idx]) {
-                if (!t.clear) { depth[idx] = iz; pix[idx] = word; } else {
+                if (!t.clear && tx) {
+                  const q = shadeAt(tx.finish, (w0 * sA + w1 * sB + w2 * sC) / iz, (w0 * yA + w1 * yB + w2 * yC) / iz, ftPx);
+                  depth[idx] = iz;
+                  pix[idx] = ((255 << 24) | (Math.min(255, b * q) << 16) | (Math.min(255, g * q) << 8) | Math.min(255, r * q)) >>> 0;
+                } else if (!t.clear) { depth[idx] = iz; pix[idx] = word; } else {
                   // SEE-THROUGH: a third glass over what is behind it, and
                   // no depth kept, so the room beyond still shows.
                   const v = pix[idx];

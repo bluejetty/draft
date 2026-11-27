@@ -4763,7 +4763,111 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // ── MASONRY ON THE PLAN (jb, 27 Nov 2026) ──────────────────────────────
+  //
+  // A plan is cut about four feet up, and what it cuts through outside an
+  // outside wall is the cladding. Siding and stucco are half an inch, which no
+  // plan scale shows and no drafter draws; brick and stone are two to five
+  // inches and are drawn, as a second line outside the wall with the space
+  // between hatched. So: any finish 2" or thicker that the wall wears at the
+  // cut height (its base or a band reaching it), from the wall's outside
+  // face outward, its own thickness (the house's, wall-types.js finishById).
+  //
+  // THE OUTSIDE IS THE REFERENCE LINE: an outside wall keeps its drawn line
+  // on its exterior face (refLine 'left' / 'right'); a centre-line partition
+  // wears none. At an OUTSIDE corner the veneer runs on past the wall's end by
+  // its own thickness so the two meet square; at an inside corner it stops.
+  const VENEER_MIN_IN = 2;
+  const PLAN_CUT_FT = 4;
+  const PLAN_SILL_FT = -1.1;   // under the floor package, where the cladding starts
+  function drawFinishVeneer2D(ctx, toS, walls, env, openings) {
+    const WT = window.DraftWallTypes;
+    if (!WT || !WT.finishAtFt || !Array.isArray(walls)) return;
+    const list = walls.filter(w => w && w.start && w.end && (w.view || 'plan') === 'plan'
+      && (w.refLine === 'left' || w.refLine === 'right'));
+    if (!list.length) return;
+    const colors = (env && env.colors) || {};
+    const edge = colors.wallEdge || '#1d1f20';
+    const same = (a, b) => Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.z - b.z) < 1e-3;
+    list.forEach(wall => {
+      const top = Number(wall.topHeight) > 0 ? Number(wall.topHeight) : 8;
+      const lines = { sill: PLAN_SILL_FT, plate: top, head: top };
+      if (PLAN_CUT_FT >= top) return;
+      const f = WT.finishAtFt(wall, PLAN_CUT_FT, lines);
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (!(len > 0.01)) return;
+      // A band that does not reach this part of the wall (its side insets)
+      // is not cut here; the cut is taken at the wall's middle.
+      let id = f.id;
+      if (f.band && WT.bandSpan) {
+        const sp = WT.bandSpan(f.band, 0, len);
+        if (!sp || sp.lo > 0.01 || sp.hi < len - 0.01) id = wall.finish || WT.DEFAULT_FINISH_ID;
+      }
+      const finish = WT.finishById(id);
+      const thIn = Number(finish.thicknessIn) || 0;
+      if (thIn < VENEER_MIN_IN) return;
+      const th = thIn / 12;
+      const ux = (wall.end.x - wall.start.x) / len, uz = (wall.end.z - wall.start.z) / len;
+      const nx = -uz, nz = ux;
+      const shift = WT.wallLineShiftFt ? WT.wallLineShiftFt(wall) : 0;
+      // The body runs +n from a 'left' line and -n from a 'right' one; the
+      // veneer runs the other way from the face.
+      const out = wall.refLine === 'left' ? -1 : 1;
+      const face = shift;   // the line, moved with the body if offset
+      const body = -out;
+      const outsideCornerAt = end => {
+        const far = list.concat(walls).find(o => o !== wall && o && o.start && o.end
+          && o.levelId === wall.levelId && (o.view || 'plan') === (wall.view || 'plan')
+          && (same(o.start, end) || same(o.end, end)));
+        if (!far) return false;
+        const other = same(far.start, end) ? far.end : far.start;
+        const along = (other.x - end.x) * nx + (other.z - end.z) * nz;
+        return along * body > 0.05;   // it turns towards the body: an outside corner
+      };
+      const extA = outsideCornerAt(wall.start) ? th : 0;
+      const extB = outsideCornerAt(wall.end) ? th : 0;
+      const at = (t, off) => toS({ x: wall.start.x + ux * t + nx * off, z: wall.start.z + uz * t + nz * off });
+      const o0 = face, o1 = face + out * th;
+      // CUT AT EVERY DOOR AND WINDOW in the wall, the way the wall is.
+      const holes = (Array.isArray(openings) ? openings : [])
+        .filter(o => o && o.wallId === wall.id && Number(o.width) > 0)
+        .map(o => [Number(o.offset) - Number(o.width) / 2, Number(o.offset) + Number(o.width) / 2])
+        .sort((x, y) => x[0] - y[0]);
+      const pieces = [];
+      let t = -extA;
+      holes.forEach(([h0, h1]) => { if (h0 > t + 0.01) pieces.push([t, h0]); t = Math.max(t, h1); });
+      if (len + extB > t + 0.01) pieces.push([t, len + extB]);
+      pieces.forEach(([ta, tb]) => {
+        const pts = [at(ta, o0), at(tb, o0), at(tb, o1), at(ta, o1)];
+        ctx.save();
+        ctx.beginPath();
+        pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+        ctx.closePath();
+        ctx.fillStyle = colors.wall || '#ffffff';
+        ctx.fill();
+        ctx.save();
+        ctx.clip();
+        // Masonry's section hatch: close diagonals.
+        const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
+        const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+        ctx.strokeStyle = edge; ctx.globalAlpha = 0.45; ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (let k = x0 - (y1 - y0); k < x1; k += 4) { ctx.moveTo(k, y1); ctx.lineTo(k + (y1 - y0), y0); }
+        ctx.stroke();
+        ctx.restore();
+        ctx.strokeStyle = edge; ctx.lineWidth = 1;
+        ctx.beginPath();
+        // The outer line and the two ends; the inner line is the wall's own.
+        ctx.moveTo(pts[0].x, pts[0].y);
+        [3, 2, 1].forEach(i => ctx.lineTo(pts[i].x, pts[i].y));
+        ctx.stroke();
+        ctx.restore();
+      });
+    });
+  }
+
   window.DraftRender2D = Object.freeze({
+    drawFinishVeneer2D,
     snapCounterOffset,
     drawCounters2D,
     drawWallSeg2D,

@@ -672,7 +672,18 @@
             const sub = { ...frame, lo, hi, t0: a, t1: b, ends: { lo: [a, b], hi: [a, b] }, noFill: true };
             const n0 = faces.length;
             wallWithOpenings(sub, y0, y1, holes, 'finish', finishColour(run.id, run.color), faces, null, null);
-            for (let k = n0; k < faces.length; k += 1) faces[k].finish = run.id;
+            // THE TEXTURE'S CO-ORDINATES (step 3): feet along the wall from
+            // its start, feet up. A reveal or an end runs across the wall,
+            // so it measures across instead; a ledge or soffit has none.
+            const textured = WT.finishTextureOn ? WT.finishTextureOn(run.id) : true;
+            for (let k = n0; k < faces.length; k += 1) {
+              faces[k].finish = run.id;
+              if (!textured) continue;
+              const nn = normalOf(faces[k].pts);
+              if (Math.abs(nn.y) > 0.7) continue;
+              const alongN = Math.abs(nn.x * frame.n.x + nn.z * frame.n.z) > 0.7;
+              faces[k].tex = { ax: alongN ? frame.u : frame.n, ox: wall.start.x, oz: wall.start.z };
+            }
           });
         }
       });
