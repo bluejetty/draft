@@ -46,9 +46,51 @@
     return item;
   };
 
+  // ── AUTO: A DECK POST'S FOOTING BY ITS DECK'S HEIGHT ─────────────────
+  //
+  // jb, 27 Nov 2026: "deck posts over 6ft from grade need pile and under 6ft
+  // only need 'elephant foot' ... make those default but allow the user to
+  // change the foundation support type". A column on the FOUNDATION plan
+  // with a deck (or roof) over it is placed AUTO: its footing is a 10" pile
+  // over 6 ft from grade to what it holds, an elephant foot at 6 ft or under
+  // (build-house.js autoFooting). It stays AUTO -- answered again after every
+  // edit, so raising the deck turns its feet into piles -- until another
+  // FOOTING is picked on its panel. Nothing is placed for the drafter.
+  const autoFootingFor = column => {
+    const CV = window.DraftCutView, B = window.DraftBuildHouse;
+    if (!CV || !CV.heldOver || !B || !B.autoFooting || !column?.point) return null;
+    if ((column.view || 'plan') !== 'foundation') return null;
+    try {
+      const env = cutEnv();
+      const h = CV.heldOver(env, CV.sectionLevelStack(env), column.point);
+      return Number.isFinite(h) ? B.autoFooting(h) : null;
+    } catch (e) { return null; }
+  };
+  const applyAutoFooting = column => {
+    const id = autoFootingFor(column);
+    if (!id || id === column.footing) return false;
+    column.footing = id;
+    if (id.startsWith('pile')) delete column.padIn;
+    else { delete column.capIn; delete column.capTallIn; delete column.capAboveIn; }
+    return true;
+  };
+  let autoFootingsQueued = false;
+  const queueAutoFootings = () => {
+    if (autoFootingsQueued || !(drawing?.columns || []).some(c => c && c.footingAuto)) return;
+    autoFootingsQueued = true;
+    setTimeout(() => {
+      autoFootingsQueued = false;
+      const changed = (drawing?.columns || []).filter(c => c && c.footingAuto).map(applyAutoFooting).some(Boolean);
+      if (changed) paint();
+    }, 60);
+  };
+
   const placeColumn = at => {
     const { levelId, viewId } = onActiveLevel();
     drawing.columns = drawing.columns || [];
+    const view = wallHomeView(viewId);
+    const probe = { point: { x: at.x, y: 0, z: at.z }, view };
+    const auto = autoFootingFor(probe);
     return selectPlaced('column', addItem(drawing.columns, {
       id: newStructureId(drawing.columns),
       point: { x: at.x, y: 0, z: at.z },
@@ -56,11 +98,13 @@
       // A column answers to the same home-view rule a wall does: everything on
       // this page reads 'plan' except floors. Placed on the FOUNDATION plan it
       // belongs to the foundation, not to a default.
-      view: wallHomeView(viewId),
+      view,
       // The format's own default, named here rather than left out, so the
       // record this page writes and the record the reader rebuilds are the
-      // same object rather than one filled in behind the page's back.
-      footing: 'pad36',
+      // same object rather than one filled in behind the page's back. Under
+      // a deck, AUTO's answer instead.
+      footing: auto || 'pad36',
+      ...(auto ? { footingAuto: true } : {}),
     }));
   };
 

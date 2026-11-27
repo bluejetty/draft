@@ -502,6 +502,8 @@
     // freeze the six thumbnails on the FIRST change after a save and leave
     // them stale for every change after it -- a wall drawn, no seat updated.
     bumpModelEpoch();
+    // AUTO deck-post footings follow the deck (model/08 queueAutoFootings).
+    if (typeof queueAutoFootings === 'function') queueAutoFootings();
     // AND THE HISTORY TAB HEARS EVERY EDIT (Movie, 20 Oct), ahead of the
     // guard for the epoch's reason: the first edit after a save is not the
     // only one worth a version.

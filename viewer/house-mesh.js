@@ -1185,7 +1185,22 @@
       // (drawn 4' into the ground; its depth is the soils report's), or a
       // basement post's pad under the slab.
       const BH = window.DraftBuildHouse;
-      if (pp.kind === 'pile') {
+      if (pp.efoot && Number.isFinite(pp.efoot.top) && Number.isFinite(pp.efoot.bottom)) {
+        // AN ELEPHANT FOOT: a precast block, wider at its foot, set 2" into
+        // the ground with the post standing on its top.
+        const w = (pp.efoot.sizeIn || 12) / 12;
+        const ring = (half, y) => [
+          { x: pp.point.x - half, y, z: pp.point.z - half }, { x: pp.point.x + half, y, z: pp.point.z - half },
+          { x: pp.point.x + half, y, z: pp.point.z + half }, { x: pp.point.x - half, y, z: pp.point.z + half }];
+        const lo = ring(w * 0.75, pp.efoot.bottom), hi = ring(Math.max(w * 0.4, (pp.sizeIn || 5.5) / 24 + 0.08), pp.efoot.top);
+        facing(hi, { x: 0, y: 1, z: 0 }, 'footing', COLOURS.footing, null, out);
+        facing(lo, { x: 0, y: -1, z: 0 }, 'footing', COLOURS.footing, null, out);
+        for (let i = 0; i < 4; i += 1) {
+          const j = (i + 1) % 4;
+          const mx = (lo[i].x + lo[j].x) / 2 - pp.point.x, mz = (lo[i].z + lo[j].z) / 2 - pp.point.z;
+          facing([lo[i], lo[j], hi[j], hi[i]], { x: mx, y: 0, z: mz }, 'footing', COLOURS.footing, null, out);
+        }
+      } else if (pp.kind === 'pile') {
         const pile = BH && BH.footingFor ? BH.footingFor(pp.column.footing) : null;
         const dia = ((pile && pile.sizeIn) || 12) / 12;
         const round = Array.from({ length: 12 }, (_, i) => ({

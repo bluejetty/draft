@@ -630,7 +630,23 @@ if (!window.DraftBuildHouse) {
       note: '10"ø CONC PILE — DEPTH PER SOILS REPORT' }),
     Object.freeze({ id: 'pile12', label: '12"ø PILE', sizeIn: 12, pile: true,
       note: '12"ø CONC PILE — DEPTH PER SOILS REPORT' }),
+    // A DECK POST LOW TO THE GROUND (jb, 27 Nov 2026): "under 6ft only need
+    // 'elephant foot' concrete post support dug into the ground couple inches
+    // for lat. support". A precast block, not a pour: it is no pad of a
+    // footing group and no pile with a P mark. EF on the plan.
+    Object.freeze({ id: 'efoot', label: 'EF', sizeIn: 12, efoot: true,
+      note: 'PRECAST "ELEPHANT FOOT" POST SUPPORT — SET 2" INTO GRADE' }),
   ]);
+
+  // AUTO, the deck post's default (jb, 27 Nov 2026: "deck posts over 6ft from
+  // grade need pile and under 6ft only need 'elephant foot'", and "make those
+  // default but allow the user to change the foundation support type"). The
+  // height is what the post holds up, measured from grade: over 6 ft a
+  // 10" pile, 6 ft or under an elephant foot. A column marked `footingAuto`
+  // keeps its `footing` answered by this rule as the deck moves; any other
+  // pick on the panel takes the mark off.
+  const AUTO_PILE_OVER_FT = 6;
+  const autoFooting = heightFt => (Number(heightFt) > AUTO_PILE_OVER_FT ? 'pile10' : 'efoot');
 
   // FIRST ROW IS THE FALLBACK, which is dc's rule and matters for the same
   // reason its validator's does: an id the table has never heard of is a pad,
@@ -710,6 +726,8 @@ if (!window.DraftBuildHouse) {
     capAboveIn: 8,      // grade to top of concrete, at least
     capAboveMaxIn: 12,  // more on a sloping lot ...
     capCoverMinIn: 8,   // ... as long as 8" of it stays in the ground
+    efootTallIn: 10,    // an elephant foot, 10" tall ...
+    efootBuriedIn: 2,   // ... set 2" into the ground
     standoffIn: 1,      // a standoff post base lifts the wood 1"
     plateIn: 0.5,       // a steel bearing plate, 1/2" thick
     plateOverIn: 2,     // ... 1" past the post each side
@@ -733,7 +751,8 @@ if (!window.DraftBuildHouse) {
     const pile = footing.pile === true;
     const shape = column?.postShape === 'round' ? 'round' : 'square';
     const own = Number(column?.postIn);
-    const sizeIn = Number.isFinite(own) && own > 0 ? own : (pile ? D.pileIn : footing.post ? footing.sizeIn : D.teleIn);
+    const sizeIn = Number.isFinite(own) && own > 0 ? own
+      : (pile || footing.efoot ? D.pileIn : footing.post ? footing.sizeIn : D.teleIn);
     let cap = null;
     if (pile && Number(column?.capIn) > 0) {
       const tallIn = Number(column?.capTallIn) > 0 ? Number(column.capTallIn) : D.capTallIn;
@@ -764,6 +783,7 @@ if (!window.DraftBuildHouse) {
   // two separate pads is more work than pouring the rectangle between them.
   const padGroups = (columns, { joinGapFt = 0.5 } = {}) => {
     const pads = (columns || []).filter(column => !footingFor(column?.footing).pile
+      && !footingFor(column?.footing).efoot
       && column?.point && Number.isFinite(column.point.x) && Number.isFinite(column.point.z));
     const rects = pads.map(column => {
       const half = padSizeIn(column) / 24;
@@ -1542,6 +1562,8 @@ if (!window.DraftBuildHouse) {
     midSpanBeams,
     COLUMN_FOOTINGS,
     footingFor,
+    AUTO_PILE_OVER_FT,
+    autoFooting,
     pileMark,
     padSizeIn,
     POST_DEFAULTS,
