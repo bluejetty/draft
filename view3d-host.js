@@ -92,14 +92,20 @@
   }
 
   // The drawing goes over once; asked again with the same one, it stays.
-  async function load(drawing, camera, preset) {
+  // One load at a time: two tiles asking at once must not both wait on the
+  // one 'loaded' answer, nor load the same drawing twice.
+  let loading = Promise.resolve(true);
+  function load(drawing, camera, preset) {
     if (!keys.has(drawing)) keys.set(drawing, `d${(seq += 1)}`);
     const key = keys.get(drawing);
-    if (key === loadedKey && !camera && !preset) return true;
-    const m = await ask('loaded', { type: 'draft-viewer-drawing', drawing, name: 'sheet', camera, preset });
-    if (!m || m.type !== 'draft-viewer-loaded') return false;
-    loadedKey = key;
-    return true;
+    loading = loading.catch(() => false).then(async () => {
+      if (key === loadedKey && !camera && !preset) return true;
+      const m = await ask('loaded', { type: 'draft-viewer-drawing', drawing, name: 'sheet', camera, preset });
+      if (!m || m.type !== 'draft-viewer-loaded') return false;
+      loadedKey = key;
+      return true;
+    });
+    return loading;
   }
 
   async function picture({ drawing, camera = null, preset = 'front-left', w = 800, h = 600, look = null } = {}) {

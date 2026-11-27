@@ -300,7 +300,7 @@ async function build3(p, change = null) {
       deckTop: ys('deck').length ? Math.max(...ys('deck')) : null, deckLow: ys('deck').length ? Math.min(...ys('deck')) : null,
       holoFaces: built.faces.filter(f => f.hologram).length,
       holoColour: (built.faces.find(f => f.hologram && f.kind === 'wall') || {}).colour || null,
-      houseX: [Math.min(...xs(f => !f.hologram)), Math.max(...xs(f => !f.hologram))],
+      houseX: [Math.min(...xs(f => !f.hologram && f.kind !== 'ground')), Math.max(...xs(f => !f.hologram && f.kind !== 'ground'))],
       holoX: built.faces.some(f => f.hologram) ? [Math.min(...xs(f => f.hologram)), Math.max(...xs(f => f.hologram))] : null,
       status: document.getElementById('status').textContent,
     };
@@ -418,7 +418,7 @@ test('the drafter\'s own colour wins over the finish\'s', async ({ page: p }) =>
 
 test('a level chip takes that level out of the picture and puts it back', async ({ page: p }) => {
   await build3(p);
-  await expect(p.locator('#levels [data-level]')).toHaveText(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF']);
+  await expect(p.locator('#levels [data-level]')).toHaveText(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF', 'GROUND']);
   const all = Number(await p.evaluate(() => document.body.dataset.shown));
   const roofs = await p.evaluate(() => DraftViewer.state.faces.filter(f => f.group === 'roof').length);
   expect(roofs).toBeGreaterThan(10);
@@ -840,4 +840,90 @@ test('the entry page links the 3D viewer in the bottom row, named by the skin', 
   await link.click();
   await p.waitForSelector('body[data-ready="1"]');
   await expect(p.locator('#brand')).toHaveText('ROUGH 3D');
+});
+
+// WALLS MEET CLEAN (jb, 27 Nov 2026: "the walls look overlapped or missing
+// at corners depending on inside or outside corner"). No two wall faces lie
+// in one plane, facing one way, over each other (an end poking through the
+// next wall's face), and the corner's two outside faces end on one line.
+test('walls meet at a corner without poking through each other or leaving a notch', async ({ page: p }) => {
+  for (const fixture of ['repro-movie-2storey-garage.draft', 'repro-timberhouse-jog-fascia.draft']) {
+    await openViewer(p, 'plain');
+    const saved = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto', fixture), 'utf8'));
+    const r = await p.evaluate(s => {
+      const M = DraftHouseMesh;
+      const built = DraftViewer.loadDrawing(s, 'test');
+      const walls = built.faces.filter(f => ['wall', 'garageWall', 'foundation'].includes(f.kind));
+      const rect = f => {
+        const n = M.normalOf(f.pts);
+        if (Math.abs(n.y) > 0.01) return null;
+        const u = { x: -n.z, z: n.x };
+        const along = f.pts.map(q => q.x * u.x + q.z * u.z), ys = f.pts.map(q => q.y);
+        const d = n.x * f.pts[0].x + n.z * f.pts[0].z;
+        return { n, d, a0: Math.min(...along), a1: Math.max(...along), y0: Math.min(...ys), y1: Math.max(...ys), group: f.group };
+      };
+      const R = walls.map(rect).filter(Boolean);
+      let overlaps = 0;
+      for (let i = 0; i < R.length; i += 1) for (let j = i + 1; j < R.length; j += 1) {
+        const a = R[i], b = R[j];
+        if (a.group !== b.group || Math.abs(a.d - b.d) > 1e-3 || a.n.x * b.n.x + a.n.z * b.n.z < 0.999) continue;
+        const w = Math.min(a.a1, b.a1) - Math.max(a.a0, b.a0), h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+        if (w > 0.02 && h > 0.02) overlaps += 1;
+      }
+      return { overlaps, walls: built.counts.walls };
+    }, saved);
+    expect(r.walls, fixture).toBeGreaterThan(4);
+    expect(r.overlaps, `${fixture}: wall faces over each other`).toBe(0);
+  }
+});
+
+// NO CREASE (jb: "shouldn't be a crease, should blend where surfaces match
+// on adjacent lined up surfaces"): where one finish runs on in one plane,
+// the join is a seam no painter inks -- and a floor's rim tucked a hair
+// behind the siding draws no line through it.
+test('a join inside one finish in one plane is not inked', async ({ page: p }) => {
+  await openViewer(p, 'plain');
+  const saved = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto', 'repro-timberhouse-jog-fascia.draft'), 'utf8'));
+  const r = await p.evaluate(s => {
+    const built = DraftViewer.loadDrawing(s, 'test');
+    // The floor rims just inside the west wall's outside face (x = -41.5):
+    // every edge a seam.
+    const rims = built.faces.filter(f => f.kind === 'floor' && DraftHouseMesh.normalOf(f.pts).x < -0.99
+      && f.pts.every(q => q.x < -41.4));
+    const inked = rims.filter(f => !(f.seams && f.seams.every(Boolean))).length;
+    return { rims: rims.length, inked };
+  }, saved);
+  expect(r.rims).toBeGreaterThan(4);
+  expect(r.inked, 'a floor rim behind the siding shows a line').toBe(0);
+});
+
+// SEE-THROUGH GLASS: what is behind a window shows through it, tinted.
+test('glass is see-through on the plain painter', async ({ page: p }) => {
+  await openViewer(p, 'plain');
+  const saved = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto', 'repro-timberhouse-jog-fascia.draft'), 'utf8'));
+  const shares = await p.evaluate(s => {
+    DraftViewer.loadDrawing(s, 'test');
+    const M = DraftHouseMesh;
+    const pane = DraftViewer.state.faces.find(f => f.kind === 'glass');
+    const n = M.normalOf(pane.pts);
+    const c = pane.pts.reduce((m, q) => ({ x: m.x + q.x / 4, y: m.y + q.y / 4, z: m.z + q.z / 4 }), { x: 0, y: 0, z: 0 });
+    const cam = { target: c, yaw: 0, pitch: 0, dist: 6, fov: 40 };
+    // Square on to the pane: the eye on its normal.
+    cam.yaw = Math.atan2(n.x, n.z) * 180 / Math.PI;
+    const look = { background: '#ffffff', ambient: 0.6, edges: false };
+    const px = faces => {
+      const cv = document.createElement('canvas');
+      const pt = window.DraftPaintCanvas.create(cv);
+      pt.setFaces(faces);
+      pt.render(cam, look, { W: 80, H: 80 });
+      return Array.from(cv.getContext('2d').getImageData(40, 40, 1, 1).data.slice(0, 3));
+    };
+    const all = DraftViewer.state.faces;
+    return { glass: px(all), open: px(all.filter(f => f !== pane)), pane: pane.colour };
+  }, saved);
+  // Not the pane's own colour flat: the room behind tints through it ...
+  expect(shares.glass).not.toEqual(shares.open);
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  // ... and it is nearer what is behind than a solid pane would be.
+  expect(dist(shares.glass, shares.open)).toBeLessThan(dist(shares.open, shares.pane));
 });

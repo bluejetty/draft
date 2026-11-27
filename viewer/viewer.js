@@ -309,7 +309,8 @@
   function fit() {
     if (!state.faces.length) return;
     let lo = { x: Infinity, y: Infinity, z: Infinity }, hi = { x: -Infinity, y: -Infinity, z: -Infinity };
-    state.faces.forEach(f => f.pts.forEach(p => {
+    // On the house: the GROUND is a margin round it, not part of it.
+    state.faces.filter(f => f.kind !== 'ground').forEach(f => f.pts.forEach(p => {
       lo = { x: Math.min(lo.x, p.x), y: Math.min(lo.y, p.y), z: Math.min(lo.z, p.z) };
       hi = { x: Math.max(hi.x, p.x), y: Math.max(hi.y, p.y), z: Math.max(hi.z, p.z) };
     }));

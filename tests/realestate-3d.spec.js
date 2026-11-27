@@ -39,20 +39,22 @@ async function openSheet(page, { noViewer = false } = {}) {
   return errors;
 }
 
-// The tile's middle, in page pixels, read off the sheet canvas. The tile is
-// the last box: bottom right on the default four-seat sheet.
-async function tileCentre(page) {
+// A tile's middle, in page pixels, read off the sheet canvas: the two 3D
+// views are the top row (jb, 27 Nov 2026), FRONT left and REAR right.
+async function tileCentre(page, slot = 'front') {
   const box = await page.locator('#sheet').boundingBox();
-  return { x: box.x + box.width * 0.71, y: box.y + box.height * 0.69 };
+  return { x: box.x + box.width * (slot === 'front' ? 0.38 : 0.75), y: box.y + box.height * 0.3 };
 }
+const bothDrawn = page => page.waitForFunction(
+  () => (document.body.dataset.view3dDrawn || '').split(' ').length === 2, null, { timeout: 30000 });
 
 // How much of the tile is not white paper: the house drawn there.
 async function inkedShare(page) {
   return page.evaluate(() => {
     const cv = document.getElementById('sheet');
     const ctx = cv.getContext('2d');
-    const x = Math.round(cv.width * 0.6), y = Math.round(cv.height * 0.55);
-    const w = Math.round(cv.width * 0.2), hh = Math.round(cv.height * 0.25);
+    const x = Math.round(cv.width * 0.3), y = Math.round(cv.height * 0.15);
+    const w = Math.round(cv.width * 0.15), hh = Math.round(cv.height * 0.25);
     const d = ctx.getImageData(x, y, w, hh).data;
     let inked = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i] < 200 || d[i + 1] < 200 || d[i + 2] < 200) inked += 1;
@@ -60,21 +62,26 @@ async function inkedShare(page) {
   });
 }
 
-test('the FRONT 3D VIEW tile draws the house by itself', async ({ page }) => {
+test('the FRONT and REAR 3D VIEWS draw the house by themselves, on top of the plans, no FLOOR AREAS', async ({ page }) => {
   const errors = await openSheet(page);
-  await page.waitForFunction(() => document.body.dataset.view3d === 'drawn', null, { timeout: 30000 });
+  await bothDrawn(page);
+  // The order on the rail is the order on the sheet: the 3D row, then the
+  // plans; FLOOR AREAS is there to tick but off (jb, 27 Nov 2026).
+  await expect(page.locator('#seat-list .what')).toHaveText(['FRONT 3D VIEW', 'REAR 3D VIEW', 'MAIN FL', '2ND FL', 'FLOOR AREAS']);
+  await expect(page.locator('#seat-list input').last()).not.toBeChecked();
+  expect(await page.evaluate(() => window.__ink)).not.toContain('TOTAL HOUSE');
   expect(await inkedShare(page), 'the house is on the tile').toBeGreaterThan(0.05);
   const ink = await page.evaluate(() => window.__ink);
   expect(ink).toContain('DOUBLE-CLICK TO TURN');
   expect(ink).not.toContain('3D VIEW — once available');
   // The seat is a real tick now, not a held-open one.
-  await expect(page.locator('#seat-list input').last()).toBeEnabled();
+  await expect(page.locator('#seat-list input').first()).toBeEnabled();
   expect(errors).toEqual([]);
 });
 
 test('double-click turns the 3D view, and DONE keeps it for the house', async ({ page }) => {
   await openSheet(page);
-  await page.waitForFunction(() => document.body.dataset.view3d === 'drawn', null, { timeout: 30000 });
+  await bothDrawn(page);
   await expect(page.locator('#view3d-reset')).toBeHidden();
   const at = await tileCentre(page);
   await page.mouse.dblclick(at.x, at.y);
@@ -87,15 +94,16 @@ test('double-click turns the 3D view, and DONE keeps it for the house', async ({
   await expect(frame).toBeHidden();
   await expect(page.locator('#view3d-reset')).toBeVisible();
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('draft-realestate-3d') || '{}'));
-  const cameras = Object.values(kept);
-  expect(cameras).toHaveLength(1);
-  // BACK is the front's yaw turned 215 degrees; this house's front is E1 to
-  // the east (planTurn 3), yaw 90.
-  expect(cameras[0].yaw).toBe((90 + 215) % 360);
+  const houses = Object.values(kept);
+  expect(houses).toHaveLength(1);
+  // Only the FRONT was turned. BACK is the front's yaw turned 215 degrees;
+  // this house's front is E1 to the east (planTurn 3), yaw 90.
+  expect(Object.keys(houses[0])).toEqual(['front']);
+  expect(houses[0].front.yaw).toBe((90 + 215) % 360);
 
   // Opened again, the sheet draws the kept view.
   await page.reload();
-  await page.waitForFunction(() => document.body.dataset.view3d === 'drawn', null, { timeout: 30000 });
+  await bothDrawn(page);
   await expect(page.locator('#view3d-reset')).toBeVisible();
 
   // RESET goes back to the front-left corner.
@@ -106,7 +114,7 @@ test('double-click turns the 3D view, and DONE keeps it for the house', async ({
 
 test('a click off the live 3D view keeps the view too', async ({ page }) => {
   await openSheet(page);
-  await page.waitForFunction(() => document.body.dataset.view3d === 'drawn', null, { timeout: 30000 });
+  await bothDrawn(page);
   const at = await tileCentre(page);
   await page.mouse.dblclick(at.x, at.y);
   await expect(page.locator('[data-view3d-frame]')).toBeVisible();
@@ -115,7 +123,7 @@ test('a click off the live 3D view keeps the view too', async ({ page }) => {
   await expect(page.locator('[data-view3d-frame]')).toBeHidden();
   const kept = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('draft-realestate-3d') || '{}')));
   expect(kept).toHaveLength(1);
-  expect(kept[0].yaw).toBe((90 + 90) % 360);
+  expect(kept[0].front.yaw).toBe((90 + 90) % 360);
 });
 
 test('with viewer/ deleted the sheet still works and says so in the tile', async ({ page }) => {
@@ -123,6 +131,6 @@ test('with viewer/ deleted the sheet still works and says so in the tile', async
   await page.waitForFunction(() => (window.__ink || []).includes('3D VIEWER NOT INSTALLED'), null, { timeout: 20000 });
   const ink = await page.evaluate(() => window.__ink);
   expect(ink, 'the plans still drew').toContain('MAIN FL');
-  expect(ink).toContain('TOTAL HOUSE');
+  expect(ink).toContain('2ND FL');
   expect(errors).toEqual([]);
 });

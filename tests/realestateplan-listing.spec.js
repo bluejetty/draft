@@ -76,8 +76,17 @@ test('room tags print their name, and the size under it when there is one', asyn
   expect(ink).toContain('DEN');
 });
 
+// THE AREA BOX STARTS OFF (jb, 27 Nov 2026: "no FLOOR AREAS ... we might
+// put those elsewhere on here in a bit"); a tick puts it on the sheet.
+async function areasOn(page) {
+  await page.locator('.seat', { hasText: 'FLOOR AREAS' }).locator('input').check();
+  await page.waitForFunction(() => (window.__rpAreas || []).length > 0);
+  return page.evaluate(() => window.__rpAreas);
+}
+
 test('the area box: each floor, the house total, the foundation on its own', async ({ page }) => {
-  const { areas } = await sheetText(page, TAGGED);
+  await sheetText(page, TAGGED);
+  const areas = await areasOn(page);
   const names = areas.map(row => row.replace(/ (?:[\d,]+ SQ FT|NO FLOOR DRAWN)$/, ''));
   // TOP DOWN, the total under the levels at grade and above, and the level
   // below grade after it -- never inside it.
@@ -94,9 +103,12 @@ test('the area box: each floor, the house total, the foundation on its own', asy
   expect(value('FOUNDATION')).toBeGreaterThan(0);
 });
 
-test('the area box can be taken off the sheet like a plan', async ({ page }) => {
-  await sheetText(page, TAGGED);
+test('the area box starts off, goes on with a tick, and comes off like a plan', async ({ page }) => {
+  const { areas } = await sheetText(page, TAGGED);
+  expect(areas, 'off on a new sheet').toEqual([]);
   const box = page.locator('.seat', { hasText: 'FLOOR AREAS' }).locator('input');
+  await expect(box).not.toBeChecked();
+  await areasOn(page);
   await expect(box).toBeChecked();
   await page.evaluate(() => { window.__rpAreas = null; });
   await box.uncheck();

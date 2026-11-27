@@ -319,7 +319,7 @@
         const withWalls = levels.filter(level => planned(level.id) && !LP.ridesOnFullFloor(drawing, level.id))
           .sort((a, b) => (a.elev || 0) - (b.elev || 0));
         const lowest = withWalls[0];
-        seats = withWalls.map(level => ({
+        const plans = withWalls.map(level => ({
           kind: 'plan',
           id: level.id,
           label: level.name || `LEVEL ${level.id}`,
@@ -328,14 +328,17 @@
           optional: withWalls.length > 1 && level === lowest && (level.elev || 0) < 0,
           on: !(withWalls.length > 1 && level === lowest && (level.elev || 0) < 0),
         }));
-        // THE AREAS, as a seat of their own so they can be ticked off like a
-        // plan (Movie, 1 Oct: "the floor areas and total house area on main
-        // and above levels and area for foundation area").
-        seats.push({ kind: 'areas', id: null, label: 'FLOOR AREAS', on: true });
-        // THE 3D VIEW, MADE BY ITSELF (jb, 27 Nov 2026: "automatically
-        // generate one for Real Estate Plans please"): the house from the
-        // front-left corner, turned by a double-click on the tile.
-        seats.push({ kind: 'view3d', id: null, label: 'FRONT 3D VIEW', on: true });
+        // THE 3D VIEWS FIRST, MADE BY THEMSELVES (jb, 27 Nov 2026:
+        // "automatically generate one for Real Estate Plans", then "the upper
+        // 2 windows 3d"), the plans under them.
+        seats = [
+          ...VIEWS.map(v => ({ kind: 'view3d', id: null, slot: v.slot, label: v.label, on: true })),
+          ...plans,
+          // THE AREAS, a seat of their own (Movie, 1 Oct), OFF since jb, 27
+          // Nov 2026: "no FLOOR AREAS (we might put those elsewhere on here
+          // in a bit)". A tick puts them back.
+          { kind: 'areas', id: null, label: 'FLOOR AREAS', on: false },
+        ];
       };
 
       const paintSeats = () => {
@@ -524,7 +527,7 @@
           return;
         }
         if (seat.kind === 'view3d') {
-          drawView3d(ctx, box);
+          drawView3d(ctx, box, viewOf(seat.slot));
           ctx.restore();
           return;
         }
@@ -619,13 +622,20 @@
       // DOUBLE-CLICK the tile and the live viewer opens over it to be turned;
       // DONE or a click off it keeps that view, saved for this house.
       const V3_KEY = 'draft-realestate-3d';
-      const view3d = {
-        camera: null,       // the kept camera, or null for the front-left preset
+      // TWO VIEWS ON TOP OF THE SHEET (jb, 27 Nov 2026: "2 floor plans on
+      // the bottom ... and the upper 2 windows 3d"): the front from its left
+      // corner, and the back from the far corner. Each turned on its own.
+      const VIEWS = [
+        { slot: 'front', label: 'FRONT 3D VIEW', preset: 'front-left' },
+        { slot: 'back', label: 'REAR 3D VIEW', preset: 'back' },
+      ].map(v => ({ ...v,
+        camera: null,       // the kept camera, or null for the preset
         image: null,        // the last picture, an <img>
         made: null,         // { w, h, camera } the picture was made for
         box: null,          // the tile in canvas pixels, last paint
-        asking: false, again: false, timer: 0, missing: false,
-      };
+        asking: false, again: false, timer: 0 }));
+      const viewOf = slot => VIEWS.find(v => v.slot === slot);
+      let viewerMissing = false;
       // WHICH HOUSE: its project block and its first wall, hashed -- the
       // sheet reads whatever drawing is in storage, and another house must
       // not open on this one's camera.
@@ -637,28 +647,34 @@
         for (let i = 0; i < text.length; i += 1) hsh = ((hsh * 33) ^ text.charCodeAt(i)) >>> 0;
         return hsh.toString(36);
       };
-      const readCamera = () => {
+      // { front: camera, back: camera } per house; a lone camera (kept
+      // before there were two) is the front's.
+      const readCameras = () => {
         try {
-          const all = JSON.parse(localStorage.getItem(V3_KEY) || '{}');
-          return all[houseKey()] || null;
-        } catch { return null; }
+          const kept = JSON.parse(localStorage.getItem(V3_KEY) || '{}')[houseKey()] || null;
+          if (!kept) return {};
+          return kept.target ? { front: kept } : kept;
+        } catch { return {}; }
       };
-      const writeCamera = camera => {
+      const writeCameras = () => {
         try {
           const all = JSON.parse(localStorage.getItem(V3_KEY) || '{}');
-          if (camera) all[houseKey()] = camera; else delete all[houseKey()];
+          const mine = {};
+          VIEWS.forEach(v => { if (v.camera) mine[v.slot] = v.camera; });
+          if (Object.keys(mine).length) all[houseKey()] = mine; else delete all[houseKey()];
           localStorage.setItem(V3_KEY, JSON.stringify(all));
-        } catch { /* storage off: the view lasts as long as the page */ }
+        } catch { /* storage off: the views last as long as the page */ }
+        document.getElementById('view3d-reset').hidden = !VIEWS.some(v => v.camera);
       };
       const sameCamera = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
 
       // Contained in the tile, above the label line.
-      const drawView3d = (ctx, box) => {
-        view3d.box = box;
+      const drawView3d = (ctx, box, view) => {
+        view.box = box;
         const skin = window.__rpSkin;
         const area = { x: box.x + 2, y: box.y + 2, w: box.w - 4, h: box.h - 18 };
-        if (view3d.image && view3d.image.complete && view3d.image.naturalWidth) {
-          const img = view3d.image;
+        if (view.image && view.image.complete && view.image.naturalWidth) {
+          const img = view.image;
           const k = Math.min(area.w / img.naturalWidth, area.h / img.naturalHeight);
           const w = img.naturalWidth * k, h = img.naturalHeight * k;
           ctx.drawImage(img, area.x + (area.w - w) / 2, area.y + (area.h - h) / 2, w, h);
@@ -669,78 +685,79 @@
         } else {
           ctx.fillStyle = skin['ink-quiet'];
           ctx.textAlign = 'center';
-          ctx.fillText(view3d.missing ? '3D VIEWER NOT INSTALLED' : 'DRAWING THE 3D VIEW…',
+          ctx.fillText(viewerMissing ? '3D VIEWER NOT INSTALLED' : 'DRAWING THE 3D VIEW…',
             box.x + box.w / 2, box.y + box.h / 2);
         }
-        queuePicture();
+        queuePicture(view);
       };
 
       // A new picture when the tile changed size by more than a tenth, or
       // the camera changed. Made 1.5 times the tile so it prints sharp.
-      const pictureSize = () => {
-        const b = view3d.box;
+      const pictureSize = view => {
+        const b = view.box;
         if (!b) return null;
         const k = Math.min(1.5, 2400 / Math.max(b.w, b.h));
         return { w: Math.round((b.w - 4) * k), h: Math.round((b.h - 18) * k) };
       };
-      const wantsPicture = () => {
-        const size = pictureSize();
-        if (!size || !raw || view3d.missing || window.DraftView3dHost?.editing) return false;
-        const made = view3d.made;
+      const wantsPicture = view => {
+        const size = pictureSize(view);
+        if (!size || !raw || viewerMissing || window.DraftView3dHost?.editing) return false;
+        const made = view.made;
         if (!made) return true;
-        if (!sameCamera(made.camera, view3d.camera)) return true;
+        if (!sameCamera(made.camera, view.camera)) return true;
         return Math.abs(made.w - size.w) > made.w * 0.1 || Math.abs(made.h - size.h) > made.h * 0.1;
       };
-      const queuePicture = () => {
-        if (!wantsPicture()) return;
-        clearTimeout(view3d.timer);
-        view3d.timer = setTimeout(makePicture, 120);
+      const queuePicture = view => {
+        if (!wantsPicture(view)) return;
+        clearTimeout(view.timer);
+        view.timer = setTimeout(() => makePicture(view), 120);
       };
-      const makePicture = async () => {
-        if (view3d.asking) { view3d.again = true; return; }
+      const makePicture = async view => {
+        if (view.asking) { view.again = true; return; }
         const host = window.DraftView3dHost;
-        if (!host) { view3d.missing = true; paintSheet(); return; }
-        const size = pictureSize();
+        if (!host) { viewerMissing = true; paintSheet(); return; }
+        const size = pictureSize(view);
         if (!size) return;
-        view3d.asking = true;
-        const camera = view3d.camera;
-        const out = await host.picture({ drawing: raw, camera, preset: 'front-left', w: size.w, h: size.h });
-        view3d.asking = false;
+        view.asking = true;
+        const camera = view.camera;
+        const out = await host.picture({ drawing: raw, camera, preset: view.preset, w: size.w, h: size.h });
+        view.asking = false;
         if (!out) {
-          view3d.missing = host.missing;
-          if (view3d.missing) say('3D viewer not installed — the 3D view is left empty.');
+          viewerMissing = host.missing;
+          if (viewerMissing) say('3D viewer not installed — the 3D views are left empty.');
           paintSheet();
           return;
         }
         const img = new Image();
         img.onload = () => {
-          view3d.image = img;
-          view3d.made = { w: size.w, h: size.h, camera };
-          document.body.dataset.view3d = 'drawn';
+          view.image = img;
+          view.made = { w: size.w, h: size.h, camera };
+          const drawn = VIEWS.filter(v => v.image).map(v => v.slot);
+          document.body.dataset.view3d = drawn.length ? 'drawn' : '';
+          document.body.dataset.view3dDrawn = drawn.join(' ');
           paintSheet();
-          if (view3d.again) { view3d.again = false; queuePicture(); }
+          if (view.again) { view.again = false; queuePicture(view); }
         };
         img.src = out.png;
       };
 
-      // Double-click on the tile: the live viewer over it.
-      const turnView3d = async () => {
+      // Double-click on a tile: the live viewer over it.
+      const turnView3d = async view => {
         const host = window.DraftView3dHost;
-        const b = view3d.box;
+        const b = view.box;
         if (!host || !b || !raw || host.editing) return;
         const cv = document.getElementById('sheet');
         const r = cv.getBoundingClientRect();
         const sx = r.width / cv.width, sy = r.height / cv.height;
         say('Turn the house: drag, wheel to zoom, or a view button. DONE or a click off it keeps the view.');
         const camera = await host.edit({
-          drawing: raw, camera: view3d.camera, preset: 'front-left',
+          drawing: raw, camera: view.camera, preset: view.preset,
           rect: { left: r.left + b.x * sx, top: r.top + b.y * sy, width: b.w * sx, height: (b.h - 16) * sy },
         });
         if (!camera) { say('The 3D view is as it was.'); return; }
-        view3d.camera = camera;
-        writeCamera(camera);
-        document.getElementById('view3d-reset').hidden = false;
-        say('3D view kept.');
+        view.camera = camera;
+        writeCameras();
+        say(`${view.label} kept.`);
         paintSheet();
       };
 
@@ -791,9 +808,24 @@
             x + w / 2, y + h / 2);
           return;
         }
-        view3d.box = null;
-        boxesFor(showing.length, inner.x, inner.y, inner.w, inner.h)
-          .forEach((box, i) => drawSeat(ctx, showing[i], box));
+        VIEWS.forEach(v => { v.box = null; });
+        // THE 3D VIEWS IN A ROW ON TOP, EVERYTHING ELSE IN A ROW UNDER THEM
+        // (jb, 27 Nov 2026); either alone takes the whole sheet as before.
+        const top = showing.filter(seat => seat.kind === 'view3d');
+        const rest = showing.filter(seat => seat.kind !== 'view3d');
+        if (top.length && rest.length) {
+          const gap = Math.min(inner.w, inner.h) * 0.03;
+          const rowH = (inner.h - gap) / 2;
+          const row = (list, y0) => {
+            const bw = (inner.w - gap * (list.length - 1)) / list.length;
+            list.forEach((seat, i) => drawSeat(ctx, seat, { x: inner.x + i * (bw + gap), y: y0, w: bw, h: rowH }));
+          };
+          row(top, inner.y);
+          row(rest, inner.y + rowH + gap);
+        } else {
+          boxesFor(showing.length, inner.x, inner.y, inner.w, inner.h)
+            .forEach((box, i) => drawSeat(ctx, showing[i], box));
+        }
       };
 
       // ── BOOT ──────────────────────────────────────────────────────────
@@ -833,8 +865,9 @@
             defaultWallTopFt: 8,
           }),
         };
-        view3d.camera = readCamera();
-        document.getElementById('view3d-reset').hidden = !view3d.camera;
+        const kept = readCameras();
+        VIEWS.forEach(v => { v.camera = kept[v.slot] || null; });
+        document.getElementById('view3d-reset').hidden = !VIEWS.some(v => v.camera);
         buildSeats();
         paintSeats();
         paintSheet();
@@ -848,19 +881,17 @@
         paintSheet();
       });
       document.getElementById('sheet').addEventListener('dblclick', e => {
-        const b = view3d.box;
-        if (!b) return;
         const cv = e.currentTarget;
         const r = cv.getBoundingClientRect();
         const x = (e.clientX - r.left) * (cv.width / r.width);
         const y = (e.clientY - r.top) * (cv.height / r.height);
-        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) turnView3d();
+        const hit = VIEWS.find(({ box: b }) => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+        if (hit) turnView3d(hit);
       });
       document.getElementById('view3d-reset').addEventListener('click', e => {
-        view3d.camera = null;
-        writeCamera(null);
-        e.currentTarget.hidden = true;
-        say('3D view back to the front-left corner.');
+        VIEWS.forEach(v => { v.camera = null; });
+        writeCameras();
+        say('3D views back to the front-left and rear corners.');
         paintSheet();
       });
 
