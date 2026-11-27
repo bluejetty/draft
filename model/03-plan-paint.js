@@ -370,6 +370,9 @@
       COUNTER_OVERHANG_FT: FG.COUNTER_OVERHANG_FT,
       FIXTURE_COLOR: skin['draw-fixture'],
       fixtureFill: fixtureFill(),
+      // THE PAPER, opaque: a fireplace set into its wall knocks the wall out
+      // where it passes through (jb, 27 Nov 2026).
+      paperColor: skin['surface-page'],
       // The neighbours a counter piece melds with at a joint.
       fixtures: fixtures(),
       // ONE COUNTER (Movie, 21 Oct: "meld the COUNTER"): the boxes light,

@@ -2577,7 +2577,15 @@ if (!window.DraftRender2D) {
       } else rect(a0, a1, cBack, cFront);
       ctx.fill();
       ctx.save(); ctx.lineWidth = 0.5; ctx.globalAlpha *= 0.45; ctx.stroke(); ctx.restore();
-    } else if (kind !== 'toilet' && !PEDESTAL_KINDS.includes(kind) && !joined) { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
+    } else if (kind !== 'toilet' && !PEDESTAL_KINDS.includes(kind) && !joined) {
+      // A FIREPLACE SET INTO ITS WALL opens the wall where it passes: the
+      // paper, opaque, first, so the wall's faces and hatch stop at its sides.
+      if (kind === 'fireplace' && geo.recess > 0 && env.paperColor) {
+        rect(a0, a1, cBack, cFront);
+        ctx.save(); ctx.fillStyle = env.paperColor; ctx.fill(); ctx.restore();
+      }
+      rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke();
+    }
     if (joined) {
       rect(a0, a1, cBack, cFront); ctx.fill();
       const seg = (p, q) => { const A = P(p[0], p[1]), B = P(q[0], q[1]); ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); };
