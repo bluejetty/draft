@@ -99,6 +99,88 @@
     const at = (t, off, y) => ({ x: a.x + ux * t + nx * off, y, z: a.z + uz * t + nz * off });
     return { p, at, t0: -ext, t1: len + ext, lo, hi, len, u: { x: ux, z: uz }, n: { x: nx, z: nz } };
   }
+  // ── WALLS MEET CLEAN AT A CORNER ────────────────────────────────────────
+  //
+  // jb, 27 Nov 2026: "the walls look overlapped or missing at corners
+  // depending on inside or outside corner". A wall's body was a box run on
+  // half a thickness at each end (a centre-line wall) or not at all (a
+  // face-line wall), so at an L one box poked through the other's face, or
+  // left the outside corner square empty. Now each end is cut to the corner:
+  //   an L (one other wall ends at the same point): each face runs to where
+  //     it meets the other wall's same face, outside to outside and inside
+  //     to inside, so the two bodies meet on the mitre line;
+  //   a T (this wall ends on the middle of another): both faces stop on the
+  //     other wall's near face;
+  //   two walls in line: each stops at the point they share.
+  // Returns the frame with `ends` = { lo: [t0, t1], hi: [t0, t1] }, the
+  // feet along the line where each face starts and stops; t0 / t1 become the
+  // span both faces share, so an opening never runs into a mitre.
+  function joinedFrame(wall, thickFt, peers) {
+    const f = wallFrame(wall, thickFt);
+    if (!f) return null;
+    const ends = { lo: [f.t0, f.t1], hi: [f.t0, f.t1] };
+    const near = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 0.08;
+    const hitT = (off, g, gOff) => {
+      // Where this wall's line at `off` across crosses g's line at gOff.
+      const un = f.u.x * g.n.x + f.u.z * g.n.z;
+      if (Math.abs(un) < 0.05) return null;
+      const p0 = f.p(0, off), g0 = g.p(0, 0);
+      return (gOff - ((p0.x - g0.x) * g.n.x + (p0.z - g0.z) * g.n.z)) / un;
+    };
+    [[0, wall.start, wall.end], [1, wall.end, wall.start]].forEach(([k, E, other]) => {
+      const keep = t => Number.isFinite(t) && Math.abs(t - (k ? f.len : 0)) < thickFt * 4 + 1;
+      const away = { x: other.x - E.x, z: other.z - E.z };
+      // A T first: this end on the middle of another wall's body.
+      for (const pw of peers) {
+        if (pw.wall === wall || !pw.frame) continue;
+        const g = pw.frame;
+        const d = { x: E.x - pw.wall.start.x, z: E.z - pw.wall.start.z };
+        const along = d.x * g.u.x + d.z * g.u.z, across = d.x * g.n.x + d.z * g.n.z;
+        if (along < g.t0 + 0.1 || along > g.t1 - 0.1) continue;
+        if (across < g.lo - 0.08 || across > g.hi + 0.08) continue;
+        if (near(E, pw.wall.start) || near(E, pw.wall.end)) continue;
+        const towardMe = away.x * g.n.x + away.z * g.n.z > 0 ? g.hi : g.lo;
+        const a = hitT(f.lo, g, towardMe), b = hitT(f.hi, g, towardMe);
+        if (keep(a) && keep(b)) { ends.lo[k] = a; ends.hi[k] = b; return; }
+      }
+      const meets = peers.filter(pw => pw.wall !== wall && pw.frame
+        && (near(E, pw.wall.start) || near(E, pw.wall.end)));
+      const inLine = g => Math.abs(f.u.x * g.u.z - f.u.z * g.u.x) < 0.05;
+      if (meets.length > 1) {
+        // Three or more at a point. One in line with me: we run on through
+        // it, so I stop at the point. Two in line with each other: they are
+        // one wall I end on, a T at its end.
+        if (meets.some(pw => inLine(pw.frame))) { ends.lo[k] = ends.hi[k] = k ? f.len : 0; return; }
+        const pair = meets.find(pw => meets.some(q => q !== pw
+          && Math.abs(pw.frame.u.x * q.frame.u.z - pw.frame.u.z * q.frame.u.x) < 0.05));
+        if (!pair) return;
+        const g = pair.frame;
+        const towardMe = away.x * g.n.x + away.z * g.n.z > 0 ? g.hi : g.lo;
+        const a = hitT(f.lo, g, towardMe), b = hitT(f.hi, g, towardMe);
+        if (keep(a) && keep(b)) { ends.lo[k] = a; ends.hi[k] = b; }
+        return;
+      }
+      if (meets.length !== 1) return;
+      const pw = meets[0], g = pw.frame;
+      const gOther = near(E, pw.wall.start) ? pw.wall.end : pw.wall.start;
+      const gAway = { x: gOther.x - E.x, z: gOther.z - E.z };
+      const unit = Math.abs(f.u.x * g.u.z - f.u.z * g.u.x);
+      if (unit < 0.05) {
+        // In line: each stops where they meet.
+        ends.lo[k] = ends.hi[k] = k ? f.len : 0;
+        return;
+      }
+      // My inside face is the one toward the other wall's body; its inside
+      // face the one toward mine.
+      const myIn = gAway.x * f.n.x + gAway.z * f.n.z > 0 ? 'hi' : 'lo';
+      const itsIn = away.x * g.n.x + away.z * g.n.z > 0 ? g.hi : g.lo;
+      const itsOut = itsIn === g.hi ? g.lo : g.hi;
+      const myOut = myIn === 'hi' ? 'lo' : 'hi';
+      const tIn = hitT(f[myIn], g, itsIn), tOut = hitT(f[myOut], g, itsOut);
+      if (keep(tIn) && keep(tOut)) { ends[myIn][k] = tIn; ends[myOut][k] = tOut; }
+    });
+    return { ...f, ends, t0: Math.max(ends.lo[0], ends.hi[0]), t1: Math.min(ends.lo[1], ends.hi[1]) };
+  }
   function wallFootprint(wall, thickFt) {
     const f = wallFrame(wall, thickFt);
     if (!f) return null;
@@ -197,6 +279,10 @@
     if (!frame || !(top - bottom > 1e-4)) return;
     const { at, t0: T0, t1: T1 } = frame;
     let { lo, hi } = frame;
+    // Each face's own start and stop (joinedFrame): a mitred end runs one
+    // face further than the other.
+    const E = frame.ends || { lo: [T0, T1], hi: [T0, T1] };
+    const tOn = (side, t) => (Math.abs(t - T0) < 1e-9 ? E[side][0] : Math.abs(t - T1) < 1e-9 ? E[side][1] : t);
     if (PRINT && hi - lo < PRINT.minFt) {
       const c = (lo + hi) / 2;
       lo = c - PRINT.minFt / 2; hi = c + PRINT.minFt / 2;
@@ -212,7 +298,9 @@
       // Print: a closed box for each piece of wall; the openings stay open.
       let t = T0;
       const box = (a, b, y0, y1) => {
-        if (b - a > 1e-4 && y1 - y0 > 1e-4) wallBox(at, frame.u, frame.n, a, b, lo, hi, y0, y1, kind, colour, out);
+        if (b - a > 1e-4 && y1 - y0 > 1e-4) {
+          wallBox(at, frame.u, frame.n, [tOn('lo', a), tOn('lo', b), tOn('hi', a), tOn('hi', b)], lo, hi, y0, y1, kind, colour, out);
+        }
       };
       keep.forEach(h => {
         box(t, h.t0, bottom, top);
@@ -226,7 +314,7 @@
     }
     if (!keep.length) {
       if (!paint) {
-        prism([frame.p(T0, lo), frame.p(T1, lo), frame.p(T1, hi), frame.p(T0, hi)], bottom, top, kind, colour, out);
+        prism([frame.p(E.lo[0], lo), frame.p(E.lo[1], lo), frame.p(E.hi[1], hi), frame.p(E.hi[0], hi)], bottom, top, kind, colour, out);
         return;
       }
     }
@@ -245,14 +333,15 @@
     const atEnd = v => Math.abs(v - T0) < 1e-9 || Math.abs(v - T1) < 1e-9;
     // The two long faces.
     const cuts = paint && Array.isArray(paint.cuts) ? paint.cuts.filter(y => y > bottom + 1e-4 && y < top - 1e-4) : [];
-    [{ off: lo, dir: { x: -n.x, y: 0, z: -n.z }, tint: paint && paint.lo },
-      { off: hi, dir: { x: n.x, y: 0, z: n.z }, tint: paint && paint.hi }].forEach(side => {
+    [{ off: lo, key: 'lo', dir: { x: -n.x, y: 0, z: -n.z }, tint: paint && paint.lo },
+      { off: hi, key: 'hi', dir: { x: n.x, y: 0, z: n.z }, tint: paint && paint.hi }].forEach(side => {
       cols.forEach(c => spans(c).forEach(([s0, s1]) => {
         const ys = [s0, ...cuts.filter(y => y > s0 + 1e-4 && y < s1 - 1e-4).sort((a, b) => a - b), s1];
         for (let i = 0; i + 1 < ys.length; i += 1) {
           const y0 = ys[i], y1 = ys[i + 1];
           const col = side.tint ? side.tint((y0 + y1) / 2) : colour;
-          facing([at(c.a, side.off, y0), at(c.b, side.off, y0), at(c.b, side.off, y1), at(c.a, side.off, y1)],
+          const ca = tOn(side.key, c.a), cb = tOn(side.key, c.b);
+          facing([at(ca, side.off, y0), at(cb, side.off, y0), at(cb, side.off, y1), at(ca, side.off, y1)],
             side.dir, kind, col, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
         }
       }));
@@ -261,17 +350,18 @@
     cols.forEach(c => {
       const sp = spans(c);
       if (sp.some(([, y1]) => Math.abs(y1 - top) < 1e-6)) {
-        facing([at(c.a, lo, top), at(c.b, lo, top), at(c.b, hi, top), at(c.a, hi, top)],
+        facing([at(tOn('lo', c.a), lo, top), at(tOn('lo', c.b), lo, top), at(tOn('hi', c.b), hi, top), at(tOn('hi', c.a), hi, top)],
           { x: 0, y: 1, z: 0 }, kind, colour, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
       }
       if (sp.some(([y0]) => Math.abs(y0 - bottom) < 1e-6)) {
-        facing([at(c.a, lo, bottom), at(c.b, lo, bottom), at(c.b, hi, bottom), at(c.a, hi, bottom)],
+        facing([at(tOn('lo', c.a), lo, bottom), at(tOn('lo', c.b), lo, bottom), at(tOn('hi', c.b), hi, bottom), at(tOn('hi', c.a), hi, bottom)],
           { x: 0, y: -1, z: 0 }, kind, colour, [false, !atEnd(c.b), false, !atEnd(c.a)], out);
       }
     });
     // The two ends.
-    [[T0, -1], [T1, 1]].forEach(([tt, sg]) => {
-      facing([at(tt, lo, bottom), at(tt, hi, bottom), at(tt, hi, top), at(tt, lo, top)],
+    [[0, -1], [1, 1]].forEach(([k, sg]) => {
+      const tl = E.lo[k], th = E.hi[k];
+      facing([at(tl, lo, bottom), at(th, hi, bottom), at(th, hi, top), at(tl, lo, top)],
         { x: u.x * sg, y: 0, z: u.z * sg }, kind, colour, null, out);
     });
     // Each opening: its reveals, and what fills it.
@@ -327,13 +417,15 @@
 
   // A closed box from a wall frame: along the line a..b, across lo..hi,
   // up y0..y1. Six faces, each turned out.
-  function wallBox(at, u, n, a, b, lo, hi, y0, y1, kind, colour, out) {
+  // [aLo, bLo, aHi, bHi]: where each long face starts and stops (a mitred
+  // end is a slanted end face; the box is still closed).
+  function wallBox(at, u, n, [a, b, a2, b2], lo, hi, y0, y1, kind, colour, out) {
     facing([at(a, lo, y0), at(b, lo, y0), at(b, lo, y1), at(a, lo, y1)], { x: -n.x, y: 0, z: -n.z }, kind, colour, null, out);
-    facing([at(a, hi, y0), at(b, hi, y0), at(b, hi, y1), at(a, hi, y1)], { x: n.x, y: 0, z: n.z }, kind, colour, null, out);
-    facing([at(a, lo, y1), at(b, lo, y1), at(b, hi, y1), at(a, hi, y1)], { x: 0, y: 1, z: 0 }, kind, colour, null, out);
-    facing([at(a, lo, y0), at(b, lo, y0), at(b, hi, y0), at(a, hi, y0)], { x: 0, y: -1, z: 0 }, kind, colour, null, out);
-    facing([at(a, lo, y0), at(a, hi, y0), at(a, hi, y1), at(a, lo, y1)], { x: -u.x, y: 0, z: -u.z }, kind, colour, null, out);
-    facing([at(b, lo, y0), at(b, hi, y0), at(b, hi, y1), at(b, lo, y1)], { x: u.x, y: 0, z: u.z }, kind, colour, null, out);
+    facing([at(a2, hi, y0), at(b2, hi, y0), at(b2, hi, y1), at(a2, hi, y1)], { x: n.x, y: 0, z: n.z }, kind, colour, null, out);
+    facing([at(a, lo, y1), at(b, lo, y1), at(b2, hi, y1), at(a2, hi, y1)], { x: 0, y: 1, z: 0 }, kind, colour, null, out);
+    facing([at(a, lo, y0), at(b, lo, y0), at(b2, hi, y0), at(a2, hi, y0)], { x: 0, y: -1, z: 0 }, kind, colour, null, out);
+    facing([at(a, lo, y0), at(a2, hi, y0), at(a2, hi, y1), at(a, lo, y1)], { x: -u.x, y: 0, z: -u.z }, kind, colour, null, out);
+    facing([at(b, lo, y0), at(b2, hi, y0), at(b2, hi, y1), at(b, lo, y1)], { x: u.x, y: 0, z: u.z }, kind, colour, null, out);
   }
 
   // A sheet (a roof plane) made a slab: its own face on top, the same face
@@ -499,6 +591,18 @@
     };
 
     // ── WALLS ─────────────────────────────────────────────────────────────
+    // The walls each one can meet at a corner: same level, same view.
+    const wallThick = wall => thicknessFt(wall, (wall.view || 'plan') === 'foundation' ? 8 : 5.5);
+    const peersBy = new Map();
+    const peersOf = wall => {
+      const key = `${wall.levelId}|${wall.view || 'plan'}`;
+      if (!peersBy.has(key)) {
+        peersBy.set(key, env.walls().filter(w => w && w.start && w.end && w.levelId === wall.levelId
+          && (w.view || 'plan') === (wall.view || 'plan')).map(w => ({ wall: w, frame: wallFrame(w, wallThick(w)) })));
+      }
+      return peersBy.get(key);
+    };
+    const joined = wall => joinedFrame(wall, wallThick(wall), peersOf(wall));
     env.walls().forEach(wall => {
       if (!wall || !wall.start || !wall.end || wall.levelId < 0) return;
       const n0 = faces.length;
@@ -515,7 +619,7 @@
         const t = thicknessFt(wall, 8);
         // A door drawn in a foundation wall (a detached garage's frost wall)
         // is cut down to the slab it closes onto.
-        wallWithOpenings(wallFrame(wall, t), bottom, top, holesFor(wall, bottom, top, garage),
+        wallWithOpenings(joined(wall), bottom, top, holesFor(wall, bottom, top, garage),
           'foundation', COLOURS.foundation, faces, counts);
         // The strip footing under a wall that bears on one (base at 0).
         if (num(wall.baseHeight) <= 0.01) {
@@ -541,7 +645,7 @@
       if (wall.levelId === 1) {
         const bottom = fdn.slabTop;
         const top = Math.min(bottom + num(wall.topHeight, 8), fdn.wallTop);
-        const frame = wallFrame(wall, thicknessFt(wall, 5.5));
+        const frame = joined(wall);
         wallWithOpenings(frame, bottom, top, holesFor(wall, bottom, top, null), 'wall', COLOURS.wall, faces, counts,
           paintFor(wall, frame, bottom, top, top));
         counts.walls += 1;
@@ -565,7 +669,7 @@
       if (garage && bearsOnGarage(garage, storey)) {
         try { const b = CV.garageBearing(env, fdn, garage); if (Number.isFinite(b)) floor = b; } catch (e) { /* keep the storey's */ }
       }
-      const frame = wallFrame(wall, thicknessFt(wall, 5.5));
+      const frame = joined(wall);
       wallWithOpenings(frame, bottom, top, holesFor(wall, floor, top, garage),
         garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces, counts,
         paintFor(wall, frame, bottom, top, Math.min(top, storey.wallTop)));
@@ -698,7 +802,77 @@
         id: `L${l.id}`, name: ((levels.find(v => v.id === l.id) || {}).name || `LEVEL ${l.id}`).toUpperCase() })),
       { id: 'roof', name: 'ROOF' }, { id: 'ground', name: 'GROUND' }].filter(g => faces.some(f => f.group === g.id));
     // Framed on the house: the ground is 15' of margin, not part of it.
+    if (!PRINT) blendSeams(faces);
     return { faces, stack, counts, groups, bounds: boundsOf(faces.filter(f => f.kind !== 'ground')) };
+  }
+
+  // ── NO CREASE WHERE ONE FINISH RUNS ON ──────────────────────────────────
+  //
+  // jb, 27 Nov 2026: "creases in the exter finish where there is a same
+  // finish on both surfaces -- shouldn't be a crease, should blend where
+  // surfaces match on adjacent lined up surfaces". An edge is left un-inked
+  // (a seam) where faces in the SAME PLANE and the SAME COLOUR cover the
+  // whole of it on the other side: the storey break up a wall of one
+  // siding, two walls in line, a floor's bands. A real corner, a change of
+  // finish, or an edge with nothing beside it is still drawn.
+  function blendSeams(faces) {
+    const buckets = new Map();
+    faces.forEach((f, fi) => {
+      if (f.twoSided || f.pts.length < 3) return;
+      const n = normalOf(f.pts);
+      const d = n.x * f.pts[0].x + n.y * f.pts[0].y + n.z * f.pts[0].z;
+      const key = `${n.x.toFixed(3)},${n.y.toFixed(3)},${n.z.toFixed(3)}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push({ fi, d, colour: f.colour.join(',') });
+    });
+    // Inside a face, in its own plane: dropped to the two axes the normal
+    // leans on least.
+    const flat = (n, p) => (Math.abs(n.x) >= Math.abs(n.y) && Math.abs(n.x) >= Math.abs(n.z) ? [p.y, p.z]
+      : Math.abs(n.y) >= Math.abs(n.z) ? [p.x, p.z] : [p.x, p.y]);
+    const inside = (poly, q) => {
+      let c = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+        const [ax, ay] = poly[i], [bx, by] = poly[j];
+        if ((ay > q[1]) !== (by > q[1]) && q[0] < (bx - ax) * (q[1] - ay) / (by - ay) + ax) c = !c;
+      }
+      return c;
+    };
+    buckets.forEach(list => {
+      if (list.length < 2) return;
+      const n = normalOf(faces[list[0].fi].pts);
+      const polys = list.map(m => ({ ...m, poly: faces[m.fi].pts.map(p => flat(n, p)) }));
+      list.forEach(({ fi, d, colour }) => {
+        const f = faces[fi];
+        const same = polys.filter(o => o.fi !== fi && o.colour === colour && Math.abs(o.d - d) < 0.005);
+        // A face a hair in front of this one, over the edge: a floor's rim
+        // tucked behind the wall's siding never shows, nor its edges.
+        const over = polys.filter(o => o.d - d > 0.001 && o.d - d < 0.1);
+        const c = f.pts.reduce((m, p) => ({ x: m.x + p.x / f.pts.length, y: m.y + p.y / f.pts.length, z: m.z + p.z / f.pts.length }), { x: 0, y: 0, z: 0 });
+        f.pts.forEach((a, i) => {
+          if (f.seams && f.seams[i]) return;
+          const b = f.pts[(i + 1) % f.pts.length];
+          const D = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
+          const L = Math.hypot(D.x, D.y, D.z);
+          if (!(L > 1e-4)) return;
+          // Across the edge, in the plane, away from this face.
+          let w = { x: D.y * n.z - D.z * n.y, y: D.z * n.x - D.x * n.z, z: D.x * n.y - D.y * n.x };
+          const wl = Math.hypot(w.x, w.y, w.z) || 1;
+          w = { x: w.x / wl, y: w.y / wl, z: w.z / wl };
+          if ((c.x - a.x) * w.x + (c.y - a.y) * w.y + (c.z - a.z) * w.z > 0) w = { x: -w.x, y: -w.y, z: -w.z };
+          const T = [0.03, 0.25, 0.5, 0.75, 0.97];
+          const covered = T.every(t => {
+            const q = flat(n, { x: a.x + D.x * t + w.x * 0.01, y: a.y + D.y * t + w.y * 0.01, z: a.z + D.z * t + w.z * 0.01 });
+            return same.some(o => inside(o.poly, q));
+          }) || (over.length && T.every(t => {
+            const q = flat(n, { x: a.x + D.x * t, y: a.y + D.y * t, z: a.z + D.z * t });
+            return over.some(o => inside(o.poly, q));
+          }));
+          if (!covered) return;
+          if (!f.seams) f.seams = f.pts.map(() => false);
+          f.seams[i] = true;
+        });
+      });
+    });
   }
 
   // ── A PLAN REGION: SOME RINGS LESS OTHERS ───────────────────────────────
