@@ -387,7 +387,9 @@ if (!window.DraftDrawingFormat) {
   // NOT ON A DOOR. A door has no casement, and a `casement: 'single'` on every
   // door in every file would be a key that means nothing about the thing it
   // is written on.
-  const CASEMENT_TYPES = Object.freeze(['single', 'double']);
+  // A TRIPLE IS THREE PANES IN ONE FRAME (jb, 27 Nov 2026: "i also will
+  // need a TRIPLE option"), the double's natural next step.
+  const CASEMENT_TYPES = Object.freeze(['single', 'double', 'triple']);
 
   // ── WHAT KIND OF DOOR, AND WHICH WAY IT OPENS ───────────────────────────
   //
@@ -559,6 +561,9 @@ if (!window.DraftDrawingFormat) {
         // ITS UPPERS SWITCHED OFF (Movie, 24 Oct: "allow the lower cabinets
         // to turn on or off upper cabinet"). Only OFF is written; no key is ON.
         ...(fixture?.uppers === false ? { uppers: false } : {}),
+        // ATTACHED BY ITS SIDE (jb, 27 Nov 2026: ATTACH TO BACK / LEFT /
+        // RIGHT). Only a side is written; no key is its back.
+        ...(fixture?.attach === 'left' || fixture?.attach === 'right' ? { attach: fixture.attach } : {}),
       };
     }), env.drops).filter(Boolean);
 

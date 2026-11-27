@@ -803,6 +803,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // AND OPEN IN 3D (jb, 26 Nov 2026): it opens the 3D viewer in a
             // new tab and draws nothing here.
             'strip-3d',
+            // AND OPEN LANDSCAPE (jb, 27 Nov 2026): it opens the grading
+            // program in a new tab and draws nothing here.
+            'strip-landscape',
             // THE NOTES PAD (Movie, 16 Oct): `notes-tab` opens it under
             // LEVELS / LAYERS and its CLEAR wipes the drafter's own notes. A
             // notepad is words for the drafter, never geometry, so no absence
@@ -1115,6 +1118,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // nothing and changes nothing on the plan, so no absence row
             // moves.
             'REPORT A PROBLEM',
+            // AND ATTACH TO (jb, 27 Nov 2026): which side of a cabinet stands
+            // on the wall it just went onto. It turns a piece already made,
+            // so no absence row moves.
+            'BACK (B)', 'LEFT (L)', 'RIGHT (R)',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a

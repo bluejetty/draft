@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="draft-build" content="dev">
+    <script src="../build-id.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RUFF LANDSCAPE</title>
+    <meta name="description" content="RUFF LANDSCAPE / ROUGH LANDSCAPE: grade the lot around a house drawn in Rough Drafter." />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="stylesheet" href="../vendor/fonts.css" />
+    <!--
+      THE LANDSCAPE PROGRAM (jb, 27 Nov 2026: "an area where the house stays as
+      it is and the user can manipulate the landscape for the lot grading").
+      A separate program, the same way viewer/ (RUFF 3D) is: nothing in the 2D
+      drafter loads this page or anything in landscape/, so deleting this
+      folder leaves every 2D page working (tests/landscape.spec.js holds
+      MODEL.html to that). It borrows the drafter's own modules from the folder
+      above to draw the SITE plan, and never changes the house: the grading is
+      its own `landscape` block in the .draft, which the drafter carries
+      through without reading.
+    -->
+    <!-- THE SHARED DRAWING ENGINE, one folder up. Load order as neighborhood/
+         and viewer/ have it: wall-types.js before layout-plan.js. -->
+    <script src="../palette.js"></script>
+    <script src="../profile-manager.js"></script>
+    <script src="../formatters.js"></script>
+    <script src="../wall-types.js"></script>
+    <script src="../level-assembly.js"></script>
+    <script src="../render-2d.js"></script>
+    <script src="../geometry-2d.js"></script>
+    <script src="../layer-views.js"></script>
+    <script src="../line-styles.js"></script>
+    <script src="../pen-table.js"></script>
+    <script src="../drawing-format.js"></script>
+    <script src="../roof-types.js"></script>
+    <script src="../stair-geometry.js"></script>
+    <script src="../closets.js"></script>
+    <script src="../fixture-geometry.js"></script>
+    <script src="../cut-view.js"></script>
+    <script src="../cut-view-env.js"></script>
+    <script src="../plan-composition.js"></script>
+    <script src="../layout-plan.js"></script>
+    <script src="../zip-bundle.js"></script>
+    <script src="grading.js"></script>
+    <style>
+      :root {
+        --bar: #0f2a4a;
+        --bar-2: #183a63;
+        --bar-ink: #f2f5f9;
+        --chip: #1f4778;
+        --chip-lit: #f0b429;
+        --chip-lit-ink: #0f2a4a;
+        --stage: #f4f2ee;
+        --warn: #ffb4a8;
+      }
+      html, body { margin: 0; height: 100%; }
+      body {
+        display: flex; flex-direction: column;
+        background: var(--stage);
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        color: var(--bar-ink);
+      }
+      header {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 6px 12px; background: var(--bar);
+      }
+      header h1 { margin: 0 8px 0 0; font-size: 26px; letter-spacing: 0.06em; font-weight: 700; }
+      #logo-spot { display: inline-block; width: 0; }
+      .chips { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+      .chips .label { font-size: 13px; opacity: 0.75; margin-right: 2px; letter-spacing: 0.05em; }
+      button {
+        font: inherit; font-size: 16px; font-weight: 600; letter-spacing: 0.04em;
+        color: var(--bar-ink); background: var(--chip);
+        border: 1px solid rgba(255,255,255,0.25); border-radius: 4px;
+        padding: 4px 12px; cursor: pointer;
+      }
+      button:hover:not(:disabled) { filter: brightness(1.2); }
+      button.lit { background: var(--chip-lit); color: var(--chip-lit-ink); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      #tools {
+        display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+        padding: 4px 12px; background: var(--bar-2); color: var(--bar-ink);
+      }
+      #tools button { font-size: 14px; padding: 2px 9px; }
+      #status { flex: 1 1 260px; text-align: right; font-size: 15px; opacity: 0.9; min-width: 0; }
+      #status.warn { color: var(--warn); opacity: 1; }
+      #stage { position: relative; flex: 1; min-height: 0; touch-action: none; user-select: none; }
+      #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      #stage.dropping { outline: 4px dashed var(--chip-lit); outline-offset: -8px; }
+      #drop-hint {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        color: #34506f; font-size: 24px; text-align: center; padding: 16px; pointer-events: none;
+      }
+      #help {
+        position: absolute; left: 10px; bottom: 8px; font-size: 13px; color: #34506f;
+        pointer-events: none; opacity: 0.85; max-width: calc(100% - 20px);
+      }
+      .panel {
+        position: absolute; z-index: 5; box-sizing: border-box;
+        background: var(--bar); color: var(--bar-ink); border-radius: 6px; padding: 10px 14px 12px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+      }
+      .panel h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: 0.06em; }
+      .panel p { margin: 4px 0; font-size: 14px; opacity: 0.9; }
+      #spot-panel { top: 10px; right: 10px; width: min(290px, calc(100% - 32px)); }
+      #spot-panel label { display: block; font-size: 14px; letter-spacing: 0.05em; margin: 4px 0 2px; opacity: 0.85; }
+      #spot-elev {
+        font: inherit; font-size: 20px; width: 100%; box-sizing: border-box; padding: 3px 6px;
+        border-radius: 4px; border: 1px solid rgba(255,255,255,0.35); background: #fff; color: #0f2a4a;
+      }
+      #spot-panel .row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+      #spot-panel .row button { font-size: 14px; padding: 2px 9px; }
+      #checks { left: 10px; top: 10px; width: min(300px, calc(100% - 32px)); font-size: 14px; }
+      #checks ul { list-style: none; margin: 0; padding: 0; }
+      #checks li { padding: 2px 0; display: flex; gap: 8px; align-items: baseline; }
+      #checks li .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }
+      #checks li.ok { opacity: 0.8; }
+      [hidden] { display: none !important; }
+      @media (max-width: 600px) {
+        header h1 { font-size: 20px; }
+        #status { text-align: left; }
+        #help { display: none; }
+        #checks { top: auto; bottom: 10px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <!-- A blank spot kept for a logo to come, as on RUFF 3D. --><a id="logo-spot" href="../index.html" title="Back to Rough Drafter" aria-label="Back to Rough Drafter"></a>
+      <h1 id="brand">RUFF LANDSCAPE</h1>
+      <button id="open" type="button">OPEN FILE</button>
+      <input id="file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
+      <button id="fit" type="button" title="Fit the lot to the window (F)">FIT</button>
+      <button id="undo" type="button" title="Undo the last change (Ctrl+Z)" disabled>UNDO</button>
+      <button id="save" type="button" title="Save the drawing with its grading as a .draft (the house is not changed)" disabled>SAVE .draft</button>
+      <span id="status" role="status"></span>
+    </header>
+    <nav id="tools" aria-label="Tools">
+      <span class="chips" role="group" aria-label="Tool">
+        <span class="label">TOOL</span>
+        <button type="button" data-tool="pick" class="lit" title="Pick a spot or a house corner; drag a spot to move it">PICK</button>
+        <button type="button" data-tool="fg" title="Click the lot to place a FINISHED grade spot (what the ground will be)">FINISHED SPOT</button>
+        <button type="button" data-tool="eg" title="Click the lot to place an EXISTING grade spot (what the ground is now)">EXISTING SPOT</button>
+      </span>
+      <span class="chips" role="group" aria-label="Contour interval">
+        <span class="label">CONTOURS</span>
+        <button type="button" data-interval="0.5">6"</button>
+        <button type="button" data-interval="1">1'</button>
+        <button type="button" data-interval="2">2'</button>
+        <button type="button" data-interval="5">5'</button>
+      </span>
+      <span class="chips" role="group" aria-label="Show">
+        <span class="label">SHOW</span>
+        <button type="button" data-show="contours" class="lit" title="Finished grade contours">CONTOURS</button>
+        <button type="button" data-show="arrows" class="lit" title="Slope arrows: which way water runs, and how steep">ARROWS</button>
+        <button type="button" data-show="existing" class="lit" title="Existing grade contours, dashed (needs 3 existing spots)">EXISTING</button>
+        <button type="button" data-show="checks" class="lit" title="Drainage checks: fall away from the house, too steep, too flat">CHECKS</button>
+      </span>
+      <span class="chips" role="group" aria-label="Datum">
+        <span class="label">DATUM</span>
+        <button type="button" data-datum="0" title="Heights from the main floor at 0'-0&quot;">0</button>
+        <button type="button" data-datum="100" title="Heights from the main floor at 100.00 (the usual assumed datum on a grading plan)">100</button>
+      </span>
+    </nav>
+    <main id="stage">
+      <canvas id="plan"></canvas>
+      <div id="drop-hint">Drop a .draft or a SAVE AS ZIP here, or press OPEN FILE.</div>
+      <section id="checks" class="panel" aria-label="Drainage checks" hidden>
+        <h2>CHECKS</h2>
+        <ul id="check-list"></ul>
+      </section>
+      <section id="spot-panel" class="panel" aria-label="Spot elevation" hidden>
+        <h2 id="spot-title">FINISHED SPOT</h2>
+        <label for="spot-elev">ELEVATION (feet, or 100'-6")</label>
+        <input id="spot-elev" type="text" inputmode="decimal" autocomplete="off" />
+        <p id="spot-note"></p>
+        <div class="row">
+          <button type="button" id="spot-kind" title="Switch between finished and existing grade">MAKE EXISTING</button>
+          <button type="button" id="spot-reset" title="Back to the house grade the drafter gives">HOUSE GRADE</button>
+          <button type="button" id="spot-delete" title="Remove this spot (Delete)">DELETE</button>
+        </div>
+      </section>
+      <div id="help">Wheel: zoom · right-drag or drag the empty ground: pan · Delete: remove the picked spot · Ctrl+Z: undo</div>
+    </main>
+    <script src="landscape.js"></script>
+  </body>
+</html>

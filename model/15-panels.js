@@ -1355,7 +1355,7 @@
     // chose, and nothing here was nobody's.
     if (agreedOn(openings, typeOf) === 'window') {
       box.append(propRow('CASEMENT', CASEMENT_CHIPS,
-        agreedOn(openings, o => (o.casement === 'double' ? 'double' : 'single')),
+        agreedOn(openings, o => (CASEMENT_CHIPS.some(([id]) => id === o.casement) ? o.casement : 'single')),
         id => applyToOpenings(openings, () => ({ casement: id }))));
     }
 
@@ -3929,6 +3929,16 @@
       box.append(propSelect('UPPERS', [['on', 'ON'], ['off', 'OFF']],
         agreedOn(items, f => (f.uppers === false ? 'off' : 'on')), id => {
           commitFixtureEdits(items.map(f => ({ item: f, patch: { uppers: id === 'off' ? false : null } })));
+        }));
+    }
+    // WHICH SIDE IS ON THE WALL (jb, 27 Nov 2026: "once its placed also have
+    // an option in the OBJ PROP to allow the user to repostion to R / L or
+    // BACK when its already stuck"). A piece on a wall that can stand on
+    // its side; one UNDO puts the old side back.
+    if (FG?.canAttachSide && items.every(f => f.wallId != null && FG.canAttachSide(f))) {
+      box.append(propRow('ATTACH TO', [['back', 'BACK'], ['left', 'L'], ['right', 'R']],
+        agreedOn(items, f => FG.attachOf(f)), id => {
+          if (setFixtureAttach(items, id)) renderObjProp();
         }));
     }
     if (items.every(f => f.kind === 'island')) {

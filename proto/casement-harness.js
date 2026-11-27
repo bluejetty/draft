@@ -56,8 +56,12 @@ const MUTATIONS = [
   // two cannot disagree about which casements exist without this going red.
   ['the vocabulary grows a casement the size table has never heard of',
     'drawing-format.js',
-    c => c.replace("  const CASEMENT_TYPES = Object.freeze(['single', 'double']);",
-      "  const CASEMENT_TYPES = Object.freeze(['single', 'double', 'triple']);")],
+    c => c.replace("  const CASEMENT_TYPES = Object.freeze(['single', 'double', 'triple']);",
+      "  const CASEMENT_TYPES = Object.freeze(['single', 'double', 'triple', 'quad']);")],
+
+  ['a triple casement is not the 72 x 48 jb picked', 'geometry-2d.js',
+    c => c.replace('    triple: Object.freeze({ widthFt: 72 / 12, heightFt: 48 / 12 }),',
+      '    triple: Object.freeze({ widthFt: 66 / 12, heightFt: 48 / 12 }),')],
 
   ['a double casement is not the 66 inches he asked for', 'geometry-2d.js',
     c => c.replace('    double: Object.freeze({ widthFt: 66 / 12, heightFt: 36 / 12 }),',
@@ -92,12 +96,29 @@ const MUTATIONS = [
   // THE POINT OF THE WHOLE RULING IS A BAR DOWN THE MIDDLE OF THE GLASS.
   // Everything above this row could be true with nothing drawn.
   ['the mullion is never drawn', 'cut-view.js',
-    c => c.replace("            if (f.casement === 'double' && ow > inset * 5) {",
+    c => c.replace("            if (panes > 1 && ow > inset * (2 + 1.5 * panes)) {",
       '            if (false) {')],
 
   ['every window gets a mullion, double or not', 'cut-view.js',
-    c => c.replace("            if (f.casement === 'double' && ow > inset * 5) {",
-      '            if (ow > inset * 5) {')],
+    c => c.replace("            const panes = f.casement === 'triple' ? 3 : f.casement === 'double' ? 2 : 1;",
+      '            const panes = 2;')],
+
+  ['a triple is painted as a double', 'cut-view.js',
+    c => c.replace("            const panes = f.casement === 'triple' ? 3 : f.casement === 'double' ? 2 : 1;",
+      "            const panes = f.casement === 'single' ? 1 : 2;")],
+
+  // THE PLAN, which is where jb found DOUBLE "not working" (27 Nov 2026).
+  ['the plan never draws a mullion', 'render-2d.js',
+    c => c.replace("      if (panes > 1 && glazeRun > frameAlong * (2 + 1.5 * panes)) {",
+      '      if (false) {')],
+
+  ['the plan draws a triple as a double', 'render-2d.js',
+    c => c.replace("      const panes = opening.casement === 'triple' ? 3 : opening.casement === 'double' ? 2 : 1;",
+      "      const panes = opening.casement === 'single' ? 1 : 2;")],
+
+  ['a stored triple reads back as a single', 'drawing-format.js',
+    c => c.replace("  const CASEMENT_TYPES = Object.freeze(['single', 'double', 'triple']);",
+      "  const CASEMENT_TYPES = Object.freeze(['single', 'double']);")],
 
   // THE VERSION ROW BELONGS TO window-head-harness.js, which owns the same
   // line for a different argument. Both files check F.VERSION and both are
@@ -138,6 +159,10 @@ check('and there are actually some, rather than two empties agreeing',
 const dbl = G.CASEMENT_SIZES_FT.double;
 eq('a double casement is 66 in wide', inches(dbl.widthFt), '66.00"');
 eq('and 36 in tall', inches(dbl.heightFt), '36.00"');
+const tpl = G.CASEMENT_SIZES_FT.triple;
+eq('a triple casement is 72 in wide', inches(tpl.widthFt), '72.00"');
+eq('and 48 in tall', inches(tpl.heightFt), '48.00"');
+eq('the panes per casement', ['single', 'double', 'triple'].map(k => G.CASEMENT_PANES[k]).join(','), '1,2,3');
 
 // AND THE SINGLE IS WHAT A WINDOW HAS ALWAYS BEEN, derived from this file's
 // own defaults rather than typed again: 4'-0" wide, and 4'-2" tall because a
@@ -165,8 +190,9 @@ const read = (over) => F.fenestrations([{
 
 eq('a window with nothing stored reads as a single', read({}).casement, 'single');
 eq('a stored double survives the read', read({ casement: 'double' }).casement, 'double');
+eq('a stored triple survives the read', read({ casement: 'triple' }).casement, 'triple');
 eq('and a word that is not a casement falls back rather than through',
-  read({ casement: 'triple' }).casement, 'single');
+  read({ casement: 'quad' }).casement, 'single');
 // A DOOR HAS NO CASEMENT. A `casement: 'single'` on every door in every file
 // would be a key that says nothing about the thing it is written on.
 eq('a door carries none even when one is stored on it',
@@ -296,6 +322,45 @@ check('and still the size it was',
   };
   eq('a window stored as single draws the same as one storing nothing',
     strokeCount(allSingle), strokeCount(raw));
+
+  // A TRIPLE WEARS TWO BARS WHERE A DOUBLE WEARS ONE (jb, 27 Nov 2026).
+  const allTriple = JSON.parse(JSON.stringify(raw));
+  (allTriple.fenestrations || []).forEach(f => {
+    if (f.type === 'window') f.casement = 'triple';
+  });
+  const three = mullionsIn(allTriple);
+  check('a drawing of nothing but triples wears two bars for every double\'s one',
+    three.every((n, i) => n === 2 * every[i]) && three.some(n => n > 0),
+    `triples: ${three.join(', ')}   doubles: ${every.join(', ')}`);
+}
+
+// ── AND THE PLAN DRAWS THEM TOO ───────────────────────────────────────────
+//
+// jb, 27 Nov 2026: "the DOUBLE option isn't working". The elevation had its
+// bar from the start, but the plan drew every window alike, so on a plan
+// DOUBLE changed nothing anyone could see. A mullion on plan is the only
+// FILLED quad drawOpening2D adds for a window, so fills are what is counted.
+{
+  const R = win.DraftRender2D;
+  const wall = { id: 'w', start: { x: 0, y: 0, z: 0 }, end: { x: 20, y: 0, z: 0 },
+    wallType: 'stud_2x6', refLine: 'left', baseHeight: 0, topHeight: 8 };
+  const fillsFor = casement => {
+    const opening = { id: 'o', wallId: 'w', type: 'window', width: 6, offset: 7,
+      sillHeight: 3, headHeight: 7, casement };
+    const geometry = G.openingGeometry(opening, wall, { walls: [wall], thicknessFt: () => 6.5 / 12 });
+    let fills = 0;
+    const noop = () => {};
+    const ctx = new Proxy({ fill: () => { fills += 1; }, globalAlpha: 1 }, {
+      get: (t, k) => (k in t ? t[k] : noop),
+      set: (t, k, v) => { t[k] = v; return true; },
+    });
+    R.drawOpening2D(ctx, p => ({ x: p.x * 20, y: p.z * 20 }), opening, { geometry }, { isPrinting: true });
+    return fills;
+  };
+  const base = fillsFor('single');
+  check('the plan can draw a window at all', base > 0, `${base}`);
+  eq('a double on plan adds one mullion', fillsFor('double') - base, 1);
+  eq('a triple on plan adds two', fillsFor('triple') - base, 2);
 }
 
 console.log(`casement harness: ${pass} checks passed, ${fails.length} failed`);

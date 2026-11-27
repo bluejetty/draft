@@ -7827,14 +7827,22 @@ if (!window.DraftCutView) {
             // the one that quietly stops being true. It is also how a mullion
             // meets its frame: the bar runs between the two, it does not sit
             // in the opening with its own cap top and bottom.
-            if (f.casement === 'double' && ow > inset * 5) {
-              const mx = ox + ow / 2;
-              ctx.beginPath();
-              ctx.moveTo(mx - inset / 2, Y(top) + inset);
-              ctx.lineTo(mx - inset / 2, Y(top) + inset + glassH);
-              ctx.moveTo(mx + inset / 2, Y(top) + inset);
-              ctx.lineTo(mx + inset / 2, Y(top) + inset + glassH);
-              ctx.stroke();
+            //
+            // A TRIPLE WEARS TWO (jb, 27 Nov 2026), at the thirds, each its
+            // own stroke so a harness counts bars rather than paths. Each
+            // pane needs the frame's width again, so the room test scales
+            // with the panes.
+            const panes = f.casement === 'triple' ? 3 : f.casement === 'double' ? 2 : 1;
+            if (panes > 1 && ow > inset * (2 + 1.5 * panes)) {
+              for (let k = 1; k < panes; k += 1) {
+                const mx = ox + ow * k / panes;
+                ctx.beginPath();
+                ctx.moveTo(mx - inset / 2, Y(top) + inset);
+                ctx.lineTo(mx - inset / 2, Y(top) + inset + glassH);
+                ctx.moveTo(mx + inset / 2, Y(top) + inset);
+                ctx.lineTo(mx + inset / 2, Y(top) + inset + glassH);
+                ctx.stroke();
+              }
             }
           }
         }

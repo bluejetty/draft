@@ -4043,6 +4043,45 @@
     });
   }
 
+  // OPEN LANDSCAPE (jb, 27 Nov 2026: "an area where the house stays as it is
+  // and the user can manipulate the landscape for the lot grading"). The
+  // grading program is its own folder, landscape/, and this page loads none
+  // of it (tests/landscape.spec.js holds that). The chip opens it in a new
+  // tab, answers its "ready" with the drawing as it stands, and takes back
+  // the one thing that program writes: the drawing's `landscape` block,
+  // which this page never reads and carries through every save on the
+  // spread in serializeDrawing. Only from the tab this chip opened.
+  const openLandscapeChip = document.querySelector('[data-open-landscape]');
+  if (openLandscapeChip) {
+    openLandscapeChip.addEventListener('click', () => {
+      if (!drawing) return;
+      const tab = window.open('./landscape/index.html?from=drafter', '_blank');
+      if (!tab) { sayOnStrip('OPEN LANDSCAPE: the browser blocked the new tab. Allow pop-ups for this site and press it again.'); return; }
+      const hear = event => {
+        if (event.source !== tab || event.origin !== location.origin || !event.data) return;
+        if (event.data.type === 'draft-landscape-ready') {
+          try {
+            tab.postMessage({ type: 'draft-landscape-drawing', name: document.title || 'drawing',
+              drawing: serializeDrawing({ trim: false }) }, location.origin);
+          } catch (error) {
+            sayOnStrip('OPEN LANDSCAPE: the drawing could not be handed over.');
+          }
+        } else if (event.data.type === 'draft-landscape-update') {
+          const land = event.data.landscape;
+          if (!land || typeof land !== 'object' || !drawing) return;
+          drawing.landscape = JSON.parse(JSON.stringify(land));
+          markDirty();
+        }
+      };
+      window.addEventListener('message', hear);
+      // Stop listening once the landscape tab is closed.
+      const watch = setInterval(() => {
+        if (tab.closed) { clearInterval(watch); window.removeEventListener('message', hear); }
+      }, 5000);
+      sayOnStrip('OPEN LANDSCAPE: the lot opens in a new tab. Its grading comes back here: SAVE to keep it.');
+    });
+  }
+
   if (rotateChip) {
     rotateChip.addEventListener('click', () => {
       if (!drawing) return;
