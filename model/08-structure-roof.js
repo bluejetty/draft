@@ -1554,6 +1554,7 @@
       && (w.wallType || '') === (copy.wallType || '')
       && ((samePt(w.start, copy.start) && samePt(w.end, copy.end)) || (samePt(w.start, copy.end) && samePt(w.end, copy.start))));
     let stacked = 0;
+    let stackedStructure = 0;
     const pasting = thisLevel ? thisLevelOnly(held, owner, viewNow) : held;
     const ordered = [...pasting.filter(h => h.type === 'wall'), ...pasting.filter(h => h.type !== 'wall')];
     ordered.forEach(({ type, raw, stacked: inStack }) => {
@@ -1605,6 +1606,23 @@
       // Pasted back on its own level it keeps the view it had, as before.
       else if ((type === 'beam' || type === 'column') && pasteWallView
         && Number(raw.levelId) !== Number(owner)) copy.view = pasteWallView;
+      // A WHOLE-NUMBER ID, as the BEAM and COLUMN tools give (newStructureId
+      // above): the `beam-159` newDrawingItemId gave is not one the file
+      // reads, so a pasted beam and its posts drew until the next load and
+      // were gone from the plans after it (jb, 27 Nov 2026, TIMBERHOUSE:
+      // the main floor's beam and posts showed on the WIREFRAME only). And
+      // never a second one exactly on one already filed there, the source
+      // aside -- jb's file held each post three times over.
+      if (type === 'beam' || type === 'column') {
+        copy.id = newStructureId(drawing[key] || []);
+        const near = (a, b) => samePt(a, b);
+        const twin = (drawing[key] || []).some(other => String(other.id) !== String(raw.id)
+          && Number(other.levelId) === Number(copy.levelId) && (other.view || 'plan') === (copy.view || 'plan')
+          && (type === 'column' ? near(other.point, copy.point)
+            : (near(other.start, copy.start) && near(other.end, copy.end))
+              || (near(other.start, copy.end) && near(other.end, copy.start))));
+        if (twin) { stackedStructure += 1; return; }
+      }
       // A HOLOGRAM IS THE SAME FILE AGAIN, as its card's COPY makes it: where
       // it stood, on no level of this drawing's (its own levels say where it
       // stands), with none of the first one's DEMO marks.
@@ -1709,6 +1727,9 @@
     });
     if (stacked) {
       sayOnStrip(`${stacked === 1 ? 'That wall is' : `${stacked} walls are`} already there \u2014 not pasted on top again. MOVE the copy you have, then PASTE.`);
+    }
+    if (stackedStructure) {
+      sayOnStrip(`${stackedStructure === 1 ? 'That beam or column is' : `${stackedStructure} beams or columns are`} already there \u2014 not pasted on top again.`);
     }
     if (!landed.length) return 0;
     // A PASTED STAIR'S WELL AND OPEN SIDE, as a placed one's: only the copies,
