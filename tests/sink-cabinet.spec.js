@@ -3,7 +3,7 @@
 // sink hole with a sink. and for OBJ PROP allow the user to either ADD a sink
 // to a CABINET or REMOVE a sink from a SINK CABINET". The old SINK BASE is the
 // SINK CABINET (its id, 'sinkbase', kept so saved files open), and the
-// farmhouse SINK with no cabinet is the APRON SINK.
+// farmhouse SINK with no cabinet is the SINK APRON.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -35,12 +35,12 @@ async function open(page) {
 }
 test.afterEach(async ({ page }) => { expect(page.__errors || [], 'no page errors').toEqual([]); });
 
-test('the chips say APRON SINK and SINK CABINET', async ({ page }) => {
+test('the chips say SINK APRON and SINK CABINET', async ({ page }) => {
   await open(page);
   const K = await page.evaluate(() => Object.fromEntries(window.DraftFixtureKinds.FIXTURE_KINDS.map(k => [k.id, k.label])));
-  expect(K.sink).toBe('APRON SINK');
+  expect(K.sink).toBe('SINK APRON');
   expect(K.sinkbase).toBe('SINK CABINET');
-  await expect(page.locator('#tool-slot button', { hasText: /^APRON SINK$/ })).toBeVisible();
+  await expect(page.locator('#tool-slot button', { hasText: /^SINK APRON$/ })).toBeVisible();
   await expect(page.locator('#tool-slot button', { hasText: /^SINK CABINET$/ })).toBeVisible();
 });
 
@@ -91,10 +91,10 @@ test('OBJ / PROP: ADD SINK makes a CABINET a SINK CABINET in place, REMOVE SINK 
   expect([saved.kind, saved.bowls]).toEqual(['sinkbase', 'single']);
 });
 
-test('the APRON SINK has no ADD / REMOVE SINK button', async ({ page }) => {
+test('the SINK APRON has no ADD / REMOVE SINK button', async ({ page }) => {
   const { at, z } = await open(page);
   await page.mouse.click(...at(11, z));
   const win = page.locator('#objprop');
-  await expect(win.locator('[data-objprop-title]')).toHaveText('APRON SINK');
+  await expect(win.locator('[data-objprop-title]')).toHaveText('SINK APRON');
   await expect(win.locator('[data-sink-toggle]')).toHaveCount(0);
 });

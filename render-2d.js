@@ -2454,7 +2454,7 @@ if (!window.DraftRender2D) {
     return fixture.bowls
       || (fixture.kind === 'sink' && (Number(fixture.width) || 0) <= 2.2 ? 'single' : 'double');
   }
-  // `inset` set, the bowls fill the piece to that margin (the APRON SINK);
+  // `inset` set, the bowls fill the piece to that margin (the SINK APRON);
   // unset, they are the SINK CABINET's, inside a drop-in sink centred on the
   // cabinet (jb, 27 Nov 2026: "a smaller sink size that will be dropped into
   // a CABINET"): 33" wide for a double, 25" for a single, never closer than

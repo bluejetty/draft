@@ -48,7 +48,7 @@ if (!window.DraftFixtureKinds) {
   const FIXTURE_KINDS = [
     { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true, uppers: true,
       note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
-    { id: 'sink',    label: 'APRON SINK', group: 'KITCHEN', widthFt: 2.5,  depthFt: 2,      casework: false, run: false, uppers: true,
+    { id: 'sink',    label: 'SINK APRON', group: 'KITCHEN', widthFt: 2.5,  depthFt: 2,      casework: false, run: false, uppers: true,
       note: 'Apron-front (farmhouse) sink, no cabinet under it — click it onto a wall. SINK CABINET is the drop-in sink in a base cabinet.' },
     { id: 'fridge',  label: 'FRIDGE',  group: 'KITCHEN',  widthFt: 3,      depthFt: 2.5,    casework: false, run: false, uppers: true,
       note: 'Refrigerator box — click it onto a wall.' },
