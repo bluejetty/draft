@@ -2754,10 +2754,11 @@ class Component extends PageLogic {
     const box = this._lockIconPx(viewport);
     const s = box.w;
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(box.x - 2, box.y - 2, s + 4, s + 4);
-    // Dark when shut, the way the frame is; orange when open, to be seen.
-    const ink = locked ? '#3a3f44' : '#c0632b';
+    // Sheet ink when shut; the drafting blue when open, to be seen. Both
+    // are the painter's own allowed colours (proto/skinned-page-harness.js).
+    const ink = locked ? '#1d1f20' : '#5980a6';
     ctx.strokeStyle = ink;
     ctx.fillStyle = ink;
     ctx.lineWidth = 1.6;
