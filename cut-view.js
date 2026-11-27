@@ -6315,7 +6315,10 @@ if (!window.DraftCutView) {
     // The standard board, where no one roof owns the measure: a run's
     // shortest drawable length and a dormer's rake board.
     const fasciaFt = ROOF_FASCIA_IN / 12;
-    const roofClippedTop = (pt, depth, top) => {
+    // `who`, when handed an object, is told which roof's band did the
+    // clipping (`who.roof`), so a wall top can see where it passes from
+    // under one nearer roof to under another (faceGeoms' stations).
+    const roofClippedTop = (pt, depth, top, who = null) => {
       if (!facesByRoof || !facesByRoof.size) return top;
       const span = dHi - depth;
       if (span < 0.1) return top;
@@ -6331,7 +6334,10 @@ if (!window.DraftCutView) {
         });
         if (hi === -Infinity) return;   // the ray misses this roof entirely
         lo -= roofFasciaFt(roof);
-        if (top > lo + ROOF_COVER_EPS && top <= hi + ROOF_COVER_EPS) clipped = Math.min(clipped, lo);
+        if (top > lo + ROOF_COVER_EPS && top <= hi + ROOF_COVER_EPS && lo < clipped) {
+          clipped = lo;
+          if (who) who.roof = roof;
+        }
       });
       return clipped;
     };
@@ -6474,6 +6480,51 @@ if (!window.DraftCutView) {
       }
       return out;
     };
+    // A TOP READ STATION BY STATION, stepped plumb where the band that clips
+    // it changes -- see the notes inside. `probe(u)` answers { top,
+    // clipped, by }. Shared by the wall faces and the gable infills.
+    const steppedTops = (lo, hi, samples, sampleTop, { liftAll = false } = {}) => {
+      const tops = [];
+      let prev = null;
+      for (let s = 0; s <= samples; s++) {
+        const u = lo + (hi - lo) * s / samples;
+        const here = sampleTop(u);
+        // WHERE A ROOF IN FRONT STARTS OR STOPS SWALLOWING THE TOP, the top
+        // STEPS there. Joined sample to sample it drew a slanted line a
+        // whole sample long across the wall (Movie's corner-garage E4), so
+        // the step is found by halving and drawn plumb.
+        //
+        // AND WHERE IT PASSES FROM UNDER ONE ROOF'S BAND TO UNDER ANOTHER'S
+        // (jb, 26 Nov 2026, E1 of TIMBERHOUSE: a small front gable with an
+        // 18" board whose peak sits on the big gable's rake). Both stations
+        // were clipped, one to the small roof's board, one to the big one's,
+        // so no step was looked for and the top ran a slanted chord across
+        // the gap -- a short tick showing between the big rake's foot and
+        // the small gable's board. Same halving, keyed on which roof clips.
+        if (prev && (prev.clipped !== here.clipped || prev.by !== here.by)) {
+          const side = probe => probe.clipped === prev.clipped && probe.by === prev.by;
+          let a = prev.u, b = u;
+          for (let k = 0; k < 14; k++) {
+            const m = (a + b) / 2;
+            if (side(sampleTop(m))) a = m; else b = m;
+          }
+          tops.push({ u: a, top: sampleTop(a).top });
+          // From one roof's band to another's, the plumb between them is
+          // the nearer band's edge, which that band draws itself: the
+          // outline lifts its pen there (`jump`), the fill does not. A gable
+          // infill lifts it at every step (`liftAll`): it is the triangle
+          // under a rake, and where a nearer roof's board starts or stops
+          // swallowing it the board draws the edge -- inked, the plumb stood
+          // a hair (the cover slack) proud of the small gable's rake, a nub
+          // on jb's TIMBERHOUSE E1 where the two gables meet.
+          const jump = liftAll || (prev.clipped && here.clipped && prev.by !== here.by);
+          tops.push(jump ? { u: b, top: sampleTop(b).top, jump: true } : { u: b, top: sampleTop(b).top });
+        }
+        tops.push({ u, top: here.top });
+        prev = { u, clipped: here.clipped, by: here.by };
+      }
+      return tops;
+    };
     const faceGeoms = faces.map(face => {
       const { wall, u1, u2, level } = face;
       const loU = Math.max(Math.min(u1, u2), uMin);
@@ -6507,30 +6558,12 @@ if (!window.DraftCutView) {
       const sampleTop = u => {
         const at = worldAt(u);
         const raw = gableTopAt(at, level.wallTop, wallDir, wall);
-        const top = Math.max(floor, roofClippedTop(at, face.depth, raw));
-        return { top, clipped: top < raw - 1e-6 };
+        const who = { roof: null };
+        const top = Math.max(floor, roofClippedTop(at, face.depth, raw, who));
+        const clipped = top < raw - 1e-6;
+        return { top, clipped, by: clipped ? who.roof : null };
       };
-      const tops = [];
-      let prev = null;
-      for (let s = 0; s <= samples; s++) {
-        const u = loU + (hiU - loU) * s / samples;
-        const here = sampleTop(u);
-        // WHERE A ROOF IN FRONT STARTS OR STOPS SWALLOWING THE TOP, the top
-        // STEPS there. Joined sample to sample it drew a slanted line a
-        // whole sample long across the wall (Movie's corner-garage E4), so
-        // the step is found by halving and drawn plumb.
-        if (prev && prev.clipped !== here.clipped) {
-          let a = prev.u, b = u;
-          for (let k = 0; k < 14; k++) {
-            const m = (a + b) / 2;
-            if (sampleTop(m).clipped === prev.clipped) a = m; else b = m;
-          }
-          tops.push({ u: a, top: sampleTop(a).top });
-          tops.push({ u: b, top: sampleTop(b).top });
-        }
-        tops.push({ u, top: here.top });
-        prev = { u, clipped: here.clipped };
-      }
+      const tops = steppedTops(loU, hiU, samples, sampleTop);
       return { face, loU, hiU, floor, worldAt, wallDir, tops: peakStations(tops, u => sampleTop(u).top) };
     });
     // A face standing entirely behind a nearer, taller face paints nothing
@@ -6679,12 +6712,14 @@ if (!window.DraftCutView) {
             if (r.before && r.before.loU > u0) u0 = r.before.loU;   // the wall stands on the far side
             if (r.after && r.after.hiU < u1) u1 = r.after.hiU;
             if (u1 - u0 <= overhang + 0.75) return;
-            const tops = [];
             const n = Math.max(2, Math.ceil((u1 - u0) / 0.5));
-            for (let k = 0; k <= n; k++) {
-              const u = u0 + (u1 - u0) * k / n;
-              tops.push({ u, top: topAt(u) });
-            }
+            const tops = steppedTops(u0, u1, n, u => {
+              const raw = rakeAt(u);
+              const who = { roof: null };
+              const top = Math.max(base, roofClippedTop(at(u), depth, raw, who));
+              const clipped = top < raw - 1e-6;
+              return { top, clipped, by: clipped ? who.roof : null };
+            }, { liftAll: true });
             tops.splice(0, tops.length, ...peakStations(tops, topAt));
             if (!tops.some(t => t.top > base + 0.05)) return;
             const donorFace = r.before || r.after;
@@ -7364,7 +7399,7 @@ if (!window.DraftCutView) {
       ctx.beginPath();
       endL.forEach(([lo, hi]) => { ctx.moveTo(xa, Y(lo)); ctx.lineTo(xa, Y(hi)); });
       ctx.moveTo(X(tops[0].u), Y(tops[0].top));
-      tops.slice(1).forEach((s, i) => (standsOn(tops[i], s)
+      tops.slice(1).forEach((s, i) => (s.jump || standsOn(tops[i], s)
         ? ctx.moveTo(X(s.u), Y(s.top)) : ctx.lineTo(X(s.u), Y(s.top))));
       endR.forEach(([lo, hi]) => { ctx.moveTo(xb, Y(hi)); ctx.lineTo(xb, Y(lo)); });
       // ── AND NO WALL FACE LINES ITS OWN BASE ──────────────────────────
