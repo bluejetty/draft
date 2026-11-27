@@ -20,8 +20,8 @@ const SPEC = 'tests/layout-library-details.spec.js';
 const MUTANTS = [
   { file: 'drawing-format.js',
     name: 'the reader keeps a library detail window',
-    find: "['plan', 'section', 'elevation', 'schedule', 'detail', 'libdetail']",
-    with: "['plan', 'section', 'elevation', 'schedule', 'detail']",
+    find: "['plan', 'section', 'elevation', 'schedule', 'detail', 'libdetail', 'view3d']",
+    with: "['plan', 'section', 'elevation', 'schedule', 'detail', 'view3d']",
     test: 'own scale' },
   { file: 'drawing-format.js',
     name: 'a library copy remembers it came from the browser',
