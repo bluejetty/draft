@@ -859,7 +859,16 @@ if (!window.DraftCutView) {
         if (Math.abs(eave.top - run.top) > eps) return;
         // TOUCHING COUNTS AS OVERLAP. The sampling stops short, so the run's
         // end and the edge's start can be a sample apart rather than crossing.
-        if (eave.u1 < u0 - eps || eave.u0 > u1 + eps) return;
+        //
+        // AND "A SAMPLE APART" MEANS A SAMPLE, not eps. jb, 27 Nov 2026, E3
+        // of TIMBERHOUSE: a gable seen end on, 0" overhang, 18" fascia. The
+        // side eave projects to a point at the wall's corner and the run
+        // stopped 0.075 ft (one sample) short of it -- further than eps --
+        // so the run was not grown and its closing riser hung the whole 18"
+        // board 7/8" inside the corner, a second line beside the edge.
+        // Half the reach is one sample of the caller's cut.
+        const touch = Number.isFinite(reach) ? Math.max(eps, reach / 2) : eps;
+        if (eave.u1 < u0 - touch || eave.u0 > u1 + touch) return;
         u0 = Math.min(u0, Math.max(eave.u0, run.u0 - reach));
         u1 = Math.max(u1, Math.min(eave.u1, run.u1 + reach));
       });
@@ -5406,6 +5415,21 @@ if (!window.DraftCutView) {
         const over = shownFdn.filter(({ g: o }) => o !== g
           && u > o.lo + 0.05 && u < o.hi - 0.05);
         const interior = over.length > 0;
+        // ── NO CORNER WHERE THE CONCRETE CARRIES ON IN ITS OWN PLANE ─────
+        //
+        // jb, 27 Nov 2026, E2 of TIMBERHOUSE: under the stucco column the
+        // grey read as a box of its own, a line down its left side. The
+        // column stands on its own stub of foundation, flush with the wall
+        // beside it (0.004 ft apart), and each record drew its end at the
+        // joint. The walls over them already skip that joint (paintFace's
+        // `carriesOn`); the concrete does the same: a neighbour in the same
+        // plane, abutting from the other side and standing at least as tall,
+        // leaves no corner.
+        const flushAt = (Math.abs(u - g.lo) < 0.05 || Math.abs(u - g.hi) < 0.05)
+          && shownFdn.some(({ g: o }) => o !== g && Math.abs(o.depth - g.depth) < 0.05
+            && o.topE >= g.topE - 0.02
+            && (Math.abs(u - g.lo) < 0.05 ? Math.abs(o.hi - u) < 0.05 : Math.abs(o.lo - u) < 0.05));
+        if (!interior && flushAt) return;
         // ── A CORNER SHOWS ONLY AS FAR DOWN AS ITS FACE DOES ───────────
         //
         // Movie, 24 Sep, marking a 2 STOREY + GARAGE + ROOM OVER on E3 BACK
@@ -8283,8 +8307,21 @@ if (!window.DraftCutView) {
           else painted.push({ ...part });
         });
         paintedOf.set(whole, painted);
+        // ── AHEAD OF EVERY WALL STANDING ON IT, NOT ONLY THE NEAREST ─────
+        //
+        // jb, 27 Nov 2026, E2 of TIMBERHOUSE: the stucco column's hatch
+        // stopped at 0'-0" and left a white box down to the sill, while the
+        // siding beside it ran on down. The column's face sits 0.004 ft
+        // behind the siding's -- one plane to the eye and to planesOf -- so
+        // the band took the siding's depth, sorted AFTER the column, and
+        // papered over the column's cladding. The band goes down ahead of
+        // the farthest wall of its own plane over it.
+        const sortOf = part => Math.min(depth, ...spans
+          .filter(span => span.hi > part.lo + 1e-6 && span.lo < part.hi - 1e-6
+            && Math.abs(span.depth - depth) < 0.05)
+          .map(span => span.depth));
         shown.forEach(part => {
-          bandFills.push({ part, depth });
+          bandFills.push({ part, depth, sortDepth: sortOf(part) });
           rimBands.push({
             lo: part.lo, hi: part.hi,
             bottom: level.floorBottom, top: level.floorTop, depth,
@@ -8405,7 +8442,7 @@ if (!window.DraftCutView) {
       bandLevels.filter(bl => bl.level.id === level.id).forEach(bl => {
         // MARKED, so the two ways of getting this wrong can each be written
         // as one edit -- see the mutations in garage-bearing-harness.js.
-        bl.bandFills.forEach(f => wallItems.push({ depth: f.depth, band: true,
+        bl.bandFills.forEach(f => wallItems.push({ depth: f.sortDepth ?? f.depth, band: true,
           go: () => paintRimBand(bl.level, f.part, f.depth) }));
       });
       faceGeoms.filter(geom => !faceHidden(geom) && geom.face.level.id === level.id)
@@ -8433,6 +8470,7 @@ if (!window.DraftCutView) {
     // face sorts after it (stable sort, listed last) -- it is beside the
     // wall, in front of nothing, and only its own strip is painted.
     const deckBands = [];
+    const deckPieces = [];
     geo().deckFloors(env.floors ? env.floors() : [], env.walls ? env.walls() : [])
       .forEach(floor => {
         const level = stack.floors.find(l => Number(l.id) === Number(floor.levelId));
@@ -8449,6 +8487,37 @@ if (!window.DraftCutView) {
         const band = { id: floor.id || null, lo, hi, top, bottom: top - spec.thickFt,
           depth: Math.max(...ps.map(p => p.d)) };
         deckBands.push(band);
+        // ── SORTED BY ITS NEAREST EDGE AT EACH u, NOT THE WHOLE DECK'S ─────
+        //
+        // jb, 27 Nov 2026, E2 and E4 of TIMBERHOUSE: "the column should be in
+        // front". His deck runs down the side of the house and reaches in
+        // behind the 2' stucco column, a foot back from its face. Sorted as
+        // one band at its nearest edge -- level with the column's face -- it
+        // was painted after the column and its bar ran across it. So the
+        // deck is cut where its outline turns, each piece at the nearest
+        // edge over its own stretch; pieces at one depth stay one.
+        const us = [...new Set(ps.map(p => p.u).filter(u => u > lo + 1e-6 && u < hi - 1e-6))]
+          .concat([lo, hi]).sort((a, b) => a - b);
+        const nearestAt = u => {
+          let d = null;
+          ps.forEach((a, i) => {
+            const b = ps[(i + 1) % ps.length];
+            if ((a.u - u) * (b.u - u) > 0 || Math.abs(b.u - a.u) < 1e-9) return;
+            const t = (u - a.u) / (b.u - a.u);
+            const at = a.d + (b.d - a.d) * t;
+            if (d == null || at > d) d = at;
+          });
+          return d ?? band.depth;
+        };
+        const pieces = [];
+        for (let i = 0; i + 1 < us.length; i++) {
+          if (us[i + 1] - us[i] < 1e-6) continue;
+          const depth = nearestAt((us[i] + us[i + 1]) / 2);
+          const last = pieces[pieces.length - 1];
+          if (last && Math.abs(last.depth - depth) < 0.05) last.hi = us[i + 1];
+          else pieces.push({ ...band, lo: us[i], hi: us[i + 1], depth });
+        }
+        deckPieces.push(...(pieces.length ? pieces : [band]));
       });
     const paintDeckBand = band => {
       const x0 = X(band.lo), x1 = X(band.hi);
@@ -8466,7 +8535,7 @@ if (!window.DraftCutView) {
     [
       ...wallItems,
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
-      ...deckBands.map(band => ({ depth: band.depth, deck: true, go: () => paintDeckBand(band) })),
+      ...deckPieces.map(band => ({ depth: band.depth, deck: true, go: () => paintDeckBand(band) })),
     ].sort((a, b) => a.depth - b.depth).forEach(item => item.go());
     if (ctx.canvas && ctx.canvas.setAttribute) {
       ctx.canvas.setAttribute('data-decks', JSON.stringify(deckBands.map(b => ({
@@ -8783,7 +8852,16 @@ if (!window.DraftCutView) {
             && ![...edges.keys()].some(k => !jointAt.has(k) && same(k, u))) {
             const key = [...jointAt.keys()].find(k => same(k, u));
             if (key == null) { jointAt.set(u, true); edges.set(u, span.depth); }
-            else if (span.depth > edges.get(key)) edges.set(key, span.depth);
+            else if (span.depth > edges.get(key)) {
+              // AND AT THAT WALL'S OWN u, not the one listed first (jb, 27
+              // Nov 2026, E1 of TIMBERHOUSE: "that little notch"). A
+              // partition ending at 12.958 claimed the joint and the front
+              // jog at 13.0 took it over by depth only, so the corner line
+              // through the floor strip stood 5/8" off the wall's corner
+              // above it -- a short jog in the line at 0'-0".
+              edges.delete(key); jointAt.delete(key);
+              jointAt.set(u, true); edges.set(u, span.depth);
+            }
           }
         }));
       });
@@ -9945,7 +10023,7 @@ if (!window.DraftCutView) {
     // so a nearer deck still laps a farther one.
     const deckOccluders = [...allSpans, ...rimBands,
       ...fdnGeoms.map(g => ({ lo: g.lo, hi: g.hi, depth: g.depth, top: g.topE, bottom: g.baseE }))];
-    deckBands.slice().sort((a, b) => a.depth - b.depth).forEach(band => {
+    deckPieces.slice().sort((a, b) => a.depth - b.depth).forEach(band => {
       const near = deckOccluders.filter(o => o.depth > band.depth + 1e-6
         && o.hi > band.lo + 1e-6 && o.lo < band.hi - 1e-6
         && o.top > band.bottom + 1e-6 && o.bottom < band.top - 1e-6);
