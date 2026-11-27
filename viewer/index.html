@@ -38,7 +38,7 @@
         display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
         padding: 6px 12px; background: var(--bar);
       }
-      header img { height: 40px; width: auto; }
+      #logo-spot { display: block; width: 40px; height: 40px; flex: none; }
       header h1 { margin: 0 8px 0 0; font-size: 26px; letter-spacing: 0.06em; font-weight: 700; }
       .chips { display: flex; gap: 4px; align-items: center; }
       .chips .label { font-size: 13px; opacity: 0.75; margin-right: 2px; letter-spacing: 0.05em; }
@@ -118,7 +118,7 @@
   </head>
   <body>
     <header>
-      <a href="../index.html" title="Back to Rough Drafter"><img src="../assets/bluejetty.png" alt="Rough Drafter" /></a>
+      <!-- A blank spot kept for a logo to come (jb, 27 Nov 2026). --><a id="logo-spot" href="../index.html" title="Back to Rough Drafter" aria-label="Back to Rough Drafter"></a>
       <h1 id="brand">RUFF 3D</h1>
       <button id="open" type="button">OPEN FILE</button>
       <input id="file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
