@@ -224,6 +224,53 @@ test('switching a window already drawn changes its panes and not its size',
     expect(o.headHeight).toBeCloseTo(WINDOW_HEAD, 6);
   });
 
+// A TRIPLE IS THE NATURAL NEXT STEP (jb, 27 Nov 2026: "i also will need a
+// TRIPLE option"): offered beside SINGLE and DOUBLE, it carries its own
+// 6'-0" x 4'-0" in to place, and switched on a drawn window it changes the
+// panes and nothing else, the same two rulings as the double.
+test('TRIPLE sits beside SINGLE and DOUBLE, places at 6 x 4 and switches a drawn one',
+  async ({ page }) => {
+    await open(page);
+    await armOpening(page);
+    await pickType(page, 'window');
+    const row = page.locator('[data-prop-row="casement"]');
+    await expect(row.locator('[data-prop-value]')).toHaveText(['SINGLE', 'DOUBLE', 'TRIPLE']);
+
+    const note = page.locator('[data-opening-note]');
+    await pickCasement(page, 'triple');
+    await expect(row.locator('[data-prop-value="triple"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(note).toContainText("6'-0\"");
+    await expect(note).toContainText("3'-0\"");
+    await expect(note).toContainText("7'-0\"");
+
+    const f = await h.planFrame(page);
+    await page.mouse.click(...f.at(0, -10));
+    await page.waitForTimeout(150);
+    // And a single drawn beside it, switched to TRIPLE from OBJ / PROP.
+    await pickCasement(page, 'single');
+    await page.mouse.click(...f.at(0, 10));
+    await page.waitForTimeout(150);
+    await h.armFromRail(page, 'select');
+    await page.mouse.click(...f.at(0, 10));
+    await page.waitForTimeout(150);
+    const picked = page.locator('#props-slot [data-prop-row="casement"]');
+    await expect(picked.locator('[data-prop-value="single"]')).toHaveAttribute('aria-pressed', 'true');
+    await picked.locator('[data-prop-value="triple"]').click();
+    await expect(picked.locator('[data-prop-value="triple"]')).toHaveAttribute('aria-pressed', 'true');
+    await save(page);
+
+    const openings = await survives(page);
+    expect(openings).toHaveLength(2);
+    const placed = openings.find(o => o.wallId === 'n');
+    const switched = openings.find(o => o.wallId === 's');
+    expect(placed.casement).toBe('triple');
+    expect(placed.width).toBeCloseTo(6, 6);
+    expect(placed.sillHeight).toBeCloseTo(WINDOW_HEAD - 4, 6);
+    expect(switched.casement).toBe('triple');
+    expect(switched.width, 'switching keeps its width').toBeCloseTo(WINDOW_W, 6);
+    expect(switched.sillHeight).toBeCloseTo(WINDOW_SILL, 6);
+  });
+
 test('a door offers no CASEMENT row when it is the thing selected',
   async ({ page }) => {
     await open(page);

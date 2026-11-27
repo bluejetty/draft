@@ -390,7 +390,7 @@
   // "CASEMENT: SINGLE | DOUBLE" in a rail that is 277px at its widest. The
   // VOCABULARY behind them is drawing-format.js's -- these are only what the
   // drafter sees.
-  const CASEMENT_CHIPS = Object.freeze([['single', 'SINGLE'], ['double', 'DOUBLE']]);
+  const CASEMENT_CHIPS = Object.freeze([['single', 'SINGLE'], ['double', 'DOUBLE'], ['triple', 'TRIPLE']]);
 
   // A TYPED DIMENSION, parsed by the app's own reader. formatters.js's
   // parseArchitecturalLength takes 3, 3', 3-6, 3'-6", 42" and the rest, and

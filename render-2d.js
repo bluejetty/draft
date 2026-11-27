@@ -4628,6 +4628,30 @@ if (!window.DraftRender2D) {
         ctx.lineTo(quad[2].x, quad[2].y); ctx.lineTo(quad[3].x, quad[3].y);
         ctx.closePath(); ctx.stroke();
       });
+      // ── A DOUBLE OR TRIPLE CASEMENT SHOWS ITS MULLIONS ON PLAN TOO ──────
+      //
+      // jb, 27 Nov 2026: "the DOUBLE option isn't working". The elevation
+      // barred a double from the start but the plan drew every window the
+      // same, so picking DOUBLE on a plan changed nothing a drafter could
+      // see. Each mullion is a 2" frame block like the jamb blocks, at the
+      // pane divisions (the half for a double, the thirds for a triple),
+      // filled first so the panes read as stopping at it.
+      const panes = opening.casement === 'triple' ? 3 : opening.casement === 'double' ? 2 : 1;
+      if (panes > 1 && glazeRun > frameAlong * (2 + 1.5 * panes)) {
+        for (let k = 1; k < panes; k += 1) {
+          const s = glazeRun * k / panes;
+          const quad = [[-1, 1], [-1, -1], [1, -1], [1, 1]].map(([a, t]) => toS({
+            x: gwa.x + gux * (s + a * frameAlong / 2) + gnx * poke * t,
+            z: gwa.z + guz * (s + a * frameAlong / 2) + gnz * poke * t,
+          }));
+          ctx.beginPath();
+          quad.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+          ctx.closePath();
+          ctx.fillStyle = gap;
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
     }
     if (opening.type === 'door' && !opening.garage) {
       // ── THE DOOR, BY STYLE (Movie, 1 Oct) ─────────────────────────────
