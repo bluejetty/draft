@@ -181,6 +181,7 @@ test('DIMENSION picked: the box takes only the dimensions; a plain box takes the
 test('a kitchen or bath button picks only its own kind; FIXTURE picks them all', async ({ page }) => {
   const { at } = await open(page);
   await bar(page, 'select').click();
+  await page.locator('[data-fixture-pop="sink"]').hover();
   const sink = page.locator('[data-fixture-kind="sink"]');
   await sink.click();
   await expect(sink).toHaveAttribute('data-picked', '');

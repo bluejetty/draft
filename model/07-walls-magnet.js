@@ -424,7 +424,9 @@
     const placed = [];
     spots.forEach(spot => {
       const column = {
-        id: newDrawingItemId('column'),
+        // A WHOLE NUMBER (model/08 newStructureId): drawing-format.js reads
+        // no `column-N`, and a pile with one is gone on the next load.
+        id: newStructureId(drawing.columns),
         point: { x: spot.x, y: 0, z: spot.z },
         levelId: FOUNDATION_LEVEL_ID,
         view: 'foundation',

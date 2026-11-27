@@ -571,6 +571,10 @@
   // windows' so each list clears with its own painter's guards.
   const fixtureTagHits = [];
   const SIZE_MARKED_KINDS = new Set(['shower', 'stall', 'tub', 'vanity', 'pedestal', 'pedestal30']);
+  // THE PIECES WHOSE MARK SAYS THEIR WIDTH ONLY, as the kitchen cabinets'
+  // do (jb, 27 Nov: "we don't need the depth of the vanity the width should
+  // be good enough"). The depth stays on OBJ / PROP.
+  const WIDTH_ONLY_MARKED_KINDS = new Set(['vanity']);
   const SIZE_MARK_OFF_PX = 11;
   // HOW FAR IN FROM AN EDGE a mark that sits INSIDE its piece is drawn: the
   // 9px text centred this far in has its foot about a pixel off the edge.
@@ -763,7 +767,8 @@
       const a1 = geo.tub ? geo.tubAlongEnd : geo.alongEnd;
       const P = (along, across) => toS(geo.frame.at(along, across));
       if (showFixtures && SIZE_MARKED_KINDS.has(fx.kind)) {
-        const label = `${say(fx.depth)}X${say(a1 - a0)}`;
+        const label = WIDTH_ONLY_MARKED_KINDS.has(fx.kind)
+          ? say(a1 - a0) : `${say(fx.depth)}X${say(a1 - a0)}`;
         if (fx.kind === 'tub') {
           take(fx, label, draw(lineAt(geo, a0, a1, geo.frontOff, SIZE_MARK_IN_PX), label));
         } else if (fx.kind === 'vanity') {
@@ -954,16 +959,19 @@
   const commitFixtureSize = (fixture, text) => {
     const FL = window.DraftFenLabels;
     const metric = drawing?.units === 'metric';
-    const nums = String(text ?? '').match(/\d+(?:\.\d+)?/g);
+    let nums = String(text ?? '').match(/\d+(?:\.\d+)?/g);
+    // A WIDTH-ONLY MARK TAKES ONE NUMBER BACK, the width; the depth stays.
+    const widthOnly = WIDTH_ONLY_MARKED_KINDS.has(fixture.kind) && nums?.length === 1;
+    if (widthOnly) nums = ['1', nums[0]];
     if (!nums || nums.length !== 2 || !(Number(nums[0]) > 0) || !(Number(nums[1]) > 0)) {
       sayOnStrip(`${String(text).trim() || 'That'} is not a size \u2014 type it as `
         + (metric ? '760 X 1525, in millimetres' : '30 X 60, in inches') + ': depth first, then along the wall.');
       return;
     }
     const per = metric ? (FL?.MM_PER_FT || 304.8) : 12;
-    const depth = Number(nums[0]) / per, width = Number(nums[1]) / per;
+    const depth = widthOnly ? fixture.depth : Number(nums[0]) / per, width = Number(nums[1]) / per;
     const before = { ...fixture };
-    fixture.depth = Number(depth.toFixed(4));
+    if (!widthOnly) fixture.depth = Number(depth.toFixed(4));
     fixture.width = Number(width.toFixed(4));
     if (fixture.kind === 'tub') { delete fixture.endWallId; delete fixture.dir; }
     undoStack.push({ kind: 'props', edits: [{ item: fixture, before }] });
@@ -971,7 +979,7 @@
     paint();
     const K = window.DraftFixtureKinds;
     const name = K?.kindFor?.(fixture.kind)?.label || fixture.kind;
-    sayOnStrip(`${name} is ${nums[0]} X ${nums[1]} \u2014 UNDO puts it back.`);
+    sayOnStrip(`${name} is ${widthOnly ? `${nums[1]} wide` : `${nums[0]} X ${nums[1]}`} \u2014 UNDO puts it back.`);
   };
   const commitWindowSize = (opening, text) => {
     const FL = window.DraftFenLabels;

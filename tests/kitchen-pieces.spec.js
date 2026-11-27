@@ -60,6 +60,8 @@ const alongWall = (wall, t, acrossFt) => {
 };
 
 async function armKind(page, kindId) {
+  // THE SINKS SHARE ONE CHIP (jb, 27 Nov 2026): hover it to reach them.
+  if (['sinkbase', 'sink', 'laundrysink', 'mopsink'].includes(kindId)) await page.locator('[data-fixture-pop="sink"]').hover();
   const chip = page.locator(`[data-fixture-kind="${kindId}"]`);
   await expect(chip).toBeVisible();
   await expect(chip).toBeEnabled();
@@ -123,7 +125,8 @@ test('drawers pressed 3" off a sink base land flush against it', async ({ page }
 test('every kitchen piece Movie drew is on the KITCHEN row', async ({ page }) => {
   await houseOnLivePage(page);
   const row = page.locator('[data-tool-group="fixture-kitchen"]');
-  for (const [id, label] of [['sinkbase', 'SINK BASE'], ['drawerbase', 'DRAWERS'],
+  await expect(row.locator('[data-fixture-pop="sink"]')).toHaveText('SINK');
+  for (const [id, label] of [['drawerbase', 'DRAWERS'],
     ['doorbase', 'DOOR BASE'], ['tallcab', 'FULL HT CAB'], ['fridge30', 'FRIDGE 30']]) {
     await expect(row.locator(`[data-fixture-kind="${id}"]`)).toHaveText(label);
   }
