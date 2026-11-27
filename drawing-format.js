@@ -2830,6 +2830,8 @@ if (!window.DraftDrawingFormat) {
         return {
           ...base, levelId: viewportLevelId,
           ...(view ? { view } : {}),
+          // LET GO OF THE PLAN LOCK (jb, 27 Nov 2026): absent is locked.
+          ...(viewport?.unlocked === true ? { unlocked: true } : {}),
         };
       }
       if (kind === 'section') {
