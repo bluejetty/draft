@@ -403,6 +403,9 @@
   // A dimension picked or let go opens or shuts the box at once.
   selectionWatchers.push(() => stripRefresh());
   const DIM_FEATURE_TOL_FT = 0.03;
+  // How far off its wall a dimension may stand and still measure an opening
+  // on it: the outermost auto row, with room to spare.
+  const DIM_OPENING_REACH_FT = 15;
   const dimEndFeatures = (dim, which) => {
     const G = window.DraftGeometry2D;
     const L = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
@@ -419,6 +422,11 @@
       const len = Math.hypot(host.end.x - host.start.x, host.end.z - host.start.z) || 1;
       const w = { x: (host.end.x - host.start.x) / len, z: (host.end.z - host.start.z) / len };
       const half = (Number(opening.width) || 0) / 2;
+      // ONLY ONE ON A WALL ALONG THIS DIMENSION, and near it (jb, 27 Nov
+      // 2026): a window on the far side of the house that happens to line up
+      // with the end is not what the dimension measures.
+      if (Math.abs(w.x * u.z - w.z * u.x) > 0.02) return;
+      if (Math.abs((c.x - dim.start.x) * -u.z + (c.z - dim.start.z) * u.x) > DIM_OPENING_REACH_FT) return;
       if ([c, { x: c.x + w.x * half, z: c.z + w.z * half }, { x: c.x - w.x * half, z: c.z - w.z * half }]
         .some(p => near(along(p)))) found.openings.push({ opening, host, w });
     });
@@ -458,15 +466,65 @@
     const pts = [...new Set(runs.flatMap(r => r.pts))];
     return pts.length ? { kind: 'lone', pts, score: 1 } : null;
   };
-  const driveDimension = feet => {
-    const dim = selection[0].item;
+  // ANOTHER OPENING ON THE SAME WALL IN THE WAY: what a typed figure may not
+  // push a door or window into (jb, 27 Nov 2026). The slide drag stays free;
+  // a number typed is an exact place, and an exact place on top of another
+  // opening is one the drawing cannot meet.
+  const openingClashAt = (opening, offset, width) => (drawing?.fenestrations || []).find(o => o !== opening
+    && String(o.wallId) === String(opening.wallId) && Number(o.levelId) === Number(opening.levelId)
+    && (o.view || 'plan') === (opening.view || 'plan')
+    && Math.abs(Number(o.offset) - offset) < (Number(o.width) + width) / 2 - 1e-6) || null;
+  const openingNoun = opening => String(opening?.type || 'opening').toLowerCase();
+  // THE DIMENSION THAT IS AN OPENING'S OWN WIDTH: both ends on the jambs of
+  // the same door or window.
+  const dimOwnOpening = (S, E) => {
+    const both = S.found.openings.find(a => E.found.openings.some(b => b.opening === a.opening));
+    return both && Math.abs(S.L - (Number(both.opening.width) || 0)) <= DIM_FEATURE_TOL_FT ? both : null;
+  };
+  // THE PIECE THAT TOOK ITS PLACE: an AUTO string is laid again after the
+  // move, so the dimension typed into is gone and a new one reads the figure.
+  // That one is picked, so OBJ / PROP and the LENGTH box stay on it.
+  const keepDimPicked = (dim, feet) => {
+    const list = drawing.dimensions || [];
+    if (list.includes(dim)) { setSelection(selection.filter(entry => list.includes(entry.item))); return; }
+    const L = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z) || 1;
+    const n = { x: -(dim.end.z - dim.start.z) / L, z: (dim.end.x - dim.start.x) / L };
+    const line = dim.start.x * n.x + dim.start.z * n.z;
+    const mid = { x: (dim.start.x + dim.end.x) / 2, z: (dim.start.z + dim.end.z) / 2 };
+    let best = null, bestD = Infinity;
+    list.forEach(d => {
+      if (!d.auto || Number(d.levelId) !== Number(dim.levelId) || (d.view || 'plan') !== (dim.view || 'plan')
+        || d.layer !== dim.layer) return;
+      const len = Math.hypot(d.end.x - d.start.x, d.end.z - d.start.z);
+      if (Math.abs(len - feet) > 1e-3) return;
+      if ([d.start, d.end].some(p => Math.abs(p.x * n.x + p.z * n.z - line) > 0.01)) return;
+      const dd = Math.hypot((d.start.x + d.end.x) / 2 - mid.x, (d.start.z + d.end.z) / 2 - mid.z);
+      if (dd < bestD) { bestD = dd; best = d; }
+    });
+    setSelection(best ? [{ type: 'dimension', item: best }] : []);
+  };
+  const driveDimension = (feet, dim = selection[0].item) => {
     const G = window.DraftGeometry2D;
-    if (!(feet > 0)) { sayOnStrip('Type a length over zero.'); return; }
+    if (!(feet > 0)) { sayOnStrip('Type a length over zero.'); return false; }
     const S = dimEndFeatures(dim, 'start'), E = dimEndFeatures(dim, 'end');
     const delta = feet - S.L;
-    if (Math.abs(delta) < 1e-6) { lengthBox.blur(); sayOnStrip(`Already ${feetLabel(feet)}.`); return; }
+    if (Math.abs(delta) < 1e-6) { lengthBox.blur(); sayOnStrip(`Already ${feetLabel(feet)}.`); return false; }
+    // THE WINDOW KEEPS ITS SIZE (jb, 27 Nov 2026: "keeping the window exactly
+    // as it is, but change distance from the corner (won't work for the
+    // dimension to another window/will only work to a corner)"). A figure
+    // typed into an opening's own width, or into a dimension with an opening
+    // at each end, changes nothing and the strip says where to go instead.
+    const own = dimOwnOpening(S, E);
+    if (own) {
+      sayOnStrip(`That is the ${openingNoun(own.opening)}'s own width -- change it in the ${openingNoun(own.opening)}'s OBJ / PROP. Nothing changed.`);
+      return false;
+    }
+    if (S.found.openings.length && E.found.openings.length) {
+      sayOnStrip('An opening at each end -- type into the dimension from a wall corner to the one you want to move. Nothing changed.');
+      return false;
+    }
     const plans = [['end', dimEndPlan(E.found)], ['start', dimEndPlan(S.found)]].filter(([, p]) => p);
-    if (!plans.length) { sayOnStrip('Nothing stands at either end of that dimension to move -- it stays as it is.'); return; }
+    if (!plans.length) { sayOnStrip('Nothing stands at either end of that dimension to move -- it stays as it is.'); return false; }
     plans.sort((a, b) => b[1].score - a[1].score);
     const [which, plan] = plans[0];
     const sign = which === 'end' ? 1 : -1;
@@ -478,8 +536,13 @@
       const clamped = G.clampOpeningToWall(plan.host, want, plan.opening.width,
         { walls: walls(), thicknessFt: openingThicknessFt() });
       if (!clamped || Math.abs(clamped.offset - want) > 1e-4) {
-        sayOnStrip(`The ${String(plan.opening.type || 'opening').toLowerCase()} can't go there -- it would run past the end of its wall. Nothing changed.`);
-        return;
+        sayOnStrip(`The ${openingNoun(plan.opening)} can't go there -- it would run past the end of its wall. Nothing changed.`);
+        return false;
+      }
+      const clash = openingClashAt(plan.opening, want, Number(plan.opening.width) || 0);
+      if (clash) {
+        sayOnStrip(`The ${openingNoun(plan.opening)} would run into the ${openingNoun(clash)} beside it. Nothing changed.`);
+        return false;
       }
       const was = plan.opening.offset;
       plan.opening.offset = clamped.offset;
@@ -502,7 +565,7 @@
       if (crushed) {
         before.forEach(b => { b.vtx.x = b.x; b.vtx.z = b.z; });
         sayOnStrip(`That would squeeze a wall to nothing -- ${feetLabel(feet)} doesn't fit. Nothing changed.`);
-        return;
+        return false;
       }
       pts.forEach(relinkVertex);
       step = foldRedim({ kind: 'move', before });
@@ -515,13 +578,14 @@
       dim[which] = { ...dim[which], x: dim[which].x + shift.x, z: dim[which].z + shift.z };
     }
     undoStack.push(steps.length > 1 ? { kind: 'batch', steps } : step);
-    setSelection(selection.filter(entry => (drawing.dimensions || []).includes(entry.item)));
+    keepDimPicked(dim, feet);
     lengthBox.blur();
     markDirty();
     const what = plan.kind === 'opening' ? `The ${String(plan.opening.type || 'opening').toLowerCase()} slid`
       : plan.kind === 'assembly' ? 'The assembly moved' : 'It moved';
     sayOnStrip(`${what} ${feetLabel(Math.abs(delta))} -- the dimension is ${feetLabel(feet)}. UNDO puts it back.`);
     paint();
+    return true;
   };
   const commitTypedLength = () => {
     // ENTER WITH THE BUTTON STILL DOWN (Movie, 25 Oct: "i try to move it the
