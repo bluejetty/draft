@@ -312,6 +312,8 @@ function buildEnv(win, saved) {
       ...(Array.isArray(wall?.finishBands) && wall.finishBands.length
         ? { finishBands: wall.finishBands } : {}),
       ...(wall?.gableFinish ? { gableFinish: wall.gableFinish } : {}),
+      ...(Array.isArray(wall?.finishSpecials) && wall.finishSpecials.length
+        ? { finishSpecials: wall.finishSpecials } : {}),
       // AND WHICH FACE THE LINE IS, for the same reason cut-view-env.js
       // carries it: the section stands the band inside the reference line,
       // and a mirror that drops the key makes every wall read centred.

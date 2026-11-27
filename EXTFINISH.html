@@ -399,6 +399,28 @@
           </div>
           <button class="btn" id="band-add" style="margin-top:6px; width:100%">Add band</button>
           </div>
+          <!-- SPECIAL SHAPES (jb, 27 Nov 2026): "make a little RECTANGLE",
+               "DRAW A SHAPE and place the finishing they would like on the
+               surface", kept on this wall so it moves with it. -->
+          <div id="special-area">
+          <p class="rail-title" style="margin-top:12px">Special</p>
+          <div class="band-list" id="special-list"></div>
+          <div class="prop" style="margin-top:6px">
+            <label for="special-finish">Finish</label>
+            <select id="special-finish"></select>
+          </div>
+          <div class="prop" id="special-size">
+            <label>Rectangle W &times; H (ft)</label>
+            <div style="display:flex; gap:4px">
+              <input type="number" id="special-w" value="2" step="0.25" min="0.25" style="width:50%">
+              <input type="number" id="special-h" value="2" step="0.25" min="0.25" style="width:50%">
+            </div>
+          </div>
+          <button class="btn" id="special-rect" style="margin-top:6px; width:100%">+ Special rectangle</button>
+          <button class="btn" id="special-draw" style="margin-top:6px; width:100%">+ Special shape</button>
+          <button class="btn" id="special-delete" style="margin-top:6px; width:100%" hidden>Delete this special</button>
+          <p class="empty" id="special-note"></p>
+          </div>
         </div>
         <!-- ── THE ROOF AREA ──────────────────────────────────
              Movie, 27 Sep: "we should make a special ROOF area with the roof
@@ -855,6 +877,7 @@
           document.getElementById('dormer-note').textContent = dormer.gable.finish
             ? 'Its own finish.' : 'The same as the wall under it until you pick one.';
         }
+        paintSpecials();
         if (!wall) return;
         // ── CONCRETE TAKES ONE FINISH, NOT BANDS -- YET ─────────────────
         //
@@ -1253,6 +1276,7 @@
           ? CV.dormerGables(env, cut, CV.sectionLevelStack(env), axis)
             .map(dg => ({ lo: dg.lo, hi: dg.hi, mid: dg.mid, base: dg.base, apex: dg.apex, finish: dg.finish })) : []);
         if (picked) paintPickMark(ctx);
+        paintSpecialOverlay(ctx);
       };
 
       // ── WHAT CAN BE CLICKED, WALLS AND CONCRETE ALIKE ─────────────────
@@ -1532,6 +1556,422 @@
               .replace(/^/, onFdn ? ' ' : '')
             + `, ${(face.hi - face.lo).toFixed(1)} ft on ${currentElev}`
           : 'Nothing there — click a wall face or the exposed concrete.');
+      });
+
+      // ── SPECIAL SHAPES ON A WALL (jb, 27 Nov 2026) ────────────────────
+      //
+      // "i'd like to make a little RECTANGLE and cover the ... finish with PFM
+      // for a small area ... it would be even better if the user could DRAW A
+      // SHAPE and place the finishing they would like on the surface", called
+      // SPECIAL, and kept on the WALL ("if i move the house wall the pattern
+      // stays on the house wall and also moves"). Each point is `s` feet along
+      // the wall from its start and `h` feet above its floor; the painter
+      // (cut-view paintFaceFinish) turns them back into the elevation.
+      //
+      // + SPECIAL RECTANGLE: the typed W x H follows the mouse, a click puts
+      // it down. + SPECIAL SHAPE: click the corners, click the first one (or
+      // Enter) to close, Esc to stop. A placed one is picked by a click on
+      // it, dragged to move, its corners dragged to reshape, resized by W x H,
+      // and taken off with DELETE. Points snap to the wall's corners and the
+      // other specials' corners, else to the inch.
+      let specialMode = null;     // null | 'rect' | 'shape'
+      let specialDraft = [];      // the shape's points so far, {s, h}
+      let specialHover = null;    // {s, h} under the mouse, snapped
+      let specialPicked = null;   // the picked special's id, on the picked wall
+      let specialDrag = null;     // { kind: 'move' | 'vertex', index, from, pts }
+      let specialDragged = false;
+      const SNAP_PX = 8;
+      const specialFinishSel = document.getElementById('special-finish');
+      specialFinishSel.innerHTML = WT.FASCIA_FINISHES
+        .map(f => `<option value="${f.id}">${f.label}</option>`).join('');
+      const specialsOf = wall => (Array.isArray(wall?.finishSpecials) ? wall.finishSpecials : []);
+      const wallLenOf = wall => Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      // THE WALL'S OWN FACE on this elevation: where its start and end land,
+      // and its floor, off the painter's outlines.
+      const wallFaceOf = wall => faceOutlines.find(o => !o.gable && o.wallId === String(wall?.id)
+        && Number.isFinite(o.u1) && Number.isFinite(o.u2) && Math.abs(o.u2 - o.u1) > 1e-6) || null;
+      const pxOf = (wall, q) => {
+        const o = wallFaceOf(wall);
+        if (!o || !frame) return null;
+        const u = o.u1 + (o.u2 - o.u1) * q.s / wallLenOf(wall);
+        return { x: frame.x0 + (u - frame.uMin) * frame.pxPerFt, y: frame.y0 + (frame.yTop - (o.floor + q.h)) * frame.pxPerFt };
+      };
+      const shOf = (wall, px, py) => {
+        const o = wallFaceOf(wall);
+        if (!o || !frame) return null;
+        const u = frame.uMin + (px - frame.x0) / frame.pxPerFt;
+        const e = frame.yTop - (py - frame.y0) / frame.pxPerFt;
+        return { s: (u - o.u1) / (o.u2 - o.u1) * wallLenOf(wall), h: e - o.floor };
+      };
+      const inch = v => Math.round(v * 12) / 12;
+      // SNAPPED, THE WALL'S OWN FIRST. A corner (its ends at the floor and
+      // the top, or another special's corner) within a few pixels, else each
+      // axis on its own: across to the wall's ends, up to its floor, sill,
+      // plate and head -- so a shape stops dead on the corner of the finish
+      // and the one drawn round the corner on the next elevation can be taken
+      // to the same height. Only then the other faces' corners and lines
+      // (a column stub a hair off the corner must not win), and last the inch.
+      const snapSh = (wall, px, py, skip = null) => {
+        const raw = shOf(wall, px, py);
+        const own = wallFaceOf(wall);
+        if (!raw || !own) return null;
+        const X = u => frame.x0 + (u - frame.uMin) * frame.pxPerFt;
+        const Y = e => frame.y0 + (frame.yTop - e) * frame.pxPerFt;
+        const topAt = (o, u) => {
+          const t = (o.tops || []).reduce((a, p) => (!a || Math.abs(p.u - u) < Math.abs(a.u - u) ? p : a), null);
+          return t && Math.abs(t.u - u) < 0.6 ? t.top : null;
+        };
+        const mine = o => o === own || (o.wallId === own.wallId && !o.gable);
+        const corners = (list, ends) => {
+          const out = [];
+          list.forEach(o => (ends ? [o.u1, o.u2] : [o.lo, o.hi]).forEach(u => {
+            out.push({ x: X(u), y: Y(o.floor) });
+            const t = topAt(o, u);
+            if (t != null) out.push({ x: X(u), y: Y(t) });
+          }));
+          return out;
+        };
+        const ownPts = corners([own], true);
+        specialsOf(wall).forEach(sp => sp.pts.forEach((q, i) => {
+          if (skip && skip.id === sp.id && skip.index === i) return;
+          const p = pxOf(wall, q);
+          if (p) ownPts.push(p);
+        }));
+        const closest = list => {
+          let best = null;
+          list.forEach(c => {
+            const d = Math.hypot(c.x - px, c.y - py);
+            if (d <= SNAP_PX && (!best || d < best.d)) best = { d, c };
+          });
+          return best;
+        };
+        const near = (vals, at, toPx) => {
+          let pick = null;
+          vals.filter(Number.isFinite).forEach(v => {
+            const d = Math.abs(toPx(v) - at);
+            if (d <= SNAP_PX && (!pick || d < pick.d)) pick = { d, v };
+          });
+          return pick;
+        };
+        const sOfU = u => Number(((u - own.u1) / (own.u2 - own.u1) * wallLenOf(wall)).toFixed(4));
+        const hOfE = e => Number((e - own.floor).toFixed(4));
+        const corner = closest(ownPts);
+        if (corner) {
+          const at = shOf(wall, corner.c.x, corner.c.y);
+          return { s: Number(at.s.toFixed(4)), h: Number(at.h.toFixed(4)) };
+        }
+        const ownYs = [own.floor, ...(own.lines || []), ...(own.tops || []).map(t => t.top)];
+        let sx = near([own.u1, own.u2], px, X);
+        let sy = near(ownYs, py, Y);
+        if (!sx && !sy) {
+          const others = faceOutlines.filter(o => !mine(o));
+          const c = closest(corners(others, false));
+          if (c) {
+            const at = shOf(wall, c.c.x, c.c.y);
+            return { s: Number(at.s.toFixed(4)), h: Number(at.h.toFixed(4)) };
+          }
+        }
+        if (!sx) sx = near(faceOutlines.flatMap(o => [o.lo, o.hi]), px, X);
+        if (!sy) sy = near(faceOutlines.flatMap(o => [o.floor, ...(o.lines || []), ...(o.tops || []).map(t => t.top)]), py, Y);
+        return { s: sx ? sOfU(sx.v) : inch(raw.s), h: sy ? hOfE(sy.v) : inch(raw.h) };
+      };
+      const inside = (pts, x, y) => {
+        let hit = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const a = pts[i], b = pts[j];
+          if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) hit = !hit;
+        }
+        return hit;
+      };
+      // THE SPECIAL UNDER A CLICK, on any wall this elevation shows -- the
+      // last laid first, as the painter lays them.
+      const specialAt = (px, py) => {
+        const walls = (drawing?.walls || []).filter(w => specialsOf(w).length && wallFaceOf(w));
+        for (const wall of walls) {
+          const list = specialsOf(wall);
+          for (let i = list.length - 1; i >= 0; i -= 1) {
+            const pts = list[i].pts.map(q => pxOf(wall, q));
+            if (pts.every(Boolean) && inside(pts, px, py)) return { wall, special: list[i] };
+          }
+        }
+        return null;
+      };
+      const pickedSpecial = () => {
+        const wall = storedWall();
+        return wall && specialPicked ? specialsOf(wall).find(sp => sp.id === specialPicked) || null : null;
+      };
+      const newSpecialId = wall => {
+        const used = new Set(specialsOf(wall).map(sp => sp.id));
+        let n = specialsOf(wall).length + 1;
+        while (used.has(`sp${n}`)) n += 1;
+        return `sp${n}`;
+      };
+      const writeSpecials = (wall, list) => {
+        writeWall({ finishSpecials: list.length ? list : null }, wall);
+      };
+      const finishLabel = id => WT.fasciaFinishById(id).label;
+      const boxOfPts = pts => ({
+        s0: Math.min(...pts.map(q => q.s)), s1: Math.max(...pts.map(q => q.s)),
+        h0: Math.min(...pts.map(q => q.h)), h1: Math.max(...pts.map(q => q.h)),
+      });
+      const ft2 = v => `${Number(v.toFixed(2))}'`;
+      function paintSpecials() {
+        const wall = storedWall();
+        const area = document.getElementById('special-area');
+        if (!wall || (wall.view || 'plan') === 'foundation') { area.hidden = true; return; }
+        area.hidden = false;
+        const list = specialsOf(wall);
+        if (specialPicked && !list.some(sp => sp.id === specialPicked)) specialPicked = null;
+        document.getElementById('special-list').innerHTML = list.length ? list.map(sp => {
+          const b = boxOfPts(sp.pts);
+          return `<div class="band-row${sp.id === specialPicked ? ' on' : ''}" data-special="${escapeHtml(sp.id)}"
+            style="cursor:pointer; ${sp.id === specialPicked ? 'outline:1px solid var(--accent-mark);' : ''}">
+            <span>SPECIAL ${escapeHtml(finishLabel(sp.finishId))} ${ft2(b.s1 - b.s0)} &times; ${ft2(b.h1 - b.h0)}</span>
+            <button class="drop" data-drop-special="${escapeHtml(sp.id)}" title="Remove this special">&times;</button></div>`;
+        }).join('') : '<p class="empty">No special shapes on this wall.</p>';
+        const sp = pickedSpecial();
+        document.getElementById('special-delete').hidden = !sp;
+        document.getElementById('special-rect').textContent = specialMode === 'rect' ? 'Click to place… (Esc stops)' : '+ Special rectangle';
+        document.getElementById('special-draw').textContent = specialMode === 'shape' ? 'Click the corners… (Esc stops)' : '+ Special shape';
+        if (sp) {
+          specialFinishSel.value = sp.finishId;
+          const b = boxOfPts(sp.pts);
+          document.getElementById('special-w').value = Number((b.s1 - b.s0).toFixed(3));
+          document.getElementById('special-h').value = Number((b.h1 - b.h0).toFixed(3));
+        }
+        document.getElementById('special-note').textContent = sp
+          ? 'Drag it to move, drag a corner to reshape, or type W × H.'
+          : specialMode === 'shape' ? 'Click the first corner again, or press Enter, to close it.' : '';
+      }
+      const setSpecialMode = mode => {
+        specialMode = mode;
+        specialDraft = [];
+        specialHover = null;
+        canvas.style.cursor = mode ? 'crosshair' : '';
+        paintSpecials();
+        paintElevation();
+      };
+      document.getElementById('special-rect').addEventListener('click', () => {
+        if (!storedWall()) return;
+        specialPicked = null;
+        setSpecialMode(specialMode === 'rect' ? null : 'rect');
+        if (specialMode) say('Move to where the rectangle goes and click to place it.');
+      });
+      document.getElementById('special-draw').addEventListener('click', () => {
+        if (!storedWall()) return;
+        specialPicked = null;
+        setSpecialMode(specialMode === 'shape' ? null : 'shape');
+        if (specialMode) say('Click the corners of the shape on the wall; click the first one again to close it.');
+      });
+      const deletePicked = () => {
+        const wall = storedWall();
+        const sp = pickedSpecial();
+        if (!wall || !sp) return;
+        specialPicked = null;
+        writeSpecials(wall, specialsOf(wall).filter(x => x.id !== sp.id));
+        say('Special removed.');
+      };
+      document.getElementById('special-delete').addEventListener('click', deletePicked);
+      document.getElementById('special-list').addEventListener('click', event => {
+        const wall = storedWall();
+        if (!wall) return;
+        const drop = event.target.closest('[data-drop-special]');
+        if (drop) {
+          const id = drop.getAttribute('data-drop-special');
+          if (specialPicked === id) specialPicked = null;
+          writeSpecials(wall, specialsOf(wall).filter(x => x.id !== id));
+          return;
+        }
+        const row = event.target.closest('[data-special]');
+        if (!row) return;
+        specialPicked = row.getAttribute('data-special');
+        setSpecialMode(null);
+      });
+      specialFinishSel.addEventListener('change', () => {
+        const wall = storedWall();
+        const sp = pickedSpecial();
+        if (!wall || !sp) return;
+        writeSpecials(wall, specialsOf(wall).map(x => (x.id === sp.id ? { ...x, finishId: specialFinishSel.value } : x)));
+      });
+      // W x H ON A PICKED ONE stretches it from its bottom-left corner.
+      ['special-w', 'special-h'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+        const wall = storedWall();
+        const sp = pickedSpecial();
+        if (!wall || !sp) return;
+        const w = Number(document.getElementById('special-w').value);
+        const hgt = Number(document.getElementById('special-h').value);
+        if (!(w > 0) || !(hgt > 0)) return;
+        const b = boxOfPts(sp.pts);
+        const kx = b.s1 - b.s0 > 1e-6 ? w / (b.s1 - b.s0) : 1;
+        const ky = b.h1 - b.h0 > 1e-6 ? hgt / (b.h1 - b.h0) : 1;
+        // Held at its bottom-left corner as seen, as it was placed.
+        const o = wallFaceOf(wall);
+        const anchor = o && o.u2 < o.u1 ? b.s1 : b.s0;
+        const pts = sp.pts.map(q => ({ s: Number((anchor + (q.s - anchor) * kx).toFixed(4)),
+          h: Number((b.h0 + (q.h - b.h0) * ky).toFixed(4)) }));
+        writeSpecials(wall, specialsOf(wall).map(x => (x.id === sp.id ? { ...x, pts } : x)));
+      }));
+      const rectAt = at => {
+        const w = Number(document.getElementById('special-w').value) || 2;
+        const hgt = Number(document.getElementById('special-h').value) || 2;
+        // The mouse holds the BOTTOM-LEFT corner as seen. A wall whose start
+        // is on the right of this elevation runs s leftward, so there the
+        // rectangle reaches back toward the start.
+        const o = wallFaceOf(storedWall());
+        const s0 = o && o.u2 < o.u1 ? at.s - w : at.s;
+        return [{ s: s0, h: at.h }, { s: s0 + w, h: at.h }, { s: s0 + w, h: at.h + hgt }, { s: s0, h: at.h + hgt }];
+      };
+      const placeSpecial = pts => {
+        const wall = storedWall();
+        if (!wall) return;
+        const id = newSpecialId(wall);
+        const list = specialsOf(wall).concat([{ id, finishId: specialFinishSel.value,
+          pts: pts.map(q => ({ s: Number(q.s.toFixed(4)), h: Number(q.h.toFixed(4)) })) }]);
+        specialMode = null;
+        specialDraft = [];
+        specialHover = null;
+        canvas.style.cursor = '';
+        specialPicked = id;
+        writeSpecials(wall, list);
+        say(`SPECIAL ${finishLabel(specialFinishSel.value)} placed.`);
+      };
+      const canvasXY = event => {
+        const box = canvas.getBoundingClientRect();
+        return { x: (event.clientX - box.left) * canvas.width / box.width,
+          y: (event.clientY - box.top) * canvas.height / box.height };
+      };
+      // THE OVERLAY: what is being drawn, and the picked one's mark.
+      function paintSpecialOverlay(ctx) {
+        const wall = storedWall();
+        if (!wall || !frame) return;
+        const accent = window.__reSkin?.['accent-mark'] || '#c33';
+        const path = pts => {
+          ctx.beginPath();
+          pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        };
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.fillStyle = accent;
+        ctx.lineWidth = 2;
+        if (specialMode === 'rect' && specialHover) {
+          const pts = rectAt(specialHover).map(q => pxOf(wall, q));
+          if (pts.every(Boolean)) { ctx.setLineDash([6, 4]); path(pts); ctx.closePath(); ctx.stroke(); }
+        }
+        if (specialMode === 'shape' && (specialDraft.length || specialHover)) {
+          const pts = specialDraft.concat(specialHover ? [specialHover] : []).map(q => pxOf(wall, q)).filter(Boolean);
+          ctx.setLineDash([6, 4]);
+          path(pts);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          pts.forEach(p => ctx.fillRect(p.x - 3, p.y - 3, 6, 6));
+        }
+        const sp = pickedSpecial();
+        if (sp) {
+          const pts = sp.pts.map(q => pxOf(wall, q));
+          if (pts.every(Boolean)) {
+            ctx.setLineDash([6, 4]);
+            path(pts);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.setLineDash([]);
+            pts.forEach(p => ctx.fillRect(p.x - 4, p.y - 4, 8, 8));
+          }
+        }
+        ctx.restore();
+      }
+      window.__extFinishSpecialPx = (wallId, q) => {
+        const wall = (drawing?.walls || []).find(w => String(w.id) === String(wallId));
+        return wall ? pxOf(wall, q) : null;
+      };
+      // CAPTURE PHASE, ahead of the wall pick: a drawing mode owns the click,
+      // and a click on a special picks it.
+      canvas.addEventListener('click', event => {
+        if (specialDragged) { specialDragged = false; event.stopImmediatePropagation(); return; }
+        const { x, y } = canvasXY(event);
+        const wall = storedWall();
+        if (specialMode && wall) {
+          event.stopImmediatePropagation();
+          const at = snapSh(wall, x, y);
+          if (!at) return;
+          if (specialMode === 'rect') { placeSpecial(rectAt(at)); return; }
+          const first = specialDraft[0] && pxOf(wall, specialDraft[0]);
+          if (first && specialDraft.length >= 3 && Math.hypot(first.x - x, first.y - y) <= SNAP_PX) {
+            placeSpecial(specialDraft);
+            return;
+          }
+          specialDraft.push(at);
+          paintElevation();
+          return;
+        }
+        const hit = specialAt(x, y);
+        if (hit) {
+          event.stopImmediatePropagation();
+          picked = String(hit.wall.id);
+          roofPicked = null;
+          specialPicked = hit.special.id;
+          paintElevation();
+          paintProps();
+          say(`SPECIAL ${finishLabel(hit.special.finishId)} on this wall`);
+          return;
+        }
+        specialPicked = null;
+      }, true);
+      canvas.addEventListener('mousemove', event => {
+        const wall = storedWall();
+        if (!wall) return;
+        const { x, y } = canvasXY(event);
+        if (specialDrag) {
+          const sp = pickedSpecial();
+          if (!sp) return;
+          if (specialDrag.kind === 'vertex') {
+            const at = snapSh(wall, x, y, { id: sp.id, index: specialDrag.index });
+            if (!at) return;
+            sp.pts = specialDrag.pts.map((q, i) => (i === specialDrag.index ? at : q));
+          } else {
+            const now = shOf(wall, x, y);
+            if (!now) return;
+            const ds = inch(now.s - specialDrag.from.s), dh = inch(now.h - specialDrag.from.h);
+            sp.pts = specialDrag.pts.map(q => ({ s: Number((q.s + ds).toFixed(4)), h: Number((q.h + dh).toFixed(4)) }));
+          }
+          specialDragged = true;
+          env = null;
+          rebuild();
+          return;
+        }
+        if (!specialMode) return;
+        specialHover = snapSh(wall, x, y);
+        paintElevation();
+      });
+      canvas.addEventListener('mousedown', event => {
+        // A press on the drawing leaves the rail's boxes, so DELETE / Esc /
+        // Enter that follow are the drawing's and not a W box's backspace.
+        const typing = document.activeElement;
+        if (typing && /^(INPUT|SELECT|TEXTAREA)$/.test(typing.tagName)) typing.blur();
+        const wall = storedWall();
+        const sp = pickedSpecial();
+        if (!wall || !sp || specialMode) return;
+        const { x, y } = canvasXY(event);
+        const pts = sp.pts.map(q => pxOf(wall, q));
+        if (!pts.every(Boolean)) return;
+        const vi = pts.findIndex(p => Math.hypot(p.x - x, p.y - y) <= SNAP_PX);
+        if (vi >= 0) { specialDrag = { kind: 'vertex', index: vi, pts: sp.pts.map(q => ({ ...q })) }; event.preventDefault(); return; }
+        if (inside(pts, x, y)) {
+          specialDrag = { kind: 'move', from: shOf(wall, x, y), pts: sp.pts.map(q => ({ ...q })) };
+          event.preventDefault();
+        }
+      });
+      window.addEventListener('mouseup', () => {
+        if (!specialDrag) return;
+        const wall = storedWall();
+        const sp = pickedSpecial();
+        specialDrag = null;
+        if (wall && sp && specialDragged) writeSpecials(wall, specialsOf(wall).slice());
+      });
+      document.addEventListener('keydown', event => {
+        if (event.target && /^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName)) return;
+        if (event.key === 'Escape' && specialMode) { setSpecialMode(null); say('Stopped.'); return; }
+        if (event.key === 'Enter' && specialMode === 'shape' && specialDraft.length >= 3) { placeSpecial(specialDraft); return; }
+        if ((event.key === 'Delete' || event.key === 'Backspace') && pickedSpecial()) { event.preventDefault(); deletePicked(); }
       });
 
       // ── BOOT ──────────────────────────────────────────────────────────

@@ -6783,7 +6783,13 @@ if (!window.DraftCutView) {
       faceGeoms.forEach(g => opts.faceOutlines.push({
         wallId: String(g.face.wall.gableOf ?? g.face.wall.id),
         lo: g.loU, hi: g.hiU, floor: g.floor, gable: !!g.face.gableInfill,
+        // Where the wall's start and end land, for a shape stored along it.
+        u1: g.face.u1, u2: g.face.u2,
         tops: g.tops.map(t => ({ u: t.u, top: t.top })),
+        // The face's sill, floor and plate lines, so a shape drawn on one
+        // elevation can be held to the same heights as one on the next.
+        lines: [faceSillFt(env, g.face, stack), g.face.level.floorBottom, g.face.level.wallTop]
+          .filter(Number.isFinite),
       }));
     }
     // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
@@ -7159,6 +7165,49 @@ if (!window.DraftCutView) {
           ctx.moveTo(x0, yP); ctx.lineTo(x1, yP);
           ctx.stroke();
         }
+      }
+      // ── SPECIAL SHAPES ON THE WALL (jb, 27 Nov 2026) ─────────────────
+      //
+      // "i'd like to make a little RECTANGLE ... basically it would be even
+      // better if the user could DRAW A SHAPE and place the finishing they
+      // would like on the surface", "SPECIAL", and asked whether it should
+      // ride with the wall: "if i move the house wall the pattern stays on
+      // the house wall and also moves ... i like option 2 better". So a
+      // shape is the WALL's: each point is `s` along the wall from its start
+      // and `h` above its floor, and it goes where the wall goes. Painted
+      // last, over the base, the bands and the gable, inside this face's
+      // clip; the openings are drawn after the cladding, so a window in it
+      // still shows. A wall's own face only: not its end seen end on, and
+      // not a gable infill cloned off it, which stands somewhere else.
+      const specials = !wall.endCapOf && !wall.gableOf && Array.isArray(wall.finishSpecials)
+        ? wall.finishSpecials : [];
+      if (specials.length) {
+        const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+        const floorE = geom.floor;
+        const du = wallLen > 1e-6 ? (face.u2 - face.u1) / wallLen : 0;
+        specials.forEach(sp => {
+          if (!Array.isArray(sp.pts) || sp.pts.length < 3 || !Number.isFinite(floorE)) return;
+          const pts = sp.pts.map(q => ({ x: X(face.u1 + du * q.s), y: Y(floorE + q.h) }));
+          if (!pts.every(q => Number.isFinite(q.x) && Number.isFinite(q.y))) return;
+          const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
+          const box = { x0: Math.min(...xs), x1: Math.max(...xs), yTop: Math.min(...ys), yBottom: Math.max(...ys) };
+          const outline = () => {
+            ctx.beginPath();
+            pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+            ctx.closePath();
+          };
+          ctx.save();
+          outline();
+          ctx.clip();
+          ctx.fillStyle = C.face;
+          ctx.fillRect(box.x0 - 1, box.yTop - 1, box.x1 - box.x0 + 2, box.yBottom - box.yTop + 2);
+          FP.drawFinish(ctx, { ...box, pxPerFt, ...(courseFrom != null ? { courseFrom } : {}) },
+            window.DraftWallTypes.fasciaFinishById(sp.finishId), C);
+          ctx.restore();
+          ctx.strokeStyle = INK; ctx.lineWidth = 1;
+          outline();
+          ctx.stroke();
+        });
       }
       ctx.restore();
     };
