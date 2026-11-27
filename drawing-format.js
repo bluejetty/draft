@@ -794,11 +794,26 @@ if (!window.DraftDrawingFormat) {
     // wall's plate as a separate area. Absent = the wall carries on up.
     const askedGable = legacy[wall?.gableFinish] || wall?.gableFinish;
     const gable = ids.includes(askedGable) ? askedGable : null;
+    // SPECIAL SHAPES (jb, 27 Nov 2026): a shape of finish drawn on the wall
+    // in EXT. FINISH, riding with the wall -- each point `s` feet along it
+    // from its start and `h` feet above its floor. Any finish on the wall
+    // table, or PFM.
+    const specials = (Array.isArray(wall?.finishSpecials) ? wall.finishSpecials : []).map(sp => {
+      const finishId = legacy[sp?.finishId] || sp?.finishId;
+      if (!(ids.includes(finishId) || finishId === 'pfm')) return null;
+      const pts = (Array.isArray(sp?.pts) ? sp.pts : [])
+        .map(q => ({ s: Number(q?.s), h: Number(q?.h) }))
+        .filter(q => Number.isFinite(q.s) && Number.isFinite(q.h));
+      if (pts.length < 3) return null;
+      const id = String(sp?.id ?? '').trim();
+      return { ...(id ? { id } : {}), finishId, pts };
+    }).filter(Boolean);
     return {
       ...(base ? { finish: base } : {}),
       ...(color ? { finishColor: color } : {}),
       ...(bands.length ? { finishBands: bands } : {}),
       ...(gable ? { gableFinish: gable } : {}),
+      ...(specials.length ? { finishSpecials: specials } : {}),
     };
   };
 
