@@ -8241,7 +8241,16 @@ if (!window.DraftCutView) {
             return [{ lo: piece.lo, hi: through.lo }, { lo: through.hi, hi: piece.hi }]
               .filter(bit => bit.hi - bit.lo >= 0.5);
           }), [part]));
-        paintedOf.set(whole, [...(paintedOf.get(whole) || []), ...shown]);
+        // The edge pass reads the band's ENDS: pieces of one run that meet
+        // are one band there, so they are joined back before it sees them.
+        // A joint between two planes is still found as a joint (below).
+        const painted = paintedOf.get(whole) || [];
+        shown.forEach(part => {
+          const last = painted[painted.length - 1];
+          if (last && Math.abs(last.hi - part.lo) < 1e-6) painted[painted.length - 1] = { ...last, hi: part.hi };
+          else painted.push({ ...part });
+        });
+        paintedOf.set(whole, painted);
         shown.forEach(part => {
           bandFills.push({ part, depth });
           rimBands.push({
