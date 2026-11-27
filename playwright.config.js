@@ -91,7 +91,7 @@ if (!globalThis[ANNOUNCED]) {
 //
 // SHARDING IS THE SUPPORTED WAY TO GO PARALLEL, and it is untouched: a shard
 // gets its own runner and therefore its own origin, which is the only way to
-// have both. CI's `--shard=N/6` inherits workers: 1 and never reaches this.
+// have both. CI's `--shard=N/12` inherits workers: 1 and never reaches this.
 const workerOverride = (() => {
   const argv = process.argv;
   for (let i = 2; i < argv.length; i += 1) {
