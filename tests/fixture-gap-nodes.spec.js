@@ -102,7 +102,7 @@ test('a wall drawn to a half-inch corner puts its FACE there, its body outside t
   expect((await saved(page)).fixtures.find(x => x.id === 'van').offset).toBe(5);
 });
 
-test('a wall with its face on a half-inch corner is connected: the fixture slid takes it along, one UNDO puts both back', async ({ page }) => {
+test('a wall with its face on a half-inch corner does NOT stick: the fixture slides alone, the wall stays square, UNDO puts the fixture back (jb, 26 Nov 2026)', async ({ page }) => {
   await open(page);
   const [lo] = await corners(page, 'van');
   const sx = lo.x - HALF_2X4;
@@ -120,10 +120,9 @@ test('a wall with its face on a half-inch corner is connected: the fixture slid 
   let d = await saved(page);
   const van = d.fixtures.find(x => x.id === 'van');
   expect(van.offset, 'the vanity slid').toBeGreaterThan(6);
-  const [now] = await corners(page, 'van', d);
   const p = d.walls.find(x => x.id === 'p');
-  expect([r3(p.start.x), r3(p.start.z)], 'the wall end rode its corner, face still on it')
-    .toEqual([r3(now.x - HALF_2X4), r3(now.z)]);
+  expect([r3(p.start.x), r3(p.start.z)], 'the wall end stayed put, not dragged with the vanity')
+    .toEqual([r3(sx), r3(lo.z)]);
   expect([r3(p.end.x), r3(p.end.z)], 'its far end stayed').toEqual([r3(sx), r3(lo.z + 6)]);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(150);

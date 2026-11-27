@@ -1550,7 +1550,7 @@
     // AND EACH FIXTURE'S HALF-INCH CORNERS, for every tool (Movie, 24 Oct:
     // "the corner where the 2 X 1/2" faint lines meet ... if there is a
     // corner node the use can 'connect' them"): a wall drawn or dragged to
-    // one lands on it, and rides the fixture after (fixtureLinks).
+    // one lands on it. It does not ride the fixture after (jb, 26 Nov 2026).
     fixtureGapNodes().forEach(v => {
       if (!out.some(o => Math.abs(o.x - v.x) < 1e-6 && Math.abs(o.z - v.z) < 1e-6)) out.push(v);
     });
@@ -1902,36 +1902,15 @@
     }
     return shift;
   };
-  // THE WALL ENDS STANDING WITH THEIR FACE ON A FIXTURE'S HALF-INCH CORNER:
-  // connected to it, so a slide of the fixture takes them along. Dragged off,
-  // they let go -- being there is the whole of the connection.
-  const LINK_TOL_FT = 0.01;
+  // A FIXTURE NEVER TAKES A WALL END WITH IT (jb, 26 Nov 2026: "can you
+  // make it so the cabinet nodes don't 'stick' to the wall nodes?"). A wall
+  // end on a fixture's half-inch corner used to ride a slide of the piece,
+  // which dragged partitions out of square; the corner is still a node to
+  // draw or drag a wall end to, but sliding the cabinet or vanity moves it
+  // alone. fixtureLinks stays as the one switch: an empty list carries
+  // nothing, so the drag and its UNDO step move the piece alone.
   const GAP_NODE_PX = 4;
-  const fixtureLinks = fixture => {
-    const FG = window.DraftFixtureGeometry;
-    if (!FG?.gapCorners) return [];
-    const corners = FG.gapCorners(drawing.walls || [], fixture, fixtures())
-      .map(c => ({ ...c, fixture }));
-    const host = hostWallOf(fixture);
-    const seen = new Set();
-    const out = [];
-    walls().forEach(wall => {
-      if (wall === host) return;
-      [wall.start, wall.end].forEach(v => {
-        if (!v || seen.has(v)) return;
-        const c = corners.find(p => {
-          if (Math.hypot(p.x - v.x, p.z - v.z) < LINK_TOL_FT) return true;
-          const spot = faceSpot(wall, p, v);
-          return !!spot && Math.hypot(spot.x - v.x, spot.z - v.z) < LINK_TOL_FT;
-        });
-        if (!c) return;
-        seen.add(v);
-        out.push({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ, end: c.end, cx: c.x, cz: c.z });
-      });
-    });
-    return out;
-  };
-  const hostWallOf = fixture => walls().find(w => w.id === fixture.wallId) || null;
+  const fixtureLinks = () => [];
   // THE CONNECTED WALL ENDS GO WHERE THEIR CORNERS WENT, each keeping how it
   // stood off the corner at its own end of the piece.
   const carryFixtureLinks = md => {
