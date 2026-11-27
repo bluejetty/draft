@@ -417,13 +417,13 @@
         /* ON A PHONE THE SQUARE WOULD SQUEEZE THE WORDS, so the logo stands
            alone on top and the links follow it, two to a row. */
         .ring {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: repeat(6, minmax(0, 1fr));
           grid-template-rows: auto;
           width: min(100%, 460px);
           gap: 6px;
         }
         .ring .enter { grid-column: 1 / -1; grid-row: auto; order: -1; margin-bottom: 8px; justify-self: center; }
-        .ring .ring-link { width: 100%; grid-column: auto; grid-row: auto; }
+        .ring .ring-link { width: 100%; grid-column: span 3; grid-row: auto; }
         /* A STACKED CELL ON A PHONE IS A LIST, NOT FOUR BUTTONS. The code
            shelf grew to four editions and their source lines, and on a
            390x844 screen that column pushed the page past the window --
@@ -442,9 +442,15 @@
            two real ones shrank to nothing and the logo was pushed off the
            left of the screen. So here every numbered item flows in order,
            and the partner note takes a row of its own under the books. */
-        .ring [data-box] { grid-column: auto; grid-row: auto; }
+        .ring [data-box] { grid-column: span 3; grid-row: auto; }
         .ring .ring-note { grid-column: 1 / -1; width: 100%; }
-        .ring-stack { grid-column: auto; grid-row: auto; gap: 0; }
+        .ring-stack { grid-column: span 3; grid-row: auto; gap: 0; }
+        /* THE PROGRAMS SHARE ONE ROW, THREE ACROSS (27 Nov 2026): RUFF 3D
+           joined PDF MANAGER and DXF CONVERTER, and a third link two to a
+           row took a row of its own and made the page scroll. The list is
+           six narrow columns: everything else spans three (two to a row, as
+           before), the three programs two each. */
+        .ring [data-box="8"], .ring [data-box="9"], .ring [data-box="10"] { grid-column: span 2; }
         .ring-stack .ring-link {
           width: 100%;
           min-height: 28px;
@@ -513,6 +519,14 @@
           </div>
           <!-- Box 7, the bottom-right cell -->
           <span class="ring-note" data-box="7" data-book-note hidden>eBay partner links — Rough Drafter may earn a commission</span>
+          <!-- Box 10: THE 3D VIEWER (jb, 27 Nov 2026: "is the RUFF 3D done?
+               if so put a lin to it on the main entry page"). The bottom row
+               is the other programs, and its left cell was the one free. The
+               name follows the skin as the viewer's own header does: RUFF 3D
+               on RUFF, ROUGH 3D on ROUGH (the script at the foot). A link
+               only: this page still loads nothing 3D (viewer.spec.js). -->
+          <a class="ring-link" href="viewer/" data-box="10" data-viewer-link
+             title="Open a .draft or a SAVE AS ZIP and see the house in 3D">RUFF 3D</a>
           <!-- Box 9 -->
           <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="9">PDF MANAGER</a>
           <!-- Box 8 -->
@@ -619,6 +633,22 @@
       // THE DISCLOSURE SHOWS ONLY WHERE THERE IS SOMETHING TO DISCLOSE.
       const note = document.querySelector('[data-book-note]');
       if (note && books.length) note.hidden = false;
+    })();
+  </script>
+  <script>
+    // THE 3D LINK'S NAME FOLLOWS THE SKIN: the pick viewer/viewer.js makes
+    // (the skin the drafter chose, else the door the visit came in by:
+    // a ruff host is RUFF, a public non-ruff host ROUGH, a desk RUFF).
+    (function () {
+      var link = document.querySelector('[data-viewer-link]');
+      if (!link) return;
+      var theme = null;
+      try { theme = (JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}).theme; } catch (e) { theme = null; }
+      if (theme !== 'ruff' && theme !== 'rough') {
+        var host = String(location.hostname || '').toLowerCase();
+        theme = !host || host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.indexOf('ruff') >= 0 ? 'ruff' : 'rough';
+      }
+      link.textContent = theme === 'rough' ? 'ROUGH 3D' : 'RUFF 3D';
     })();
   </script>
   <script src="./touch-device.js"></script>

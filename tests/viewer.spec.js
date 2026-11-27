@@ -818,3 +818,23 @@ test('PRINT MODEL: STL pieces in a zip, ONE PIECE as one STL, refused at 0 bones
   await expect(p.locator('[data-print-toll]')).toHaveText(/A print file costs 1 bone and you have 0\./);
   expect(await p.evaluate(() => window.__files.length), 'nothing written at 0').toBe(2);
 });
+
+// THE FRONT DOOR LINKS IT (jb, 27 Nov 2026: "is the RUFF 3D done? if so
+// put a lin to it on the main entry page"): box 10, the free left cell of
+// the bottom row with the other programs, named as the viewer names itself.
+test('the entry page links the 3D viewer in the bottom row, named by the skin', async ({ page: p }) => {
+  await p.goto('/index.html');
+  const link = p.locator('a[data-viewer-link]');
+  await expect(link).toHaveText('RUFF 3D');   // a desk is RUFF
+  await expect(link).toHaveAttribute('href', 'viewer/');
+  const [three, pdf, logo] = await Promise.all([link.boundingBox(), p.locator('a[href="https://pdf.bluejetty.ca/"]').boundingBox(), p.locator('.enter-logo').boundingBox()]);
+  expect(Math.abs(three.y - pdf.y)).toBeLessThanOrEqual(2);
+  expect(three.x + three.width).toBeLessThanOrEqual(pdf.x);
+  expect(three.y).toBeGreaterThan(logo.y + logo.height - 1);
+  await p.evaluate(() => localStorage.setItem('draft-skin', JSON.stringify({ theme: 'rough' })));
+  await p.reload();
+  await expect(link).toHaveText('ROUGH 3D');
+  await link.click();
+  await p.waitForSelector('body[data-ready="1"]');
+  await expect(p.locator('#brand')).toHaveText('ROUGH 3D');
+});
