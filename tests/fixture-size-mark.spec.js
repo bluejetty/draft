@@ -22,7 +22,7 @@ const drawing = () => ({
     W('tb', [0, 20], [10, 20]), W('te', [10, 20], [10, 30])],
   fixtures: [FX('sh', 'shower', 'back', 4, 5, 2.5), FX('st', 'stall', 'short', 1.5, 4, 8 / 3),
     FX('tb', 'tub', 'tb', 0, 5, 2.5, { endWallId: 'te', dir: -1 }),
-    FX('vn', 'vanity', 'van', 5, 2.5, 2)],
+    FX('vn', 'vanity', 'van', 5, 2.5, 22 / 12)],
   groups: [{ id: 'group-1', name: 'WC 1', fixed: true, stretchBehavior: 'rigid',
     members: [{ type: 'wall', id: 'back' }, { type: 'wall', id: 'left' }, { type: 'fixture', id: 'sh' }] }],
   lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [], outlines: [], shapes: [],
@@ -132,7 +132,7 @@ test('the vanity says its width only, like a kitchen cabinet; one number typed s
   await box.press('Enter');
   await expect(page.locator('#strip-message')).toContainText('48 wide');
   let vn = (await saved(page)).fixtures.find(f => f.id === 'vn');
-  expect([vn.depth, vn.width]).toEqual([2, 4]);
+  expect([vn.depth, vn.width], 'the 22" depth kept exactly, not rounded').toEqual([22 / 12, 4]);
   expect((await tags(page)).find(t => t.id === 'vn').label).toBe('48');
   // Depth X width still works for a drafter who types both.
   await pressTag(page, 'vn');
