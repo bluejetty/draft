@@ -253,3 +253,22 @@ test('OPEN LANDSCAPE on the drafter: the grading comes back and survives the dra
   expect(after.spots.some((x, i) => Math.abs(x.x - kept.spots[i].x) > 0.5 || Math.abs(x.z - kept.spots[i].z) > 0.5)).toBe(true);
   expect(after.houseCorners).toEqual(kept.houseCorners);
 });
+
+test('the entry page links it under REFERENCES, below INTERNET LINKS and above RUFF 3D, named by the skin', async ({ page: p }) => {
+  await p.goto('/index.html');
+  const link = p.locator('a[data-landscape-link]');
+  await expect(link).toHaveText('RUFF LANDSCAPE');
+  await expect(link).toHaveAttribute('href', 'landscape/');
+  const [land, links, three] = await Promise.all([link.boundingBox(),
+    p.locator('a[href="LINKS.html"]').boundingBox(), p.locator('a[data-viewer-link]').boundingBox()]);
+  expect(land.y).toBeGreaterThanOrEqual(links.y + links.height - 1);
+  expect(land.y + land.height).toBeLessThanOrEqual(three.y);
+  expect(Math.abs((land.x + land.width / 2) - (links.x + links.width / 2))).toBeLessThanOrEqual(2);
+  // The page still does not scroll to show a way in.
+  expect(await p.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
+  await p.evaluate(() => localStorage.setItem('draft-skin', JSON.stringify({ theme: 'rough' })));
+  await p.reload();
+  await expect(link).toHaveText('ROUGH LANDSCAPE');
+  await link.click();
+  await expect(p.locator('#brand')).toHaveText('ROUGH LANDSCAPE');
+});

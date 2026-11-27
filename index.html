@@ -510,6 +510,12 @@
                  is links-catalog.js, read by LINKS.html, the way the codes
                  page reads codes-catalog.js. -->
             <a class="ring-link" href="LINKS.html" data-box="11">INTERNET LINKS</a>
+            <!-- THE LANDSCAPE PROGRAM (jb, 27 Nov 2026: "can you put it above
+                 Rough 3D under REFERENCES stuff and internet links"). Named by
+                 the skin as RUFF 3D is (the script at the foot). A link only:
+                 this page loads nothing of landscape/ (tests/landscape.spec.js). -->
+            <a class="ring-link" href="landscape/" data-landscape-link
+               title="Open a .draft and grade the lot round the house">RUFF LANDSCAPE</a>
           </div>
           <div class="ring-column ring-column-right">
             <span class="ring-title">Books</span>
@@ -649,6 +655,8 @@
         theme = !host || host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.indexOf('ruff') >= 0 ? 'ruff' : 'rough';
       }
       link.textContent = theme === 'rough' ? 'ROUGH 3D' : 'RUFF 3D';
+      var land = document.querySelector('[data-landscape-link]');
+      if (land) land.textContent = theme === 'rough' ? 'ROUGH LANDSCAPE' : 'RUFF LANDSCAPE';
     })();
   </script>
   <script src="./touch-device.js"></script>
