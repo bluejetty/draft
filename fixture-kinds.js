@@ -131,6 +131,8 @@ if (!window.DraftFixtureKinds) {
   const takesUppers = fixture => {
     const id = typeof fixture === 'string' ? fixture : fixture?.kind;
     if (!FIXTURE_KINDS.some(kind => kind.id === id && kind.uppers === true)) return false;
+    // NOR ONE STANDING ON ITS SIDE (attach 'left' / 'right'): no wall behind it.
+    if (typeof fixture !== 'string' && (fixture?.attach === 'left' || fixture?.attach === 'right')) return false;
     return typeof fixture === 'string' || !(Number(fixture?.standoff) > 0);
   };
   // DOES IT CARRY THEM: every lower piece does until its UPPERS switch is

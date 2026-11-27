@@ -1584,6 +1584,10 @@
   /* THE BEAM QUESTION HOLDS NOTHING: no backdrop, over the top of the sheet. */
   #beam-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #beam-ask[hidden] { display:none; }
+  /* ATTACH TO sits by the piece (offerAttach places it), over the sheet. */
+  #attach-ask { position:fixed; z-index:6; }
+  #attach-ask[hidden] { display:none; }
+  #attach-ask button[aria-pressed="true"] { outline:2px solid currentColor; }
   #brush-warn { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #shelf-suite, #shelf-close, #turtle-trace-ask { position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:6; }
   #shelf-suite[hidden], #shelf-close[hidden], #turtle-trace-ask[hidden] { display:none; }

@@ -559,6 +559,9 @@ if (!window.DraftDrawingFormat) {
         // ITS UPPERS SWITCHED OFF (Movie, 24 Oct: "allow the lower cabinets
         // to turn on or off upper cabinet"). Only OFF is written; no key is ON.
         ...(fixture?.uppers === false ? { uppers: false } : {}),
+        // ATTACHED BY ITS SIDE (jb, 27 Nov 2026: ATTACH TO BACK / LEFT /
+        // RIGHT). Only a side is written; no key is its back.
+        ...(fixture?.attach === 'left' || fixture?.attach === 'right' ? { attach: fixture.attach } : {}),
       };
     }), env.drops).filter(Boolean);
 
