@@ -1353,7 +1353,7 @@
     const island = fixture.kind === 'island' ? null : FG.islandHolding(all, fixture);
     const riders = fixture.kind === 'island' ? FG.islandPieces(all, fixture) : [];
     return {
-      fixture, host, frame, local, grab: local(at), island,
+      fixture, host, frame, local, grab: local(at), grabWorld: { x: at.x, z: at.z }, island,
       was: { offset: Number(fixture.offset) || 0, standoff: Number(fixture.standoff) || 0 },
       riders: riders.map(item => ({ item, offset: Number(item.offset) || 0 })),
       edits: [fixture, ...riders].map(item => ({ item, before: { ...item } })),
@@ -1391,6 +1391,39 @@
     const p = md.frame.at(md.joint, geo.frontOff);
     return { pt: { x: p.x, y: 0, z: p.z }, node: true };
   };
+  // ── PULLED OFF ITS WALL (jb, 27 Nov 2026) ──────────────────────────────
+  //
+  // "the cabinets stick to the wall but a user can pull it away from the
+  // wall with an EXAGGERATED pull away it will become unstuck and the user
+  // can position on the floor or choose a new wall to 'stick too'". A piece
+  // still slides along its wall however the hand wanders off it; only a pull
+  // of PULL_FREE_FT square off the wall lets it go. From there it is a free
+  // piece for the rest of the drag -- standing on a line of its own where
+  // its wall stood, as a piece kept when its wall went does -- and the
+  // release puts it on whatever wall its back is let go against
+  // (freeFixtureLand), the one it came off included, or leaves it free on
+  // the floor. Its `before` has no `host`, so one UNDO puts it back on its
+  // wall whole. Not a piece inside an island (it lives in the island), and
+  // not a tub held in its alcove (its own branch above).
+  const PULL_FREE_FT = 3;
+  const pullFixtureFree = md => {
+    const { fixture, host } = md;
+    if (!host?.start || !host?.end || md.island) return false;
+    fixture.offset = md.was.offset;
+    fixture.host = { id: `free:${fixture.id}`,
+      start: { x: host.start.x, y: 0, z: host.start.z }, end: { x: host.end.x, y: 0, z: host.end.z },
+      wallType: host.wallType, refLine: host.refLine || 'center' };
+    fixture.wallId = null;
+    md.free = true;
+    md.pulled = true;
+    md.lit = null;
+    md.joint = null;
+    md.hostsWas = new Map([[fixture, hostCopy(fixture.host)]]);
+    md.riders = [];
+    sayOnStrip(`${fixtureLabel(fixture)} pulled off its wall -- let go on the floor to leave it free, `
+      + 'or against a wall to stick it there.');
+    return true;
+  };
   const setStandoff = (item, standoff) => { if (standoff > 0) item.standoff = standoff; else delete item.standoff; };
   const fixtureMoveTo = (md, raw) => {
     const FG = window.DraftFixtureGeometry;
@@ -1426,6 +1459,9 @@
     } else if (fixture.kind === 'tub' && fixture.endWallId) {
       const geo = FG.tubGeometry(walls(), fixture, md.host, frame);
       if (geo) fixture.offset = Math.min(Math.max(geo.dir * (here.along - geo.face) - geo.tubLen / 2, 0), geo.gap);
+    } else if (Math.abs(dAcross) > PULL_FREE_FT && pullFixtureFree(md)) {
+      fixtureMoveTo(md, raw);
+      return;
     } else {
       // ALONG ITS WALL ONLY, inside its island when it has one, and never
       // over a run mate. A counter run (cabinet, vanity) is what pieces sit
