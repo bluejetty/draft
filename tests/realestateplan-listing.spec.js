@@ -110,12 +110,15 @@ test('the area box starts off, goes on with a tick, and comes off like a plan', 
   await expect(box).not.toBeChecked();
   await areasOn(page);
   await expect(box).toBeChecked();
+  // UNTICKED FIRST, THEN CLEARED: the sheet repaints on its own (fonts, the
+  // 3D views landing), and a repaint still in flight from the tick could set
+  // the rows again between clearing them and unticking. Cleared after the
+  // untick has settled, any later paint that still drew the box would show.
   await box.uncheck();
-  // A paint already on its way when the tick came off (the 3D views land
-  // late) may still carry the box; what counts is every paint after it.
-  // So the record is cleared AFTER the untick and a paint is asked for.
-  await page.waitForTimeout(200);
-  await page.evaluate(() => { window.__rpAreas = null; window.dispatchEvent(new Event('resize')); });
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { window.__rpAreas = null; });
+  await page.locator('.seat', { hasText: 'FLOOR AREAS' }).locator('input').dispatchEvent('change');
+  await page.waitForTimeout(300);
+  await expect(box).not.toBeChecked();
   expect(await page.evaluate(() => window.__rpAreas)).toBe(null);
 });

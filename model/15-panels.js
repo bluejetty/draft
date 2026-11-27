@@ -1397,7 +1397,7 @@
     // chose, and nothing here was nobody's.
     if (agreedOn(openings, typeOf) === 'window') {
       box.append(propRow('CASEMENT', CASEMENT_CHIPS,
-        agreedOn(openings, o => (o.casement === 'double' ? 'double' : 'single')),
+        agreedOn(openings, o => (CASEMENT_CHIPS.some(([id]) => id === o.casement) ? o.casement : 'single')),
         id => applyToOpenings(openings, () => ({ casement: id }))));
     }
 

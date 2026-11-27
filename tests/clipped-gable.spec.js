@@ -170,8 +170,14 @@ test('the eave\'s soffit return reaches the porch wall', async ({ page }) => {
   // is a light line; the gap is a dark blend.
   const light = p => p[0] > wall[0] + 40;
   let inked = 0;
+  // ON THE PAINTER'S OWN ROW: it snaps a level line to round(y - 0.5) + 0.5,
+  // so the ink is on row round(y - 0.5), which a plain round(y) misses
+  // whenever the frame's fraction lands past the half.
+  const row = Math.round(f.y0 + (f.yTop - PLATE) * f.pxPerFt - 0.5);
   for (let u = 81.05; u <= 81.56; u += 0.05) {
-    const [p] = await boxAt(page, f, u, PLATE, 0);
+    const x = f.x0 + (u - f.uMin) * f.pxPerFt;
+    const [p] = await page.evaluate(([x, y]) => [[...document.getElementById('elev').getContext('2d')
+      .getImageData(Math.round(x), y, 1, 1).data].slice(0, 3)], [x, row]);
     if (light(p)) inked += 1;
   }
   expect(inked, `${inked} of 11 samples across u 81.05..81.55 on the plate line are ink`).toBeGreaterThanOrEqual(9);

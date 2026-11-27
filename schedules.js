@@ -33,7 +33,7 @@ if (!window.DraftSchedules) {
     bypass: 'BYPASS', garden: 'GARDEN', sidelight: 'W/ SIDELIGHT', overhead: 'OVERHEAD',
   });
   const KIND_WORD = Object.freeze({ ext: 'EXTERIOR', int: 'INTERIOR', garage: 'OVERHEAD' });
-  const CASEMENT_WORD = Object.freeze({ single: 'SINGLE', double: 'DOUBLE' });
+  const CASEMENT_WORD = Object.freeze({ single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE' });
   const KIND_RANK = Object.freeze({ ext: 0, int: 1, garage: 2 });
 
   // Inches (or millimetres, to 5) as the estimate has always written them.

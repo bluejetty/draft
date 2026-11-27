@@ -235,6 +235,13 @@ if (!window.DraftPlanRotate) {
     if (drawing.drawingOrigin) {
       out.drawingOrigin = turnPoint(drawing.drawingOrigin, centre, n);
     }
+    // AND THE GRADING (landscape/, jb 27 Nov 2026): its spots stand on the
+    // lot round the house, so they turn with it. The block is the landscape
+    // program's; only the spots' x/z are touched, the heights stay.
+    if (drawing.landscape && Array.isArray(drawing.landscape.spots)) {
+      out.landscape = { ...drawing.landscape,
+        spots: drawing.landscape.spots.map(spot => turnPoint(spot, centre, n)) };
+    }
     // AND THE DRAWING REMEMBERS HOW FAR ROUND IT HAS BEEN TURNED, because the
     // elevation marks need it: E1 keeps its wall, so after one turn its mark
     // stands on the west rather than the south. cut-marks reads this and
