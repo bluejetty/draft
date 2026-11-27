@@ -92,6 +92,11 @@ test('a file carrying pasted `kind-N` beams and posts opens with them on the MAI
   [...main.beams, ...main.columns].forEach(item => {
     expect(Number.isInteger(item.id)).toBe(true);
   });
+  // Nothing of MAIN FL's left on a 'foundation' sheet, which only FOUNDATION
+  // has: the first paste (beam-159 and its posts) is filed on the walls plan,
+  // and the later ones are its twins.
+  expect(await page.evaluate(() => [...drawing.beams, ...drawing.columns]
+    .filter(item => Number(item.levelId) === 3).map(item => item.view))).toEqual(['plan', 'plan', 'plan']);
   await page.goto('/MODEL.html?level=1&view=foundation');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   expect(await page.evaluate(() => [beams().map(b => b.id), columns().map(c => c.id)])).toEqual([[1], [1, 2]]);
