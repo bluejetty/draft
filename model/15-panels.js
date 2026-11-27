@@ -4230,6 +4230,53 @@
         + (dim.auto ? ' \u00b7 AUTO' : ' \u00b7 HAND');
       box.append(row);
     });
+    // TYPE THE FIGURE AND WHAT IT MEASURES MOVES (jb, 27 Nov 2026: "could
+    // you allow the user to type in and change the dimension and move the
+    // window to that new dimension. in the OBJ PROP"). One dimension only;
+    // ENTER runs the same driveDimension the LENGTH box does, so the two
+    // boxes can never disagree -- a window or door slides along its wall, its
+    // own width resizes it, and anything else moves as the LENGTH box moves it.
+    if (dims.length === 1) {
+      const dim = dims[0];
+      const ft = Math.hypot(dim.end.x - dim.start.x, dim.end.z - dim.start.z);
+      const sTitle = document.createElement('div');
+      sTitle.className = 'props-title';
+      sTitle.textContent = 'SET TO';
+      box.append(sTitle);
+      const sRow = document.createElement('div');
+      sRow.className = 'chip-row';
+      const field = document.createElement('input');
+      field.type = 'text';
+      field.className = 'roof-field';
+      field.dataset.dimSetTo = '';
+      field.style.width = '8em';
+      field.value = feetLabel(ft);
+      field.title = 'Type a length (6, 6-0 1/2, 72", 1.83m) and press ENTER: the window, door or wall at one end moves to make it so';
+      const go = () => {
+        const parsed = readLength(field.value);
+        if (!parsed.ok) { sayOnStrip(parsed.error); return; }
+        if (driveDimension(parsed.inches / 12, dim)) { showSelectionProps(); renderObjProp(); }
+        else field.value = feetLabel(ft);
+      };
+      field.addEventListener('keydown', ev => {
+        ev.stopPropagation();
+        if (ev.key === 'Enter') { ev.preventDefault(); go(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); field.value = feetLabel(ft); field.blur(); }
+      });
+      const set = document.createElement('button');
+      set.type = 'button';
+      set.className = 'sel-chip';
+      set.dataset.dimSetGo = '';
+      set.textContent = 'SET';
+      set.addEventListener('click', go);
+      sRow.append(field, set);
+      box.append(sRow);
+      const sHint = document.createElement('div');
+      sHint.className = 'sel-help';
+      sHint.dataset.propRow = 'set-to-hint';
+      sHint.textContent = 'THE WINDOW OR DOOR MOVES; THE WALL CORNER STAYS';
+      box.append(sHint);
+    }
     const title = document.createElement('div');
     title.className = 'props-title';
     title.textContent = 'UNITS';
