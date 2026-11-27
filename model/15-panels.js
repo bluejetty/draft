@@ -3931,6 +3931,16 @@
           commitFixtureEdits(items.map(f => ({ item: f, patch: { uppers: id === 'off' ? false : null } })));
         }));
     }
+    // WHICH SIDE IS ON THE WALL (jb, 27 Nov 2026: "once its placed also have
+    // an option in the OBJ PROP to allow the user to repostion to R / L or
+    // BACK when its already stuck"). A piece on a wall that can stand on
+    // its side; one UNDO puts the old side back.
+    if (FG?.canAttachSide && items.every(f => f.wallId != null && FG.canAttachSide(f))) {
+      box.append(propRow('ATTACH TO', [['back', 'BACK'], ['left', 'L'], ['right', 'R']],
+        agreedOn(items, f => FG.attachOf(f)), id => {
+          if (setFixtureAttach(items, id)) renderObjProp();
+        }));
+    }
     if (items.every(f => f.kind === 'island')) {
       box.append(field('AISLE', f => Number(f.standoff) || 0, feet => {
         if (!(feet >= 0)) return 'The aisle is the clear run from the wall: zero or more.';

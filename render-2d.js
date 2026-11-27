@@ -1695,6 +1695,7 @@ if (!window.DraftRender2D) {
     if (env.meldCounters === true) return;
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo || geo.tub) return;
+    if (geo.piece) return;
     const dirC = geo.frontOff >= geo.backOff ? 1 : -1;
     const depth = Math.min(upperDepthFt(fixture), Math.abs(geo.frontOff - geo.backOff));
     const front = geo.backOff + dirC * depth;
@@ -2408,8 +2409,9 @@ if (!window.DraftRender2D) {
         && (o.side === -1 ? -1 : 1) === (fx.side === -1 ? -1 : 1))
         .map(o => env.fixtureGeometry(o)).filter(Boolean).map(g => [g.alongStart, g.alongEnd]);
       list.forEach(fx => {
-        const geo = env.fixtureGeometry(fx);
-        const cuts = spansOn(fx, NO_COUNTER_KINDS);
+        const wallGeo = env.fixtureGeometry(fx);
+        const geo = asPiece(wallGeo);
+        const cuts = wallGeo && wallGeo.piece ? [] : spansOn(fx, NO_COUNTER_KINDS);
         counters.push(...counterRings(fx, geo, env.COUNTER_OVERHANG_FT, cuts));
         if (typeof env.hasUppers === 'function' && env.hasUppers(fx)) uppers.push(...upperRings(fx, geo, upperCutsOn(fx, list, env)));
       });
@@ -2479,8 +2481,11 @@ if (!window.DraftRender2D) {
     return { spans: [[s0, mid - 0.04], [mid + 0.04, s0 + total + 0.08]], mark: leftIsLow ? 0 : 1 };
   }
 
+  // A PIECE ATTACHED BY ITS SIDE (fixture-geometry's sideGeometry) is drawn
+  // by its own axes, so its symbol faces its front and not the wall.
+  const asPiece = geo => (geo && geo.piece ? { ...geo, ...geo.piece } : geo);
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
-    const geo = env.fixtureGeometry(fixture, wall);
+    const geo = asPiece(env.fixtureGeometry(fixture, wall));
     if (!geo) return;
     const P = (along, across) => toS(geo.frame.at(along, across));
     const poly = pts => {
@@ -2545,7 +2550,7 @@ if (!window.DraftRender2D) {
     // MELDED (env.meldCounters): a piece under the counter is its box filled
     // and stroked light, and drawCounters2D draws the counter over the lot.
     const melded = env.meldCounters === true && MELD_KINDS.includes(kind);
-    const joined = !melded && COUNTER_KINDS.includes(kind) ? counterJoints(fixture, geo, a0, a1, env) : null;
+    const joined = !melded && !geo.piece && COUNTER_KINDS.includes(kind) ? counterJoints(fixture, geo, a0, a1, env) : null;
     if (melded) {
       const c = kind === 'cornerbase' && geo.cornerAlong != null ? (geo.cornerAlong > geo.legAlong ? 1 : -1) : 0;
       const far = c > 0 ? a0 : a1;
