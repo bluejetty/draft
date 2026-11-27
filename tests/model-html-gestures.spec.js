@@ -429,6 +429,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                         : el.dataset.levelLock !== undefined ? 'level-lock'
                           : el.dataset.levelLockBreak !== undefined ? 'level-lock-break'
                             : el.dataset.fixtureKind !== undefined ? 'fixture-kind'
+                            // THE SINK CHIP (jb, 27 Nov 2026: "one SINK
+                            // button"): a press arms the SINK CABINET, a
+                            // hover offers the four sinks -- fixture kinds
+                            // all, named rather than let through as 'button'.
+                            : el.dataset.fixturePop !== undefined ? 'fixture-pop'
                             // THE DEFAULT WASHROOMS (Movie, 9 Oct): BATH A
                             // and BATH B under the FIXTURE tool. A pick is a
                             // room, not a fixture kind -- it drops walls, a
@@ -990,6 +995,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // Each arms a tool already in the column (FLOOR, or SHAPE's
             // corners closing into a ROOM TAG), so no absence row moves.
             'FLOOR', 'FLOORING', 'DECK',
+            // THE SINK CHIP'S POP-UP (jb, 27 Nov 2026): "one SINK button but
+            // when user scolls over offers the 4 buttons". Each arms the
+            // FIXTURE tool with that sink, as the chips they replaced did, so
+            // no absence row moves.
+            'SINK CABINET', 'SINK APRON', 'SINK LAUNDRY', 'SINK MOP',
             // THE BONE'S SECOND PRESS (Movie, 19 Sep): "on 2nd always offer
             // choice between drivetrhu or house build". Two answers to one
             // question, like every other card on this page -- and neither
@@ -1274,7 +1284,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // pressed or typed into, not what can be read.
           toolKinds: ['assembly-anchor', 'assembly-fixed', 'assembly-loose', 'assembly-name',
             'assembly-start', 'assembly-ungroup',
-            'fixture-kind',
+            'fixture-kind', 'fixture-pop',
             // KITCHEN L1, one control kind (see toolKind).
             'kitchen',
             'level-lock', 'level-lock-break',

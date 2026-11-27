@@ -69,6 +69,8 @@ const alongWall = (wall, t, acrossFt) => {
 };
 
 async function armKind(page, kindId) {
+  // THE SINKS SHARE ONE CHIP (jb, 27 Nov 2026): hover it to reach them.
+  if (['sinkbase', 'sink', 'laundrysink', 'mopsink'].includes(kindId)) await page.locator('[data-fixture-pop="sink"]').hover();
   const chip = page.locator(`[data-fixture-kind="${kindId}"]`);
   await expect(chip).toBeVisible();
   await expect(chip).toBeEnabled();

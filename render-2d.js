@@ -2671,6 +2671,29 @@ if (!window.DraftRender2D) {
       sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left, inset).spans.forEach(([b0, b1]) => {
         rect(b0, b1, cMin + inset, cMax - inset); ctx.stroke();
       });
+    } else if (kind === 'laundrysink') {
+      // THE LAUNDRY TUB: one deep bowl inside its rim, a ledge at the back
+      // for the faucet, and the drain.
+      const lip = Math.min(2 / 12, (a1 - a0) / 6), back = Math.min(3.5 / 12, (cMax - cMin) / 4);
+      const b0 = a0 + lip, b1 = a1 - lip;
+      const c0 = cBack + dirC * back, c1 = cFront - dirC * lip;
+      roundRect(b0, b1, Math.min(c0, c1), Math.max(c0, c1), 2.5 / 12); ctx.stroke();
+      oval((b0 + b1) / 2, (c0 + c1) / 2, 1.75 / 12, 1.75 / 12); ctx.stroke();
+    } else if (kind === 'mopsink') {
+      // THE MOP SINK: a basin at the floor inside its curb, the floor of it
+      // falling to the drain -- drawn as the lines from its corners in.
+      const curb = Math.min(3 / 12, (a1 - a0) / 5, (cMax - cMin) / 5);
+      const b0 = a0 + curb, b1 = a1 - curb, c0 = cMin + curb, c1 = cMax - curb;
+      rect(b0, b1, c0, c1); ctx.stroke();
+      const ac = (b0 + b1) / 2, cc = (c0 + c1) / 2, r = 1.75 / 12;
+      oval(ac, cc, r, r); ctx.stroke();
+      ctx.beginPath();
+      [[b0, c0], [b1, c0], [b1, c1], [b0, c1]].forEach(([ea, ec]) => {
+        const len = Math.hypot(ac - ea, cc - ec) || 1;
+        const p = P(ea, ec), q = P(ac - (ac - ea) * r / len, cc - (cc - ec) * r / len);
+        ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
+      });
+      ctx.stroke();
     } else if (kind === 'stove') {
       const w = a1 - a0, d = cMax - cMin;
       [[0.28, 0.3], [0.72, 0.3], [0.28, 0.7], [0.72, 0.7]].forEach(([fa, fc]) => {

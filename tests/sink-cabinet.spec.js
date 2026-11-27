@@ -35,13 +35,74 @@ async function open(page) {
 }
 test.afterEach(async ({ page }) => { expect(page.__errors || [], 'no page errors').toEqual([]); });
 
-test('the chips say SINK APRON and SINK CABINET', async ({ page }) => {
-  await open(page);
+test('one SINK chip: a press places a SINK CABINET, hover offers the four sinks', async ({ page }) => {
+  const { at, z } = await open(page);
   const K = await page.evaluate(() => Object.fromEntries(window.DraftFixtureKinds.FIXTURE_KINDS.map(k => [k.id, k.label])));
-  expect(K.sink).toBe('SINK APRON');
-  expect(K.sinkbase).toBe('SINK CABINET');
-  await expect(page.locator('#tool-slot button', { hasText: /^SINK APRON$/ })).toBeVisible();
-  await expect(page.locator('#tool-slot button', { hasText: /^SINK CABINET$/ })).toBeVisible();
+  expect([K.sinkbase, K.sink, K.laundrysink, K.mopsink]).toEqual(['SINK CABINET', 'SINK APRON', 'SINK LAUNDRY', 'SINK MOP']);
+  const chip = page.locator('#tool-slot [data-fixture-pop="sink"]');
+  await expect(chip).toHaveText('SINK');
+  await expect(chip, 'one chip for every sink').toHaveCount(1);
+  for (const id of ['sinkbase', 'sink', 'laundrysink', 'mopsink']) {
+    await expect(page.locator(`#tool-slot [data-fixture-kind="${id}"]`), `${id} has no chip of its own`).toHaveCount(0);
+  }
+  const pop = page.locator('#sink-pop');
+  await expect(pop).toBeHidden();
+  await chip.hover();
+  await expect(pop).toBeVisible();
+  await expect(pop.locator('button')).toHaveText(['SINK CABINET', 'SINK APRON', 'SINK LAUNDRY', 'SINK MOP']);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/4-sink-button-hover.png` });
+  // Off the chip and the pop-up both, it goes.
+  await page.mouse.move(700, 600);
+  await expect(pop).toBeHidden();
+  // THE DEFAULT: a press on SINK itself arms the SINK CABINET.
+  await chip.click();
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => fixtureKindId)).toBe('sinkbase');
+  // A pick in the pop-up arms that sink, and the chip stays lit for it.
+  await chip.hover();
+  await pop.locator('[data-fixture-kind="mopsink"]').click();
+  await expect(pop).toBeHidden();
+  expect(await page.evaluate(() => fixtureKindId)).toBe('mopsink');
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('SINK LAUNDRY and SINK MOP save, open, and draw their own pictures', async ({ page }) => {
+  await open(page);
+  const got = await page.evaluate(() => {
+    const R = window.DraftRender2D;
+    const strokes = kind => {
+      const c = document.createElement('canvas'); c.width = 200; c.height = 200;
+      const ctx = c.getContext('2d'); let n = 0;
+      const s = ctx.stroke.bind(ctx); ctx.stroke = (...a) => { n += 1; return s(...a); };
+      const walls = [{ id: 'w', start: { x: 0, y: 0, z: 0 }, end: { x: 10, y: 0, z: 0 }, wallType: 'stud_2x4', refLine: 'center' }];
+      const fx = { id: 'f', wallId: 'w', kind, offset: 5, width: 2, depth: 2, side: 1 };
+      R.drawFixture2D(ctx, p => ({ x: p.x * 15, y: p.z * 15 + 50 }), fx, {}, walls[0], {
+        fixtureGeometry: f => window.DraftFixtureGeometry.fixtureGeometry(walls, f), FIXTURE_COLOR: '#000', fixtureFill: '#fff', COUNTER_OVERHANG_FT: 0.125 });
+      return n;
+    };
+    return { ids: window.DraftFixtureKinds.STORABLE_KIND_IDS.filter(id => /sink/.test(id)),
+      laundry: strokes('laundrysink'), mop: strokes('mopsink'), plain: strokes('washer') };
+  });
+  expect(got.ids).toEqual(expect.arrayContaining(['laundrysink', 'mopsink']));
+  expect(got.laundry, 'a bowl and a drain inside the box').toBeGreaterThan(2);
+  expect(got.mop, 'a basin, a drain and the fall lines').toBeGreaterThan(got.laundry);
+});
+
+test('OBJ / PROP: SINK TYPE turns any sink into any other, in place', async ({ page }) => {
+  const { at, z } = await open(page);
+  await page.mouse.click(...at(11, z));
+  const win = page.locator('#objprop');
+  await expect(win.locator('[data-objprop-title]')).toHaveText('SINK APRON');
+  const type = win.locator('[data-prop-select="sink type"]');
+  await expect(type).toHaveValue('sink');
+  await type.selectOption('laundrysink');
+  await expect(win.locator('[data-objprop-title]')).toHaveText('SINK LAUNDRY');
+  await expect(win.locator('[data-prop-select="bowls"]'), 'a laundry tub has one bowl, no choice').toHaveCount(0);
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  const saved = (await h.savedDrawing(page)).fixtures.find(f => f.id === 's');
+  expect([saved.kind, saved.width, saved.offset]).toEqual(['laundrysink', 3, 11]);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/5-sink-type-on-objprop.png` });
 });
 
 test('the sink cabinet draws a drop-in sink smaller than the cabinet: 33" rim on a 48" double, 25" on a single, 3" clear of a narrow cabinet ends', async ({ page }) => {
