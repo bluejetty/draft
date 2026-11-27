@@ -49,6 +49,9 @@ function load(mutate) {
   // geometry-2d.js too: a bent segment is stroked as the circular arc it
   // answers for (screenArc), since 11 Nov 2026.
   new Function('window', fs.readFileSync(path.join(__dirname, '..', 'geometry-2d.js'), 'utf8'))(window);
+  // wall-types.js too: a plan's brick veneer asks it what a wall wears at the
+  // cut and how thick that is (drawFinishVeneer2D, jb 27 Nov 2026).
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'wall-types.js'), 'utf8'))(window);
   new Function('window', src)(window);
   if (!window.DraftRender2D) throw new Error('render-2d.js defined no DraftRender2D');
   return window.DraftRender2D;
@@ -330,6 +333,33 @@ const toS = p => ({ x: 400 + (p.x || 0) * 10, y: 300 + (p.z || 0) * 10 });
 // ─── The checks ───────────────────────────────────────────────────────────
 const SUITES = [];
 const suite = (painter, name, fn) => SUITES.push({ painter, name, fn });
+
+// ── drawFinishVeneer2D: brick outside the wall on a plan (jb, 27 Nov 2026) ──
+// The wall runs x 0..20 at z 0 on a 'left' line, so its body is +z and the
+// veneer -z, 4 5/8" deep. Siding is half an inch and is not drawn; a window
+// breaks the veneer the way it breaks the wall.
+suite('drawFinishVeneer2D', 'brick is a hatched strip outside the face, broken at a window; siding is nothing', R => {
+  const wall = finish => ({ id: 'w', start: { x: 0, z: 0 }, end: { x: 20, z: 0 }, levelId: 3, view: 'plan',
+    wallType: 'stud_2x6', topHeight: 8, refLine: 'left', finish });
+  const outer = ctx => calls(ctx, 'lineTo').concat(calls(ctx, 'moveTo'));
+  const siding = recordingCtx();
+  R.drawFinishVeneer2D(siding, toS, [wall('siding_h')], { colors: {} }, []);
+  expect('half an inch of siding draws nothing', siding.tape.length, 0);
+  const whole = recordingCtx();
+  R.drawFinishVeneer2D(whole, toS, [wall('brick')], { colors: {} }, []);
+  expect('brick fills one strip', count(whole, 'fill'), 1);
+  const ys = outer(whole).map(([, y]) => y);
+  // toS puts z 0 at y 300, 10 px a foot: the veneer reaches y 300 - 3.85.
+  expect('it sits outside the face, never on the body side', ys.every(y => y <= 300 + 1e-6), true);
+  expect('it is the brick deep', ys.some(y => Math.abs(y - (300 - 4.625 / 12 * 10)) < 0.01), true);
+  const broken = recordingCtx();
+  R.drawFinishVeneer2D(broken, toS, [wall('brick')], { colors: {} },
+    [{ id: 'o', wallId: 'w', type: 'window', offset: 10, width: 4 }]);
+  expect('a window cuts it in two', count(broken, 'fill'), 2);
+  const right = recordingCtx();
+  R.drawFinishVeneer2D(right, toS, [{ ...wall('brick'), refLine: 'right' }], { colors: {} }, []);
+  expect('a right line puts it on the other side', outer(right).map(([, y]) => y).every(y => y >= 300 - 1e-6), true);
+});
 
 // ── strokeSegPath2D: the straight branch and the curved one ──
 suite('strokeSegPath2D', 'a straight segment strokes a line, not a curve', R => {

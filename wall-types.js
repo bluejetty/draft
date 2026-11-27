@@ -455,6 +455,7 @@ if (!window.DraftWallTypes) {
   };
   const finishById = id => {
     const row = stockFinishById(id);
+    if (!row) return row;
     const rec = finishSettingOf(row.id);
     if (!rec) return row;
     const stamp = JSON.stringify(rec);
