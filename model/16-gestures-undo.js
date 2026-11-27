@@ -2760,6 +2760,9 @@
         Object.assign(item, before);
       });
       showSelectionProps();
+      // OBJ / PROP shows the piece in hand too: an undone ADD SINK must not
+      // leave the window calling it a SINK CABINET.
+      if (typeof renderObjProp === 'function') renderObjProp();
     } else if (step.kind === 'remove-items') {
       // Put back in the reverse of the order they came out, so every index
       // recorded at removal is the right one again when it is used.

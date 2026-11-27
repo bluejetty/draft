@@ -2454,8 +2454,15 @@ if (!window.DraftRender2D) {
     return fixture.bowls
       || (fixture.kind === 'sink' && (Number(fixture.width) || 0) <= 2.2 ? 'single' : 'double');
   }
-  // `inset` set, the bowls fill the piece to that margin (the drop-in SINK);
-  // unset, they are the sink base's, centred at most 18" each.
+  // `inset` set, the bowls fill the piece to that margin (the APRON SINK);
+  // unset, they are the SINK CABINET's, inside a drop-in sink centred on the
+  // cabinet (jb, 27 Nov 2026: "a smaller sink size that will be dropped into
+  // a CABINET"): 33" wide for a double, 25" for a single, never closer than
+  // 3" to the cabinet's ends -- so a 36" cabinet takes a 30" double and the
+  // box always shows round it -- the bowls 1 1/2" inside its rim and 2"
+  // apart. `rim` is the sink's own span along the wall.
+  const SINK_RIM_DOUBLE_FT = 33 / 12, SINK_RIM_SINGLE_FT = 25 / 12;
+  const SINK_RIM_DEPTH_FT = 22 / 12, SINK_LIP_FT = 1.5 / 12, SINK_DIVIDER_FT = 2 / 12, SINK_END_FT = 3 / 12;
   function sinkBowlSpans(a0, a1, bowls, leftIsLow, inset) {
     if (inset != null) {
       const lo = a0 + inset, hi = a1 - inset, w = hi - lo;
@@ -2464,19 +2471,15 @@ if (!window.DraftRender2D) {
       return { spans: [[lo, cut - 0.05], [cut + 0.05, hi]],
         mark: bowls === 'right' ? (leftIsLow ? 1 : 0) : (leftIsLow ? 0 : 1) };
     }
-    const mid = (a0 + a1) / 2, w = a1 - a0;
-    if (bowls === 'single') {
-      const h = Math.max(0.2, Math.min(1.25, w / 2 - 0.25));
-      return { spans: [[mid - h, mid + h]], mark: 0 };
-    }
-    const half = Math.max(0.1, Math.min(0.75, w / 4 - 0.05));
-    const total = 4 * half, s0 = mid - 2 * half - 0.04;
-    if (bowls === 'right') {
-      const small = 0.4 * total, big = 0.6 * total;
-      const first = leftIsLow ? small : big;
-      return { spans: [[s0, s0 + first], [s0 + first + 0.08, s0 + total + 0.08]], mark: leftIsLow ? 1 : 0 };
-    }
-    return { spans: [[s0, mid - 0.04], [mid + 0.04, s0 + total + 0.08]], mark: leftIsLow ? 0 : 1 };
+    const mid = (a0 + a1) / 2;
+    const rimW = Math.max(0.5, Math.min(bowls === 'single' ? SINK_RIM_SINGLE_FT : SINK_RIM_DOUBLE_FT, (a1 - a0) - 2 * SINK_END_FT));
+    const rim = [mid - rimW / 2, mid + rimW / 2];
+    const lo = rim[0] + SINK_LIP_FT, hi = rim[1] - SINK_LIP_FT, w = hi - lo;
+    if (bowls === 'single') return { spans: [[lo, hi]], mark: 0, rim };
+    const gap = Math.min(SINK_DIVIDER_FT, w / 6) / 2;
+    const cut = lo + w * (bowls === 'right' ? (leftIsLow ? 0.4 : 0.6) : 0.5);
+    return { spans: [[lo, cut - gap], [cut + gap, hi]],
+      mark: bowls === 'right' ? (leftIsLow ? 1 : 0) : (leftIsLow ? 0 : 1), rim };
   }
 
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
@@ -2496,6 +2499,20 @@ if (!window.DraftRender2D) {
         const p = P(alongC + Math.cos(t) * ra, acrossC + Math.sin(t) * rc);
         if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
       }
+      ctx.closePath();
+    };
+    // A box with its corners rounded to `r` feet, for the drop-in sink.
+    const roundRect = (b0, b1, c0, c1, r) => {
+      const ra = Math.min(r, (b1 - b0) / 2), rc = Math.min(r, (c1 - c0) / 2);
+      const corners = [[b1 - ra, c1 - rc, 0], [b0 + ra, c1 - rc, 0.5], [b0 + ra, c0 + rc, 1], [b1 - ra, c0 + rc, 1.5]];
+      ctx.beginPath();
+      corners.forEach(([ca, cc, t0]) => {
+        for (let i = 0; i <= 6; i += 1) {
+          const t = (t0 + i / 12) * Math.PI;
+          const p = P(ca + Math.cos(t) * ra, cc + Math.sin(t) * rc);
+          ctx.lineTo(p.x, p.y);
+        }
+      });
       ctx.closePath();
     };
     const sa = P(0, 0), sb = P(1, 0);
@@ -2627,11 +2644,20 @@ if (!window.DraftRender2D) {
         ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
       }
       if (kind === 'sinkbase') {
-        // The bowls, centred: an equal double unless the piece says one bowl
-        // or the bigger on the right (sinkBowlSpans).
+        // THE DROP-IN SINK: its rim -- the hole in the counter -- centred on
+        // the cabinet, the bowls inside it (an equal double unless the piece
+        // says one bowl or the bigger on the right, sinkBowlSpans), and a
+        // drain in each. The cabinet's own box and counter line stay round it.
         const left = viewerLeftIsLow(P, a0, a1, cBack, cFront);
-        sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left).spans.forEach(([b0, b1]) => {
-          rect(b0, b1, cMin + 0.25, cMax - 0.2); ctx.stroke();
+        const sink = sinkBowlSpans(a0, a1, sinkBowlsOf(fixture), left);
+        const rimD = Math.max(0.3, Math.min(SINK_RIM_DEPTH_FT, (cMax - cMin) - 2 / 12));
+        const r0 = mid - rimD / 2, r1 = mid + rimD / 2;
+        roundRect(sink.rim[0], sink.rim[1], r0, r1, 1.5 / 12); ctx.stroke();
+        sink.spans.forEach(([b0, b1]) => {
+          const c0 = r0 + SINK_LIP_FT, c1 = r1 - SINK_LIP_FT;
+          roundRect(b0, b1, c0, c1, 2 / 12); ctx.stroke();
+          // The drain toward the back, clear of the size mark at the middle.
+          oval((b0 + b1) / 2, (c0 + c1) / 2 - dirC * (c1 - c0) * 0.25, 1.75 / 12, 1.75 / 12); ctx.stroke();
         });
       }
     } else if (kind === 'tallcab') {

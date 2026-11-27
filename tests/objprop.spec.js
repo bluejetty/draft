@@ -52,7 +52,7 @@ test('the tab hangs under the top bar; a click on a sink base opens the window o
   await page.mouse.click(...at(7, z));
   const win = page.locator('#objprop');
   await expect(win).toBeVisible();
-  await expect(win.locator('[data-objprop-title]')).toHaveText('SINK BASE');
+  await expect(win.locator('[data-objprop-title]')).toHaveText('SINK CABINET');
   expect(await inked(page)).toEqual([['top', true], ['front', true], ['left', true], ['right', true]]);
   for (const field of ['width', 'depth']) await expect(win.locator(`[data-prop-field="${field}"]`)).toBeVisible();
   for (const pick of ['bowls', 'uppers']) await expect(win.locator(`[data-prop-select="${pick}"]`)).toBeVisible();

@@ -3911,7 +3911,27 @@
       commitFixtureEdits(items.map(f => ({ item: f, patch: { depth: feet } })));
       return null;
     }));
-    // A SINK BASE'S BOWLS (Movie, 24 Oct: "add double sink right bowl
+    // A SINK IN THE CABINET OR NOT (jb, 27 Nov 2026: "allow the user to
+    // either ADD a sink to a CABINET or REMOVE a sink from a SINK CABINET").
+    // The two are one piece with the sink on or off: the kind changes in
+    // place, same width, depth and spot on the wall, one UNDO.
+    const sinkOn = items.every(f => f.kind === 'sinkbase'), sinkOff = items.every(f => f.kind === 'cabinet');
+    if (sinkOn || sinkOff) {
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.sinkToggle = sinkOn ? 'remove' : 'add';
+      btn.textContent = sinkOn ? 'REMOVE SINK' : 'ADD SINK';
+      btn.title = sinkOn ? 'Take the sink out: this becomes a plain CABINET (UNDO puts it back)'
+        : 'Drop a sink into this cabinet: it becomes a SINK CABINET (UNDO takes it out)';
+      btn.addEventListener('click', () => commitFixtureEdits(items.map(f => ({ item: f,
+        patch: sinkOn ? { kind: 'cabinet', bowls: null } : { kind: 'sinkbase' } }))));
+      row.append(btn);
+      box.append(row);
+    }
+    // A SINK CABINET'S BOWLS (Movie, 24 Oct: "add double sink right bowl
     // option"): one bowl, two equal, or two with the bigger, 60/40, on the
     // right. The equal double is what a sink base always was.
     const R2 = window.DraftRender2D;
