@@ -247,21 +247,9 @@ if (!window.DraftPlanComposition) {
     // MELDED where a wall ends on another or two cross (geometry-2d's
     // meldPieces) -- the pieces are for the painter only; openings and
     // fixtures below still read the real walls.
-    // THE WC TILE, under the walls so their fill stops it at the face. It
-    // rides the fixture env: a sheet that draws no fixtures draws no tile.
-    const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer) && !off(fixture.layer || 'A-FIXT'));
-    if (env.fixtureEnv && render.drawWetFloors2D && levelFixtures.length) {
-      const ink = env.fixtureEnv.FIXTURE_COLOR;
-      onLayer(ctx, 'A-FL-FLOORING');
-      render.drawWetFloors2D(ctx, toS, {
-        walls,
-        flooredAt: roomShapes.filter(tag => tag.flooring).map(tag => tag.at),
-        fixtures: levelFixtures,
-        fixtureGeometry: env.fixtureEnv.fixtureGeometry,
-        wallFrame: env.fixtureEnv.wallFrame,
-        tileColor: /^#[0-9a-f]{6}$/i.test(ink || '') ? `${ink}55` : ink,
-      });
-    }
+    // NO FLOOR LAID BY THE FIXTURES (jb, 27 Nov 2026): a toilet no longer
+    // tiles its room on its own; flooring is a room tag's or a shape's, so
+    // the drafter can pick it and change or clear it.
     const melded = env.meldPieces ? env.meldPieces(walls) : walls;
     // Walls set OFF their line join only walls of the same offset (geometry-2d offsetApart).
     const pieces = window.DraftGeometry2D && window.DraftGeometry2D.offsetApart
@@ -489,6 +477,9 @@ if (!window.DraftPlanComposition) {
       const pxPerFt = Math.hypot(one.x - o.x, one.y - o.y);
       pick(env.roomTags, { views: false })
         .filter(tag => shows(tag.layer || 'ROOM-IDS-AREA') && !off(tag.layer || 'ROOM-IDS-AREA'))
+        // A NAME TURNED OFF on its panel (jb, 27 Nov 2026) prints nothing;
+        // its shape and flooring are their own pass and go on regardless.
+        .filter(tag => tag.nameShown !== false)
         .forEach(tag => { onLayer(ctx, tag.layer || 'ROOM-IDS-AREA'); render.drawRoomTag2D(ctx, toS, tag, { pxPerFt }, env.roomTagEnv); });
     }
   };

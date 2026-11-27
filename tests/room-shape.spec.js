@@ -245,6 +245,40 @@ test('SHOW AREA off counts nothing; a FLOORING picks a finish; the file carries 
   expect(out[1].points[1].link).toBeUndefined();
 });
 
+// SHOW TAG (jb, 27 Nov 2026): "keep room tag with flooring but allow either
+// the tag or flooring or both be turned off to not display". The name off
+// keeps the shape and its flooring; NO FLOORING keeps the name; both off
+// leave the outline. The name stays pickable on the board, faint.
+test('SHOW TAG off keeps the flooring; NO FLOORING keeps the name; either or both', async ({ page }) => {
+  const { at } = await open(page);
+  await click(page, at, [6, 5]);
+  await page.locator('[data-room-flooring="tile"]').click();
+  await expect(page.locator('[data-room-name-shown]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-room-name-shown]').click();
+  await expect(page.locator('[data-room-name-shown]')).toHaveAttribute('aria-pressed', 'false');
+  let tag = tagNamed(await saved(page), 'BEDROOM');
+  expect(tag.nameShown).toBe(false);
+  expect(tag.flooring).toEqual({ type: 'tile' });
+  await page.locator('[data-room-flooring="none"]').click();
+  tag = tagNamed(await saved(page), 'BEDROOM');
+  expect(tag.nameShown).toBe(false);
+  expect(tag.flooring).toBeUndefined();
+  // Still picked by its faint name, and turned back on.
+  await page.keyboard.press('Escape');
+  await click(page, at, [6, 5]);
+  await page.locator('[data-room-name-shown]').click();
+  tag = tagNamed(await saved(page), 'BEDROOM');
+  expect(tag.nameShown).toBeUndefined();
+  // The format keeps the switch on a shaped tag only.
+  const out = await page.evaluate(() => window.DraftDrawingFormat.roomTags([
+    { id: 1, at: { x: 0, z: 0 }, levelId: 3, name: 'A', nameShown: false },
+    { id: 2, at: { x: 0, z: 0 }, levelId: 3, name: 'B', nameShown: false,
+      points: [{ x: 0, z: 0 }, { x: 2, z: 0 }, { x: 2, z: 2 }] },
+  ], new Set([3])));
+  expect(out[0].nameShown).toBeUndefined();
+  expect(out[1].nameShown).toBe(false);
+});
+
 test('a dropped WC brings its tag, shaped to the room\'s inside and tiled; one UNDO takes it with the room', async ({ page }) => {
   const { at } = await open(page, drawing(), 'level=3&left=1&lpane=build');
   const chip = page.locator('[data-washroom="B"]');

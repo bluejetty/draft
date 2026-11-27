@@ -300,7 +300,14 @@
     const R = window.DraftRender2D;
     if (!R || !roomTagsShown()) return;
     const env = roomTagEnv();
-    roomTags().forEach(tag => R.drawRoomTag2D(ctx, toS, tag, { pxPerFt: view.scale }, env));
+    roomTags().forEach(tag => {
+      // A NAME TURNED OFF (jb, 27 Nov 2026: "allow either the tag or
+      // flooring or both be turned off") never reaches a sheet, but stays
+      // here faint, so it can still be picked and turned back on.
+      if (tag.nameShown === false) { ctx.save(); ctx.globalAlpha *= 0.3; }
+      R.drawRoomTag2D(ctx, toS, tag, { pxPerFt: view.scale }, env);
+      if (tag.nameShown === false) ctx.restore();
+    });
   };
   // THE ROOM SHAPES AND THEIR FLOORING, under the walls so their fill stops
   // the finish at the face -- the slot the WC tile has.
@@ -396,25 +403,6 @@
     if (R.drawCounters2D) R.drawCounters2D(ctx, toS, fixtures(), env);
     // THE MARKS OVER THE PIECES, never under their fill.
     paintFixtureMarks(ctx, toS);
-  };
-
-  // THE WC FLOOR -- 1'-0" tile in a room with a toilet, tub or shower in it
-  // (Movie, 9 Oct: "lighter line at joints"). The fixture ink, faint.
-  const paintWetFloors = () => {
-    const R = window.DraftRender2D;
-    const FG = window.DraftFixtureGeometry;
-    if (!R?.drawWetFloors2D || !FG) return;
-    const all = drawing?.walls || [];
-    const ink = skin['draw-fixture'];
-    R.drawWetFloors2D(ctx, toS, {
-      walls: walls(),
-      // A room whose tag lays its own flooring is not tiled over it.
-      flooredAt: roomTags().filter(tag => roomShapeOf(tag) && tag.flooring).map(tag => tag.at),
-      fixtures: fixtures(),
-      fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
-      wallFrame: wl => FG.wallFrame(wl),
-      tileColor: /^#[0-9a-f]{6}$/i.test(ink) ? `${ink}55` : ink,
-    });
   };
 
   // THE WASHROOM PREVIEW: the room washroomPlacement would drop, drawn
@@ -2417,10 +2405,11 @@
         paintOutlines();
         paintHalfLevelGhost();
         paintBasementFoundationGhost();
-        // The WC tile under the walls, so their fill stops it at the face,
-        // and the room shapes with the flooring they lay, in the same slot.
+        // The room shapes with the flooring they lay, under the walls so
+        // their fill stops it at the face. No floor is laid on its own any
+        // more (jb, 27 Nov 2026: a toilet used to tile its room with a grid
+        // nobody could pick or clear; flooring is a room tag's or a shape's).
         paintRoomShapes();
-        paintWetFloors();
         paintLines(); paintWalls();
         // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct).
         paintDoorBucks();

@@ -1784,6 +1784,10 @@ if (!window.DraftDrawingFormat) {
         ...(size ? { size } : {}),
         ...(shaped ? { points } : {}),
         ...(shaped && !areaShown ? { areaShown: false } : {}),
+        // SHOW TAG off (jb, 27 Nov 2026): the name is not drawn on a sheet,
+        // while the shape and its flooring stay. Shown is the default and is
+        // not stored.
+        ...(shaped && tag?.nameShown === false ? { nameShown: false } : {}),
         ...(shaped && tagFlooring ? { flooring: { type: tagFlooring } } : {}),
         ...look,
         areaSqFt: shaped ? (areaShown ? loopAreaSqFt(points) : 0) : (area > 0 ? area : 0),
