@@ -110,8 +110,14 @@ test('the area box starts off, goes on with a tick, and comes off like a plan', 
   await expect(box).not.toBeChecked();
   await areasOn(page);
   await expect(box).toBeChecked();
-  await page.evaluate(() => { window.__rpAreas = null; });
+  // UNTICK FIRST, THEN CLEAR THE RECORD AND FORCE A FRESH PAINT. The two 3D
+  // tiles paint the sheet again whenever their pictures land, and ticking the
+  // box resizes them, so on a slow runner a picture landed between clearing
+  // the record and the untick and wrote the areas back (main, 27 Nov 2026).
+  // Every paint after the untick must leave the box off, late pictures too.
   await box.uncheck();
+  await page.evaluate(() => { window.__rpAreas = null; });
+  await page.selectOption('#paper', 'letter-port');
   await page.waitForTimeout(200);
   expect(await page.evaluate(() => window.__rpAreas)).toBe(null);
 });
