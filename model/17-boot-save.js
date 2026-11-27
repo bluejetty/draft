@@ -113,6 +113,10 @@
         ? { standalone: F.standalone(parsed.standalone) } : { standalone: undefined }),
       ...(parsed.wallTypes !== undefined
         ? { wallTypes: madeWallTypes.map(WT.userWallTypeRecord) } : {}),
+      // EACH FINISH'S THICKNESS AND TEXTURE as this house has them (jb, 27
+      // Nov 2026), only when the file has them.
+      ...(parsed.finishSettings !== undefined && WT.normalizeFinishSettings
+        ? { finishSettings: WT.normalizeFinishSettings(parsed.finishSettings) } : {}),
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: [...WT.WALL_TYPES, ...(WT.STOCK_WALL_TYPES || []), ...madeWallTypes],
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
@@ -177,6 +181,7 @@
       shapes: F.shapes(parsed.shapes, levelIds, { drops: refusedItems.shapes }),
       fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };
+    if (WT.adoptFinishSettings) WT.adoptFinishSettings(drawing);
     adoptNotes();
     turtleOnDrawingChanged();
     trimSlivers({ walls: true });
