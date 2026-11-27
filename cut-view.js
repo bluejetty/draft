@@ -859,7 +859,16 @@ if (!window.DraftCutView) {
         if (Math.abs(eave.top - run.top) > eps) return;
         // TOUCHING COUNTS AS OVERLAP. The sampling stops short, so the run's
         // end and the edge's start can be a sample apart rather than crossing.
-        if (eave.u1 < u0 - eps || eave.u0 > u1 + eps) return;
+        //
+        // AND "A SAMPLE APART" MEANS A SAMPLE, not eps. jb, 27 Nov 2026, E3
+        // of TIMBERHOUSE: a gable seen end on, 0" overhang, 18" fascia. The
+        // side eave projects to a point at the wall's corner and the run
+        // stopped 0.075 ft (one sample) short of it -- further than eps --
+        // so the run was not grown and its closing riser hung the whole 18"
+        // board 7/8" inside the corner, a second line beside the edge.
+        // Half the reach is one sample of the caller's cut.
+        const touch = Number.isFinite(reach) ? Math.max(eps, reach / 2) : eps;
+        if (eave.u1 < u0 - touch || eave.u0 > u1 + touch) return;
         u0 = Math.min(u0, Math.max(eave.u0, run.u0 - reach));
         u1 = Math.max(u1, Math.min(eave.u1, run.u1 + reach));
       });
@@ -8783,7 +8792,16 @@ if (!window.DraftCutView) {
             && ![...edges.keys()].some(k => !jointAt.has(k) && same(k, u))) {
             const key = [...jointAt.keys()].find(k => same(k, u));
             if (key == null) { jointAt.set(u, true); edges.set(u, span.depth); }
-            else if (span.depth > edges.get(key)) edges.set(key, span.depth);
+            else if (span.depth > edges.get(key)) {
+              // AND AT THAT WALL'S OWN u, not the one listed first (jb, 27
+              // Nov 2026, E1 of TIMBERHOUSE: "that little notch"). A
+              // partition ending at 12.958 claimed the joint and the front
+              // jog at 13.0 took it over by depth only, so the corner line
+              // through the floor strip stood 5/8" off the wall's corner
+              // above it -- a short jog in the line at 0'-0".
+              edges.delete(key); jointAt.delete(key);
+              jointAt.set(u, true); edges.set(u, span.depth);
+            }
           }
         }));
       });
