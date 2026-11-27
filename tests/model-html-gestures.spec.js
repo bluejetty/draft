@@ -985,6 +985,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // floor". Two answers about a corner already there; neither
             // makes anything, so no absence row moves.
             'MOVE WALL AND FLOOR', 'DE-LINK, MOVE ONLY THE FLOOR',
+            // THE FLOOR KEY'S POP-UP (jb, 27 Nov 2026): "when a user scrolls
+            // over it it shows 3 choices - FLOOR - FLOORING - and DECK".
+            // Each arms a tool already in the column (FLOOR, or SHAPE's
+            // corners closing into a ROOM TAG), so no absence row moves.
+            'FLOOR', 'FLOORING', 'DECK',
             // THE BONE'S SECOND PRESS (Movie, 19 Sep): "on 2nd always offer
             // choice between drivetrhu or house build". Two answers to one
             // question, like every other card on this page -- and neither
