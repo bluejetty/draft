@@ -1007,6 +1007,41 @@
     <span>HOLOGRAM</span>
   </button>
 </div>
+<!-- THE FLOOR KEY'S POP-UP (jb, 27 Nov 2026: "on the FLOOR button can we
+     make it so when a user scrolls over it it shows 3 choices - FLOOR -
+     FLOORING - and DECK"). Hovering the key shows it beside the key, and so
+     does a press on a tablet. FLOOR is the FLOOR tool as it always was;
+     DECK is the FLOOR tool making decks; FLOORING is the SHAPE tool laying
+     a floor finish (model/11 floorChoice, model/14 the pop-up). -->
+<div id="floor-pop" data-floor-pop role="menu" hidden aria-label="Floor, flooring or deck">
+  <button type="button" data-floor-pop-choice="floor" role="menuitem"
+    title="FLOOR — draw a floor (framed, or a slab on the foundation)">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 17l5-10h13l-5 10z"></path><path d="M7.5 17l5-10M12 17l5-10" stroke-width="1"></path>
+    </svg>
+    <span>FLOOR</span>
+  </button>
+  <button type="button" data-floor-pop-choice="flooring" role="menuitem"
+    title="FLOORING — draw the area a floor finish covers (tile, hardwood, laminate, carpet)">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16"></rect>
+      <path d="M9 4v16M15 4v16M3 9.3h18M3 14.7h18" stroke-width="1"></path>
+    </svg>
+    <span>FLOORING</span>
+  </button>
+  <button type="button" data-floor-pop-choice="deck" role="menuitem"
+    title="DECK — draw a deck (2x10 joists, 3/4&quot; boards, a step down from the floor)">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="11"></rect>
+      <path d="M3 8.7h18M3 12.3h18" stroke-width="1"></path>
+      <path d="M5 16v4M19 16v4M12 16v4"></path>
+    </svg>
+    <span>DECK</span>
+  </button>
+</div>
 <!-- THE CHIP'S RIGHT-CLICK MENU. The lines carry the old PHOTO and HOLOGRAM
      chips' ids and data-mode names on purpose: the handlers and the specs
      that pressed those chips press these. -->

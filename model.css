@@ -1964,6 +1964,18 @@
     font-family: var(--font-ui); font-weight:600; font-size:10px; letter-spacing:0.05em; text-transform:uppercase; }
 #underlay-pop button:hover, #underlay-pop button:focus-visible { border-color: var(--accent); color: var(--accent); outline:none; }
 #underlay-pop button.lit { color: var(--accent); }
+/* THE FLOOR KEY'S POP-UP (jb, 27 Nov 2026): the house chip's pop-up look,
+   three buttons beside the key. */
+#floor-pop { position:fixed; z-index:40; display:flex; gap:6px; padding:5px; box-sizing:border-box;
+    background: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:4px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.35); }
+#floor-pop[hidden] { display:none; }
+#floor-pop button { width:76px; height:56px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:5px; border:1px solid var(--edge-panel); border-radius:3px;
+    background:none; color: var(--ink-primary); cursor:pointer; padding:0;
+    font-family: var(--font-ui); font-weight:600; font-size:10px; letter-spacing:0.05em; text-transform:uppercase; }
+#floor-pop button:hover, #floor-pop button:focus-visible { border-color: var(--accent); color: var(--accent); outline:none; }
+#floor-pop button.lit { color: var(--accent); border-color: var(--accent); }
 /* THE UNDERLAY CHIP'S MENU (jb, 13 Nov), the LINE menu's look to the pixel. */
 #underlay-menu { position:fixed; z-index:40; min-width:150px; padding:4px; box-sizing:border-box;
     background: var(--surface-panel); border:1px solid var(--edge-panel); border-radius:4px;
