@@ -1525,8 +1525,9 @@
     if (reg) reg.style.left = `${dockLeft + side + 8}px`;
     const left = dockLeft - box.left;
     const top0 = window.innerHeight - bottom - side * 2 - DOCK_GAP - box.top;
-    // OPEN IN 3D (jb, 26 Nov 2026) stands over the pair, the same size.
-    [['strip-3d', top0 - side - DOCK_GAP], ['strip-rotate', top0], ['strip-fill', top0 + side + DOCK_GAP]].forEach(([id, top]) => {
+    // OPEN IN 3D (jb, 26 Nov 2026) stands over the pair, the same size, and
+    // OPEN LANDSCAPE (jb, 27 Nov 2026) over that.
+    [['strip-landscape', top0 - (side + DOCK_GAP) * 2], ['strip-3d', top0 - side - DOCK_GAP], ['strip-rotate', top0], ['strip-fill', top0 + side + DOCK_GAP]].forEach(([id, top]) => {
       const chip = document.getElementById(id);
       if (chip) Object.assign(chip.style, { left: `${left}px`, top: `${top}px`, width: `${side}px`, height: `${side}px` });
     });
@@ -1859,7 +1860,7 @@
   const syncNorthHands = () => {
     if (northDock && driveThruUp()) northDock.hidden = true;
     const drafting = activeTool !== RESTING_TOOL;
-    ['north-hit', 'strip-rotate', 'strip-fill', 'strip-3d'].forEach(id => {
+    ['north-hit', 'strip-rotate', 'strip-fill', 'strip-3d', 'strip-landscape'].forEach(id => {
       const b = document.getElementById(id);
       if (b) b.style.pointerEvents = drafting ? 'none' : '';
     });
