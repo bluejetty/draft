@@ -1525,9 +1525,12 @@ if (!window.DraftCutView) {
   // line less its sill plate) up to the underside of what it carries: a
   // floor's underside, or the roof's bearing line.
   const POST_SIZE_IN = 5.5;
-  function pilePosts(env, stack) {
-    if (!stack || !env || !env.columns) return [];
-    const foot = stack.foundation.wallTop - houseSillPlateFt();
+  // WHAT A POST AT `p` WOULD HOLD UP: the lowest deck, floor or roof over it
+  // ({ top, levelId?, roof? }), or null with nothing over it or with the
+  // house's concrete under it. pilePosts stands its posts by it; heldOver
+  // tells the drafter how high a deck post is, for AUTO (build-house.js
+  // autoFooting).
+  function postHoldsAt(env, stack) {
     const near = (p, pts, tol) => pts.some((a, i) => {
       const b = pts[(i + 1) % pts.length];
       const dx = b.x - a.x, dz = b.z - a.z;
@@ -1549,18 +1552,33 @@ if (!window.DraftCutView) {
       ? d.level.floorTop - geo().deckSpec(d.floor).dropFt - geo().deckSpec(d.floor).thickFt
       : d.level.floorBottom);
     const roofs = (env.roofs() || []).filter(r => r.points && r.points.length >= 3);
+    return p => {
+      if (concrete.some(f => over(p, f.points))) return null;
+      const carried = [
+        ...decks.filter(d => over(p, d.pts)).map(d => ({ top: undersideOf(d), levelId: d.level.id })),
+        ...roofs.filter(r => over(p, r.points)).map(r => ({ top: roofBaseElev(r, stack, env), roof: r })),
+      ];
+      return carried.length ? carried.reduce((low, c) => (c.top < low.top ? c : low)) : null;
+    };
+  }
+  // How high a post at `p` stands, grade to what it holds; null if nothing.
+  function heldOver(env, stack, p) {
+    if (!stack || !env || !p) return null;
+    const held = postHoldsAt(env, stack)(p);
+    const grade = stack.foundation.grade;
+    return held && Number.isFinite(grade) ? held.top - grade : null;
+  }
+  function pilePosts(env, stack) {
+    if (!stack || !env || !env.columns) return [];
+    const foot = stack.foundation.wallTop - houseSillPlateFt();
+    const holds = postHoldsAt(env, stack);
     return env.columns()
       .filter(c => (c.view || 'plan') === 'foundation' && c.point && c.auto !== true
-        && String(c.footing || '').startsWith('pile'))
+        && (String(c.footing || '').startsWith('pile') || c.footing === 'efoot'))
       .map(column => {
         const p = column.point;
-        if (concrete.some(f => over(p, f.points))) return null;
-        const carried = [
-          ...decks.filter(d => over(p, d.pts)).map(d => ({ top: undersideOf(d), levelId: d.level.id })),
-          ...roofs.filter(r => over(p, r.points)).map(r => ({ top: roofBaseElev(r, stack, env), roof: r })),
-        ];
-        if (!carried.length) return null;
-        const held = carried.reduce((low, c) => (c.top < low.top ? c : low));
+        const held = holds(p);
+        if (!held) return null;
         // THE POST'S OWN SHAPE AND WIDTH, AND A SQUARE CAP UNDER IT (jb, 25-26
         // Nov 2026: "square pile cap on the top of the round pile from under
         // grade to where the wood starts"). With a cap the wood starts at the
@@ -1574,12 +1592,18 @@ if (!window.DraftCutView) {
             bottom: grade + spec.cap.aboveIn / 12 - spec.cap.tallIn / 12 }
           : null;
         const base = spec && spec.base ? spec.base : null;
-        const seat = cap ? cap.top : foot;
+        // AN ELEPHANT FOOT: the precast block set into grade, the post on it.
+        const D = bh && bh.POST_DEFAULTS ? bh.POST_DEFAULTS : { efootTallIn: 10, efootBuriedIn: 2 };
+        const efoot = column.footing === 'efoot' && Number.isFinite(grade)
+          ? { sizeIn: (bh && bh.footingFor ? bh.footingFor('efoot').sizeIn : 12),
+            bottom: grade - D.efootBuriedIn / 12, top: grade + (D.efootTallIn - D.efootBuriedIn) / 12 }
+          : null;
+        const seat = efoot ? efoot.top : cap ? cap.top : foot;
         const postFoot = seat + (base ? base.liftIn / 12 : 0);
         if (held.top <= postFoot + 0.01) return null;
         return { column, point: p, foot: postFoot, seat, top: held.top,
           sizeIn: spec ? spec.sizeIn : POST_SIZE_IN, shape: spec ? spec.shape : 'square',
-          cap, base, carries: held.roof ? 'roof' : 'floor', levelId: held.levelId ?? null };
+          cap, base, efoot, carries: held.roof ? 'roof' : 'floor', levelId: held.levelId ?? null };
       })
       .filter(Boolean);
   }
@@ -10055,6 +10079,7 @@ if (!window.DraftCutView) {
     roofBaseElev,
     roofEaveElev,
     pilePosts,
+    heldOver,
     framingPieces,
     POST_SIZE_IN,
     garageBearing,

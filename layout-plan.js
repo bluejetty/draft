@@ -1767,7 +1767,9 @@ if (!window.DraftLayoutPlan) {
       // question about this page's pixels and not about what a pile is called.
       // Named here rather than left to be found.
       columnFooting: column => (/pile/i.test(String(column.footing || ''))
-        ? { pile: true, sizeIn: 6, label: pileMarkOf(column) } : null),
+        ? { pile: true, sizeIn: 6, label: pileMarkOf(column) }
+        : column.footing === 'efoot' && window.DraftBuildHouse
+          ? window.DraftBuildHouse.footingFor('efoot') : null),
       roofEnv: {
         isPrinting: false,
         offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),

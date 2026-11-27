@@ -1771,6 +1771,10 @@ if (!window.DraftRender2D) {
     const cap = pile && post?.cap ? post.cap : null;
     const capHalf = cap ? Math.max(half + 1, (cap.sizeIn / 12) * pxPerFt / 2) : 0;
     const postHalf = cap ? Math.max(1.5, (post.sizeIn / 12) * pxPerFt / 2) : 0;
+    // AN ELEPHANT FOOT (build-house.js 'efoot'): its precast square seen from
+    // above, the post standing in it, and EF beside it.
+    const efoot = footing?.efoot === true;
+    const efHalf = efoot ? Math.max(half + 1, ((footing.sizeIn || 12) / 12) * pxPerFt / 2) : 0;
 
     ctx.save();
     ctx.strokeStyle = env.columnColor;
@@ -1802,7 +1806,12 @@ if (!window.DraftRender2D) {
       else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);
       ctx.stroke();
     }
-    const cross = Math.max(half, capHalf) + 4;
+    if (!centreOnly && efoot) {
+      ctx.beginPath();
+      ctx.rect(c.x - efHalf, c.y - efHalf, efHalf * 2, efHalf * 2);
+      ctx.stroke();
+    }
+    const cross = Math.max(half, capHalf, efHalf) + 4;
     ctx.beginPath();
     ctx.moveTo(c.x - cross, c.y); ctx.lineTo(c.x + cross, c.y);
     ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
@@ -1814,13 +1823,13 @@ if (!window.DraftRender2D) {
     // comes in beside the footing exactly as the footing does. The diameter
     // has not gone anywhere: it is the schedule's row, which is where a mark
     // is a mark OF something.
-    const tag = pile ? (mark || footing.label) : null;
+    const tag = pile ? (mark || footing.label) : efoot ? footing.label : null;
     if (tag && !preview && !env.isPrinting) {
       ctx.fillStyle = env.columnColor;
       ctx.font = env.labelFont;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(tag, c.x, c.y + Math.max(half, capHalf) + 3);
+      ctx.fillText(tag, c.x, c.y + Math.max(half, capHalf, efHalf) + 3);
     }
     ctx.restore();
   }

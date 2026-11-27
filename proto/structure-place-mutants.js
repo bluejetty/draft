@@ -52,8 +52,8 @@ const MUTANTS = [
     // but as a SUBSTRING: the auto record is indented eight, so the six-space
     // anchor matched inside its leading whitespace. The harness refused it
     // rather than mutating the wrong one, which is what that guard is for.
-    find: "      footing: 'pad36',\n    }));",
-    with: "      footing: 'pad',\n    }));",
+    find: "      footing: auto || 'pad36',",
+    with: "      footing: auto || 'pad',",
     test: 'placing a column opens its properties' },
   { file: 'model/15-panels.js',
     name: 'a pile keeps a pad size the reader will drop',

@@ -1301,7 +1301,7 @@ if (!window.DraftDrawingFormat) {
       const view = oneOf(column?.view, ['plan', 'floor', 'foundation'], null);
       if (!safeId(id) || seen.has(id) || !centre || columnLevelId == null || !view) return null;
       seen.add(id);
-      const footing = oneOf(column?.footing, ['pad36', 'pad42', 'pile8', 'pile10', 'pile12'], 'pad36');
+      const footing = oneOf(column?.footing, ['pad36', 'pad42', 'pile8', 'pile10', 'pile12', 'efoot'], 'pad36');
       // A pad column can carry a custom square size (inches) typed on the
       // FOUNDATION plan; piles keep their fixed diameters.
       const padIn = Number(column?.padIn);
@@ -1319,6 +1319,9 @@ if (!window.DraftDrawingFormat) {
         ...(!footing.startsWith('pile') && Number.isFinite(padIn) && padIn > 0
           ? { padIn } : {}),
         auto: column?.auto === true, // tour-placed; the stair re-derive may replace it
+        // AUTO FOOTING (jb, 27 Nov 2026): a deck post's footing answered by
+        // the deck's height (build-house.js autoFooting). Absent when unset.
+        ...(column?.footingAuto === true ? { footingAuto: true } : {}),
         // THE SCHEDULE'S MARK, additive (Movie, 25 Sep): "place a P2 for
         // garage as DEFAULT pile type". The marks are spec-master.js:200's
         // CONCRETE PILE SCHEDULE -- P1 is the 10" pile, P2 and P3 the 12" --
