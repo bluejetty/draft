@@ -19,7 +19,7 @@ if (!window.DraftObjViews) {
 (() => {
   // HOW TALL A PIECE STANDS when it has no traced face to say so.
   const PLAIN_HEIGHT_IN = Object.freeze({ fridge: 70, fridge30: 66, tallcab: 82.75, pantry: 84, closet: 84,
-    shower: 80, stall: 80, tub: 20, toilet: 30, washer: 38, dryer: 38 });
+    shower: 80, stall: 80, tub: 20, toilet: 30, washer: 38, dryer: 38, fireplace: 40 });
   const plainHeightIn = kind => PLAIN_HEIGHT_IN[kind] || 36;
 
   // ONE FACE, IN INCHES: x across the face from 0 to its width, h up from the
@@ -29,6 +29,26 @@ if (!window.DraftObjViews) {
     const depthIn = (Number(fixture?.depth) || 0) * 12;
     const spanIn = view === 'front' ? widthIn : depthIn;
     const profile = FP && FP.profileFor(fixture?.kind, view === 'front' ? 'front' : 'side');
+    // THE FIREPLACE'S FRONT (jb, 27 Nov 2026): its box, the frame round the
+    // opening, the glass in it, and the threshold strip on the floor -- the
+    // OPENING and THRESHOLD the drafter typed below, so the window shows
+    // what they changed. fixture-geometry.js fireplaceParts sizes them.
+    const FG = typeof window !== 'undefined' ? window.DraftFixtureGeometry : null;
+    if (fixture?.kind === 'fireplace' && view === 'front' && FG?.fireplaceParts) {
+      const parts = FG.fireplaceParts(fixture);
+      const h = plainHeightIn('fireplace');
+      const mid = spanIn / 2, op = parts.opening * 12 / 2, fr = parts.frame * 12;
+      const rectIn = (x0, x1, y0, y1) => [x0, y0, x1, y0, x1, y1, x0, y1, x0, y0];
+      const box = rectIn(0, spanIn, 0, h);
+      const frame = rectIn(mid - op - fr, mid + op + fr, 6, h - 4);
+      const glass = rectIn(mid - op, mid + op, 6 + fr, h - 4 - fr);
+      const polys = [box, frame, glass];
+      if (parts.hearth > 0) {
+        const hw = parts.hearthWidth * 12 / 2;
+        polys.push(rectIn(mid - hw, mid + hw, 0, 1.5));
+      }
+      return { widthIn: spanIn, heightIn: h, sil: [box], polys, traced: false };
+    }
     if (!profile) {
       const h = plainHeightIn(fixture?.kind);
       const box = [0, 0, spanIn, 0, spanIn, h, 0, h, 0, 0];

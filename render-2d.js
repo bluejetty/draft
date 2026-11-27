@@ -2720,6 +2720,47 @@ if (!window.DraftRender2D) {
         if (name === 'REF') c = frontMarkAt(ctx, toS, geo, cFront > cBack ? cFront - inset : cFront + inset, name, c);
         ctx.fillText(name, c.x, c.y);
       }
+    } else if (kind === 'fireplace') {
+      // THE GAS FIREPLACE (jb, 27 Nov 2026), on plan as a construction set
+      // draws a GAS FP: the box (filled above) against the wall, the frame
+      // round the opening at the front, the glass across it as a double
+      // line, the firebox tapering back from the glass, and the threshold
+      // strip on the floor in front of the box. Sizes: fireplaceParts.
+      const FG = window.DraftFixtureGeometry;
+      const parts = FG?.fireplaceParts ? FG.fireplaceParts({ ...fixture, width: a1 - a0, depth: cMax - cMin }) : null;
+      if (parts) {
+        const centre = (a0 + a1) / 2, half = parts.opening / 2;
+        const oL = centre - half, oR = centre + half;
+        const at = off => cBack + dirC * off;
+        const d = cMax - cMin;
+        // The frame: one band across the front, the opening plus its
+        // surround each side.
+        rect(oL - parts.frame, oR + parts.frame, at(d - parts.frameDepth), cFront); ctx.stroke();
+        // The glass, just behind the frame: two close lines across the opening.
+        const glass = d - parts.frameDepth;
+        const g0 = P(oL, at(glass)), g1 = P(oR, at(glass));
+        const g2 = P(oL, at(glass - 0.5 / 12)), g3 = P(oR, at(glass - 0.5 / 12));
+        ctx.beginPath(); ctx.moveTo(g0.x, g0.y); ctx.lineTo(g1.x, g1.y);
+        ctx.moveTo(g2.x, g2.y); ctx.lineTo(g3.x, g3.y); ctx.stroke();
+        // The firebox: its back wall half the opening, splayed sides out to
+        // the glass.
+        const fb = parts.fireboxBack / 2;
+        poly([P(oL, at(glass - 0.5 / 12)), P(centre - fb, at(parts.backInset)),
+          P(centre + fb, at(parts.backInset)), P(oR, at(glass - 0.5 / 12))]);
+        ctx.stroke();
+        // The threshold: a hearth strip on the floor in front, none at 0.
+        if (parts.hearth > 0) {
+          const hw = parts.hearthWidth / 2;
+          rect(centre - hw, centre + hw, cFront, cFront + dirC * parts.hearth); ctx.fill(); ctx.stroke();
+        }
+        if (pxPerFt > 6) {
+          const c = toS(geo.frame.at(centre, at(d / 2)));
+          ctx.fillStyle = env.FIXTURE_COLOR;
+          ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('GAS FP', c.x, c.y);
+        }
+      }
     } else if (kind === 'island') {
       // Freestanding island: its countertop overhangs EVERY side, so the
       // counter edge runs all the way round the box -- which is also what
