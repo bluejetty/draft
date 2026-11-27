@@ -1039,6 +1039,125 @@
 
   buildToolColumn();
 
+  // ── THE FLOOR KEY'S POP-UP: FLOOR, FLOORING, DECK ──────────────────────
+  //
+  // jb, 27 Nov 2026: "on the FLOOR button can we make it so when a user
+  // scrolls over it it shows 3 choices - FLOOR - FLOORING - and DECK". The
+  // house chip's pop-up (model/13, 25 Nov) is the pattern: hovering shows it,
+  // it goes when the pointer leaves the key and the pop-up both, on Esc, or
+  // on a press anywhere else. A tablet has no hover, so there a press on the
+  // key arms FLOOR as it always has AND puts the pop-up up beside it.
+  //
+  // PRESSING THE KEY ITSELF IS UNCHANGED: FLOOR, or back to SELECT when FLOOR
+  // is up. The pop-up only adds the other two. What each choice makes is
+  // model/11's floorChoice; which tool it rides on is here.
+  const FLOOR_CHOICE_TOOL = { floor: 'floor', deck: 'floor', flooring: 'shape' };
+  const FLOOR_CHOICE_SAY = {
+    floor: 'FLOOR — click the corners, double-click or click the first corner to close.',
+    deck: 'DECK — click the corners; each floor it closes is a deck (2x10 joists, 3/4" boards, a step down).',
+    flooring: 'FLOORING — click the corners of the area the finish covers; pick the finish on its panel.',
+  };
+  const floorPop = document.getElementById('floor-pop');
+  const floorKey = () => document.querySelector('[data-tool-key="floor"]');
+  let floorPopTimer = null;
+  // THE KEYS SAY WHICH CHOICE IS UP: FLOORING rides the SHAPE tool, and the
+  // drafter picked it off the FLOOR key, so the FLOOR key is the one lit.
+  const markFloorChoice = () => {
+    const key = floorKey();
+    const armedChoice = FLOOR_CHOICE_TOOL[floorChoice] === activeTool ? floorChoice : null;
+    if (key) {
+      if (armedChoice && armedChoice !== 'floor') key.dataset.floorChoice = armedChoice;
+      else delete key.dataset.floorChoice;
+      if (armedChoice === 'flooring') {
+        key.setAttribute('aria-pressed', 'true');
+        document.querySelector('[data-tool-key="shape"]')?.setAttribute('aria-pressed', 'false');
+      }
+    }
+    floorPop?.querySelectorAll('[data-floor-pop-choice]').forEach(btn => {
+      btn.classList.toggle('lit', btn.dataset.floorPopChoice === armedChoice);
+    });
+  };
+  // PUT DOWN WITH ITS TOOL: a DECK or FLOORING choice lasts while the tool
+  // it rides on is up, and the next FLOOR or SHAPE is the plain one again.
+  toolListeners.push(next => {
+    if (FLOOR_CHOICE_TOOL[floorChoice] !== next) floorChoice = 'floor';
+    markFloorChoice();
+  });
+  const closeFloorPop = () => {
+    clearTimeout(floorPopTimer);
+    if (floorPop && !floorPop.hidden) floorPop.hidden = true;
+  };
+  const openFloorPop = () => {
+    clearTimeout(floorPopTimer);
+    const key = floorKey();
+    if (!floorPop || !key || key.disabled || !drawing) return;
+    markFloorChoice();
+    floorPop.hidden = false;
+    // BESIDE THE KEY, on the drawing's side of the column, where it covers
+    // no other key.
+    const r = key.getBoundingClientRect();
+    const w = floorPop.offsetWidth, hh = floorPop.offsetHeight;
+    const right = r.right + 4 + w <= window.innerWidth - 4;
+    floorPop.style.left = `${Math.max(4, right ? r.right + 4 : r.left - w - 4)}px`;
+    floorPop.style.top = `${Math.max(4, Math.min(r.top + r.height / 2 - hh / 2, window.innerHeight - hh - 4))}px`;
+  };
+  const leaveFloorPop = () => {
+    clearTimeout(floorPopTimer);
+    floorPopTimer = setTimeout(closeFloorPop, 250);
+  };
+  // A CHOICE ARMS ITS TOOL -- never toggles it down, as pressing the armed
+  // key does: picking DECK while FLOOR is up switches to DECK.
+  const pickFloorChoice = choice => {
+    closeFloorPop();
+    const tool = FLOOR_CHOICE_TOOL[choice];
+    if (!tool) return;
+    if (typeof detailsToolRefused === 'function' && detailsToolRefused(tool)) {
+      sayOnStrip(`${choice.toUpperCase()} is not in a DETAILS LIBRARY \u2014 details are drawn with the DRAW / EDIT keys.`);
+      return;
+    }
+    floorChoice = choice;
+    if (activeTool !== tool) setTool(tool); else markFloorChoice();
+    sayOnStrip(FLOOR_CHOICE_SAY[choice]);
+    paint();
+  };
+  if (floorPop) {
+    floorPop.querySelectorAll('[data-floor-pop-choice]').forEach(btn => {
+      btn.addEventListener('click', () => pickFloorChoice(btn.dataset.floorPopChoice));
+    });
+    floorPop.addEventListener('pointerenter', () => clearTimeout(floorPopTimer));
+    floorPop.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') leaveFloorPop(); });
+    // ON THE COLUMN, not on the key: buildToolColumn swaps the group's box,
+    // and a listener on the column outlives the key it was hung on.
+    const overFloorKey = e => e.target instanceof Element && e.target.closest('[data-tool-key="floor"]');
+    document.addEventListener('pointerover', e => {
+      if (e.pointerType === 'touch' || !overFloorKey(e)) return;
+      if (e.relatedTarget instanceof Element && overFloorKey({ target: e.relatedTarget })) return;
+      openFloorPop();
+    });
+    document.addEventListener('pointerout', e => {
+      if (e.pointerType === 'touch' || !overFloorKey(e)) return;
+      if (e.relatedTarget instanceof Element
+        && (overFloorKey({ target: e.relatedTarget }) || floorPop.contains(e.relatedTarget))) return;
+      leaveFloorPop();
+    });
+    // A PRESS ON THE KEY IS THE FLOOR CHOICE MADE: with a mouse the pop-up
+    // goes at once, so the drafter's first corner on the sheet beside the key
+    // never lands on it. On a tablet the key has armed FLOOR (or put it
+    // down) and the pop-up comes up beside it, so DECK and FLOORING are a
+    // tap away.
+    document.addEventListener('pointerup', e => {
+      if (!overFloorKey(e)) return;
+      if (e.pointerType === 'touch') setTimeout(openFloorPop, 0); else closeFloorPop();
+    });
+    window.addEventListener('pointerdown', e => {
+      if (floorPop.hidden || floorPop.contains(e.target) || overFloorKey(e)) return;
+      closeFloorPop();
+    }, true);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !floorPop.hidden) { closeFloorPop(); e.stopPropagation(); }
+    }, true);
+  }
+
   // ── THE LETTERS ON THE KEYS DO SOMETHING ─────────────────────────────────
   //
   // The column has painted a letter on every key since it was built and not

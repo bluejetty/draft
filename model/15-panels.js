@@ -1722,6 +1722,8 @@
         chip.textContent = finish.label;
         chip.setAttribute('aria-pressed', String((tag.flooring?.type || null) === finish.id));
         chip.addEventListener('click', () => edit(() => {
+          // THE NEXT FLOORING (FLOOR key) lays this finish too.
+          if (finish.id && typeof flooringDefault !== 'undefined') flooringDefault = finish.id;
           if (finish.id) tag.flooring = { type: finish.id }; else delete tag.flooring;
         }));
         floorRow.append(chip);
@@ -1953,6 +1955,8 @@
       const flooringNow = same(s => s.flooring?.type || null);
       [{ id: null, label: 'NO FLOORING' }, ...FMT.FLOORING_FINISHES].forEach(finish => {
         floorRow.append(chip({ shapeFlooring: finish.id || 'none' }, finish.label, flooringNow === finish.id, () => {
+          // THE NEXT FLOORING SHAPE (FLOOR key, FLOORING) lays this one too.
+          if (finish.id && typeof flooringDefault !== 'undefined') flooringDefault = finish.id;
           writeShapeProps(shapes, { flooring: finish.id ? { type: finish.id, thicknessIn: 3 / 8 } : null });
         }));
       });

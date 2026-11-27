@@ -105,6 +105,71 @@
     paint();
   };
 
+  // THE FLOOR KEY'S THREE CHOICES (jb, 27 Nov 2026: "on the FLOOR button
+  // ... when a user scrolls over it it shows 3 choices - FLOOR - FLOORING -
+  // and DECK"). The pop-up is model/14's; what each choice makes is here.
+  //   'floor'    -- the FLOOR tool as it always was (deck or not decided by
+  //                 geometry-2d deckFloors, `deck` unset).
+  //   'deck'     -- the FLOOR tool, and each floor it closes is a DECK
+  //                 (`deck: true`, the FLOOR panel's TYPE chip already lit).
+  //   'flooring' -- the SHAPE tool's corners, and each loop it closes is a
+  //                 ROOM TAG laying a floor finish (commitFlooring below).
+  // Put down with its tool: model/14 sends it back to 'floor' when the tool
+  // it rides on goes down.
+  let floorChoice = 'floor';
+  // THE FINISH FLOORING LAYS, the last one picked on a room tag's or a
+  // shape's FLOORING row (model/15), TILE until one is.
+  let flooringDefault = 'tile';
+
+  // FLOORING IS A ROOM TAG DRAWN FROM ITS FLOOR SIDE (jb, 27 Nov 2026:
+  // "keep room tag with flooring" -- "so the ROOM TAG command should also
+  // make FLOORING too right?"). A room tag has carried a shape and a
+  // flooring since 23 Oct ("the FLOOR shape and ROOM TAG shape can be the
+  // same thing"), so this makes that one record: the loop drawn is its
+  // shape, the finish is its flooring, its name sits in the middle. The
+  // SHAPE tool's corners draw it (T-square, magnet, arcs, typed lengths);
+  // an arc is laid flat, as a room tag's corners are points only.
+  const commitFlooring = loop => {
+    const G2 = window.DraftGeometry2D;
+    const { levelId, viewId } = onActiveLevel();
+    if (viewId != null && viewId !== 'plan') {
+      sayOnStrip('FLOORING goes on the FLOOR PLAN (WALLS) view, with the room tags.');
+      return null;
+    }
+    const flat = (G2.loopHasArcs && G2.loopHasArcs(loop) ? G2.flattenLoop(loop) : loop)
+      .map(p => ({ x: p.x, z: p.z }));
+    // ITS NAME AT THE MIDDLE: the centroid of the ring, or the corners'
+    // average for a sliver whose area rounds to nothing.
+    let a2 = 0, cx = 0, cz = 0;
+    flat.forEach((p, i) => {
+      const q = flat[(i + 1) % flat.length];
+      const k = p.x * q.z - q.x * p.z;
+      a2 += k; cx += (p.x + q.x) * k; cz += (p.z + q.z) * k;
+    });
+    const at = Math.abs(a2) > 1e-9
+      ? { x: cx / (3 * a2), z: cz / (3 * a2) }
+      : { x: flat.reduce((t, p) => t + p.x, 0) / flat.length, z: flat.reduce((t, p) => t + p.z, 0) / flat.length };
+    drawing.roomTags = drawing.roomTags || [];
+    // THE ID AS placeRoomTag (model/08) takes one: whole, past every one used.
+    const ids = drawing.roomTags.map(t => Number(t.id)).filter(Number.isInteger);
+    const id = Math.max(0, ...ids, (Number(drawing.nextRoomTagId) || 1) - 1) + 1;
+    drawing.nextRoomTagId = id + 1;
+    const tag = addItem(drawing.roomTags, {
+      id, at, levelId, view: 'plan',
+      name: 'ROOM', areaSqFt: 0, underMin: false, stamped: true, layer: ROOM_TAG_LAYER,
+      points: flat,
+      flooring: { type: flooringDefault },
+    });
+    shapeCorners = [];
+    markLoopClosed(loop[0]);
+    // SELECTED, so its panel -- the room's name and the FLOORING row -- is
+    // up; the tool stays up for the next room's floor.
+    selectPlaced('roomtag', tag);
+    sayOnStrip(`${flooringDefault.toUpperCase()} flooring drawn — change the finish or the room's name on its panel.`);
+    paint();
+    return tag;
+  };
+
   // THE LOOP MAY BE HANDED IN (19-line-arcs.js: a CIRCLE, or corners whose
   // closing edge was just bent); its corners may carry a `bulge`, the arc
   // leaving each, and the crossing test reads the arcs flattened.
@@ -112,9 +177,11 @@
     const loop = (given || shapeCorners).slice();
     if (loop.length < 3) return null;
     if (window.DraftGeometry2D.selfIntersects(window.DraftGeometry2D.flattenLoop(loop))) {
-      sayOnStrip('That shape crosses itself, so it encloses no area.');
+      sayOnStrip(floorChoice === 'flooring' ? 'That flooring crosses itself, so it encloses no area.'
+        : 'That shape crosses itself, so it encloses no area.');
       return null;
     }
+    if (floorChoice === 'flooring') return commitFlooring(loop);
     const { levelId } = onActiveLevel();
     drawing.shapes = drawing.shapes || [];
     const shape = addItem(drawing.shapes, {
@@ -193,6 +260,10 @@
     const homeView = LV.floorHomeView(viewId, levelId);
     const slab = homeView === 'foundation';
     const floor = floorRecord(loop, levelId, homeView);
+    // DECK off the FLOOR key: the drafter said so, whatever the walls say.
+    // Never on a slab, as the FLOOR panel's TYPE chip is never offered there.
+    const deck = floorChoice === 'deck' && !slab;
+    if (deck) floor.deck = true;
     if (!Array.isArray(drawing.floors)) drawing.floors = [];
     drawing.floors.push(floor);
     undoStack.push({ kind: 'add-item', list: drawing.floors, item: floor });
@@ -211,7 +282,7 @@
     const homeLabel = (LV.layerViewsForLevelId(levelId)
       .find(view => view.id === homeView) || {}).label || homeView;
     sayOnStrip(homeView === viewId
-      ? (slab ? 'Slab drawn — it saves to S-SLAB.' : 'Floor drawn.')
+      ? (slab ? 'Slab drawn — it saves to S-SLAB.' : deck ? 'Deck drawn.' : 'Floor drawn.')
       : `${slab ? 'Slab' : 'Floor'} drawn — it belongs to ${homeLabel}, `
         + 'so it is not on this layer set.');
     markDirty();
