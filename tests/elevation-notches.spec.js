@@ -45,3 +45,45 @@ test('his E3: the 18" fascia\'s end is drawn on the wall corner, not 7/8" inside
   expect(near.length).toBeGreaterThan(0);
   near.forEach(u => expect([0, -19.5]).toContain(u));
 });
+
+// jb, 27 Nov 2026, his E2 (this bench's E1) at the 2' stucco column beside
+// the siding: "something funny with the sill plate maybe? not sure the floor
+// area shaded properly", then "the column should be in front" of the deck.
+const SEAM_INK = '#1d1f20';
+const fillsOver = (view, u0, u1, top) => (view.modelFills || [])
+  .map(f => ({ seq: f.seq, us: (f.pts || []).map(p => p.u), es: (f.pts || []).map(p => p.e) }))
+  .filter(f => f.us.length && Math.min(...f.us) < u0 && Math.max(...f.us) > u1
+    && Math.abs(Math.max(...f.es) - top) < 0.03);
+const columnHatch = view => view.strokes.find(s => s.clip && s.ink === SEAM_INK && s.w < 1
+  && Math.abs(Math.min(...s.clip.map(p => p.u))) < 0.01 && Math.abs(Math.max(...s.clip.map(p => p.u)) - 2) < 0.01
+  && Math.min(...s.clip.map(p => p.e)) < -1);
+
+test('his E2: the column\'s stucco runs down over the floor strip like the siding beside it', () => {
+  const view = paint('E1');
+  const hatch = columnHatch(view);
+  expect(hatch, 'the column is clad down past the floor').toBeTruthy();
+  // The MAIN FL band (0'-0" down to the sill) goes down BEFORE the column's
+  // cladding, not over it.
+  const bands = fillsOver(view, 0.05, 1.95, 0.027);
+  expect(bands.length).toBeGreaterThan(0);
+  bands.forEach(b => expect(b.seq, 'band painted under the column').toBeLessThan(hatch.seq));
+});
+
+test('his E2: no joint line in the concrete under the flush column', () => {
+  const view = paint('E1');
+  expect(plumbs(view, 1, -2.4, -1.3).filter(u => Math.abs(u) < 0.01)).toEqual([]);
+});
+
+test('his E2 and E4: the deck behind the column stays behind it', () => {
+  for (const [id, lo, hi] of [['E1', 0.05, 1.95], ['E3', -1.95, -0.05]]) {
+    const view = paint(id);
+    const hatch = view.strokes.filter(s => s.clip && s.ink === SEAM_INK && s.w < 1
+      && Math.min(...s.clip.map(p => p.e)) < -1 && Math.min(...s.clip.map(p => p.u)) <= lo
+      && Math.max(...s.clip.map(p => p.u)) >= hi);
+    expect(hatch.length, `${id}: the column's cladding`).toBeGreaterThan(0);
+    const last = Math.min(...hatch.map(s => s.seq));
+    // The deck's top is 0'-0" less its drop.
+    const decks = fillsOver(view, hi, lo, -0.37).filter(f => f.seq > last);
+    expect(decks, `${id}: a deck fill laid over the column`).toEqual([]);
+  }
+});
