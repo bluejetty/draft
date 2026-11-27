@@ -465,6 +465,19 @@ jobs:
     # that named no failing test, which is the "adding specs ate it" case
     # playwright.config.js describes. 445 spec files over eight shards is
     # about 56 a shard; the two timeouts are untouched.
+    #
+    # AND TWELVE (27 Nov). The 27 Nov audit read the last 40 runs: shard 1 of
+    # eight ran into the 35-minute globalTimeout on about half of them, main
+    # and PRs alike, with NO TEST FAILING -- the same nameless red as #838.
+    # 3,705 tests over twelve is about 309 a shard against eight's ~463, so the
+    # worst shard should land near two thirds of today's 35, back inside the
+    # margin. The timeouts are untouched again, for the reason given above.
+    # The split is still by test count, not time; balancing by measured time
+    # would stop this coming back, but Playwright 1.62 has no built-in way to
+    # do it, so it would be new code and is left as its own decision.
+    #
+    # IF A BRANCH RULE NAMES REQUIRED CHECKS, it names them per shard --
+    # "playwright (1)" ... "playwright (8)" -- and 9-12 must be added there.
     # 45, AND IT SITS ABOVE playwright.config.js's 35-MINUTE globalTimeout.
     # The two numbers are one mechanism and must not be edited apart.
     #
@@ -491,7 +504,7 @@ jobs:
       # cancelled is a mystery.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
