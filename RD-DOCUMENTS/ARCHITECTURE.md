@@ -1,308 +1,294 @@
 # Draft — Architecture
 
-How the app is put together, how the DC framework works, and where data
-flows. Written for someone about to add a feature (the 3D phase included)
-who needs to know which file owns what before touching anything.
+How the app is put together and where data flows. Written for a session
+about to add a feature, which needs to know which file owns what before
+touching anything.
+
+Brought up to date on **27 Nov 2026** (main at the merge of #1149). The
+previous version described `MODEL.dc.html` as the drafting workspace; that
+stopped being true in October. If something here disagrees with the code,
+the code wins, and this file should be fixed in the same PR.
+
+## The short version
+
+- The app is **Rough Drafter**: a house-drafting program that runs entirely
+  in the browser. No server, no build step, no install. What is in the repo
+  is what runs, served as static files.
+- It wears two skins: **RUFF DRAFTER** (dark, cartoon) and **ROUGH DRAFTER**
+  (paper). Same program, same files; `palette.js` and the skin code in
+  `model/01-skin-view.js` pick the look.
+- **The editor is `MODEL.html`** plus its 22 parts in `model/`. It reads and
+  writes one drawing (a `.draft` file, JSON) through `drawing-format.js`.
+- Every other screen (LAYOUT sheets, PROJECT, EXT. FINISH, BONEYARD, the 3D
+  viewer, LANDSCAPE...) reads that same drawing and shares the same plain-JS
+  modules at the repo root, so a rule lives in one place.
+- `MODEL.dc.html` is the **old** editor, built on the DC framework. Nothing
+  in the app links to it any more, but most of the test suite's helpers still
+  open it (see Testing). Do not build features in it.
 
 ## Page map
 
-Draft is a set of static HTML pages served from the repo root — GitHub
-Pages in production, `python3 -m http.server` under test. No build step,
-no bundler: what is in the repo is what runs.
+Static HTML pages at the repo root. Each has a `<meta name="draft-build">`
+line and loads `build-id.js` first (the deploy build stamp; see Deploy).
+
+| Page | What it is |
+| --- | --- |
+| `index.html` | The entry page: the drive-thru, links into the editor, RUFF 3D, LANDSCAPE, CODES, LINKS, the DXF converter and the PDF tool (pdf.bluejetty.ca). |
+| `MODEL.html` | **The editor (model space).** About 1,600 lines of markup and styles; the script is the 22 files in `model/`. |
+| `LAYOUT.html` | Sheets: CONSTRUCTION LAYOUT, viewports at scale, titleblock, print / SAVE PDF (written by `pdf-writer.js`), DXF out, details on sheets, 3D tiles. |
+| `PROJECT.html` | PROJECT page: project info, wall/floor build-ups, the typical wall section. |
+| `EXTFINISH.html` | EXT. FINISH: the elevations with siding/stucco/brick areas, fascia finish, SPECIAL finish shapes, zoom and pan. |
+| `BONEYARD.html` | The BONEYARD frame: the house's loops per floor, beams and columns. |
+| `REALESTATEPLAN.html` | REAL ESTATE PLAN sheet: two 3D views on top, plans below. |
+| `ESTIMATES.html` | Quantities laid out for pricing (`estimates.js`). |
+| `SPECS.html` | The written specification (`spec-master.js`, `spec-pages.js`). |
+| `CODES.html`, `LINKS.html` | Building-code / span-table catalogue and favourite links. |
+| `SETTINGS.html`, `STANDARDS.html` | Keyboard profiles and company standard layers. |
+| `MODEL.dc.html` | The OLD editor (DC framework, ~23,000 lines). Kept because tests use it. Not linked from the app. |
+| `Notepad.dc.html`, `SaveBox.dc.html` | Old DC components, linked from nothing. |
+
+### Separate programs in folders
+
+Each lives in its own folder, loads the shared root modules with `../`, and
+can be deleted without breaking the 2D pages.
+
+| Folder | What it is |
+| --- | --- |
+| `viewer/` | **RUFF 3D / ROUGH 3D**: opens a `.draft` or a SAVE AS ZIP and builds the house in 3D. Two painters: a plain canvas painter with its own depth buffer (works on a PC with no graphics card, jb's case) and a WebGL painter (three.js 0.128 from `vendor/`). Section, level chips, finishes and textures, EXPORT in ten open formats (glTF/GLB, OBJ, STL, 3MF, PLY, DAE, X3D, VRML, DXF), PRINT MODEL for 3D printing. Files: `house-mesh.js` (drawing to faces), `paint-canvas.js`, `paint-webgl.js`, `viewer-camera.js`, `finish-texture.js`, `export-writers.js`, `print-model.js`, `viewer.js`. |
+| `landscape/` | **RUFF / ROUGH LANDSCAPE**: lot grading. The house is read-only; the user sets spot elevations, the program draws contours, slope arrows and warnings. Stores an optional `landscape` block inside the `.draft`, which `drawing-format.js` passes through untouched. See `landscape/README.md`. |
+| `neighborhood/` | Places several `.draft` files on one plan, display only. See `neighborhood/README.md`. |
+| `DXF/` | The DWG-to-DXF converter page the DWG card opens. |
+
+How the editor hands a drawing to these: MODEL's OPEN IN 3D and OPEN
+LANDSCAPE chips open the program in a new tab and send the drawing by
+`postMessage` (`draft-viewer-drawing`, `draft-landscape-drawing`; code in
+`model/13-suites-trim-follow.js`). The sheet pages' 3D tiles
+(`view3d-host.js`) show `viewer/` in a frame. **No 2D page loads
+`viewer/` code or three.js**; `tests/viewer.spec.js` scans every root page
+to hold that line.
+
+## MODEL.html and its parts
+
+`MODEL.html` was one ~27,000-line page until late October, when it was cut
+at its own section headings into numbered parts (jb, 24 Oct: "how can we
+reduce the MODEL.html size in a nice organized way"). The parts are plain
+`<script src>` files loaded in order, and **they share one name space**: a
+function declared in part 3 is visible in part 15. That makes a duplicate
+name anywhere a page-breaking bug, so `proto/model-parts-harness.js` checks
+for it. (Parts 1 to 17 still say "part N of 17" in their header; there are
+22.)
+
+| Part | Holds |
+| --- | --- |
+| `01-skin-view.js` | skin, zoom and pan, world-to-screen, boneyard state, photo underlay, room tag shape, ZOOM TO FILL |
+| `02-holograms-tags.js` | holograms, DEMO, super nodes, window size tags |
+| `03-plan-paint.js` | plan painting: which way is out, the bones, garage doors, the rail, the foot bar |
+| `04-levels-notes-bars.js` | level and view switchers, NOTES pad, left rail, build bar, GRUFF's sign |
+| `05-props-shelves-rail.js` | per-tool properties slot, shelves saved as suites, view rail |
+| `06-selection-pick.js` | selection, hit testing, window drag, assemblies, anchor nodes, dimensions |
+| `07-walls-magnet.js` | moving corners and walls, room corner card, the magnet, garage order |
+| `08-structure-roof.js` | STRUCTURE (beams, columns, piles), ROOF, DELETE |
+| `09-draw-move-stretch.js` | the draw gesture, ROTATE/FLIP, RESCALE, MOVE, STRETCH, BREAK ROOF |
+| `10-tracking-garage.js` | hovered nodes, tracking rays, attached garage, CONNECT AT CORNER, house off the trace, the lot |
+| `11-floor-openings-fixtures.js` | FLOOR tool, windows and doors, washrooms, fixtures and kitchens, premade designs |
+| `12-garage-storeys-stairs.js` | grade beam, rooms over garages, storeys, AUTO STAIR, framing |
+| `13-suites-trim-follow.js` | suites, + CUT, TRIM/EXTEND, MOVE and DELETE, turning the house, OPEN IN 3D / LANDSCAPE hand-off |
+| `14-promotion-tools.js` | typed lengths (TAB to angle), switches, the tool column, ASSEMBLY / UNGROUP |
+| `15-panels.js` | OBJ / PROP and the tool panels (wall, floor, line, roof, dimension, beam, fixture) |
+| `16-gestures-undo.js` | pan/zoom gestures, half-finished gestures, UNDO / REDO |
+| `17-boot-save.js` | boot, save, NEW, orders from PROJECT, the edit lease |
+| `18-draft-commands.js` | OFFSET, MIRROR, ROTATE about a point, FILLET, ARRAY |
+| `19-line-arcs.js` | arcs and circles inside LINE (and SHAPE/FLOOR) |
+| `20-wall-type-card.js` | CREATE WALL TYPE (walls built from slices) |
+| `21-details-library.js` | the DETAILS LIBRARY file and DETAIL windows |
+| `22-details-strip.js` | the DETAILS strip inside a house file |
+
+The page keeps its working drawing in a plain object (`drawing`) with
+helpers such as `selection` and `lines()`; tests reach these through
+`page.evaluate`. Painting is 2D canvas only (no three.js on this page).
+Elevations and sections are drawn by `cut-view.js`, the same painter LAYOUT
+uses, so a fix there shows on both screens.
+
+### Saving
+
+MODEL.html saves when the drafter presses SAVE (and SAVE AS / SAVE AS ZIP
+to the computer); it warns before closing with unsaved work. There is no
+autosave on this page yet (see `RULING-autosave-two-writers.md`). Two tabs
+cannot edit at once: an **edit lease** gives one tab the right to edit, and
+TAKE OVER DRAWING moves it.
+
+## Shared modules at the root
+
+Plain JS, one global each (`window.DraftSomething`), each guarded by
+`if (!window.X)` so loading twice is harmless. Nearly all are **pure** (plain
+data in, plain data out, no DOM), which is why the Node harnesses in
+`proto/` can test them with no browser. A page that uses one reaches it for
+every rule in it and keeps no copy of its own
+(`RULING-a-ported-rule-keeps-one-home.md`).
+
+**Load order matters.** Some modules capture another at load time
+(`const geo = window.DraftGeometry2D;`), so the dependency must be loaded
+first. Copy the order in `MODEL.html` when adding a page.
+
+The list below names the main ones by job. Every module opens with a header
+comment saying what it is; read that before editing.
+
+**Drawing file and storage**
 
 | File | Role |
 | --- | --- |
-| `index.html` | Entry hub: plain HTML, links into the workspaces. |
-| `MODEL.dc.html` | The drafting workspace — most application logic still lives here, though several modules have been extracted out of it (see `REFACTOR-PLAN.md`). |
-| `LAYOUT.dc.html` | Sheet layout workspace. |
-| `SETTINGS.html` | Keyboard bindings and preferences UI. |
-| `STANDARDS.html` | Company Standard Layers reference. |
-| `Notepad.dc.html`, `SaveBox.dc.html` | Small DC components; `SaveBox` is the minimal worked example of the component pattern. |
-
-Shared plain-JS modules, each loaded with an ordinary `<script src>` tag
-and each guarded by `if (!window.X)` so double-loading is harmless. That
-guard earns its keep beyond tidiness: it is what lets a stand-in module be
-displaced by the real one, simply by loading the real one first.
-
-Nearly all of these are **pure** — no DOM, no component state, plain data in
-and plain data out — which is what makes them testable in node without a
-browser (see `proto/`). The handful that reach for the platform say so.
-
-A page that adopts one of them reaches it for every rule in it and keeps no
-copy of its own: `RULING-a-ported-rule-keeps-one-home.md`, which also says
-when a second table is not a copy at all.
-
-**Platform and storage**
-
-| File | Global | Role |
-| --- | --- | --- |
-| `support.js` | `DCLogic` etc. | The DC runtime. **Generated** from `dc-runtime/src/*.ts` — do not edit by hand (header says how to rebuild). |
-| `drawing-format.js` | `DraftDrawingFormat` | Stored-drawing readers: format version + one validator per collection. |
-| `shared-file-store.js` | `SharedFileStore` | **IndexedDB.** Wrapper over db `pdf-img-mgr-shared`, store `files`. Buckets of records, each carrying a revision so a concurrent whole-bucket write is caught rather than silently clobbering. |
-| `profile-manager.js` | `DraftProfileManager` | **localStorage.** Personal-settings / company-standards packages. JSON data only; imported packages never execute code. Owns `DEFAULT_KEYBINDINGS`. |
-| `orientation-guard.js` | `DraftOrientationGuard` | **DOM.** Holds every working screen in landscape on a coarse pointer; ENTRY is exempt. |
-| `traffic-counter.js` | — | The one deliberate off-site request in the app, and the single exception `tests/no-third-party.spec.js` knows about. |
+| `drawing-format.js` | The `.draft` format: version number and a reader per collection. Every load goes through it. |
+| `shared-file-store.js` | IndexedDB wrapper (`SharedFileStore`), buckets with revision checks. The working drawing is bucket `model-drawing`. |
+| `zip-bundle.js` | SAVE AS ZIP (drawing plus folders of attached files) and opening a zip back. |
+| `backup-email.js`, `error-report.js` | BACKUP FILE email and the problem-report card; both send through jb's Cloudflare mail worker. Reports go to `REPORT_TO` in `error-report.js`. |
+| `profile-manager.js` | Personal settings / company standards packages, key bindings. |
+| `build-id.js` | The deploy build stamp and its one fresh reload. |
+| `traffic-counter.js` | The one deliberate off-site request (`tests/no-third-party.spec.js` allows only it). |
 
 **Geometry and painting**
 
-| File | Global | Role |
-| --- | --- | --- |
-| `geometry-2d.js` | `DraftGeometry2D` | Plan-view math (snap, trim, distances, roof skeleton and faces) on plain `{x,y,z}` objects — no THREE, no state. |
-| `formatters.js` | `DraftFormatters` | Architectural length parsing and formatting: the one place feet-and-inches becomes a number and back. |
-| `wall-types.js` | `DraftWallTypes` | Wall assembly definitions; `totalIn` is the full assembly width. Authoritative on wall geometry. |
-| `render-2d.js` | `DraftRender2D` | The 2D overlay painters: a canvas context and a world→screen transform in, ink out. |
-| `cut-view.js` | `DraftCutView` | The generated section / elevation painter, shared by MODEL and the LAYOUT sheets — so one fix heals both screens, and one bug shows on both. |
-| `layout-plan.js` | `DraftLayoutPlan` | Turns a saved drawing's plan-level entities into ink on a LAYOUT viewport. |
-| `titleblock.js` | `DraftTitleblock` | The company strip on a LAYOUT sheet. |
+| File | Role |
+| --- | --- |
+| `geometry-2d.js` | Plan math: snap, trim, distances, roof skeleton and roof faces. |
+| `formatters.js` | Feet-and-inches parsing and formatting (also metric suffixes). |
+| `render-2d.js` | 2D plan painters (canvas + transform + env in, ink out). |
+| `cut-view.js`, `cut-view-env.js` | The section / elevation painter, shared by MODEL, LAYOUT and EXT. FINISH. About 10,500 lines and the most-changed file; see HANDOVER for care notes. |
+| `elev-snap.js`, `cut-marks.js` | Snap points on elevations; where section marks land on the plan. |
+| `layout-plan.js`, `plan-composition.js`, `titleblock.js` | Plans on LAYOUT viewports, composed once; the titleblock. |
+| `line-styles.js`, `pen-table.js`, `layer-views.js` | Line weights/dashes, pen per CAD layer, which drawing of a level is shown. |
+| `finish-patterns.js`, `roof-patterns.js`, `finish-settings-panel.js` | Exterior finish and roofing hatches; finish thickness and texture settings. |
+| `plan-rotate.js`, `north.js` | Turning the house a quarter; construction vs true north. |
+| `dxf-reader.js`, `dxf-writer.js`, `pdf-writer.js`, `pdf-scan.js` | DXF in and out, PDF of the sheets, PDF/photo underlays. |
+| `detail-snapshot.js`, `wall-section.js`, `stair-section.js` | Detail snapshots, the typical wall section, the stair section. |
 
-**Generation — the machinery behind the bone**
+**Building parts and rules**
 
-| File | Global | Role |
-| --- | --- | --- |
-| `build-house.js` | `DraftBuildHouse` | BUILD HOUSE itself: measure the outline, return walls, floors, slab and footings as plain data. |
-| `room-grow.js` | `DraftRoomGrow` | Stamp programs in, partition walls and room claims out, plus the house-wide BEDROOM / WC numbering ladder. |
-| `auto-stair.js` | `DraftAutoStair` | Where a stair fits, derived from the outline, beam lines and stamps. |
-| `stair-rules.js` | `DraftStairRules` | The rulebook `auto-stair.js` reads, so the numbers are an office standard rather than constants in a tool. |
-| `auto-windows.js` | `DraftAutoWindows` | The office's window-siting ruleset: faces and room claims in, openings out. |
-| `auto-dims.js` | `DraftAutoDims` | AUTO DIMS string computation. |
-| `areas.js` | `DraftAreas` | Per-level and building areas for permit applications. |
+| File | Role |
+| --- | --- |
+| `wall-types.js` | Wall assemblies (`totalIn` = full width), stock and made (CREATE WALL TYPE) types. Authoritative on wall thickness. |
+| `level-assembly.js`, `level-lock.js` | What one level is made of (wall height, floor build-up); LEVEL LOCK grouping. |
+| `build-house.js`, `outline-master.js`, `traced-plans.js`, `premade-plans.js`, `starter-shape.js` | The autohouse: outline to walls, floors, slab and footings. |
+| `garage-roofs.js`, `garage-site.js`, `door-bucks.js` | Garages: roofs, detached placement, door bucks. |
+| `roof-types.js` | Roofing materials and gable corner styles. |
+| `joist-spans.js`, `beam-pockets.js`, `footing-outline.js`, `overhead-lines.js` | Joist picks by span, beam pockets, strip footing outline, what hangs over a floor. |
+| `stair-geometry.js`, `stair-place.js`, `stair-rules.js`, `auto-stair.js` | Stairs: riser math and plan parts, placing by hand, the rulebook, auto placement. |
+| `fixture-kinds.js`, `fixture-geometry.js`, `fixture-profiles.js`, `closets.js`, `washroom.js`, `washroom-presets.js`, `kitchen-presets.js` | Fixtures (cabinets, sinks, fireplace, baths...), closets, preset washrooms and kitchens. |
+| `auto-windows.js`, `auto-dims.js`, `fen-labels.js`, `schedules.js` | Window siting, AUTO DIMS, opening names, door/window schedules. |
+| `hologram.js` | HOLOGRAMS: another `.draft` shown under this one (suites compiled into one plan). |
+| `turtle-path.js`, `turtle.js`, `trim-extend.js`, `calc-engine.js` | TURTLE (direction + distance table), TRIM/EXTEND, the construction calculator. |
+| `areas.js`, `room-standards.js`, `room-numbers.js`, `electric-rules.js`, `electric-symbols.js` | Areas for permits, room minimums and numbering, electrical devices. |
+| `estimates.js`, `spec-master.js`, `spec-pages.js`, `codes-catalog.js` | Estimates, specification, codes catalogue. |
 
-**Office standards — where the drafting knowledge lives**
+**Shell, skins and guided flows**
 
-| File | Global | Role |
-| --- | --- | --- |
-| `room-standards.js` | `DraftRoomStandards` | Preferred room minimum sizes, and the ROOM TRAY list. |
-| `fen-labels.js` | `DraftFenLabels` | The fenestration naming ladder and its stock tables. Authoritative on what an opening is *called*. |
+| File | Role |
+| --- | --- |
+| `palette.js`, `shell-bars.js`, `shell-bars.css`, `model.css` | Colours for both skins; the bars every page wears. |
+| `bone-wallet.js`, `bone-sound.js` | The bone economy (prints, exports and saves cost bones) and its sound. |
+| `gruff-interview.js`, `gruff-drivethru.js`, `build-menu.js`, `lot-sizes.js`, `first-run.js`, `tour.js` | The drive-thru, house types, lot card, first run, tour. |
+| `orientation-guard.js`, `touch-device.js` | Landscape lock; the phone/tablet note and PC MODE. |
+| `view3d-host.js` | 3D tiles on sheet pages (frames `viewer/`). |
+| `support.js` | The DC runtime for the old `.dc.html` pages. Generated; do not edit. |
 
-**Guided flows and secondary pages**
+Vendored libraries live in `vendor/` (React for the old DC pages, three.js
+0.128 + OrbitControls for `viewer/`, pdf.js 3.11.174 + its matching worker,
+fonts). Nothing is fetched from a CDN. Upgrade pdf.js and its worker in the
+same commit or PDF parsing fails.
 
-| File | Global | Role |
-| --- | --- | --- |
-| `tour.js` | `DraftTour` | The guided tour's rules: plain data in, verdicts and geometry out. |
-| `gruff-interview.js` | `DraftGruffInterview` | The interview engine — the question tree Gruff works through. Deterministic: no network, no AI, seeded flavour only. |
-| `gruff-drivethru.js` | `DraftGruffDrivethru` | The drive-thru window's pure half. |
-| `bone-wallet.js` | `DraftBoneWallet` | **localStorage.** The bone economy: seed grant, cost per build, drip and cap. |
-| `project-page.js` | `DraftProjectPage` | The PROJECT page's typical wall-section detail. |
-| `pdf-scan.js` | `DraftPdfScan` | **DOM.** PDF / photo scan-and-convert for the INSERT flow. |
-
-Vendored libraries live in `vendor/` (React 18.3.1, Three.js 0.128,
-OrbitControls, pdf.js 3.11.174 + its matching worker). Nothing is fetched
-from a CDN; the app runs with no network. The pdf.js worker must always
-come from the same `pdfjs-dist` build as the main library — upgrade both
-in the same commit or PDF parsing dies with a version-mismatch error.
-
-## The DC framework
-
-A `.dc.html` page is one self-contained component: an HTML template plus a
-logic class, evaluated at load time by `support.js`.
-
-### Template
-
-The markup inside `<x-dc>…</x-dc>` is the template. It is real HTML with
-four extensions:
-
-- `{{ name }}` — interpolation. Values come from the flat object
-  `renderVals()` returns (merged over `props`). Works in text and in
-  attribute values, including inside `style="…"`.
-- `<sc-for list="{{ items }}" as="item">…</sc-for>` — repeat the body per
-  array element; bindings inside use `{{ item.field }}`.
-- `<sc-if value="{{ cond }}">…</sc-if>` — conditional render.
-- `sc-camel-*` attributes — React props that need a capital letter
-  (`sc-camel-on-mouse-down="{{ handler }}"` → `onMouseDown`), since HTML
-  attributes are case-insensitive.
-
-`hint-placeholder-count` / `hint-placeholder-val` on `sc-for`/`sc-if` size
-the skeleton placeholders drawn before the logic finishes booting; they
-have no effect after mount.
-
-### Logic
-
-The `<script type="text/x-dc" data-dc-script>` block defines exactly one
-`class Component extends DCLogic`. The runtime instantiates it and wires
-it to a React wrapper. The contract:
-
-- `this.props` — inputs, defaults declared in the script tag's
-  `data-props` JSON attribute (`default`, `tsType` per prop).
-- `this.state` + `this.setState(update, cb)` — same semantics as React
-  class state.
-- Lifecycle: `componentDidMount`, `componentDidUpdate(prevProps)`,
-  `componentWillUnmount`.
-- `renderVals()` — returns the flat object the template renders against.
-  This is the single choke point between logic and markup: the template
-  never reads state directly, so anything the markup shows must be shaped
-  here.
-
-There is no JSX and no virtual-DOM authoring in app code; React is an
-implementation detail of the runtime. Handlers are plain methods passed
-through `renderVals()` into `onClick="{{ handler }}"`-style bindings.
-
-### Adding a component
-
-Copy the `SaveBox.dc.html` shape:
-
-1. `<head>` loads `vendor/react…`, `vendor/react-dom…`, `support.js`
-   (plus any shared modules the component needs).
-2. `<x-dc>` holds the template.
-3. `<script type="text/x-dc" data-dc-script data-props="…">` holds
-   `class Component extends DCLogic` with `renderVals()`.
-
-That's the whole pattern. The page is immediately servable and testable —
-no registration, no build.
-
-## MODEL.dc.html anatomy
-
-One file, deliberately (see the split plan below before "fixing" that).
-Internal layout:
-
-- **Constants** from ~line 1170: tuning values, layer names,
-  `LEVEL_BUTTON_NAMES`, `LEVEL_LAYER_VIEWS`, joist/footing defaults.
-  Retune here, not in the code that consumes them.
-- **One `Component extends DCLogic`** containing everything, organised by
-  `// ─── Section ───` banner comments: Lifecycle, Local drawing
-  persistence, INSERT PHOTO/PDF underlays, Undo history, Init (Three.js
-  scene), STAIR workspace, Levels, Views, Mouse, the per-tool drawing
-  sections (Wall/Floor/Shape/Roof/Line/Cut/…), the 2D renderers, Snap
-  helpers, Selection/groups, Keyboard, Formatters, and `renderVals()` at
-  the end. Grep for `── ` to get the live table of contents.
-
-### State vs. instance collections
-
-React state (`this.state`) holds UI state: active tool, active level,
-phases, panel visibility, `cuts`, `dimensions` counts, etc. The heavy
-geometry collections live as **instance fields**, not state:
-`this._walls`, `this._floors`, `this._shapes`, `this._roofs`,
-`this._outlines`, `this._dimensions`, `this._vertices`, `this._groups`,
-`this._underlays`, … (see `_ensureDrawingCollections()` for the full
-list). Mutating them does not re-render; the canvas renderers read them
-directly each frame, and `setState`/`_redrawOverlay` trigger repaints.
-New persisted collections must be added in `_ensureDrawingCollections()`,
-the save serialiser, `_applyDrawingData`, **and** `drawing-format.js` —
-all four, or the field silently vanishes on some path.
-
-### Rendering
-
-Two renderers share the viewport:
-
-- A **Three.js scene** (vendored 0.128) for the model: walls, roofs, cut
-  lines/arrows, the 3D orbit views. The plan view is an orthographic
-  camera looking down.
-- A **2D overlay canvas** for plan-view ink: dimensions, underlays, roof
-  plans, stair workspace panes, snap markers.
-
-WebGL is optional: with it unavailable the overlay canvas is the only
-renderer and must still draw everything the plan needs
-(`tests/cut-fallback.spec.js` pins this for cuts). New visible features
-need a 2D representation, not just meshes.
-
-## Data flow and persistence
+## Data and persistence
 
 ```
-input (mouse/keyboard)
-  → tool handler mutates instance collections / setState
-    → _markUnsaved()
-      → autosave: drawing JSON → SharedFileStore bucket 'model-drawing'
+drafter's press in MODEL.html
+  -> tool code changes `drawing`, marks the page unsaved
+    -> SAVE: drawing JSON -> drawing-format.js -> SharedFileStore 'model-drawing'
+                          -> or a .draft / .zip file on the computer
+other pages (LAYOUT, PROJECT, EXT. FINISH, 3D...) read the same bucket or file
 ```
 
-- The saved drawing is **one JSON document** (versioned with
-  `DraftDrawingFormat.VERSION`) holding metadata and geometry only.
-  **Binaries never go in it** — no base64. Underlay files live as
-  separate records in the `underlays` bucket, keyed by underlay id;
-  the JSON holds placement metadata pointing at them.
-- The INSERT PHOTO/PDF card classifies a picked PDF page into four tiers
-  by inspecting its operator list: **VECTOR** (paths + live text, no
-  images), **HYBRID** (real vector geometry with embedded images),
-  **OCR** (a scan wearing an invisible searchable text layer — text
-  rendering mode 3 gives it away), **IMAGE** (just pixels). Vector and
-  hybrid keep their original bytes; OCR and image convert once to a
-  capped-size quality-0.8 WebP. Titleblock scale notations are read off
-  the page text where present; CALIBRATE (mark a known distance)
-  computes the scale when they aren't.
-- **Loading** goes through `_applyDrawingData`, which runs every
-  collection through its `drawing-format.js` validator: version checked
-  up front (a newer format is refused outright, never partly applied),
-  types coerced, broken entries dropped and reported, missing optional
-  fields defaulted. Legacy shapes are remapped, not discarded
-  (`LEGACY_LEVEL_ID_REMAP`). The standing rule: **old drawings open
-  forever** — format changes are additive with defaults, never breaking.
-- The validators also normalise on the way in (e.g. a cut's `dirVec` is
-  re-normalised to unit length), so downstream code can trust invariants
-  instead of re-checking them.
+- A drawing is **one JSON document**, versioned with
+  `DraftDrawingFormat.VERSION`, holding metadata and geometry only.
+  **Binaries never go in it** (no base64): underlay files are separate
+  records keyed by id, or folders inside a SAVE AS ZIP.
+- **Loading always goes through the readers in `drawing-format.js`**: a
+  newer format is refused outright, types are coerced, broken entries are
+  dropped and reported, missing fields get defaults, legacy shapes are
+  remapped. The standing rule: **old drawings open forever**. Format changes
+  add fields with defaults; they never break.
+- **A new saved field needs a reader in `drawing-format.js`**, or the reader
+  drops it on the next load and it silently vanishes. (A block the 2D pages
+  do not own, like `landscape`, is passed through untouched on purpose.)
+  `RD-DOCUMENTS/RULES-persisted-keys.md` says what the saved key names mean, and
+  `tests/persisted-format.spec.js` pins them.
+- Storage is per web address, so roughdrafter.com and ruffdrafter.com keep
+  separate drawings, settings and bone wallets in the same browser.
 
-## Levels and layers
+## Levels, shelves and holograms
 
-Levels have fixed ids: `1` FOUNDATION, `3` MAIN FL, `5` 2ND FL, `7` ROOF,
-`8` SITE; `+ ADD` levels get new ids and the standard floor layer sets.
-ROOF and SITE are whole-level contexts; floor levels carry layer-set views
-(ELECTRIC / PLAN / FLOOR / STAIR, FOUNDATION on level 1) defined by
-`LEVEL_LAYER_VIEWS`. The BONEYARD is shelf storage outside the level
-stack; the master outline lives there and propagates edits to each
-level's linked points (`srcId` links on stored vertices).
+Levels have fixed ids for the stock ones (FOUNDATION / BASEMENT, MAIN FL,
+2ND FL, ROOF, SITE); added levels get new ids. Floor levels have layer views
+(walls plan, FLOOR LAYOUT, electric...) from `layer-views.js`. The BONEYARD
+holds shelves outside the level stack; the master outline lives there and
+its edits flow to each level's linked copy (`outline-master.js`).
 
-Per-level construction data is queryable and is what a section/elevation
-generator should read: `_levelAssembly(levelId)` (wall height, joists,
-sheathing, slab, footing), `_levelFloorFt`, `_levelBorderHeights`
-(datum-aware stacked heights), `_foundationHeights`, and roof geometry
-validated with per-edge `eave|gable`, clamped `overhang` and `pitch`.
+A shelf can be saved as a SUITE, a SHELF or a **HOLOGRAM** (another `.draft`
+shown on a level or the SITE plan). A plan made only of holograms is a
+supported case (jb compiles suites into one master plan this way), and the
+elevations, rail seats and LAYOUT draw them.
 
-## The BONEYARD → OUTLINE → BUILD HOUSE flow
+## Deploy
 
-The footprint pipeline that most other geometry hangs off:
-
-1. **OUTLINE** — the never-printing footprint guide (`OUTLINE_LAYER`).
-   The first outline completed on the active BONEYARD shelf becomes that
-   shelf's **master** and copies to every level. Master edits flow to
-   each level copy's common points (via `srcId` links); per-level local
-   adjustments survive later master edits. Additional outlines stay
-   local to their level.
-2. **BONEYARD shelves** — shelf storage outside the level stack. Each
-   shelf keeps its own master; shelves are isolated from each other and
-   from levels. Marks placed on the master (FENESTRATION on the
-   BONEYARD) annotate the footprint for generation.
-3. **BUILD HOUSE** — reads the master outline + marks + level
-   assemblies and generates the building: exterior walls per level,
-   slab/foundation, doors and windows cut where marked, roof from the
-   footprint plus overhang, and the auto-dimension stacks on every level
-   it builds. Re-running regenerates instead of doubling. Attached
-   garages marked on the outline generate their own walls, doors, and
-   grade beam.
-
-Auto-dims (`_placeAutoDims`) reads the same outlines/roofs and strings
-each footprint's own stack per side; dimension ends carry `srcId` links
-so master edits move the strings with the footprint.
+- `main` is what is live. A merge to `main` deploys; there is no staging
+  site.
+- **roughdrafter.com** is GitHub Pages. `.github/workflows/pages.yml` copies
+  the site, stamps the commit id into every page and script address
+  (`tools/stamp-build.js`), and publishes the copy, so a cached old page
+  can't run new scripts. The stamp only happens when the repo's Pages
+  source is set to "GitHub Actions"; otherwise the workflow stops green and
+  Pages serves `main` as-is. GitHub Pages can time out and cancel a
+  deploy, so a merge occasionally needs the deploy re-run.
+- **ruffdrafter.com** is a Cloudflare Pages project ("ruffdrafter") that
+  builds from `main` with the same stamp script. Its build command lives in
+  the Cloudflare dashboard, not the repo, so if `tools/stamp-build.js`
+  changes its arguments that command must change too.
+- The repo itself is never stamped: locally and under tests every page says
+  `dev`.
 
 ## Testing
 
-Playwright drives the real pages over a plain HTTP server (config in
-`playwright.config.js`; the suite starts `python3 -m http.server 4173`
-itself). One worker, deliberately serial. See the README for setup.
+Two kinds of check, both in `.github/workflows/test.yml`:
 
-Conventions the suite relies on:
+1. **Node harnesses and mutation gates** (`proto/`): fast, no browser.
+   `proto/*-harness.js` test the pure modules; `proto/*-mutants.js` break a
+   line on purpose and prove a spec notices. CI runs them in the
+   `harnesses` job. See `RUNNING-THE-HARNESSES.md`.
+2. **Playwright** (`tests/*.spec.js`): drives the real pages in Chromium
+   over a plain HTTP server. About 670 spec files and 3,700 tests (27 Nov),
+   growing by roughly 250 to 300 a week. Serial on one worker; CI splits it
+   into parallel shards. The number of shards is set only in the `matrix`
+   in `test.yml` (the run step reads it back), so change it there.
 
-- **Assert against the saved drawing**, not the DOM: `h.savedDrawing()`
-  reads the JSON back out of the `model-drawing` bucket, so a test proves
-  what persists, not what happened to render.
-- `h.waitForSaved()` requires SAVED to hold across two looks, because an
-  edit flips the status a render late and a single early poll can read
-  the previous save.
-- Real interactions: `h.clickWorld()` converts world feet to client
-  pixels and clicks; drags use real mouse moves. Pixel-level checks read
-  the overlay canvas (`h.overlayPixels` / `h.countColor`).
-- WebGL-off coverage: `h.openModel(page, { webgl: false })` boots the 2D
-  fallback path.
+Things a new session gets wrong:
 
-Every PR lands with the full suite green. Tests are the spec: the header
-comment of each `*.spec.js` states the behaviour contract in prose.
+- **`helpers.openModel` opens the OLD page** (`MODEL.dc.html`). About 140
+  spec files only ever test through it. To test the real editor, seed a
+  drawing into the `model-drawing` bucket and open `/MODEL.html` (see
+  `tests/stack-cycle.spec.js` or `tests/model-tool-select.spec.js`, and
+  `h.planFrame(page).at(x, z)` for world-to-screen).
+- **Assert against the saved drawing**, not the DOM.
+- **Never run with `--workers=2`**; the config refuses it, because parallel
+  workers on one machine wipe each other's storage. Shard instead.
+- Each spec opens with a prose header saying what it pins, usually quoting
+  jb. Read it before changing a test.
 
-## The 3D phase — ground rules already decided
+## The old DC framework (MODEL.dc.html only)
 
-- Three.js is already vendored and initialised; 3D work extends the
-  existing scene, it does not introduce a new stack.
-- **Extend `drawing-format.js`** for anything new that persists — no
-  separate schema, and old 2D drawings must open forever.
-- Binaries stay in IndexedDB buckets; the drawing JSON stays
-  metadata-only.
-- **No structural reorganisation of MODEL.dc.html until #116 lands.**
-  The eventual split (tools, panels, renderers into separate files) is
-  planned, not started — plan against the `── Section ──` banners, which
-  are the natural seams.
-- Small PRs, each with tests, suite green before merge.
+Kept here for whoever has to touch the old page or the two orphan
+components. A `.dc.html` page is one component: an HTML template inside
+`<x-dc>…</x-dc>` (with `{{ name }}` interpolation, `<sc-for>`, `<sc-if>` and
+`sc-camel-*` attributes) plus one `class Component extends DCLogic` in a
+`<script type="text/x-dc" data-dc-script>` block, run by `support.js`.
+`renderVals()` is the only bridge from logic to markup. Geometry lives in
+instance fields (`this._walls`, `this._roofs`...), not React state; a new
+saved collection there had to be added in four places
+(`_ensureDrawingCollections`, the serialiser, `_applyDrawingData`,
+`drawing-format.js`). New work does not go here.
