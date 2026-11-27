@@ -44,7 +44,8 @@ const sinkNow = page => page.evaluate(() => {
 const card = page => page.locator('#attach-ask');
 
 async function pressSink(page, at) {
-  await page.locator('[data-fixture-kind="sinkbase"]').click();
+  // THE SINK CHIP: a press arms the SINK CABINET (jb, 27 Nov 2026).
+  await page.locator('[data-fixture-pop="sink"]').click();
   // On the room side of wall a (z > 0), a foot off it.
   const [x, y] = at(9, 1);
   await page.mouse.move(x, y);

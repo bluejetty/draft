@@ -48,8 +48,8 @@ if (!window.DraftFixtureKinds) {
   const FIXTURE_KINDS = [
     { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true, uppers: true,
       note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
-    { id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false, uppers: true,
-      note: 'Kitchen sink — click it onto a wall (usually over a cabinet run).' },
+    { id: 'sink',    label: 'SINK APRON', group: 'KITCHEN', widthFt: 2.5,  depthFt: 2,      casework: false, run: false, uppers: true,
+      note: 'Apron-front (farmhouse) sink, no cabinet under it — click it onto a wall. SINK CABINET is the drop-in sink in a base cabinet.' },
     { id: 'fridge',  label: 'FRIDGE',  group: 'KITCHEN',  widthFt: 3,      depthFt: 2.5,    casework: false, run: false, uppers: true,
       note: 'Refrigerator box — click it onto a wall.' },
     { id: 'stove',   label: 'STOVE',   group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2.17,   casework: false, run: false, uppers: true,
@@ -63,8 +63,12 @@ if (!window.DraftFixtureKinds) {
     // MOVIE'S KITCHEN PIECES (KITCHENITEMS1/2.DXF, 9 Oct): each placed on its
     // own, one click onto a wall; where two touch they read as one counter
     // with a light line at the joint.
-    { id: 'sinkbase', label: 'SINK BASE', group: 'KITCHEN', widthFt: 4, depthFt: 2, casework: false, run: false, uppers: true,
-      note: '48" sink base, two doors and a double bowl — click it onto a wall.' },
+    // SINK CABINET (jb, 27 Nov 2026: "make it similar to a CABINET but show a
+    // sink hole with a sink"): the old SINK BASE, its id kept so saved files
+    // open, now named for what it is and drawn as a cabinet with a drop-in
+    // sink. OBJ / PROP's SINK row turns a CABINET into one and back.
+    { id: 'sinkbase', label: 'SINK CABINET', group: 'KITCHEN', widthFt: 4, depthFt: 2, casework: false, run: false, uppers: true,
+      note: '48" sink cabinet, two doors and a drop-in double sink — click it onto a wall.' },
     { id: 'drawerbase', label: 'DRAWERS', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false, uppers: true,
       note: '24" drawer base, four drawers — click it onto a wall.' },
     { id: 'doorbase', label: 'DOOR BASE', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false, uppers: true,
@@ -105,6 +109,14 @@ if (!window.DraftFixtureKinds) {
       note: 'Washer box — click it onto a wall.' },
     { id: 'dryer',   label: 'DRYER',   group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
       note: 'Dryer box — click it onto a wall.' },
+    // SINK LAUNDRY and SINK MOP (jb, 27 Nov 2026, named SINK first like SINK
+    // CABINET and SINK APRON): a freestanding laundry tub, 24" x 22", one
+    // deep bowl; and a janitor's mop sink, a 24" square basin at the floor
+    // inside a curb.
+    { id: 'laundrysink', label: 'SINK LAUNDRY', group: 'LAUNDRY', widthFt: 2, depthFt: 22 / 12, casework: false, run: false,
+      note: 'Laundry tub, 24" x 22", one deep bowl — click it onto a wall.' },
+    { id: 'mopsink', label: 'SINK MOP', group: 'LAUNDRY', widthFt: 2, depthFt: 2, casework: false, run: false,
+      note: 'Mop sink, a 24" x 24" floor basin with a curb — click it onto a wall.' },
     { id: 'closet',  label: 'CLOSET',  group: 'BEDROOM',  widthFt: 4,      depthFt: CLOSET_INSIDE_DEPTH_FT + CLOSET_WALL_FT, casework: false, run: true,
       note: 'Closet — two clicks along a wall set the width; 2\'-1" inside with 2x4 closet walls, rod + shelf, and the door picked from the DD/D ladder.' },
   ];
@@ -142,10 +154,18 @@ if (!window.DraftFixtureKinds) {
   const hasUppers = fixture => takesUppers(fixture)
     && (typeof fixture === 'string' || fixture?.uppers !== false);
   const kindsInGroup = group => FIXTURE_KINDS.filter(kind => kind.group === group);
+  // ONE SINK BUTTON (jb, 27 Nov 2026: "lets have one SINK button but when
+  // user scolls over offers the 4 buttons (or more)", "make the SINK CABINET
+  // the default"): the sinks share one chip on the BUILD pane, the first id
+  // here is what a press on the chip itself arms, and the rest pop up beside
+  // it on hover. A sink added to this list joins the pop-up by itself, and
+  // OBJ / PROP's SINK TYPE offers the same list.
+  const SINK_KIND_IDS = ['sinkbase', 'sink', 'laundrysink', 'mopsink'];
 
   window.DraftFixtureKinds = Object.freeze({
     FIXTURE_KINDS: Object.freeze(FIXTURE_KINDS.map(kind => Object.freeze({ ...kind }))),
     STORABLE_KIND_IDS: Object.freeze(STORABLE_KIND_IDS),
+    SINK_KIND_IDS: Object.freeze(SINK_KIND_IDS),
     GROUPS: Object.freeze(GROUPS),
     kindFor,
     isKind,

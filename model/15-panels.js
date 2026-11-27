@@ -35,6 +35,88 @@
     // the FIXTURE tool places from, and FIXTURE is a BUILD key.
     const home = leftPane(paneForBlock('fixtures')) || slot;
 
+    // ── THE SINK CHIP AND ITS POP-UP ───────────────────────────────────
+    //
+    // jb, 27 Nov 2026: "lets have one SINK button but when user scolls over
+    // offers the 4 buttons (or more)" and "make the SINK CABINET the default
+    // it they don't select any of the 4". The FLOOR key's pop-up (model/14)
+    // is the pattern: hovering the chip shows the sinks beside it; it goes
+    // when the pointer leaves the chip and the pop-up both, on Esc, or on a
+    // press anywhere else. A press on the chip itself arms the SINK CABINET;
+    // a tablet's press does that AND puts the pop-up up.
+    const SINK_IDS = K.SINK_KIND_IDS || [];
+    let sinkChipLaid = false;
+    const sinkPop = document.createElement('div');
+    sinkPop.id = 'sink-pop';
+    sinkPop.dataset.sinkPop = '';
+    sinkPop.setAttribute('role', 'menu');
+    sinkPop.setAttribute('aria-label', 'Sinks');
+    sinkPop.hidden = true;
+    document.body.append(sinkPop);
+    let sinkPopTimer = null;
+    let sinkChipEl = null;
+    const armFixtureKind = id => {
+      if (selectPicking) { pickKind('fixture', id); return; }
+      fixtureKindId = id;
+      washroomPreset = null;
+      kitchenPreset = null;
+      fixtureRunStart = null;
+      setTool('fixture');
+      syncFixturePanel();
+    };
+    const closeSinkPop = () => { clearTimeout(sinkPopTimer); sinkPop.hidden = true; };
+    const leaveSinkPop = () => { clearTimeout(sinkPopTimer); sinkPopTimer = setTimeout(closeSinkPop, 250); };
+    const openSinkPop = () => {
+      clearTimeout(sinkPopTimer);
+      if (!sinkChipEl || sinkChipEl.disabled || !sinkChipEl.isConnected) return;
+      sinkPop.hidden = false;
+      // BESIDE THE CHIP, toward the drawing, where it covers no other chip.
+      const r = sinkChipEl.getBoundingClientRect();
+      const w = sinkPop.offsetWidth, hh = sinkPop.offsetHeight;
+      const right = r.right + 4 + w <= window.innerWidth - 4;
+      sinkPop.style.left = `${Math.max(4, right ? r.right + 4 : r.left - w - 4)}px`;
+      sinkPop.style.top = `${Math.max(4, Math.min(r.top + r.height / 2 - hh / 2, window.innerHeight - hh - 4))}px`;
+    };
+    SINK_IDS.forEach(id => {
+      const kind = K.kindFor(id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.fixtureKind = id;
+      btn.setAttribute('role', 'menuitem');
+      btn.textContent = kind.label;
+      btn.title = kind.note;
+      btn.addEventListener('click', () => { closeSinkPop(); armFixtureKind(id); });
+      sinkPop.append(btn);
+    });
+    sinkPop.addEventListener('pointerenter', () => clearTimeout(sinkPopTimer));
+    sinkPop.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') leaveSinkPop(); });
+    window.addEventListener('pointerdown', e => {
+      if (sinkPop.hidden || sinkPop.contains(e.target) || (sinkChipEl && sinkChipEl.contains(e.target))) return;
+      closeSinkPop();
+    }, true);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !sinkPop.hidden) { closeSinkPop(); e.stopPropagation(); }
+    }, true);
+    const sinkChip = () => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.fixturePop = 'sink';
+      btn.setAttribute('aria-haspopup', 'menu');
+      btn.textContent = 'SINK';
+      btn.title = `SINK — press for a ${K.kindFor(SINK_IDS[0]).label}, or hover for ${SINK_IDS.map(id => K.kindFor(id).label).join(', ')}`;
+      btn.addEventListener('pointerenter', e => { if (e.pointerType !== 'touch') openSinkPop(); });
+      btn.addEventListener('pointerleave', e => {
+        if (e.pointerType === 'touch') return;
+        if (e.relatedTarget instanceof Element && sinkPop.contains(e.relatedTarget)) return;
+        leaveSinkPop();
+      });
+      btn.addEventListener('pointerup', e => { if (e.pointerType === 'touch') setTimeout(openSinkPop, 0); });
+      btn.addEventListener('click', () => armFixtureKind(SINK_IDS[0]));
+      sinkChipEl = btn;
+      return btn;
+    };
+
     K.GROUPS.forEach(group => {
       const box = document.createElement('div');
       box.dataset.toolGroup = `fixture-${group.toLowerCase()}`;
@@ -63,6 +145,12 @@
       // stays in the shared catalogue, where MODEL.dc.html still builds it;
       // this page only ever answered it with "not on this page yet".
       K.kindsInGroup(group).filter(kind => kind.preset !== true).forEach(kind => {
+        // THE SINKS ARE ONE CHIP: the first sink met lays the SINK chip, the
+        // rest are its pop-up's (sinkChip).
+        if (SINK_IDS.includes(kind.id)) {
+          if (!sinkChipLaid) { sinkChipLaid = true; row.append(sinkChip()); }
+          return;
+        }
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `sel-chip${kind.preset ? ' assembled' : ''}`;
@@ -147,6 +235,19 @@
           String(activeTool === 'fixture' && !washroomPreset && !kitchenPreset && btn.dataset.fixtureKind === fixtureKindId));
         btn.disabled = !on;
       });
+      // THE SINK CHIP IS LIT for whichever sink is armed, and so is that
+      // sink in its pop-up.
+      const sinkArmed = activeTool === 'fixture' && !washroomPreset && !kitchenPreset && SINK_IDS.includes(fixtureKindId);
+      slot.querySelectorAll('[data-fixture-pop="sink"]').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(sinkArmed));
+        btn.disabled = !on;
+      });
+      sinkPop.querySelectorAll('[data-fixture-kind]').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(sinkArmed && btn.dataset.fixtureKind === fixtureKindId));
+        btn.classList.toggle('lit', sinkArmed && btn.dataset.fixtureKind === fixtureKindId);
+        btn.disabled = !on;
+      });
+      if (!on) closeSinkPop();
       slot.querySelectorAll('[data-washroom]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(activeTool === 'fixture' && btn.dataset.washroom === washroomPreset));
@@ -3911,7 +4012,39 @@
       commitFixtureEdits(items.map(f => ({ item: f, patch: { depth: feet } })));
       return null;
     }));
-    // A SINK BASE'S BOWLS (Movie, 24 Oct: "add double sink right bowl
+    // A SINK IN THE CABINET OR NOT (jb, 27 Nov 2026: "allow the user to
+    // either ADD a sink to a CABINET or REMOVE a sink from a SINK CABINET").
+    // The two are one piece with the sink on or off: the kind changes in
+    // place, same width, depth and spot on the wall, one UNDO.
+    const sinkOn = items.every(f => f.kind === 'sinkbase'), sinkOff = items.every(f => f.kind === 'cabinet');
+    if (sinkOn || sinkOff) {
+      const row = document.createElement('div');
+      row.className = 'chip-row';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.sinkToggle = sinkOn ? 'remove' : 'add';
+      btn.textContent = sinkOn ? 'REMOVE SINK' : 'ADD SINK';
+      btn.title = sinkOn ? 'Take the sink out: this becomes a plain CABINET (UNDO puts it back)'
+        : 'Drop a sink into this cabinet: it becomes a SINK CABINET (UNDO takes it out)';
+      btn.addEventListener('click', () => commitFixtureEdits(items.map(f => ({ item: f,
+        patch: sinkOn ? { kind: 'cabinet', bowls: null } : { kind: 'sinkbase' } }))));
+      row.append(btn);
+      box.append(row);
+    }
+    // WHICH SINK (jb, 27 Nov 2026: "allow them to change it later in OBJ
+    // PROP"): any sink can be any other, in place -- same width, depth and
+    // spot on the wall. Only the drop-in and the apron sink have BOWLS, so
+    // the others shed theirs.
+    const SINKS = window.DraftFixtureKinds?.SINK_KIND_IDS || [];
+    if (SINKS.length && items.every(f => SINKS.includes(f.kind))) {
+      box.append(propSelect('SINK TYPE', SINKS.map(id => [id, fixtureLabel({ kind: id })]),
+        agreedOn(items, f => f.kind), id => {
+          commitFixtureEdits(items.map(f => ({ item: f,
+            patch: { kind: id, ...(id === 'sink' || id === 'sinkbase' ? {} : { bowls: null }) } })));
+        }));
+    }
+    // A SINK CABINET'S BOWLS (Movie, 24 Oct: "add double sink right bowl
     // option"): one bowl, two equal, or two with the bigger, 60/40, on the
     // right. The equal double is what a sink base always was.
     const R2 = window.DraftRender2D;
