@@ -21,14 +21,18 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
   { file: 'model/08-structure-roof.js',
-    name: 'THE BUG THAT WAS WAITING: the page allocator, whose ids are strings',
+    // RE-AIMED 27 Nov 2026. drawing-format.js now reads the page's own
+    // `column-7` as the next whole number (pasted-structure-ids: jb's pasted
+    // posts were lost that way), so that string no longer loses the work.
+    // Any other string still does, and the trap this guards is the same one.
+    name: 'THE BUG THAT WAS WAITING: an id that is a string',
     find: '      id: newStructureId(drawing.columns),',
-    with: "      id: newDrawingItemId('column'),",
+    with: "      id: 'c' + newStructureId(drawing.columns),",
     test: 'a placed column survives save and reload' },
   { file: 'model/08-structure-roof.js',
     name: 'the beam takes a string id too',
     find: '      id: newStructureId(drawing.beams),',
-    with: "      id: newDrawingItemId('beam'),",
+    with: "      id: 'b' + newStructureId(drawing.beams),",
     test: 'a placed beam survives save and reload' },
   { file: 'model/08-structure-roof.js',
     name: 'the allocator never rises, so every column after the first is dropped',

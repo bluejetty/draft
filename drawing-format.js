@@ -1291,6 +1291,43 @@ if (!window.DraftDrawingFormat) {
       return { id, point: centre, levelId: nodeLevelId, view };
     }).filter(Boolean);
   };
+  // A PASTED BEAM OR COLUMN CARRIED THE STRING ID `beam-159` (jb, 27 Nov
+  // 2026). PASTE gave beams and columns the page's `kind-N` id, which this
+  // file never read: the copy drew while the page was open and was gone on
+  // the next load, kept in the file and drawn nowhere -- so jb pasted the
+  // main floor's beam and posts again, and again. TIMBERHOUSE carried six
+  // posts and three beams that way, every one a twin of another. A `kind-N`
+  // id is now read as a new whole number after the list's highest. Rescued
+  // records are the paste's, so two things more follow from that:
+  //   - one filed on 'foundation' on a storey (a paste made before #1118)
+  //     goes to that storey's walls plan, where the paste lands today;
+  //     only FOUNDATION (level 1) has a foundation view;
+  //   - one landing exactly on a record already kept (same level, view and
+  //     points) is the stacked twin and is left out, as the page's PASTE
+  //     now skips it. It stays in the file, raw, as any refused record does.
+  const PASTED_ID = /^[a-z]+-\d+$/i;
+  const rescueStructure = (raw, readOne, sameSpot) => {
+    let next = raw.reduce((top, item) => {
+      const n = Number(item?.id);
+      return safeId(n) && n > top ? n : top;
+    }, 0) + 1;
+    const mapped = raw.map(item => (PASTED_ID.test(String(item?.id ?? '')) ? undefined : readOne(item, null)));
+    const kept = mapped.filter(Boolean);
+    return mapped.map((done, index) => {
+      if (done !== undefined) return done;
+      const item = raw[index];
+      const view = item?.view === 'foundation' && Number(item?.levelId) !== 1 ? 'plan' : item?.view;
+      const read = readOne({ ...item, view }, next);
+      next += 1;
+      if (!read || kept.some(other => sameSpot(other, read))) return null;
+      kept.push(read);
+      return read;
+    });
+  };
+  const SAME_SPOT_FT = 0.01;
+  const samePoint = (a, b) => Math.hypot(a.x - b.x, a.z - b.z) < SAME_SPOT_FT;
+  const sameFiling = (a, b) => Number(a.levelId) === Number(b.levelId) && a.view === b.view;
+
   // A typed inch value inside [min, max], or null. Not rounded: 5 1/2 stays.
   const inchesIn = (value, min, max) => {
     const n = Number(value);
@@ -1299,8 +1336,8 @@ if (!window.DraftDrawingFormat) {
   const columns = (rawColumns, levelIds, env = {}) => {
     const seen = new Set();
     const raw = Array.isArray(rawColumns) ? rawColumns : [];
-    return collectRefusals(raw, raw.map(column => {
-      const id = Number(column?.id);
+    return collectRefusals(raw, rescueStructure(raw, (column, rescuedId) => {
+      const id = rescuedId != null ? rescuedId : Number(column?.id);
       const centre = point(column?.point);
       const columnLevelId = levelId(column?.levelId, levelIds);
       const view = oneOf(column?.view, ['plan', 'floor', 'foundation'], null);
@@ -1360,7 +1397,7 @@ if (!window.DraftDrawingFormat) {
         ...(['standoff', 'plate'].includes(column?.postBase) ? { postBase: column.postBase } : {}),
         layer: 'S-COL-FOOTING',
       };
-    }), env.drops).filter(Boolean);
+    }, (a, b) => sameFiling(a, b) && samePoint(a.point, b.point)), env.drops).filter(Boolean);
   };
 
   // A beam is one span between two supports, FLUSH (top flush with the joists,
@@ -1369,8 +1406,8 @@ if (!window.DraftDrawingFormat) {
   const beams = (rawBeams, levelIds, env = {}) => {
     const seen = new Set();
     const raw = Array.isArray(rawBeams) ? rawBeams : [];
-    return collectRefusals(raw, raw.map(beam => {
-      const id = Number(beam?.id);
+    return collectRefusals(raw, rescueStructure(raw, (beam, rescuedId) => {
+      const id = rescuedId != null ? rescuedId : Number(beam?.id);
       const start = point(beam?.start);
       const end = point(beam?.end);
       const beamLevelId = levelId(beam?.levelId, levelIds);
@@ -1400,7 +1437,8 @@ if (!window.DraftDrawingFormat) {
           ? { mark: beam.mark.trim().slice(0, 80) } : {}),
         layer: 'S-BEAM',
       };
-    }), env.drops).filter(Boolean);
+    }, (a, b) => sameFiling(a, b) && ((samePoint(a.start, b.start) && samePoint(a.end, b.end))
+      || (samePoint(a.start, b.end) && samePoint(a.end, b.start)))), env.drops).filter(Boolean);
   };
 
   // A stair placed from the top nosing: start is the upper-floor nosing at
