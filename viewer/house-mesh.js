@@ -37,7 +37,7 @@
     roof: [96, 92, 90],
     gable: [226, 220, 205],
     fascia: [238, 236, 228],
-    glass: [138, 178, 204],
+    glass: [168, 212, 240],   // light blue, and see-through on screen
     door: [150, 106, 72],
     overhead: [232, 232, 226],
     deck: [176, 150, 116],

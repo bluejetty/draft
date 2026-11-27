@@ -34,7 +34,7 @@
     // with a SECTION on, the INSIDE of every solid is drawn flat in the cut
     // colour -- what you see through a cut is the wall's own body, poché,
     // the same rule the plain painter follows.
-    let mesh = null, thin = null, back = null, edges = null;
+    let mesh = null, thin = null, glass = null, back = null, edges = null;
     const lambert = side => new THREE.MeshLambertMaterial({
       vertexColors: true, side, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
     });
@@ -43,10 +43,11 @@
 
     function setFaces(faces) {
       const M = window.DraftHouseMesh;
-      [mesh, thin, back, edges].forEach(o => { if (o) { scene.remove(o); o.geometry.dispose(); } });
-      const solid = { pos: [], col: [] }, sheet = { pos: [], col: [] }, edgePos = [];
+      [mesh, thin, glass, back, edges].forEach(o => { if (o) { scene.remove(o); o.geometry.dispose(); } });
+      const solid = { pos: [], col: [] }, sheet = { pos: [], col: [] }, clear = { pos: [], col: [] }, edgePos = [];
       faces.forEach(f => {
-        const into = f.twoSided ? sheet : solid;
+        // Glass is see-through: its own mesh, drawn last, blended.
+        const into = f.kind === 'glass' ? clear : f.twoSided ? sheet : solid;
         const tris = M.triangulate(f.pts);
         const [r, g, b] = f.colour.map(v => v / 255);
         tris.forEach(t => t.forEach(i => { const p = f.pts[i]; into.pos.push(p.x, p.y, p.z); into.col.push(r, g, b); }));
@@ -67,9 +68,13 @@
       };
       mesh = new THREE.Mesh(geoOf(solid), lambert(THREE.FrontSide));
       thin = new THREE.Mesh(geoOf(sheet), lambert(THREE.DoubleSide));
+      glass = new THREE.Mesh(geoOf(clear), new THREE.MeshLambertMaterial({
+        vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.35, depthWrite: false,
+      }));
+      glass.renderOrder = 2;
       back = new THREE.Mesh(mesh.geometry.clone(), backMat);
       back.visible = false;
-      scene.add(mesh, thin, back);
+      scene.add(mesh, thin, glass, back);
       const eg = new THREE.BufferGeometry();
       eg.setAttribute('position', new THREE.Float32BufferAttribute(edgePos, 3));
       edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }));
@@ -102,11 +107,12 @@
       // the viewer's shoulder, so the face turned toward you is never black.
       sun.position.set(eye.x - cam.dist * 0.4, eye.y + cam.dist, eye.z + cam.dist * 0.3);
       renderer.render(scene, camera);
-      return (mesh ? mesh.geometry.attributes.position.count / 3 : 0) + (thin ? thin.geometry.attributes.position.count / 3 : 0);
+      return (mesh ? mesh.geometry.attributes.position.count / 3 : 0) + (thin ? thin.geometry.attributes.position.count / 3 : 0)
+        + (glass ? glass.geometry.attributes.position.count / 3 : 0);
     }
 
     function dispose() {
-      [mesh, thin, back, edges].forEach(o => { if (o) o.geometry.dispose(); });
+      [mesh, thin, glass, back, edges].forEach(o => { if (o) o.geometry.dispose(); });
       renderer.dispose();
       if (renderer.forceContextLoss) renderer.forceContextLoss();
     }

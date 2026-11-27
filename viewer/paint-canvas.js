@@ -35,6 +35,7 @@
     function setFaces(faces) {
       const M = window.DraftHouseMesh;
       tris = [];
+      const late = [];   // glass: drawn after every solid, blended over it
       faces.forEach(f => {
         const n = M.normalOf(f.pts);
         const count = f.pts.length;
@@ -50,15 +51,17 @@
           if (d === count - 1) return !seam(count - 1);
           return false;
         };
+        const clear = f.kind === 'glass';
         M.triangulate(f.pts).forEach(([i, j, k]) => {
           const a = f.pts[i], b = f.pts[j], c = f.pts[k];
-          tris.push({
-            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour,
+          (clear ? late : tris).push({
+            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour, clear,
             edges: [real(i, j), real(j, k), real(k, i)],
             mid: { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3, z: (a.z + b.z + c.z) / 3 },
           });
         });
       });
+      tris.push(...late);
     }
 
     function buffers(W, H) {
@@ -138,7 +141,17 @@
           for (let x = x0; x <= x1; x += 1, idx += 1) {
             if (w0 >= EPS && w1 >= EPS && w2 >= EPS) {
               const iz = w0 * A.iz + w1 * B.iz + w2 * C.iz;
-              if (iz > depth[idx]) { depth[idx] = iz; pix[idx] = word; }
+              if (iz > depth[idx]) {
+                if (!t.clear) { depth[idx] = iz; pix[idx] = word; } else {
+                  // SEE-THROUGH: a third glass over what is behind it, and
+                  // no depth kept, so the room beyond still shows.
+                  const v = pix[idx];
+                  const rr = Math.round((v & 255) * 0.65 + r * 0.35);
+                  const gg = Math.round(((v >>> 8) & 255) * 0.65 + g * 0.35);
+                  const bl = Math.round(((v >>> 16) & 255) * 0.65 + b * 0.35);
+                  pix[idx] = ((255 << 24) | (bl << 16) | (gg << 8) | rr) >>> 0;
+                }
+              }
             }
             w0 += e0dx; w1 += e1dx; w2 += e2dx;
           }
