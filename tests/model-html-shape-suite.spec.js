@@ -139,6 +139,8 @@ test('the Real Estate area box lists the suite under the floor it is on', async 
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: h.STORAGE_BUCKET, saved });
   await page.goto('/REALESTATEPLAN.html');
+  // The area box starts off (jb, 27 Nov 2026: "no FLOOR AREAS"); a tick puts it on.
+  await page.locator('.seat', { hasText: 'FLOOR AREAS' }).locator('input').check();
   await page.waitForFunction(() => Array.isArray(window.__rpAreas) && window.__rpAreas.length > 0,
     null, { timeout: 15000 });
   const rows = await page.evaluate(() => window.__rpAreas);
