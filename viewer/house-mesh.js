@@ -1392,13 +1392,16 @@
   // roof covers the line. `inward` is the unit plan normal into the roof: the
   // read is taken a hair inside, since a point exactly on a face's boundary
   // can fall outside every face.
-  function surfaceAlong(roof, list, eave, a, b, inward, G, keep) {
+  // `alsoLists` are other roofs' faces whose corners and edges become
+  // stations too, so a neighbour's ridge or valley crossing the line is read
+  // exactly rather than at the nearest foot.
+  function surfaceAlong(roof, list, eave, a, b, inward, G, keep, alsoLists) {
     const dx = b.x - a.x, dz = b.z - a.z;
     const len = Math.hypot(dx, dz);
     if (!(len > 1e-6)) return [];
     const ts = new Set([0, 1]);
     const addT = t => { if (t > -1e-9 && t < 1 + 1e-9) ts.add(Math.min(1, Math.max(0, Math.round(t * 1e7) / 1e7))); };
-    list.forEach(face => {
+    [list, ...(alsoLists || [])].forEach(faces => (faces || []).forEach(face => {
       const poly = face.points || [];
       poly.forEach((p, i) => {
         // A corner on (or within an inch of) the line.
@@ -1414,7 +1417,7 @@
         const u = ((p.x - a.x) * dz - (p.z - a.z) * dx) / den;
         if (u > -1e-9 && u < 1 + 1e-9) addT(tt);
       });
-    });
+    }));
     // Every foot as well: the surface is flat between the breakpoints, so
     // these add nothing to the shape, but they let `keep` cut a run where
     // another roof takes over part way along.
@@ -1470,6 +1473,50 @@
     }
   }
 
+  // Stations {t, top, foot} along a line, cut into the stretches where the
+  // top stands above the foot. Both are straight between stations, so a
+  // stretch starts and ends at the exact crossing, not the nearest station.
+  function openPieces(st) {
+    const OPEN = 1e-4;
+    const pieces = [];
+    let cur = [];
+    st.forEach((s, k) => {
+      const open = s.top - s.foot > OPEN;
+      const prev = st[k - 1];
+      if (prev && (prev.top - prev.foot > OPEN) !== open) {
+        const d0 = prev.top - prev.foot, d1 = s.top - s.foot;
+        const f = Math.min(1, Math.max(0, d0 / (d0 - d1)));
+        const y = prev.top + (s.top - prev.top) * f;
+        cur.push({ t: prev.t + (s.t - prev.t) * f, top: y, foot: y });
+        if (!open) { pieces.push(cur); cur = []; }
+      }
+      if (open) cur.push(s);
+    });
+    if (cur.length) pieces.push(cur);
+    return pieces.filter(run => run.length >= 2);
+  }
+  // A stretch's outline: along the top, back along the foot.
+  const ringOf = run => [...run.map(s => ({ t: s.t, y: s.top })), ...run.slice().reverse().map(s => ({ t: s.t, y: s.foot }))];
+
+  // A wall outline in (t along the line, y) with repeated corners and
+  // corners in a straight run taken out: ear clipping cannot clip a straight
+  // corner and would fall back to a fan.
+  function tidyRing(ring, len) {
+    let pts = ring.slice();
+    let changed = true;
+    while (changed && pts.length > 3) {
+      changed = false;
+      for (let i = 0; i < pts.length && pts.length > 3; i += 1) {
+        const a = pts[(i + pts.length - 1) % pts.length], b = pts[i], c = pts[(i + 1) % pts.length];
+        const ux = (b.t - a.t) * len, uy = b.y - a.y, vx = (c.t - b.t) * len, vy = c.y - b.y;
+        const same = Math.hypot(ux, uy) < 1e-6;
+        const straight = Math.abs(ux * vy - uy * vx) < 1e-6 * Math.max(1, Math.hypot(ux, uy) * Math.hypot(vx, vy)) && ux * vx + uy * vy >= 0;
+        if (same || straight) { pts.splice(i, 1); changed = true; i -= 1; }
+      }
+    }
+    return pts;
+  }
+
   function dressRoof(item, solved, G, out, counts) {
     const { roof, list, eave, base } = item;
     const pts = roof.points;
@@ -1491,23 +1538,42 @@
       // wing's gable butts into the main roof, the main roof's surface
       // carries on just outside it at or above the wing's own height; no
       // fascia hangs there and no gable wall stands there, as on the
-      // elevations, where the bigger roof hides it.
-      const keep = (p, y) => !solved.some(other => {
-        if (other === item) return false;
-        const q = { x: p.x - inward.x * 0.15, z: p.z - inward.z * 0.15 };
-        const rise = G.roofRiseAt(other.roof, q, other.list);
-        // Above the bottom of this edge's own board: the board is buried.
-        return rise != null && other.eave + rise >= y - fasciaFt;
-      });
+      // elevations, where the bigger roof hides it. Where the other roof
+      // only comes part way up a board or a gable wall (a lower wing running
+      // into this roof's gable), it cuts that board or wall along its own
+      // surface instead (jb, 28 Nov 2026: "should go down and cut a lower
+      // peak"), so nothing opens between the two roofs.
+      const others = solved.filter(other => other !== item);
+      const alsoLists = others.map(o => o.list);
+      // The highest other roof just outside the line from (pa) to (pb) at t,
+      // tucked `tuck` under its sheathing, or -Infinity.
+      const otherTopAt = (pa, pb, tRaw, tuck) => {
+        // A hair in from each end, as surfaceAlong reads: a point exactly on
+        // the other roof's own edge can fall outside all its faces.
+        const t = Math.min(1 - 1e-4, Math.max(1e-4, tRaw));
+        const q = { x: pa.x + (pb.x - pa.x) * t - inward.x * 0.15, z: pa.z + (pb.z - pa.z) * t - inward.z * 0.15 };
+        let y = -Infinity;
+        others.forEach(other => {
+          const rise = G.roofRiseAt(other.roof, q, other.list);
+          if (rise != null && Number.isFinite(rise)) y = Math.max(y, other.eave + rise - tuck);
+        });
+        return y;
+      };
       const at = (t, y, shift = 0) => ({
         x: a.x + (b.x - a.x) * t + inward.x * shift, y, z: a.z + (b.z - a.z) * t + inward.z * shift,
       });
       // The fascia board: the surface along the edge, hung down by its depth.
-      surfaceAlong(roof, list, eave, a, b, inward, G, keep).forEach(run => {
-        const top = run.map(s => at(s.t, s.y));
-        const bottom = run.slice().reverse().map(s => at(s.t, s.y - fasciaFt));
-        slab([...top, ...bottom], inward, FASCIA_THICK_FT, 'fascia', fasciaColour, out);
-        counts.fascia = (counts.fascia || 0) + 1;
+      surfaceAlong(roof, list, eave, a, b, inward, G, null, alsoLists).forEach(whole => {
+        // The board shows wherever its top stands above the other roof, and
+        // ends there with a plumb cut, full depth, its foot tucked behind
+        // the other roof (jb, 28 Nov 2026: "should be cut VERT at the lower
+        // roof peak"), not sliced along the other roof's slope.
+        const st = whole.map(s => ({ t: s.t, top: s.y, foot: Math.max(s.y - fasciaFt, otherTopAt(a, b, s.t, 0)) }));
+        openPieces(st).forEach(run => {
+          const board = run.map(s => ({ t: s.t, top: s.top, foot: s.top - fasciaFt }));
+          slab(tidyRing(ringOf(board), len).map(q => at(q.t, q.y)), inward, FASCIA_THICK_FT, 'fascia', fasciaColour, out);
+          counts.fascia = (counts.fascia || 0) + 1;
+        });
       });
       if (kind !== 'gable') continue;
       // The gable wall: on the wall line (the edge in by its overhang), from
@@ -1517,14 +1583,17 @@
       const wa = { x: a.x + inward.x * over, z: a.z + inward.z * over };
       const wb = { x: b.x + inward.x * over, z: b.z + inward.z * over };
       const wat = (t, y) => ({ x: wa.x + (wb.x - wa.x) * t, y, z: wa.z + (wb.z - wa.z) * t });
-      surfaceAlong(roof, list, eave, wa, wb, inward, G, keep).forEach(run => {
+      // The foot follows a lower roof running into this gable, an inch under
+      // its sheathing, and the wall stops where that roof is as high as this.
+      surfaceAlong(roof, list, eave, wa, wb, inward, G, null, alsoLists).forEach(whole => {
         // An inch under the roof, so its top never shares a plane with the
         // roof sheathing (the two would flicker through each other).
-        const top = run.map(s => wat(s.t, s.y - 1 / 12));
-        if (!top.some(p => p.y > base + 0.6)) return;   // nothing to fill under a near-flat run
-        const bottom = [wat(run[run.length - 1].t, base), wat(run[0].t, base)];
-        slab([...top, ...bottom], inward, GABLE_THICK_FT, 'gable', COLOURS.gable, out);
-        counts.gables = (counts.gables || 0) + 1;
+        const st = whole.map(s => ({ t: s.t, top: s.y - 1 / 12, foot: Math.max(base, otherTopAt(wa, wb, s.t, 1 / 12)) }));
+        openPieces(st).forEach(run => {
+          if (!run.some(s => s.top > s.foot + 0.6)) return;   // nothing to fill under a near-flat run
+          slab(tidyRing(ringOf(run), len).map(q => wat(q.t, q.y)), inward, GABLE_THICK_FT, 'gable', COLOURS.gable, out);
+          counts.gables = (counts.gables || 0) + 1;
+        });
       });
     }
   }
