@@ -82,7 +82,9 @@ const hrefs = new Set();
 for (const f of pages) {
   const m = /<link[^>]*rel=["']icon["'][^>]*href=["']([^"']+)["']/i
     .exec(markup(f));
-  if (m) hrefs.add(m[1]);
+  // 404.html is served at ANY address (/viewer/smith-house), so its links
+  // start at the site root: /favicon.svg is the same asset as favicon.svg.
+  if (m) hrefs.add(m[1].replace(/^\//, ''));
 }
 check('they all point at the same asset', hrefs.size, 1);
 check('and that asset is on disk',

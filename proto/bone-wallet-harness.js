@@ -41,9 +41,13 @@ const MUTATIONS = [
   ['a full wallet still counts down to a drip it will never get', 'bone-wallet.js',
     c => c.replace('nextDripMs: state.balance >= cap ? null :', 'nextDripMs:')],
   ['the 25BONES line on the pad is ignored', 'bone-wallet.js',
-    c => c.replace("first.trim().toUpperCase() === BONES_CODE ? BIG_CAP : DRIP_CAP", 'DRIP_CAP')],
-  ['any line of the pad turns the 25 cap on, not just the first', 'bone-wallet.js',
-    c => c.replace("split('\\n')[0]", "split('\\n').find(l => l.trim().toUpperCase() === BONES_CODE) || ''")],
+    c => c.replace("(padHas(BONES_CODE) ? BIG_CAP : DRIP_CAP)", 'DRIP_CAP')],
+  ['any line of the pad turns the 25 cap on, not just the first five', 'bone-wallet.js',
+    c => c.replace(".slice(0, CODE_LINES)", '')],
+  ['only the first line counts again', 'bone-wallet.js',
+    c => c.replace(".slice(0, CODE_LINES)", '.slice(0, 1)')],
+  ['a code inside a longer line counts', 'bone-wallet.js',
+    c => c.replace("padCodes().includes(String(code).trim().toUpperCase())", "padCodes().some(l => l.includes(String(code).trim().toUpperCase()))")],
 ];
 
 if (MUTATE) {
@@ -129,8 +133,9 @@ check('a wallet below the cap counts down the rest of the hour',
   W.read(T + HOUR / 4).nextDripMs, HOUR * 3 / 4);
 
 // ── THE 25-BONE LINE (jb, 11 Nov 2026) ────────────────────────────────────
-// 25BONES as the FIRST line of the NOTES pad lifts the ceiling to 25 at the
-// same drip; anywhere else on the pad it is just a note.
+// 25BONES on one of the first FIVE lines of the NOTES pad (jb, 28 Nov 2026:
+// "allow codes in positions line 1-5") lifts the ceiling to 25 at the same
+// drip; on line 6 or later, or inside a longer line, it is just a note.
 const NOTES = 'draft.notepad';
 check('no pad: the ceiling is 10', W.cap(), W.DRIP_CAP);
 wallet(null); store.set(NOTES, '25bones \nw 86.86');
@@ -138,8 +143,13 @@ check('25BONES first (any case, trailing space): the ceiling is 25', W.cap(), W.
 wallet({ balance: 0, lastDripAt: T, createdAt: T }); store.set(NOTES, '25BONES');
 check('a hundred hours with the code fills to 25', W.read(T + 100 * HOUR).balance, 25);
 check('and read says which ceiling is in force', W.read(T + 100 * HOUR).cap, 25);
-wallet({ balance: 10, lastDripAt: T, createdAt: T }); store.set(NOTES, 'w 86.86\n25BONES');
-check('25BONES on the second line counts for nothing', W.read(T + 100 * HOUR).balance, 10);
+wallet({ balance: 10, lastDripAt: T, createdAt: T }); store.set(NOTES, 'w 86.86\n3DBONES\n\nn 10\n 25bones ');
+check('25BONES on the fifth line counts', W.read(T + 100 * HOUR).balance, 25);
+check('and 3DBONES beside it is on the pad too', W.padHas(W.PROJECTS_CODE), true);
+wallet({ balance: 10, lastDripAt: T, createdAt: T }); store.set(NOTES, 'a\nb\nc\nd\ne\n25BONES');
+check('25BONES on the sixth line counts for nothing', W.read(T + 100 * HOUR).balance, 10);
+wallet({ balance: 10, lastDripAt: T, createdAt: T }); store.set(NOTES, 'call about 25BONES');
+check('25BONES inside a longer line counts for nothing', W.read(T + 100 * HOUR).balance, 10);
 wallet({ balance: 25, lastDripAt: T, createdAt: T });
 check('the line taken off keeps bones already above 10', W.read(T + HOUR).balance, 25);
 check('with no drip coming until a spend brings it under 10', W.read(T + HOUR).nextDripMs, null);
