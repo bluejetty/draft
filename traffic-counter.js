@@ -18,6 +18,13 @@
   var host = location.hostname;
   if (!host || host === 'localhost' || host === '127.0.0.1' || host === '[::1]') return;
 
+  // A PAGE INSIDE A FRAME IS NOT A VISIT. LAYOUT's 3D viewports open the
+  // viewer in a frame (view3d-host.js), one per viewport and again on every
+  // reload, and each of those would otherwise count as a visit to the viewer
+  // and print a count over the sheet. The visit is the page the drafter
+  // opened, which reports for itself.
+  if (typeof window !== 'undefined' && window.top && window.top !== window) return;
+
   var path = location.pathname || '/';
   var base = 'https://' + SITE + '.goatcounter.com';
 
