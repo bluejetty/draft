@@ -73,6 +73,14 @@
         position: absolute; left: 10px; bottom: 8px; font-size: 13px; color: #34506f;
         pointer-events: none; opacity: 0.85; max-width: calc(50% - 50px);
       }
+      /* The visit count (../traffic-counter.js mounts it in here; nothing on localhost). */
+      #visits {
+        position: absolute; left: 4px; bottom: 4px; z-index: 4;
+        --ink-quiet: #34506f;
+      }
+      #visits:not(:empty) ~ #help { bottom: 28px; }
+      /* While walking (walk.js) the thumb pad has that corner. */
+      body[data-walking="1"] #visits { display: none; }
       .panel {
         position: absolute; top: 10px; right: 10px; z-index: 5; width: min(440px, calc(100% - 32px));
         max-height: calc(100% - 20px); overflow: auto; box-sizing: border-box;
@@ -101,7 +109,7 @@
       /* ON A SHEET (?embed=1): only the house, the view buttons while it is
          being turned, nothing else of the program. */
       body[data-embed="1"] header, body[data-embed="1"] #tools, body[data-embed="1"] #help,
-      body[data-embed="1"] #drop-hint, body[data-embed="1"] .panel { display: none !important; }
+      body[data-embed="1"] #drop-hint, body[data-embed="1"] #visits, body[data-embed="1"] .panel { display: none !important; }
       body[data-embed="1"] { background: #ffffff; }
       #embed-bar {
         position: absolute; left: 4px; right: 4px; top: 4px; z-index: 6;
@@ -366,6 +374,7 @@
         <button type="button" data-preset="top" title="Straight down">TOP</button>
         <button type="button" id="embed-done" class="lit" title="Keep this view on the sheet">DONE</button>
       </div>
+      <div id="visits" data-visit-counter-home></div>
       <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits · LEVELS hide a floor · SECTION cuts the house</div>
     </main>
 
@@ -402,5 +411,7 @@
     <script src="notepad.js"></script>
     <script src="photo-bones.js"></script>
     <script src="projects.js"></script>
+    <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+    <script src="../traffic-counter.js" defer></script>
   </body>
 </html>

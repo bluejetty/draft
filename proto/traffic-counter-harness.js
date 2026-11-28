@@ -164,6 +164,9 @@ function run(scene, answer) {
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
+  // A framed page (the viewer inside a LAYOUT 3D viewport) has a top window
+  // that is not its own; an ordinary page is its own top.
+  sandbox.top = scene.framed ? { framed: 'the sheet around it' } : sandbox;
   vm.createContext(sandbox);
   vm.runInContext(readSubject('traffic-counter.js'), sandbox, { filename: 'traffic-counter.js' });
 
@@ -215,6 +218,13 @@ async function runChecks() {
       quiet.images.length === 0 && quiet.fetches.length === 0 && quiet.label() === null,
       'every test run and every dev reload would otherwise land in a public count');
   }
+
+  // ── A FRAME IS NOT A VISIT ───────────────────────────────────────────
+  const framed = run({ framed: true, corner: true, pathname: '/viewer/index.html' }, { count: 5 });
+  await framed.drain();
+  check('a page shown inside a frame (a LAYOUT 3D viewport) reports nothing and prints nothing',
+    framed.images.length === 0 && framed.fetches.length === 0 && framed.label() === null,
+    'every sheet with a 3D viewport would count a viewer visit on each load and print a count over the sheet');
 
   // ── THE HIT ───────────────────────────────────────────────────────────
   const live = run({ corner: true }, { count: 12 });
@@ -399,6 +409,9 @@ if (!MUTATE) {
   const MUTATIONS = [
     ['a dev desk reports its hits to the public count', 'traffic-counter.js',
       c => c.replace("if (!host || host === 'localhost' || host === '127.0.0.1' || host === '[::1]') return;", '')],
+
+    ['a page inside a frame reports as a visit', 'traffic-counter.js',
+      c => c.replace("if (typeof window !== 'undefined' && window.top && window.top !== window) return;", '')],
 
     ['only the name localhost is spared, so 127.0.0.1 reports', 'traffic-counter.js',
       c => c.replace("host === '127.0.0.1' || host === '[::1]'", "host === '127.0.0.1x' || host === '[::1]x'")],

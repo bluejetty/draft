@@ -415,3 +415,58 @@ for (const mode of ['night', 'day']) {
       .toBeGreaterThanOrEqual(4.5);
   });
 }
+
+// ROUGH 3D / RUFF 3D (jb, 28 Nov 2026: "can we put the goat counter into the
+// ROUGH / RUFF 3D"). The viewer has no bottom bar, so it names a home of its
+// own in the bottom-left of the picture, and the mouse help moves up a line
+// to make room. Shown inside a LAYOUT 3D viewport it is not a visit at all.
+const answerCounter = (page, count, hits) => page.route(`${GC_HOST}/**`, route => {
+  const url = new URL(route.request().url());
+  if (url.pathname.endsWith('.json')) {
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count }) });
+  }
+  if (url.pathname === '/count') hits.push(url.searchParams.get('p'));
+  return route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') });
+});
+
+test('the 3D viewer wears the count in the bottom-left of the picture, the help a line above it', async ({ page, baseURL }) => {
+  await proxyApp(page, baseURL);
+  const hits = [];
+  await answerCounter(page, '77', hits);
+  await page.goto('https://draft.test/viewer/index.html');
+  const counter = page.locator('[data-traffic-counter]');
+  await expect(counter).toHaveText('77 VISITS');
+  expect(hits).toEqual(['/viewer/index.html']);
+  const where = await page.evaluate(() => {
+    const c = document.querySelector('[data-traffic-counter]').getBoundingClientRect();
+    const stage = document.getElementById('stage').getBoundingClientRect();
+    const help = document.getElementById('help').getBoundingClientRect();
+    return {
+      inHome: !!document.querySelector('#visits [data-traffic-counter]'),
+      left: c.left - stage.left, fromBottom: stage.bottom - c.bottom,
+      helpAbove: help.bottom <= c.top + 0.5,
+      ink: getComputedStyle(document.querySelector('[data-traffic-counter]')).color,
+    };
+  });
+  expect(where.inHome).toBe(true);
+  expect(where.left).toBeLessThan(20);
+  expect(where.fromBottom).toBeLessThan(20);
+  expect(where.helpAbove, 'the help text moved up, not printed over the count').toBe(true);
+  expect(where.ink, 'the stage ink, readable on the pale stage').toBe('rgb(52, 80, 111)');
+});
+
+test('the viewer inside a LAYOUT 3D viewport reports no visit and shows no count', async ({ page, baseURL }) => {
+  await proxyApp(page, baseURL);
+  const hits = [];
+  await answerCounter(page, '77', hits);
+  await page.route('https://draft.test/frame-host.html', route => route.fulfill({
+    status: 200, contentType: 'text/html',
+    body: '<!doctype html><iframe id="f" src="/viewer/index.html?embed=1" width="600" height="400"></iframe>',
+  }));
+  await page.goto('https://draft.test/frame-host.html');
+  const frame = page.frameLocator('#f');
+  await expect(frame.locator('body[data-ready="1"]')).toHaveCount(1);
+  await page.waitForTimeout(1200);
+  await expect(frame.locator('[data-traffic-counter]')).toHaveCount(0);
+  expect(hits).toEqual([]);
+});
