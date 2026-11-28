@@ -27,7 +27,13 @@
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 20000);
     const ambient = new THREE.AmbientLight(0xffffff, 0.45);
     const sun = new THREE.DirectionalLight(0xffffff, 0.75);
-    scene.add(ambient, sun);
+    // LIGHT BOUNCED UP FROM THE FLOOR, straight up, so a ceiling or a stair
+    // soffit turned down reads white, not dark grey -- the plain painter's
+    // BOUNCE (paint-canvas.js).
+    const BOUNCE = 0.75;
+    const bounce = new THREE.DirectionalLight(0xffffff, BOUNCE * 0.55);
+    bounce.position.set(0, -1, 0);
+    scene.add(ambient, sun, bounce);
     // THREE MESHES FROM ONE LIST. The solids (walls, floors, boards) are
     // closed and wound outward, so only their fronts are drawn; the thin
     // sheets (roof planes, glass, door slabs) are seen from both sides; and
@@ -188,6 +194,7 @@
       renderer.setClearColor(new THREE.Color(look.background));
       ambient.intensity = look.ambient;
       sun.intensity = 1 - look.ambient;
+      bounce.intensity = BOUNCE * (1 - look.ambient);
       if (edges) edges.visible = !!look.edges;
       if (glass && (look.textures !== false) !== glassReflects) {
         glassReflects = look.textures !== false;

@@ -46,6 +46,8 @@
     deck: [176, 150, 116],
     ground: [139, 156, 104],
     stringer: [196, 170, 128],
+    riser: [200, 166, 120],
+    underWood: [204, 180, 140],
     stair: [190, 156, 112],
     landing: [182, 148, 104],
     drywall: [238, 236, 230],
@@ -841,7 +843,11 @@
         const holes = (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
           .filter(o => o && o.hostType === 'floor' && o.hostId === floor.id && Array.isArray(o.points) && o.points.length >= 3)
           .map(o => o.points.map(p => ({ x: p.x, z: p.z })));
-        holedSlab(insetRing(ring, 0.02), holes, storey.floorBottom, storey.floorTop, 'floor', COLOURS.floor, faces);
+        // CEILINGS AND THE STAIR WELL WHITE (jb, 28 Nov 2026: "make the
+        // ceiling and inside of stair opening default to WHITE (GYP
+        // Painted)"): the floor's top stays wood, what is seen from below
+        // is painted board.
+        holedSlab(insetRing(ring, 0.02), holes, storey.floorBottom, storey.floorTop, 'floor', COLOURS.floor, faces, COLOURS.drywall);
       }
       counts.floors += 1;
     }
@@ -879,7 +885,12 @@
     if (SG) env.stairs().forEach(stair => {
       const n0 = faces.length;
       let group = null;
-      try { group = buildStair(stair, stack, levelById, SG, faces); } catch (e) { group = null; /* a stair that will not solve is left out */ }
+      // The holes in the floor it comes down from: where its head stands.
+      const floorIds = new Set((Array.isArray(saved.floors) ? saved.floors : []).filter(f => f && f.levelId === stair.levelId).map(f => f.id));
+      const holes = (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
+        .filter(o => o && o.hostType === 'floor' && floorIds.has(o.hostId) && Array.isArray(o.points) && o.points.length >= 3)
+        .map(o => o.points.map(p => ({ x: p.x, z: p.z })));
+      try { group = buildStair(stair, stack, levelById, SG, faces, holes); } catch (e) { group = null; /* a stair that will not solve is left out */ }
       if (group) { counts.stairs += 1; mark(n0, group); }
     });
 
@@ -1060,8 +1071,18 @@
   // A SLAB WITH HOLES IN IT (a floor with its stair opening): the top and
   // bottom cut in bands, and a side on every edge of the ring and of each
   // hole, turned to face out of the solid.
-  function holedSlab(ring, holes, bottom, top, kind, colour, out) {
-    if (!holes.length) { prism(ring, bottom, top, kind, colour, out); return; }
+  //
+  // `under`, when given, is the colour of what is seen from below: the
+  // bottom and the inside of each hole (the ceiling and the stair well).
+  function holedSlab(ring, holes, bottom, top, kind, colour, out, under) {
+    const below = under || colour;
+    if (!holes.length) {
+      const from = out.length;
+      prism(ring, bottom, top, kind, colour, out);
+      // prism pushes the top, then the bottom.
+      if (out[from + 1]) out[from + 1].colour = below;
+      return;
+    }
     const traps = planRegion([ring], holes);
     if (!traps.length) return;
     // WELDED: a band corner that lands part way along a neighbour's edge (or
@@ -1081,7 +1102,7 @@
     traps.forEach(t => {
       const w = welded(t);
       out.push(flatFace(w, top, true, kind, colour));
-      out.push(flatFace(w, bottom, false, kind, colour));
+      out.push(flatFace(w, bottom, false, kind, below));
     });
     const inLoop = (p, loop) => {
       let c = false;
@@ -1092,7 +1113,7 @@
       return c;
     };
     const solid = p => inLoop(p, ring) && !holes.some(h => inLoop(p, h));
-    [ring, ...holes].map(welded).forEach(loop => loop.forEach((a, i) => {
+    [ring, ...holes].map(welded).forEach((loop, li) => loop.forEach((a, i) => {
       const b = loop[(i + 1) % loop.length];
       const len = Math.hypot(b.x - a.x, b.z - a.z);
       if (!(len > 1e-6)) return;
@@ -1105,7 +1126,7 @@
       const outN = solid(probe) ? { x: -nx, z: -nz } : { x: nx, z: nz };
       const pts = [{ x: a.x, y: bottom, z: a.z }, { x: b.x, y: bottom, z: b.z }, { x: b.x, y: top, z: b.z }, { x: a.x, y: top, z: a.z }];
       const n = normalOf(pts);
-      out.push({ pts: n.x * outN.x + n.z * outN.z >= 0 ? pts : pts.reverse(), kind, colour });
+      out.push({ pts: n.x * outN.x + n.z * outN.z >= 0 ? pts : pts.reverse(), kind, colour: li > 0 ? below : colour });
     }));
   }
 
@@ -1143,7 +1164,37 @@
   // tread is one riser lower than the last; a flat landing is one riser, a
   // landing of winders as many risers as it has winders. The upper floor is
   // the top tread, so the first tread already stands one riser down.
-  function buildStair(stair, stack, levelById, SG, out) {
+  // How far back from a flight's head, against its walking direction `d`,
+  // the edge of the floor hole it stands in lies -- the gap the backing
+  // fills. 0 when no hole holds it; never more than 6".
+  function headGap(start, d, holes) {
+    const inLoop = (p, loop) => {
+      let c = false;
+      for (let i = 0, j = loop.length - 1; i < loop.length; j = i, i += 1) {
+        const a = loop[i], b = loop[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) c = !c;
+      }
+      return c;
+    };
+    const probe = { x: start.x + d.x * 0.01, z: start.z + d.z * 0.01 };
+    const hole = holes.find(h => inLoop(probe, h));
+    if (!hole) return 0;
+    let best = Infinity;
+    hole.forEach((a, i) => {
+      const b = hole[(i + 1) % hole.length];
+      // Ray start - t d meets segment a + s (b - a).
+      const ex = b.x - a.x, ez = b.z - a.z;
+      const den = (-d.x) * ez - (-d.z) * ex;
+      if (Math.abs(den) < 1e-9) return;
+      const wx = a.x - start.x, wz = a.z - start.z;
+      const t = (wx * ez - wz * ex) / den;
+      const sv = (wx * (-d.z) - wz * (-d.x)) / den;
+      if (t >= -1e-6 && sv >= -1e-6 && sv <= 1 + 1e-6) best = Math.min(best, Math.max(0, t));
+    });
+    return Number.isFinite(best) && best <= 0.5 ? best : 0;
+  }
+
+  function buildStair(stair, stack, levelById, SG, out, holes = []) {
     if (!stair || !stair.start || !stair.end) return false;
     const storey = levelById[stair.levelId];
     if (!storey) return false;
@@ -1179,6 +1230,16 @@
     const STRINGER_T = Math.max(1.5 / 12, PRINT ? PRINT.minFt : 0);
     const STRINGER_D = 11.25 / 12;
     const MAX_OC = 16 / 12;
+    // CLOSED RISERS AND THE UNDERSIDE (jb, 28 Nov 2026): "a 1/2 board on the
+    // front of the steps to cover the hole", unless stair.riserBoards is
+    // false ("the kickplate on front or no plate"); and under the flight a
+    // 1/2" board on the slope, wood or "GYP (painted white)", unless
+    // stair.underside is 'open' and the stringers show ("they do make it
+    // look higher quality"). Both on by default, the backing wood; chosen on
+    // OBJ PROP. Neither is printed: PRINT MODEL keeps the stair as it was.
+    const BOARD_FT = 0.5 / 12;
+    const underside = PRINT || stair.underside === 'open' ? null : (stair.underside === 'gyp' ? 'gyp' : 'wood');
+    const underColour = underside === 'gyp' ? COLOURS.drywall : COLOURS.underWood;
     // seq is [flight] straight, [flight, landing, flight] for an L (or a U
     // whose landings merge), [flight, landing, (middle flight), landing,
     // flight] for a U. A landing of winders carries `treads` too, so a
@@ -1220,6 +1281,56 @@
           prof = [[0, back(0)], ...teeth, [runEnd, yFoot], [Math.min(runEnd, uFoot), yFoot]];
         }
         void yTop;
+        // THE RISERS: a board on the face of every notch, from the top of
+        // the tread (or floor, or landing) below up under the tread above,
+        // tucked behind its nosing; and one under the top tread up to the
+        // floor or landing the flight comes down from.
+        if (!PRINT && stair.riserBoards !== false) {
+          const riserAt = (u, lo, hi) => {
+            if (!(hi - lo > 1e-4)) return;
+            prism([at(u, -half), at(u + BOARD_FT, -half), at(u + BOARD_FT, half), at(u, half)], lo, hi, 'riser', COLOURS.riser, out);
+          };
+          riserAt(0, tops[0], idx === 0 ? yTop - TREAD_FT : yTop);
+          tops.forEach((t, k) => riserAt((k + 1) * step, k + 1 < count ? tops[k + 1] : yFoot, t - TREAD_FT));
+        }
+        // THE HEAD OF THE FLIGHT (jb, 28 Nov 2026: "the top step looks like
+        // there is a gap, there should be a nosing or backing board of WOOD
+        // in there"): as the STAIR SECTION builds it (stair-section.js
+        // topBacking), a wood backing on the opening's header from the hole's
+        // edge to the top riser, down the floor's depth, and a nosing board
+        // flush with the floor over it and the top riser.
+        if (!PRINT && idx === 0) {
+          const back = headGap(run.start, d, holes);
+          const nTop = yTop, nLow = yTop - TREAD_FT;
+          if (back > 1e-3) {
+            extrudeProfile([[-back, storey.floorBottom], [0, storey.floorBottom], [0, nLow], [-back, nLow]], at3, -half, half, 'stair-head', COLOURS.stair, out);
+          }
+          extrudeProfile([[-back, nLow], [BOARD_FT + NOSE_FT, nLow], [BOARD_FT + NOSE_FT, nTop], [-back, nTop]], at3, -half, half, 'stair-head', COLOURS.stair, out);
+        }
+        // THE UNDERSIDE BOARD, along the stringers' bottom edge from the top
+        // of the flight down to where it meets the floor or landing.
+        if (underside) {
+          const u0 = prof[0][0], y0 = prof[0][1];
+          const uE = Math.min(runEnd, uFoot);
+          if (u0 === 0 && y0 > yFoot && uE > 1e-4) {
+            const ms = (yFoot - y0) / uE;
+            const tv = BOARD_FT * Math.sqrt(1 + ms * ms);
+            const uLow = uE + tv / ms;
+            if (uLow > 1e-4) {
+              extrudeProfile([[0, y0], [uE, yFoot], [uLow, yFoot], [0, y0 - tv]], at3, -half, half, 'stair-under', underColour, out);
+            }
+            // THE FLAT AT THE TOP (jb, 28 Nov 2026: "extra drywall at the back
+            // flat part of stringer"): the stringers' plumb ends at the head
+            // of the flight, closed with the same board standing behind
+            // them, from the soffit up to the top tread (whose top riser
+            // closes the rest), whether a floor's header is there or the
+            // hole runs on past it.
+            const hTop = tops[0] - TREAD_FT, hLow = y0 - tv;
+            if (hTop - hLow > 1e-3) {
+              extrudeProfile([[-BOARD_FT, hLow], [0, hLow], [0, hTop], [-BOARD_FT, hTop]], at3, -half, half, 'stair-under', underColour, out);
+            }
+          }
+        }
         // How many, evenly spaced, no more than 16" apart, centred 3/4" in.
         const span = Math.max(0, run.widthFt - STRINGER_T);
         const n = Math.max(2, Math.ceil(span / MAX_OC - 1e-6) + 1);

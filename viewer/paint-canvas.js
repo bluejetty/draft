@@ -19,6 +19,12 @@
   'use strict';
   if (window.DraftPaintCanvas) return;
 
+  // LIGHT BOUNCED UP FROM THE FLOOR (jb, 28 Nov 2026: "make the ceiling ...
+  // WHITE (GYP Painted)"): a face turned down -- a ceiling, a stair soffit,
+  // an eave -- is lit from below as a room's ceiling is, rather than left
+  // in the ambient alone, where white board read as dark grey. The WebGL
+  // painter has the same light (paint-webgl.js `bounce`).
+  const BOUNCE = 0.75;
   const LIGHT = (() => { const v = { x: -0.45, y: 0.8, z: 0.4 }; const l = Math.hypot(v.x, v.y, v.z); return { x: v.x / l, y: v.y / l, z: v.z / l }; })();
 
   const hexRgb = hex => {
@@ -117,7 +123,8 @@
         const area = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
         if (Math.abs(area) < 1e-9) continue;
         const sn = facing < 0 ? -1 : 1;
-        const lam = Math.max(0, sn * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z));
+        const lam = Math.min(1, Math.max(0, sn * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z))
+          + BOUNCE * Math.max(0, -sn * n.y));
         // Glass shows the sky it catches, so a window on the shady side
         // stays blue instead of going grey: it takes little of the shading.
         const k = t.clear ? 0.85 + 0.15 * lam : look.ambient + (1 - look.ambient) * lam;
