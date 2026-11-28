@@ -1303,9 +1303,9 @@
           const back = headGap(run.start, d, holes);
           const nTop = yTop, nLow = yTop - TREAD_FT;
           if (back > 1e-3) {
-            extrudeProfile([[-back, storey.floorBottom], [0, storey.floorBottom], [0, nLow], [-back, nLow]], at3, -half, half, 'stair', COLOURS.stair, out);
+            extrudeProfile([[-back, storey.floorBottom], [0, storey.floorBottom], [0, nLow], [-back, nLow]], at3, -half, half, 'stair-head', COLOURS.stair, out);
           }
-          extrudeProfile([[-back, nLow], [BOARD_FT + NOSE_FT, nLow], [BOARD_FT + NOSE_FT, nTop], [-back, nTop]], at3, -half, half, 'stair', COLOURS.stair, out);
+          extrudeProfile([[-back, nLow], [BOARD_FT + NOSE_FT, nLow], [BOARD_FT + NOSE_FT, nTop], [-back, nTop]], at3, -half, half, 'stair-head', COLOURS.stair, out);
         }
         // THE UNDERSIDE BOARD, along the stringers' bottom edge from the top
         // of the flight down to where it meets the floor or landing.

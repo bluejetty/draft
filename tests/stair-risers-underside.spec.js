@@ -42,9 +42,10 @@ test('by default every step has a 1/2" riser board and the underside is closed i
   // two flights.
   expect(r.risers.length).toBeGreaterThanOrEqual(2 * 13 * 6);
   expect(r.risers.length % 6).toBe(0);
-  // The top riser of the 2ND FL flight reaches the 2ND FL.
+  // The top riser of the 2ND FL flight reaches up under the 1" nosing
+  // board that lies flush with the 2ND FL.
   const top = Math.max(...r.risers.flatMap(f => f.ys));
-  expect(top).toBeCloseTo(r.levels[5].top, 3);
+  expect(top).toBeCloseTo(r.levels[5].top - 1 / 12, 3);
   // A board on the slope and one closing the stringers' plumb ends at the
   // head of the flight ("the back flat part of stringer"), each flight.
   expect(r.under.length).toBeGreaterThanOrEqual(2 * 2 * 6);
@@ -98,7 +99,7 @@ test('the head of a flight is closed to the hole edge: wood backing down the flo
   const r = await p.evaluate(s => {
     const built = DraftViewer.loadDrawing(s, 'test');
     const L5 = built.stack.floors.find(l => l.id === 5);
-    const wood = built.faces.filter(f => f.kind === 'stair' && f.group === 'L3');
+    const wood = built.faces.filter(f => f.kind === 'stair-head' && f.group === 'L3');
     const xs = wood.flatMap(f => f.pts.map(q => q.x));
     const atEdge = wood.filter(f => f.pts.some(q => Math.abs(q.x + 16.625) < 1e-3));
     const ys = atEdge.flatMap(f => f.pts.map(q => q.y));
