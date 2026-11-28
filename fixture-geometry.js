@@ -282,12 +282,19 @@ if (!window.DraftFixtureGeometry) {
     const faceOff = fixture.side === -1 ? frame.startOff : frame.endOff;
     const wallGap = wallGapOf(fixture);
     const backGap = backGapOf(fixture);
-    const backOff = faceOff + fixture.side * ((fixture.standoff || 0) + backGap);
+    // A FIREPLACE SITS IN ITS WALL (jb, 27 Nov 2026: "that's where the
+    // 'fireplace' should sit within the wall (the threshold and trim will be
+    // on outside of wall and fireplace on the inside of that box i make with
+    // the 4 2x4 walls"): only its trim stands proud of the room face; the
+    // body goes back through the wall into the framed box behind it.
+    const recess = fixture.kind === 'fireplace'
+      ? Math.max(0, fixture.depth - fireplaceParts(fixture).frameDepth) : 0;
+    const backOff = faceOff + fixture.side * ((fixture.standoff || 0) + backGap - recess);
     const frontOff = backOff + fixture.side * fixture.depth;
     const geo = {
       wall, frame,
       along, alongStart: along - half, alongEnd: along + half,
-      backOff, frontOff, width, side: fixture.side, faceOff, wallGap, backGap,
+      backOff, frontOff, width, side: fixture.side, faceOff, wallGap, backGap, recess,
       corners: [
         frame.at(along - half, backOff),
         frame.at(along + half, backOff),

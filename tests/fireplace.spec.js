@@ -69,14 +69,18 @@ for (const [wallId, z, faceIn] of [['six', 0, 2.75], ['four', -12, 1.75]]) {
     expect(d.fixtures).toHaveLength(1);
     const f = d.fixtures[0];
     expect([f.kind, f.wallId, f.side, r3(f.width), r3(f.depth)]).toEqual(['fireplace', wallId, 1, 5, r3(19 / 12)]);
-    // TIGHT TO THE FRAMING: its back on the wall's face, no half inch.
+    // TIGHT TO THE FRAMING, no half inch.
     const back = await page.evaluate(id => {
       const FG = window.DraftFixtureGeometry;
       const f = drawing.fixtures.find(fx => fx.kind === 'fireplace');
       const g = FG.fixtureGeometry(drawing.walls, f);
-      return [g.backOff, FG.wallGapOf(f), id];
+      return [g.backOff, FG.wallGapOf(f), g.frontOff, g.faceOff];
     }, wallId);
-    expect(r3(back[0])).toBe(r3(faceIn / 12));
+    // SET INTO THE WALL (jb, 27 Nov 2026): only the 2" trim stands proud of
+    // the room face; the body goes back through the wall, 1'-5" behind it.
+    expect(r3(back[3])).toBe(r3(faceIn / 12));
+    expect(r3(back[2])).toBe(r3((faceIn + 2) / 12));
+    expect(r3(back[0])).toBe(r3((faceIn - 17) / 12));
     expect(back[1]).toBe(0);
   });
 }
@@ -93,7 +97,7 @@ test('OBJ / PROP edits WIDTH, DEPTH, OPENING and THRESHOLD; a too-wide opening i
   const { at } = await open(page, [FP()]);
   const selectKey = page.locator('[data-tool-key="select"]');
   if (await selectKey.getAttribute('aria-pressed') !== 'true') await h.armFromRail(page, 'select');
-  await page.mouse.click(...at(0, 0.9));
+  await page.mouse.click(...at(0, -0.8));
   await expect(page.locator('#delete')).toBeVisible();
   const box = name => page.locator(`#props-slot [data-prop-field="${name}"]`);
   await expect(box('width')).toHaveValue('5\'-0"');
