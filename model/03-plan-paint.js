@@ -2395,14 +2395,10 @@
         if (showOwn) {
         paintBackgrounds();
         paintHalfLevelGhostFloors();
-        paintFloors(); paintDeckEdges(); paintRoofs(); paintShapes(); paintStructure();
-        // THE BEAM UNDER THIS FLOOR, after the structure ON it and before the
-        // openings above, which is the order they stack in the building.
-        paintBeamsBelow();
-        // AND THE BEAM OVER THIS PLAN, dash-dot and lighter (the overhead
-        // convention), in the same slot: structure first, then what is read
-        // against it.
-        paintBeamsAbove();
+        paintFloors(); paintDeckEdges(); paintRoofs(); paintShapes();
+        // THE PADS stay down here, concrete in the ground under the walls;
+        // the beams and columns on them go to the top (below, after stairs).
+        paintColumnPads();
         paintOverheadLines();
         // AFTER THE STRUCTURE IT SITS OVER, before the walls. An opening above
         // is context for what this level carries, so it reads over the pads
@@ -2432,6 +2428,18 @@
         // straight past the fixture and beam passes, and well before the
         // selection highlight and the dimension strings).
         paintStairs();
+        // ── BEAMS AND COLUMNS ON TOP (jb, 28 Nov 2026: "can you bring the
+        // BEAM and columns to the top layer") ─────────────────────────────
+        // A beam running along a stairwell was buried under the stair's
+        // lines, its posts under the treads. They now go down last of the
+        // geometry -- over walls, fixtures and stairs, under the dimensions,
+        // notes and selection -- which is where a LAYOUT sheet has always
+        // drawn them (plan-composition: structure after the stairs).
+        // This level's own first, then the beam under this floor, then the
+        // beam over this plan (dash-dot, the overhead convention).
+        paintStructure();
+        paintBeamsBelow();
+        paintBeamsAbove();
         // THE SUPER NODES, over the geometry they mark (desk furniture:
         // never on a sheet, never in a PRINTSCREEN).
         paintSuperNodes();
