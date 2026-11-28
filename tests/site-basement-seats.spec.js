@@ -84,3 +84,24 @@ test('the BASEMENT (WALLS) seat shows the foundation it stands in', async ({ pag
   expect(n[0]).toBeGreaterThan(10);
   expect(n[2]).toBeGreaterThan(10);
 });
+
+// NO LOT DRAWN (jb, 28 Nov 2026: "the site plan layout small window is
+// zooming in too far"). The seat paints the house's footprint, but framed
+// only the SITE level's own records -- none without a lot -- so it fell to
+// 6 px/ft at the origin and showed one corner of the house.
+test('the SITE PLAN seat fits the whole house when no lot is drawn', async ({ page }) => {
+  const house = {
+    ...BLANK,
+    outlines: [{ id: 901, levelId: 3,
+      points: [{ x: 10, z: 5 }, { x: 50, z: 5 }, { x: 50, z: 29 }, { x: 10, z: 29 }] }],
+    walls: box('m', 10, 5, 50, 29, 3, 'plan'),
+  };
+  await openRail(page, house);
+  const seat = page.locator('#view-rail .seat', { hasText: 'SITE PLAN' });
+  await expect(seat).toHaveCount(1);
+  const [left, middle, right] = await thirds(seat);
+  // Both ends of the house, and its middle, are in the seat.
+  expect(left, 'the house\'s west end').toBeGreaterThan(30);
+  expect(right, 'the house\'s east end').toBeGreaterThan(30);
+  expect(middle, 'the house\'s middle').toBeGreaterThan(30);
+});
