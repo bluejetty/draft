@@ -2761,6 +2761,23 @@ if (!window.DraftRender2D) {
           const hw = parts.hearthWidth / 2;
           rect(centre - hw, centre + hw, cFront, cFront + dirC * parts.hearth); ctx.fill(); ctx.stroke();
         }
+        // THE WALL OVER IT (jb, 28 Nov 2026: "show the 2x4 wall lines as
+        // dotted lines where it passes the fireplace (maybe the outter line
+        // should be solid inner dotted" -- "overlap the 'fireplace'" -- "show
+        // all the fireplace lines in the wall too"): set into its wall, the
+        // unit keeps every one of its own lines, and the wall's two faces run
+        // across it -- the room face solid, the face inside the box dotted.
+        if (geo.recess > 0 && geo.frame && geo.faceOff != null) {
+          const inner = fixture.side === -1 ? geo.frame.endOff : geo.frame.startOff;
+          const seg = (c, dash) => {
+            const A = P(a0, c), B = P(a1, c);
+            ctx.save(); ctx.setLineDash(dash);
+            ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+            ctx.restore();
+          };
+          seg(geo.faceOff, []);
+          seg(inner, [4, 3]);
+        }
         if (pxPerFt > 6) {
           const c = toS(geo.frame.at(centre, at(d / 2)));
           ctx.fillStyle = env.FIXTURE_COLOR;
