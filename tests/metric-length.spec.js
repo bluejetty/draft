@@ -24,12 +24,7 @@ const sheet = units => ({
   boneyardOutlines: [], groups: [], levelLocks: [], underlays: [],
 });
 async function open(page, units) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: sheet(units) });
-  await page.goto('/MODEL.html?level=3&lpane=drafting&left=1');
+  await h.openEditor(page, { drawing: sheet(units), bucket: BUCKET, url: '/MODEL.html?level=3&lpane=drafting&left=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);

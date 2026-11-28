@@ -71,13 +71,7 @@ const LOCKED = { id: 'lock-1', name: 'WC STACK', members: ['group-1', 'group-2']
 // presses a button needs the panel, and its grab point is at the centre of the
 // sheet, well clear of the rail.
 async function open(page, file, { left = false } = {}) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
-  await page.goto(left ? '/MODEL.html?left=1&lpane=drafting' : '/MODEL.html');
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: left ? '/MODEL.html?left=1&lpane=drafting' : '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   if (left) await expect(page.locator('[data-assembly-start]')).toBeVisible();
 }

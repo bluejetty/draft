@@ -51,12 +51,7 @@ const HOUSE = [[0, 0], [-6, 0], [-6, -12], [0, -12], [0, -21],
 const GARAGE = [[0, 0], [0, -1], [16, -1], [16, 26], [-13, 26], [-13, 0]];
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

@@ -26,12 +26,7 @@ const HOUSE = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'perf-bungalow.draft'), 'utf8'));
 
 async function openPanel(page, query = '') {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: HOUSE });
-  await page.goto(`/MODEL.html?mode=night&right=1${query}`);
+  await h.openEditor(page, { drawing: HOUSE, bucket: BUCKET, url: `/MODEL.html?mode=night&right=1${query}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

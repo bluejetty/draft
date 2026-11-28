@@ -23,12 +23,7 @@ const HIGH_DECK = { ...HOUSE.floors.find(f => f.id === 'floor-113'), id: 'floor-
 const SAVED = { ...HOUSE, columns: [], floors: [...HOUSE.floors, HIGH_DECK] };
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: SAVED });
-  await page.goto('/MODEL.html?left=1&right=1&level=1&view=foundation');
+  await h.openEditor(page, { drawing: SAVED, bucket: BUCKET, url: '/MODEL.html?left=1&right=1&level=1&view=foundation', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

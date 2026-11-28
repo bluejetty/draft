@@ -26,12 +26,7 @@ const drawing = walls => ({
 const HOUSE = [W('n', [0, 0], [20, 0]), W('e', [20, 0], [20, 10]), W('s', [20, 10], [0, 10]), W('w', [0, 10], [0, 0])];
 
 async function openOn(page, view, walls = HOUSE) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing(walls) });
-  await page.goto(`/MODEL.html?view=${encodeURIComponent(view)}`);
+  await h.openEditor(page, { drawing: drawing(walls), bucket: BUCKET, url: `/MODEL.html?view=${encodeURIComponent(view)}`, webgl: false });
   await expect(page.locator('#readout')).not.toHaveText('', { timeout: 10000 });
   await page.waitForTimeout(300);
 }
@@ -55,12 +50,7 @@ test('on a section the bone walks to PROJECT', async ({ page }) => {
 });
 
 test('on the plan the bone is the drive-thru as it always was', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing(HOUSE) });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: drawing(HOUSE), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   const bone = page.locator('#bone');
   await expect(bone).not.toHaveAttribute('data-bone-goes', /.*/);

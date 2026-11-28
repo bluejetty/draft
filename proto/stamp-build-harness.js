@@ -43,7 +43,7 @@ for (const file of dashboards) {
   const html = fs.readFileSync(path.join(out, file), 'utf8');
   const metaAt = html.search(/<meta name="draft-build" content="a1b2c3d4e5f6">/);
   const firstScript = html.search(/<script\b/);
-  const idScript = html.search(/<script src="(?:\.\.\/|\.\/)build-id\.js\?v=a1b2c3d4e5f6"><\/script>/);
+  const idScript = html.search(/<script src="(?:\.\.\/|\.\/|\/)build-id\.js\?v=a1b2c3d4e5f6"><\/script>/);
   check(metaAt > 0, `${file}: carries the build meta`);
   check(idScript > 0 && idScript === firstScript, `${file}: build-id.js is the first script`);
   check(metaAt < idScript, `${file}: the meta comes before build-id.js`);

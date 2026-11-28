@@ -19,12 +19,7 @@ const BUCKET = 'model-drawing';
 const REPRO = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'proto', 'repro-movie-bands.draft'), 'utf8'));
 
 test('MODEL: the FOUNDATION view cuts a buck at the man door and the overhead door, the basement plan none', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: REPRO });
-  await page.goto('/MODEL.html?right=1&level=1');
+  await h.openEditor(page, { drawing: REPRO, bucket: BUCKET, url: '/MODEL.html?right=1&level=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await h.pickModelLayer(page, 1, 'foundation');
   await page.waitForTimeout(300);

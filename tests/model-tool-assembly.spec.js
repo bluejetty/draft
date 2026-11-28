@@ -56,13 +56,7 @@ const FIXTURE = {
 };
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, file }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(file)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, file: FIXTURE });
-  await page.goto('/MODEL.html?left=1&lpane=drafting');
+  await h.openEditor(page, { drawing: FIXTURE, bucket: BUCKET, url: '/MODEL.html?left=1&lpane=drafting', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-assembly-start]')).toBeVisible();
 }

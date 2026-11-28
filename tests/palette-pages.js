@@ -54,6 +54,10 @@ const EXEMPT = {
   // shares the suffix and is NOT one of these; see below.)
   'Notepad.dc.html': 'component preview, not a dashboard',
   'SaveBox.dc.html': 'component preview, not a dashboard',
+  // NOT FOUND (28 Nov 2026): the page the host serves for an address that is
+  // not a page, and the door that sends /viewer/NAME on to the 3D viewer.
+  // One line of words and a link home, its own fixed look, no palette.js.
+  '404.html': 'not-found page and project-link door, not a dashboard',
   // THE ONE EXEMPTION THAT IS A DEBT, NOT A CATEGORY. MODEL.dc.html is a
   // working screen — board #310 puts it on the landscape roster and the
   // suite drives it — but it predates the palette and takes no skin: 743

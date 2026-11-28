@@ -34,12 +34,7 @@ const drawing = () => ({
 });
 
 async function open(page, search = '?level=7&left=1&lpane=drafting') {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto(`/MODEL.html${search}`);
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: `/MODEL.html${search}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
@@ -311,12 +306,7 @@ const REPRO = JSON.parse(require('fs').readFileSync(
 for (const cut of ['E1', 'E2']) {
   test(`${cut} paints the busted bilevel as it painted the whole roofs`, async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
-    await h.openModel(page, { webgl: false });
-    await page.evaluate(async ({ bucket, saved }) => {
-      await window.SharedFileStore.saveSharedFile(
-        new File([JSON.stringify(saved)], 'model-drawing.json', { type: 'application/json' }), bucket);
-    }, { bucket: BUCKET, saved: REPRO });
-    await page.goto(`/MODEL.html?theme=rough&mode=day&pane=previews&right=1&level=7&lpane=build&left=1&view=cut%3A${cut}`);
+    await h.openEditor(page, { drawing: REPRO, bucket: BUCKET, url: `/MODEL.html?theme=rough&mode=day&pane=previews&right=1&level=7&lpane=build&left=1&view=cut%3A${cut}`, webgl: false });
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
     await page.waitForTimeout(1500);
     // The sheet alone: the strip above it says UNSAVED afterwards.
@@ -377,12 +367,7 @@ test('FASCIA, IN on the ROOF panel sets one roof\'s board and the file keeps it'
 
 test('E1 hangs a 10" board under the main roof once its fascia is typed', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(saved)], 'model-drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO });
-  await page.goto('/MODEL.html?theme=rough&mode=day&pane=previews&right=1&level=7&lpane=build&left=1&view=cut%3AE1');
+  await h.openEditor(page, { drawing: REPRO, bucket: BUCKET, url: '/MODEL.html?theme=rough&mode=day&pane=previews&right=1&level=7&lpane=build&left=1&view=cut%3AE1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(1500);
   // Rows darker than paper down one screen column through the upper roof's eave, over

@@ -45,6 +45,37 @@
     const backMat = new THREE.MeshBasicMaterial({ color: 0x4a4744, side: THREE.BackSide,
       polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 
+    // THE GLASS'S REFLECTION as a texture: the glass colour with a little of
+    // the sky and trees (glass-reflection.js, GLASS_REFLECT) mixed in, so
+    // the vertex colour is white and the map is the pane. Made once.
+    let glassMap = null;
+    function glassTexture() {
+      const GR = window.DraftGlassReflection, M = window.DraftHouseMesh;
+      if (glassMap || !GR) return glassMap;
+      const t = GR.make(), src = GR.canvas();
+      const cv = document.createElement('canvas');
+      cv.width = t.w; cv.height = t.h;
+      const cx = cv.getContext('2d');
+      cx.fillStyle = `rgb(${M.COLOURS.glass.join(',')})`;
+      cx.fillRect(0, 0, t.w, t.h);
+      cx.globalAlpha = M.GLASS_REFLECT;
+      cx.drawImage(src, 0, 0);
+      glassMap = new THREE.CanvasTexture(cv);
+      glassMap.wrapS = THREE.RepeatWrapping;
+      glassMap.wrapT = THREE.ClampToEdgeWrapping;
+      glassMap.anisotropy = 4;
+      return glassMap;
+    }
+    // TEXTURES on: the pane wears the reflection (white vertex colour times
+    // the map); off: its flat glass colour, as before.
+    let glassReflects = true;
+    function glassLook(mat) {
+      const map = glassReflects ? glassTexture() : null;
+      mat.map = map;
+      mat.vertexColors = !map;
+      mat.needsUpdate = true;
+    }
+
     function setFaces(faces) {
       const M = window.DraftHouseMesh;
       [mesh, thin, glass, back, edges].forEach(o => { if (o) { scene.remove(o); o.geometry.dispose(); } });
@@ -54,7 +85,7 @@
         t.texMat.dispose(); t.plainMat.dispose();
       });
       textured = [];
-      const solid = { pos: [], col: [] }, sheet = { pos: [], col: [] }, clear = { pos: [], col: [] }, edgePos = [];
+      const solid = { pos: [], col: [] }, sheet = { pos: [], col: [] }, clear = { pos: [], col: [], uv: [] }, edgePos = [];
       const WT = window.DraftWallTypes, FT = window.DraftFinishTexture;
       const byFinish = new Map();   // id -> { pos, col, uv, tile }
       faces.forEach(f => {
@@ -81,6 +112,16 @@
           // Glass is see-through: its own mesh, drawn last, blended.
           const into = f.kind === 'glass' ? clear : f.twoSided ? sheet : solid;
           tris.forEach(t => t.forEach(i => { const p = f.pts[i]; into.pos.push(p.x, p.y, p.z); into.col.push(r, g, b); }));
+          // Glass carries where it sits in the reflected scene
+          // (glass-reflection.js), in feet along the wall and up from grade.
+          if (into === clear) {
+            const R = f.refl, GR = window.DraftGlassReflection;
+            tris.forEach(t => t.forEach(i => {
+              const p = f.pts[i];
+              if (!R || !GR) { clear.uv.push(0, 0.5); return; }
+              clear.uv.push((p.x * R.ax.x + p.z * R.ax.z) / GR.FT_W, (p.y - R.grade) / GR.FT_H);
+            }));
+          }
         }
         for (let i = 0; i < f.pts.length; i += 1) {
           // A seam (an edge where one wall face meets the next piece of the
@@ -99,9 +140,14 @@
       };
       mesh = new THREE.Mesh(geoOf(solid), lambert(THREE.FrontSide));
       thin = new THREE.Mesh(geoOf(sheet), lambert(THREE.DoubleSide));
-      glass = new THREE.Mesh(geoOf(clear), new THREE.MeshLambertMaterial({
-        vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.35, depthWrite: false,
+      // Glass shows the sky it catches, so it is not shaded like a wall: a
+      // window on the shady side stays blue instead of going grey.
+      const glassGeo = geoOf(clear);
+      glassGeo.setAttribute('uv', new THREE.Float32BufferAttribute(clear.uv, 2));
+      glass = new THREE.Mesh(glassGeo, new THREE.MeshBasicMaterial({ color: 0xe0e0e0,
+        vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: window.DraftHouseMesh.GLASS_SHOW, depthWrite: false,
       }));
+      glassLook(glass.material);
       glass.renderOrder = 2;
       back = new THREE.Mesh(mesh.geometry.clone(), backMat);
       back.visible = false;
@@ -143,6 +189,10 @@
       ambient.intensity = look.ambient;
       sun.intensity = 1 - look.ambient;
       if (edges) edges.visible = !!look.edges;
+      if (glass && (look.textures !== false) !== glassReflects) {
+        glassReflects = look.textures !== false;
+        glassLook(glass.material);
+      }
       if (back) {
         back.visible = !!look.section;
         if (look.cutColour) backMat.color.set(look.cutColour);

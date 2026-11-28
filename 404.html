@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="draft-build" content="dev">
+    <script src="/build-id.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rough Drafter — not found</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!--
+      THE PAGE EVERY UNKNOWN ADDRESS GETS, and the door for project links
+      (jb, 28 Nov 2026: "a user can type in
+      https://roughdrafter.com/viewer/PROJECT_NAME and it will open their file
+      directly in the viewer"). There is no page at /viewer/smith-house:
+      GitHub Pages (roughdrafter.com) and Cloudflare Pages (ruffdrafter.com)
+      both answer such an address with this file, which sends the visit on to
+      the viewer as /viewer/?project=smith-house. The viewer
+      (viewer/projects.js) fetches the file and puts the short address back.
+
+      This file is served at whatever address was asked for, so every link in
+      it starts with / (a ./ link would point inside /viewer/smith-house/).
+      Anything else not found gets a plain word and a way home.
+    -->
+    <script>
+      (function () {
+        var m = /^(.*\/viewer)\/([^\/?#]+)\/?$/i.exec(location.pathname);
+        if (m && !/\.[a-z0-9]+$/i.test(m[2])) {
+          var name = m[2];
+          try { name = decodeURIComponent(name); } catch (e) { /* keep it as typed */ }
+          location.replace(m[1] + '/?project=' + encodeURIComponent(name) + location.hash);
+        }
+      })();
+    </script>
+    <style>
+      :root { --ink: #163653; --page: #f4f7fa; --link: #1f4778; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        display: flex; align-items: center; justify-content: center; text-align: center;
+        background: var(--page); color: var(--ink);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; box-sizing: border-box;
+      }
+      h1 { font-size: 28px; letter-spacing: 0.04em; margin: 0 0 8px; }
+      p { margin: 0 0 16px; font-size: 17px; }
+      a { color: var(--link); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>NOTHING HERE</h1>
+      <p>That address is not a page on this site.</p>
+      <p><a href="/">Back to the drafter</a></p>
+    </main>
+  </body>
+</html>

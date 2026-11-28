@@ -57,13 +57,7 @@ const garage = ({ id = 'outline-garage', x = 0, z = 0, w = 24, d = 24,
 });
 
 async function open(page, file = empty()) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
-  await page.goto('/MODEL.html?left=1&right=1');
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: '/MODEL.html?left=1&right=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

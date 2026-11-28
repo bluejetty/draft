@@ -405,7 +405,7 @@
     new ResizeObserver(seatNotesTab).observe(document.getElementById('right-tab'));
     new ResizeObserver(seatNotesTab).observe(notesTab);
   }
-  // THE 25-BONE LINE (jb, 11 Nov 2026): 25BONES typed as the first line of
+  // THE 25-BONE LINE (jb, 11 Nov 2026): 25BONES typed on one of the first five lines of
   // page 1 lifts the wallet's ceiling to 25 (bone-wallet.js reads the pad's
   // own key); the bone foot repaints and the strip says so the moment the
   // line lands or goes.

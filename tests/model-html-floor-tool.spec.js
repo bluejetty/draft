@@ -79,15 +79,9 @@ const floorsTotal = async page => Number(
   (await readout(page).textContent()).match(/floors (\d+)\/(\d+)/)?.[2] ?? -1);
 
 async function open(page, { level = MAIN_FL, view = 'floor', file = base({}) } = {}) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
   // ?left=1 for the tool column: FLOOR has no legacy button on this page, so
   // the key in the rail is the only way to arm it.
-  await page.goto(`/MODEL.html?level=${level}&view=${view}&left=1&lpane=build`);
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: `/MODEL.html?level=${level}&view=${view}&left=1&lpane=build`, webgl: false });
   await expect(readout(page)).toContainText('floors', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="floor"]')).toBeVisible();
 }

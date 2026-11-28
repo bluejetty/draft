@@ -14,49 +14,47 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-const BUCKET = 'model-drawing';
-
 // S-BEAM is in the tested vocabulary and was NOT one of the surviving three.
 const LAYER = 'S-BEAM';
 
-test('a layer outside the old whitelist survives a save and reload', async ({ page }) => {
-  await h.openModel(page);
+// ON MODEL.html (moved off the old page, 28 Nov 2026): the editor drafters
+// use has its own loader and saver, so it is the one this pins.
+const drawing = () => ({
+  version: 1,
+  levels: [{ id: 3, name: 'MAIN FL', elev: 0, visible: true }],
+  activeLevelIdx: 0,
+  walls: [], floors: [], roofs: [], fenestrations: [], dimensions: [], outlines: [],
+  shapes: [], stairs: [], notes: [], roomTags: [], columns: [], beams: [],
+  boneyardOutlines: [], boneyardShelves: [], groups: [], levelLocks: [], underlays: [],
+  lines: [{
+    id: 1, levelId: 3, view: 'plan', layer: LAYER,
+    start: { x: 0, y: 0, z: 0 }, end: { x: 10, y: 0, z: 0 },
+  }],
+});
 
-  // Straight into the bucket the app loads from, then reopen it.
-  await page.evaluate(async ({ bucket, json }) => {
-    const file = new File([json], 'model-drawing.json', { type: 'application/json' });
-    await window.SharedFileStore.saveSharedFile(file, bucket);
-  }, {
-    bucket: h.STORAGE_BUCKET,
-    json: JSON.stringify({
-      version: 1,
-      levels: [{ id: 3, name: 'MAIN FL', elev: 0, visible: true }],
-      lines: [{
-        id: 1, levelId: 3, view: 'plan', layer: LAYER,
-        start: { x: 0, y: 0, z: 0 }, end: { x: 10, y: 0, z: 0 },
-      }],
-    }),
-  });
-  await page.reload();
-  await h.waitForModelReady(page);
+test('a layer outside the old whitelist survives a save and reload', async ({ page }) => {
+  await h.openEditor(page, { drawing: drawing(), url: '/MODEL.html?left=1&lpane=drafting&level=3' });
+  await page.waitForTimeout(300);
+  const { at } = await h.planFrame(page);
 
   // The app must WRITE the drawing back, or this reads the file the test
-  // itself wrote and proves nothing — an earlier version passed on the
-  // unfixed code for exactly that reason. An edit forces the re-serialise,
-  // so what is asserted is what the LOAD PATH produced.
-  await h.selectTool(page, 'Line');
-  await h.clickWorld(page, -6, 6);
-  await h.clickWorld(page, 6, 6);
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
+  // itself wrote and proves nothing -- an earlier version passed on the
+  // unfixed code for exactly that reason. A second line forces the
+  // re-serialise, so what is asserted is what the LOAD PATH produced.
+  await page.keyboard.press('l');
+  await page.mouse.click(...at(2, 1)); await page.waitForTimeout(60);
+  await page.mouse.click(...at(8, 1)); await page.waitForTimeout(60);
+  await page.keyboard.press('Escape');
+  await page.locator('#save').click();
+  await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
 
   const saved = await h.savedDrawing(page);
-  // Ids are reassigned on load, so find the seeded line by its geometry.
-  const line = (saved.lines || []).find(l =>
+  expect((saved.lines || []).length, 'the drawn line landed, so the file was rewritten').toBe(2);
+  const line = saved.lines.find(l =>
     Math.abs(l.start.x - 0) < 0.01 && Math.abs(l.start.z - 0) < 0.01
     && Math.abs(l.end.x - 10) < 0.01 && Math.abs(l.end.z - 0) < 0.01);
   expect(line).toBeTruthy();
-  // Before the fix this came back 'draft': the name was eaten on the way in
-  // and written back flattened, so the original was gone for good.
+  // Flattened, this comes back 'draft': the name eaten on the way in and
+  // written back, so the original is gone for good.
   expect(line.layer).toBe(LAYER);
 });

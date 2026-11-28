@@ -36,12 +36,7 @@ const floorFixture = () => ({ ...base(),
 });
 
 async function open(page, saved, url = '/MODEL.html?left=1') {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, file }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(file)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, file: saved });
-  await page.goto(url);
+  await h.openEditor(page, { drawing: saved, bucket: BUCKET, url: url, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('s');
   await page.evaluate(() => { tsquareOn = true; footOn = true; });
@@ -155,12 +150,7 @@ const roofFixture = () => ({ ...base(),
 });
 
 test('roof: the top eave is broken at x=0; its east half pulled past the bottom edge splits the roof in two, edge kinds kept; UNDO joins them', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, file }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(file)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, file: roofFixture() });
-  await page.goto('/MODEL.html?level=7');
+  await h.openEditor(page, { drawing: roofFixture(), bucket: BUCKET, url: '/MODEL.html?level=7', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);

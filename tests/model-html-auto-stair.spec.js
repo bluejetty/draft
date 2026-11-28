@@ -72,16 +72,10 @@ const floorOn = ({ id = 'floor-x', levelId = MAIN_FL, wide = 40, deep = 32,
 });
 
 async function open(page, file = empty()) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
   // ?left=1 FOR THE TOOL COLUMN AND ?right=1 FOR THE PROPERTIES SLOT: both
   // ship collapsed, and the key is the only way to arm a tool with no legacy
   // button.
-  await page.goto('/MODEL.html?left=1&lpane=build&right=1');
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: '/MODEL.html?left=1&lpane=build&right=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

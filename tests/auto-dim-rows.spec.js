@@ -28,12 +28,7 @@ const SHELF = {
 };
 
 async function onShelf(page, drawing = SHELF) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing });
-  await page.goto('/MODEL.html?level=3');
+  await h.openEditor(page, { drawing: drawing, bucket: BUCKET, url: '/MODEL.html?level=3', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.evaluate(() => enterShelf(1));
   await page.waitForTimeout(200);
@@ -231,12 +226,7 @@ const HOUSE = {
   notes: [], roomTags: [], columns: [], beams: [], boneyardOutlines: [], groups: [], levelLocks: [], underlays: [],
 };
 async function onSheet(page, url) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: HOUSE });
-  await page.goto(url);
+  await h.openEditor(page, { drawing: HOUSE, bucket: BUCKET, url: url, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(200);
 }

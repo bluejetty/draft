@@ -34,12 +34,7 @@ const house = ({ walls: withWalls = true } = {}) => ({
 });
 
 async function open(page, level, file = {}) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: house(file) });
-  await page.goto(`/MODEL.html?level=${level}`);
+  await h.openEditor(page, { drawing: house(file), bucket: BUCKET, url: `/MODEL.html?level=${level}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // A SITE with no house asks how big the lot is; the question is not the
   // subject here.

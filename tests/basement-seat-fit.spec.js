@@ -47,12 +47,7 @@ const inkBox = seat => seat.evaluate(el => {
 });
 
 test('the BASEMENT (WALLS) seat shows the whole foundation loop, not the short wall zoomed in', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html?left=1&right=1&level=1&view=plan');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html?left=1&right=1&level=1&view=plan', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   const seat = page.locator('#view-rail .seat', { hasText: 'BASEMENT (WALLS)' });
   await expect(seat).toHaveCount(1);
