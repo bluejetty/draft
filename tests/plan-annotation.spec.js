@@ -32,12 +32,7 @@ const siteFile = () => ({
 
 async function openSite(page) {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, drawing: siteFile() });
-  await page.goto(`/MODEL.html?level=${SITE}&lpane=drafting&left=1`);
+  await h.openEditor(page, { drawing: siteFile(), bucket: BUCKET, url: `/MODEL.html?level=${SITE}&lpane=drafting&left=1`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(300);
   const later = page.locator('#lot-pick [data-lot-pick-ok]');

@@ -38,12 +38,7 @@ const drawing = (fdnType = 'concrete_8', extra = {}) => ({
   ...extra,
 });
 async function open(page, url, f) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto(url);
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: url, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
@@ -207,12 +202,7 @@ async function trace(page, corners) {
 }
 
 test('a house built off a traced OUTLINE stands on 8" CONC + 2X6 BSMT, concrete on the outline, footing under the concrete', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: emptyHouse() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: emptyHouse(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await drawType(page, 'bungalow', 'bungalow-garage');
   await trace(page, [[-10, -8], [10, -8], [10, 8], [-10, 8]]);

@@ -36,12 +36,7 @@ async function open(page, fixtures, pane = 'drafting') {
     const orig = proto.fillText;
     proto.fillText = function (text, ...rest) { window.__texts.push(String(text)); return orig.call(this, text, ...rest); };
   });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing(fixtures) });
-  await page.goto(`/MODEL.html?left=1&lpane=${pane}&level=3`);
+  await h.openEditor(page, { drawing: drawing(fixtures), bucket: BUCKET, url: `/MODEL.html?left=1&lpane=${pane}&level=3`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(200);
   return h.planFrame(page);

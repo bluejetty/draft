@@ -60,12 +60,7 @@ const house = (stairs = drifted()) => ({
 
 async function open(page, file = house(), level = MAIN_FL) {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
-  await page.goto(`/MODEL.html?left=1&lpane=build&right=1&level=${level}`);
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: `/MODEL.html?left=1&lpane=build&right=1&level=${level}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(300);
 }

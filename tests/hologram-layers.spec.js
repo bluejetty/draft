@@ -43,12 +43,7 @@ async function open(page) {
       return real.call(this, text, ...rest);
     };
   });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html?level=3');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html?level=3', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 // The suites' room names one paint writes.

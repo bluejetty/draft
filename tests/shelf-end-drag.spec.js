@@ -31,12 +31,7 @@ const drawing = () => ({ version: 1, board: 'drafting', levels: LEVELS, activeLe
   boneyardShelves: [{ id: 1, name: 'SHELF 1' }], nextBoneyardShelfId: 2, activeBoneyardShelfId: 1 });
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html?level=3&right=1');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html?level=3&right=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await h.openModelRail(page);
   await page.locator('[data-shelf="1"]').click();

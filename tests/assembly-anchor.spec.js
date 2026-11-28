@@ -33,12 +33,7 @@ const drawing = (anchors, bot = W('bot', [0, 12], [0, 20])) => ({
   groups: [{ ...CLOSET, ...(anchors ? { anchors } : {}) }], levelLocks: [], underlays: [],
 });
 async function open(page, f) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   const levels = page.getByRole('button', { name: 'LEVELS / LAYERS' });
   if (await levels.getAttribute('aria-expanded') === 'true') await levels.click();

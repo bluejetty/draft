@@ -139,12 +139,7 @@ const readPage = page => page.evaluate(() => {
 
 test('an elevation is drawn clear of the rails, and full width when they are shut', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 700 });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
   await h.openDriveThru(page);
@@ -279,12 +274,7 @@ test('an elevation is drawn clear of the rails, and full width when they are shu
 // shell laid the bar out is repainted once it has.
 test('the footing clears the foot bar, and the piles run under it', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 700 });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
   // A GARAGE, because the piles are the half of this that is allowed out and

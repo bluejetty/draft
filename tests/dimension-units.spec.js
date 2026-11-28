@@ -28,12 +28,7 @@ const drawing = (units = 'imperial') => ({
 });
 
 async function open(page, f) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto('/MODEL.html?left=1&lpane=drafting');
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: '/MODEL.html?left=1&lpane=drafting', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('s');
   await page.locator('#objprop-tab').click();

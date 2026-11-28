@@ -21,12 +21,7 @@ const empty = (extra = {}) => ({
 });
 
 async function open(page, file = empty()) {
-  await h.openModel(page, { webgl: false, garageAlign: 'ask' });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: '/MODEL.html', webgl: false, garageAlign: 'ask' });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 async function order(page, family, entry) {

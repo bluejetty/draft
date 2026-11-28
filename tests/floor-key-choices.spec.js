@@ -29,12 +29,7 @@ const FILE = {
 };
 
 async function open(page, view) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: FILE });
-  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=${view}&left=1&lpane=build`);
+  await h.openEditor(page, { drawing: FILE, bucket: BUCKET, url: `/MODEL.html?level=${MAIN_FL}&view=${view}&left=1&lpane=build`, webgl: false });
   await expect(page.locator('#readout')).toContainText('floors', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="floor"]')).toBeVisible();
 }

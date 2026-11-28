@@ -44,13 +44,7 @@ const plan = {
 
 async function openShort(page) {
   await page.setViewportSize({ width: 1280, height: 560 });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: plan });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: plan, bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
@@ -256,13 +250,7 @@ test('the printed whole-plan page is not letterboxed by bars that are not in the
     // take a tenth of the printed page, which is a separate consequence
     // rather than the same one restated.
     await page.setViewportSize({ width: 1280, height: 720 });
-    await h.openModel(page, { webgl: false });
-    await page.evaluate(async ({ bucket, f }) => {
-      await window.SharedFileStore.saveSharedFile(
-        new File([JSON.stringify(f)], 'drawing.json',
-          { type: 'application/json' }), bucket);
-    }, { bucket: BUCKET, f: plan });
-    await page.goto('/MODEL.html');
+    await h.openEditor(page, { drawing: plan, bucket: BUCKET, url: '/MODEL.html', webgl: false });
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
     await page.locator('#printscreen').click();

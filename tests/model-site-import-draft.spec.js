@@ -40,12 +40,7 @@ const sitePlanFile = () => ({
 });
 
 async function openOnSite(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, drawing: blank() });
-  await page.goto(`/MODEL.html?level=${SITE}`);
+  await h.openEditor(page, { drawing: blank(), bucket: BUCKET, url: `/MODEL.html?level=${SITE}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // THE CARD DOES NOT COME UP ON ITS OWN ANY MORE (jb, 9 Nov): the SITE
   // PLAN key opens it.

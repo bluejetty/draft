@@ -49,12 +49,7 @@ const PIECES = () => {
 };
 
 async function open(page, level = 7, file = drawing) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file() });
-  await page.goto(`/MODEL.html?level=${level}`);
+  await h.openEditor(page, { drawing: file(), bucket: BUCKET, url: `/MODEL.html?level=${level}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
