@@ -37,12 +37,7 @@ const drawing = () => ({ version: 1, board: 'drafting', planTurn: 0, levels: LEV
   nextBoneyardShelfId: 5, activeBoneyardShelfId: 1, nextDrawingItemId: 60 });
 
 async function open(page, f = drawing()) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto('/MODEL.html?level=3&right=1');
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: '/MODEL.html?level=3&right=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(200);
 }
@@ -166,12 +161,7 @@ test('a super node left on a shelf by an old file is ignored: the shelf keeps it
   // corners, and the sheet, standing on the shelf, counts one gold node.
   const f = drawing();
   f.superNodes = [{ id: 'sn1', levelId: -1, view: 'plan', point: P(100 - 1.75 / 12, 52 + 1.75 / 12) }];
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto('/MODEL.html?level=3&right=1');
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: '/MODEL.html?level=3&right=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   if (await page.locator('#shelf-previews').isHidden()) await page.locator('#shelf-tab').click();
   const { green } = await inks(page);

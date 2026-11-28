@@ -20,13 +20,7 @@ const HOUSE = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'perf-bungalow.draft'), 'utf8'));
 
 async function openPage(page, saved = HOUSE) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }),
-      bucket);
-  }, { bucket: BUCKET, drawing: saved });
-  await page.goto('/MODEL.html?mode=night');
+  await h.openEditor(page, { drawing: saved, bucket: BUCKET, url: '/MODEL.html?mode=night', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

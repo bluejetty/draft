@@ -31,12 +31,7 @@ const drawing = () => ({
 const DOOR_TAG = /^D\d+(\/\d+)?$/;
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await page.evaluate(() => {
     window.__tags = [];
     const orig = CanvasRenderingContext2D.prototype.fillText;

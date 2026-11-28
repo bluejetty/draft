@@ -29,12 +29,7 @@ const EAST = SHAPE('east', [V(W + 2.3, -2), V(W + 6, -2), V(W + 6, 2), V(W + 2.3
 const OVER = SHAPE('over', [V(1, -2), V(6, -2), V(6, 2), V(1, 2)]);
 
 async function open(page, saved) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, file }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(file)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, file: saved });
-  await page.goto('/MODEL.html?left=1');
+  await h.openEditor(page, { drawing: saved, bucket: BUCKET, url: '/MODEL.html?left=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-sel-mode]').first()).toBeVisible();
   // ZOOMED IN, so a foot is a good many pixels and the handles stand clear

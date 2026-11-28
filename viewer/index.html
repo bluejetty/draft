@@ -71,7 +71,7 @@
       }
       #help {
         position: absolute; left: 10px; bottom: 8px; font-size: 13px; color: #34506f;
-        pointer-events: none; opacity: 0.85;
+        pointer-events: none; opacity: 0.85; max-width: calc(50% - 50px);
       }
       .panel {
         position: absolute; top: 10px; right: 10px; z-index: 5; width: min(440px, calc(100% - 32px));
@@ -124,6 +124,92 @@
         border: 2px solid #0f2a4a; pointer-events: none; transition: transform 0.05s linear;
       }
       body[data-embed="1"] #walk, body[data-embed="1"] #walk-pad { display: none !important; }
+      /* THE NOTEPAD (jb, 28 Nov 2026: "add the blue/yello NOTEPAD tab to the
+         ROUGH 3d and i could have the code in there like i do with the
+         Bones"): the drafter's own pad -- the same five pages, kept under
+         the same keys, so what is typed in one shows in the other. Blue on
+         ROUGH, yellow on RUFF, the drafter's colours (model.css). */
+      body { --pad: #d6e9f8; --pad-gum: #a9cdea; --pad-ink: #2b2f33; --pad-rule: rgba(43,47,51,0.10); }
+      body[data-theme="ruff"] { --pad: #fbeea0; --pad-gum: #efd65c; }
+      #pad-tab {
+        position: absolute; right: 0; top: 40%; z-index: 7; transform: translateY(-50%);
+        writing-mode: vertical-lr; padding: 14px 6px; font-size: 14px; letter-spacing: 0.14em;
+        border: 1px solid var(--pad-gum); border-right: none; border-radius: 4px 0 0 4px;
+        background: linear-gradient(to right, var(--pad-gum) 0 6px, var(--pad) 6px); color: var(--pad-ink);
+      }
+      #pad-tab.lit { border-color: var(--pad-ink); color: #000; }
+      #pad {
+        position: absolute; right: 30px; top: 10px; bottom: 10px; z-index: 7; width: min(300px, calc(100% - 60px));
+        display: flex; flex-direction: column; background: var(--pad); color: var(--pad-ink);
+        border: 1px solid var(--pad-gum); box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      }
+      #pad .pad-head {
+        display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: var(--pad-gum);
+        font-size: 14px; font-weight: 700; letter-spacing: 0.12em;
+      }
+      #pad .pad-head span:first-child { flex: 1; }
+      #pad-text {
+        flex: 1; min-height: 0; resize: none; border: 0; outline: none; margin: 0; padding: 4px 10px;
+        font: 16px/24px "Barlow Condensed", system-ui, sans-serif; color: var(--pad-ink);
+        background: repeating-linear-gradient(to bottom, transparent 0 23px, var(--pad-rule) 23px 24px) local, var(--pad);
+      }
+      #pad .pad-foot { display: flex; justify-content: flex-end; gap: 4px; padding: 5px 8px 7px; }
+      #pad .pad-foot button {
+        font-size: 13px; padding: 1px 7px; background: var(--pad); color: var(--pad-ink);
+        border: 1px solid var(--pad-ink); border-radius: 2px;
+      }
+      #pad .pad-foot button[data-pad-page] { opacity: 0.55; min-width: 24px; }
+      #pad .pad-foot button[data-written] { opacity: 0.85; }
+      #pad .pad-foot button[aria-pressed="true"] { opacity: 1; background: var(--pad-ink); color: var(--pad); }
+      #pad .pad-foot .gap { flex: 1; }
+      /* PROJECTS (jb, 28 Nov 2026): only there while 3DBONES is on the pad. */
+      #projects label.row { display: block; font-size: 13px; letter-spacing: 0.05em; opacity: 0.8; margin: 8px 0 3px; }
+      #projects input[type="text"], #projects input[type="password"] {
+        font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; padding: 5px 8px; border-radius: 4px;
+        border: 1px solid rgba(255,255,255,0.3); background: #183a63; color: #fff;
+      }
+      #projects .remember { display: flex; gap: 6px; align-items: center; font-size: 14px; margin-top: 6px; opacity: 0.9; }
+      #projects .pick { display: flex; gap: 8px; align-items: center; }
+      #projects .pick span {
+        flex: 1; min-width: 0; padding: 5px 8px; border: 2px dashed var(--chip-lit); border-radius: 4px;
+        font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #projects-said { margin: 8px 0 0; font-size: 15px; }
+      #projects-said.warn { color: var(--warn); }
+      #projects-link { margin-top: 8px; padding: 6px 8px; background: #183a63; border-radius: 4px; font-size: 15px; word-break: break-all; }
+      #projects-link b { color: var(--chip-lit); }
+      #projects-link button { margin-left: 6px; font-size: 13px; padding: 1px 8px; }
+      #projects-list { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 4px; }
+      #projects-list td { padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,0.12); vertical-align: middle; }
+      #projects-list td.when { text-align: right; white-space: nowrap; opacity: 0.85; font-size: 14px; }
+      #projects-list td.acts { text-align: right; white-space: nowrap; }
+      #projects-list td.acts button { font-size: 13px; padding: 1px 7px; margin-left: 3px; }
+      #projects-list td.acts button.sure { background: #a33a2c; }
+      /* THE BONE AT THE FOOT, bottom centre as on the drafter (jb, 28 Nov
+         2026), the wallet's count on it; pressing it asks what to spend on. */
+      #bone-foot {
+        position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 6;
+        padding: 0; border: none; background: none; line-height: 0; cursor: pointer;
+      }
+      #bone-foot img { display: block; height: 46px; width: auto; }
+      #bone-foot:hover img { filter: brightness(1.12); }
+      #bone-foot[data-broke] img { filter: grayscale(1) brightness(0.82); }
+      #bone-count {
+        position: absolute; left: 0; right: 0; top: 74%; transform: translateY(-50%); text-align: center;
+        font-size: 17px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(29,31,32,0.6); line-height: 1;
+      }
+      body[data-theme="rough"] #bone-count { top: 50%; }
+      #spend.panel { top: auto; bottom: 66px; right: auto; left: 50%; transform: translateX(-50%); width: min(340px, calc(100% - 32px)); }
+      #spend .choices { display: grid; gap: 6px; }
+      #spend .choices button { width: 100%; text-align: left; font-size: 17px; padding: 6px 12px; }
+      #spend .choices button span { float: right; font-weight: 400; font-size: 14px; opacity: 0.85; padding-top: 2px; }
+      #photo-size-note { font-size: 14px; opacity: 0.85; margin-left: 6px; }
+      #photo-toll { margin: 8px 0 0; font-size: 15px; }
+      #photo-toll.warn { color: var(--warn); }
+      /* The pad's tab sits on the right edge: panels stand clear of it. */
+      .panel { right: 34px; }
+      body[data-embed="1"] #pad-tab, body[data-embed="1"] #pad, body[data-embed="1"] #bone-foot { display: none !important; }
+      @media (max-width: 600px) { #bone-foot img { height: 38px; } }
       [hidden] { display: none !important; }
       @media (max-width: 600px) {
         header h1 { font-size: 20px; }
@@ -144,6 +230,8 @@
       <button id="export-open" type="button" title="Save the house as a 3D file other programs open (1 bone a file)" disabled>EXPORT</button>
       <button id="print-open" type="button" title="Make the house ready for a 3D printer: scale, thickness, lift-off pieces (1 bone a file)" disabled>PRINT MODEL</button>
       <button id="walk" type="button" title="Walk through the house at eye height: click where to stand, then W/S or the arrows walk and dragging looks round (Esc stops)" disabled>WALK</button>
+      <button id="photo-open" type="button" title="Save what is on screen as a picture: PNG, JPG or WEBP (1 bone a picture)" disabled>TAKE PHOTO</button>
+      <button id="projects-open" type="button" title="Your projects: upload a file and get its link" hidden>PROJECTS</button>
       <span class="chips" role="group" aria-label="Painter">
         <span class="label">PAINTER</span>
         <button type="button" data-painter="auto" title="WebGL when this computer has it, plain canvas when it does not">AUTO</button>
@@ -212,6 +300,81 @@
         <p id="print-toll" data-print-toll></p>
       </section>
       <div id="walk-pad" title="Push the knob the way to walk" hidden><div id="walk-knob"></div></div>
+      <section id="photo" class="panel" role="dialog" aria-label="Take a photo" hidden>
+        <h2>TAKE PHOTO</h2>
+        <p class="note">A picture of what is on screen: this angle, the levels that are on, the section as it is cut. No buttons in it.</p>
+        <div class="chips" role="group" aria-label="Photo file">
+          <span class="label">FILE</span>
+          <button type="button" data-photo-format="png" title="Sharp, every line crisp: best for drawings">PNG</button>
+          <button type="button" data-photo-format="jpg" title="Smaller file: best for email and phones">JPG</button>
+          <button type="button" data-photo-format="webp" title="Small and sharp: web pages">WEBP</button>
+        </div>
+        <div class="chips" role="group" aria-label="Photo size">
+          <span class="label">SIZE</span>
+          <button type="button" data-photo-scale="1" title="The size of the window">1x</button>
+          <button type="button" data-photo-scale="2" title="Twice the window: sharper">2x</button>
+          <button type="button" data-photo-scale="4" title="Four times the window: for printing">4x</button>
+          <span id="photo-size-note"></span>
+        </div>
+        <div class="foot">
+          <button type="button" id="photo-go" class="lit">SAVE PHOTO</button>
+          <button type="button" id="photo-close">CLOSE</button>
+        </div>
+        <p id="photo-toll" data-photo-toll></p>
+      </section>
+      <section id="projects" class="panel" role="dialog" aria-label="Projects" hidden>
+        <h2>PROJECTS</h2>
+        <div id="projects-lock">
+          <p class="note">Your password, once. Cloudflare checks it; nobody else can upload.</p>
+          <label class="row" for="projects-password">PASSWORD</label>
+          <input id="projects-password" type="password" autocomplete="current-password" />
+          <label class="remember"><input id="projects-remember" type="checkbox" checked /> Remember on this computer</label>
+          <div class="foot"><button type="button" id="projects-unlock" class="lit">UNLOCK</button></div>
+        </div>
+        <div id="projects-open-box" hidden>
+          <label class="row">FILE</label>
+          <div class="pick"><span id="projects-file-name">Pick a .draft or a SAVE AS ZIP</span>
+            <button type="button" id="projects-pick">PICK...</button></div>
+          <input id="projects-file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
+          <label class="row" for="projects-name">PROJECT NAME</label>
+          <input id="projects-name" type="text" spellcheck="false" autocomplete="off" placeholder="smith-house" />
+          <div class="foot"><button type="button" id="projects-upload" class="lit" disabled>UPLOAD</button></div>
+          <div id="projects-link" hidden></div>
+          <label class="row">YOUR PROJECTS</label>
+          <table id="projects-list"></table>
+        </div>
+        <p id="projects-said" role="status"></p>
+        <div class="foot">
+          <button type="button" id="projects-forget" hidden title="Forget the password on this computer">LOCK</button>
+          <button type="button" id="projects-close">CLOSE</button>
+        </div>
+      </section>
+      <section id="spend" class="panel" role="dialog" aria-label="Spend a bone" hidden>
+        <h2 id="spend-title">BONES</h2>
+        <p class="note" id="spend-note"></p>
+        <div class="choices">
+          <button type="button" data-spend="photo">TAKE PHOTO <span>1 bone</span></button>
+          <button type="button" data-spend="export">EXPORT 3D MODEL <span>1 bone</span></button>
+          <button type="button" data-spend="print">PRINT MODEL <span>1 bone</span></button>
+        </div>
+        <div class="foot"><button type="button" id="spend-close">CLOSE</button></div>
+      </section>
+      <button id="bone-foot" type="button" title="Your bones: take a photo or export the house"><img id="bone-art" src="../assets/bone-red.png" alt="BONES" /><span id="bone-count" aria-hidden="true"></span></button>
+      <button id="pad-tab" type="button" title="The NOTEPAD: the drafter's own pad">NOTEPAD</button>
+      <aside id="pad" aria-label="Notepad" hidden>
+        <div class="pad-head"><span>NOTEPAD</span><span id="pad-page-said"></span></div>
+        <textarea id="pad-text" spellcheck="false" aria-label="Notes" placeholder="Type or paste notes, numbers, anything..."></textarea>
+        <div class="pad-foot">
+          <button type="button" id="pad-clear" title="Clear this page">CLEAR</button>
+          <span class="gap"></span>
+          <button type="button" data-pad-page="1" title="Page 1">1</button>
+          <button type="button" data-pad-page="2" title="Page 2">2</button>
+          <button type="button" data-pad-page="3" title="Page 3">3</button>
+          <button type="button" data-pad-page="4" title="Page 4">4</button>
+          <button type="button" data-pad-page="5" title="Page 5">5</button>
+          <button type="button" id="pad-close" title="Put the pad away">CLOSE</button>
+        </div>
+      </aside>
       <div id="embed-bar" hidden>
         <button type="button" data-preset="front-left" title="From the front, the left corner">FRONT-LEFT</button>
         <button type="button" data-preset="front" title="The front, square on">FRONT</button>
@@ -255,5 +418,8 @@
     <script src="paint-webgl.js"></script>
     <script src="viewer.js"></script>
     <script src="walk.js"></script>
+    <script src="notepad.js"></script>
+    <script src="photo-bones.js"></script>
+    <script src="projects.js"></script>
   </body>
 </html>

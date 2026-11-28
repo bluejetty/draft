@@ -1966,19 +1966,11 @@
     const B = window.DraftBuildHouse;
     return B?.beamDepthLabel ? B.beamDepthLabel({ ...beam, mode: 'flush' }, drawing) : null;
   };
-  const paintStructure = () => {
+  const paintColumnPads = () => {
     const R = window.DraftRender2D;
     const env = paintEnv();
     const B = window.DraftBuildHouse;
     const F = window.DraftFormatters;
-    // THE TAG OPPOSITE THE STRING, one per beam line (render-2d
-    // beamTagSides): read off this level and view's own column rows.
-    const tags = R.beamTagSides(beams(), dimensions());
-    const marked = beamsPastTheTable();
-    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam,
-      { tag: tags.get(beam.id), warn: marked.has(beam) ? B?.ENGINEERING_MARK : null,
-        spanTags: true, depthLabel: flushDepthLabel(beam) }, env));
-    paintBeamSpanTags(beams(), columns(), tags, {}, env);
     // ── THE PADS GO DOWN FIRST, UNDER EVERYTHING THEY CARRY ─────────────────
     //
     // Movie, 25 Sep: "we have beam and columns, but no footing, we will need
@@ -1993,6 +1985,9 @@
     //
     // FIRST, so a telepost's cross sits ON its pad rather than under it. The
     // painter draws in call order and these overlap by construction.
+    // THEIR OWN PASS since the beams and columns went to the top (jb, 28 Nov
+    // 2026): the pad is concrete in the ground and stays under the walls;
+    // the posts and beams on it are drawn last of the geometry.
     if (activeViewId() === 'foundation' && B) {
       B.padGroups(columns()).forEach(group => R.drawPadGroup2D(ctx, toS, group, {
         // ONE PAD KEEPS ITS TYPE, several pour as a measured rectangle -- dc's
@@ -2004,6 +1999,20 @@
             + `×${F.formatInchesOnly((group.maxZ - group.minZ) * 12)} PAD`,
       }, env));
     }
+  };
+  const paintStructure = () => {
+    const R = window.DraftRender2D;
+    const env = paintEnv();
+    const B = window.DraftBuildHouse;
+    // THE TAG OPPOSITE THE STRING, one per beam line (render-2d
+    // beamTagSides): read off this level and view's own column rows.
+    const tags = R.beamTagSides(beams(), dimensions());
+    const marked = beamsPastTheTable();
+    // (The pads are paintColumnPads, drawn early, under the walls.)
+    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam,
+      { tag: tags.get(beam.id), warn: marked.has(beam) ? B?.ENGINEERING_MARK : null,
+        spanTags: true, depthLabel: flushDepthLabel(beam) }, env));
+    paintBeamSpanTags(beams(), columns(), tags, {}, env);
     // THE FOOTING IS THE PAGE'S ANSWER, not the painter's -- but the page had
     // no table to answer from, so it invented `sizeIn: 6` for every pile and
     // handed the LABEL the raw id. A 12" pile and an 8" pile drew as the same

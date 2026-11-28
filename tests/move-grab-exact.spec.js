@@ -29,12 +29,7 @@ const drawing = () => ({
 });
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html?left=1&lpane=drafting');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html?left=1&lpane=drafting', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);
@@ -144,12 +139,7 @@ test('a 2x6 run into the side of an ICF wall makes its inside corner a node: the
   const d = drawing();
   d.walls = [W('icf', [0, -10], [0, 20], 'icf'), W('t6', [-12, 0], [0, 0], 'stud_2x6'),
     W('wa', [20, 20], [26, 20], 'stud_2x4'), W('wb', [20, 20], [20, 26], 'stud_2x4')];
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: d });
-  await page.goto('/MODEL.html?left=1&lpane=drafting');
+  await h.openEditor(page, { drawing: d, bucket: BUCKET, url: '/MODEL.html?left=1&lpane=drafting', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);

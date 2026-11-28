@@ -30,12 +30,7 @@ const drawing = holograms => ({ version: 1, board: 'drafting', levels: LEVELS, a
   walls: box('h', 0, 20, 0, 20), holograms });
 
 async function open(page, holograms) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing(holograms) });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: drawing(holograms), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 // THE ELEVATION THAT STANDS ON THE +x SIDE, and the one on the -x side.

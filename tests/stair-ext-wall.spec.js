@@ -43,12 +43,7 @@ const fixture = (stairs = [flight(BASE_ID, MAIN_FL), flight(UPPER_ID, SECOND)]) 
 });
 
 async function open(page, f = fixture()) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto(`/MODEL.html?left=1&right=1&level=${MAIN_FL}`);
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: `/MODEL.html?left=1&right=1&level=${MAIN_FL}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(300);
 }
@@ -265,12 +260,7 @@ for (const side of ['left', 'right']) {
     f.walls = [Wl('n', [-20, -20], [20, -20]), Wl('e', [20, -20], [20, 20]), Wl('s', [20, 20], [-20, 20]), Wl('w', [-20, 20], [-20, -20])];
     f.stairs = [flight(BASE_ID, MAIN_FL, { start: { x: 2, z: -14 }, end: { x: 8, z: -14 }, widthFt: 3.5,
       shape: 'L', turn: 'right', extLegs: [{ in: 9, side }] })];
-    await h.openModel(page, { webgl: false });
-    await page.evaluate(async ({ bucket, f }) => {
-      await window.SharedFileStore.saveSharedFile(
-        new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-    }, { bucket: BUCKET, f });
-    await page.goto(`/MODEL.html?level=${MAIN_FL}`);
+    await h.openEditor(page, { drawing: f, bucket: BUCKET, url: `/MODEL.html?level=${MAIN_FL}`, webgl: false });
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
     await page.evaluate(() => { view.cx = 12; view.cz = -14; view.scale = 24; paint(); });
     await page.waitForTimeout(150);

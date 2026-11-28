@@ -44,12 +44,7 @@ const file = (extra = {}) => ({
 });
 
 async function open(page, extra) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file(extra) });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: file(extra), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(250);
   return (await h.planFrame(page)).at;

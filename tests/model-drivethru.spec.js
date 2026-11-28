@@ -47,25 +47,15 @@ const REPRO = JSON.parse(fs.readFileSync(
 const NO_BUILDING = { ...REPRO, outlines: [] };
 
 async function openWithNoBuilding(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: NO_BUILDING });
-  await page.goto('/MODEL.html?mode=night');
+  await h.openEditor(page, { drawing: NO_BUILDING, bucket: BUCKET, url: '/MODEL.html?mode=night', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
 async function openPage(page) {
-  await h.openModel(page, { webgl: false });
   // A DRAWING IN THE STORE, because MODEL.html reads the shared file and an
   // empty store gives "no drawing saved" -- a page with no drawing has no
   // build bar to put on the board.
-  await page.evaluate(async ({ bucket, saved }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO });
-  await page.goto('/MODEL.html?mode=night');
+  await h.openEditor(page, { drawing: REPRO, bucket: BUCKET, url: '/MODEL.html?mode=night', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
@@ -921,12 +911,7 @@ const BLANK = {
 };
 
 async function arriveFromEntry(page, saved) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, drawing: saved });
-  await page.goto('/MODEL.html?from=entry');
+  await h.openEditor(page, { drawing: saved, bucket: BUCKET, url: '/MODEL.html?from=entry', webgl: false });
   // Boot has finished with the drawing on the page: the stamp goes on at the
   // end of it. The board is raised after that, so this is the right thing to
   // wait on before either asking for it or giving it time not to come.
