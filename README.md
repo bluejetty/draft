@@ -55,7 +55,7 @@ npm test                          # full suite (about 3,700 tests on 27 Nov 2026
 
 Requirements:
 
-- **Node 18+** and **Python 3** — the Playwright config starts `python3 -m http.server 4173` itself as its web server (it reuses an already-running server locally; in CI, when `CI` is set, it always starts its own).
+- **Node 18+** and **Python 3** — the Playwright config starts its own web server (`tools/test-server.py`, the stock `python3 -m http.server` with successful requests left out of the log) on port 4173 (it reuses an already-running server locally; in CI, when `CI` is set, it always starts its own).
 - **Chromium via Playwright** — the pinned `@playwright/test` version wants its matching browser build, hence `npx playwright install chromium`. On CI images with browsers pre-provisioned, set `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` and point `PLAYWRIGHT_BROWSERS_PATH` at them instead.
 - **Headless-capable Linux needs Chromium's system deps** (`npx playwright install-deps chromium` on Debian/Ubuntu). No display server is required.
 - No network beyond localhost: all libraries **and the fonts** are vendored in `vendor/`, so tests run fully offline once the browser is installed. `tests/no-third-party.spec.js` holds that line — it fails if any page requests a host other than the one it was served from.

@@ -228,7 +228,10 @@ module.exports = defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: `python3 -m http.server ${PORT} --bind 127.0.0.1`,
+    // tools/test-server.py is `python3 -m http.server` that does not log
+    // requests that worked (a shard's log was ~45,000 "GET ... 200" lines).
+    // 404s and errors are still logged. Same files, same headers.
+    command: `python3 tools/test-server.py ${PORT}`,
     url: `http://127.0.0.1:${PORT}/index.html`,
     reuseExistingServer: REUSE,
   },
