@@ -202,10 +202,10 @@ test('+ ADD VIEWPORT asks what -- plans, elevations, sections -- then the next p
   await expect(page.locator('[data-add-pick]')).toHaveText(['SITE PLAN', 'ROOF PLAN', 'MAIN FL PLAN',
     'FOUNDATION PLAN', 'BASEMENT PLAN', 'MAIN FL FLOOR LAYOUT',
     'ELEVATION E1', 'ELEVATION E2', 'ELEVATION E3', 'ELEVATION E4', 'SECTION S1',
-    // AND THE SCHEDULES AND DETAILS (jb, 9 Nov), under their own heads.
-    'DOOR SCHEDULE', 'WINDOW SCHEDULE',
-    'TYP. WALL SECTION', 'EAVE DETAIL', 'FLOOR DETAIL', 'FOOTING DETAIL', '3D VIEW']);
-  await expect(page.locator('.lay-add-head')).toHaveText(['PLANS', 'FLOOR LAYOUTS', 'ELEVATIONS', 'SECTIONS', 'SCHEDULES', 'DETAILS', '3D VIEW',
+    // AND THE SCHEDULES (jb, 9 Nov), under their own head. Not PROJECT's
+    // wall section and details any more (jb, 28 Nov 2026).
+    'DOOR SCHEDULE', 'WINDOW SCHEDULE', '3D VIEW']);
+  await expect(page.locator('.lay-add-head')).toHaveText(['PLANS', 'FLOOR LAYOUTS', 'ELEVATIONS', 'SECTIONS', 'SCHEDULES', '3D VIEW',
     // and, since 19 Nov (jb), the details libraries this browser keeps, and
     // the door to another file's windows and levels.
     'DETAILS LIBRARY', 'FROM ANOTHER FILE']);

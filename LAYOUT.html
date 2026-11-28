@@ -3063,14 +3063,12 @@ class Component extends PageLogic {
     deal('FOUNDATION', [planSheet(1, 'foundation')]);
     if (!sectionViews.length) deal('SECTIONS');
     sectionViews.forEach(view => deal('SECTIONS', [view]));
-    // THE WALL SECTION AND ITS THREE DETAILS (jb, 9 Nov), on one sheet after
-    // the sections: the whole stack at 1/2" with the eave, the floor and the
-    // footing blown up beside it. Only when the drawing has a floor to stand
-    // a wall on -- the section is built off PROJECT's numbers, not drawn.
-    if (this._wallSection()) {
-      deal('WALL SECTION', (window.DraftWallSection?.DETAIL_IDS || [])
-        .map(detail => sized({ kind: 'detail', detail })));
-    }
+    // NO WALL SECTION SHEET (jb, 28 Nov 2026): the typical wall section and
+    // its eave / floor / footing details were built off PROJECT's pitch,
+    // overhang, heel and level numbers, not off the roof and walls drawn, so
+    // they could disagree with the house. jb: sections come from the actual
+    // house only -- S1, S2 above -- "we won't need those". A layout that
+    // already holds one keeps painting it until the drafter deletes it.
     // The basement after the sections and before ELECTRIC (Movie, 1 Oct).
     const basement = planSheet(1, 'plan');
     if (basement) deal('BASEMENT PLAN', [basement]);
@@ -3147,40 +3145,10 @@ class Component extends PageLogic {
           viewports.push({ ...base, kind: 'section', cutId: view.cutId });
         } else if (view.kind === 'schedule') {
           viewports.push({ ...base, kind: 'schedule', table: view.table, pif: SCHEDULE_PIF });
-        } else if (view.kind === 'detail') {
-          viewports.push({ ...base, kind: 'detail', detail: view.detail });
         } else {
           viewports.push({ ...base, kind: 'elevation', elevId: view.elevId });
         }
       };
-      // THE WALL SECTION SHEET: the section stands in the left share of the
-      // region at the biggest rung up to 1/2" that fits its height; the
-      // details stack down the right share at the biggest rung up to 1" at
-      // which all three fit, each centred in its column.
-      if (views.every(isDetail)) {
-        const section = views.find(view => view.detail === 'wallsection');
-        const details = views.filter(view => view.detail !== 'wallsection');
-        const gap = COMPOSE_GAP_IN;
-        const left = { ...region, w: details.length ? region.w * 0.56 - gap / 2 : region.w };
-        const right = { ...region, x: region.x + region.w * 0.56 + gap / 2, w: region.w * 0.44 - gap / 2 };
-        if (section) {
-          const own = this._detailPif(section, left);
-          commit(section, left.x + left.w / 2, left.y + (left.h - COMPOSE_LABEL_IN) / 2, null, own);
-        }
-        if (details.length) {
-          const share = { ...right, h: (right.h - (details.length - 1) * gap) / details.length };
-          const own = Math.min(...details.map(view => this._detailPif(view, share)));
-          const tall = view => view.hFt * own;
-          const stackH = details.reduce((sum, view) => sum + tall(view) + COMPOSE_LABEL_IN, 0)
-            + gap * (details.length - 1);
-          let y = right.y + Math.max(0, (right.h - stackH) / 2);
-          details.forEach(view => {
-            commit(view, right.x + right.w / 2, y + tall(view) / 2, null, own);
-            y += tall(view) + COMPOSE_LABEL_IN + gap;
-          });
-        }
-        return;
-      }
       if (cutSheet) {
         windowsFor(views, pifs, region).forEach(({ view, xIn, yIn, crop, pif: own }) => commit(view, xIn, yIn, crop, own));
         return;
@@ -5457,16 +5425,16 @@ class Component extends PageLogic {
       ({ kind: 'section', cutId: cut.id, label: `SECTION ${cut.name}` }));
     const shelves = (this._shelfLevels || []).map(level =>
       ({ kind: 'plan', levelId: level.id, label: `${level.name} PLAN` }));
-    // THE SCHEDULES AND THE DETAILS (jb, 9 Nov), offered whether or not the
-    // drawing has an opening or a wall yet, like every other view here.
+    // THE SCHEDULES (jb, 9 Nov), offered whether or not the drawing has an
+    // opening yet, like every other view here. NOT PROJECT'S WALL SECTION OR
+    // ITS DETAILS (jb, 28 Nov 2026: "don't allow it to be added for a
+    // viewport") -- they came off PROJECT's numbers, not the house drawn.
+    // The drafter's own details come from a DETAILS LIBRARY below.
     const schedules = siteOnly || !this._saved ? [] : SCHEDULE_TABLES.map(table =>
       ({ kind: 'schedule', table, label: table === 'door' ? 'DOOR SCHEDULE' : 'WINDOW SCHEDULE' }));
-    const WS = window.DraftWallSection;
-    const details = siteOnly || !this._saved || !WS ? [] : WS.DETAIL_IDS.map(detail =>
-      ({ kind: 'detail', detail, label: WS.DETAIL_TITLES[detail] }));
     return [['PLANS', this._saved ? plans : []], ['FLOOR LAYOUTS', this._saved ? floors : []],
       ['SHELVES', shelves], ['ELEVATIONS', this._saved ? elevations : []], ['SECTIONS', sections],
-      ['SCHEDULES', schedules], ['DETAILS', details],
+      ['SCHEDULES', schedules],
       // THE HOUSE IN 3D (jb, 27 Nov 2026), turned to taste once placed.
       ['3D VIEW', siteOnly || !this._saved ? [] : [{ kind: 'view3d', label: '3D VIEW' }]]]
       .filter(([, list]) => list.length);

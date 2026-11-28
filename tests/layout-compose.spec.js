@@ -331,14 +331,14 @@ test("the set deals in Movie's order, under his names", async ({ page }) => {
   // nothing on them; the basement plan goes after the sections, just before
   // ELECTRIC.
   //
-  // AND SINCE 9 NOV (jb: "window and door schedules and a wall section cut
-  // in the base set") the WALL SECTION follows the sections and the
-  // SCHEDULES follow the basement -- tests/schedules-wall-section.spec.js
-  // holds what is on them.
+  // AND SINCE 9 NOV (jb: "window and door schedules ... in the base set")
+  // the SCHEDULES follow the basement -- tests/schedules-wall-section.spec.js
+  // holds what is on them. The WALL SECTION sheet PROJECT's numbers drew
+  // after the sections is gone (jb, 28 Nov 2026).
   expect(layout.sheets.map(sheet => sheet.title)).toEqual([
     'SITE PLAN', 'ELEVATIONS', 'ELEVATIONS', 'ROOF PLAN',
     '2ND FL PLAN', '2ND FLOOR', 'MAIN FL PLAN', 'MAIN FLOOR',
-    'FOUNDATION', 'SECTIONS', 'WALL SECTION', 'BASEMENT PLAN', 'SCHEDULES',
+    'FOUNDATION', 'SECTIONS', 'BASEMENT PLAN', 'SCHEDULES',
   ]);
   expect(e1).toBe(2);
   expect(e3).toBe(3);
@@ -346,7 +346,7 @@ test("the set deals in Movie's order, under his names", async ({ page }) => {
   expect(main).toBe(7);
   expect(fdn).toBe(9);
   expect(sect).toBe(10);
-  expect(bsmt).toBe(12);
+  expect(bsmt).toBe(11);
   // THE ROOF PLAN carries the roof level (Movie, 6 Oct: "yes lets do the
   // roof plan sheet").
   expect(sheetOf(layout, v => v.kind === 'plan' && v.levelId === 7)).toBe(4);
@@ -644,26 +644,26 @@ test('the named sheets survive a reload, an undo and a hand on the set', async (
   await openLayout(page, twoStorey());
   await waitForCompose(page);
   const dealt = await savedLayout(page);
-  expect(dealt.sheets).toHaveLength(13);
+  expect(dealt.sheets).toHaveLength(12);
 
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
-  await expect(page.locator('[data-layout-sheet]')).toHaveCount(13);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(12);
   expect((await savedLayout(page)).sheets).toEqual(dealt.sheets);
 
-  // + SHEET makes a fourteenth that stays, and takes the set off the composer.
+  // + SHEET makes a thirteenth that stays, and takes the set off the composer.
   const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
   await page.locator('[data-rail-add-page]').click();
   await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
   const added = await savedLayout(page);
-  expect(added.sheets).toHaveLength(14);
+  expect(added.sheets).toHaveLength(13);
   expect(added.auto).toBe(false);
-  await expect(page.locator('[data-layout-sheet]')).toHaveCount(14);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(13);
 
   // Undo takes it back, and the page is not left on a sheet that is gone.
   await page.locator('[data-undo]').click();
-  await expect(page.locator('[data-layout-sheet]')).toHaveCount(13);
-  await expect(page.locator('[data-layout-sheet="13"]')).toHaveClass(/\bon\b/);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(12);
+  await expect(page.locator('[data-layout-sheet="12"]')).toHaveClass(/\bon\b/);
 });
 
 // ── THE PRESS A DRAFTER ACTUALLY REACHES FOR ───────────────────────────────
@@ -760,9 +760,9 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 768
       await waitForCompose(page);
       const rail = page.locator('[data-sheet-rail]');
       const thumbs = rail.locator('[data-sheet-thumb]');
-      await expect(thumbs).toHaveCount(13);
+      await expect(thumbs).toHaveCount(12);
       await expect(thumbs.nth(0)).toHaveAttribute('title', '1 SITE PLAN');
-      await expect(thumbs.nth(12)).toHaveAttribute('title', '13 SCHEDULES');
+      await expect(thumbs.nth(11)).toHaveAttribute('title', '12 SCHEDULES');
 
       const railBox = await rail.boundingBox();
       const canvasBox = await page.locator('[data-layout-canvas]').boundingBox();
@@ -852,7 +852,7 @@ test('ELECTRIC PLAN is dealt last when devices are placed, and REMOVE SHEET take
     expect(electric.map(v => [v.kind, v.levelId, v.view])).toEqual([['plan', 3, 'plan']]);
 
     // Take out sheet 10, the section: its viewport goes, the basement moves up
-    // to 11 (the WALL SECTION sheet is 10 now), and the numbers stay unbroken.
+    // to 10, and the numbers stay unbroken.
     const sectionSheet = dealt.viewports.find(v => v.kind === 'section').sheet;
     expect(sectionSheet).toBe(10);
     await page.locator('[data-layout-sheet="10"]').click();
@@ -863,12 +863,12 @@ test('ELECTRIC PLAN is dealt last when devices are placed, and REMOVE SHEET take
     await page.locator('[data-sheet-thumb="10"] [data-remove-sheet-at]').click();
     await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
     const after = await savedLayout(page);
-    expect(after.sheets.map(sheet => sheet.title).slice(-5)).toEqual(['FOUNDATION', 'WALL SECTION', 'BASEMENT PLAN', 'SCHEDULES', 'ELECTRIC PLAN']);
+    expect(after.sheets.map(sheet => sheet.title).slice(-4)).toEqual(['FOUNDATION', 'BASEMENT PLAN', 'SCHEDULES', 'ELECTRIC PLAN']);
     expect(after.viewports.some(v => v.kind === 'section')).toBe(false);
-    expect(after.viewports.find(v => v.kind === 'plan' && v.levelId === 1 && v.view === 'plan').sheet).toBe(11);
+    expect(after.viewports.find(v => v.kind === 'plan' && v.levelId === 1 && v.view === 'plan').sheet).toBe(10);
     expect(after.auto).toBe(false);
-    await expect(page.locator('[data-sheet-thumb]')).toHaveCount(13);
-    expect(after.viewports.filter(v => v.sheet === 13).map(v => v.levelId)).toEqual([3]);
+    await expect(page.locator('[data-sheet-thumb]')).toHaveCount(12);
+    expect(after.viewports.filter(v => v.sheet === 12).map(v => v.levelId)).toEqual([3]);
 
     // Undo puts it back where it was.
     await page.locator('[data-undo]').click();
