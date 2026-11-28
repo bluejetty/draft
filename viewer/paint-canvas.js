@@ -27,6 +27,28 @@
     return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
   };
 
+  // The part of triangle t in front of the plane z = near (camera space),
+  // as triangles of its own. Edges keep whether they were the face's own
+  // (inked) edges; the cut along the near plane is never inked.
+  function clipNear(t, za, zb, zc, near) {
+    const P = [t.a, t.b, t.c], Z = [za, zb, zc], out = [];
+    for (let i = 0; i < 3; i += 1) {
+      const j = (i + 1) % 3, cin = Z[i] >= near, nin = Z[j] >= near;
+      if (cin) out.push({ p: P[i], e: t.edges[i] });
+      if (cin !== nin) {
+        const f = (near - Z[i]) / (Z[j] - Z[i]);
+        const a = P[i], b = P[j];
+        out.push({ p: { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f }, e: cin ? false : t.edges[i] });
+      }
+    }
+    const res = [];
+    for (let i = 1; i + 1 < out.length; i += 1) {
+      res.push({ ...t, a: out[0].p, b: out[i].p, c: out[i + 1].p,
+        edges: [i === 1 ? out[0].e : false, out[i].e, i + 2 === out.length ? out[i + 1].e : false] });
+    }
+    return res;
+  }
+
   function create(canvas) {
     const ctx = canvas.getContext('2d');
     let tris = null;   // [{ a, b, c, edges:[ab,bc,ca], n, twoSided, colour, mid }]
@@ -103,17 +125,23 @@
       const lines = [];
       let drawn = 0;
 
-      for (const t of tris) {
-        const n = t.n, m = t.mid;
+      for (const whole of tris) {
+        const n = whole.n, m = whole.mid;
         const facing = n.x * (eye.x - m.x) + n.y * (eye.y - m.y) + n.z * (eye.z - m.z);
         // The inside of a solid is only ever seen through a SECTION cut, and
         // there it is the solid's own body: drawn flat in the cut colour.
-        const inside = facing < 0 && !t.twoSided;
+        const inside = facing < 0 && !whole.twoSided;
         if (inside && !look.section) continue;
+        // CLIPPED AT THE EYE (the WALKTHROUGH, jb 28 Nov 2026): standing in
+        // a room, the wall beside you runs back past your shoulder. A
+        // triangle partly behind the eye is cut at the near plane and the
+        // part in front drawn; only one wholly behind is left out.
+        const za = view.toCamera(whole.a).z, zb = view.toCamera(whole.b).z, zc = view.toCamera(whole.c).z;
+        if (za < near && zb < near && zc < near) continue;
+        const parts = za >= near && zb >= near && zc >= near ? [whole] : clipNear(whole, za, zb, zc, near * 1.001);
+        for (const t of parts) {
         const A = proj(t.a), B = proj(t.b), C = proj(t.c);
-        // Behind the eye: left out rather than clipped (only matters with
-        // the camera inside the house).
-        if (A.z < near || B.z < near || C.z < near) continue;
+        if (A.z < near * 0.999 || B.z < near * 0.999 || C.z < near * 0.999) continue;
         const area = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
         if (Math.abs(area) < 1e-9) continue;
         const sn = facing < 0 ? -1 : 1;
@@ -186,6 +214,7 @@
           if (t.edges[0]) lines.push(A, B);
           if (t.edges[1]) lines.push(B, C);
           if (t.edges[2]) lines.push(C, A);
+        }
         }
       }
 

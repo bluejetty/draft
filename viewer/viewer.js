@@ -100,7 +100,14 @@
     requestAnimationFrame(() => {
       queued = false;
       if (!state.painter || !state.camera) return;
-      state.lastDrawn = state.painter.render(state.camera, LOOK);
+      // WHILE WALKING (walk.js) the plain painter draws a half-size picture,
+      // stretched to the window, and the full one once you stop.
+      let size;
+      if (state.lowRes && state.painter.kind === 'plain') {
+        const c = $('plain'), dpr = window.devicePixelRatio || 1;
+        size = { W: Math.max(1, Math.round(c.clientWidth * dpr * 0.5)), H: Math.max(1, Math.round(c.clientHeight * dpr * 0.5)) };
+      }
+      state.lastDrawn = state.painter.render(state.camera, LOOK, size);
       state.frames += 1;
       if (EMBED) toParent({ type: 'draft-viewer-camera', camera: state.camera });
       document.body.dataset.frames = String(state.frames);
@@ -185,6 +192,7 @@
     document.body.dataset.shown = String(list.length);
     $('export-open').disabled = !list.length;
     $('print-open').disabled = !list.length;
+    window.dispatchEvent(new Event('draft-viewer-shown'));
     if (!$('print').hidden) showPrintPanel();
     redraw();
   }
@@ -251,7 +259,7 @@
     let drag = null;
     // The EXPORT panel floats over the stage: presses on it are its own.
     // So is the view-button bar on a sheet (?embed=1).
-    const onPanel = e => !!(e.target.closest && e.target.closest('.panel, #embed-bar'));
+    const onPanel = e => !!(e.target.closest && e.target.closest('.panel, #embed-bar, #walk-pad'));
     stage.addEventListener('contextmenu', e => { if (!onPanel(e)) e.preventDefault(); });
     stage.addEventListener('pointerdown', e => {
       if (!state.camera || onPanel(e)) return;
@@ -793,7 +801,7 @@
     }
   }
 
-  window.DraftViewer = { state, openFile, loadDrawing, fit, redraw, applyView, exportFile, savePrint, presetCamera, picture };
+  window.DraftViewer = { state, LOOK, setStatus, closePanel, openFile, loadDrawing, fit, redraw, applyView, exportFile, savePrint, presetCamera, picture };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
