@@ -240,6 +240,58 @@ test('a gable that butts into a bigger roof gets no wall and no fascia', async (
   expect(r.counts.fascia).toBeGreaterThan(0);
 });
 
+test('a lower wing running into a gable leaves no hole: the gable comes down onto the wing', async ({ page: p }) => {
+  // jb, 28 Nov 2026, TIMBERHOUSE front: the 3 ft porch wing (roof-64, ridge
+  // 4.33 ft up) runs into the main front gable (roof-61, ridge 6.5 ft up) at
+  // x = -1. Behind the wing's ridge (z -6.5 to -13) the wing's back slope
+  // falls away while the main roof climbs; the main gable wall used to stop
+  // a station short and open a hole there. jb: "should go down and cut a
+  // lower peak" -- the wall's foot follows the wing's slope, and the rake
+  // board runs to the wing's ridge.
+  await openViewer(p, 'plain');
+  await p.setInputFiles('#file', path.join(ROOT, 'proto', 'repro-jb-floor-strip-jog.draft'));
+  await p.waitForFunction(() => document.body.dataset.loaded);
+  const r = await p.evaluate(() => {
+    const s = DraftViewer.state;
+    // The outer face of each piece standing on the plane x = -1.
+    const onPlane = kind => s.faces.filter(f => f.kind === kind && f.pts.every(q => Math.abs(q.x + 1) < 1e-6));
+    const gable = onPlane('gable');
+    // The rake board itself, not the end caps of the eave boards.
+    const rake = onPlane('fascia').filter(f => {
+      const z = f.pts.map(q => q.z);
+      return Math.max(...z) - Math.min(...z) > 5;
+    });
+    const zs = fs => fs.flatMap(f => f.pts.map(q => q.z));
+    // Lowest wall point at depth z: the foot there.
+    const footAt = z => {
+      let lo = Infinity;
+      gable.forEach(f => f.pts.forEach((q, i) => {
+        const n = f.pts[(i + 1) % f.pts.length];
+        if ((q.z - z) * (n.z - z) > 0 || q.z === n.z) return;
+        const y = q.y + (n.y - q.y) * (z - q.z) / (n.z - q.z);
+        lo = Math.min(lo, y);
+      }));
+      return lo;
+    };
+    return {
+      gables: gable.length, gableFront: Math.max(...zs(gable)), rakeFront: Math.max(...zs(rake)),
+      foot: [-7, -9.75, -12, -16].map(footAt),
+      eave: Math.min(...s.faces.filter(f => f.kind === 'roof').flatMap(f => f.pts.map(q => q.y))),
+    };
+  });
+  expect(r.gables).toBe(1);
+  // Wall and rake both start right at the wing's ridge, not a foot behind it.
+  expect(r.gableFront).toBeCloseTo(-6.5, 2);
+  expect(r.rakeFront).toBeCloseTo(-6.5, 2);
+  // The foot rides the wing's back slope (8/12, an inch under it) ...
+  const slope = 8 / 12;
+  expect(r.foot[0] - r.eave).toBeCloseTo((13 - 7) * slope - 1 / 12, 2);
+  expect(r.foot[1] - r.eave).toBeCloseTo((13 - 9.75) * slope - 1 / 12, 2);
+  expect(r.foot[2] - r.eave).toBeCloseTo((13 - 12) * slope - 1 / 12, 2);
+  // ... and past the wing it stands on the plate again.
+  expect(r.foot[3]).toBeLessThan(r.eave + 0.01);
+});
+
 test('the plain painter hides what is behind, whatever order the faces come in', async ({ page: p }) => {
   await openViewer(p, 'plain');
   // Two squares, the near one listed FIRST: a far-to-near sort by list order
