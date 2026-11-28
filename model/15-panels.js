@@ -3266,7 +3266,7 @@
   // special still lands on the next one put back to MAIN. Every piece still
   // carries its values in its own record, so nothing that paints a roof
   // has to know about either.
-  const ROOF_OWN_KEYS = ['pitch', 'fascia', 'overhang'];
+  const ROOF_OWN_KEYS = ['pitch', 'fascia', 'overhang', 'heel'];
   const roofOwns = (roof, key) => Array.isArray(roof?.own) && roof.own.includes(key);
   const setRoofOwn = (roof, key, on) => {
     const list = (Array.isArray(roof.own) ? roof.own : []).filter(k => k !== key && [...ROOF_OWN_KEYS, 'fasciaFinish'].includes(k));
@@ -3280,7 +3280,46 @@
     const list = roofOverhangs(roof).filter((_, i) => roofOutsideEdge(roof, i));
     return list.length && list.every(v => Math.abs(v - list[0]) < 1e-9) ? list[0] : null;
   };
+  // ── RAISE HEEL FOR THE WHOLE ROOF (jb, 28 Nov 2026) ─────────────────
+  //
+  // "in ROOF can i have a spot to adjust the ROOF HEEL for OBJ PROP" -- "i
+  // need a higher heel for this roof - more air flow coming in from under
+  // the 6" eaves". jb chose the AMOUNT ADDED: 0 is the roof as it stands
+  // ("leave the bottom of soffit / top of ceiling the default HEEL / 0"),
+  // plus lifts the whole roof, minus drops it ("no you can go below 0"),
+  // never under the standard 5 1/2" heel at the wall line -- so the bottom is
+  // the rise over the overhang, and 0 with none (drawing-format
+  // roofHeelDropLimitIn). `roof.heelIn`; cut-view roofEaveElev carries it to
+  // every painter. The per-edge RAISE HEEL (`edgeHeelIn`) still adds on top.
+  const FMTD = () => window.DraftDrawingFormat;
+  const roofRaiseOf = roof => (Number.isFinite(Number(roof?.heelIn)) ? Number(roof.heelIn) : 0);
+  const ROOF_HEEL_MAX_IN = 48;
+  const roofHeelRange = roofs => ({
+    lo: -Math.min(...roofs.map(r => FMTD().roofHeelDropLimitIn(r))),
+    hi: ROOF_HEEL_MAX_IN,
+  });
+  const inchText = v => (v < 0 ? '-' : '') + window.DraftFormatters.formatInchesOnly(Math.abs(v));
+  const roofHeelHint = roofs => {
+    const { lo, hi } = roofHeelRange(roofs);
+    const hint = document.createElement('div');
+    hint.className = 'sel-help';
+    hint.dataset.roofHeelRange = '';
+    hint.textContent = `${inchText(lo)} TO ${inchText(hi)} (0 = AS DRAWN; THE HEEL STAYS 5 1/2" OR MORE AT THE WALL)`;
+    return hint;
+  };
+  const setRoofRaise = (roof, inches) => {
+    const v = FMTD().clampRoofHeelIn(roof, inches);
+    if (Math.abs(v - inches) > 1e-9) {
+      return `This roof's heel goes from ${inchText(-FMTD().roofHeelDropLimitIn(roof))} to ${inchText(ROOF_HEEL_MAX_IN)}: lower and the top chord would meet the ceiling.`;
+    }
+    if (Math.abs(v) > 1e-9) roof.heelIn = v; else delete roof.heelIn;
+    return null;
+  };
   const ROOF_SETTING = {
+    heel: {
+      read: roofRaiseOf,
+      write: setRoofRaise,
+    },
     pitch: {
       read: roof => Number(roof.pitch) || 0,
       write: (roof, v) => { roof.pitch = v; roof.follows = 'none'; return null; },
@@ -3675,13 +3714,27 @@
     const overRow = propField('OVERHANG, ALL EDGES', roofMainValue(group, kin, 'overhang'),
       ft => setRoofMain(group, kin, 'overhang', ft), again);
     overRow.firstChild.textContent += tail('overhang');
-    wrap.append(pitchRow, fasciaRow, overRow);
+    const mainKin = kin.filter(roof => !roofOwns(roof, 'heel'));
+    const mainRange = roofHeelRange(mainKin.length ? mainKin : kin);
+    const heelRow = numberField('RAISE HEEL, IN', roofMainValue(group, kin, 'heel'), mainRange.lo, mainRange.hi, 0.25, v => {
+      if (v === null) {
+        sayOnStrip(`RAISE HEEL here runs from ${inchText(mainRange.lo)} to ${inchText(mainRange.hi)}.`);
+        return roofMainValue(group, kin, 'heel');
+      }
+      say(setRoofMain(group, kin, 'heel', v));
+      again();
+      return roofMainValue(group, kin, 'heel');
+    }, { fractions: true });
+    heelRow.dataset.roofRaiseHeel = 'main';
+    heelRow.firstChild.textContent += tail('heel');
+    wrap.append(pitchRow, fasciaRow, overRow, heelRow, roofHeelHint(mainKin.length ? mainKin : kin));
     if (!lone) return wrap;
     wrap.append(roofSectionHead('THIS PIECE (SPECIAL CASE)', 'special'));
     const showOf = {
       pitch: v => String(v),
       fascia: v => String(v),
       overhang: v => (v == null ? '' : F.formatArchitecturalInches(v * 12)),
+      heel: v => inchText(v).replace(/"$/, ''),
     };
     const parseOf = {
       pitch: text => {
@@ -3697,8 +3750,13 @@
         const parsed = F.parseArchitecturalLength(text);
         return parsed.ok ? { v: parsed.inches / 12 } : { error: parsed.error };
       },
+      heel: text => {
+        const parsed = F.parseInches ? F.parseInches(text) : null;
+        const v = parsed && parsed.ok ? parsed.inches : Number(text);
+        return Number.isFinite(v) ? { v } : { error: 'Type the heel raise in inches, minus to drop it.' };
+      },
     };
-    [['pitch', 'PITCH'], ['fascia', 'FASCIA, IN'], ['overhang', 'OVERHANG, ALL EDGES']].forEach(([key, label]) => {
+    [['pitch', 'PITCH'], ['fascia', 'FASCIA, IN'], ['overhang', 'OVERHANG, ALL EDGES'], ['heel', 'RAISE HEEL, IN']].forEach(([key, label]) => {
       const row = document.createElement('div');
       row.dataset.propRow = `special ${label.toLowerCase()}`;
       const name = document.createElement('div');
@@ -3821,6 +3879,23 @@
         again();
         return window.DraftDrawingFormat.roofFasciaIn(items[0].fascia);
       }, { fractions: true }));
+      // RAISE HEEL, the whole roof (jb, 28 Nov 2026): + lifts, - drops.
+      const loneRange = roofHeelRange(items);
+      const raiseRow = numberField('RAISE HEEL, IN', roofRaiseOf(items[0]), loneRange.lo, loneRange.hi, 0.25, v => {
+        if (v === null) {
+          sayOnStrip(`RAISE HEEL here runs from ${inchText(loneRange.lo)} to ${inchText(loneRange.hi)}: lower and the top chord would meet the ceiling.`);
+          return roofRaiseOf(items[0]);
+        }
+        if (Math.abs(v - roofRaiseOf(items[0])) > 1e-9) {
+          const refusal = editRoofs(items, roof => setRoofRaise(roof, v));
+          if (refusal) sayOnStrip(refusal);
+          else sayOnStrip(v > 0 ? `ROOF raised ${inchText(v)}.` : v < 0 ? `ROOF dropped ${inchText(-v)}.` : 'ROOF back as drawn.');
+        }
+        again();
+        return roofRaiseOf(items[0]);
+      }, { fractions: true });
+      raiseRow.dataset.roofRaiseHeel = 'lone';
+      box.append(raiseRow, roofHeelHint(items));
     }
     // SITS ON (Movie, 27 Oct: "cut the roof how it is now and drop it down to
     // match the one beside it" -- "we shouldn't drop it automatically but
@@ -3914,7 +3989,7 @@
               ? lone.edgeHeelIn : null;
             return list ? Number(list[index]) || 0 : 0;
           };
-          box.append(numberField('RAISE HEEL, IN', heelNow(), 0, 48, 0.25, v => {
+          box.append(numberField('RAISE HEEL, THIS EDGE, IN', heelNow(), 0, 48, 0.25, v => {
             if (v === null) {
               sayOnStrip('A raised heel runs from 0" to 48".');
               return heelNow();

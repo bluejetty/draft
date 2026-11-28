@@ -1569,8 +1569,20 @@ if (!window.DraftCutView) {
   // top)"). A deeper fascia no longer lifts the roof: the eave stays where
   // the 5 1/2" board puts it and the board hangs further down past the
   // plate -- every painter draws the board as eave minus roofFasciaFt.
+  // RAISE HEEL FOR THE WHOLE ROOF (jb, 28 Nov 2026): `roof.heelIn`, inches,
+  // plus or minus, lifts or drops the whole roof -- every plane, so the
+  // ridge keeps its place in plan. 0 is the roof as it stands. It never
+  // takes the heel at the wall line under the standard 5 1/2" (jb: "at 0
+  // overhang / 5.5" roof heel - 0 might be the bottom"), so a drop is at
+  // most the rise over the overhang (drawing-format roofHeelDropLimitIn;
+  // the normaliser clamps it). The bearing (`roofBaseElev`) stays on the
+  // plate: only the surface and the board hung from it move.
+  function roofHeelShiftFt(roof) {
+    const v = Number(roof?.heelIn);
+    return Number.isFinite(v) ? v / 12 : 0;
+  }
   function roofEaveElev(roof, stack, env) {
-    return roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+    return roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12 + roofHeelShiftFt(roof);
   }
 
   // ── A PILE OUT IN THE OPEN CARRIES A POST ──────────────────────────────
@@ -2912,11 +2924,11 @@ if (!window.DraftCutView) {
           const profile = geo().roofProfile(
             roof, geo().roofFaces(roof, geo().roofSkeleton(roof)),
             cut.startPt, cut.endPt, axis)
-            .map(pt => ({ u: pt.u, rise: base + ROOF_FASCIA_IN / 12 + pt.rise }));
+            .map(pt => ({ u: pt.u, rise: base + ROOF_FASCIA_IN / 12 + roofHeelShiftFt(roof) + pt.rise }));
           if (profile.length < 2) return;
           profiles.push(profile);
           roofChords.push({
-            u0: profile[0].u, u1: profile[profile.length - 1].u, elev: base,
+            u0: profile[0].u, u1: profile[profile.length - 1].u, elev: base, shift: roofHeelShiftFt(roof),
             profile, overhang: Number(roof.overhang) || 0, fascia: roofFasciaFt(roof),
           });
         });
@@ -3667,10 +3679,13 @@ if (!window.DraftCutView) {
         // An end is an EAVE when the surface lands on the fascia top there;
         // the bearing wall stands the overhang inside it, and the heel's two
         // faces rise from the plate and the bottom chord to the underside.
-        const eaveAt = pt => Math.abs(pt.rise - (chord.elev + ROOF_FASCIA_IN / 12)) < 0.05;
+        const eaveAt = pt => Math.abs(pt.rise - (chord.elev + ROOF_FASCIA_IN / 12 + (chord.shift || 0))) < 0.05;
         const first = prof[0], last = prof[prof.length - 1];
         const span = last.u - first.u;
-        const hasHeel = chord.overhang > 0.05
+        // A whole roof raised over a wall with no overhang (jb, 28 Nov 2026)
+        // stands its heel on the wall face too: without it the band and the
+        // raised fascia left the truss end open.
+        const hasHeel = (chord.overhang > 0.05 || (chord.shift || 0) > 0.01)
           && span > 2 * (chord.overhang + chordFt);
         const leftEave = hasHeel && eaveAt(first);
         const rightEave = hasHeel && eaveAt(last);
@@ -6312,11 +6327,14 @@ if (!window.DraftCutView) {
       if (!facesByRoof || !wallDir) return top;
       facesByRoof.forEach((roofFaces, roof) => {
         const pts = roof.points || [];
-        if (!Array.isArray(roof.edgeHeelIn)) return;
+        const raise = Math.max(0, roofHeelShiftFt(roof));
+        if (!Array.isArray(roof.edgeHeelIn) && !(raise > 0)) return;
         const base = roofBaseElev(roof, stack, env);
         if (Math.abs(base - plateTop) > 0.6) return;
         pts.forEach((a, i) => {
-          const lift = heelLiftAt(roof, i);
+          const kindHere = roof.edges?.[i];
+          if (kindHere === 'gable' || kindHere === 'sloped' || kindHere === 'joint' || kindHere === 'flush') return;
+          const lift = heelLiftAt(roof, i) + raise;
           if (!(lift > 0)) return;
           const b = pts[(i + 1) % pts.length];
           const gx = b.x - a.x, gz = b.z - a.z;
@@ -6333,7 +6351,7 @@ if (!window.DraftCutView) {
           const rise = sectionRoofHeightAt(
             { x: eavePt.x + inward.x / il * 0.02, z: eavePt.z + inward.z / il * 0.02 }, roof, roofFaces);
           if (rise == null) return;
-          top = Math.max(top, base + Math.min(lift, rise));
+          top = Math.max(top, base + Math.min(lift, rise + raise));
         });
       });
       return top;
@@ -10561,6 +10579,7 @@ if (!window.DraftCutView) {
     faceSillFt,
     roofBaseElev,
     roofEaveElev,
+    roofHeelShiftFt,
     pilePosts,
     heldOver,
     framingPieces,

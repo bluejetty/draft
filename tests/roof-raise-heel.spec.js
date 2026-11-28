@@ -52,7 +52,7 @@ async function saved(page) {
   await h.waitForSaved(page);
   return (await h.savedDrawing(page)).roofs[0];
 }
-const heelBox = page => page.locator('[data-roof-field="raise heel, in"]');
+const heelBox = page => page.locator('[data-roof-field="raise heel, this edge, in"]');
 // The level runs of the skeleton: the ridge.
 const ridgeOf = (page, roof) => page.evaluate(r => window.DraftGeometry2D.roofSkeleton(r)
   .filter(s => Math.abs(s.a.z - s.b.z) < 1e-6 && Math.abs(s.a.x - s.b.x) > 1e-3)
