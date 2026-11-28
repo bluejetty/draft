@@ -416,18 +416,16 @@ test('the drafter\'s own colour wins over the finish\'s', async ({ page: p }) =>
   expect(n).toBeGreaterThan(10);
 });
 
-test('a level chip takes that level out of the picture and puts it back', async ({ page: p }) => {
+// NO LEVELS CHIPS (jb, 28 Nov 2026: "take out levels because the user can cut
+// from top to bottom and do the same thing but its more confusing with more
+// buttons"): the whole house shows, and SECTION's PLAN cut takes floors off.
+test('there are no LEVELS chips: every level shows, and the PLAN cut takes the floors above off', async ({ page: p }) => {
   await build3(p);
-  await expect(p.locator('#levels [data-level]')).toHaveText(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF', 'GROUND']);
-  const all = Number(await p.evaluate(() => document.body.dataset.shown));
-  const roofs = await p.evaluate(() => DraftViewer.state.faces.filter(f => f.group === 'roof').length);
-  expect(roofs).toBeGreaterThan(10);
-  await p.locator('[data-level="roof"]').click();
-  await expect(p.locator('[data-level="roof"]')).not.toHaveClass(/lit/);
-  expect(Number(await p.evaluate(() => document.body.dataset.shown))).toBe(all - roofs);
+  await expect(p.locator('#levels, [data-level]')).toHaveCount(0);
+  expect(await p.evaluate(() => DraftViewer.state.shown.length)).toBe(await p.evaluate(() => DraftViewer.state.faces.length));
+  await p.locator('[data-cut="y"]').click();
   expect(await p.evaluate(() => DraftViewer.state.shown.some(f => f.kind === 'roof'))).toBe(false);
-  await p.locator('[data-level="roof"]').click();
-  expect(Number(await p.evaluate(() => document.body.dataset.shown))).toBe(all);
+  await p.locator('[data-cut="off"]').click();
 });
 
 test('a SECTION keeps one side of the cut, and FLIP the other', async ({ page: p }) => {
@@ -750,10 +748,11 @@ test('PRINT MODEL lists the lift-off pieces at the scale, writes a 3MF a slicer 
   await expect(p.locator('[data-print-fit]')).toContainText('bigger than a 250 mm bed');
   await expect(p.locator('[data-print-fit]')).toHaveClass(/warn/);
   await p.locator('[data-scale="96"]').click();
-  // A level switched off does not print.
-  await p.locator('[data-level="roof"]').click();
+  // A level left out does not print (no chips on the page now: by code).
+  const roofOff = on => p.evaluate(on => { if (on) DraftViewer.state.hidden.add('roof'); else DraftViewer.state.hidden.delete('roof'); DraftViewer.applyView(); }, on);
+  await roofOff(true);
   await expect(p.locator('[data-piece]')).toHaveCount(3);
-  await p.locator('[data-level="roof"]').click();
+  await roofOff(false);
   await expect(p.locator('[data-piece]')).toHaveCount(4);
   // Save: the bone goes once the file is written.
   const blob = p.evaluate(() => new Promise(res => {

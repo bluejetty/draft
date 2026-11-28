@@ -120,8 +120,12 @@
   // painter. A level chip leaves a whole level out (house-mesh.js tags each
   // face with its level); the SECTION cuts every face at one plane and keeps
   // one side, and the painter shows what the cut opens up in the cut colour.
+  // The LEVELS chips are gone from the page (jb, 28 Nov 2026: SECTION's
+  // PLAN cut does the same job with fewer buttons); `state.hidden` stays so
+  // a level can still be left out by code, and is empty on every load.
   function showLevelChips() {
     const box = $('levels');
+    if (!box) return;
     box.textContent = '';
     state.groups.forEach(g => {
       const b = document.createElement('button');

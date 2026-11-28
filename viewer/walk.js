@@ -289,7 +289,7 @@
     $('walk').classList.add('lit');
     $('stage').classList.add('walk-picking');
     document.body.dataset.walking = 'pick';
-    v.setStatus('WALK: click a spot on a floor, a stair, a deck or the ground to stand there. (Hide a level to reach the one under it.) Esc cancels.');
+    v.setStatus('WALK: click a spot on a floor, a stair, a deck or the ground to stand there. (SECTION PLAN takes the floors above off, to reach the one under.) Esc cancels.');
   }
 
   function stop() {
@@ -434,7 +434,7 @@
         const r = stage.getBoundingClientRect();
         const hit = pick(e.clientX - r.left, e.clientY - r.top);
         if (hit && hit.ok) standAt(hit.x, hit.y, hit.z, hit.kind, hit.group);
-        else V().setStatus(hit ? 'That is not something to stand on: click a floor, a stair, a deck or the ground. (Hide a level to reach the one under it.)' : 'Nothing there: click a floor, a stair, a deck or the ground.', true);
+        else V().setStatus(hit ? 'That is not something to stand on: click a floor, a stair, a deck or the ground. (SECTION PLAN takes the floors above off, to reach the one under.)' : 'Nothing there: click a floor, a stair, a deck or the ground.', true);
       }
     };
     stage.addEventListener('pointerup', up, true);

@@ -58,7 +58,6 @@
       #tools button { font-size: 14px; padding: 2px 9px; }
       /* On a phone the SECTION row wraps rather than running off the side. */
       #tools .chips { flex-wrap: wrap; }
-      #levels { display: flex; gap: 4px; flex-wrap: wrap; }
       #cut-at { width: 180px; accent-color: var(--chip-lit); }
       #status { flex: 1 1 260px; text-align: right; font-size: 15px; opacity: 0.9; min-width: 0; }
       #status.warn { color: var(--warn); opacity: 1; }
@@ -280,7 +279,6 @@
         }
         body:not([data-embed="1"]) #tools button { font-size: 15px; padding: 4px 10px; }
         body:not([data-embed="1"]) #walk, body:not([data-embed="1"]) #pad-tab { flex: 1 1 100%; }
-        body:not([data-embed="1"]) #levels { gap: 5px; }
         body:not([data-embed="1"]) #cut-at { flex: 1 1 100%; width: auto; }
         body:not([data-embed="1"]) #painter-note { flex: 0 0 100%; }
         body:not([data-embed="1"]) #status { flex: none; margin-top: auto; text-align: left; font-size: 14px; }
@@ -323,10 +321,9 @@
       <span id="status" role="status"></span>
     </header>
     <nav id="tools" aria-label="What to show">
-      <span class="chips" role="group" aria-label="Levels">
-        <span class="label">LEVELS</span>
-        <span id="levels"></span>
-      </span>
+      <!-- No LEVELS chips (jb, 28 Nov 2026: "take out levels because the user
+           can cut from top to bottom and do the same thing but its more
+           confusing with more buttons"): SECTION's PLAN cut takes floors off. -->
       <span class="chips" role="group" aria-label="Section">
         <span class="label">SECTION</span>
         <button type="button" data-cut="off" class="lit" title="No section: the whole house">OFF</button>
@@ -523,7 +520,7 @@
         <button type="button" data-preset="top" title="Straight down">TOP</button>
         <button type="button" id="embed-done" class="lit" title="Keep this view on the sheet">DONE</button>
       </div>
-      <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits · LEVELS hide a floor · SECTION cuts the house</div>
+      <div id="help">Drag to turn · right-drag or Shift-drag to slide · wheel to zoom · arrows turn 15° · F fits · SECTION cuts the house (PLAN takes floors off)</div>
     </main>
 
     <!-- The drafter's own modules, read from the folder above. Order as LAYOUT.html loads them. -->
