@@ -129,3 +129,19 @@ test('OBJ / PROP edits WIDTH, DEPTH, OPENING and THRESHOLD; a too-wide opening i
   d = await saved(page);
   expect([fx(d, 'fp').opening, fx(d, 'fp').hearth]).toEqual([3.5, 0]);
 });
+
+// THE WALL OVER IT (jb, 28 Nov 2026): set into its wall, the wall's faces run
+// across the fireplace -- the room face solid, the face inside the box dotted.
+test('the wall it sits in still shows across it: one face dotted', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__dashes = [];
+    const proto = CanvasRenderingContext2D.prototype;
+    const orig = proto.setLineDash;
+    proto.setLineDash = function (d) { window.__dashes.push(JSON.stringify(d)); return orig.call(this, d); };
+  });
+  await open(page, []);
+  const without = await page.evaluate(() => window.__dashes.filter(d => d === '[4,3]').length);
+  await open(page, [FP()]);
+  const withFp = await page.evaluate(() => window.__dashes.filter(d => d === '[4,3]').length);
+  expect(withFp, 'the inner face is drawn dotted over the fireplace').toBeGreaterThan(without);
+});
