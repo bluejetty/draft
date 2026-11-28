@@ -87,3 +87,24 @@ test('RISER BOARDS NONE leaves the steps open', async ({ page: p }) => {
   expect(r.stairs).toBe(2);
   expect(r.risers).toEqual([]);
 });
+
+// jb, 28 Nov 2026: "the top step looks like there is a gap, there should be
+// a nosing or backing board of WOOD in there". This file's MAIN FL hole edge
+// is 2 1/2" behind the 2ND FL flight's head (x -16.625 vs -16.4167).
+test('the head of a flight is closed to the hole edge: wood backing down the floor, nosing flush with it', async ({ page: p }) => {
+  await p.goto('/viewer/index.html?painter=plain');
+  await p.waitForSelector('body[data-ready="1"]');
+  const saved = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+  const r = await p.evaluate(s => {
+    const built = DraftViewer.loadDrawing(s, 'test');
+    const L5 = built.stack.floors.find(l => l.id === 5);
+    const wood = built.faces.filter(f => f.kind === 'stair' && f.group === 'L3');
+    const xs = wood.flatMap(f => f.pts.map(q => q.x));
+    const atEdge = wood.filter(f => f.pts.some(q => Math.abs(q.x + 16.625) < 1e-3));
+    const ys = atEdge.flatMap(f => f.pts.map(q => q.y));
+    return { minX: Math.min(...xs), lo: Math.min(...ys), hi: Math.max(...ys), top: L5.floorTop, bottom: L5.floorBottom };
+  }, saved);
+  expect(r.minX).toBeCloseTo(-16.625, 3);
+  expect(r.hi).toBeCloseTo(r.top, 3);
+  expect(r.lo).toBeCloseTo(r.bottom, 3);
+});

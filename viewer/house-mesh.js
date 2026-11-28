@@ -882,7 +882,12 @@
     if (SG) env.stairs().forEach(stair => {
       const n0 = faces.length;
       let group = null;
-      try { group = buildStair(stair, stack, levelById, SG, faces); } catch (e) { group = null; /* a stair that will not solve is left out */ }
+      // The holes in the floor it comes down from: where its head stands.
+      const floorIds = new Set((Array.isArray(saved.floors) ? saved.floors : []).filter(f => f && f.levelId === stair.levelId).map(f => f.id));
+      const holes = (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
+        .filter(o => o && o.hostType === 'floor' && floorIds.has(o.hostId) && Array.isArray(o.points) && o.points.length >= 3)
+        .map(o => o.points.map(p => ({ x: p.x, z: p.z })));
+      try { group = buildStair(stair, stack, levelById, SG, faces, holes); } catch (e) { group = null; /* a stair that will not solve is left out */ }
       if (group) { counts.stairs += 1; mark(n0, group); }
     });
 
@@ -1155,7 +1160,37 @@
   // tread is one riser lower than the last; a flat landing is one riser, a
   // landing of winders as many risers as it has winders. The upper floor is
   // the top tread, so the first tread already stands one riser down.
-  function buildStair(stair, stack, levelById, SG, out) {
+  // How far back from a flight's head, against its walking direction `d`,
+  // the edge of the floor hole it stands in lies -- the gap the backing
+  // fills. 0 when no hole holds it; never more than 6".
+  function headGap(start, d, holes) {
+    const inLoop = (p, loop) => {
+      let c = false;
+      for (let i = 0, j = loop.length - 1; i < loop.length; j = i, i += 1) {
+        const a = loop[i], b = loop[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) c = !c;
+      }
+      return c;
+    };
+    const probe = { x: start.x + d.x * 0.01, z: start.z + d.z * 0.01 };
+    const hole = holes.find(h => inLoop(probe, h));
+    if (!hole) return 0;
+    let best = Infinity;
+    hole.forEach((a, i) => {
+      const b = hole[(i + 1) % hole.length];
+      // Ray start - t d meets segment a + s (b - a).
+      const ex = b.x - a.x, ez = b.z - a.z;
+      const den = (-d.x) * ez - (-d.z) * ex;
+      if (Math.abs(den) < 1e-9) return;
+      const wx = a.x - start.x, wz = a.z - start.z;
+      const t = (wx * ez - wz * ex) / den;
+      const sv = (wx * (-d.z) - wz * (-d.x)) / den;
+      if (t >= -1e-6 && sv >= -1e-6 && sv <= 1 + 1e-6) best = Math.min(best, Math.max(0, t));
+    });
+    return Number.isFinite(best) && best <= 0.5 ? best : 0;
+  }
+
+  function buildStair(stair, stack, levelById, SG, out, holes = []) {
     if (!stair || !stair.start || !stair.end) return false;
     const storey = levelById[stair.levelId];
     if (!storey) return false;
@@ -1251,8 +1286,22 @@
             if (!(hi - lo > 1e-4)) return;
             prism([at(u, -half), at(u + BOARD_FT, -half), at(u + BOARD_FT, half), at(u, half)], lo, hi, 'riser', COLOURS.riser, out);
           };
-          riserAt(0, tops[0], yTop);
+          riserAt(0, tops[0], idx === 0 ? yTop - TREAD_FT : yTop);
           tops.forEach((t, k) => riserAt((k + 1) * step, k + 1 < count ? tops[k + 1] : yFoot, t - TREAD_FT));
+        }
+        // THE HEAD OF THE FLIGHT (jb, 28 Nov 2026: "the top step looks like
+        // there is a gap, there should be a nosing or backing board of WOOD
+        // in there"): as the STAIR SECTION builds it (stair-section.js
+        // topBacking), a wood backing on the opening's header from the hole's
+        // edge to the top riser, down the floor's depth, and a nosing board
+        // flush with the floor over it and the top riser.
+        if (!PRINT && idx === 0) {
+          const back = headGap(run.start, d, holes);
+          const nTop = yTop, nLow = yTop - TREAD_FT;
+          if (back > 1e-3) {
+            extrudeProfile([[-back, storey.floorBottom], [0, storey.floorBottom], [0, nLow], [-back, nLow]], at3, -half, half, 'stair', COLOURS.stair, out);
+          }
+          extrudeProfile([[-back, nLow], [BOARD_FT + NOSE_FT, nLow], [BOARD_FT + NOSE_FT, nTop], [-back, nTop]], at3, -half, half, 'stair', COLOURS.stair, out);
         }
         // THE UNDERSIDE BOARD, along the stringers' bottom edge from the top
         // of the flight down to where it meets the floor or landing.
