@@ -1479,10 +1479,9 @@
       // ITS CENTRE ON THE NODE, along its wall, however far off the wall the
       // node lies -- a dimension drawn out in the room does not pull it free.
       const { node, along } = centreTabCatch(md, raw);
-      const bounds = md.island
-        ? [Number(md.island.offset) - Number(md.island.width) / 2, Number(md.island.offset) + Number(md.island.width) / 2]
-        : [0, frame.len];
-      const at = FG.slideClamp(along, half, bounds, []);
+      const isl = md.island;
+      const at = FG.slideClamp(along, half,
+        isl ? [Number(isl.offset) - Number(isl.width) / 2, Number(isl.offset) + Number(isl.width) / 2] : [0, frame.len], []);
       if (at != null) fixture.offset = at;
       md.joint = null;
       md.lit = at != null && Math.abs(at - along) < 1e-6 ? { pt: { x: node.x, y: 0, z: node.z }, node: true } : null;
