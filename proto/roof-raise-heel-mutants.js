@@ -37,7 +37,7 @@ const MUTANTS = [
     test: 'corners climb' },
   { file: 'cut-view.js',
     name: 'the wall stops at the plate under a raised eave',
-    find: '          top = Math.max(top, base + Math.min(lift, rise));',
+    find: '          top = Math.max(top, base + Math.min(lift, rise + raise));',
     with: '',
     test: 'the elevations' },
   { file: 'drawing-format.js',
