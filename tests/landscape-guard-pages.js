@@ -66,6 +66,10 @@ const EXEMPT = {
   // a working screen, and it is on the roster.)
   'Notepad.dc.html': 'component preview, not a screen a drafter works on',
   'SaveBox.dc.html': 'component preview, not a screen a drafter works on',
+  // NOT FOUND (28 Nov 2026): what the host serves for an address that is not
+  // a page; /viewer/NAME passes straight through it to the 3D viewer. A
+  // visitor with a shared link on a phone held upright must get through.
+  '404.html': 'not-found page and project-link door, read on any device',
 };
 
 const ALL_PAGES = fs.readdirSync(ROOT).filter(f => f.endsWith('.html')).sort();

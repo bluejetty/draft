@@ -70,11 +70,14 @@ test('25BONES on the first line of the pad lifts the ceiling to 25; the bone and
   await expect(page.locator('#bone')).toHaveAttribute('title', /25 bones .* full/);
 });
 
-test('the line counts only as the FIRST line, and only on page 1', async ({ page }) => {
+// jb, 28 Nov 2026: "lets allow codes in positions line 1-5".
+test('the line counts on any of the first FIVE lines, and only on page 1', async ({ page }) => {
   await open(page);
   await openPad(page);
   const pad = page.locator('[data-notes-text]');
-  await pad.fill('site notes\n25BONES');
+  await pad.fill('site notes\n3DBONES\n\nlot 12\n25BONES');
+  expect(await capNow(page)).toBe(25);
+  await pad.fill('a\nb\nc\nd\ne\n25BONES');
   expect(await capNow(page)).toBe(10);
   await pad.fill('  25bones  \nsite notes');
   expect(await capNow(page)).toBe(25);
