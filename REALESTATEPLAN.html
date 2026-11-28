@@ -106,6 +106,10 @@
 <script src="./line-styles.js"></script>
 <script src="./pen-table.js"></script>
 <script src="./layout-plan.js"></script>
+<!-- The scale list and the SHOW LAYERS rows, CONSTRUCTION LAYOUT's own;
+     the logos the title block offers. -->
+<script src="./viewport-kit.js"></script>
+<script src="./titleblock.js"></script>
 <script src="./formatters.js"></script>
 <!-- AFTER formatters.js, and the order is the whole of it: cut-view.js
      destructures window.DraftFormatters AT LOAD, so placed before it the
@@ -213,6 +217,68 @@
     background: var(--surface-chip); border: var(--sheet-edge);
     width: 100%; height: 100%; display: block;
   }
+  .seat { cursor: default; }
+  .seat[data-picked="true"] { border-color: var(--accent-mark); }
+  .seat .seat-del {
+    flex: none; border: none; background: none; color: var(--ink-quiet); cursor: pointer;
+    font: inherit; font-size: 15px; line-height: 1; padding: 0 2px;
+  }
+  .seat .seat-del:hover { color: var(--ink-warn); }
+  .rail-btn.add { text-align: center; border-color: var(--accent-mark); color: var(--accent-mark); font-weight: 600; }
+  .rail-pair { display: flex; gap: 6px; }
+  .rail-pair .rail-btn { flex: 1; text-align: center; }
+  .rail-btn:disabled { opacity: .45; cursor: default; border-color: var(--edge-panel); }
+  #rp-menu, #rp-card {
+    position: fixed; z-index: 40; color: var(--ink-primary);
+    /* SOLID in every skin: a panel colour with see-through in it would put
+       the plan's lines behind the card's words. */
+    background: linear-gradient(var(--surface-panel), var(--surface-panel)), var(--surface-page);
+    border: 1px solid var(--edge-panel); box-shadow: 0 6px 18px rgba(0,0,0,.28);
+    font-family: 'Barlow Condensed', system-ui, sans-serif;
+  }
+  #rp-menu[hidden], #rp-card[hidden] { display: none; }
+  #rp-menu { min-width: 190px; padding: 4px; display: flex; flex-direction: column; }
+  #rp-menu .rp-menu-head { font-size: 10px; letter-spacing: .1em; color: var(--accent-mark); padding: 4px 8px 2px; }
+  #rp-menu button {
+    background: none; border: none; color: inherit; font: inherit; font-size: 13px; letter-spacing: .05em;
+    text-align: left; padding: 5px 8px; cursor: pointer;
+  }
+  #rp-menu button:hover { background: var(--surface-chip); }
+  #rp-menu button.danger { color: var(--ink-warn); }
+  #rp-card { width: 290px; max-height: calc(100vh - 24px); overflow: auto; padding: 8px 10px 10px; font-size: 12px; }
+  #rp-card .rp-card-head { display: flex; align-items: center; justify-content: space-between; }
+  #rp-card .rp-card-title { font-weight: 600; letter-spacing: .1em; color: var(--accent-mark); }
+  #rp-card .rp-card-close { border: none; background: none; color: var(--ink-quiet); font-size: 18px; cursor: pointer; }
+  #rp-card .rp-card-section { margin: 8px 0 4px; font-size: 10px; letter-spacing: .1em; color: var(--ink-quiet); }
+  #rp-card .rp-card-note { margin: 2px 0 8px; font-size: 10px; letter-spacing: .06em; color: var(--ink-quiet); }
+  #rp-card select, #rp-card input[type="text"] {
+    width: 100%; font: inherit; font-size: 12px; padding: 4px 6px; background: var(--surface-chip);
+    color: var(--ink-primary); border: 1px solid var(--edge-panel);
+  }
+  #rp-card .rp-scale-text { margin-top: 4px; }
+  #rp-card .rp-layer {
+    display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 3px; padding: 4px 6px;
+    background: var(--surface-chip); color: var(--ink-primary); border: 1px solid var(--edge-panel);
+    font: inherit; font-size: 12px; letter-spacing: .05em; text-align: left; cursor: pointer;
+  }
+  #rp-card .rp-layer.sub { margin-left: 18px; width: calc(100% - 18px); font-size: 11px; padding: 2px 6px; }
+  #rp-card .rp-layer.off .rp-layer-name { color: var(--ink-quiet); }
+  #rp-card .rp-layer.reset { justify-content: center; margin-top: 6px; }
+  #rp-card .rp-layer:disabled { opacity: .45; cursor: default; }
+  #rp-card .rp-onoff { flex: none; min-width: 34px; text-align: center; border: 1px solid currentColor; font-size: 10px; }
+  #rp-card .rp-onoff-on { color: var(--ink-good); }
+  #rp-card .rp-onoff-off { color: var(--ink-warn); }
+  #rp-card .rp-onoff-part { color: var(--ink-warn); border-style: dashed; }
+  #rp-card .rp-line { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  #rp-card .rp-line input[type="checkbox"] { accent-color: var(--accent-mark); }
+  #rp-card .rp-line-del { border: none; background: none; color: var(--ink-quiet); cursor: pointer; font-size: 15px; }
+  #rp-card .rp-logo {
+    display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 4px; padding: 4px 6px;
+    background: #ffffff; color: #1d1f20; border: 1px solid var(--edge-panel); cursor: pointer;
+    font: inherit; font-size: 12px; text-align: left;
+  }
+  #rp-card .rp-logo.on { outline: 2px solid var(--accent-mark); }
+  #rp-card .rp-logo img { width: 56px; height: 32px; object-fit: contain; }
   #status {
     flex: none; padding: 5px 12px; font-size: 11px; letter-spacing: .05em;
     color: var(--ink-quiet); min-height: 22px;
@@ -239,6 +305,12 @@
              starts OFF for the same reason he wrote the word. The 3D seat is
              held open and says so: nothing can draw it yet. -->
         <div id="seat-list"></div>
+        <button type="button" id="rp-add" class="rail-btn add"
+          title="Put a floor plan, a 3D view, the floor areas, a logo or the company box on the sheet">+ ADD</button>
+        <div class="rail-pair">
+          <button type="button" id="rp-undo" class="rail-btn" disabled title="Undo (Ctrl+Z)">UNDO</button>
+          <button type="button" id="rp-redo" class="rail-btn" disabled title="Redo (Ctrl+Y)">REDO</button>
+        </div>
         <button type="button" id="view3d-reset" class="rail-btn" hidden
           title="Put the 3D view back to the front-left corner">RESET 3D VIEW</button>
         <p class="rail-title">Sheet</p>
@@ -251,6 +323,10 @@
       <div class="sheet-wrap"><canvas id="sheet" width="1000" height="640"></canvas></div>
     </div>
     <div id="status" role="status"></div>
+    <!-- RIGHT-CLICK and + ADD: one menu. The CARD: a plan's SCALE & LAYERS,
+         the company box's lines, the logo list. -->
+    <div id="rp-menu" role="menu" hidden></div>
+    <div id="rp-card" role="dialog" aria-label="Viewport settings" hidden></div>
   </main>
 
   <!-- page:'real-estate' marks this chip "you are here". NO BONE yet: the bone
@@ -281,11 +357,87 @@
       const MARGIN_IN = 0.5;
 
       // ── WHAT IS ON IT ─────────────────────────────────────────────────
-      // A seat is a LEVEL plus whether it prints. Kept in the order the
-      // drawing's own levels are in, so the sheet reads bottom-up the way the
-      // house is stacked -- and the 3D view sits at the end as a seat with no
-      // level behind it, which is why it carries `kind` rather than an id.
-      let seats = [];
+      //
+      // VIEWPORTS THE DRAFTER PLACES (jb, 28 Nov 2026: "can we make these
+      // viewports so the user can place them and add or delete more. also
+      // would like to double click the floor plans to change scale and
+      // layers", and "allow the user to place and move around a logo and
+      // maybe a text box ... for the company name and or address / phone
+      // number"). "More similar to construction plans kindof" -- so the same
+      // verbs as CONSTRUCTION LAYOUT (pick, drag, right-click, Delete, UNDO)
+      // on a sheet that is still a listing sheet.
+      //
+      // TWO STATES, AND THE FIRST IS THE OLD PAGE. A drawing nobody has
+      // arranged carries no `realEstatePlan` and opens exactly as it always
+      // did: the 3D row on top, the plans under it, re-dealt from the drawing
+      // each time it opens, ticks flowing the rest into the room. The first
+      // MOVE, ADD, DELETE, SCALE or anything else that arranges the sheet
+      // writes the arrangement into the drawing (`realEstatePlan`), and from
+      // then on the sheet is the drafter's and stays where it was put.
+      //
+      // AN ITEM, in paper INCHES from the paper's top-left corner:
+      //   { id, kind, label, on, x, y, w, h, ... }
+      //   plan    levelId, pif (null = FIT the box), layersOff
+      //   view3d  preset, camera (null = the preset)
+      //   areas   the FLOOR AREAS box
+      //   logo    markId (titleblock.js marks: shipped + COMPANY STANDARDS)
+      //   text    lines [{ role, text, on }]  -- the company box
+      // A plan at a named scale HUGS its drawing (jb: "hug"): its w and h are
+      // the plan's own size at that scale, worked out, not kept.
+      const RECORD_KEY = 'realEstatePlan';
+      const KINDS = ['plan', 'view3d', 'areas', 'logo', 'text'];
+      const HUG_PAD_IN = 0.12;
+      const LABEL_IN = 0.22;
+      const MIN_IN = 0.4;
+
+      let sheet = null;          // the drafter's arrangement, or null = auto
+      let autoTicks = new Map(); // auto mode: the ticks changed this visit
+      let selectedId = null;
+
+      const finite = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+      const cleanCamera = c => (c && typeof c === 'object' ? JSON.parse(JSON.stringify(c)) : null);
+      // WHAT COMES OFF DISK IS CHECKED, item by item: a file is a thing anyone
+      // can edit, and an item with no kind or no size is dropped rather than
+      // drawn as a guess.
+      const normaliseRecord = rec => {
+        if (!rec || typeof rec !== 'object' || !Array.isArray(rec.items)) return null;
+        const seen = new Set();
+        const items = rec.items.reduce((out, it) => {
+          if (!it || !KINDS.includes(it.kind)) return out;
+          const id = String(it.id ?? '').slice(0, 40);
+          if (!id || seen.has(id)) return out;
+          seen.add(id);
+          const item = {
+            id, kind: it.kind,
+            label: String(it.label || '').slice(0, 60),
+            on: it.on !== false,
+            x: finite(it.x), y: finite(it.y),
+            w: Math.max(MIN_IN, finite(it.w, 2)), h: Math.max(MIN_IN, finite(it.h, 2)),
+          };
+          if (it.kind === 'plan') {
+            item.levelId = it.levelId;
+            item.pif = Number(it.pif) > 0 ? Number(it.pif) : null;
+            const off = Array.isArray(it.layersOff) ? it.layersOff.map(String).filter(Boolean) : [];
+            if (off.length) item.layersOff = [...new Set(off)];
+          }
+          if (it.kind === 'view3d') {
+            item.preset = typeof it.preset === 'string' ? it.preset : 'front-left';
+            item.camera = cleanCamera(it.camera);
+          }
+          if (it.kind === 'logo') item.markId = String(it.markId || 'roughdrafter');
+          if (it.kind === 'text') {
+            item.lines = (Array.isArray(it.lines) ? it.lines : []).slice(0, 8).map(l => ({
+              role: String(l?.role || 'other').slice(0, 20),
+              text: String(l?.text || '').slice(0, 120),
+              on: l?.on !== false,
+            }));
+          }
+          out.push(item);
+          return out;
+        }, []);
+        const paperId = PAPERS.some(p => p.id === rec.paper) ? rec.paper : PAPERS[0].id;
+        return { paper: paperId, items, nextId: Math.max(1, Math.floor(finite(rec.nextId, 1))) };
+      };
 
       const load = async () => {
         const store = window.SharedFileStore;
@@ -309,89 +461,49 @@
       // 21 Sep about empty sheets: a seat holding a level nothing is drawn on
       // is a rectangle that teaches the drafter the plan is missing.
       const planned = levelId => LP.planWalls(drawing, levelId, 'plan').length > 0;
+      // A HALF-FLOOR prints on its full floor's plan, not as a seat of its own.
+      const planLevels = () => levels.filter(level => planned(level.id) && !LP.ridesOnFullFloor(drawing, level.id))
+        .sort((a, b) => (a.elev || 0) - (b.elev || 0));
+      const levelName = id => {
+        const level = levels.find(l => String(l.id) === String(id));
+        return level ? (level.name || `LEVEL ${level.id}`) : 'PLAN';
+      };
 
+      // THE SEATS THE OLD PAGE DEALT, in its order: the 3D views first, the
+      // plans bottom-up, the FLOOR AREAS last and off.
+      //
       // WHICH LEVEL IS THE BASEMENT: the lowest one that carries plan walls
       // and sits below the first floor. Read off the drawing rather than off a
       // name, because a level called anything at all can be the one under the
-      // house -- and `optional` is the only thing this page does differently
-      // with it, so getting it wrong costs a tick and not a drawing.
-      const buildSeats = () => {
-        // A HALF-FLOOR prints on its full floor's plan, not as a seat of its own.
-        const withWalls = levels.filter(level => planned(level.id) && !LP.ridesOnFullFloor(drawing, level.id))
-          .sort((a, b) => (a.elev || 0) - (b.elev || 0));
+      // house -- and the basement is the "(maybe basement (optional)" Movie
+      // asked for, so it starts OFF.
+      const autoSeats = () => {
+        const withWalls = planLevels();
         const lowest = withWalls[0];
         const plans = withWalls.map(level => ({
-          kind: 'plan',
-          id: level.id,
+          id: `plan-${level.id}`, kind: 'plan', levelId: level.id, pif: null,
           label: level.name || `LEVEL ${level.id}`,
-          // THE BASEMENT IS OPTIONAL AND OFF, which is the word he used:
-          // "(maybe basement (optional)". Everything else prints.
-          optional: withWalls.length > 1 && level === lowest && (level.elev || 0) < 0,
           on: !(withWalls.length > 1 && level === lowest && (level.elev || 0) < 0),
         }));
         // THE 3D VIEWS FIRST, MADE BY THEMSELVES (jb, 27 Nov 2026:
         // "automatically generate one for Real Estate Plans", then "the upper
         // 2 windows 3d"), the plans under them.
-        seats = [
-          ...VIEWS.map(v => ({ kind: 'view3d', id: null, slot: v.slot, label: v.label, on: true })),
+        const seats = [
+          ...VIEWS.map(v => ({ id: v.slot, kind: 'view3d', label: v.label, preset: v.preset,
+            camera: autoCameras[v.slot] || null, on: true })),
           ...plans,
           // THE AREAS, a seat of their own (Movie, 1 Oct), OFF since jb, 27
           // Nov 2026: "no FLOOR AREAS (we might put those elsewhere on here
           // in a bit)". A tick puts them back.
-          { kind: 'areas', id: null, label: 'FLOOR AREAS', on: false },
+          { id: 'areas', kind: 'areas', label: 'FLOOR AREAS', on: false },
         ];
-      };
-
-      const paintSeats = () => {
-        const host = document.getElementById('seat-list');
-        host.innerHTML = '';
-        if (!seats.length) {
-          const p = document.createElement('p');
-          p.className = 'empty';
-          p.textContent = 'No plans in this drawing yet.';
-          host.appendChild(p);
-          return;
-        }
-        seats.forEach((seat, i) => {
-          const row = document.createElement('div');
-          row.className = 'seat';
-          if (seat.waiting) row.dataset.empty = 'true';
-          const box = document.createElement('input');
-          box.type = 'checkbox';
-          box.checked = !!seat.on;
-          box.disabled = !!seat.waiting;
-          box.id = `seat-${i}`;
-          box.addEventListener('change', () => {
-            seats[i].on = box.checked;
-            paintSheet();
-            say(`${seat.label} ${box.checked ? 'on' : 'off'} the sheet.`);
-          });
-          const label = document.createElement('label');
-          label.className = 'what';
-          label.htmlFor = box.id;
-          label.textContent = seat.waiting ? `${seat.label} — waiting on 3D` : seat.label;
-          row.appendChild(box);
-          row.appendChild(label);
-          host.appendChild(row);
-        });
-      };
-
-      // ── THE SHEET ─────────────────────────────────────────────────────
-      const fitCanvas = canvas => {
-        const box = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        const w = Math.max(320, Math.round(box.width * dpr));
-        const h = Math.max(240, Math.round(box.height * dpr));
-        if (canvas.width !== w) canvas.width = w;
-        if (canvas.height !== h) canvas.height = h;
+        return seats.map(seat => ({ ...seat, on: autoTicks.has(seat.id) ? autoTicks.get(seat.id) : seat.on }));
       };
 
       // THE SEATS ARE LAID IN A ROW OF EQUAL BOXES, which is the plainest
-      // arrangement that is honestly an arrangement -- and the one Movie said
-      // he would change: "i will need to adjust what is shown and how it is
-      // shown in this layout view". So the boxes are computed from a count
-      // rather than written down, and moving to a different presentation is a
-      // change to this function and to nothing else.
+      // arrangement that is honestly an arrangement. In INCHES now, so the
+      // same boxes become the drafter's starting arrangement the moment one
+      // is moved.
       const boxesFor = (n, x, y, w, h) => {
         if (n <= 0) return [];
         const gap = Math.min(w, h) * 0.03;
@@ -406,6 +518,59 @@
         }
         return out;
       };
+      const innerIn = (p = paper) => ({ x: MARGIN_IN, y: MARGIN_IN, w: p.w - MARGIN_IN * 2, h: p.h - MARGIN_IN * 2 });
+      // THE 3D VIEWS IN A ROW ON TOP, EVERYTHING ELSE IN A ROW UNDER THEM
+      // (jb, 27 Nov 2026); either alone takes the whole sheet as before.
+      const dealBoxes = (showing, inner) => {
+        const out = new Map();
+        const top = showing.filter(seat => seat.kind === 'view3d');
+        const rest = showing.filter(seat => seat.kind !== 'view3d');
+        if (top.length && rest.length) {
+          const gap = Math.min(inner.w, inner.h) * 0.03;
+          const rowH = (inner.h - gap) / 2;
+          const row = (list, y0) => {
+            const bw = (inner.w - gap * (list.length - 1)) / list.length;
+            list.forEach((seat, i) => out.set(seat.id, { x: inner.x + i * (bw + gap), y: y0, w: bw, h: rowH }));
+          };
+          row(top, inner.y);
+          row(rest, inner.y + rowH + gap);
+        } else {
+          boxesFor(showing.length, inner.x, inner.y, inner.w, inner.h)
+            .forEach((box, i) => out.set(showing[i].id, box));
+        }
+        return out;
+      };
+      // Auto mode: the seats with the boxes the old page would have drawn.
+      // One that is ticked off is given the box it would have had with
+      // everything on, so it has somewhere to come back to once arranged.
+      const autoItems = () => {
+        const seats = autoSeats();
+        const inner = innerIn();
+        const shown = dealBoxes(seats.filter(s => s.on), inner);
+        const all = dealBoxes(seats, inner);
+        return seats.map(seat => ({ ...seat, ...(shown.get(seat.id) || all.get(seat.id)) }));
+      };
+      const items = () => (sheet ? sheet.items : autoItems());
+      const itemById = id => items().find(it => it.id === id) || null;
+
+      // A PLAN AT A NAMED SCALE, ITS OWN SIZE: the drawing's extent at that
+      // scale, a little paper round it and its title line under it.
+      const hugSize = item => {
+        const bounds = drawing ? LP.planBounds(drawing, item.levelId) : null;
+        if (!bounds || !(item.pif > 0)) return null;
+        return {
+          w: Math.max(1, bounds.maxX - bounds.minX) * item.pif + HUG_PAD_IN * 2,
+          h: Math.max(1, bounds.maxZ - bounds.minZ) * item.pif + HUG_PAD_IN * 2 + LABEL_IN,
+        };
+      };
+      const boxIn = item => {
+        if (item.kind === 'plan' && item.pif > 0) {
+          const size = hugSize(item);
+          if (size) return { x: item.x, y: item.y, ...size };
+        }
+        return { x: item.x, y: item.y, w: item.w, h: item.h };
+      };
+      const resizable = item => !(item.kind === 'plan' && item.pif > 0);
 
       // ── THE AREAS ─────────────────────────────────────────────────────
       //
@@ -504,115 +669,185 @@
         window.__rpAreas = rows.map(([name, value]) => `${name} ${value}`);
       };
 
-      // ONE PLAN INTO ONE BOX, at whatever scale makes it fit. A listing plan
-      // is not drawn to a named scale -- nobody measures off it -- so the fit
-      // is the box's and the scale bar a construction sheet carries is absent
-      // on purpose rather than forgotten.
-      const drawSeat = (ctx, seat, box) => {
+
+      // ── ONE ITEM INTO ITS BOX ─────────────────────────────────────────
+      const drawItem = (ctx, item, box, k) => {
         const skin = window.__rpSkin;
         ctx.save();
-        ctx.strokeStyle = skin['edge-panel'];
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w, box.h);
-        ctx.setLineDash([]);
-        ctx.fillStyle = skin['ink-quiet'];
-        ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(seat.label.toUpperCase(), box.x + 4, box.y + box.h - 5);
-
-        if (seat.kind === 'areas') {
-          drawAreas(ctx, box);
-          ctx.restore();
-          return;
+        // THE LOGO AND THE COMPANY BOX WEAR NO FRAME: they are ink on the
+        // sheet, not windows onto the drawing. Picked, every item is outlined.
+        if (item.kind !== 'logo' && item.kind !== 'text') {
+          ctx.strokeStyle = skin['edge-panel'];
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w, box.h);
+          ctx.setLineDash([]);
+          ctx.fillStyle = skin['ink-quiet'];
+          ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+          const scaleWord = item.kind === 'plan' && item.pif > 0
+            ? `  ·  ${window.DraftViewportKit.scaleLabelOf(item.pif)}` : '';
+          ctx.fillText(`${item.label.toUpperCase()}${scaleWord}`, box.x + 4, box.y + box.h - 5);
         }
-        if (seat.kind === 'view3d') {
-          drawView3d(ctx, box, viewOf(seat.slot));
-          ctx.restore();
-          return;
-        }
-        if (seat.kind !== 'plan') { ctx.restore(); return; }
+        if (item.kind === 'areas') drawAreas(ctx, box);
+        else if (item.kind === 'view3d') drawView3d(ctx, box, item);
+        else if (item.kind === 'plan') drawPlanIn(ctx, item, box, k);
+        else if (item.kind === 'logo') drawLogo(ctx, item, box);
+        else if (item.kind === 'text') drawCompany(ctx, item, box);
+        ctx.restore();
+      };
 
-        // FRAMED OVER WHAT IS DRAWN, NOT OVER THE WALLS. This asked
-        // `wallBounds` until now, and every dimension string on the sheet paid
-        // for it: the strings stand 3 to 4.5 ft OUTSIDE the walls they measure,
-        // the box below clips to its own rectangle, and what falls outside a
-        // clip on paper is not one pan away -- it is gone. On Movie's own
-        // drawing that silently cut nineteen of them, including both overalls,
-        // off the top and bottom of every plan.
-        //
-        // `planBounds` is the answer layout-plan.js already wrote for exactly
-        // this, and LAYOUT.html and the neighborhood page have both read it
-        // since 21 Sep: walls with their thickness, plus lines, floors, roofs,
-        // outlines AND dimensions, measured rather than allowed for. This page
-        // was the last caller left on the old one.
-        //
-        // NOT A PAD BUMP, which is the tempting one-liner and is wrong twice:
-        // a constant would have to be the worst case for every drawing and
-        // would then be too roomy for all the rest, and it would shrink the
-        // plan on drawings whose strings already fit. LAYOUT.html's
-        // VIEW_ALLOWANCE_FT carries that argument in full and keeps its
-        // `dimensions: 0` for the same reason.
-        const bounds = LP.planBounds(drawing, seat.id);
-        if (!bounds) { ctx.restore(); return; }
-        // AND THE HALF OF IT NO BOUNDS IN MODEL FEET CAN REACH. `planBounds`
-        // frames the dimension RECORDS, which is everything it can honestly
-        // do, and it is still not where the string is drawn:
-        // render-2d.js's drawDimension2D stands its line off the two recorded
-        // points by a CONSTANT NINETEEN SCREEN PIXELS and centres the label on
-        // that line. A screen-space stand-off does not shrink with the scale,
-        // so no amount of fitting in feet accounts for it -- it is the same
-        // 19px on a cottage and on a whole subdivision, and it is why the top
-        // row of strings was still cut after the bounds were fixed.
-        //
-        // So it is reserved where it lives, in PIXELS, on top of the pad.
-        // 19 is the painter's own offset and 7 is half an 11px label plus its
-        // backing box. If either number in render-2d.js ever moves, the strings
-        // start clipping again -- which is precisely what
-        // realestateplan-listing.spec.js measured, so the drift failed a test
-        // rather than reaching a sheet.
-        const STANDOFF_PX = 19;
-        const LABEL_HALF_PX = 7;
-        // ONLY WHERE THERE ARE STRINGS TO CLEAR. A plan with no dimensions on
-        // it would otherwise be drawn 26px smaller in every direction to leave
-        // room for nothing.
-        // AND THERE ARE NONE ON A LISTING (Movie, 1 Oct: "on REAL ESTATE
-        // LAYOUTS we should NOT show the dimensions at all"), so no room is
-        // kept for strings that are not drawn.
-        const dimensioned = false;
-        const pad = 14 + (dimensioned ? STANDOFF_PX + LABEL_HALF_PX : 0);
+      // ONE PLAN INTO ONE BOX: at whatever scale makes it fit (FIT, the old
+      // page's only way), or at the drafter's named scale with the box hugging
+      // it. A listing plan is not measured off, so FIT is still where a new
+      // one starts; a named scale is there for the drafter who wants the two
+      // floors to read the same size.
+      const drawPlanIn = (ctx, item, box, k) => {
+        // FRAMED OVER WHAT IS DRAWN, NOT OVER THE WALLS: `planBounds` is the
+        // answer layout-plan.js wrote for exactly this -- walls with their
+        // thickness, plus lines, floors, roofs, outlines and dimensions,
+        // measured rather than allowed for.
+        const bounds = LP.planBounds(drawing, item.levelId);
+        if (!bounds) return;
         const spanX = Math.max(1, bounds.maxX - bounds.minX);
         const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
-        const scale = Math.min((box.w - pad * 2) / spanX, (box.h - pad * 2 - 14) / spanZ);
-        const ox = box.x + (box.w - spanX * scale) / 2 - bounds.minX * scale;
-        const oy = box.y + (box.h - 14 - spanZ * scale) / 2 - bounds.minZ * scale;
+        let scale, ox, oy;
+        if (item.pif > 0) {
+          scale = item.pif * k;
+          const labelPx = LABEL_IN * k;
+          ox = box.x + (box.w - spanX * scale) / 2 - bounds.minX * scale;
+          oy = box.y + (box.h - labelPx - spanZ * scale) / 2 - bounds.minZ * scale;
+        } else {
+          // NO ROOM KEPT FOR DIMENSION STRINGS: there are none on a listing
+          // (Movie, 1 Oct: "on REAL ESTATE LAYOUTS we should NOT show the
+          // dimensions at all").
+          const pad = 14;
+          scale = Math.min((box.w - pad * 2) / spanX, (box.h - pad * 2 - 14) / spanZ);
+          ox = box.x + (box.w - spanX * scale) / 2 - bounds.minX * scale;
+          oy = box.y + (box.h - 14 - spanZ * scale) / 2 - bounds.minZ * scale;
+        }
         const toS = pt => ({ x: ox + pt.x * scale, y: oy + pt.z * scale });
         ctx.save();
         ctx.beginPath();
         ctx.rect(box.x, box.y, box.w, box.h);
         ctx.clip();
-        // THE SAME PLAN CONSTRUCTION LAYOUT DRAWS, which is where Movie asked
-        // this page to start: "similar to the CONSTRUCTION layout but we will
-        // present the drawings in a different way".
-        //
-        // AND NOT `shell: true`, though a listing plan wants no dimension
-        // strings over it. That flag is all-or-nothing in layout-plan -- it
-        // drops the stairs, the fixtures and the structure with the dimensions
-        // and the notes -- and a real-estate plan is the one plan that most
-        // wants the fixtures, because a buyer reads rooms by what is in them.
-        // Splitting it into a finer gate is a change to a module LAYOUT and
-        // the neighborhood page both draw through, so it waits on him saying
-        // which of the two halves he wants gone.
-        LP.drawPlan(ctx, toS, drawing, seat.id, {
+        // THE SAME PLAN CONSTRUCTION LAYOUT DRAWS, as a listing: no
+        // dimensions, no size tags, solid walls, each room tag with its size
+        // line; stairs and fixtures stay (not `shell: true`, which drops
+        // them). And this viewport's own layers switched off, the same
+        // `layersOff` CONSTRUCTION LAYOUT's SHOW LAYERS hands the composer.
+        LP.drawPlan(ctx, toS, drawing, item.levelId, {
           view: 'plan',
           paperColor: '#ffffff',
-          // THE LISTING PLAN: no dimensions, no size tags, solid walls, and
-          // each room tag with its size line. Stairs and fixtures stay.
           listing: true,
+          pif: item.pif || undefined,
+          layersOff: item.layersOff?.length ? new Set(item.layersOff) : null,
         });
         ctx.restore();
-        ctx.restore();
+      };
+
+      // ── THE LOGO ──────────────────────────────────────────────────────
+      // THE MARKS CONSTRUCTION LAYOUT'S TITLE BLOCK OFFERS: the two that ship
+      // and every logo uploaded in COMPANY STANDARDS, read from the one copy
+      // (the standards package), so a logo is never uploaded twice.
+      const companyLogos = () => window.DraftProfileManager?.getActive('standards')?.content?.model?.companyLogos || [];
+      const marks = () => window.DraftTitleblock ? window.DraftTitleblock.marksFor(companyLogos()) : [];
+      const markOf = id => marks().find(m => m.id === id) || marks()[0] || null;
+      const pictures = new Map();
+      const pictureOf = src => {
+        if (!src) return null;
+        if (!pictures.has(src)) {
+          const img = new Image();
+          img.onload = () => paintSheet();
+          img.src = src;
+          pictures.set(src, img);
+        }
+        const img = pictures.get(src);
+        return img.complete && img.naturalWidth ? img : null;
+      };
+      const drawLogo = (ctx, item, box) => {
+        const mark = markOf(item.markId);
+        const img = pictureOf(mark?.logoSrc);
+        if (!img) return;
+        const s = Math.min(box.w / img.naturalWidth, box.h / img.naturalHeight);
+        const w = img.naturalWidth * s, h = img.naturalHeight * s;
+        ctx.drawImage(img, box.x + (box.w - w) / 2, box.y + (box.h - h) / 2, w, h);
+      };
+      // The default mark: the one this drawing's construction sheets wear,
+      // else the office's first uploaded logo, else ROUGH DRAFTER.
+      const defaultMarkId = () => {
+        const all = marks();
+        const sheetMark = raw?.layout?.titleblockMark;
+        if (sheetMark && all.some(m => m.id === sheetMark)) return sheetMark;
+        return (all.find(m => m.uploaded) || all[0] || { id: 'roughdrafter' }).id;
+      };
+
+      // ── THE COMPANY BOX ───────────────────────────────────────────────
+      // NAME, ADDRESS, PHONE, each with its own tick. Kept in COMPANY
+      // STANDARDS (`companyInfo`) once typed, so the next drawing's box starts
+      // with them; until then the name is the office's uploaded logo's and
+      // the phone is SETTINGS' drafter phone, as the title block prints.
+      const companyInfo = () => {
+        const info = window.DraftProfileManager?.getActive('standards')?.content?.model?.companyInfo || {};
+        const drafter = window.DraftDrafter?.normaliseDrafter(
+          window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter || {}) || {};
+        const logo = window.DraftTitleblock?.normaliseCompanyLogos(companyLogos())[0];
+        const text = v => (typeof v === 'string' ? v.trim().slice(0, 120) : '');
+        return {
+          name: text(info.name) || (logo ? logo.label : ''),
+          address: text(info.address),
+          phone: text(info.phone) || text(drafter.phone),
+        };
+      };
+      const ROLE_LABELS = { name: 'COMPANY NAME', address: 'ADDRESS', phone: 'PHONE', other: 'OTHER LINE' };
+      const defaultLines = () => {
+        const info = companyInfo();
+        return ['name', 'address', 'phone'].map(role => ({ role, text: info[role], on: true }));
+      };
+      const saveCompanyInfo = lines => {
+        const manager = window.DraftProfileManager;
+        if (!manager) return;
+        const info = {};
+        ['name', 'address', 'phone'].forEach(role => {
+          const line = lines.find(l => l.role === role);
+          if (line) info[role] = line.text.trim();
+        });
+        const active = manager.getActive('standards');
+        const pkg = manager.createPackage('standards', active?.name || 'COMPANY STANDARDS', { model: { companyInfo: info } });
+        manager.saveActive(pkg);
+      };
+      const drawCompany = (ctx, item, box) => {
+        const skin = window.__rpSkin;
+        const lines = (item.lines || []).filter(l => l.on && l.text.trim());
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (!lines.length) {
+          ctx.fillStyle = skin['ink-quiet'];
+          ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
+          ctx.fillText('COMPANY — DOUBLE-CLICK TO TYPE', box.x + box.w / 2, box.y + box.h / 2);
+          return;
+        }
+        // THE NAME A SIZE UP, the rest even; all of it as large as the box
+        // holds, then brought in until the widest line fits.
+        const sizeOf = l => (l.role === 'name' ? 1.3 : 1);
+        const units = lines.reduce((sum, l) => sum + sizeOf(l) * 1.2, 0);
+        let unit = (box.h * 0.92) / units;
+        const fontFor = (l, u) => `${l.role === 'name' ? 600 : 500} ${Math.max(4, u * sizeOf(l))}px "Barlow Condensed", system-ui, sans-serif`;
+        lines.forEach(l => {
+          ctx.font = fontFor(l, unit);
+          const w = ctx.measureText(l.text).width;
+          if (w > box.w * 0.94) unit *= (box.w * 0.94) / w;
+        });
+        const total = lines.reduce((sum, l) => sum + sizeOf(l) * unit * 1.2, 0);
+        let y = box.y + (box.h - total) / 2;
+        ctx.fillStyle = '#1d1f20';
+        lines.forEach(l => {
+          const lh = sizeOf(l) * unit * 1.2;
+          ctx.font = fontFor(l, unit);
+          ctx.fillText(l.text, box.x + box.w / 2, y + lh / 2);
+          y += lh;
+        });
       };
 
       // ── THE 3D VIEW ───────────────────────────────────────────────────
@@ -621,21 +856,33 @@
       // viewer (in a frame, view3d-host.js) at the tile's size and kept here
       // as an image, so the sheet paints and prints it like any other ink.
       // DOUBLE-CLICK the tile and the live viewer opens over it to be turned;
-      // DONE or a click off it keeps that view, saved for this house.
+      // DONE or a click off it keeps that view.
+      //
+      // WHERE THE TURNED VIEW IS KEPT: on an arranged sheet, in the item
+      // itself, so it travels with the drawing. On a sheet nobody has
+      // arranged, where it always was -- browser storage, keyed per house --
+      // and it moves into the item the moment the sheet is arranged.
       const V3_KEY = 'draft-realestate-3d';
       // TWO VIEWS ON TOP OF THE SHEET (jb, 27 Nov 2026: "2 floor plans on
       // the bottom ... and the upper 2 windows 3d"): the front from its left
-      // corner, and the back from the far corner. Each turned on its own.
+      // corner, and the back from the far corner.
       const VIEWS = [
         { slot: 'front', label: 'FRONT 3D VIEW', preset: 'front-left' },
         { slot: 'back', label: 'REAR 3D VIEW', preset: 'back' },
-      ].map(v => ({ ...v,
-        camera: null,       // the kept camera, or null for the preset
-        image: null,        // the last picture, an <img>
-        made: null,         // { w, h, camera } the picture was made for
-        box: null,          // the tile in canvas pixels, last paint
-        asking: false, again: false, timer: 0 }));
-      const viewOf = slot => VIEWS.find(v => v.slot === slot);
+      ];
+      // What + ADD offers for a 3D view: those two, and the far front corner.
+      const VIEW_PRESETS = [
+        { preset: 'front-left', label: 'FRONT 3D VIEW' },
+        { preset: 'back', label: 'REAR 3D VIEW' },
+        { preset: 'front-right', label: '3D VIEW' },
+      ];
+      let autoCameras = {};
+      // A picture per 3D item: { image, made, box, asking, again, timer }.
+      const pics = new Map();
+      const picOf = id => {
+        if (!pics.has(id)) pics.set(id, { image: null, made: null, box: null, asking: false, again: false, timer: 0 });
+        return pics.get(id);
+      };
       let viewerMissing = false;
       // WHICH HOUSE: its project block and its first wall, hashed -- the
       // sheet reads whatever drawing is in storage, and another house must
@@ -661,21 +908,25 @@
         try {
           const all = JSON.parse(localStorage.getItem(V3_KEY) || '{}');
           const mine = {};
-          VIEWS.forEach(v => { if (v.camera) mine[v.slot] = v.camera; });
+          VIEWS.forEach(v => { if (autoCameras[v.slot]) mine[v.slot] = autoCameras[v.slot]; });
           if (Object.keys(mine).length) all[houseKey()] = mine; else delete all[houseKey()];
           localStorage.setItem(V3_KEY, JSON.stringify(all));
         } catch { /* storage off: the views last as long as the page */ }
-        document.getElementById('view3d-reset').hidden = !VIEWS.some(v => v.camera);
+      };
+      const syncResetButton = () => {
+        document.getElementById('view3d-reset').hidden = !items().some(it => it.kind === 'view3d' && it.camera);
       };
       const sameCamera = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
 
       // Contained in the tile, above the label line.
-      const drawView3d = (ctx, box, view) => {
-        view.box = box;
+      const drawView3d = (ctx, box, item) => {
+        const pic = picOf(item.id);
+        pic.box = box;
+        pic.item = item;
         const skin = window.__rpSkin;
         const area = { x: box.x + 2, y: box.y + 2, w: box.w - 4, h: box.h - 18 };
-        if (view.image && view.image.complete && view.image.naturalWidth) {
-          const img = view.image;
+        if (pic.image && pic.image.complete && pic.image.naturalWidth) {
+          const img = pic.image;
           const k = Math.min(area.w / img.naturalWidth, area.h / img.naturalHeight);
           const w = img.naturalWidth * k, h = img.naturalHeight * k;
           ctx.drawImage(img, area.x + (area.w - w) / 2, area.y + (area.h - h) / 2, w, h);
@@ -689,40 +940,45 @@
           ctx.fillText(viewerMissing ? '3D VIEWER NOT INSTALLED' : 'DRAWING THE 3D VIEW…',
             box.x + box.w / 2, box.y + box.h / 2);
         }
-        queuePicture(view);
+        queuePicture(pic);
       };
 
       // A new picture when the tile changed size by more than a tenth, or
       // the camera changed. Made 1.5 times the tile so it prints sharp.
-      const pictureSize = view => {
-        const b = view.box;
+      const pictureSize = pic => {
+        const b = pic.box;
         if (!b) return null;
         const k = Math.min(1.5, 2400 / Math.max(b.w, b.h));
         return { w: Math.round((b.w - 4) * k), h: Math.round((b.h - 18) * k) };
       };
-      const wantsPicture = view => {
-        const size = pictureSize(view);
-        if (!size || !raw || viewerMissing || window.DraftView3dHost?.editing) return false;
-        const made = view.made;
+      const wantsPicture = pic => {
+        const size = pictureSize(pic);
+        if (!size || size.w < 8 || size.h < 8 || !raw || viewerMissing || window.DraftView3dHost?.editing) return false;
+        const made = pic.made;
         if (!made) return true;
-        if (!sameCamera(made.camera, view.camera)) return true;
+        if (made.preset !== pic.item.preset || !sameCamera(made.camera, pic.item.camera)) return true;
         return Math.abs(made.w - size.w) > made.w * 0.1 || Math.abs(made.h - size.h) > made.h * 0.1;
       };
-      const queuePicture = view => {
-        if (!wantsPicture(view)) return;
-        clearTimeout(view.timer);
-        view.timer = setTimeout(() => makePicture(view), 120);
+      const queuePicture = pic => {
+        if (!wantsPicture(pic)) return;
+        clearTimeout(pic.timer);
+        pic.timer = setTimeout(() => makePicture(pic), 120);
       };
-      const makePicture = async view => {
-        if (view.asking) { view.again = true; return; }
+      const markDrawn = () => {
+        const drawn = items().filter(it => it.kind === 'view3d' && it.on && pics.get(it.id)?.image).map(it => it.id);
+        document.body.dataset.view3d = drawn.length ? 'drawn' : '';
+        document.body.dataset.view3dDrawn = drawn.join(' ');
+      };
+      const makePicture = async pic => {
+        if (pic.asking) { pic.again = true; return; }
         const host = window.DraftView3dHost;
         if (!host) { viewerMissing = true; paintSheet(); return; }
-        const size = pictureSize(view);
+        const size = pictureSize(pic);
         if (!size) return;
-        view.asking = true;
-        const camera = view.camera;
-        const out = await host.picture({ drawing: raw, camera, preset: view.preset, w: size.w, h: size.h });
-        view.asking = false;
+        pic.asking = true;
+        const { camera, preset } = pic.item;
+        const out = await host.picture({ drawing: raw, camera, preset, w: size.w, h: size.h });
+        pic.asking = false;
         if (!out) {
           viewerMissing = host.missing;
           if (viewerMissing) say('3D viewer not installed — the 3D views are left empty.');
@@ -731,36 +987,541 @@
         }
         const img = new Image();
         img.onload = () => {
-          view.image = img;
-          view.made = { w: size.w, h: size.h, camera };
-          const drawn = VIEWS.filter(v => v.image).map(v => v.slot);
-          document.body.dataset.view3d = drawn.length ? 'drawn' : '';
-          document.body.dataset.view3dDrawn = drawn.join(' ');
+          pic.image = img;
+          pic.made = { w: size.w, h: size.h, camera, preset };
+          markDrawn();
           paintSheet();
-          if (view.again) { view.again = false; queuePicture(view); }
+          if (pic.again) { pic.again = false; queuePicture(pic); }
         };
         img.src = out.png;
       };
 
       // Double-click on a tile: the live viewer over it.
-      const turnView3d = async view => {
+      const turnView3d = async item => {
         const host = window.DraftView3dHost;
-        const b = view.box;
+        const b = picOf(item.id).box;
         if (!host || !b || !raw || host.editing) return;
         const cv = document.getElementById('sheet');
         const r = cv.getBoundingClientRect();
         const sx = r.width / cv.width, sy = r.height / cv.height;
         say('Turn the house: drag, wheel to zoom, or a view button. DONE or a click off it keeps the view.');
         const camera = await host.edit({
-          drawing: raw, camera: view.camera, preset: view.preset,
+          drawing: raw, camera: item.camera, preset: item.preset,
           rect: { left: r.left + b.x * sx, top: r.top + b.y * sy, width: b.w * sx, height: (b.h - 16) * sy },
         });
         if (!camera) { say('The 3D view is as it was.'); return; }
-        view.camera = camera;
-        writeCameras();
-        say(`${view.label} kept.`);
-        paintSheet();
+        if (sheet) {
+          change(`${item.label} turned`, () => { const it = itemById(item.id); if (it) it.camera = camera; });
+        } else {
+          autoCameras[item.id] = camera;
+          writeCameras();
+          syncResetButton();
+          paintSheet();
+        }
+        say(`${item.label} kept.`);
       };
+
+      // ── ARRANGING, SAVING, UNDO ───────────────────────────────────────
+      //
+      // EVERY CHANGE IS ONE STEP, made through `change`: the sheet before it
+      // goes on the UNDO list (jb, 28 Nov 2026: "undo good idea and redo"),
+      // the arrangement is written into the drawing, and the sheet repaints.
+      // An unarranged sheet becomes the drafter's here, with the boxes it was
+      // showing, so the first drag starts from what was on the screen.
+      const snapshot = () => JSON.stringify({ sheet, paper: paper.id, ticks: [...autoTicks] });
+      const undoList = [], redoList = [];
+      const restore = text => {
+        const s = JSON.parse(text);
+        sheet = s.sheet;
+        autoTicks = new Map(s.ticks || []);
+        paper = PAPERS.find(p => p.id === (sheet ? sheet.paper : s.paper)) || PAPERS[0];
+        paperSel.value = paper.id;
+        if (selectedId && !itemById(selectedId)) selectedId = null;
+      };
+      const syncUndo = () => {
+        document.getElementById('rp-undo').disabled = !undoList.length;
+        document.getElementById('rp-redo').disabled = !redoList.length;
+      };
+      const freeze = () => {
+        if (sheet) return;
+        const kept = autoItems().map(it => normaliseRecord({ items: [it] }).items[0]);
+        sheet = { paper: paper.id, items: kept, nextId: 1 };
+        autoTicks = new Map();
+      };
+      const refresh = () => {
+        paintSeats();
+        paintSheet();
+        syncResetButton();
+        syncUndo();
+        if (card.item && !itemById(card.item)) closeCard();
+        else if (card.item && !card.typing) paintCard();
+      };
+      // `fn` changes the sheet in place; `persistIt` false for a step that is
+      // not the drawing's (an auto-mode tick, which the old page never kept).
+      const change = (label, fn, { persistIt = true, arrange = true } = {}) => {
+        undoList.push(snapshot());
+        if (undoList.length > 100) undoList.shift();
+        redoList.length = 0;
+        if (arrange) freeze();
+        fn();
+        if (persistIt) persist();
+        refresh();
+        if (label) say(label);
+      };
+      const undo = () => {
+        if (!undoList.length) return;
+        redoList.push(snapshot());
+        restore(undoList.pop());
+        persist();
+        refresh();
+        say('Undone.');
+      };
+      const redo = () => {
+        if (!redoList.length) return;
+        undoList.push(snapshot());
+        restore(redoList.pop());
+        persist();
+        refresh();
+        say('Redone.');
+      };
+
+      // INTO THE DRAWING, under its own key and no other: the copy in the
+      // store is read fresh and only `realEstatePlan` is changed on it, so a
+      // wall MODEL saved meanwhile is not put back (CONSTRUCTION LAYOUT
+      // writes its `layout` the same way, ifRev and all).
+      let saveQueue = Promise.resolve();
+      const writeRecord = async (triesLeft = 3) => {
+        const store = window.SharedFileStore;
+        if (!store) return;
+        const at = await store.loadSharedFileAt(BUCKET);
+        let base = null;
+        if (at.file) { try { base = JSON.parse(await at.file.text()); } catch { base = null; } }
+        if (!base || typeof base !== 'object') base = raw;
+        if (!base) return;
+        const merged = { ...base };
+        if (sheet) merged[RECORD_KEY] = JSON.parse(JSON.stringify(sheet));
+        else delete merged[RECORD_KEY];
+        const file = new File([JSON.stringify(merged)], 'model-drawing.json', { type: 'application/json' });
+        try {
+          await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });
+        } catch (error) {
+          if (!error?.stale || triesLeft <= 0) throw error;
+          return writeRecord(triesLeft - 1);
+        }
+        if (raw) {
+          if (sheet) raw[RECORD_KEY] = merged[RECORD_KEY]; else delete raw[RECORD_KEY];
+        }
+      };
+      const persist = () => {
+        document.body.dataset.rpSaveDirty = '1';
+        saveQueue = saveQueue.catch(() => {}).then(() => writeRecord()).then(() => {
+          document.body.dataset.rpSaveDirty = '0';
+          document.body.dataset.rpSaveSeq = String(Number(document.body.dataset.rpSaveSeq || 0) + 1);
+        }).catch(error => {
+          console.warn('Unable to save the real estate sheet:', error);
+          say('The sheet could not be saved into the drawing — try again, or reload.');
+        });
+      };
+
+      // ── THE LIST ON THE LEFT ──────────────────────────────────────────
+      // A ROW PER ITEM: its tick (on the sheet or not), its name, and an ×
+      // that takes it off for good. Pressing the name picks it on the sheet.
+      const paintSeats = () => {
+        const host = document.getElementById('seat-list');
+        host.innerHTML = '';
+        const list = drawing ? items() : [];
+        if (!list.length) {
+          const p = document.createElement('p');
+          p.className = 'empty';
+          p.textContent = drawing ? 'Nothing on the sheet — + ADD puts something on it.' : 'No plans in this drawing yet.';
+          host.appendChild(p);
+          return;
+        }
+        list.forEach((item, i) => {
+          const row = document.createElement('div');
+          row.className = 'seat';
+          row.dataset.item = item.id;
+          if (item.id === selectedId) row.dataset.picked = 'true';
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.checked = !!item.on;
+          box.id = `seat-${i}`;
+          box.addEventListener('change', () => {
+            const on = box.checked;
+            const word = `${item.label} ${on ? 'on' : 'off'} the sheet.`;
+            if (sheet) change(word, () => { const it = itemById(item.id); if (it) it.on = on; });
+            else change(word, () => autoTicks.set(item.id, on), { persistIt: false, arrange: false });
+          });
+          const label = document.createElement('label');
+          label.className = 'what';
+          label.htmlFor = box.id;
+          label.textContent = item.label;
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'seat-del';
+          del.textContent = '×';
+          del.title = `Delete ${item.label} from the sheet`;
+          del.setAttribute('aria-label', `Delete ${item.label}`);
+          del.addEventListener('click', () => deleteItem(item.id));
+          row.addEventListener('click', e => {
+            if (e.target === box || e.target === del || e.target === label) return;
+            selectedId = item.id;
+            refresh();
+          });
+          row.appendChild(box);
+          row.appendChild(label);
+          row.appendChild(del);
+          host.appendChild(row);
+        });
+      };
+
+      const deleteItem = id => {
+        const item = itemById(id);
+        if (!item) return;
+        change(`${item.label} deleted — UNDO brings it back.`, () => {
+          sheet.items = sheet.items.filter(it => it.id !== id);
+        });
+        if (selectedId === id) selectedId = null;
+        refresh();
+      };
+
+      // ── ADDING ────────────────────────────────────────────────────────
+      // WHAT + ADD OFFERS: every floor plan the drawing has (the same floor
+      // twice is allowed, at two scales), the three 3D views, the FLOOR AREAS
+      // box, a LOGO and the COMPANY box.
+      const addChoices = () => [
+        ...planLevels().map(level => ({ kind: 'plan', label: level.name || `LEVEL ${level.id}`, levelId: level.id })),
+        ...VIEW_PRESETS.map(v => ({ kind: 'view3d', label: v.label, preset: v.preset })),
+        { kind: 'areas', label: 'FLOOR AREAS' },
+        { kind: 'logo', label: 'LOGO' },
+        { kind: 'text', label: 'COMPANY TEXT' },
+      ];
+      // Dropped centred where it was asked for (the right-click's point, or
+      // the middle of the paper), picked, ready to drag.
+      const addItem = (choice, at = null) => {
+        const inner = innerIn();
+        let w = inner.w / 2, h = inner.h / 2;
+        if (choice.kind === 'areas') { w = 3; h = 2; }
+        if (choice.kind === 'text') { w = 3; h = 0.9; }
+        let markId = null;
+        if (choice.kind === 'logo') {
+          markId = defaultMarkId();
+          const img = pictureOf(markOf(markId)?.logoSrc);
+          w = 1.6;
+          h = img ? w * img.naturalHeight / img.naturalWidth : 1;
+        }
+        const cx = at ? at.x : inner.x + inner.w / 2, cy = at ? at.y : inner.y + inner.h / 2;
+        let made = null;
+        change(`${choice.label} added — drag it where it goes.`, () => {
+          made = {
+            id: `v${sheet.nextId++}`, kind: choice.kind, label: choice.label, on: true,
+            x: cx - w / 2, y: cy - h / 2, w, h,
+          };
+          if (choice.kind === 'plan') { made.levelId = choice.levelId; made.pif = null; }
+          if (choice.kind === 'view3d') { made.preset = choice.preset; made.camera = null; }
+          if (choice.kind === 'logo') made.markId = markId;
+          if (choice.kind === 'text') made.lines = defaultLines();
+          clampIn(made);
+          sheet.items.push(made);
+        });
+        selectedId = made.id;
+        refresh();
+        return made;
+      };
+      // Kept on the paper: an item can hang over the margin, never off it.
+      const clampIn = item => {
+        const b = boxIn(item);
+        item.x = Math.min(Math.max(item.x, 0), Math.max(0, paper.w - b.w));
+        item.y = Math.min(Math.max(item.y, 0), Math.max(0, paper.h - b.h));
+      };
+
+      // ── MENUS ─────────────────────────────────────────────────────────
+      const menu = document.getElementById('rp-menu');
+      const closeMenu = () => { menu.hidden = true; menu.textContent = ''; };
+      const openMenu = (entries, clientX, clientY) => {
+        menu.textContent = '';
+        entries.forEach(entry => {
+          if (entry.section) {
+            const head = document.createElement('div');
+            head.className = 'rp-menu-head';
+            head.textContent = entry.section;
+            menu.appendChild(head);
+            return;
+          }
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = entry.label;
+          b.dataset.menuItem = entry.id;
+          if (entry.danger) b.className = 'danger';
+          b.addEventListener('click', () => { closeMenu(); entry.run(); });
+          menu.appendChild(b);
+        });
+        menu.hidden = false;
+        const w = menu.offsetWidth, h = menu.offsetHeight;
+        menu.style.left = `${Math.max(4, Math.min(clientX, window.innerWidth - w - 4))}px`;
+        menu.style.top = `${Math.max(4, Math.min(clientY, window.innerHeight - h - 4))}px`;
+      };
+      const addMenuEntries = at => [
+        { section: 'ADD TO THE SHEET' },
+        ...addChoices().map((choice, i) => ({
+          id: `add-${choice.kind}${choice.kind === 'plan' ? `-${choice.levelId}` : ''}${choice.preset ? `-${choice.preset}` : ''}`,
+          label: choice.kind === 'plan' ? `${choice.label} PLAN` : choice.label,
+          run: () => addItem(choice, at),
+        })),
+      ];
+      const itemMenuEntries = (item, clientX, clientY) => [
+        { section: item.label },
+        ...(item.kind === 'plan' ? [{ id: 'scale-layers', label: 'SCALE & LAYERS', run: () => openCard(item.id, clientX, clientY) }] : []),
+        ...(item.kind === 'view3d' ? [{ id: 'turn', label: 'TURN 3D VIEW', run: () => turnView3d(item) },
+          { id: 'reset-3d', label: 'RESET 3D VIEW', run: () => resetViews([item.id]) }] : []),
+        ...(item.kind === 'text' ? [{ id: 'edit-text', label: 'EDIT TEXT', run: () => openCard(item.id, clientX, clientY) }] : []),
+        ...(item.kind === 'logo' ? [{ id: 'pick-logo', label: 'PICK LOGO', run: () => openCard(item.id, clientX, clientY) }] : []),
+        { id: 'to-front', label: 'TO FRONT', run: () => change(`${item.label} to the front.`, () => {
+          const it = itemById(item.id); sheet.items = [...sheet.items.filter(x => x !== it), it];
+        }) },
+        { id: 'to-back', label: 'TO BACK', run: () => change(`${item.label} to the back.`, () => {
+          const it = itemById(item.id); sheet.items = [it, ...sheet.items.filter(x => x !== it)];
+        }) },
+        { id: 'hide', label: 'TAKE OFF THE SHEET (KEEP IN LIST)', run: () => change(`${item.label} off the sheet.`, () => { itemById(item.id).on = false; }) },
+        { id: 'delete', label: 'DELETE', danger: true, run: () => deleteItem(item.id) },
+      ];
+
+      const resetViews = ids => {
+        if (sheet) {
+          change('3D view back to its corner.', () => sheet.items.forEach(it => {
+            if (it.kind === 'view3d' && (!ids || ids.includes(it.id))) it.camera = null;
+          }));
+        } else {
+          Object.keys(autoCameras).forEach(slot => { if (!ids || ids.includes(slot)) delete autoCameras[slot]; });
+          writeCameras();
+          refresh();
+          say('3D views back to the front-left and rear corners.');
+        }
+      };
+
+      // ── THE CARD: SCALE & LAYERS, THE COMPANY LINES, THE LOGO ─────────
+      const cardEl = document.getElementById('rp-card');
+      const card = { item: null, left: 0, top: 0 };
+      const closeCard = () => { card.item = null; cardEl.hidden = true; cardEl.textContent = ''; };
+      const openCard = (id, clientX, clientY) => {
+        card.item = id;
+        card.left = clientX + 12;
+        card.top = clientY - 20;
+        paintCard();
+      };
+      const el = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text != null) node.textContent = text;
+        return node;
+      };
+      const paintCard = () => {
+        const item = itemById(card.item);
+        if (!item) { closeCard(); return; }
+        // A FIELD BEING TYPED IN KEEPS ITS PLACE across the repaint.
+        const focused = document.activeElement && cardEl.contains(document.activeElement)
+          ? document.activeElement.dataset.keep : null;
+        cardEl.textContent = '';
+        const head = el('div', 'rp-card-head');
+        head.append(el('div', 'rp-card-title', item.label));
+        const x = el('button', 'rp-card-close', '×');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Close');
+        x.addEventListener('click', closeCard);
+        head.append(x);
+        cardEl.append(head);
+        if (item.kind === 'plan') paintPlanCard(item);
+        else if (item.kind === 'text') paintTextCard(item);
+        else if (item.kind === 'logo') paintLogoCard(item);
+        cardEl.hidden = false;
+        const w = cardEl.offsetWidth, h = cardEl.offsetHeight;
+        cardEl.style.left = `${Math.max(4, Math.min(card.left, window.innerWidth - w - 4))}px`;
+        cardEl.style.top = `${Math.max(4, Math.min(card.top, window.innerHeight - h - 4))}px`;
+        if (focused) cardEl.querySelector(`[data-keep="${focused}"]`)?.focus();
+      };
+
+      // SCALE: FIT (the box decides, as the page always did) or a named one,
+      // the list CONSTRUCTION LAYOUT offers, or typed. A named scale makes the
+      // box hug the plan, kept centred where it was.
+      const setScale = (id, pif) => {
+        const item = itemById(id);
+        if (!item) return;
+        const before = boxIn(item);
+        const name = pif ? window.DraftViewportKit.scaleLabelOf(pif) : 'FIT';
+        change(`${item.label} at ${name}.`, () => {
+          const it = itemById(id);
+          if (!pif && it.pif) { it.w = before.w; it.h = before.h; }
+          it.pif = pif || null;
+          const after = boxIn(it);
+          it.x = before.x + before.w / 2 - after.w / 2;
+          it.y = before.y + before.h / 2 - after.h / 2;
+          clampIn(it);
+        });
+      };
+      const toggleLayers = (id, layers) => {
+        const item = itemById(id);
+        if (!item) return;
+        const off = new Set(item.layersOff || []);
+        const allOff = layers.every(layer => off.has(layer));
+        change(null, () => {
+          const it = itemById(id);
+          layers.forEach(layer => { if (allOff) off.delete(layer); else off.add(layer); });
+          if (off.size) it.layersOff = [...off]; else delete it.layersOff;
+        });
+      };
+      const paintPlanCard = item => {
+        const kit = window.DraftViewportKit;
+        cardEl.append(el('div', 'rp-card-section', 'SCALE'));
+        const list = el('select', 'rp-scale-list');
+        list.size = 7;
+        list.dataset.scaleList = '1';
+        const fit = el('option', null, 'FIT THE BOX');
+        fit.value = '0';
+        list.append(fit);
+        kit.SCALES.forEach(s => {
+          const opt = el('option', null, s.label);
+          opt.value = String(s.pif);
+          list.append(opt);
+        });
+        const listed = kit.SCALES.find(s => item.pif && Math.abs(s.pif - item.pif) < 1e-9);
+        list.value = !item.pif ? '0' : (listed ? String(listed.pif) : '');
+        list.addEventListener('change', () => setScale(item.id, Number(list.value) || null));
+        cardEl.append(list);
+        const typed = el('input', 'rp-scale-text');
+        typed.type = 'text';
+        typed.placeholder = 'OR TYPE ONE: 3/16", 1" = 25\'';
+        typed.dataset.scaleText = '1';
+        typed.dataset.keep = 'scale-text';
+        if (item.pif && !listed) typed.value = kit.scaleLabelOf(item.pif);
+        typed.addEventListener('keydown', e => {
+          if (e.key !== 'Enter') return;
+          const pif = kit.parseScale(typed.value);
+          if (pif) setScale(item.id, pif); else say(`"${typed.value}" is not a scale I can read.`);
+        });
+        cardEl.append(typed);
+
+        // LAYERS: CONSTRUCTION LAYOUT's SHOW LAYERS rows, ON / OFF / PART in
+        // words, this viewport only. A row with kinds under it lists them
+        // under it, one press each.
+        cardEl.append(el('div', 'rp-card-section', 'LAYERS · THIS VIEWPORT ONLY'));
+        const off = new Set(item.layersOff || []);
+        const row = (label, layers, sub) => {
+          const isOff = layers.every(layer => off.has(layer));
+          const some = !isOff && layers.some(layer => off.has(layer));
+          const state = isOff ? 'OFF' : some ? 'PART' : 'ON';
+          const b = el('button', `rp-layer${sub ? ' sub' : ''}${isOff ? ' off' : ''}`);
+          b.type = 'button';
+          b.dataset.state = state;
+          b.append(el('span', `rp-onoff rp-onoff-${state.toLowerCase()}`, state), el('span', 'rp-layer-name', label));
+          b.title = isOff ? `Draw ${label} again` : `Switch ${label} off in this viewport`;
+          b.addEventListener('click', () => toggleLayers(item.id, layers));
+          return b;
+        };
+        kit.layerGroups().forEach(group => {
+          const b = row(group.label, group.layers, false);
+          b.dataset.layerGroup = group.id;
+          cardEl.append(b);
+          (group.subs || []).forEach(sub => {
+            const s = row(sub.label, sub.layers, true);
+            s.dataset.layerGroup = sub.id;
+            cardEl.append(s);
+          });
+        });
+        const reset = el('button', 'rp-layer reset', 'EVERY LAYER BACK ON');
+        reset.type = 'button';
+        reset.dataset.layersReset = '1';
+        reset.disabled = !off.size;
+        reset.addEventListener('click', () => change(`${item.label}: every layer on.`, () => { delete itemById(item.id).layersOff; }));
+        cardEl.append(reset);
+      };
+
+      // THE COMPANY LINES: a tick and a box each. What is typed is kept in
+      // the item and in COMPANY STANDARDS, so the next drawing's box opens
+      // with it.
+      // A LINE TYPED IN does not repaint the card: Tab has already moved on
+      // to the next box, and a repaint would pull the cursor back.
+      const setLines = (id, fn, { typing = false } = {}) => {
+        card.typing = typing;
+        change(null, () => {
+          const it = itemById(id);
+          it.lines = it.lines.map(l => ({ ...l }));
+          fn(it.lines);
+          saveCompanyInfo(it.lines);
+        });
+        card.typing = false;
+      };
+      const paintTextCard = item => {
+        cardEl.append(el('div', 'rp-card-note', 'TICK WHAT SHOWS · KEPT IN COMPANY STANDARDS FOR THE NEXT DRAWING'));
+        item.lines.forEach((line, i) => {
+          const r = el('div', 'rp-line');
+          const tick = el('input');
+          tick.type = 'checkbox';
+          tick.checked = line.on;
+          tick.dataset.lineOn = String(i);
+          tick.setAttribute('aria-label', `Show ${ROLE_LABELS[line.role] || 'line'}`);
+          tick.addEventListener('change', () => setLines(item.id, lines => { lines[i].on = tick.checked; }));
+          const box = el('input');
+          box.type = 'text';
+          box.value = line.text;
+          box.placeholder = ROLE_LABELS[line.role] || 'LINE';
+          box.maxLength = 120;
+          box.dataset.lineText = String(i);
+          box.dataset.keep = `line-${i}`;
+          box.addEventListener('change', () => setLines(item.id, lines => { lines[i].text = box.value.trim(); }, { typing: true }));
+          const del = el('button', 'rp-line-del', '×');
+          del.type = 'button';
+          del.title = 'Remove this line';
+          del.addEventListener('click', () => setLines(item.id, lines => { lines.splice(i, 1); }));
+          r.append(tick, box, del);
+          cardEl.append(r);
+        });
+        if (item.lines.length < 8) {
+          const more = el('button', 'rp-layer reset', '+ LINE');
+          more.type = 'button';
+          more.dataset.addLine = '1';
+          more.addEventListener('click', () => setLines(item.id, lines => { lines.push({ role: 'other', text: '', on: true }); }));
+          cardEl.append(more);
+        }
+      };
+
+      const paintLogoCard = item => {
+        cardEl.append(el('div', 'rp-card-note', 'UPLOAD YOUR OWN IN COMPANY STANDARDS'));
+        marks().forEach(mark => {
+          const b = el('button', `rp-logo${mark.id === item.markId ? ' on' : ''}`);
+          b.type = 'button';
+          b.dataset.markId = mark.id;
+          const img = el('img');
+          img.src = mark.logoSrc;
+          img.alt = '';
+          b.append(img, el('span', null, mark.label));
+          b.addEventListener('click', () => change(`${mark.label} logo.`, () => {
+            const it = itemById(item.id);
+            it.markId = mark.id;
+            const pic = pictureOf(mark.logoSrc);
+            if (pic) it.h = it.w * pic.naturalHeight / pic.naturalWidth;
+            clampIn(it);
+          }));
+          cardEl.append(b);
+        });
+      };
+
+      // ── THE SHEET ─────────────────────────────────────────────────────
+      const fitCanvas = canvas => {
+        const box = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.max(320, Math.round(box.width * dpr));
+        const h = Math.max(240, Math.round(box.height * dpr));
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+      };
+      // Where the paper landed on the canvas, last paint: canvas pixels.
+      let geom = null;
+      const toPx = b => ({ x: geom.x + b.x * geom.k, y: geom.y + b.y * geom.k, w: b.w * geom.k, h: b.h * geom.k });
+      const GRIP_PX = 5;
+      const gripsOf = px => [
+        { corner: 'nw', x: px.x, y: px.y }, { corner: 'ne', x: px.x + px.w, y: px.y },
+        { corner: 'sw', x: px.x, y: px.y + px.h }, { corner: 'se', x: px.x + px.w, y: px.y + px.h },
+      ];
 
       const paintSheet = () => {
         const cv = document.getElementById('sheet');
@@ -775,6 +1536,7 @@
           (cv.height - pad * 2) / paper.h);
         const w = paper.w * pxPerIn, h = paper.h * pxPerIn;
         const x = Math.round((cv.width - w) / 2), y = Math.round((cv.height - h) / 2);
+        geom = { x, y, k: pxPerIn };
 
         // THE PAPER IS WHITE IN EVERY SKIN. It is paper.
         ctx.fillStyle = '#ffffff';
@@ -800,34 +1562,226 @@
           return;
         }
 
-        const showing = seats.filter(seat => seat.on);
+        pics.forEach(pic => { pic.box = null; });
+        const showing = items().filter(item => item.on);
         if (!showing.length) {
           ctx.fillStyle = skin['ink-quiet'];
           ctx.font = '600 12px "Barlow Condensed", system-ui, sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('Nothing ticked — pick what goes on the sheet.',
+          ctx.fillText('Nothing on the sheet — tick something, or + ADD.',
             x + w / 2, y + h / 2);
+        }
+        showing.forEach(item => drawItem(ctx, item, toPx(boxIn(item)), pxPerIn));
+
+        // THE PICKED ONE: outlined in the accent, with its four corner grips
+        // when it can be sized (a plan at a named scale is sized by its scale).
+        const picked = selectedId && showing.find(it => it.id === selectedId);
+        if (picked) {
+          const px = toPx(boxIn(picked));
+          ctx.save();
+          ctx.strokeStyle = skin['accent-mark'];
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px.x, px.y, px.w, px.h);
+          if (resizable(picked)) {
+            ctx.fillStyle = '#ffffff';
+            gripsOf(px).forEach(g => {
+              ctx.fillRect(g.x - GRIP_PX, g.y - GRIP_PX, GRIP_PX * 2, GRIP_PX * 2);
+              ctx.strokeRect(g.x - GRIP_PX, g.y - GRIP_PX, GRIP_PX * 2, GRIP_PX * 2);
+            });
+          }
+          ctx.restore();
+        }
+        // SNAP GUIDES while a drag is lined up with something.
+        if (drag && drag.guides?.length) {
+          ctx.save();
+          ctx.strokeStyle = skin['accent-mark'];
+          ctx.setLineDash([2, 3]);
+          ctx.lineWidth = 1;
+          drag.guides.forEach(gd => {
+            ctx.beginPath();
+            if (gd.axis === 'x') { const gx = geom.x + gd.at * geom.k; ctx.moveTo(gx, y); ctx.lineTo(gx, y + h); }
+            else { const gy = geom.y + gd.at * geom.k; ctx.moveTo(x, gy); ctx.lineTo(x + w, gy); }
+            ctx.stroke();
+          });
+          ctx.restore();
+        }
+        markDrawn();
+      };
+
+      // ── PICK, DRAG, SIZE ──────────────────────────────────────────────
+      const canvasPt = e => {
+        const cv = document.getElementById('sheet');
+        const r = cv.getBoundingClientRect();
+        return { x: (e.clientX - r.left) * (cv.width / r.width), y: (e.clientY - r.top) * (cv.height / r.height) };
+      };
+      const toIn = pt => ({ x: (pt.x - geom.x) / geom.k, y: (pt.y - geom.y) / geom.k });
+      // The top one under the point: the last drawn is the one on top.
+      const itemAt = pt => {
+        if (!geom) return null;
+        const showing = items().filter(it => it.on);
+        for (let i = showing.length - 1; i >= 0; i -= 1) {
+          const b = toPx(boxIn(showing[i]));
+          if (pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h) return showing[i];
+        }
+        return null;
+      };
+      const gripAt = pt => {
+        const item = selectedId && itemById(selectedId);
+        if (!item || !item.on || !resizable(item) || !geom) return null;
+        return gripsOf(toPx(boxIn(item))).find(g => Math.abs(pt.x - g.x) <= GRIP_PX + 3 && Math.abs(pt.y - g.y) <= GRIP_PX + 3) || null;
+      };
+
+      // LINED UP WITH THE MARGINS AND WITH EACH OTHER: an edge or a middle
+      // within a few pixels of another's snaps to it, and a guide shows it.
+      const SNAP_PX = 7;
+      const snapLines = movingId => {
+        const inner = innerIn();
+        const xs = [inner.x, inner.x + inner.w, inner.x + inner.w / 2];
+        const ys = [inner.y, inner.y + inner.h, inner.y + inner.h / 2];
+        items().filter(it => it.on && it.id !== movingId).forEach(it => {
+          const b = boxIn(it);
+          xs.push(b.x, b.x + b.w, b.x + b.w / 2);
+          ys.push(b.y, b.y + b.h, b.y + b.h / 2);
+        });
+        return { xs, ys };
+      };
+      const nearest = (values, targets, reach) => {
+        let best = null;
+        values.forEach((v, i) => targets.forEach(t => {
+          const d = t - v;
+          if (Math.abs(d) <= reach && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, at: t, i };
+        }));
+        return best;
+      };
+
+      let drag = null;
+      const sheetEl = document.getElementById('sheet');
+      sheetEl.addEventListener('pointerdown', e => {
+        if (e.button !== 0 || !drawing || !geom) return;
+        closeMenu();
+        const pt = canvasPt(e);
+        const grip = gripAt(pt);
+        const hit = grip ? itemById(selectedId) : itemAt(pt);
+        if (!hit) {
+          if (selectedId) { selectedId = null; refresh(); }
           return;
         }
-        VIEWS.forEach(v => { v.box = null; });
-        // THE 3D VIEWS IN A ROW ON TOP, EVERYTHING ELSE IN A ROW UNDER THEM
-        // (jb, 27 Nov 2026); either alone takes the whole sheet as before.
-        const top = showing.filter(seat => seat.kind === 'view3d');
-        const rest = showing.filter(seat => seat.kind !== 'view3d');
-        if (top.length && rest.length) {
-          const gap = Math.min(inner.w, inner.h) * 0.03;
-          const rowH = (inner.h - gap) / 2;
-          const row = (list, y0) => {
-            const bw = (inner.w - gap * (list.length - 1)) / list.length;
-            list.forEach((seat, i) => drawSeat(ctx, seat, { x: inner.x + i * (bw + gap), y: y0, w: bw, h: rowH }));
-          };
-          row(top, inner.y);
-          row(rest, inner.y + rowH + gap);
-        } else {
-          boxesFor(showing.length, inner.x, inner.y, inner.w, inner.h)
-            .forEach((box, i) => drawSeat(ctx, showing[i], box));
+        if (selectedId !== hit.id) { selectedId = hit.id; refresh(); }
+        const b = boxIn(hit);
+        drag = { id: hit.id, grip: grip?.corner || null, start: pt, from: { ...b }, moved: false, guides: [],
+          before: snapshot(), wasAuto: !sheet };
+        sheetEl.setPointerCapture?.(e.pointerId);
+      });
+      sheetEl.addEventListener('pointermove', e => {
+        const pt = canvasPt(e);
+        if (!drag) {
+          const grip = gripAt(pt);
+          sheetEl.style.cursor = grip ? (grip.corner === 'nw' || grip.corner === 'se' ? 'nwse-resize' : 'nesw-resize')
+            : (itemAt(pt) ? 'move' : '');
+          return;
         }
+        if (!drag.moved && Math.hypot(pt.x - drag.start.x, pt.y - drag.start.y) < 4) return;
+        if (!drag.moved) { drag.moved = true; freeze(); }
+        const item = itemById(drag.id);
+        if (!item) return;
+        const dx = (pt.x - drag.start.x) / geom.k, dy = (pt.y - drag.start.y) / geom.k;
+        const reach = SNAP_PX / geom.k;
+        const lines = snapLines(item.id);
+        const f = drag.from;
+        drag.guides = [];
+        if (!drag.grip) {
+          let nx = f.x + dx, ny = f.y + dy;
+          const sx = nearest([nx, nx + f.w, nx + f.w / 2], lines.xs, reach);
+          const sy = nearest([ny, ny + f.h, ny + f.h / 2], lines.ys, reach);
+          if (sx) { nx += sx.d; drag.guides.push({ axis: 'x', at: sx.at }); }
+          if (sy) { ny += sy.d; drag.guides.push({ axis: 'y', at: sy.at }); }
+          item.x = nx; item.y = ny;
+          clampIn(item);
+        } else {
+          // THE OPPOSITE CORNER STAYS PUT; a logo keeps its shape.
+          const west = drag.grip.includes('w'), north = drag.grip.includes('n');
+          let ex = (west ? f.x : f.x + f.w) + dx;
+          let ey = (north ? f.y : f.y + f.h) + dy;
+          const sx = nearest([ex], lines.xs, reach), sy = nearest([ey], lines.ys, reach);
+          if (sx) { ex += sx.d; drag.guides.push({ axis: 'x', at: sx.at }); }
+          if (sy) { ey += sy.d; drag.guides.push({ axis: 'y', at: sy.at }); }
+          const ax = west ? f.x + f.w : f.x, ay = north ? f.y + f.h : f.y;
+          let w = Math.max(MIN_IN, west ? ax - ex : ex - ax);
+          let h = Math.max(MIN_IN, north ? ay - ey : ey - ay);
+          if (item.kind === 'logo') {
+            const s = Math.max(w / f.w, h / f.h);
+            w = Math.max(MIN_IN, f.w * s); h = Math.max(MIN_IN, f.h * s);
+            drag.guides = [];
+          }
+          item.w = w; item.h = h;
+          item.x = west ? ax - w : ax;
+          item.y = north ? ay - h : ay;
+          clampIn(item);
+        }
+        paintSheet();
+      });
+      const endDrag = () => {
+        if (!drag) return;
+        const done = drag;
+        drag = null;
+        if (done.moved) {
+          undoList.push(done.before);
+          redoList.length = 0;
+          persist();
+          const item = itemById(done.id);
+          say(item ? `${item.label} ${done.grip ? 'sized' : 'moved'}.` : '');
+        }
+        refresh();
       };
+      sheetEl.addEventListener('pointerup', endDrag);
+      sheetEl.addEventListener('pointercancel', endDrag);
+
+      // DOUBLE-CLICK: a 3D view turns; a plan opens SCALE & LAYERS; the
+      // company box opens its lines; a logo opens the logo list.
+      sheetEl.addEventListener('dblclick', e => {
+        const hit = itemAt(canvasPt(e));
+        if (!hit) return;
+        if (hit.kind === 'view3d') turnView3d(hit);
+        else if (hit.kind === 'plan' || hit.kind === 'text' || hit.kind === 'logo') openCard(hit.id, e.clientX, e.clientY);
+      });
+      // RIGHT-CLICK: the item's commands, or + ADD at that point on the paper.
+      sheetEl.addEventListener('contextmenu', e => {
+        if (!drawing || !geom) return;
+        e.preventDefault();
+        const pt = canvasPt(e);
+        const hit = itemAt(pt);
+        if (hit) {
+          selectedId = hit.id;
+          refresh();
+          openMenu(itemMenuEntries(hit, e.clientX, e.clientY), e.clientX, e.clientY);
+        } else {
+          openMenu(addMenuEntries(toIn(pt)), e.clientX, e.clientY);
+        }
+      });
+      document.addEventListener('pointerdown', e => {
+        if (!menu.hidden && !menu.contains(e.target)) closeMenu();
+        if (!cardEl.hidden && !cardEl.contains(e.target) && e.target !== sheetEl) closeCard();
+      }, true);
+      document.addEventListener('keydown', e => {
+        const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
+        const mod = e.ctrlKey || e.metaKey;
+        if (mod && !typing && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+        if (mod && !typing && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+        if (e.key === 'Escape') { closeMenu(); closeCard(); if (selectedId) { selectedId = null; refresh(); } return; }
+        if (!typing && (e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+          e.preventDefault();
+          deleteItem(selectedId);
+          return;
+        }
+        // NUDGE: the arrows move the picked one a sixteenth of an inch, a
+        // quarter with Shift.
+        if (!typing && selectedId && e.key.startsWith('Arrow')) {
+          e.preventDefault();
+          const step = e.shiftKey ? 0.25 : 1 / 16;
+          const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+          change(null, () => { const it = itemById(selectedId); it.x += d[0]; it.y += d[1]; clampIn(it); });
+        }
+      });
 
       // ── BOOT ──────────────────────────────────────────────────────────
       const paperSel = document.getElementById('paper');
@@ -838,15 +1792,42 @@
         paperSel.appendChild(opt);
       });
       paperSel.value = paper.id;
+      // ANOTHER PAPER, THE SAME ARRANGEMENT: an arranged sheet is stretched
+      // to the new paper, each item's place and size in proportion (a logo
+      // keeps its shape, a plan at a scale keeps its scale).
       paperSel.addEventListener('change', () => {
-        paper = PAPERS.find(p => p.id === paperSel.value) || PAPERS[0];
-        paintSheet();
-        say(`${paper.label}.`);
+        const next = PAPERS.find(p => p.id === paperSel.value) || PAPERS[0];
+        if (!sheet) {
+          change(`${next.label}.`, () => { paper = next; }, { persistIt: false, arrange: false });
+          return;
+        }
+        const from = innerIn(paper), to = innerIn(next);
+        const sx = to.w / from.w, sy = to.h / from.h;
+        change(`${next.label}.`, () => {
+          paper = next;
+          sheet.paper = next.id;
+          sheet.items.forEach(it => {
+            const b = boxIn(it);
+            const cx = to.x + (b.x + b.w / 2 - from.x) * sx, cy = to.y + (b.y + b.h / 2 - from.y) * sy;
+            if (it.kind === 'logo') { const s = Math.min(sx, sy); it.w *= s; it.h *= s; }
+            else if (resizable(it)) { it.w *= sx; it.h *= sy; }
+            const nb = boxIn(it);
+            it.x = cx - nb.w / 2; it.y = cy - nb.h / 2;
+            clampIn(it);
+          });
+        });
       });
+      document.getElementById('rp-add').addEventListener('click', e => {
+        if (!drawing) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        openMenu(addMenuEntries(null), r.right + 4, r.top);
+      });
+      document.getElementById('rp-undo').addEventListener('click', undo);
+      document.getElementById('rp-redo').addEventListener('click', redo);
 
       document.getElementById('note').textContent =
-        'Drawn the way Construction Layout draws a plan, for now \u2014 say how you '
-        + 'want it presented and this is the page it changes on.';
+        'Drag a viewport to move it, a corner to size it. Double-click a floor plan for its scale and '
+        + 'layers, a 3D view to turn it. Right-click for more.';
 
       raw = await load();
       if (!raw) {
@@ -866,35 +1847,32 @@
             defaultWallTopFt: 8,
           }),
         };
-        const kept = readCameras();
-        VIEWS.forEach(v => { v.camera = kept[v.slot] || null; });
-        document.getElementById('view3d-reset').hidden = !VIEWS.some(v => v.camera);
-        buildSeats();
-        paintSeats();
-        paintSheet();
-        say(seats.length > 1
-          ? 'Tick what goes on the sheet.'
-          : 'This drawing has no plans to lay out yet.');
+        autoCameras = readCameras();
+        sheet = normaliseRecord(raw[RECORD_KEY]);
+        if (sheet) {
+          paper = PAPERS.find(p => p.id === sheet.paper) || PAPERS[0];
+          paperSel.value = paper.id;
+        }
+        // The marks preloaded, so a LOGO added comes in at its own shape.
+        marks().forEach(mark => pictureOf(mark.logoSrc));
+        refresh();
+        say(sheet
+          ? 'Your arranged sheet. Drag to move, double-click a plan for scale and layers.'
+          : (planLevels().length ? 'Tick what goes on the sheet, or drag a viewport to arrange it.'
+            : 'This drawing has no plans to lay out yet.'));
       }
+
+      // FOR THE SPECS: the arrangement as the page holds it, nothing parsed back.
+      window.__rpSheet = () => JSON.parse(JSON.stringify({ arranged: !!sheet, paper: paper.id, items: items(),
+        boxes: items().map(it => ({ id: it.id, ...boxIn(it) })), selectedId,
+        geom, undo: undoList.length, redo: redoList.length }));
 
       window.addEventListener('resize', () => {
         window.DraftView3dHost?.stopEditing();
+        closeMenu();
         paintSheet();
       });
-      document.getElementById('sheet').addEventListener('dblclick', e => {
-        const cv = e.currentTarget;
-        const r = cv.getBoundingClientRect();
-        const x = (e.clientX - r.left) * (cv.width / r.width);
-        const y = (e.clientY - r.top) * (cv.height / r.height);
-        const hit = VIEWS.find(({ box: b }) => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-        if (hit) turnView3d(hit);
-      });
-      document.getElementById('view3d-reset').addEventListener('click', e => {
-        VIEWS.forEach(v => { v.camera = null; });
-        writeCameras();
-        say('3D views back to the front-left and rear corners.');
-        paintSheet();
-      });
+      document.getElementById('view3d-reset').addEventListener('click', () => resetViews(null));
 
       window.DraftShellBars.wireSkin({
         theme: window.__rpTheme.theme,
