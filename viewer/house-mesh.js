@@ -1438,6 +1438,7 @@
   // taken along the wall line -- the edge moved in by its own overhang --
   // from the plate up to the roof.
   const FASCIA_THICK_FT = 1.5 / 12;
+  const BURIED_EPS_FT = 0.02;
   const GABLE_THICK_FT = 5.5 / 12;
   const roofFasciaFt = roof => (Number(roof.fascia) > 0 ? Number(roof.fascia) : 5.5) / 12;
 
@@ -1549,8 +1550,14 @@
         if (other === item) return false;
         const q = { x: p.x - inward.x * 0.15, z: p.z - inward.z * 0.15 };
         const rise = G.roofRiseAt(other.roof, q, other.list);
-        // Above the bottom of this edge's own board: the board is buried.
-        return rise != null && other.eave + rise >= y - fasciaFt;
+        // At or above the TOP of this edge's own board: the board is buried.
+        // (It was "above its bottom", and where another roof stood only a
+        // little under this edge -- a gable pushed out over the piece next
+        // door by a 6" overhang, jb 28 Nov 2026 -- the board and the gable
+        // wall under it both went, leaving the attic open in the strip
+        // between the two roofs. A board partly under the other roof is
+        // drawn; the other roof hides the part that is under it.)
+        return rise != null && other.eave + rise >= y - BURIED_EPS_FT;
       });
       const at = (t, y, shift = 0) => ({
         x: a.x + (b.x - a.x) * t + inward.x * shift, y, z: a.z + (b.z - a.z) * t + inward.z * shift,

@@ -236,3 +236,25 @@ test('the elevations: the whole roof dropped, the board hangs past the plate', (
   expect(dropped.E3[at(TOP - 0.5, 1)], 'the fascia top 6" down').toBeGreaterThan(20);
   expect(dropped.E3[at(PLATE - 0.5, 2.25)], 'and its foot').toBeGreaterThan(20);
 });
+
+// A 6" EAVE ALL ROUND (jb, 28 Nov 2026: "when i added 6" eave it raised the
+// roof, but now the fascia board is missing"). The main gable, pushed 6" out,
+// stands over the front gable piece next door; where the main roof climbs
+// past that piece's ridge, its rake board and gable wall used to drop out
+// until the main roof was a whole board higher, leaving the attic open in
+// between. Now the board and the wall run down to where the two roofs meet.
+test('3D: a gable pushed out over the piece next door keeps its board down to that roof', async ({ page }) => {
+  await page.goto('/viewer/index.html?painter=plain');
+  await page.waitForSelector('body[data-ready="1"]');
+  const saved = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto', 'repro-jb-timberhouse-6in-eave.draft'), 'utf8'));
+  const r = await page.evaluate(s => {
+    const built = DraftViewer.loadDrawing(s, 't');
+    const on = (f, x) => f.pts.every(q => Math.abs(q.x - x) < 0.01);
+    const nearest = (kind, x) => Math.max(...built.faces.filter(f => f.kind === kind && on(f, x))
+      .flatMap(f => f.pts.map(q => q.z)).filter(z => z < -1));
+    // The front piece's ridge runs at z = -6.5 (eaves at 0.5 and -13.5).
+    return { fascia: nearest('fascia', -0.5), gable: nearest('gable', -1) };
+  }, saved);
+  expect(r.fascia, 'the main rake board reaches the front piece\'s ridge').toBeGreaterThan(-6.9);
+  expect(r.gable, 'and the gable wall under it').toBeGreaterThan(-6.9);
+});
