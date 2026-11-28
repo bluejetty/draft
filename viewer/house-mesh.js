@@ -705,12 +705,63 @@
       return peersBy.get(key);
     };
     const joined = wall => joinedFrame(wall, wallThick(wall), peersOf(wall));
+    const raisedEaves = [];
+    env.roofs().forEach(roof => {
+      const pts = (roof && roof.points) || [];
+      const n = pts.length;
+      const heel = Array.isArray(roof && roof.edgeHeelIn) && roof.edgeHeelIn.length === n ? roof.edgeHeelIn : null;
+      // The whole-roof RAISE HEEL (roof.heelIn) lifts every eave; a drop
+      // leaves the wall on its plate, the board hanging past it.
+      const raise = Math.max(0, CV.roofHeelShiftFt ? CV.roofHeelShiftFt(roof) : 0);
+      if ((!heel && !(raise > 0)) || n < 3) return;
+      let base;
+      try { base = CV.roofBaseElev(roof, stack, env); } catch (e) { return; }
+      if (!Number.isFinite(base)) return;
+      pts.forEach((a, i) => {
+        const kind = roof.edges && roof.edges[i];
+        if (kind === 'gable' || kind === 'sloped' || kind === 'joint' || kind === 'flush') return;
+        const lift = (heel ? Math.max(0, Number(heel[i]) || 0) / 12 : 0) + raise;
+        if (!(lift > 0)) return;
+        const over = Array.isArray(roof.edgeOverhang) && Number.isFinite(Number(roof.edgeOverhang[i]))
+          ? Number(roof.edgeOverhang[i]) : Number(roof.overhang) || 0;
+        raisedEaves.push({ a, b: pts[(i + 1) % n], base, lift, reach: over + 1 });
+      });
+    });
     env.walls().forEach(wall => {
       if (!wall || !wall.start || !wall.end || wall.levelId < 0) return;
       const n0 = faces.length;
       wallOne(wall);
       mark(n0, (wall.view || 'plan') === 'foundation' || wall.levelId === 1 ? 'fdn' : `L${wall.levelId}`);
     });
+    // ── A RAISED HEEL: THE WALL UNDER IT CLIMBS TO THE SOFFIT ────────────
+    //
+    // jb, 28 Nov 2026: with every eave raised, the roof and its fascia went
+    // up and left an open slot over the plate. The elevations' own rule
+    // (cut-view.js heelTopAt; Movie, 29 Oct: "the lower wall extends up
+    // until it hits the soffit / fascia"): a wall along a raised eave, inside
+    // it by no more than its overhang and a foot, on the plate that roof
+    // bears on, stands up by the lift -- its own finish all the way, the
+    // fascia's foot landing on its top.
+    function heelTopFor(wall, top) {
+      if (!raisedEaves.length) return top;
+      const wx = wall.end.x - wall.start.x, wz = wall.end.z - wall.start.z;
+      const wLen = Math.hypot(wx, wz);
+      if (!(wLen > 1e-6)) return top;
+      const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
+      let out = top;
+      raisedEaves.forEach(({ a, b, base, lift, reach }) => {
+        if (Math.abs(base - top) > 0.6) return;
+        const gx = b.x - a.x, gz = b.z - a.z;
+        const gLen = Math.hypot(gx, gz);
+        if (!(gLen > 1e-6)) return;
+        if (Math.abs(wx * gz - wz * gx) / (wLen * gLen) > 0.2) return;
+        const along = ((mid.x - a.x) * gx + (mid.z - a.z) * gz) / gLen;
+        const off = Math.abs((mid.x - a.x) * gz - (mid.z - a.z) * gx) / gLen;
+        if (along < 0 || along > gLen || off > reach) return;
+        out = Math.max(out, base + lift);
+      });
+      return out;
+    }
     function wallOne(wall) {
       const view = wall.view || 'plan';
       if (view === 'foundation') {
@@ -772,9 +823,11 @@
       if (garage && bearsOnGarage(garage, storey)) {
         try { const b = CV.garageBearing(env, fdn, garage); if (Number.isFinite(b)) floor = b; } catch (e) { /* keep the storey's */ }
       }
+      const plateTop = top;
+      if (!garage) top = heelTopFor(wall, top);
       const frame = joined(wall);
       const holes = holesFor(wall, floor, top, garage);
-      const paint = paintFor(wall, frame, bottom, top, Math.min(top, storey.wallTop));
+      const paint = paintFor(wall, frame, bottom, top, Math.min(plateTop, storey.wallTop));
       wallWithOpenings(frame, bottom, top, holes,
         garage ? 'garageWall' : 'wall', garage ? COLOURS.garageWall : COLOURS.wall, faces, counts, paint);
       finishSkin(wall, frame, bottom, top, paint, holes);
@@ -1385,6 +1438,7 @@
   // taken along the wall line -- the edge moved in by its own overhang --
   // from the plate up to the roof.
   const FASCIA_THICK_FT = 1.5 / 12;
+  const BURIED_EPS_FT = 0.02;
   const GABLE_THICK_FT = 5.5 / 12;
   const roofFasciaFt = roof => (Number(roof.fascia) > 0 ? Number(roof.fascia) : 5.5) / 12;
 
@@ -1496,8 +1550,14 @@
         if (other === item) return false;
         const q = { x: p.x - inward.x * 0.15, z: p.z - inward.z * 0.15 };
         const rise = G.roofRiseAt(other.roof, q, other.list);
-        // Above the bottom of this edge's own board: the board is buried.
-        return rise != null && other.eave + rise >= y - fasciaFt;
+        // At or above the TOP of this edge's own board: the board is buried.
+        // (It was "above its bottom", and where another roof stood only a
+        // little under this edge -- a gable pushed out over the piece next
+        // door by a 6" overhang, jb 28 Nov 2026 -- the board and the gable
+        // wall under it both went, leaving the attic open in the strip
+        // between the two roofs. A board partly under the other roof is
+        // drawn; the other roof hides the part that is under it.)
+        return rise != null && other.eave + rise >= y - BURIED_EPS_FT;
       });
       const at = (t, y, shift = 0) => ({
         x: a.x + (b.x - a.x) * t + inward.x * shift, y, z: a.z + (b.z - a.z) * t + inward.z * shift,

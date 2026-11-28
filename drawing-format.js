@@ -1119,6 +1119,31 @@ if (!window.DraftDrawingFormat) {
     return Number.isFinite(n) && n >= ROOF_FASCIA_MIN_IN && n <= ROOF_FASCIA_MAX_IN ? n : ROOF_FASCIA_IN;
   };
   const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;
+  // RAISE HEEL FOR THE WHOLE ROOF (jb, 28 Nov 2026): `roof.heelIn`, inches,
+  // lifts (+) or drops (-) the whole roof. Up to 48". Down only as far as
+  // keeps the standard 5 1/2" heel at the wall line on every eave: the rise
+  // over the smallest eave overhang (jb: "at 0 overhang / 5.5" roof heel -
+  // 0 might be the bottom"; with an 8 ft eave "the user can adjust down
+  // alot before the top chord would hit the ceiling").
+  const ROOF_HEEL_RAISE_MAX_IN = 48;
+  const roofHeelDropLimitIn = roof => {
+    const pts = Array.isArray(roof?.points) ? roof.points : [];
+    const pitch = Math.max(0, Number(roof?.pitch) || 0);
+    let least = Infinity;
+    pts.forEach((_, i) => {
+      const kind = roof?.edges?.[i];
+      if (kind === 'gable' || kind === 'sloped' || kind === 'joint' || kind === 'flush') return;
+      const own = Array.isArray(roof?.edgeOverhang) ? Number(roof.edgeOverhang[i]) : NaN;
+      const over = Number.isFinite(own) ? own : (Number.isFinite(Number(roof?.overhang)) ? Number(roof.overhang) : 0);
+      least = Math.min(least, Math.max(0, over) * pitch);
+    });
+    return Number.isFinite(least) ? least : 0;
+  };
+  const clampRoofHeelIn = (roof, value) => {
+    const v = Number(value);
+    if (!Number.isFinite(v)) return 0;
+    return Math.min(ROOF_HEEL_RAISE_MAX_IN, Math.max(-roofHeelDropLimitIn(roof), v));
+  };
 
   // ── WHAT A ROOF WEARS, AND HOW ITS GABLE ENDS ──────────────────────────
   //
@@ -1200,6 +1225,13 @@ if (!window.DraftDrawingFormat) {
             ? roof.edgeHeelIn.map(value => Math.min(48, Math.max(0, number(value, 0)))) : null;
           return heel && heel.some(v => v > 0) ? { edgeHeelIn: heel } : {};
         })()),
+        // RAISE HEEL FOR THE WHOLE ROOF (jb, 28 Nov 2026), inches, + or -.
+        // Kept only when it moves the roof, clamped to what the roof allows.
+        ...((() => {
+          if (roof?.heelIn == null) return {};
+          const v = clampRoofHeelIn({ ...roof, points }, roof.heelIn);
+          return Math.abs(v) > 1e-9 ? { heelIn: v } : {};
+        })()),
         // THE WALL LINE THE EAVES HANG FROM, one point per roof point, kept
         // once a drafter types an edge's overhang (Movie, 18 Oct). Every
         // overhang is worked out from this, never from the eave: bringing the
@@ -1257,8 +1289,8 @@ if (!window.DraftDrawingFormat) {
         // THE SETTINGS A PIECE KEEPS FOR ITSELF (jb, 15 Nov 2026: MAIN ROOF
         // and the SPECIAL CASE, model/15). Absent, the piece follows its
         // assembly's MAIN ROOF; the values themselves are on the record.
-        ...(Array.isArray(roof?.own) && roof.own.some(k => ['pitch', 'fascia', 'overhang', 'fasciaFinish'].includes(k))
-          ? { own: [...new Set(roof.own.filter(k => ['pitch', 'fascia', 'overhang', 'fasciaFinish'].includes(k)))] } : {}),
+        ...(Array.isArray(roof?.own) && roof.own.some(k => ['pitch', 'fascia', 'overhang', 'heel', 'fasciaFinish'].includes(k))
+          ? { own: [...new Set(roof.own.filter(k => ['pitch', 'fascia', 'overhang', 'heel', 'fasciaFinish'].includes(k)))] } : {}),
         // TWO GABLES ON A STEPPED END (jb, 15 Nov 2026; model/15
         // splitJogGable): the small piece names its big one (`jogOf`), and
         // the big one keeps the flush roof it was cut from (`flushOf`) for
@@ -3166,6 +3198,9 @@ if (!window.DraftDrawingFormat) {
     WINDOW_HEAD_FT,
     SUPERSEDED_WINDOW_HEADS_FT,
     roofHeelIn,
+    ROOF_HEEL_RAISE_MAX_IN,
+    roofHeelDropLimitIn,
+    clampRoofHeelIn,
     walls,
     lines,
     floors,

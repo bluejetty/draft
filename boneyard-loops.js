@@ -230,7 +230,10 @@ if (!window.DraftBoneyardLoops) {
     // A SPECIAL CASE piece (one with its own pitch / fascia / overhang /
     // fascia finish, `roof.own`) carries `special`, which the page draws in
     // its own linetype.
-    const thinOf = (roof, elev) => {
+    const thinOf = (roof, plate) => {
+      // RAISE HEEL FOR THE WHOLE ROOF (jb, 28 Nov 2026): + or -, the whole
+      // roof moves with it (cut-view roofHeelShiftFt).
+      const elev = plate + (Number.isFinite(Number(roof.heelIn)) ? Number(roof.heelIn) / 12 : 0);
       const special = Array.isArray(roof.own) && roof.own.length > 0 ? { special: true } : {};
       const pts = (roof.points || []).map(p => ({ x: Number(p.x), z: Number(p.z) }));
       if (pts.length < 3) return;
