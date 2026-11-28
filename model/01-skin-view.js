@@ -1148,6 +1148,12 @@
     // licence to re-zoom the drafter's page inside a rail change. The gap is
     // written up rather than smuggled; pressing 0 on ROOF still fits to
     // nothing, and that is one line to change when somebody rules on it.
+    //
+    // RULED, FOR ROOF ONLY (audit 27 Nov 2026, jb 28 Nov "sure why not"):
+    // the ROOF plan opened at scale 6 round the world origin, the house small
+    // and off to one side, while every floor plan filled the sheet. fit()
+    // now asks for roofs and outlines on the ROOF level, which holds nothing
+    // else to frame; every other level's default zoom is untouched.
     if (wide) {
       roofs().forEach(r => (r.points || []).forEach(p => pts.push(p)));
       outlines().forEach(o => (o.points || []).forEach(p => pts.push(p)));
@@ -1319,7 +1325,9 @@
   const fit = (wide = false, margin = 0.86) => {
     // 0 TO FIT on an elevation: back to the painter's own fit.
     elevPin = null; elevPinFor = null;
-    const own = allPoints(wide);
+    // THE ROOF PLAN FRAMES ITS ROOFS (see allPoints): it has no walls, lines
+    // or floors of its own, so without them the fit found nothing at all.
+    const own = allPoints(wide || activeLevelId() === ROOF_LEVEL_ID);
     // A SEAT OF HOLOGRAMS ALONE (jb, 24 Nov 2026: a file of PHASE 1/2/3
     // SUITES and nothing else had a blank rail) frames the holograms, since
     // there is no house of its own to frame. The ROOF and SITE seats take in

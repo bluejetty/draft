@@ -31,6 +31,7 @@ async function open(page) {
   await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html?level=7', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   return h.planFrame(page);
 }
@@ -153,6 +154,7 @@ test('a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corne
   await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   const { at } = await h.planFrame(page);
   await click(page, at, 30, 15);
@@ -182,6 +184,7 @@ test('a corner node DELETEd on a plain roof: a SLOPED edge, the planes the corne
   await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   expect((await saved(page)).edges).toEqual(['eave', 'eave', 'eave', 'sloped', 'eave']);
   // The edge panel says SLOPED for it.
@@ -207,6 +210,7 @@ test('a BREAK node DELETEd from a straight eave just goes; no SLOPED edge', asyn
   await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   const { at } = await h.planFrame(page);
   await click(page, at, 30, 15);
@@ -253,6 +257,7 @@ test('an edge beside a 45-degree corner: its end slides along the 45', async ({ 
   await page.goto('/MODEL.html?level=7');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   const { at } = await h.planFrame(page);
   await armMove(page, at);

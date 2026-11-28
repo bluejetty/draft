@@ -37,6 +37,7 @@ async function open(page, edges = EAVE.map(() => 'eave')) {
   await h.openEditor(page, { drawing: drawing(edges), bucket: BUCKET, url: '/MODEL.html?level=7&left=1&lpane=drafting', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   return h.planFrame(page);
 }

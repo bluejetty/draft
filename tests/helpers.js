@@ -829,7 +829,19 @@ async function underlayPick(page, kind) {
   await page.locator(`#underlay-menu [data-mode-${kind}]`).click();
 }
 
+// THE ROOF PLAN AT ITS OLD OPENING ZOOM: 6 px/ft round the world origin.
+// Until 28 Nov 2026 the ROOF level's fit found nothing to frame and fell to
+// that default; it now frames the roofs (audit fix). The roof-editing specs
+// were written against the old picture -- clicks a tenth of a foot off an
+// edge, ends that sat clear of the open DRAFTING rail -- and they test the
+// roof tools, not the zoom, so they put the view back where it was.
+async function roofPlanAtOldZoom(page) {
+  await page.evaluate(() => { view.cx = 0; view.cz = 0; view.scale = 6; paint(); });
+  await expect(page.locator('#plan')).toHaveAttribute('data-view', /^0\.0+ 0\.0+ 6\.0+$/);
+}
+
 module.exports = {
+  roofPlanAtOldZoom,
   underlayPick,
   deckCallouts,
   undesignedTile,

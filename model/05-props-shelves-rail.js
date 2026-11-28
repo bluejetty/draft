@@ -1635,6 +1635,19 @@
   let railPassEnv = null;
   let railPassMs = 0;
 
+  // THE NEXT FREE SECTION NAMES, first free number first: with S2 stored the
+  // next three are S1, S3, S4. armCut (model/13) mints the first of these, and
+  // the empty seats on the rail are labelled with them in order, so the seat
+  // a drafter presses says the name the new cut will get.
+  const freeSectionNames = count => {
+    const used = new Set(cuts().map(cut => cut.name));
+    const names = [];
+    for (let n = 1; names.length < count; n += 1) {
+      if (!used.has(`S${n}`)) names.push(`S${n}`);
+    }
+    return names;
+  };
+
   // WHICH CUT SITS IN A SEAT. Elevations are looked up BY ID -- E3 is the back
   // of the house wherever it falls in the array. Sections are seated BY
   // POSITION, which is the old page's rule and not an oversight of mine: it
@@ -1653,15 +1666,23 @@
           : `${name} — this elevation cuts itself when the house builds`,
       };
     }
-    const cut = cuts()[Number(name.slice(1)) - 1] || null;
+    const stored = cuts();
+    const at = Number(name.slice(1)) - 1;
+    const cut = stored[at] || null;
+    // AN EMPTY SEAT WEARS THE NAME + CUT WILL GIVE IT (audit 27 Nov 2026).
+    // Seats fill by position, but a cut is named by the first free number
+    // (armCut, model/13). TIMBERHOUSE keeps one section called S2, so the
+    // spare seat beside it -- the second seat -- said S2 as well, and its
+    // press made S1. Name the spare seats from the free names instead.
+    const shown = cut ? name : freeSectionNames(at - stored.length + 1)[at - stored.length];
     return {
       cut,
-      label: cut ? cutLabel(cut) : name,
+      label: cut ? cutLabel(cut) : shown,
       // AN EMPTY SECTION SEAT IS + CUT (Movie, 11 Oct), the same press as
       // + CUT in the SECTIONS head, so its title is that button's words.
       title: cut
         ? `${cut.name || name} — tap to bring this section center`
-        : `${name} — + CUT: press the two ends of the line, then the side you want to look from`,
+        : `${shown} — + CUT: press the two ends of the line, then the side you want to look from`,
     };
   };
 

@@ -2873,7 +2873,12 @@ if (!window.DraftCutView) {
       ctx.fillStyle = ink(0.55);
       ctx.font = `600 ${textPx(10)}px 'Barlow Condensed', system-ui, sans-serif`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-      ctx.fillText(label, 10, 8);
+      // WHERE THE CALLER SAYS THE OPEN CORNER IS (MODEL.html hands its top
+      // bar and left rail over as opts.titleAt), else 10,8 from the corner.
+      const at = (opts && opts.titleAt) || null;
+      const tx = at && Number.isFinite(at.x) ? at.x : 10;
+      const ty = at && Number.isFinite(at.y) ? at.y : 8;
+      ctx.fillText(label, tx, ty);
     };
     if (!stack) { header(cut.name); return; }
     const crossings = sectionWallCrossings(env, cut, axis);
