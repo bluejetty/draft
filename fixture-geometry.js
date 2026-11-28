@@ -526,7 +526,24 @@ if (!window.DraftFixtureGeometry) {
     };
   };
 
+  // THE CENTRE TAB (jb, 28 Nov 2026: "make a 'tab' on the fireplace right in
+  // the dead center of the fireplace (widthwise) so i can pick up and move
+  // it to the center of the dimension line and therefore center it in the
+  // wall"): a grab point at the middle of the piece's width, just inside its
+  // front edge. Held by it, the piece's centre is what snaps.
+  const centreTab = (walls, fixture) => {
+    const geo = fixtureGeometry(walls, fixture);
+    if (!geo?.frame || geo.tub) return null;
+    const dir = geo.frontOff >= geo.backOff ? 1 : -1;
+    const inset = Math.min(1.5 / 12, Math.abs(geo.frontOff - geo.backOff) / 4);
+    const p = geo.frame.at(geo.along, geo.frontOff - dir * inset);
+    return { x: p.x, z: p.z, along: geo.along };
+  };
+  const CENTRE_TAB_KINDS = Object.freeze(['fireplace']);
+
   window.DraftFixtureGeometry = Object.freeze({
+    centreTab,
+    CENTRE_TAB_KINDS,
     fireplaceParts,
     FIREPLACE_OPENING_FT,
     FIREPLACE_HEARTH_FT,
