@@ -43,6 +43,8 @@
     deck: [176, 150, 116],
     ground: [139, 156, 104],
     stringer: [196, 170, 128],
+    riser: [200, 166, 120],
+    underWood: [204, 180, 140],
     stair: [190, 156, 112],
     landing: [182, 148, 104],
     drywall: [238, 236, 230],
@@ -838,7 +840,11 @@
         const holes = (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
           .filter(o => o && o.hostType === 'floor' && o.hostId === floor.id && Array.isArray(o.points) && o.points.length >= 3)
           .map(o => o.points.map(p => ({ x: p.x, z: p.z })));
-        holedSlab(insetRing(ring, 0.02), holes, storey.floorBottom, storey.floorTop, 'floor', COLOURS.floor, faces);
+        // CEILINGS AND THE STAIR WELL WHITE (jb, 28 Nov 2026: "make the
+        // ceiling and inside of stair opening default to WHITE (GYP
+        // Painted)"): the floor's top stays wood, what is seen from below
+        // is painted board.
+        holedSlab(insetRing(ring, 0.02), holes, storey.floorBottom, storey.floorTop, 'floor', COLOURS.floor, faces, COLOURS.drywall);
       }
       counts.floors += 1;
     }
@@ -1056,8 +1062,18 @@
   // A SLAB WITH HOLES IN IT (a floor with its stair opening): the top and
   // bottom cut in bands, and a side on every edge of the ring and of each
   // hole, turned to face out of the solid.
-  function holedSlab(ring, holes, bottom, top, kind, colour, out) {
-    if (!holes.length) { prism(ring, bottom, top, kind, colour, out); return; }
+  //
+  // `under`, when given, is the colour of what is seen from below: the
+  // bottom and the inside of each hole (the ceiling and the stair well).
+  function holedSlab(ring, holes, bottom, top, kind, colour, out, under) {
+    const below = under || colour;
+    if (!holes.length) {
+      const from = out.length;
+      prism(ring, bottom, top, kind, colour, out);
+      // prism pushes the top, then the bottom.
+      if (out[from + 1]) out[from + 1].colour = below;
+      return;
+    }
     const traps = planRegion([ring], holes);
     if (!traps.length) return;
     // WELDED: a band corner that lands part way along a neighbour's edge (or
@@ -1077,7 +1093,7 @@
     traps.forEach(t => {
       const w = welded(t);
       out.push(flatFace(w, top, true, kind, colour));
-      out.push(flatFace(w, bottom, false, kind, colour));
+      out.push(flatFace(w, bottom, false, kind, below));
     });
     const inLoop = (p, loop) => {
       let c = false;
@@ -1088,7 +1104,7 @@
       return c;
     };
     const solid = p => inLoop(p, ring) && !holes.some(h => inLoop(p, h));
-    [ring, ...holes].map(welded).forEach(loop => loop.forEach((a, i) => {
+    [ring, ...holes].map(welded).forEach((loop, li) => loop.forEach((a, i) => {
       const b = loop[(i + 1) % loop.length];
       const len = Math.hypot(b.x - a.x, b.z - a.z);
       if (!(len > 1e-6)) return;
@@ -1101,7 +1117,7 @@
       const outN = solid(probe) ? { x: -nx, z: -nz } : { x: nx, z: nz };
       const pts = [{ x: a.x, y: bottom, z: a.z }, { x: b.x, y: bottom, z: b.z }, { x: b.x, y: top, z: b.z }, { x: a.x, y: top, z: a.z }];
       const n = normalOf(pts);
-      out.push({ pts: n.x * outN.x + n.z * outN.z >= 0 ? pts : pts.reverse(), kind, colour });
+      out.push({ pts: n.x * outN.x + n.z * outN.z >= 0 ? pts : pts.reverse(), kind, colour: li > 0 ? below : colour });
     }));
   }
 
@@ -1175,6 +1191,16 @@
     const STRINGER_T = Math.max(1.5 / 12, PRINT ? PRINT.minFt : 0);
     const STRINGER_D = 11.25 / 12;
     const MAX_OC = 16 / 12;
+    // CLOSED RISERS AND THE UNDERSIDE (jb, 28 Nov 2026): "a 1/2 board on the
+    // front of the steps to cover the hole", unless stair.riserBoards is
+    // false ("the kickplate on front or no plate"); and under the flight a
+    // 1/2" board on the slope, wood or "GYP (painted white)", unless
+    // stair.underside is 'open' and the stringers show ("they do make it
+    // look higher quality"). Both on by default, the backing wood; chosen on
+    // OBJ PROP. Neither is printed: PRINT MODEL keeps the stair as it was.
+    const BOARD_FT = 0.5 / 12;
+    const underside = PRINT || stair.underside === 'open' ? null : (stair.underside === 'gyp' ? 'gyp' : 'wood');
+    const underColour = underside === 'gyp' ? COLOURS.drywall : COLOURS.underWood;
     // seq is [flight] straight, [flight, landing, flight] for an L (or a U
     // whose landings merge), [flight, landing, (middle flight), landing,
     // flight] for a U. A landing of winders carries `treads` too, so a
@@ -1216,6 +1242,32 @@
           prof = [[0, back(0)], ...teeth, [runEnd, yFoot], [Math.min(runEnd, uFoot), yFoot]];
         }
         void yTop;
+        // THE RISERS: a board on the face of every notch, from the top of
+        // the tread (or floor, or landing) below up under the tread above,
+        // tucked behind its nosing; and one under the top tread up to the
+        // floor or landing the flight comes down from.
+        if (!PRINT && stair.riserBoards !== false) {
+          const riserAt = (u, lo, hi) => {
+            if (!(hi - lo > 1e-4)) return;
+            prism([at(u, -half), at(u + BOARD_FT, -half), at(u + BOARD_FT, half), at(u, half)], lo, hi, 'riser', COLOURS.riser, out);
+          };
+          riserAt(0, tops[0], yTop);
+          tops.forEach((t, k) => riserAt((k + 1) * step, k + 1 < count ? tops[k + 1] : yFoot, t - TREAD_FT));
+        }
+        // THE UNDERSIDE BOARD, along the stringers' bottom edge from the top
+        // of the flight down to where it meets the floor or landing.
+        if (underside) {
+          const u0 = prof[0][0], y0 = prof[0][1];
+          const uE = Math.min(runEnd, uFoot);
+          if (u0 === 0 && y0 > yFoot && uE > 1e-4) {
+            const ms = (yFoot - y0) / uE;
+            const tv = BOARD_FT * Math.sqrt(1 + ms * ms);
+            const uLow = uE + tv / ms;
+            if (uLow > 1e-4) {
+              extrudeProfile([[0, y0], [uE, yFoot], [uLow, yFoot], [0, y0 - tv]], at3, -half, half, 'stair-under', underColour, out);
+            }
+          }
+        }
         // How many, evenly spaced, no more than 16" apart, centred 3/4" in.
         const span = Math.max(0, run.widthFt - STRINGER_T);
         const n = Math.max(2, Math.ceil(span / MAX_OC - 1e-6) + 1);

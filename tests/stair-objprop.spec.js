@@ -305,3 +305,32 @@ test('a stair whose side lies on a wall grows away from it; its wall side stays'
   expect(after.widthFt).toBeCloseTo(3.5, 6);
   expect(after.start.x - 1.75, 'the wall side stays on the face').toBeCloseTo(face.x, 3);
 });
+
+// jb, 28 Nov 2026: "just make underside / closed or show stringers", the
+// backing "GYP (painted white) too", and for the front "the kickplate on
+// front or no plate" -- the riser boards. Seen in 3D (stair-risers-underside).
+test('RISER BOARDS and SOFFIT: both on by default, backing wood; GYP and NONE kept on save; UNDO takes it back; SHOW STRINGERS opens it', async ({ page }) => {
+  await stairPicked(page);
+  const row = name => win(page).locator(`[data-prop-row="${name}"]`);
+  await expect(row('riser boards').locator('[data-prop-value="on"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(row('soffit').locator('[data-prop-value="closed"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(row('backing').locator('[data-prop-value="wood"]')).toHaveAttribute('aria-pressed', 'true');
+  await row('backing').locator('[data-prop-value="gyp"]').click();
+  await row('riser boards').locator('[data-prop-value="off"]').click();
+  let st = await stairOf(page);
+  expect(st.underside).toBe('gyp');
+  expect(st.riserBoards).toBe(false);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(150);
+  st = await stairOf(page);
+  expect(st.riserBoards).toBeUndefined();
+  expect(st.underside).toBe('gyp');
+  await row('soffit').locator('[data-prop-value="open"]').click();
+  st = await stairOf(page);
+  expect(st.underside).toBe('open');
+  await expect(row('backing')).toHaveCount(0);
+  await row('soffit').locator('[data-prop-value="closed"]').click();
+  await expect(row('backing').locator('[data-prop-value="wood"]')).toHaveAttribute('aria-pressed', 'true');
+  st = await stairOf(page);
+  expect(st.underside).toBeUndefined();
+});

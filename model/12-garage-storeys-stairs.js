@@ -4365,7 +4365,7 @@
   // worked out again after, so the 9" stays on the wall side. UNTICKED, an
   // edit is the one flight's alone, as before.
   const STAIR_MATCH_FIELDS = ['shape', 'turn', 'winders', 'lowerWinders', 'midRisers',
-    'landExtraU', 'landExtraV', 'uGapIn', 'widthFt', 'rail'];
+    'landExtraU', 'landExtraV', 'uGapIn', 'widthFt', 'rail', 'underside', 'riserBoards'];
   const stairStackMates = stair => (stair ? stairStackOf(stair) : [])
     .filter(st => (st.view || 'plan') === (stair.view || 'plan'));
   const stairMatchOnto = (src, mate) => editStair(mate, st => {

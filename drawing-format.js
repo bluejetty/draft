@@ -1524,6 +1524,12 @@ if (!window.DraftDrawingFormat) {
         auto: stair?.auto === true,
         ...(Number.isInteger(splitTreads) && splitTreads > 0 ? { splitTreads } : {}),
         ...(Number.isInteger(riserCount) && riserCount > 0 ? { riserCount } : {}),
+        // THE UNDERSIDE (jb, 28 Nov 2026): closed with a 1/2" board on the
+        // slope, wood ("DEFAULT WOOD for backing") or GYP painted white, or
+        // 'open', the stringers showing. Written only when not wood.
+        ...(['open', 'gyp'].includes(stair?.underside) ? { underside: stair.underside } : {}),
+        // The riser boards on the front of the steps: on unless taken off.
+        ...(stair?.riserBoards === false ? { riserBoards: false } : {}),
         // LOCKED TO A WALL'S INSIDE FACE (Movie, 18 Oct): which wall each side
         // of a straight flight lies on, so a thicker wall moves that side and
         // narrows the flight. Written only when present.

@@ -2876,6 +2876,34 @@
         stairEditMatched(stair, () => editStair(stair, st => { st.rail = id; return null; }));
         redraw();
       }));
+    // THE FRONT AND THE UNDERSIDE (jb, 28 Nov 2026). The front: "a 1/2
+    // board on the front of the steps to cover the hole" -- the riser board,
+    // on unless taken off ("the kickplate on front or no plate"); stored only
+    // when off. The underside: "just make underside / closed or show
+    // stringers"; CLOSED is a 1/2" board on the slope, wood or "GYP (painted
+    // white)" -- the stair SOFFIT, the switch's name (jb, 28 Nov). Both ON by default ("leave both of those ON and they can turn
+    // them off"), the backing wood ("DEFAULT WOOD for backing"), so only
+    // 'open' or 'gyp' is stored. Seen in 3D.
+    const editLook = change => {
+      stairEditMatched(stair, () => editStair(stair, st => { change(st); return null; }));
+      redraw();
+    };
+    box.append(propRow('RISER BOARDS', [['on', 'ON'], ['off', 'NONE']],
+      stair.riserBoards === false ? 'off' : 'on', id => editLook(st => {
+        if (id === 'off') st.riserBoards = false; else delete st.riserBoards;
+      })));
+    const closed = stair.underside !== 'open';
+    box.append(propRow('SOFFIT', [['closed', 'CLOSED'], ['open', 'SHOW STRINGERS']],
+      closed ? 'closed' : 'open', id => editLook(st => {
+        if (id === 'open') st.underside = 'open';
+        else if (st.underside === 'open') delete st.underside;
+      })));
+    if (closed) {
+      box.append(propRow('BACKING', [['wood', '1/2" WOOD'], ['gyp', '1/2" GYP (WHITE)']],
+        stair.underside === 'gyp' ? 'gyp' : 'wood', id => editLook(st => {
+          if (id === 'gyp') st.underside = 'gyp'; else delete st.underside;
+        })));
+    }
 
     // ── UPPER FLIGHTS WIDER BESIDE AN EXTERIOR WALL (jb, 23 Nov 2026) ──────
     //
