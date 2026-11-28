@@ -35,12 +35,7 @@ const library = (crop = false) => ({
 });
 
 async function openDetail(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, drawing: library() });
-  await page.goto('/MODEL.html?left=1');
+  await h.openEditor(page, { drawing: library(), bucket: BUCKET, url: '/MODEL.html?left=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // A details file opens on its board; double-click goes into the detail.
   await page.locator('#details-board [data-board-card="1"]').dblclick();

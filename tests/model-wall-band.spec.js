@@ -56,14 +56,8 @@ const base = extra => ({
 const readout = page => page.locator('#readout');
 
 async function open(page, { file = base({}), view = 'plan' } = {}) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
   // ?left=1 for the tool column — the rail key is how WALL is armed here.
-  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=${view}&left=1&lpane=build`);
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: `/MODEL.html?level=${MAIN_FL}&view=${view}&left=1&lpane=build`, webgl: false });
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
 }

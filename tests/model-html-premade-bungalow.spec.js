@@ -60,13 +60,7 @@ const empty = () => ({
 const matchedTops = () => ({ ...empty(), levelAssemblies: { 3: { wallHeightFt: 109.125 / 12 } } });
 
 async function open(page, file = empty()) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: '/MODEL.html', webgl: false });
   // The readout's TEXT, not its visibility: it is a debug strip and starts
   // hidden, so toBeVisible waits for ever on a page that loaded perfectly.
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
@@ -532,13 +526,7 @@ test('one Ctrl+Z takes the openings back with the house', async ({ page }) => {
 // Order a design while looking at FOUNDATION, which is where the entry screen
 // leaves a drafter. That was the state Movie reported from.
 async function orderFromFoundation(page, entry = 'bungalow') {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto('/MODEL.html?level=1&view=plan');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: '/MODEL.html?level=1&view=plan', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await order(page, 'bungalow', entry);
   await page.keyboard.press('Escape');
@@ -684,13 +672,7 @@ test('it writes nothing the reload would lose', async ({ page }) => {
     ],
     activeLevelIdx: 1,
   };
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: noFoundation });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: noFoundation, bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await order(page, 'bungalow', 'bungalow');
   await page.keyboard.press('Escape');
@@ -732,13 +714,7 @@ test('one Ctrl+Z takes the whole building back', async ({ page }) => {
   // walls on two levels, two floors, eight footing lines, a roof, an outline
   // and eleven openings -- and a Ctrl+Z that took the walls and left the
   // footings would leave concrete linework under nothing.
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto('/MODEL.html?level=1&view=plan');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: '/MODEL.html?level=1&view=plan', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await order(page, 'bungalow', 'bungalow');
   await page.keyboard.press('Escape');
@@ -859,13 +835,7 @@ test('a design wanting more storeys than the drawing has levels builds what fits
       ],
       activeLevelIdx: 1,
     };
-    await h.openModel(page, { webgl: false });
-    await page.evaluate(async ({ bucket, f }) => {
-      await window.SharedFileStore.saveSharedFile(
-        new File([JSON.stringify(f)], 'drawing.json',
-          { type: 'application/json' }), bucket);
-    }, { bucket: BUCKET, f: oneFloor });
-    await page.goto('/MODEL.html');
+    await h.openEditor(page, { drawing: oneFloor, bucket: BUCKET, url: '/MODEL.html', webgl: false });
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
     await order(page, 'bungalow', 'twoStorey');
     await page.keyboard.press('Escape');
@@ -1086,13 +1056,7 @@ test('the strip says the room went up, and says so when it cannot', async ({ pag
     roomTags: [], columns: [], beams: [], boneyardOutlines: [], boneyardShelves: [],
     groups: [], levelLocks: [], underlays: [],
   };
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: oneFloor });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: oneFloor, bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await order(page, 'bungalow', 'twoStorey-over');
   await expect(page.locator('#strip-message')).toContainText('NO room over', { timeout: 4000 });

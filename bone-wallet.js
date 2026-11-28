@@ -19,20 +19,31 @@ if (!window.DraftBoneWallet) {
   // THE 25-BONE CEILING (jb, 11 Nov 2026: "go into the notepad and type
   // 25BONES on the first line, as long as it's typed in there first line
   // they get 25 BONES max"): the same hourly drip, a ceiling of 25 for as
-  // long as the first line of the NOTES pad (page 1, kept in localStorage
-  // under the pad's own key by model/04, and in the .draft) reads 25BONES.
+  // long as page 1 of the NOTES pad (kept in localStorage under the pad's
+  // own key by model/04, and in the .draft) carries the line 25BONES.
   // Take the line off and the ceiling is 10 again -- bones already above
   // it are kept (at or above the cap the clock parks; nothing is taken),
   // the drip just waits until a spend brings the wallet under 10.
+  //
+  // THE CODES SIT ON ANY OF THE FIRST FIVE LINES (jb, 28 Nov 2026: "lets
+  // allow codes in positions line 1-5 so if the codes are within the first
+  // 5 lines"), now there is more than one: 25BONES for the wallet, 3DBONES
+  // for the 3D viewer's PROJECTS button (viewer/projects.js). A code is a
+  // whole line, trimmed, capitals or not. Page 1 only; pages 2 to 5 are
+  // just notes.
   const BIG_CAP = 25;
   const BONES_CODE = '25BONES';
+  const PROJECTS_CODE = '3DBONES';
+  const CODE_LINES = 5;
   const NOTES_KEY = 'draft.notepad';
-  const capNow = () => {
+  const padCodes = () => {
     try {
-      const first = String(localStorage.getItem(NOTES_KEY) || '').split('\n')[0];
-      return first.trim().toUpperCase() === BONES_CODE ? BIG_CAP : DRIP_CAP;
-    } catch { return DRIP_CAP; }
+      return String(localStorage.getItem(NOTES_KEY) || '').split('\n').slice(0, CODE_LINES)
+        .map(line => line.trim().toUpperCase()).filter(Boolean);
+    } catch { return []; }
   };
+  const padHas = code => padCodes().includes(String(code).trim().toUpperCase());
+  const capNow = () => (padHas(BONES_CODE) ? BIG_CAP : DRIP_CAP);
   // The spend registry — the growth point: elevation re-deals (#253)
   // register here later.
   // A BACKUP FILE BY EMAIL was 3 (Movie, 30 Oct: "charge them 3 bones per
@@ -55,9 +66,11 @@ if (!window.DraftBoneWallet) {
   // A 3D EXPORT from the viewer (viewer/, jb, 25 Nov 2026: "cost 1 bone")
   // is 1 a file, taken once the file is written, and a PRINT MODEL file
   // (phase 6) the same; turning the house round on screen is free.
+  // TAKE PHOTO in the viewer (jb, 28 Nov 2026: "make a photo 1 bone too")
+  // is 1 a picture, taken once the picture is saved.
   const COSTS = Object.freeze({
     buildHouse: 1, saveToComputer: 1, saveZip: 5, emailBackup: 1, printPackage: 2, savePdf: 5, saveDxf: 15,
-    export3d: 1, printModel: 1,
+    export3d: 1, printModel: 1, photo3d: 1,
   });
   const STORAGE_KEY = 'draft-bone-wallet';
 
@@ -145,6 +158,9 @@ if (!window.DraftBoneWallet) {
     DRIP_CAP,
     BIG_CAP,
     BONES_CODE,
+    PROJECTS_CODE,
+    CODE_LINES,
+    padHas,
     cap: capNow,
     COSTS,
     STORAGE_KEY,

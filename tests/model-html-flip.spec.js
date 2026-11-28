@@ -35,12 +35,7 @@ const drawing = () => ({
   levelLocks: [], underlays: [],
 });
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // The LEVELS panel folded away: it stands over the right of the plan.
   const levels = page.getByRole('button', { name: 'LEVELS / LAYERS' });

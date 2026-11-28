@@ -38,12 +38,7 @@ const REPRO = JSON.parse(fs.readFileSync(
 const HOUSELESS = { ...REPRO, outlines: [] };
 
 async function openPage(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: HOUSELESS });
-  await page.goto('/MODEL.html?mode=night');
+  await h.openEditor(page, { drawing: HOUSELESS, bucket: BUCKET, url: '/MODEL.html?mode=night', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

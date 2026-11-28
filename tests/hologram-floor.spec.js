@@ -28,12 +28,7 @@ const SHELF_ONLY = { version: 1, levels: LEVELS, activeLevelIdx: 3, ...EMPTY,
 async function bringIn(page, level, file, name = 'two-bed.draft') {
   page.__errors = [];
   page.on('pageerror', err => page.__errors.push(String(err)));
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: shell() });
-  await page.goto(`/MODEL.html?level=${level}`);
+  await h.openEditor(page, { drawing: shell(), bucket: BUCKET, url: `/MODEL.html?level=${level}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await h.underlayPick(page, 'hologram');
   await page.locator('[data-hologram-ask-upload]').click();

@@ -21,12 +21,7 @@ const REPRO = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'repro-garage-house.draft'), 'utf8'));
 
 async function openBar(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO });
-  await page.goto('/MODEL.html?mode=night');
+  await h.openEditor(page, { drawing: REPRO, bucket: BUCKET, url: '/MODEL.html?mode=night', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // THE TYPES MOVED ONTO THE SIGN (Movie, 15 Sep). Same chips, same data,
   // same seam -- they are tiles on the drive-thru board now instead of a row

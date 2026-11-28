@@ -31,12 +31,7 @@ const holo = (extra, source) => ({ id: 'h1', name: 'unit', x: 100, z: 50, angleD
   layer: 'HOLOGRAM', source, ...extra });
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 const nodes = (page, hg) => page.evaluate(hg => window.DraftHologram.suiteSuperNodes(hg, 3)

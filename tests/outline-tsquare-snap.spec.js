@@ -24,12 +24,7 @@ const empty = withLine => ({
 });
 
 async function open(page, withLine = false) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty(withLine) });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: empty(withLine), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   return h.planFrame(page);
 }

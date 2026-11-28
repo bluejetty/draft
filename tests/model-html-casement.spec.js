@@ -65,16 +65,10 @@ const base = extra => ({
 const readout = page => page.locator('#readout');
 
 async function open(page, file = base({})) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
   // `lpane=build`, since 29 Sep: the left rail is tabbed now and FENESTRATION
   // is a BUILD key. Its CASEMENT row opens in the PROPERTIES box, which stands
   // open beside the tool tab, so the panel is still one press from the key.
-  await page.goto('/MODEL.html?left=1&lpane=build&right=1');
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: '/MODEL.html?left=1&lpane=build&right=1', webgl: false });
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="fenestration"]')).toBeVisible();
 }

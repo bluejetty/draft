@@ -112,12 +112,7 @@ const modelDrawing = (shapes = []) => ({
 });
 const URL = '/MODEL.html?mode=day&level=3&left=1&lpane=drafting';
 async function openModel(page, f) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto(URL);
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: URL, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 async function zoomTo(page, target) {

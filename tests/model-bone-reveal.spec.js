@@ -66,12 +66,7 @@ const inkCount = page => page.evaluate(() => {
 });
 
 async function buildAHouse(page, opts = {}) {
-  await h.openModel(page, { webgl: false, ...opts });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: '/MODEL.html', webgl: false, ...opts });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
   await h.openDriveThru(page);

@@ -46,12 +46,7 @@ const hisHouse = (extra, fenestrations = []) => ({
 const T6 = 5.5 / 12, T4 = 3.5 / 12;
 
 async function open(page, drawing) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'd.json', { type: 'application/json' }), bucket);
-  }, { bucket: h.STORAGE_BUCKET, f: drawing });
-  await page.goto('/MODEL.html?theme=rough&mode=day');
+  await h.openEditor(page, { drawing: drawing, bucket: h.STORAGE_BUCKET, url: '/MODEL.html?theme=rough&mode=day', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 async function press(page, x, z, modifiers) {

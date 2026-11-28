@@ -26,12 +26,7 @@ const shell = () => ({ version: 1, board: 'drafting', planTurn: 0, levels: LEVEL
 async function open(page, f = shell()) {
   page.__errors = [];
   page.on('pageerror', err => page.__errors.push(String(err)));
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto('/MODEL.html?level=3');
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: '/MODEL.html?level=3', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);

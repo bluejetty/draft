@@ -42,19 +42,13 @@ const base = extra => ({
 });
 
 async function open(page, file) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: file });
   // BOTH RAILS. ?left=1 for the tool column -- COLUMN and BEAM have no legacy
   // button, so the key in the rail is the only way to arm them -- and ?right=1
   // for the properties slot, which lives in the right rail and ships
   // `hidden data-collapsed`. Without the second, the two panel checks measured
   // a properties panel that was not on screen: the same fault as the boards
   // spec earlier today, in the other rail, and I walked into it again.
-  await page.goto('/MODEL.html?left=1&lpane=build&right=1');
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: '/MODEL.html?left=1&lpane=build&right=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="column"]')).toBeVisible();
 }
