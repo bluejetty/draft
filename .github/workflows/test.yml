@@ -33,6 +33,10 @@ jobs:
   # PLAIN MODE FOR THE LOOP, deliberately. Plain mode asks the one question
   # that is always fair of every harness: do the checks pass?
   #
+  # THE MUTATION ENGINES RUN IN THEIR OWN JOB NOW (mutation-engines, below,
+  # split four ways since 28 Nov); the paragraph is kept for why they are
+  # selected the way they are.
+  #
   # THE MUTATION ENGINES RUN IN A SECOND STEP, BY NAME. Three harnesses carry
   # a real engine -- merge-vertex, render-2d, wall-joins -- and each is run
   # with --mutate below, so a rotted engine goes red here instead of decaying
@@ -91,8 +95,13 @@ jobs:
     # remedy is the same; the ceiling is a ceiling for a hang.
     # AND AGAIN (20 Nov): 30 -> 45. #1048, #1054, #1057, #1063 and main
     # were cancelled at 30m00s; the mutation run had simply outgrown it.
+    #
+    # AND DOWN (28 Nov): 45 -> 15. The mutation engines -- the step every
+    # raise above was for -- moved to their own split job, mutation-engines,
+    # below. What is left here took about 1 minute on main, so 15 is a
+    # ceiling for a hang again and nothing else.
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       # @v7 ON ALL THREE ACTIONS, AND THE MAJOR WAS CHECKED PER ACTION.
       #
@@ -178,7 +187,111 @@ jobs:
           echo "$(( ${#harnesses[@]} - failed ))/${#harnesses[@]} harnesses passed"
           [ "$failed" -eq 0 ]
 
-      - name: Run the mutation engines
+      - name: Run the mutation gates that drive a harness
+        run: |
+          # TWENTY-FIVE GATES EXIST AND THIS JOB RAN NONE OF THEM. Each
+          # proto/*-mutants.js file bends one line of a real source file, runs
+          # the check that should notice, and restores -- 303 rows in all. Only
+          # mutant-anchors-harness read them, and only to confirm their anchors
+          # still MATCH; nothing ever asked whether they still KILL. Measured
+          # 30 Sep, all 303: 11 survived, in four gates.
+          #
+          # TWO OF THE TWENTY-FIVE DRIVE A HARNESS AND NOT A SPEC, and those
+          # two are what this step runs. shared-shell-mutants.js says why in
+          # its own header -- "the whole gate is seconds rather than minutes...
+          # THIS ONE HAS NO EXCUSE." Measured: 23 rows, about five seconds for
+          # both. The other 23 files are 280 Playwright rows and roughly 55
+          # minutes, which is a scheduling decision and not this step's
+          # business.
+          #
+          # DERIVED, NOT LISTED, on the one fact that makes a gate cheap: it
+          # does not shell out to Playwright. A gate that grows a spec drops
+          # out of this step by construction rather than timing the job out.
+          # (A gate whose rows name a harness but which still drives a spec
+          # for the rest -- auto-piles, pad-footing -- stays out, correctly.)
+          shopt -s nullglob
+          gates=()
+          for g in proto/*-mutants.js; do
+            grep -q "playwright test" "$g" || gates+=("$g")
+          done
+
+          # A LOOP THAT MATCHES NOTHING PASSES -- the same trap this job names
+          # above for the harnesses themselves, and the more likely one here:
+          # the grep is a NEGATIVE test, so a rename that breaks the glob and a
+          # Playwright call that changes shape both read as "no cheap gates".
+          if [ ${#gates[@]} -eq 0 ]; then
+            echo "no harness-driven gate matched proto/*-mutants.js -- nothing ran"
+            exit 1
+          fi
+
+          # A FLOOR, NOT AN INVENTORY, as with the engine list above. These two
+          # were the cheap ones when this was written; a third is picked up by
+          # the loop without touching this list, and the list goes stale only
+          # in the safe direction.
+          failed=0
+          for must in proto/layout-record-mutants.js \
+                      proto/shared-shell-mutants.js; do
+            printf '%s\n' "${gates[@]}" | grep -qxF "$must" || {
+              failed=$((failed + 1))
+              printf 'FAIL  %s is a known harness-driven gate and the loop did not select it\n' "$must"
+            }
+          done
+
+          echo "${#gates[@]} harness-driven gates"
+          for g in "${gates[@]}"; do
+            out=$(node "$g" 2>&1) && code=0 || code=$?
+            if [ "$code" -ne 0 ]; then
+              failed=$((failed + 1))
+              printf 'FAIL  %s  (exit %s)\n' "$g" "$code"
+              echo "$out" | tail -30 | sed 's/^/      /'
+            else
+              printf 'ok    %s  %s\n' "$g" "$(echo "$out" | grep -oE '[0-9]+/[0-9]+ killed' | tail -1)"
+            fi
+          done
+          [ "$failed" -eq 0 ]
+
+  # THE MUTATION ENGINES, IN THEIR OWN JOB, SPLIT FOUR WAYS (28 Nov).
+  #
+  # They used to be the middle step of `harnesses` above, and they were nearly
+  # all of its time: on main at f41bdea the plain harnesses took 1m02s, the two
+  # cheap gates 2s, and the engines 18m18s -- and 30 minutes on another run
+  # the same day. That job's ceiling had been raised five times (5 -> 12 ->
+  # 15 -> 20 -> 30 -> 45), every time for this one step outgrowing it, and
+  # each time it arrived as a grey "cancelled" that named nothing. Moving the
+  # step into its own job alone would not have changed that: one machine
+  # running 112 engines in a row takes as long wherever it sits.
+  #
+  # So the step is split across four machines, the way the playwright job
+  # below is split. Nothing is dropped and nothing is weakened: every engine
+  # still runs with --mutate on every pull request and every push to main,
+  # the floor list below is checked in every shard, and an engine that exits
+  # 0 without printing its table is still red. The only change is which
+  # machine runs it. The engines only read files and work in memory (no
+  # writes, no child processes -- checked before this split), so they cannot
+  # trip over each other even if two ever shared a machine.
+  #
+  # Four, from the measured 18-30 minutes: about 5-8 minutes a shard, far
+  # inside the ceiling. When the engines grow to the point a shard nears 20,
+  # the fix is one more number in the matrix, not a higher ceiling.
+  mutation-engines:
+    runs-on: ubuntu-latest
+    # A ceiling for a hang, as above. A shard should take well under ten.
+    timeout-minutes: 30
+    strategy:
+      # Every shard's result, always: three green and one red names the
+      # engine; one red and three cancelled names nothing.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Run the mutation engines (this shard's share)
+        env:
+          SHARD: ${{ matrix.shard }}
+          TOTAL: ${{ strategy.job-total }}
         run: |
           # DERIVED, NOT LISTED. The first version of this step named three
           # engines by hand, and a fourth existed on a sibling branch before
@@ -200,6 +313,7 @@ jobs:
           # selected by this grep. A derived list is only as wide as the
           # forms it knows, so a new shape of guard is a change to this line.
           shopt -s nullglob
+          export LC_ALL=C
           engines=()
           for h in proto/*-harness.js; do
             grep -qE "harness-args\.js'\)\.mutationMode(WithFiles)?\(\)" "$h" \
@@ -279,7 +393,23 @@ jobs:
             echo "no harness declares a mutation mode -- nothing ran"
             exit 1
           fi
-          echo "${#engines[@]} engines"
+          echo "${#engines[@]} engines in all"
+
+          # THIS SHARD'S SHARE. Every shard derives the same sorted list (C
+          # locale, so the order cannot differ between runners) and takes
+          # every Nth engine, N being the matrix length -- strategy.job-total,
+          # the same trick the playwright job uses, so the count lives in one
+          # place. Each engine lands in exactly one shard by construction: no
+          # list to keep, nothing that can fall between two shards.
+          mine=()
+          for i in "${!engines[@]}"; do
+            [ $(( i % TOTAL )) -eq $(( SHARD - 1 )) ] && mine+=("${engines[$i]}")
+          done
+          if [ ${#mine[@]} -eq 0 ]; then
+            echo "shard $SHARD/$TOTAL was given no engines -- nothing ran"
+            exit 1
+          fi
+          echo "shard $SHARD/$TOTAL runs ${#mine[@]} of them"
 
           # EXIT 0 IS NOT ENOUGH. The grep sees a file that declares the mode,
           # not one that honours it: a harness that calls mutationMode() and
@@ -287,7 +417,7 @@ jobs:
           # So each engine must also print its table -- the "mutations caught"
           # line every engine ends on -- or the step is red. Same captured-
           # never-piped pattern as the loop above.
-          for h in "${engines[@]}"; do
+          for h in "${mine[@]}"; do
             out=$(node "$h" --mutate 2>&1) && code=0 || code=$?
             if [ "$code" -ne 0 ]; then
               failed=$((failed + 1))
@@ -299,69 +429,6 @@ jobs:
               echo "$out" | tail -20 | sed 's/^/      /'
             else
               printf 'ok    %s --mutate  %s\n' "$h" "$(echo "$out" | grep "mutations caught" | tail -1)"
-            fi
-          done
-          [ "$failed" -eq 0 ]
-
-      - name: Run the mutation gates that drive a harness
-        run: |
-          # TWENTY-FIVE GATES EXIST AND THIS JOB RAN NONE OF THEM. Each
-          # proto/*-mutants.js file bends one line of a real source file, runs
-          # the check that should notice, and restores -- 303 rows in all. Only
-          # mutant-anchors-harness read them, and only to confirm their anchors
-          # still MATCH; nothing ever asked whether they still KILL. Measured
-          # 30 Sep, all 303: 11 survived, in four gates.
-          #
-          # TWO OF THE TWENTY-FIVE DRIVE A HARNESS AND NOT A SPEC, and those
-          # two are what this step runs. shared-shell-mutants.js says why in
-          # its own header -- "the whole gate is seconds rather than minutes...
-          # THIS ONE HAS NO EXCUSE." Measured: 23 rows, about five seconds for
-          # both. The other 23 files are 280 Playwright rows and roughly 55
-          # minutes, which is a scheduling decision and not this step's
-          # business.
-          #
-          # DERIVED, NOT LISTED, on the one fact that makes a gate cheap: it
-          # does not shell out to Playwright. A gate that grows a spec drops
-          # out of this step by construction rather than timing the job out.
-          # (A gate whose rows name a harness but which still drives a spec
-          # for the rest -- auto-piles, pad-footing -- stays out, correctly.)
-          shopt -s nullglob
-          gates=()
-          for g in proto/*-mutants.js; do
-            grep -q "playwright test" "$g" || gates+=("$g")
-          done
-
-          # A LOOP THAT MATCHES NOTHING PASSES -- the same trap this job names
-          # above for the harnesses themselves, and the more likely one here:
-          # the grep is a NEGATIVE test, so a rename that breaks the glob and a
-          # Playwright call that changes shape both read as "no cheap gates".
-          if [ ${#gates[@]} -eq 0 ]; then
-            echo "no harness-driven gate matched proto/*-mutants.js -- nothing ran"
-            exit 1
-          fi
-
-          # A FLOOR, NOT AN INVENTORY, as with the engine list above. These two
-          # were the cheap ones when this was written; a third is picked up by
-          # the loop without touching this list, and the list goes stale only
-          # in the safe direction.
-          failed=0
-          for must in proto/layout-record-mutants.js \
-                      proto/shared-shell-mutants.js; do
-            printf '%s\n' "${gates[@]}" | grep -qxF "$must" || {
-              failed=$((failed + 1))
-              printf 'FAIL  %s is a known harness-driven gate and the loop did not select it\n' "$must"
-            }
-          done
-
-          echo "${#gates[@]} harness-driven gates"
-          for g in "${gates[@]}"; do
-            out=$(node "$g" 2>&1) && code=0 || code=$?
-            if [ "$code" -ne 0 ]; then
-              failed=$((failed + 1))
-              printf 'FAIL  %s  (exit %s)\n' "$g" "$code"
-              echo "$out" | tail -30 | sed 's/^/      /'
-            else
-              printf 'ok    %s  %s\n' "$g" "$(echo "$out" | grep -oE '[0-9]+/[0-9]+ killed' | tail -1)"
             fi
           done
           [ "$failed" -eq 0 ]
