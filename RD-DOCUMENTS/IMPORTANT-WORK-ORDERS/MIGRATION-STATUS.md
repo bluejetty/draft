@@ -1,5 +1,10 @@
 # MIGRATION STATUS — where every page and module stands
 
+> **Out of date (note added 27 Nov 2026).** This is a September snapshot. The
+> move it tracks is done: `MODEL.html` (script in `model/`) is the live editor
+> and `LAYOUT.html` replaced `LAYOUT.dc.html`. For where things stand now, read
+> `RD-DOCUMENTS/ARCHITECTURE.md` and the "Start here" section of `HANDOVER.md`.
+
 The inventory for the move. **One table to answer "where are we?"** without
 reading the repo.
 

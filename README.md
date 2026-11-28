@@ -1,22 +1,36 @@
-# Draft
+# Draft — Rough Drafter
 
-A browser-based architectural drafting tool. No installs, no uploads — everything runs locally in the browser.
+A house-drafting program that runs entirely in the browser: floor plans,
+foundation, roof, elevations, sections, construction sheets, and a 3D view.
+No installs and no uploads; the drawing stays on the drafter's computer.
+It wears two skins, **RUFF DRAFTER** and **ROUGH DRAFTER**, over the same
+program.
 
-Built on the DC framework. Hosted on GitHub Pages.
+- **Live:** roughdrafter.com (GitHub Pages) and ruffdrafter.com (Cloudflare
+  Pages). Both deploy from `main` on every merge.
+- **The editor is [`MODEL.html`](MODEL.html)**, with its script in the 22
+  parts under [`model/`](model/). `MODEL.dc.html` is the old editor, kept only
+  because tests still use it.
+- **Separate programs in folders:** [`viewer/`](viewer/) (RUFF 3D / ROUGH 3D),
+  [`landscape/`](landscape/) (lot grading), [`neighborhood/`](neighborhood/)
+  (several drawings on one plan), [`DXF/`](DXF/) (DWG to DXF converter).
 
-See [ARCHITECTURE.md](RD-DOCUMENTS/ARCHITECTURE.md) for how the app is put together and [BRANCHING.md](RD-DOCUMENTS/BRANCHING.md) for the branch/merge rules.
+**New session? Read [`HANDOVER.md`](HANDOVER.md) first** (standing orders and
+the state of the program), then
+[ARCHITECTURE.md](RD-DOCUMENTS/ARCHITECTURE.md) for which file owns what, and
+[BRANCHING.md](RD-DOCUMENTS/BRANCHING.md) for how work lands.
 
 ## Where the documentation is
 
-**Everything written lives in [`RD-DOCUMENTS/`](RD-DOCUMENTS/).** The repository root is kept for the site itself — the pages, the modules, and the folders they need — because GitHub Pages serves it with no build step, so anything at root is live. The one thing the deploy adds is a build stamp: `.github/workflows/pages.yml` copies the site, writes the commit id into every dashboard and onto every script and style address (`tools/stamp-build.js`), and publishes that copy, so a cached old page can never run new scripts. The repo itself is never stamped; on a desk and under the tests everything says `dev` and `build-id.js` is quiet. This README is the one document that stays, since GitHub shows it as the front page.
+**Everything written lives in [`RD-DOCUMENTS/`](RD-DOCUMENTS/).** The repository root is kept for the site itself — the pages, the modules, and the folders they need — because GitHub Pages serves it with no build step, so anything at root is live. The one thing the deploy adds is a build stamp: `.github/workflows/pages.yml` (GitHub Pages) and the Cloudflare Pages build (ruffdrafter.com, command kept in the Cloudflare dashboard) both run `tools/stamp-build.js`, which writes the commit id into every dashboard and onto every script and style address, so a cached old page can never run new scripts. The repo itself is never stamped; on a desk and under the tests everything says `dev` and `build-id.js` is quiet. This README and `HANDOVER.md` are the documents that stay at root: GitHub shows this one as the front page, and every new session reads the handover first. (The old `AUDIT-*.md` reports also still sit at root; they are history.)
 
 | | |
 |---|---|
 | [`DEEP-CLEANUP-ITEMS.md`](RD-DOCUMENTS/DEEP-CLEANUP-ITEMS.md) | work deliberately left for a deep clean, with the traps already mapped |
 | [`RUNNING-THE-HARNESSES.md`](RD-DOCUMENTS/RUNNING-THE-HARNESSES.md) | the Node harnesses under `proto/` — how to run them, what CI does differently, and which scripts edit your tree |
 | [`DEFINITIONS.md`](RD-DOCUMENTS/DEFINITIONS.md) | **what our words mean here** — the terms we use in a particular way, and the ones that collide |
-| [`IMPORTANT-WORK-ORDERS/`](RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/) | what is being built now — the turtle path, how the boneyard works (TOY MODE was retired 9 Nov 2026) |
-| [`ARCHITECTURE.md`](RD-DOCUMENTS/ARCHITECTURE.md) · [`BRANCHING.md`](RD-DOCUMENTS/BRANCHING.md) · [`REFACTOR-PLAN.md`](RD-DOCUMENTS/REFACTOR-PLAN.md) | how the app is put together, how work lands, and why `MODEL.dc.html` is the shape it is |
+| [`IMPORTANT-WORK-ORDERS/`](RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/) | older work orders — the turtle path, how the boneyard works (TOY MODE was retired 9 Nov 2026). `MIGRATION-STATUS.md` in there is a 2 Sep snapshot |
+| [`ARCHITECTURE.md`](RD-DOCUMENTS/ARCHITECTURE.md) · [`BRANCHING.md`](RD-DOCUMENTS/BRANCHING.md) · [`REFACTOR-PLAN.md`](RD-DOCUMENTS/REFACTOR-PLAN.md) | how the app is put together (updated 27 Nov 2026), how work lands, and the history of the move off `MODEL.dc.html` |
 | [`BOARDS.md`](RD-DOCUMENTS/BOARDS.md) and the `BOARD-*` files | the shared work list, and the boards written up in full |
 | [`HANDOFF-SKIPPER.md`](RD-DOCUMENTS/HANDOFF-SKIPPER.md) | who is who, the standing constraints, and the traps a session actually hit — read before the boards |
 | [`SPECIFICATIONS/`](RD-DOCUMENTS/SPECIFICATIONS/) | the written half of a *drawing set* — product content, not software specs |
@@ -36,7 +50,7 @@ There is a second, much faster gate: the Node harnesses under `proto/`, which ne
 ```sh
 npm install                       # @playwright/test (pinned in package.json)
 npx playwright install chromium   # once per machine, downloads the browser
-npm test                          # full suite (784 tests, one worker, serial)
+npm test                          # full suite (about 3,700 tests on 27 Nov 2026, one worker, serial)
 ```
 
 Requirements:
@@ -48,9 +62,9 @@ Requirements:
 
 Run one file with `npx playwright test tests/underlays.spec.js`; add `--headed` to watch it. Traces are kept on failure (`trace: 'retain-on-failure'`) — open with `npx playwright show-trace`.
 
-The suite is configured **serial on one worker** (`fullyParallel: false, workers: 1`), and the config **refuses** a `--workers` override outright — a throw, not a warning. Every spec shares one origin, and `helpers.openModel` clears `localStorage` and deletes the shared IndexedDB on the way into each test, so parallel workers on one machine wipe each other's storage mid-test. The failures that produces look like real bugs — null or stale reads from `savedDrawing()`, a dismissed entry coach that comes back and swallows every click — and on 9 Sep 2026 they cost a day and three boards. To go parallel, **shard** instead (`npx playwright test --shard=1/6`): a shard gets its own runner and therefore its own origin, which is the only way to have both.
+The suite is configured **serial on one worker** (`fullyParallel: false, workers: 1`), and the config **refuses** a `--workers` override outright — a throw, not a warning. Every spec shares one origin, and `helpers.openModel` clears `localStorage` and deletes the shared IndexedDB on the way into each test, so parallel workers on one machine wipe each other's storage mid-test. The failures that produces look like real bugs — null or stale reads from `savedDrawing()`, a dismissed entry coach that comes back and swallows every click — and on 9 Sep 2026 they cost a day and three boards. To go parallel, **shard** instead (`npx playwright test --shard=1/8`): a shard gets its own runner and therefore its own origin, which is the only way to have both. CI shards the suite; the shard count is set only in the `matrix` in `.github/workflows/test.yml`, and the run step reads it back from there.
 
-**Resolve, push, then run.** The suite is serial and takes about an hour. A branch that exists only in a session container for that hour is one restart from gone — a worktree was already lost to a box restart. Pushing first costs seconds, turns a restart into a re-run rather than a loss, and lets the diff be reviewed while the suite is still running instead of after it.
+**Resolve, push, then run.** The suite is serial and takes about three and a half hours end to end on one machine (27 Nov 2026), so run the specs your change touches and let CI's shards run the rest. A branch that exists only in a session container for that hour is one restart from gone — a worktree was already lost to a box restart. Pushing first costs seconds, turns a restart into a re-run rather than a loss, and lets the diff be reviewed while the suite is still running instead of after it.
 
 Pushing is not merging. The PR still waits on a green run.
 
@@ -65,9 +79,9 @@ Both crews on this repo hit the first two of these independently on 10 Sep 2026 
 
 A surviving mutant is a finding only once these four hold. Until then it is a report about the harness.
 
-`tests/helpers.js` is the suite's vocabulary: `openModel` (boot + storage reset, optional `{ webgl: false }` for the 2D fallback), `worldToClient`/`clickWorld`/`moveTo` (world-feet in, real mouse events out), `selectTool`, `waitForSaved` (autosave settle), `savedDrawing` (reads the drawing JSON back out of IndexedDB — assert against this, not the DOM), and `overlayPixels`/`countColor` (pixel assertions on the overlay canvas).
+`tests/helpers.js` is the suite's vocabulary: `openModel` (boot + storage reset, optional `{ webgl: false }` for the 2D fallback; **note it opens the OLD page, `MODEL.dc.html`** — to test the real editor, seed a drawing into the `model-drawing` bucket and open `/MODEL.html`, as `tests/stack-cycle.spec.js` does, using `h.planFrame(page).at(x, z)` for world-to-screen), `worldToClient`/`clickWorld`/`moveTo` (world-feet in, real mouse events out), `selectTool`, `waitForSaved` (autosave settle), `savedDrawing` (reads the drawing JSON back out of IndexedDB — assert against this, not the DOM), and `overlayPixels`/`countColor` (pixel assertions on the overlay canvas).
 
-To poke at the app by hand, serve the repo root with any static server — `python3 -m http.server 8000` — and open `/MODEL.dc.html`. (The suite runs its own server on port 4173; the two don't conflict.)
+To poke at the app by hand, serve the repo root with any static server — `python3 -m http.server 8000` — and open `/index.html` (the entry page) or `/MODEL.html` (the editor). (The suite runs its own server on port 4173; set `DRAFT_TEST_PORT` to give a run its own port.)
 
 Every PR lands with the full suite green. Test files open with a prose header stating the behaviour they pin — read that before editing a test.
 

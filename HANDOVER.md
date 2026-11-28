@@ -1,12 +1,124 @@
-# HANDOVER — 16 Oct 2026
+# HANDOVER — brought up to date 27 Nov 2026 (first written 16 Oct)
 
-Written at the end of a session that ran out of room, for whoever picks the
-work up next. Everything Movie asked for on 16 Oct is in here, in his own
-words, with the decisions already taken and the questions still open marked as
-such. Nothing below is a guess dressed up as a ruling: where I decided
-something myself, it says so and says why.
+For whoever picks the work up next. **Read "Start here" and §1 first**: they
+describe the program as it is on `main` today and hold the owner's standing
+orders. §0 records the TOY MODE removal. §2 to §6 are the 16 Oct handover,
+kept as written (in the owner's own words, with the decisions taken then);
+§3 now opens with a note on which of those items have since been built.
 
-`main` is at **7410dd1**. Nothing is open on GitHub.
+**Who is who.** The owner is **jb** (GitHub `bluejetty`). Documents and code
+comments written before November call him **Movie**; it is the same person,
+and every quotation signed either way is his.
+
+---
+
+## Start here — the program on 27 Nov 2026
+
+`main` was at the merge of **#1149** (27 Nov 2026) when this was written. PRs
+merge most days, so check `git log` for anything newer.
+
+**What it is.** Rough Drafter: a house-drafting program that runs entirely in
+the browser (static files, no server, no build step). Two skins over one
+program, RUFF DRAFTER and ROUGH DRAFTER. Live at roughdrafter.com (GitHub
+Pages) and ruffdrafter.com (Cloudflare Pages); both deploy from `main` on
+every merge, so **a merge is a release**.
+
+**Where things are** (full map in `RD-DOCUMENTS/ARCHITECTURE.md`):
+
+- **`MODEL.html` is the editor jb uses**, about 1,600 lines of markup; its
+  script is the 22 numbered parts in `model/` (about 55,000 lines), which
+  share one name space.
+- `MODEL.dc.html` is the **old** editor. Nothing in the app links to it, but
+  the test helper `helpers.openModel` still opens it, and about 140 spec
+  files test only through it. Don't build features there.
+- Other screens read the same drawing: `LAYOUT.html` (sheets), `PROJECT.html`,
+  `EXTFINISH.html`, `BONEYARD.html`, `REALESTATEPLAN.html`, `ESTIMATES.html`,
+  `SPECS.html`, `CODES.html`.
+- Separate programs in folders, each removable without breaking the 2D pages:
+  `viewer/` (**RUFF 3D / ROUGH 3D**, the 3D house viewer with exports and
+  PRINT MODEL), `landscape/` (**RUFF / ROUGH LANDSCAPE**, lot grading),
+  `neighborhood/`, `DXF/` (DWG to DXF converter).
+- The shared rules live in plain-JS modules at the repo root
+  (`geometry-2d.js`, `wall-types.js`, `cut-view.js`, `drawing-format.js`...).
+  A rule lives in one module and every page reads it from there.
+
+**How work lands** (the standing orders in §1 are the rules; this is the
+routine around them):
+
+- One thread or task, one branch, one PR. jb reviews and merges every PR
+  himself. Feature work comes with a spec in `tests/` and, where it fits, a
+  mutation gate in `proto/`.
+- For big or unclear work, jb wants a plan first and says "go" before
+  building. Ask in plain language: he is a draftsman, not a programmer, and
+  reads screenshots (marked up in GIMP) more readily than code.
+- The day-to-day record of what was asked, decided and merged is the
+  **project memory** kept by the Claude project (one note per feature),
+  not this repo. Git history and PR descriptions are the other record.
+
+**Checks (CI).** `.github/workflows/test.yml` runs two jobs on every PR:
+
+- `harnesses`: every `proto/*-harness.js`, the mutation engines, and the
+  mutation gates that drive a harness (45 minute cap). The mutation gates
+  that drive Playwright specs are run locally, not in CI.
+- `playwright`: the full suite (about 3,700 tests on 27 Nov, growing by
+  roughly 250 to 300 a week), split into parallel shards with a 35 minute
+  limit each. The shard count lives only in the job's `matrix`. When a shard
+  goes red with **no failing test**, it ran out of time; read the log before
+  hunting for a bug.
+
+**What changed since the last update (10 Nov to 27 Nov, roughly #950 to
+#1155).** The detail of each is in its PR and in project memory:
+
+- **Roofs:** AUTO ROOF / HAND ROOF, BUST ROOF into hand pieces, ROOF PIECE
+  tool, HIP ROOF card, hip or gable per piece, MAIN ROOF / SPECIAL CASE per
+  piece, two gables on a stepped end, the small gable over a hip, zero
+  overhang, fascia that grows down and its finish/seam rules.
+- **Walls and structure:** CREATE WALL TYPE (slices with hatch, on floors and
+  the foundation), MAIN WALLS / SPECIAL CASE, wall OFFSET, JOIST DEPTH picks
+  from span, beams (FLUSH/DROPPED per span, pockets, cut to one span),
+  columns (round/square posts, pile caps, copy a whole stack, ride their
+  beam), LEVEL LOCK.
+- **Stairs:** flights, landings and winders, stacked stairs moving as one,
+  CHANGE BOTH FLIGHTS, stairs on every level, EXT. WALL leg widths, REDUCE
+  BASEMENT, STAIR SECTION, stair corners as snap nodes.
+- **Elevations and sections:** draw over them (LINE, SHAPE, DIMENSION),
+  deck bands, footing outlines, columns and beams in sections, EXT. FINISH
+  hatches shown on MODEL and printed on LAYOUT, finish thickness.
+- **EXT. FINISH:** gable as its own area, fascia finish, siding fill rules,
+  SPECIAL finish shapes, wheel zoom / pan / FIT.
+- **Details and sheets:** DETAILS LIBRARY (its own file, board of cards,
+  detail windows, crop), DETAILS strip in a house, details placed on LAYOUT,
+  bring layout windows in from another file, viewport LOCK across sheets,
+  right-click viewport menu, PROJECT INFO drop-down, PDF written by the app.
+- **Holograms:** a third shelf save kind; holograms-only master plans drawn
+  on elevations, rail seats and LAYOUT.
+- **Fixtures:** cabinets that stand on their side, double-cabinet handles,
+  SINK chip (cabinet, apron, laundry, mop), vanity width mark, FIREPLACE,
+  DOUBLE and TRIPLE windows, DECK floor type and deck post footings.
+- **Drafting tools:** OFFSET / MIRROR / ROTATE / FILLET / ARRAY, arcs and
+  circles in LINE / SHAPE / FLOOR, TURTLE (draw as wall, trace), NOTE and
+  ROOM TAG properties, dimension UNITS and divide snaps, type a dimension to
+  move a window or door, Ctrl/Shift box selects all levels, COPY / PASTE
+  carrying notes, beams and posts.
+- **Files and shell:** SAVE AS ZIP, SAVE AS / prints / exports cost bones,
+  the deploy build stamp, REPORT A PROBLEM, phones/tablets PC MODE.
+- **New programs:** RUFF 3D (`viewer/`, phases 1 to 6) and RUFF LANDSCAPE
+  (`landscape/`, phases 1 and 2), with OPEN IN 3D / OPEN LANDSCAPE chips in
+  MODEL and 3D tiles on the sheet pages.
+
+**Care notes for the code.**
+
+- `cut-view.js` (the elevation/section painter, about 10,500 lines) is the
+  most-changed and most fragile file. It decides "these two points are the
+  same" with several different tolerances; small notches on elevations
+  usually come from that. Check a change against the test houses in
+  `proto/*.draft` (TIMBERHOUSE among them), not just the one in the report.
+- A new saved field needs a reader in `drawing-format.js`, or it vanishes on
+  the next load. Old drawings must always open.
+- No 2D page may load `viewer/` code or three.js (`tests/viewer.spec.js`).
+- Any new page needs the build-stamp head lines (`<meta name="draft-build"
+  content="dev">` then `<script src="./build-id.js">`) or the stamp harness
+  fails.
 
 ---
 
@@ -49,9 +161,9 @@ is the two lights, nothing more.
 ## 1. Where the work is, and how it is done
 
 **The app is `bluejetty/draft` — Rough Drafter**, a browser-based residential
-architectural drafting app. `MODEL.html` (~27k lines) is the live editor.
-`MODEL.dc.html` is the OLD page and is only a module host for
-`tests/geometry-2d.spec.js` — do not edit it as if it were live.
+architectural drafting app. `MODEL.html` (with its script in `model/`) is the
+live editor. `MODEL.dc.html` is the OLD page: tests still open it, but do not
+edit it as if it were live. (Updated 27 Nov; see "Start here".)
 
 **Standing orders from Movie, which hold whatever else a task says:**
 
@@ -80,8 +192,11 @@ architectural drafting app. `MODEL.html` (~27k lines) is the live editor.
   already red kills every mutant and prints a perfect sheet over broken code.
 - A mutant that cannot be demonstrated is **removed with a written reason**,
   never softened. A `SKIPPED` mutant counts as AMBIGUOUS and fails the sheet.
-- CI runs `proto/*-harness.js` plus Playwright in **6 shards**. The mutation
-  gates are local-only. Each run needs its own `DRAFT_TEST_PORT`.
+- CI runs `proto/*-harness.js`, the mutation engines and the harness-driven
+  mutation gates in one job, and Playwright in parallel shards (the count is
+  in the `matrix` in `.github/workflows/test.yml`). The Playwright-driven
+  mutation gates are local-only. Each local run needs its own
+  `DRAFT_TEST_PORT`.
 - **Never run Playwright with `--workers=2`.** The config refuses it: parallel
   workers on one machine wipe each other's `localStorage` and IndexedDB
   mid-test. Shard instead.
@@ -101,6 +216,8 @@ tests flake (see §5, the 2.50 ms reading).
 ---
 
 ## 2. What shipped on 16 Oct
+
+*History. For what has shipped since, see "Start here" and `git log`.*
 
 | PR | what |
 |---|---|
@@ -132,7 +249,25 @@ never chooses; he is told. Consequences that bit five separate specs:
 
 ---
 
-## 3. The queue
+## 3. The queue (from 16 Oct)
+
+**Status checked 27 Nov 2026, from the code and the specs, not with jb.**
+Much of this queue has since been built. Before starting any item, check the
+code and ask jb whether it still stands; his rulings may have moved on.
+
+| item | status on 27 Nov |
+|---|---|
+| 3.1, 3.2 (TOY grains) | moot: TOY MODE was removed (§0). 3.2(d) wall justification exists (`tests/model-wall-justify.spec.js`). |
+| 3.3 garage square | built (`tests/garage-square.spec.js`) |
+| 3.4 beam over an opening | bearing rules exist (`tests/opening-bearing.spec.js`); not checked against every point here |
+| 3.5, 3.6 stair beams | not checked |
+| 3.7 type into LENGTH, TAB to ANGLE | built: TAB moves to the angle box, and `14 6` now parses as 14'-6" |
+| 3.8 DRIVE-THRU banners | built (`tests/drivethru-banners.spec.js`); the drive-thru has changed again since |
+| 3.9 LAYOUT text at print size | built (the `Math.max(9, …)` floors are gone from `LAYOUT.html`) |
+| §4 BONEYARD beams/columns | built (`tests/boneyard-beams.spec.js`) |
+| §4 dormers | exist (`tests/model-html-dormer.spec.js`, `tests/ext-finish-dormer.spec.js`) |
+| §4 roof against a 2nd-storey wall | work exists (`tests/roof-against-wall.spec.js`); partial-overlap case not checked |
+| rest of §4, §5 | not checked |
 
 Ordered as he gave them. Every quotation is his.
 
