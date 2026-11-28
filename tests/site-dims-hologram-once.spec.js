@@ -43,12 +43,7 @@ const withHologram = mode => {
 };
 
 async function openOnSite(page, drawing) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, d }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, d: drawing });
-  await page.goto(`/MODEL.html?level=${SITE}&left=1`);
+  await h.openEditor(page, { drawing: drawing, bucket: BUCKET, url: `/MODEL.html?level=${SITE}&left=1`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 // HOW MANY TIMES EACH FIGURE REACHES THE CANVAS in one paint: the lot's two

@@ -57,13 +57,7 @@ const storedWalls = page => page.evaluate(async bucket => {
 }, BUCKET);
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json',
-        { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: base() });
-  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=plan&left=1&lpane=build`);
+  await h.openEditor(page, { drawing: base(), bucket: BUCKET, url: `/MODEL.html?level=${MAIN_FL}&view=plan&left=1&lpane=build`, webgl: false });
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   return h.planFrame(page);
 }

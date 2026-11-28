@@ -54,12 +54,7 @@ const dashedLighter = (page, canvasId) => page.evaluate(id => {
 }, canvasId);
 
 test('MODEL: the walls plan hangs the cantilever above and the roof over it; the floor layout nothing', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: REPRO });
-  await page.goto('/MODEL.html?right=1&level=3');
+  await h.openEditor(page, { drawing: REPRO, bucket: BUCKET, url: '/MODEL.html?right=1&level=3', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await spy(page);
   await h.pickModelLayer(page, 3, 'plan');

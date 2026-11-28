@@ -25,12 +25,7 @@ const LOT = { id: 'lot', site: true, levelId: 8,
   points: [{ x: 0, z: 0 }, { x: 20, z: 0 }, { x: 20, z: 30 }, { x: 0, z: 30 }] };
 
 async function open(page, f, level = 8) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto(`/MODEL.html?left=1&lpane=drafting&level=${level}`);
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: `/MODEL.html?left=1&lpane=drafting&level=${level}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 async function frame(page) {

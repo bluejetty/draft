@@ -30,12 +30,7 @@ const empty = () => ({
   groups: [], levelLocks: [], underlays: [],
 });
 async function open(page, theme = null) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto(theme ? `/MODEL.html?theme=${theme}` : '/MODEL.html');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: theme ? `/MODEL.html?theme=${theme}` : '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await h.openDriveThru(page);
 }

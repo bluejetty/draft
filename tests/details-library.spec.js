@@ -59,12 +59,7 @@ const library = () => blank({
 });
 
 async function openModel(page, file = blank(), query = '') {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, drawing: file });
-  await page.goto(`/MODEL.html${query}`);
+  await h.openEditor(page, { drawing: file, bucket: BUCKET, url: `/MODEL.html${query}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(300);
 }

@@ -27,12 +27,7 @@ const house = () => ({
 // A bare sheet for the outline, which builds the house.
 const bare = () => ({ ...house(), levels: [{ id: 3, name: 'MAIN FL', elev: 0 }], activeLevelIdx: 0, walls: [] });
 async function open(page, level = 5, f = house()) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto(`/MODEL.html?level=${level}&lpane=build&left=1`);
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: `/MODEL.html?level=${level}&lpane=build&left=1`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
   await page.waitForTimeout(200);

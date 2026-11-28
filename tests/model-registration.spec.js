@@ -27,12 +27,7 @@ const file = units => ({
   groups: [], levelLocks: [], underlays: [],
 });
 async function open(page, level, units) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, drawing: file(units) });
-  await page.goto(`/MODEL.html?level=${level}`);
+  await h.openEditor(page, { drawing: file(units), bucket: BUCKET, url: `/MODEL.html?level=${level}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 const box = page => page.locator('#registration');
@@ -112,12 +107,7 @@ const withPhase1 = () => {
   return d;
 };
 async function openWith(page, drawing) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, drawing }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, drawing });
-  await page.goto(`/MODEL.html?level=${SITE}`);
+  await h.openEditor(page, { drawing: drawing, bucket: BUCKET, url: `/MODEL.html?level=${SITE}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

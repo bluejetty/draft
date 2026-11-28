@@ -24,12 +24,7 @@ const CUTS = [
 ];
 
 async function load(page, drawing, url) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing });
-  await page.goto(url);
+  await h.openEditor(page, { drawing: drawing, bucket: BUCKET, url: url, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(400);
 }

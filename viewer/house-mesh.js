@@ -37,7 +37,10 @@
     roof: [96, 92, 90],
     gable: [226, 220, 205],
     fascia: [238, 236, 228],
-    glass: [168, 212, 240],   // light blue, and see-through on screen
+    // Sky-blue, like a window catching the sky: jb 28 Nov, the old pale
+    // [168,212,240] at a third read as no glass at all. GLASS_SHOW says how
+    // much of it covers what is behind (both painters use it).
+    glass: [118, 168, 212],
     door: [150, 106, 72],
     overhead: [232, 232, 226],
     deck: [176, 150, 116],
@@ -916,6 +919,7 @@
       { id: 'roof', name: 'ROOF' }, { id: 'ground', name: 'GROUND' }].filter(g => faces.some(f => f.group === g.id));
     // Framed on the house: the ground is 15' of margin, not part of it.
     if (!PRINT) blendSeams(faces);
+    if (!opts.inner) markReflections(faces, Number.isFinite(fdn.grade) ? fdn.grade : 0);
     return { faces, stack, counts, groups, bounds: boundsOf(faces.filter(f => f.kind !== 'ground')) };
   }
 
@@ -1701,5 +1705,30 @@
     return tris;
   }
 
-  window.DraftHouseMesh = Object.freeze({ build, normalOf, triangulate, COLOURS, wallFootprint, wallFrame });
+  // How much of the glass's colour covers what is behind it (both painters).
+  const GLASS_SHOW = 0.6;
+  // How much of the reflected sky and trees (glass-reflection.js) the glass
+  // takes on: jb, "we shouldn't really notice it too much / won't draw
+  // attentions unless you look carefully".
+  const GLASS_REFLECT = 0.45;
+  // Each pane learns which way along the wall the reflected scene runs and
+  // where grade is, so the painters can read glass-reflection.js in feet.
+  function markReflections(faces, grade) {
+    faces.forEach(f => {
+      if (f.kind !== 'glass' || f.pts.length < 2) return;
+      let best = null;
+      f.pts.forEach((p, i) => {
+        const q = f.pts[(i + 1) % f.pts.length];
+        const dx = q.x - p.x, dz = q.z - p.z, len = Math.hypot(dx, dz);
+        if (!best || len > best.len) best = { len, dx, dz };
+      });
+      if (!best || best.len < 1e-6) return;
+      // Pointed the same way for both senses of a wall, so the scene runs
+      // on from one window to the next.
+      let ax = { x: best.dx / best.len, z: best.dz / best.len };
+      if (ax.x < -1e-9 || (Math.abs(ax.x) < 1e-9 && ax.z < 0)) ax = { x: -ax.x, z: -ax.z };
+      f.refl = { ax, grade };
+    });
+  }
+  window.DraftHouseMesh = Object.freeze({ build, normalOf, triangulate, COLOURS, GLASS_SHOW, GLASS_REFLECT, wallFootprint, wallFrame });
 })();

@@ -28,12 +28,7 @@ const base = () => ({
 });
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: base() });
-  await page.goto(`/MODEL.html?level=${MAIN_FL}`);
+  await h.openEditor(page, { drawing: base(), bucket: BUCKET, url: `/MODEL.html?level=${MAIN_FL}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.evaluate(() => { view.cx = 6; view.cz = -4; view.scale = 24; paint(); });
   await page.waitForTimeout(150);

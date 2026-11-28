@@ -24,12 +24,7 @@ const base = () => ({
 });
 
 async function open(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: base() });
-  await page.goto(`/MODEL.html?level=${MAIN_FL}`);
+  await h.openEditor(page, { drawing: base(), bucket: BUCKET, url: `/MODEL.html?level=${MAIN_FL}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // Framed on the flight and the line, 30 px a foot.
   await page.evaluate(() => { view.cx = 8; view.cz = -4; view.scale = 30; paint(); });
