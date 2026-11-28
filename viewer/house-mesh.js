@@ -1266,6 +1266,16 @@
             if (uLow > 1e-4) {
               extrudeProfile([[0, y0], [uE, yFoot], [uLow, yFoot], [0, y0 - tv]], at3, -half, half, 'stair-under', underColour, out);
             }
+            // THE FLAT AT THE TOP (jb, 28 Nov 2026: "extra drywall at the back
+            // flat part of stringer"): the stringers' plumb ends at the head
+            // of the flight, closed with the same board standing behind
+            // them, from the soffit up to the top tread (whose top riser
+            // closes the rest), whether a floor's header is there or the
+            // hole runs on past it.
+            const hTop = tops[0] - TREAD_FT, hLow = y0 - tv;
+            if (hTop - hLow > 1e-3) {
+              extrudeProfile([[-BOARD_FT, hLow], [0, hLow], [0, hTop], [-BOARD_FT, hTop]], at3, -half, half, 'stair-under', underColour, out);
+            }
           }
         }
         // How many, evenly spaced, no more than 16" apart, centred 3/4" in.

@@ -45,7 +45,9 @@ test('by default every step has a 1/2" riser board and the underside is closed i
   // The top riser of the 2ND FL flight reaches the 2ND FL.
   const top = Math.max(...r.risers.flatMap(f => f.ys));
   expect(top).toBeCloseTo(r.levels[5].top, 3);
-  expect(r.under.length).toBeGreaterThanOrEqual(2 * 6);
+  // A board on the slope and one closing the stringers' plumb ends at the
+  // head of the flight ("the back flat part of stringer"), each flight.
+  expect(r.under.length).toBeGreaterThanOrEqual(2 * 2 * 6);
   expect(r.under.every(f => f.colour.join() !== DRYWALL.join())).toBe(true);
   const open = await build(p, `s.stairs.forEach(st => { st.underside = 'open'; }); return s;`);
   expect(open.under).toEqual([]);
