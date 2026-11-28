@@ -56,6 +56,8 @@
         padding: 4px 12px; background: #183a63; color: var(--bar-ink);
       }
       #tools button { font-size: 14px; padding: 2px 9px; }
+      /* On a phone the SECTION row wraps rather than running off the side. */
+      #tools .chips { flex-wrap: wrap; }
       #levels { display: flex; gap: 4px; flex-wrap: wrap; }
       #cut-at { width: 180px; accent-color: var(--chip-lit); }
       #status { flex: 1 1 260px; text-align: right; font-size: 15px; opacity: 0.9; min-width: 0; }
@@ -210,6 +212,51 @@
       .panel { right: 34px; }
       body[data-embed="1"] #pad-tab, body[data-embed="1"] #pad, body[data-embed="1"] #bone-foot { display: none !important; }
       @media (max-width: 600px) { #bone-foot img { height: 38px; } }
+      /* THE GROUPS (FILE, VIEW, WALK THROUGH, SAVE) only show as groups in
+         the side bars below; in the rows across the top their buttons run on
+         as before. */
+      .grp { display: contents; }
+      .grp > .gl { display: none; }
+      /* A WIDE SCREEN -- a desktop, an iPad on its side (jb, 28 Nov 2026:
+         "the viewport could be square in middle and then have side bars where
+         the commands are listed") -- puts the picture in the middle and the
+         two rows in narrow bars either side of it: the program's own
+         commands on the left, what to show and what to save on the right. A
+         phone held upright, or anything taller than it is wide, keeps the
+         rows across the top. A sheet's 3D viewport (?embed=1) is only the
+         house, whatever its shape. */
+      @media (min-aspect-ratio: 1/1) and (min-width: 820px) {
+        body:not([data-embed="1"]) {
+          display: grid; grid-template-rows: 100%;
+          /* Each bar is 60% of what a square picture would leave it (jb:
+             "make them 60% width"), never under 150px; the picture takes the
+             rest, a little wider than square. */
+          --bar-w: max(150px, calc((100vw - min(100vh, 100vw - 400px)) / 2 * 0.6));
+          grid-template-columns: var(--bar-w) minmax(0, 1fr) var(--bar-w);
+        }
+        body:not([data-embed="1"]) header, body:not([data-embed="1"]) #tools {
+          flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 16px;
+          padding: 12px 10px; overflow: auto; min-width: 0; box-sizing: border-box;
+        }
+        body:not([data-embed="1"]) header { grid-column: 1; grid-row: 1; }
+        body:not([data-embed="1"]) #tools { grid-column: 3; grid-row: 1; }
+        body:not([data-embed="1"]) #stage { grid-column: 2; grid-row: 1; border-left: 1px solid #0b1f38; border-right: 1px solid #0b1f38; }
+        body:not([data-embed="1"]) header h1 { display: flex; align-items: center; gap: 10px; margin: 0; }
+        body:not([data-embed="1"]) #logo-spot { order: -1; }
+        body:not([data-embed="1"]) .grp, body:not([data-embed="1"]) .chips {
+          display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+        }
+        body:not([data-embed="1"]) .grp > .gl, body:not([data-embed="1"]) .chips > .label {
+          display: block; flex: 0 0 100%; margin: 0 0 1px; font-size: 13px; opacity: 0.7; letter-spacing: 0.12em;
+          border-bottom: 1px solid rgba(255,255,255,0.18); padding-bottom: 3px;
+        }
+        body:not([data-embed="1"]) #tools button { font-size: 15px; padding: 4px 10px; }
+        body:not([data-embed="1"]) #walk { flex: 1 1 100%; }
+        body:not([data-embed="1"]) #levels { gap: 5px; }
+        body:not([data-embed="1"]) #cut-at { flex: 1 1 100%; width: auto; }
+        body:not([data-embed="1"]) #painter-note { flex: 0 0 100%; }
+        body:not([data-embed="1"]) #status { flex: none; margin-top: auto; text-align: left; font-size: 14px; }
+      }
       [hidden] { display: none !important; }
       @media (max-width: 600px) {
         header h1 { font-size: 20px; }
@@ -222,16 +269,22 @@
     <header>
       <!-- A blank spot kept for a logo to come (jb, 27 Nov 2026). --><a id="logo-spot" href="../index.html" title="Back to Rough Drafter" aria-label="Back to Rough Drafter"></a>
       <h1 id="brand">RUFF 3D</h1>
-      <button id="open" type="button">OPEN FILE</button>
-      <input id="file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
-      <button id="fit" type="button" title="Fit the house to the window (F)">FIT</button>
-      <button id="edges" type="button" class="lit" title="Draw the edges of every face">EDGES</button>
-      <button id="textures" type="button" class="lit" title="Brick joints, siding laps, battens, shake and stone on the walls (each finish can be turned off in its THICKNESS &amp; TEXTURE section)">TEXTURES</button>
-      <button id="export-open" type="button" title="Save the house as a 3D file other programs open (1 bone a file)" disabled>EXPORT</button>
-      <button id="print-open" type="button" title="Make the house ready for a 3D printer: scale, thickness, lift-off pieces (1 bone a file)" disabled>PRINT MODEL</button>
-      <button id="walk" type="button" title="Walk through the house at eye height: click where to stand, then W/S or the arrows walk and dragging looks round (Esc stops)" disabled>WALK</button>
-      <button id="photo-open" type="button" title="Save what is on screen as a picture: PNG, JPG or WEBP (1 bone a picture)" disabled>TAKE PHOTO</button>
-      <button id="projects-open" type="button" title="Your projects: upload a file and get its link" hidden>PROJECTS</button>
+      <span class="grp" role="group" aria-label="File">
+        <span class="gl">FILE</span>
+        <button id="open" type="button">OPEN FILE</button>
+        <input id="file" type="file" accept=".draft,.zip,.json,application/json,application/zip" hidden />
+        <button id="projects-open" type="button" title="Your projects: upload a file and get its link" hidden>PROJECTS</button>
+      </span>
+      <span class="grp" role="group" aria-label="View">
+        <span class="gl">VIEW</span>
+        <button id="fit" type="button" title="Fit the house to the window (F)">FIT</button>
+        <button id="edges" type="button" class="lit" title="Draw the edges of every face">EDGES</button>
+        <button id="textures" type="button" class="lit" title="Brick joints, siding laps, battens, shake and stone on the walls (each finish can be turned off in its THICKNESS &amp; TEXTURE section)">TEXTURES</button>
+      </span>
+      <span class="grp" role="group" aria-label="Walk through">
+        <span class="gl">WALK THROUGH</span>
+        <button id="walk" type="button" title="Walk through the house at eye height: click where to stand, then W/S or the arrows walk and dragging looks round (Esc stops)" disabled>WALK</button>
+      </span>
       <span class="chips" role="group" aria-label="Painter">
         <span class="label">PAINTER</span>
         <button type="button" data-painter="auto" title="WebGL when this computer has it, plain canvas when it does not">AUTO</button>
@@ -254,6 +307,12 @@
         <button type="button" data-cut="y" title="Take the top off at a height, like a plan">PLAN</button>
         <input id="cut-at" type="range" min="0" max="1000" value="500" aria-label="Where the section cuts" disabled />
         <button type="button" id="cut-flip" title="Keep the other side of the cut" disabled>FLIP</button>
+      </span>
+      <span class="grp" role="group" aria-label="Save">
+        <span class="gl">SAVE</span>
+        <button id="photo-open" type="button" title="Save what is on screen as a picture: PNG, JPG or WEBP (1 bone a picture)" disabled>TAKE PHOTO</button>
+        <button id="export-open" type="button" title="Save the house as a 3D file other programs open (1 bone a file)" disabled>EXPORT</button>
+        <button id="print-open" type="button" title="Make the house ready for a 3D printer: scale, thickness, lift-off pieces (1 bone a file)" disabled>PRINT MODEL</button>
       </span>
     </nav>
     <main id="stage">

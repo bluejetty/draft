@@ -256,8 +256,10 @@ test('TAKE PHOTO saves what is on screen at the size and file picked, for 1 bone
   await expect(p.locator('#photo')).toBeVisible();
   await p.locator('[data-photo-format="jpg"]').click();
   await p.locator('[data-photo-scale="2"]').click();
-  const stage = await p.locator('#stage').boundingBox();
-  await expect(p.locator('#photo-size-note')).toHaveText(`${Math.round(stage.width) * 2} x ${Math.round(stage.height) * 2} pixels`);
+  // The stage's own whole-pixel size (a side-bar layout can leave it a
+  // fraction wide, which the box would round the other way).
+  const stage = await p.evaluate(() => { const st = document.getElementById('stage'); return { width: st.clientWidth, height: st.clientHeight }; });
+  await expect(p.locator('#photo-size-note')).toHaveText(`${stage.width * 2} x ${stage.height * 2} pixels`);
   await p.locator('#photo-go').click();
   await expect(p.locator('#photo-toll')).toHaveText(/^Saved .* 3D\.jpg/);
   const files = await p.evaluate(() => window.__files);
