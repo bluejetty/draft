@@ -56,11 +56,43 @@ send it over and it gets changed there.
    once (tick "remember on this computer"), pick a `.draft` or SAVE AS ZIP,
    name it, press **UPLOAD**, and copy the link.
 
+## Saving straight from MODEL
+
+1. In MODEL, type `3DBONES` on any of the first five lines of NOTES page 1.
+2. An **ONLINE** button appears in the top bar after SAVE AS. Press it.
+3. **SAVE ONLINE**: type the project name (like `timberhouse`) and press
+   SAVE ONLINE. The drawing is saved in the browser as SAVE does, then sent.
+   Saving again under the same name replaces it, and the customer's link
+   `roughdrafter.com/viewer/timberhouse` shows the new one the next time they
+   open or refresh it.
+4. **OPEN ONLINE**: lists your online projects; OPEN puts one in MODEL to keep
+   working on, on any computer (it asks for the password once there).
+
+The password is the same one, and a computer that remembers it in the viewer
+remembers it in MODEL too. The Worker's address is in two places, kept the
+same: `PROJECTS_API` at the top of `viewer/projects.js` and of
+`model/23-save-online.js`.
+
+## A folder for each house
+
+Each project name is a folder in the bucket:
+
+- `projects/NAME/drawing` is the house itself: what the link opens and what
+  SAVE ONLINE replaces.
+- `projects/NAME/files/...` holds anything else for that house (zips, PDFs,
+  photos) for the customer to download. Only your password can add or remove
+  them; customers can only look and download.
+
+A project uploaded before folders (one loose file) still opens, and moves
+into its folder the next time it is saved.
+
 ## Notes
 
 - Anyone with a link can open that project. Names are letters, numbers and
   dashes; capitals do not count (`Smith-House` = `smith-house`).
-- Same name again replaces the file. Files up to 25 MB.
+- Same name again replaces the drawing. Files up to 25 MB each (Cloudflare's
+  free plan would take up to 100 MB if zips need more).
+- Deleting a project in the viewer's PROJECTS list empties its whole folder.
 - To change the password later: Settings → Variables and Secrets → edit
   `UPLOAD_PASSWORD`. Every computer then asks for the new one.
 - If you ever change `worker.mjs` in the repo, paste it into the dashboard
