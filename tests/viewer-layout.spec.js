@@ -52,3 +52,53 @@ test('a sheet\'s 3D viewport is only the house, wide or not', async ({ page: p }
   expect(b.stage.w).toBeCloseTo(1200, 0);
   expect(b.stage.h).toBeCloseTo(700, 0);
 });
+
+// THE NOTEPAD IN THE BAR (jb, 28 Nov 2026): "under the SAVE TAKE PHOTO PRINT
+// MODEL spot put the tab for notepad and when it open make it look and act
+// like the other one (yellow or blue) keep the text allow save as text etc.
+// maybe even calculator too".
+test('NOTEPAD sits under SAVE and opens the drafter\'s pad: NOTES, CALC, pages and the TXT file', async ({ page: p }) => {
+  await p.setViewportSize({ width: 1440, height: 900 });
+  await p.goto('/viewer/index.html');
+  await p.waitForSelector('body[data-ready="1"]');
+  await p.evaluate(() => { localStorage.setItem('draft.notepad', 'from the drafter'); localStorage.removeItem('draft.calc'); });
+  await p.reload();
+  await p.waitForSelector('body[data-ready="1"]');
+  const save = await p.locator('#print-open').boundingBox(), key = await p.locator('#pad-tab').boundingBox();
+  expect(key.y).toBeGreaterThan(save.y);
+  expect(await p.locator('#pad-tab').evaluate(b => !!b.closest('#tools'))).toBe(true);
+  await p.locator('#pad-tab').click();
+  await expect(p.locator('#pad-text')).toHaveValue('from the drafter');
+  // A key typed on the pad is a letter, not the page's F (fit) or W (walk).
+  const cam = await p.evaluate(() => JSON.stringify(DraftViewer.state.camera));
+  await p.locator('#pad-text').press('End');
+  await p.locator('#pad-text').type('\nfw');
+  expect(await p.evaluate(() => JSON.stringify(DraftViewer.state.camera))).toBe(cam);
+  // CALC: the drafter's calculator, its tape kept where the drafter keeps it.
+  await p.locator('[data-pad-tab="calc"]').click();
+  await p.locator('#calc-line').fill("12'6\" x 10'");
+  await expect(p.locator('[data-calc-answer]')).toContainText('125 sq ft');
+  await p.locator('#calc-line').press('Enter');
+  await expect(p.locator('[data-calc-row]')).toHaveCount(1);
+  const kept = JSON.parse(await p.evaluate(() => localStorage.getItem('draft.calc')));
+  expect(kept.pages[0][0]).toMatchObject({ line: "12'6\" x 10'", main: '125 sq ft' });
+  await p.locator('#calc-line').fill("3' + 6\"");
+  await p.locator('[data-calc-do="notes"]').click();
+  expect(await p.evaluate(() => localStorage.getItem('draft.notepad'))).toBe("from the drafter\nfw\n3' + 6\" = 3'-6\"");
+  // The page keys follow the tab: page 2 of CALC is its own tape.
+  await p.locator('[data-pad-page="2"]').click();
+  await expect(p.locator('[data-calc-row]')).toHaveCount(0);
+  await expect(p.locator('#pad-page-said')).toHaveText('PAGE 2 OF 5');
+  // SAVE AS TXT writes the drafter's format; OPEN TXT reads it back.
+  const text = await p.evaluate(() => DraftViewerPad.asText());
+  expect(text).toContain('ROUGH-DRAFTER NOTEPAD');
+  expect(text).toContain("=== NOTES PAGE 1 ===\nfrom the drafter");
+  expect(text).toContain("=== CALC PAGE 1 ===\n12'6\" x 10' = 125 sq ft");
+  await p.evaluate(() => DraftViewerPad.openText('=== NOTES PAGE 3 ===\nfrom a file\n\n=== CALC PAGE 2 ===\n2\' x 3\' = 6 sq ft'));
+  const pages = JSON.parse(await p.evaluate(() => localStorage.getItem('draft.notepad.pages')));
+  expect(pages[2]).toBe('from a file');
+  await expect(p.locator('[data-calc-row]')).toHaveCount(1);
+  // The close button puts it away.
+  await p.locator('#pad-close').click();
+  await expect(p.locator('#pad')).toBeHidden();
+});
