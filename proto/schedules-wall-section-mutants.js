@@ -7,7 +7,7 @@
 // doors", "so the wall section is basically taken from the PROJECT
 // information right". The pure rows and the section's numbers are gated in
 // node by proto/schedules-harness.js --mutate; what is here is the PAGE
-// side -- the deal, the add menu, the frame, the titleblock, the reader,
+// side -- the deal (no WALL SECTION since jb, 28 Nov 2026), the add menu, the frame, the titleblock, the reader,
 // the painter and the ESTIMATES row -- which has no engine harness.
 //
 // Run: node proto/schedules-wall-section-mutants.js   (refuses a dirty tree; restores from HEAD)
@@ -19,29 +19,24 @@ const SPEC = 'tests/schedules-wall-section.spec.js';
 
 const MUTANTS = [
   { file: 'LAYOUT.html',
-    name: 'the WALL SECTION sheet is not dealt',
-    find: '    if (this._wallSection()) {\n      deal(\'WALL SECTION\'',
-    with: '    if (false) {\n      deal(\'WALL SECTION\'',
-    test: 'the deal puts a WALL SECTION sheet' },
-  { file: 'LAYOUT.html',
-    name: "the three details take the sheet's rung, not their own",
-    find: '          const own = Math.min(...details.map(view => this._detailPif(view, share)));',
-    with: '          const own = pif;',
-    test: 'the deal puts a WALL SECTION sheet' },
+    name: 'the WALL SECTION sheet is dealt again',
+    find: "    deal('FOUNDATION', [planSheet(1, 'foundation')]);\n",
+    with: "    deal('FOUNDATION', [planSheet(1, 'foundation')]);\n    deal('WALL SECTION', [sized({ kind: 'plan', levelId: 3, view: 'plan' })]);\n",
+    test: 'the deal puts no WALL SECTION sheet' },
   { file: 'LAYOUT.html',
     name: "a dealt schedule takes the sheet's scale",
     find: "          viewports.push({ ...base, kind: 'schedule', table: view.table, pif: SCHEDULE_PIF });",
     with: "          viewports.push({ ...base, kind: 'schedule', table: view.table, pif: 1 / 4 });",
-    test: 'the deal puts a WALL SECTION sheet' },
+    test: 'the deal puts no WALL SECTION sheet' },
   { file: 'LAYOUT.html',
     name: 'a sheet of schedules reads AS NOTED on the titleblock',
     find: "      : (pifs.length ? 'AS NOTED' : (sheetViewports.length ? 'NTS' : ''));",
     with: "      : (pifs.length ? 'AS NOTED' : (sheetViewports.length ? 'AS NOTED' : ''));",
     test: 'a schedule prints its rows' },
   { file: 'LAYOUT.html',
-    name: 'the add menu leaves the details out',
-    find: "      ['SCHEDULES', schedules], ['DETAILS', details],\n",
-    with: "      ['SCHEDULES', schedules],\n",
+    name: "the add menu offers PROJECT's details again",
+    find: "      ['SCHEDULES', schedules],\n",
+    with: "      ['SCHEDULES', schedules], ['DETAILS', window.DraftWallSection.DETAIL_IDS.map(detail => ({ kind: 'detail', detail, label: window.DraftWallSection.DETAIL_TITLES[detail] }))],\n",
     test: 'ADD VIEWPORT offers the schedules' },
   { file: 'LAYOUT.html',
     name: "a placed schedule's frame follows the sheet's ladder instead of the table",
@@ -62,7 +57,7 @@ const MUTANTS = [
     name: 'the detail painter puts no ink down',
     find: '    const X = x => box.x + (x - win.minX) * pxPerFt;',
     with: '    return; const X = x => box.x + (x - win.minX) * pxPerFt;',
-    test: 'has ink in every one of its four windows' },
+    test: 'still print, ink in every one of the four windows' },
   { file: 'ESTIMATES.html',
     name: 'the estimate row loses its mark',
     find: '          item.innerHTML = `${row.mark ? `<span class="mark" data-mark>${row.mark}</span>` : \'\'}${row.label}',

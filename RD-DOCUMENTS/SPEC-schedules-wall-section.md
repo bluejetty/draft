@@ -4,6 +4,17 @@ What jb asked for on 9 Nov 2026, from his draftsman's review of the base
 set, and the rulings he gave while it was being scoped. Nothing here is in
 the code's own words; this is the page to read before changing any of it.
 
+> **28 Nov 2026, jb: the wall section is OFF the construction layouts.**
+> *"take the project info 'sections and details' off the construction
+> layouts we won't need those. don't allow it to be added for a viewport"*.
+> It was drawn from PROJECT's pitch, overhang, heel and level numbers, not
+> from the house drawn, so it could disagree with it; sections come from the
+> actual house (S1, S2). The deal no longer makes the WALL SECTION sheet and
+> + ADD VIEWPORT no longer offers TYP. WALL SECTION / EAVE / FLOOR / FOOTING.
+> A layout saved before then keeps painting the ones it holds until the
+> drafter deletes the sheet. PROJECT's own wall section picture and the
+> schedules are unchanged. The wall section notes below are history.
+
 ## What he said
 
 - *"Window and door schedules and a wall section cut in the base set. we

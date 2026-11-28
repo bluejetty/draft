@@ -154,9 +154,9 @@ test('Ctrl+C and Ctrl+V do the same; pasted onto its own sheet it stands half an
   await page.keyboard.press('Control+v');
   const again = (await saved(page, seq2)).viewports;
   expect(again).toHaveLength(dealt.viewports.length + 2);
-  // OF THE TWO PASTED, not of the whole set: since the WALL SECTION sheet
-  // (9 Nov) the set holds viewports that do not stand on their sheet's
-  // centre line, so the furthest-right viewport is no longer a paste.
+  // OF THE TWO PASTED, not of the whole set: a set can hold viewports that
+  // do not stand on their sheet's centre line, so the furthest-right
+  // viewport need not be a paste.
   const pastes = again.filter(v => !dealt.viewports.some(d => d.id === v.id));
   expect(Math.max(...pastes.map(v => v.xIn - plan.xIn))).toBeCloseTo(1, 6);
 });

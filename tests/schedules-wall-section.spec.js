@@ -9,15 +9,24 @@
 // "when i do details i usually show where the exterior walls meet the floor,
 // and where it meets the roof and also the footing".
 //
+// NO WALL SECTION SHEET ANY MORE (jb, 28 Nov 2026): "take the project info
+// 'sections and details' off the construction layouts we won't need those.
+// don't allow it to be added for a viewport". The section was built off
+// PROJECT's pitch, overhang, heel and level numbers, not off the house
+// drawn, so it could disagree with it; sections come from the house (S1,
+// S2). A layout saved before then still paints the ones it holds, until
+// the drafter deletes them.
+//
 // So four things are held here:
-//   1. the deal puts a WALL SECTION sheet after the SECTIONS (the section
-//      and the eave, floor and footing details) and a SCHEDULES sheet after
-//      the basement, before ELECTRIC;
+//   1. the deal puts no WALL SECTION sheet and no detail anywhere, and a
+//      SCHEDULES sheet after the basement, before ELECTRIC; + ADD VIEWPORT
+//      offers the schedules and no PROJECT detail;
 //   2. a schedule has no scale -- pif 1, NTS on the titleblock -- and its
 //      rows carry the marks ESTIMATES prints under 8-A / 8-B;
 //   3. the section is drawn from PROJECT's numbers: change the pitch in the
 //      file and the callout follows;
-//   4. the viewports survive a reload through the layout reader.
+//   4. the viewports survive a reload through the layout reader, and an
+//      old file's details still print.
 //
 // Mutation gate: proto/schedules-wall-section-mutants.js.
 const { test, expect } = require('@playwright/test');
@@ -64,28 +73,38 @@ const layoutState = page => page.evaluate(() => ({
     ({ id, kind, sheet, pif, ...(table ? { table } : {}), ...(detail ? { detail } : {}) })),
 }));
 
-test('the deal puts a WALL SECTION sheet after the sections and a SCHEDULES sheet before ELECTRIC', async ({ page }) => {
+// AN OLD FILE'S WALL SECTION AND DETAILS, one to a sheet past the dealt
+// set, placed the way + ADD VIEWPORT used to place them (it no longer
+// offers them, so the pick is armed by hand here).
+const DETAIL_IDS = ['wallsection', 'eave', 'floor', 'footing'];
+async function seatOldDetails(page) {
+  for (const detail of DETAIL_IDS) {
+    const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+    await page.evaluate(detail => new Promise(done => {
+      page._addSheet();
+      page.setState({ addingViewport: { kind: 'detail', detail } }, () => {
+        const r = page._composeRegionIn();
+        page._placeViewport({ xIn: r.x + r.w / 2, yIn: r.y + r.h / 2 });
+        done();
+      });
+    }), detail);
+    await page.waitForFunction(prev => Number(document.body.dataset.layoutSaveSeq || 0) > prev, seq);
+  }
+}
+
+test('the deal puts no WALL SECTION sheet and no detail, and a SCHEDULES sheet after the sections', async ({ page }) => {
   await openLayout(page, house());
   const { sheets, viewports } = await layoutState(page);
   const at = title => sheets.indexOf(title) + 1;
-  expect(at('WALL SECTION')).toBe(at('SECTIONS') + 1);
+  // jb, 28 Nov 2026: PROJECT's wall section and details are off the set.
+  expect(sheets).not.toContain('WALL SECTION');
+  expect(viewports.filter(v => v.kind === 'detail')).toEqual([]);
+  expect(at('SECTIONS')).toBeGreaterThan(0);
   // This house has no basement walls and no electric, so the SCHEDULES are
   // the last sheet; layout-compose.spec.js holds their place between the
   // BASEMENT PLAN and the ELECTRIC PLAN on a house that has both.
   expect(at('SCHEDULES')).toBe(sheets.length);
-  expect(at('SCHEDULES')).toBeGreaterThan(at('WALL SECTION'));
-  // The section and its three details, in jb's order, on the one sheet.
-  const details = viewports.filter(v => v.kind === 'detail' && v.sheet === at('WALL SECTION'));
-  expect(details.map(v => v.detail)).toEqual(['wallsection', 'eave', 'floor', 'footing']);
-  // THE SECTION NO BIGGER THAN 1/2", THE DETAILS NO BIGGER THAN 1", and the
-  // three details share one rung -- a set of details at three scales
-  // reads as three drawings, not one wall.
-  const section = details.find(v => v.detail === 'wallsection');
-  expect(section.pif).toBeLessThanOrEqual(1 / 2);
-  const blown = details.filter(v => v.detail !== 'wallsection');
-  expect(new Set(blown.map(v => v.pif)).size).toBe(1);
-  expect(blown[0].pif).toBeLessThanOrEqual(1);
-  expect(blown[0].pif).toBeGreaterThan(section.pif);
+  expect(at('SCHEDULES')).toBeGreaterThan(at('SECTIONS'));
   // The door schedule over the window schedule, each at pif 1: a table
   // has no scale.
   const schedules = viewports.filter(v => v.kind === 'schedule' && v.sheet === at('SCHEDULES'));
@@ -154,13 +173,13 @@ test('the section is drawn from PROJECT\'s numbers: the pitch callout follows th
   expect(windows.footing.maxY).toBeLessThan(windows.floor.minY);
 });
 
-test('the printed WALL SECTION sheet has ink in every one of its four windows', async ({ page }) => {
+test('an old file\'s wall section and details still print, ink in every one of the four windows', async ({ page }) => {
   await openLayout(page, house());
+  await seatOldDetails(page);
   const inks = await page.evaluate(() => {
-    const sheet = page.state.sheets.findIndex(s => s.title === 'WALL SECTION') + 1;
-    const { canvas } = page._printSheetCanvas(sheet, 72);
-    const ctx = canvas.getContext('2d');
-    return page.state.viewports.filter(v => v.sheet === sheet).map(v => {
+    return page.state.viewports.filter(v => v.kind === 'detail').map(v => {
+      const { canvas } = page._printSheetCanvas(v.sheet, 72);
+      const ctx = canvas.getContext('2d');
       const r = page._viewportRectIn(v);
       const data = ctx.getImageData(Math.round(r.xIn * 72), Math.round(r.yIn * 72),
         Math.round(r.wIn * 72), Math.round(r.hIn * 72)).data;
@@ -169,16 +188,21 @@ test('the printed WALL SECTION sheet has ink in every one of its four windows', 
       return [v.detail, ink];
     });
   });
+  expect(inks.map(([detail]) => detail)).toEqual(DETAIL_IDS);
   inks.forEach(([detail, ink]) => expect(ink, `${detail} draws`).toBeGreaterThan(200));
 });
 
-test('+ ADD VIEWPORT offers the schedules and the details, and a placed schedule survives a reload', async ({ page }) => {
+test('+ ADD VIEWPORT offers the schedules and no PROJECT detail, and a placed schedule survives a reload', async ({ page }) => {
   await openLayout(page, house());
+  await seatOldDetails(page);
   await page.locator('[data-layout-add-viewport]').click();
-  await expect(page.locator('.lay-add-head')).toContainText(['SCHEDULES', 'DETAILS']);
+  await expect(page.locator('.lay-add-head').first()).toBeVisible();
+  const heads = await page.locator('.lay-add-head').allTextContents();
+  expect(heads).toContain('SCHEDULES');
+  // jb, 28 Nov 2026: "don't allow it to be added for a viewport".
+  expect(heads).not.toContain('DETAILS');
   await expect(page.locator('[data-add-pick^="schedule:"]')).toHaveText(['DOOR SCHEDULE', 'WINDOW SCHEDULE']);
-  await expect(page.locator('[data-add-pick^="detail:"]')).toHaveText(
-    ['TYP. WALL SECTION', 'EAVE DETAIL', 'FLOOR DETAIL', 'FOOTING DETAIL']);
+  await expect(page.locator('[data-add-pick^="detail:"]')).toHaveCount(0);
   // Put the window schedule on sheet 1 by hand.
   await page.evaluate(() => page._setActiveSheet(1));
   await page.locator('[data-add-pick="schedule:window"]').click();
@@ -190,8 +214,8 @@ test('+ ADD VIEWPORT offers the schedules and the details, and a placed schedule
   // Its frame is the table's own size, whatever rung the sheet is on.
   const frame = await page.evaluate(id => page._naturalRectIn(page.state.viewports.find(v => v.id === id)), placed.id);
   expect(frame.wIn).toBeCloseTo(7.4, 3);
-  // THE READER KEEPS IT: a reload finds the schedule and every detail
-  // still seated, with their references.
+  // THE READER KEEPS IT: a reload finds the schedule, and an old file's
+  // details, still seated, with their references.
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   const after = await layoutState(page);

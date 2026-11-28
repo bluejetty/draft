@@ -124,6 +124,22 @@ async function openLayout(page, saved) {
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.waitForFunction(() => page.state.sheets.length > 1);
 }
+// AN OLD FILE'S WALL SECTION: the typical section on a sheet of its own,
+// placed the way + ADD VIEWPORT used to before jb took PROJECT's section
+// off the layouts (28 Nov 2026). Returns the sheet.
+async function seatOldWallSection(page) {
+  const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+  const sheet = await page.evaluate(() => new Promise(done => {
+    page._addSheet();
+    page.setState({ addingViewport: { kind: 'detail', detail: 'wallsection' } }, () => {
+      const r = page._composeRegionIn();
+      page._placeViewport({ xIn: r.x + r.w / 2, yIn: r.y + r.h / 2 });
+      done(page.state.activeSheet);
+    });
+  }));
+  await page.waitForFunction(prev => Number(document.body.dataset.layoutSaveSeq || 0) > prev, seq);
+  return sheet;
+}
 const reproWith = (floorType, fdnType) => {
   const saved = JSON.parse(JSON.stringify(REPRO));
   delete saved.layout;
@@ -146,9 +162,10 @@ test('the WALL SECTION sheet names the made type and lists its slices; the found
   ['3" LEDGESTONE', '1" AIR GAP', '5 1/2" 2X6 + BATT', '1/2" GYP'].forEach(t => expect(labels, t).toContain(t));
   expect(labels).toContain('8IN CONC + LINING');
   ['3 1/2" 2X4 + BATT', '1/2" AIR SPACE'].forEach(t => expect(labels, t).toContain(t));
-  // The sheet still prints in every window.
-  const inks = await page.evaluate(() => {
-    const sheet = page.state.sheets.findIndex(s => s.title === 'WALL SECTION') + 1;
+  // An old file's sheet still prints in every window (the deal and + ADD
+  // VIEWPORT stopped offering it on 28 Nov 2026, jb).
+  const sheet = await seatOldWallSection(page);
+  const inks = await page.evaluate(sheet => {
     const { canvas } = page._printSheetCanvas(sheet, 72);
     const ctx = canvas.getContext('2d');
     return page.state.viewports.filter(v => v.sheet === sheet).map(v => {
@@ -159,13 +176,11 @@ test('the WALL SECTION sheet names the made type and lists its slices; the found
       for (let i = 0; i < data.length; i += 4) if (data[i] < 128 && data[i + 3] > 0) ink += 1;
       return [v.detail, ink];
     });
-  });
+  }, sheet);
+  expect(inks.length).toBeGreaterThan(0);
   inks.forEach(([detail, ink]) => expect(ink, `${detail} draws`).toBeGreaterThan(200));
   if (SHOTS) {
-    const png = await page.evaluate(() => {
-      const sheet = page.state.sheets.findIndex(s => s.title === 'WALL SECTION') + 1;
-      return page._printSheetCanvas(sheet, 150).canvas.toDataURL('image/png');
-    });
+    const png = await page.evaluate(sheet => page._printSheetCanvas(sheet, 150).canvas.toDataURL('image/png'), sheet);
     fs.writeFileSync(path.join(SHOTS, '9-wall-section-sheet.png'), Buffer.from(png.split(',')[1], 'base64'));
   }
 });
