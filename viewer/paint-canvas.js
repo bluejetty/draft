@@ -60,7 +60,7 @@
         M.triangulate(f.pts).forEach(([i, j, k]) => {
           const a = f.pts[i], b = f.pts[j], c = f.pts[k];
           (clear ? late : tris).push({
-            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour, clear, tex,
+            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour, clear, tex, refl: clear ? f.refl || null : null,
             edges: [real(i, j), real(j, k), real(k, i)],
             mid: { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3, z: (a.z + b.z + c.z) / 3 },
           });
@@ -150,6 +150,16 @@
           ftPx = mz / focal / Math.max(0.25, cos);
           shadeAt = window.DraftFinishTexture.shadeAt;
         }
+        // GLASS REFLECTS (glass-reflection.js): feet along the wall and up
+        // from grade at each corner, over z, like a texture.
+        const GR = t.clear && t.refl && look.textures !== false ? window.DraftGlassReflection : null;
+        if (GR) {
+          const ax = t.refl.ax, gr = t.refl.grade;
+          const sOf = p => p.x * ax.x + p.z * ax.z;
+          sA = sOf(t.a) * A.iz; sB = sOf(t.b) * B.iz; sC = sOf(t.c) * C.iz;
+          yA = (t.a.y - gr) * A.iz; yB = (t.b.y - gr) * B.iz; yC = (t.c.y - gr) * C.iz;
+        }
+        const rf = window.DraftHouseMesh.GLASS_REFLECT, rk = 1 - rf;
         // Barycentric weights from the edge functions, stepped a pixel at a time.
         const e0dx = (B.y - C.y) * inv, e0dy = (C.x - B.x) * inv;
         const e1dx = (C.y - A.y) * inv, e1dy = (A.x - C.x) * inv;
@@ -175,9 +185,16 @@
                   // it (GLASS_SHOW), and no depth kept, so the room beyond
                   // still shows.
                   const v = pix[idx];
-                  const rr = Math.round((v & 255) * keep + r * show);
-                  const gg = Math.round(((v >>> 8) & 255) * keep + g * show);
-                  const bl = Math.round(((v >>> 16) & 255) * keep + b * show);
+                  let gr = r, gg0 = g, gb = b;
+                  if (GR) {
+                    const q = GR.at((w0 * sA + w1 * sB + w2 * sC) / iz, (w0 * yA + w1 * yB + w2 * yC) / iz);
+                    gr = r * rk + Math.min(255, q[0] * k) * rf;
+                    gg0 = g * rk + Math.min(255, q[1] * k) * rf;
+                    gb = b * rk + Math.min(255, q[2] * k) * rf;
+                  }
+                  const rr = Math.round((v & 255) * keep + gr * show);
+                  const gg = Math.round(((v >>> 8) & 255) * keep + gg0 * show);
+                  const bl = Math.round(((v >>> 16) & 255) * keep + gb * show);
                   pix[idx] = ((255 << 24) | (bl << 16) | (gg << 8) | rr) >>> 0;
                 }
               }
