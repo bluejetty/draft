@@ -59,13 +59,6 @@ const EXEMPT = {
   // list of links to other programs and sites, read on any device, in
   // CODES.html's skin. Nobody drafts on it either.
   'LINKS.html': 'reference page off ENTRY, read on any device',
-  // Single-component preview pages: a <x-dc> block, react, support.js and
-  // nothing else — around 5KB each, with no app shell, no store and no
-  // drawing surface. Nobody drafts on them, so there is no landscape to
-  // present. (MODEL.dc.html shares the suffix and is NOT one of these: it is
-  // a working screen, and it is on the roster.)
-  'Notepad.dc.html': 'component preview, not a screen a drafter works on',
-  'SaveBox.dc.html': 'component preview, not a screen a drafter works on',
   // NOT FOUND (28 Nov 2026): what the host serves for an address that is not
   // a page; /viewer/NAME passes straight through it to the 3D viewer. A
   // visitor with a shared link on a phone held upright must get through.
