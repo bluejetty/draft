@@ -206,6 +206,12 @@
   // active" for exactly as long as one synchronous draw, restored in a
   // `finally` so a throwing painter cannot leave the page pointing at a seat.
   let thumbTarget = null;
+  // THE JOIST ARROWS, SMALLER IN A SEAT (jb, 28 Nov 2026: "reduce the arrow
+  // end size for the layout views ... they are too big in those little
+  // viewports"). The heads are 11 px on the sheet, a sixth of an 82 px seat,
+  // so a seat draws the arrow at this share of its sheet size
+  // (paintJoistCallouts, paintLines). The sheet and print are as they were.
+  const SEAT_JOIST_INK = 0.4;
   let drawing = null;
   // The bucket revision the drawing was read at, handed back as `ifRev` on
   // save so a write that would land on top of someone else's is REFUSED
@@ -1329,8 +1335,21 @@
     // of its own: the buildings on it are the holograms, so the seat draws
     // them (paintPlanThumb) and takes them into its frame as the site does.
     const siteSeat = thumbTarget && activeLevelId() === SITE_LEVEL_ID;
+    // AND THE BUILDING ITSELF (jb, 28 Nov 2026: "the site plan layout small
+    // window is zooming in too far"). The seat paints the footprint and its
+    // roof through drawSitePlan, but `own` is only the SITE level's records:
+    // with no lot drawn it was empty, the fit fell to 6 px/ft at the origin,
+    // and the seat showed one corner of the house. Frame what is painted.
+    const siteParts = () => {
+      const LP = window.DraftLayoutPlan;
+      if (!LP || typeof LP.sitePlanParts !== 'function') return [];
+      const { lot, bodies, roofs } = LP.sitePlanParts(drawing);
+      return [lot, ...bodies, ...roofs].filter(Boolean)
+        .flatMap(item => item.points || [])
+        .filter(p => Number.isFinite(p?.x) && Number.isFinite(p?.z));
+    };
     const pts = shootingPaper ? own
-      : siteSeat ? own.concat(thumbHologramPoints())
+      : siteSeat ? own.concat(thumbHologramPoints(), siteParts())
       : thumbTarget ? (own.length ? own : thumbHologramPoints())
       : own.concat(hologramFramePoints());
     // THE EMPTY TEST STILL STANDS HERE FOR EVERY OTHER LEVEL, and only moves
@@ -1734,7 +1753,7 @@
       // unless the line was given a colour of its own.
       if (line.joist && R.drawJoistCallout2D) {
         R.drawJoistCallout2D(ctx, toS, { start: line.start, end: line.end, text: line.joist.text, side: line.joist.side, warn: line.joist.warn },
-          paintEnv(), { color: line.color || null });
+          paintEnv(), { color: line.color || null, inkScale: thumbTarget ? SEAT_JOIST_INK : 1 });
         return;
       }
       const ink = LS ? LS.strokeFor(line) : { lineWidth: 1, dash: [], color: null };
@@ -2096,7 +2115,7 @@
     if (!B?.joistCalloutSeeds || !R.drawJoistCallout2D) return;
     const seeds = B.joistCalloutSeeds(drawing, Number(activeLevelId()), belowBeams);
     seeds.forEach(seed => {
-      const at = R.drawJoistCallout2D(ctx, toS, seed, env);
+      const at = R.drawJoistCallout2D(ctx, toS, seed, env, { inkScale: thumbTarget ? SEAT_JOIST_INK : 1 });
       if (at) joistCalloutHits.push({ ...at, seed });
     });
     canvas.setAttribute('data-joist-callouts', String(joistCalloutHits.length));
