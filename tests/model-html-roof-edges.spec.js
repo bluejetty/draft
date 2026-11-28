@@ -36,6 +36,7 @@ async function open(page) {
   await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html?level=7&left=1&lpane=drafting', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   return h.planFrame(page);
 }
@@ -136,6 +137,7 @@ async function openChamfer(page) {
   await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   return h.planFrame(page);
 }
@@ -236,6 +238,7 @@ test('a roof in an ASSEMBLY: MAIN ROOF reaches every piece, THIS PIECE keeps its
   await page.goto('/MODEL.html?level=7&left=1&lpane=drafting');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   const { at } = await h.planFrame(page);
   await click(page, at, 30, 15);
@@ -285,6 +288,7 @@ test('on SITE the roof picks, and the edge clicked takes its overhang', async ({
   await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html?level=8&left=1&lpane=drafting', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.keyboard.press('0');
+  await h.roofPlanAtOldZoom(page);
   await page.waitForTimeout(200);
   const { at } = await h.planFrame(page);
   await click(page, at, 30, 15);

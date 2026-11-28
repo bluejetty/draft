@@ -2228,6 +2228,20 @@
     return { left: railReserve.left, right: railReserve.right, bottom };
   };
 
+  // WHERE AN ELEVATION OR SECTION'S TITLE GOES: just inside the open corner,
+  // right of the left rail's reserve and below the top bar (#strip), in
+  // canvas pixels. The painter's own 10,8 inset is kept from that corner.
+  const elevTitleAt = rails => {
+    const canvas = ctx && ctx.canvas;
+    const box = canvas && canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+    const bar = document.querySelector('#strip');
+    const br = box && bar && !bar.hidden ? bar.getBoundingClientRect() : null;
+    const top = br && br.height > 0
+      ? Math.max(0, Math.min(box.bottom, br.bottom) - Math.max(box.top, br.top)) : 0;
+    const left = rails && Number(rails.left) > 0 ? Number(rails.left) : 0;
+    return { x: left + 10, y: top + 8 };
+  };
+
   // The whole of what the painter reads from the furniture, as one comparable
   // value.
   const railKey = mg => (mg ? `${mg.left},${mg.right},${mg.bottom}` : '');
@@ -2335,6 +2349,12 @@
             },
             // Zoomed or panned by hand: the painter draws in this frame.
             ...(elevPinned(cut) ? { frame: elevPin } : {}),
+            // THE TITLE CLEARS THE FURNITURE (audit 27 Nov 2026: "E1 · FRONT"
+            // sat half under SETTINGS). The painter writes it 10,8 in from the
+            // canvas corner, which on this page is under the top bar and, with
+            // DRAFTING TOOLS open, the left rail. Handed the corner that is
+            // actually open instead; the drawing's own fit is not moved.
+            titleAt: elevTitleAt(rails),
             selectedMark: elevSelected,
             selectColor: skin['draw-selected'],
             markScreen: true,

@@ -6263,10 +6263,17 @@ class Component extends PageLogic {
 
     // SIZE THEN WAY UP, never width-by-height: `17" × 11"` for a landscape
     // ledger read as a bug to the first draftsman who saw it (9 Nov).
+    //
+    // WITH NOTHING SELECTED IT READS THE SHEET'S SCALE, the same words as the
+    // title block (audit 27 Nov 2026: the site sheet's title block said
+    // 1" = 10' while this line said 1/4" = 1'-0", the next placement's scale,
+    // which nothing on the sheet is drawn at). An empty sheet has no scale of
+    // its own, so it still shows the one the next viewport will take.
+    const sheetScale = selectedPif == null ? this._titleblockInfo().scale : '';
     document.querySelector('[data-sheet-readout]').textContent =
       `${window.DraftTitleblock.paperOnSheet(paperKey, orientation).short}  ·  ${selectedPif != null
         ? (scaleLabelOf(selectedPif) || 'AS NOTED')
-        : SCALES[activeScale].label}`;
+        : (sheetScale || SCALES[activeScale].label)}`;
 
     this._paintProfileDialog();
     this._paintEditInModel();

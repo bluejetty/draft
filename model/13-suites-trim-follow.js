@@ -1188,14 +1188,14 @@
     // S1, S2 ... after the standard E1-E4 elevations, taking the first free
     // number rather than the count: deleting S2 of three should let the next
     // cut be S2 again rather than mint an S4 beside an existing one.
-    const used = new Set(stored.map(cut => cut.name));
-    let n = 1;
-    while (used.has(`S${n}`)) n += 1;
+    // freeSectionNames (model/05) is the same rule the rail's empty seats
+    // are labelled by, so the seat pressed and the cut made agree.
+    const [freeName] = freeSectionNames(1);
     const levelId = activeLevelId();
     const level = (drawing.levels || []).find(lvl => Number(lvl.id) === Number(levelId));
     const cut = {
       id,
-      name: `S${n}`,
+      name: freeName,
       startPt: { x: cutStart.x, z: cutStart.z },
       endPt: { x: cutEnd.x, z: cutEnd.z },
       dirVec: { x: dirVec.x, z: dirVec.z },
