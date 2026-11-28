@@ -1813,6 +1813,17 @@
             ctx.beginPath(); ctx.arc(p.x, p.y, GAP_NODE_PX, 0, Math.PI * 2); ctx.stroke();
             ctx.restore();
           });
+          // ITS CENTRE TAB (jb, 28 Nov 2026): a small filled square in the
+          // middle of its width, just inside its front -- press it to carry
+          // the piece by its centre onto a dimension's midpoint.
+          const tab = FG?.CENTRE_TAB_KINDS?.includes(item.kind) ? FG.centreTab(drawing?.walls || [], item) : null;
+          if (tab) {
+            const p = toS(tab);
+            ctx.save();
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
+            ctx.restore();
+          }
         }
         return;
       }

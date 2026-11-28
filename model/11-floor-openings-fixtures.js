@@ -1352,7 +1352,13 @@
     const all = fixtures();
     const island = fixture.kind === 'island' ? null : FG.islandHolding(all, fixture);
     const riders = fixture.kind === 'island' ? FG.islandPieces(all, fixture) : [];
+    // HELD BY ITS CENTRE TAB (jb, 28 Nov 2026): a press within a few pixels
+    // of the tab takes the piece by its middle, and the slide then puts that
+    // middle on a node -- a dimension's midpoint, to centre it in the wall.
+    const tab = FG.CENTRE_TAB_KINDS?.includes(fixture.kind) ? FG.centreTab(walls(), fixture) : null;
+    const centreGrab = !!tab && Math.hypot(at.x - tab.x, at.z - tab.z) <= CENTRE_TAB_PX / view.scale;
     return {
+      centreGrab,
       fixture, host, frame, local, grab: local(at), grabWorld: { x: at.x, z: at.z }, island,
       was: { offset: Number(fixture.offset) || 0, standoff: Number(fixture.standoff) || 0 },
       riders: riders.map(item => ({ item, offset: Number(item.offset) || 0 })),
@@ -1367,6 +1373,15 @@
   // off TOY, as every other catch.
   // `md.joint` keeps where the two meet, along the run, for the ring.
   const SIDE_SNAP_FT = 1 / 12;
+  const CENTRE_TAB_PX = 10;
+  // WHERE A PIECE HELD BY ITS CENTRE TAB CATCHES: the node under the hand --
+  // a dimension's midpoint or DIVIDE point, a wall end -- within a node's
+  // reach, SNAP lit. Its centre goes along the wall to that node.
+  const centreTabCatch = (md, raw) => {
+    if (!md.centreGrab || !snapLive() || typeof snapNodeAt !== 'function') return null;
+    const node = snapNodeAt(raw);
+    return node ? { node, along: md.local(node).along } : null;
+  };
   const sideSnap = (fixture, target, half, md = {}) => {
     md.joint = null;
     if (!snapLive()) return target;
@@ -1460,6 +1475,16 @@
     } else if (fixture.kind === 'tub' && fixture.endWallId) {
       const geo = FG.tubGeometry(walls(), fixture, md.host, frame);
       if (geo) fixture.offset = Math.min(Math.max(geo.dir * (here.along - geo.face) - geo.tubLen / 2, 0), geo.gap);
+    } else if (md.centreGrab && centreTabCatch(md, raw)) {
+      // ITS CENTRE ON THE NODE, along its wall, however far off the wall the
+      // node lies -- a dimension drawn out in the room does not pull it free.
+      const { node, along } = centreTabCatch(md, raw);
+      const isl = md.island;
+      const at = FG.slideClamp(along, half,
+        isl ? [Number(isl.offset) - Number(isl.width) / 2, Number(isl.offset) + Number(isl.width) / 2] : [0, frame.len], []);
+      if (at != null) fixture.offset = at;
+      md.joint = null;
+      md.lit = at != null && Math.abs(at - along) < 1e-6 ? { pt: { x: node.x, y: 0, z: node.z }, node: true } : null;
     } else if (Math.abs(dAcross) > PULL_FREE_FT && pullFixtureFree(md)) {
       fixtureMoveTo(md, raw);
       return;
