@@ -108,6 +108,22 @@
         display: flex; flex-wrap: wrap; gap: 3px; justify-content: center;
       }
       #embed-bar button { font-size: 11px; padding: 1px 6px; line-height: 1.4; }
+      /* THE WALKTHROUGH (walk.js, jb 28 Nov 2026). Picking where to stand:
+         a crosshair. Walking: the thumb pad, bottom left, for a tablet (a
+         mouse can push it too). */
+      #stage.walk-picking canvas { cursor: crosshair; }
+      body[data-walking="1"] #stage canvas { cursor: move; }
+      body[data-walking="1"] #help { display: none; }
+      #walk-pad {
+        position: absolute; left: 22px; bottom: 22px; z-index: 6; width: 120px; height: 120px; border-radius: 50%;
+        background: rgba(15, 42, 74, 0.28); border: 2px solid rgba(15, 42, 74, 0.55);
+        display: flex; align-items: center; justify-content: center; touch-action: none; cursor: grab;
+      }
+      #walk-knob {
+        width: 48px; height: 48px; border-radius: 50%; background: rgba(240, 180, 41, 0.92);
+        border: 2px solid #0f2a4a; pointer-events: none; transition: transform 0.05s linear;
+      }
+      body[data-embed="1"] #walk, body[data-embed="1"] #walk-pad { display: none !important; }
       /* THE NOTEPAD (jb, 28 Nov 2026: "add the blue/yello NOTEPAD tab to the
          ROUGH 3d and i could have the code in there like i do with the
          Bones"): the drafter's own pad -- the same five pages, kept under
@@ -213,6 +229,7 @@
       <button id="textures" type="button" class="lit" title="Brick joints, siding laps, battens, shake and stone on the walls (each finish can be turned off in its THICKNESS &amp; TEXTURE section)">TEXTURES</button>
       <button id="export-open" type="button" title="Save the house as a 3D file other programs open (1 bone a file)" disabled>EXPORT</button>
       <button id="print-open" type="button" title="Make the house ready for a 3D printer: scale, thickness, lift-off pieces (1 bone a file)" disabled>PRINT MODEL</button>
+      <button id="walk" type="button" title="Walk through the house at eye height: click where to stand, then W/S or the arrows walk and dragging looks round (Esc stops)" disabled>WALK</button>
       <button id="photo-open" type="button" title="Save what is on screen as a picture: PNG, JPG or WEBP (1 bone a picture)" disabled>TAKE PHOTO</button>
       <button id="projects-open" type="button" title="Your projects: upload a file and get its link" hidden>PROJECTS</button>
       <span class="chips" role="group" aria-label="Painter">
@@ -282,6 +299,7 @@
         </div>
         <p id="print-toll" data-print-toll></p>
       </section>
+      <div id="walk-pad" title="Push the knob the way to walk" hidden><div id="walk-knob"></div></div>
       <section id="photo" class="panel" role="dialog" aria-label="Take a photo" hidden>
         <h2>TAKE PHOTO</h2>
         <p class="note">A picture of what is on screen: this angle, the levels that are on, the section as it is cut. No buttons in it.</p>
@@ -399,6 +417,7 @@
     <script src="paint-canvas.js"></script>
     <script src="paint-webgl.js"></script>
     <script src="viewer.js"></script>
+    <script src="walk.js"></script>
     <script src="notepad.js"></script>
     <script src="photo-bones.js"></script>
     <script src="projects.js"></script>

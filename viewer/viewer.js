@@ -100,7 +100,14 @@
     requestAnimationFrame(() => {
       queued = false;
       if (!state.painter || !state.camera) return;
-      state.lastDrawn = state.painter.render(state.camera, LOOK);
+      // WHILE WALKING (walk.js) the plain painter draws a half-size picture,
+      // stretched to the window, and the full one once you stop.
+      let size;
+      if (state.lowRes && state.painter.kind === 'plain') {
+        const c = $('plain'), dpr = window.devicePixelRatio || 1;
+        size = { W: Math.max(1, Math.round(c.clientWidth * dpr * 0.5)), H: Math.max(1, Math.round(c.clientHeight * dpr * 0.5)) };
+      }
+      state.lastDrawn = state.painter.render(state.camera, LOOK, size);
       state.frames += 1;
       if (EMBED) toParent({ type: 'draft-viewer-camera', camera: state.camera });
       document.body.dataset.frames = String(state.frames);
@@ -252,9 +259,9 @@
     const C = window.DraftViewerCamera;
     let drag = null;
     // The EXPORT panel floats over the stage: presses on it are its own.
-    // So is the view-button bar on a sheet (?embed=1), and the NOTEPAD,
-    // its tab and the bone at the foot.
-    const onPanel = e => !!(e.target.closest && e.target.closest('.panel, #embed-bar, #pad, #pad-tab, #bone-foot'));
+    // So is the view-button bar on a sheet (?embed=1), the NOTEPAD, its
+    // tab, the bone at the foot, and the WALK thumb pad.
+    const onPanel = e => !!(e.target.closest && e.target.closest('.panel, #embed-bar, #pad, #pad-tab, #bone-foot, #walk-pad'));
     stage.addEventListener('contextmenu', e => { if (!onPanel(e)) e.preventDefault(); });
     stage.addEventListener('pointerdown', e => {
       if (!state.camera || onPanel(e)) return;

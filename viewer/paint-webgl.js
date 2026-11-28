@@ -76,6 +76,27 @@
       mat.needsUpdate = true;
     }
 
+    // THE REFLECTION FOLLOWS THE EYE (glass-reflection.js seenFrom): each
+    // glass corner's place in the picture, worked out again whenever the eye
+    // has moved. One function per pane per frame; a house has a few hundred
+    // corners of glass at most.
+    let glassCorners = [], aimedFrom = null;
+    function aimRefl(eye) {
+      const GR = window.DraftGlassReflection;
+      if (!glass || !GR || !glassReflects || !glassCorners.length) return;
+      if (aimedFrom && aimedFrom.x === eye.x && aimedFrom.y === eye.y && aimedFrom.z === eye.z) return;
+      aimedFrom = { x: eye.x, y: eye.y, z: eye.z };
+      const uv = glass.geometry.getAttribute('uv');
+      let face = null, where = null;
+      glassCorners.forEach((c, i) => {
+        if (!c) return;
+        if (c.f !== face) { face = c.f; where = GR.seenFrom(c.f.refl, c.n, c.f.pts[0], eye); }
+        const q = where(c.p);
+        uv.setXY(i, q[0] / GR.FT_W, GR.ease(q[1]) / GR.FT_H);
+      });
+      uv.needsUpdate = true;
+    }
+
     function setFaces(faces) {
       const M = window.DraftHouseMesh;
       [mesh, thin, glass, back, edges].forEach(o => { if (o) { scene.remove(o); o.geometry.dispose(); } });
@@ -85,7 +106,7 @@
         t.texMat.dispose(); t.plainMat.dispose();
       });
       textured = [];
-      const solid = { pos: [], col: [] }, sheet = { pos: [], col: [] }, clear = { pos: [], col: [], uv: [] }, edgePos = [];
+      const solid = { pos: [], col: [] }, sheet = { pos: [], col: [] }, clear = { pos: [], col: [], uv: [], refl: [] }, edgePos = [];
       const WT = window.DraftWallTypes, FT = window.DraftFinishTexture;
       const byFinish = new Map();   // id -> { pos, col, uv, tile }
       faces.forEach(f => {
@@ -114,13 +135,11 @@
           tris.forEach(t => t.forEach(i => { const p = f.pts[i]; into.pos.push(p.x, p.y, p.z); into.col.push(r, g, b); }));
           // Glass carries where it sits in the reflected scene
           // (glass-reflection.js), in feet along the wall and up from grade.
+          // Which part of it depends on the eye (a pane is a mirror), so
+          // the corners are kept and aimRefl() works them out each frame.
           if (into === clear) {
-            const R = f.refl, GR = window.DraftGlassReflection;
-            tris.forEach(t => t.forEach(i => {
-              const p = f.pts[i];
-              if (!R || !GR) { clear.uv.push(0, 0.5); return; }
-              clear.uv.push((p.x * R.ax.x + p.z * R.ax.z) / GR.FT_W, (p.y - R.grade) / GR.FT_H);
-            }));
+            const n = M.normalOf(f.pts);
+            tris.forEach(t => t.forEach(i => { clear.uv.push(0, 0.5); clear.refl.push(f.refl ? { p: f.pts[i], f, n } : null); }));
           }
         }
         for (let i = 0; i < f.pts.length; i += 1) {
@@ -148,6 +167,8 @@
         vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: window.DraftHouseMesh.GLASS_SHOW, depthWrite: false,
       }));
       glassLook(glass.material);
+      glassCorners = clear.refl;
+      aimedFrom = null;
       glass.renderOrder = 2;
       back = new THREE.Mesh(mesh.geometry.clone(), backMat);
       back.visible = false;
@@ -192,6 +213,7 @@
       if (glass && (look.textures !== false) !== glassReflects) {
         glassReflects = look.textures !== false;
         glassLook(glass.material);
+        aimedFrom = null;
       }
       if (back) {
         back.visible = !!look.section;
@@ -202,6 +224,7 @@
         t.back.visible = !!look.section;
       });
       const eye = window.DraftViewerCamera.eyeOf(cam);
+      aimRefl(eye);
       camera.fov = cam.fov;
       camera.aspect = w / Math.max(h, 1);
       camera.near = Math.max(0.1, cam.dist / 500);

@@ -13,7 +13,8 @@
 // every TILE.ftW feet along; above TILE.ftH it is sky.
 //
 // Both painters read it: the PLAIN painter per pixel (`at`), WEBGL as a
-// texture (`canvas`). Exports and PRINT MODEL never see it.
+// texture (`canvas`). Where on it a pane looks depends on the eye
+// (`seenFrom`, at the bottom). Exports and PRINT MODEL never see it.
 (function () {
   'use strict';
 
@@ -203,5 +204,40 @@
     return cv;
   }
 
-  window.DraftGlassReflection = Object.freeze({ at, canvas, make, FT_W, FT_H });
+  // ── WHAT THE PANE SHOWS FROM WHERE YOU STAND (jb, 28 Nov 2026) ───────
+  // "make it so when the user walks by the reflections will change based on
+  // his angle", and looking up "he should mostly see sky and cloud
+  // reflection". A window is a mirror: what you see in it at a point is
+  // what lies along your line of sight bounced off the glass. The picture
+  // above is taken to stand BACKDROP feet out from the wall, so the bounced
+  // ray from the eye through a point on the pane meets it at
+  //
+  //   s' = s + (s - sEye) * BACKDROP / d     h' = h + (h - hEye) * BACKDROP / d
+  //
+  // (d = the eye's distance from the glass): the mirror image of the
+  // picture, seen through the pane as through a window. Both are straight
+  // lines in s and h, so a painter can work them out at the corners and
+  // carry them across the pane like any texture. Walk along and s' slides
+  // (the trees pass in the glass); look up at a window above you and h'
+  // climbs into the sky; look down from on high and it drops to the shrubs.
+  // A pane that is not upright (none today) keeps the fixed picture.
+  const BACKDROP = 40;
+  const NEAREST = 1;   // closer than a foot, as at a foot: no blow-up at the glass
+  function seenFrom(refl, n, p0, eye) {
+    const ax = refl.ax, gr = refl.grade;
+    const sOf = p => p.x * ax.x + p.z * ax.z;
+    const len = Math.hypot(n.x, n.y, n.z) || 1;
+    if (!eye || Math.abs(n.y) / len > 0.3) return p => [sOf(p), p.y - gr];
+    const d = Math.max(NEAREST, Math.abs((n.x * (eye.x - p0.x) + n.y * (eye.y - p0.y) + n.z * (eye.z - p0.z)) / len));
+    const k = BACKDROP / d, sE = sOf(eye), hE = eye.y - gr;
+    return p => { const s = sOf(p), h = p.y - gr; return [s + (s - sE) * k, h + (h - hE) * k]; };
+  }
+  // The picture stops at FT_H, and a ray bounced steeply up would read its
+  // top row, a flat blue with no clouds in it. So the height is eased in
+  // above SKY_FROM: as the ray climbs it passes up through the clouds and
+  // only ever nears the top of the picture. Below, unchanged.
+  const SKY_FROM = 18;
+  const ease = h => (h <= SKY_FROM ? h : SKY_FROM + (FT_H - 1 - SKY_FROM) * (1 - Math.exp(-(h - SKY_FROM) / 40)));
+
+  window.DraftGlassReflection = Object.freeze({ at, canvas, make, seenFrom, ease, FT_W, FT_H, BACKDROP });
 })();
