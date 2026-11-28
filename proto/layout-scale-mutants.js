@@ -33,8 +33,8 @@ const MUTANTS = [
     find: "      const pif = parseScale(e.target.value);\n",
     with: "      const pif = null;\n",
     test: "CHANGE SCALE? under it: a list of the usual scales with this one picked, and a box for any other" },
-  { file: 'LAYOUT.html', name: "a typed scale is not named",
-    find: "  if (feet >= 1 && Math.abs(feet - Math.round(feet)) < 1e-6) return `1\" = ${Math.round(feet)}'`;\n",
+  { file: 'viewport-kit.js', name: "a typed scale is not named",
+    find: "    if (feet >= 1 && Math.abs(feet - Math.round(feet)) < 1e-6) return `1\" = ${Math.round(feet)}'`;\n",
     with: "",
     test: "CHANGE SCALE? under it: a list of the usual scales with this one picked, and a box for any other" },
 ];
