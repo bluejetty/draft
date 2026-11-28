@@ -82,7 +82,7 @@
         M.triangulate(f.pts).forEach(([i, j, k]) => {
           const a = f.pts[i], b = f.pts[j], c = f.pts[k];
           (clear ? late : tris).push({
-            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour, clear, tex,
+            a, b, c, n, twoSided: !!f.twoSided, colour: f.colour, clear, tex, refl: clear ? f.refl || null : null,
             edges: [real(i, j), real(j, k), real(k, i)],
             mid: { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3, z: (a.z + b.z + c.z) / 3 },
           });
@@ -146,12 +146,15 @@
         if (Math.abs(area) < 1e-9) continue;
         const sn = facing < 0 ? -1 : 1;
         const lam = Math.max(0, sn * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z));
-        const k = look.ambient + (1 - look.ambient) * lam;
+        // Glass shows the sky it catches, so a window on the shady side
+        // stays blue instead of going grey: it takes little of the shading.
+        const k = t.clear ? 0.85 + 0.15 * lam : look.ambient + (1 - look.ambient) * lam;
         const cut = inside ? hexRgb(look.cutColour || '#4a4744') : null;
         const r = cut ? cut[0] : Math.min(255, Math.round(t.colour[0] * k));
         const g = cut ? cut[1] : Math.min(255, Math.round(t.colour[1] * k));
         const b = cut ? cut[2] : Math.min(255, Math.round(t.colour[2] * k));
         const word = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+        const show = window.DraftHouseMesh.GLASS_SHOW, keep = 1 - show;
         const x0 = Math.max(0, Math.floor(Math.min(A.x, B.x, C.x)));
         const x1 = Math.min(W - 1, Math.ceil(Math.max(A.x, B.x, C.x)));
         const y0 = Math.max(0, Math.floor(Math.min(A.y, B.y, C.y)));
@@ -175,6 +178,16 @@
           ftPx = mz / focal / Math.max(0.25, cos);
           shadeAt = window.DraftFinishTexture.shadeAt;
         }
+        // GLASS REFLECTS (glass-reflection.js): feet along the wall and up
+        // from grade at each corner, over z, like a texture.
+        const GR = t.clear && t.refl && look.textures !== false ? window.DraftGlassReflection : null;
+        if (GR) {
+          const ax = t.refl.ax, gr = t.refl.grade;
+          const sOf = p => p.x * ax.x + p.z * ax.z;
+          sA = sOf(t.a) * A.iz; sB = sOf(t.b) * B.iz; sC = sOf(t.c) * C.iz;
+          yA = (t.a.y - gr) * A.iz; yB = (t.b.y - gr) * B.iz; yC = (t.c.y - gr) * C.iz;
+        }
+        const rf = window.DraftHouseMesh.GLASS_REFLECT, rk = 1 - rf;
         // Barycentric weights from the edge functions, stepped a pixel at a time.
         const e0dx = (B.y - C.y) * inv, e0dy = (C.x - B.x) * inv;
         const e1dx = (C.y - A.y) * inv, e1dy = (A.x - C.x) * inv;
@@ -196,12 +209,20 @@
                   depth[idx] = iz;
                   pix[idx] = ((255 << 24) | (Math.min(255, b * q) << 16) | (Math.min(255, g * q) << 8) | Math.min(255, r * q)) >>> 0;
                 } else if (!t.clear) { depth[idx] = iz; pix[idx] = word; } else {
-                  // SEE-THROUGH: a third glass over what is behind it, and
-                  // no depth kept, so the room beyond still shows.
+                  // SEE-THROUGH: half sky-blue glass over what is behind
+                  // it (GLASS_SHOW), and no depth kept, so the room beyond
+                  // still shows.
                   const v = pix[idx];
-                  const rr = Math.round((v & 255) * 0.65 + r * 0.35);
-                  const gg = Math.round(((v >>> 8) & 255) * 0.65 + g * 0.35);
-                  const bl = Math.round(((v >>> 16) & 255) * 0.65 + b * 0.35);
+                  let gr = r, gg0 = g, gb = b;
+                  if (GR) {
+                    const q = GR.at((w0 * sA + w1 * sB + w2 * sC) / iz, (w0 * yA + w1 * yB + w2 * yC) / iz);
+                    gr = r * rk + Math.min(255, q[0] * k) * rf;
+                    gg0 = g * rk + Math.min(255, q[1] * k) * rf;
+                    gb = b * rk + Math.min(255, q[2] * k) * rf;
+                  }
+                  const rr = Math.round((v & 255) * keep + gr * show);
+                  const gg = Math.round(((v >>> 8) & 255) * keep + gg0 * show);
+                  const bl = Math.round(((v >>> 16) & 255) * keep + gb * show);
                   pix[idx] = ((255 << 24) | (bl << 16) | (gg << 8) | rr) >>> 0;
                 }
               }

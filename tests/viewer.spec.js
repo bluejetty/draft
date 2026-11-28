@@ -927,3 +927,30 @@ test('glass is see-through on the plain painter', async ({ page: p }) => {
   // ... and it is nearer what is behind than a solid pane would be.
   expect(dist(shares.glass, shares.open)).toBeLessThan(dist(shares.open, shares.pane));
 });
+
+// GLASS REFLECTS (jb, 28 Nov 2026): a faint sky and clouds up high, trees
+// low down, drawn (no photo) and laid on the panes in feet from grade.
+test('glass reflects trees low down and sky up high, faintly', async ({ page: p }) => {
+  const run = await openViewer(p, 'plain');
+  const saved = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+  const r = await p.evaluate(s => {
+    DraftViewer.loadDrawing(s, 'test');
+    const G = DraftGlassReflection;
+    const avg = h => {
+      const sum = [0, 0, 0];
+      for (let s2 = 0; s2 < G.FT_W; s2 += 0.5) G.at(s2, h).forEach((v, i) => { sum[i] += v; });
+      return sum.map(v => v / (G.FT_W * 2));
+    };
+    const panes = DraftViewer.state.faces.filter(f => f.kind === 'glass');
+    return { low: avg(3), high: avg(36), panes: panes.length, marked: panes.filter(f => f.refl && f.refl.ax).length,
+      reflect: DraftHouseMesh.GLASS_REFLECT };
+  }, saved);
+  // Low down mostly leaves: more green than blue; up high, sky: blue leads.
+  expect(r.low[1]).toBeGreaterThan(r.low[2]);
+  expect(r.high[2]).toBeGreaterThan(r.high[1]);
+  expect(r.marked).toBe(r.panes);
+  // Faint: never more than half the pane.
+  expect(r.reflect).toBeGreaterThan(0);
+  expect(r.reflect).toBeLessThanOrEqual(0.5);
+  expect(run.errors).toEqual([]);
+});
