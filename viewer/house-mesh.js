@@ -1560,9 +1560,14 @@
       });
       // The fascia board: the surface along the edge, hung down by its depth.
       surfaceAlong(roof, list, eave, a, b, inward, G, null, alsoLists).forEach(whole => {
+        // The board shows wherever its top stands above the other roof, and
+        // ends there with a plumb cut, full depth, its foot tucked behind
+        // the other roof (jb, 28 Nov 2026: "should be cut VERT at the lower
+        // roof peak"), not sliced along the other roof's slope.
         const st = whole.map(s => ({ t: s.t, top: s.y, foot: Math.max(s.y - fasciaFt, otherTopAt(a, b, s.t, 0)) }));
         openPieces(st).forEach(run => {
-          slab(tidyRing(ringOf(run), len).map(q => at(q.t, q.y)), inward, FASCIA_THICK_FT, 'fascia', fasciaColour, out);
+          const board = run.map(s => ({ t: s.t, top: s.top, foot: s.top - fasciaFt }));
+          slab(tidyRing(ringOf(board), len).map(q => at(q.t, q.y)), inward, FASCIA_THICK_FT, 'fascia', fasciaColour, out);
           counts.fascia = (counts.fascia || 0) + 1;
         });
       });

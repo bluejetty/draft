@@ -275,6 +275,11 @@ test('a lower wing running into a gable leaves no hole: the gable comes down ont
     };
     return {
       gables: gable.length, gableFront: Math.max(...zs(gable)), rakeFront: Math.max(...zs(rake)),
+      // The rake board's end at the wing's ridge: its top and bottom there.
+      rakeEnd: (() => {
+        const ys = rake.flatMap(f => f.pts).filter(q => Math.abs(q.z - Math.max(...zs(rake))) < 1e-3).map(q => q.y);
+        return { top: Math.max(...ys), low: Math.min(...ys) };
+      })(),
       foot: [-7, -9.75, -12, -16].map(footAt),
       eave: Math.min(...s.faces.filter(f => f.kind === 'roof').flatMap(f => f.pts.map(q => q.y))),
     };
@@ -283,6 +288,9 @@ test('a lower wing running into a gable leaves no hole: the gable comes down ont
   // Wall and rake both start right at the wing's ridge, not a foot behind it.
   expect(r.gableFront).toBeCloseTo(-6.5, 2);
   expect(r.rakeFront).toBeCloseTo(-6.5, 2);
+  // jb: the board's end is cut plumb at the lower peak, full depth (5 1/2"),
+  // its foot tucked behind the wing -- not sliced along the wing's slope.
+  expect(r.rakeEnd.top - r.rakeEnd.low).toBeCloseTo(5.5 / 12, 2);
   // The foot rides the wing's back slope (8/12, an inch under it) ...
   const slope = 8 / 12;
   expect(r.foot[0] - r.eave).toBeCloseTo((13 - 7) * slope - 1 / 12, 2);
