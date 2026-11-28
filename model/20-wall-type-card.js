@@ -69,7 +69,6 @@
   };
 
   // ── the drawing's list ──────────────────────────────────────────────────
-  const drawingWallTypes = () => window.DraftWallTypes.userWallTypesOf(drawing);
   const putDrawingWallType = type => {
     const WT = window.DraftWallTypes;
     const list = (Array.isArray(drawing.wallTypes) ? drawing.wallTypes : []).filter(t => t?.id !== type.id);

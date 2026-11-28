@@ -749,4 +749,3 @@
     if (e.target === canvas) { e.stopPropagation(); e.preventDefault(); }
   }, true);
   window.addEventListener('keydown', e => { if (e.key === 'Escape' && !lineMenu.hidden) { closeLineMenu(); e.stopPropagation(); } }, true);
-  const lineMenuOpen = () => !lineMenu.hidden;

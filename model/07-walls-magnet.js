@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 7 of 17: moving a corner and a wall, the room corner card, the magnet, the ordered garage.
+// MODEL.html's page script, part 7 of 22: moving a corner and a wall, the room corner card, the magnet, the ordered garage.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

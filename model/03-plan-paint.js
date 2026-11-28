@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 3 of 17: which way is out, the rising reveal, the bones, a garage's doors, the rail's pair, the foot bar.
+// MODEL.html's page script, part 3 of 22: which way is out, the rising reveal, the bones, a garage's doors, the rail's pair, the foot bar.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

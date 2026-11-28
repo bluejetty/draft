@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 1 of 17: the skin, zoom and pan, world to screen, the boneyard's state, the photo, a room tag's shape, ZOOM TO FILL, what holds a floor up.
+// MODEL.html's page script, part 1 of 22: the skin, zoom and pan, world to screen, the boneyard's state, the photo, a room tag's shape, ZOOM TO FILL, what holds a floor up.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

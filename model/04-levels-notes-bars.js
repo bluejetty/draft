@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 4 of 17: the level and view switchers, the NOTES pad, the left rail's facts, the build bar, GRUFF's sign, the bone's second press.
+// MODEL.html's page script, part 4 of 22: the level and view switchers, the NOTES pad, the left rail's facts, the build bar, GRUFF's sign, the bone's second press.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut
@@ -738,7 +738,6 @@
     const onLevel = found.find(copy => Number(copy.levelId) === activeLevelId());
     return onLevel ? [onLevel, ...found.filter(copy => copy !== onLevel)] : found;
   };
-  const turtleLiveLines = rec => (turtleKindOf(rec?.kind) === 'lines' ? turtleLiveItems(rec) : []);
   // WHERE THE PATH STANDS: its first corner as it lies now, so a path moved
   // whole on the sheet regenerates where it was moved to.
   const turtleStartOf = (rec, live) => {

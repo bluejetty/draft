@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 9 of 17: the draw gesture, ROTATE / FLIP, RESCALE, WALL OFF, the selection move, STRETCH, BREAK ROOF, TOY's grain.
+// MODEL.html's page script, part 9 of 22: the draw gesture, ROTATE / FLIP, RESCALE, WALL OFF, the selection move, STRETCH, BREAK ROOF, TOY's grain.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

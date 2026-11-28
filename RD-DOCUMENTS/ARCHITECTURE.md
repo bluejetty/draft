@@ -75,8 +75,7 @@ reduce the MODEL.html size in a nice organized way"). The parts are plain
 `<script src>` files loaded in order, and **they share one name space**: a
 function declared in part 3 is visible in part 15. That makes a duplicate
 name anywhere a page-breaking bug, so `proto/model-parts-harness.js` checks
-for it. (Parts 1 to 17 still say "part N of 17" in their header; there are
-22.)
+for it.
 
 | Part | Holds |
 | --- | --- |

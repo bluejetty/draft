@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 5 of 17: the per-tool properties slot, a shelf saved as a suite, the view rail.
+// MODEL.html's page script, part 5 of 22: the per-tool properties slot, a shelf saved as a suite, the view rail.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut
@@ -1301,7 +1301,6 @@
     if (out.suiteKind === undefined) delete out.suiteKind;
     return out;
   };
-  const shelfKindLabel = kind => (window.DraftDrawingFormat.suiteKind(kind) ? suiteLabel(kind) : 'HOLOGRAM');
   const shelfSuiteAsk = document.getElementById('shelf-suite');
   // WHICH SHELF THE QUESTION IS ABOUT, and what follows the file being
   // written: the shelf the drafter stands on, with nothing after, from the

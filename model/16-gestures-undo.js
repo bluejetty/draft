@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 16 of 17: pan and zoom, the SHIFT tap, half-finished gestures, a note's words, UNDO / REDO.
+// MODEL.html's page script, part 16 of 22: pan and zoom, the SHIFT tap, half-finished gestures, a note's words, UNDO / REDO.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

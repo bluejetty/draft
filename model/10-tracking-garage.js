@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 10 of 17: hovered nodes, the tracking rays, the attached garage, CONNECT AT CORNER, the house off the trace, the lot.
+// MODEL.html's page script, part 10 of 22: hovered nodes, the tracking rays, the attached garage, CONNECT AT CORNER, the house off the trace, the lot.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut
@@ -173,31 +173,6 @@
   // choose from, not a bone pre-chopped into forty segments: "same result, one
   // decision at a time".
   //
-  // THE MARK IS A DISTANCE ALONG THE RUN, NOT A ROUNDED COORDINATE, and that
-  // is the rule I broke once already tonight. TOY rounds a run's LENGTH
-  // (model-toy-board.spec.js:333), so a bone whose start sits at x = -10.4 has
-  // its marks at -9.4, -8.4, ... Rounding the clicked point's x would put the
-  // break at a whole number that is not a mark on this bone at all -- whole
-  // POSITIONS and a fractional LENGTH, which is exactly backwards.
-  const breakMarkOn = (wall, at) => {
-    const rx = wall.end.x - wall.start.x, rz = wall.end.z - wall.start.z;
-    const run = Math.hypot(rx, rz);
-    if (run < 2) return null;              // no interior mark to break at
-    const along = ((at.x - wall.start.x) * rx + (at.z - wall.start.z) * rz) / run;
-    // CLAMPED OFF BOTH ENDS. A break AT a corner is not a break -- it would
-    // make a zero-length half, and the format drops anything under 1e-6 on
-    // load, so it would be a wall that vanishes on the next reload.
-    // CLAMPED OFF BOTH ENDS, and the clamp IS the guard. A `feet <= 0 || feet
-    // >= run` line sat here too and the gate showed it surviving: the clamp
-    // already pins feet to [1, floor(run) - 1], so nothing could ever reach
-    // it. A guard nothing can exercise is a claim about a case that does not
-    // exist -- the same dead-guard shape as the already-angled skip in
-    // wouldAngle, removed on the same evidence.
-    const feet = Math.min(Math.max(Math.round(along), 1), Math.floor(run) - 1 || 1);
-    return { x: wall.start.x + (rx / run) * feet, y: 0,
-      z: wall.start.z + (rz / run) * feet };
-  };
-
   // The bone gains the point BETWEEN the two corners it lies between, never
   // appended: an outline is an ordered ring, so a point on the end is a
   // different shape, not the same shape with a joint in it.

@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 17 of 17: boot, the write tier, slivers, notes as text, NEW, an order from PROJECT, the hide-save, the converter's hand-off.
+// MODEL.html's page script, part 17 of 22: boot, the write tier, slivers, notes as text, NEW, an order from PROJECT, the hide-save, the converter's hand-off.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

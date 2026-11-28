@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 15 of 17: the FIXTURE panel, WALL / FLOOR / LINE properties, GABLE END, fixture properties and OBJ / PROP, the ROOF panel, hand DIMENSIONS, the BEAM panel, AUTO PILES.
+// MODEL.html's page script, part 15 of 22: the FIXTURE panel, WALL / FLOOR / LINE properties, GABLE END, fixture properties and OBJ / PROP, the ROOF panel, hand DIMENSIONS, the BEAM panel, AUTO PILES.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut
