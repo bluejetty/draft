@@ -691,6 +691,9 @@ test.describe('MODEL.html tier 1', () => {
       // The DETAILS tab on a house (jb, 20 Nov): a library loaded into the
       // house's own file, searched, put on sheets, edited and fed snapshots.
       './model/22-details-strip.js',
+      // SAVE ONLINE / OPEN ONLINE (jb, 28 Nov): the drawing to the house's
+      // online folder, shown only while 3DBONES is on the NOTES pad.
+      './model/23-save-online.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT

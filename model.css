@@ -2176,3 +2176,39 @@
   #details-panel .ds-look-presses { display:flex; gap:6px; }
   #details-panel .ds-look-presses .ds-btn { flex:1; padding:5px 6px; font-size:9px; }
   .dl-back-house { margin:0 6px 4px; align-self:flex-start; border-color: var(--accent); color: var(--accent); }
+
+  /* SAVE ONLINE / OPEN ONLINE (model/23-save-online.js, jb 28 Nov 2026):
+     shown only while 3DBONES is on the NOTES pad. The card wears the same
+     shell as SAVE AS. */
+  #save-online { position:fixed; inset:0; z-index:7; display:flex;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,0.35); }
+  #save-online[hidden] { display:none; }
+  #save-online, #save-online * { box-sizing:border-box; }
+  #save-online .promote-card { max-width:440px; width:100%; }
+  #save-online [hidden] { display:none !important; }
+  #save-online input[type=text], #save-online input[type=password] { width:100%; margin:0 0 10px;
+    padding:7px 9px; border-radius:3px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    font-family: var(--font-mono); font-size:13px; }
+  #save-online input:focus { border-color: var(--accent); outline:none; }
+  #save-online .online-small { font-size:11px; line-height:1.4; color: var(--ink-quiet); margin:0 0 8px; }
+  #save-online .online-small b { color: var(--ink-primary); word-break:break-all; }
+  #save-online .online-said { font-size:12px; margin:8px 0 4px; min-height:1em; }
+  #save-online [data-kind="error"] { color: var(--ink-warn); }
+  #save-online .online-list { width:100%; border-collapse:collapse; margin:0 0 10px; font-size:12px; }
+  #save-online .online-list td { padding:5px 4px; border-bottom:1px solid var(--edge-panel); }
+  #save-online .online-list td.when { color: var(--ink-quiet); font-size:11px; }
+  #save-online .online-list td:last-child { text-align:right; }
+  #save-online .online-forget button { background:none; border:none; padding:0; color: var(--ink-quiet);
+    text-decoration:underline; cursor:pointer; font-size:11px; }
+  #save-online .online-modes { display:flex; gap:6px; margin:0 0 12px; }
+  #save-online .online-modes button { flex:1; padding:6px 8px; font-size:11px; font-weight:600; letter-spacing:0.06em;
+    border:1px solid var(--edge-panel); border-radius:4px; background: var(--surface-chip); color: var(--ink-quiet); cursor:pointer; }
+  #save-online .online-modes button[aria-selected="true"] { border-color: var(--accent); color: var(--ink-primary); }
+  #save-online .online-modes button:disabled { opacity:0.45; cursor:default; }
+  #save-online .online-remember { display:flex; align-items:center; gap:6px; margin:0 0 12px; }
+  #save-online .online-list button, #save-online [data-online-done] button { padding:4px 10px; font-size:10px; font-weight:600;
+    letter-spacing:0.06em; border:1px solid var(--edge-panel); border-radius:4px; background: var(--surface-chip);
+    color: var(--ink-primary); cursor:pointer; }
+  #save-online .online-list button:hover, #save-online [data-online-done] button:hover { border-color: var(--accent); }

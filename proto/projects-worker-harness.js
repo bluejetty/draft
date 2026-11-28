@@ -4,7 +4,8 @@
 // its rules are checked before they go live: anyone may read a project,
 // only the password may write, list or delete, names are cleaned the same
 // way the viewer cleans them, and only a .draft or a SAVE AS ZIP up to 25 MB
-// is taken.
+// is taken. Each house is a folder (jb, 28 Nov 2026): the drawing plus
+// files for the customer to download, which only the password can add.
 //
 // Run: node proto/projects-worker-harness.js
 require('./harness-args.js').noFlags();
@@ -32,7 +33,13 @@ function fakeBucket() {
     async put(key, bytes, opts) {
       items.set(key, { bytes: new Uint8Array(bytes), httpMetadata: opts.httpMetadata, customMetadata: opts.customMetadata });
     },
-    async delete(key) { items.delete(key); },
+    async head(key) {
+      const it = items.get(key);
+      if (!it) return null;
+      return { httpMetadata: it.httpMetadata, customMetadata: it.customMetadata, size: it.bytes.length, uploaded: new Date() };
+    },
+    // R2 takes one key or a list of up to 1000.
+    async delete(keys) { [].concat(keys).forEach(k => items.delete(k)); },
     async list({ prefix }) {
       const objects = [...items.entries()].filter(([k]) => k.startsWith(prefix))
         .map(([key, it]) => ({ key, size: it.bytes.length, customMetadata: it.customMetadata, uploaded: new Date() }));
@@ -108,6 +115,39 @@ function fakeBucket() {
   check('the password deletes it', r.status, 200);
   r = await call('GET', '/p/timberhouse');
   check('and it is gone', r.status, 404);
+
+  // ── A FOLDER FOR EACH HOUSE ──────────────────────────────────────────
+  check('a drawing sits in its folder', [...env.PROJECTS.items.keys()].sort(), ['projects/smith-house/drawing']);
+  // A project uploaded before folders, one loose file.
+  await env.PROJECTS.put('projects/oldhouse', new TextEncoder().encode(DRAFT),
+    { httpMetadata: { contentType: 'application/json' }, customMetadata: { fileName: 'OLD.draft' } });
+  r = await call('GET', '/p/oldhouse');
+  check('a project from before folders still opens', Buffer.from(r.data).toString(), DRAFT);
+  r = await call('PUT', '/p/oldhouse', { pw: 'hunter2-long', body: JSON.stringify({ version: 3 }) });
+  check('its next save moves it into a folder',
+    [...env.PROJECTS.items.keys()].filter(k => k.includes('oldhouse')), ['projects/oldhouse/drawing']);
+
+  r = await call('PUT', '/f/smith-house/PLANS SET.zip', { body: zip });
+  check('a customer cannot put a file in the folder', r.status, 401);
+  r = await call('PUT', '/f/smith-house/PLANS SET.zip', { pw: 'hunter2-long', body: zip });
+  check('the password puts a zip in the folder', [r.status, r.data.fileName], [200, 'PLANS SET.zip']);
+  r = await call('PUT', '/f/smith-house/notes.pdf', { pw: 'hunter2-long', body: '%PDF-1.4' });
+  r = await call('GET', '/f/SMITH-HOUSE', { origin: 'https://somewhere-else.example' });
+  check('anyone with the link sees the folder', [r.status, r.data.drawing.fileName, r.data.files.map(f => f.fileName)],
+    [200, 'smith-house.draft', ['notes.pdf', 'PLANS SET.zip']]);
+  r = await call('GET', '/f/smith-house/PLANS%20SET.zip');
+  check('and downloads a file from it', [r.status, r.res.headers.get('Content-Disposition')],
+    [200, 'attachment; filename="PLANS SET.zip"']);
+  r = await call('DELETE', '/f/smith-house/notes.pdf');
+  check('a customer cannot remove a file', r.status, 401);
+  r = await call('GET', '/f/nobody');
+  check('an empty folder name: 404', r.status, 404);
+  r = await call('GET', '/list', { pw: 'hunter2-long' });
+  check('the list counts each folder\'s files',
+    r.data.projects.filter(p => p.name === 'smith-house').map(p => [p.fileName, p.files]), [['smith-house.draft', 2]]);
+  r = await call('DELETE', '/p/smith-house', { pw: 'hunter2-long' });
+  check('deleting a project empties its whole folder',
+    [...env.PROJECTS.items.keys()].filter(k => k.includes('smith-house')), []);
 
   r = await call('OPTIONS', '/list', { origin: 'https://ruffdrafter.com' });
   check('ruffdrafter.com may ask', r.res.headers.get('Access-Control-Allow-Origin'), 'https://ruffdrafter.com');

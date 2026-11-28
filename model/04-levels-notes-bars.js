@@ -227,6 +227,9 @@
       else localStorage.removeItem(NOTES_PAGES_KEY);
       localStorage.setItem(NOTES_PAGE_KEY, String(notesPage));
     } catch { /* private window: the .draft still carries them */ }
+    // A code typed on the pad (3DBONES) shows SAVE ONLINE / OPEN ONLINE
+    // (model/23-save-online.js), the same event the viewer's pad sends.
+    window.dispatchEvent(new Event('draft-pad-changed'));
   };
   const syncNotesCount = () => {
     const used = notesText.value.length;
