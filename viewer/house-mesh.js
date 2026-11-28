@@ -37,7 +37,10 @@
     roof: [96, 92, 90],
     gable: [226, 220, 205],
     fascia: [238, 236, 228],
-    glass: [168, 212, 240],   // light blue, and see-through on screen
+    // Sky-blue, like a window catching the sky: jb 28 Nov, the old pale
+    // [168,212,240] at a third read as no glass at all. GLASS_SHOW says how
+    // much of it covers what is behind (both painters use it).
+    glass: [118, 168, 212],
     door: [150, 106, 72],
     overhead: [232, 232, 226],
     deck: [176, 150, 116],
@@ -1590,5 +1593,6 @@
     return tris;
   }
 
-  window.DraftHouseMesh = Object.freeze({ build, normalOf, triangulate, COLOURS, wallFootprint, wallFrame });
+  const GLASS_SHOW = 0.5;
+  window.DraftHouseMesh = Object.freeze({ build, normalOf, triangulate, COLOURS, GLASS_SHOW, wallFootprint, wallFrame });
 })();

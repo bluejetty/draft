@@ -118,12 +118,15 @@
         if (Math.abs(area) < 1e-9) continue;
         const sn = facing < 0 ? -1 : 1;
         const lam = Math.max(0, sn * (n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z));
-        const k = look.ambient + (1 - look.ambient) * lam;
+        // Glass shows the sky it catches, so a window on the shady side
+        // stays blue instead of going grey: it takes little of the shading.
+        const k = t.clear ? 0.85 + 0.15 * lam : look.ambient + (1 - look.ambient) * lam;
         const cut = inside ? hexRgb(look.cutColour || '#4a4744') : null;
         const r = cut ? cut[0] : Math.min(255, Math.round(t.colour[0] * k));
         const g = cut ? cut[1] : Math.min(255, Math.round(t.colour[1] * k));
         const b = cut ? cut[2] : Math.min(255, Math.round(t.colour[2] * k));
         const word = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+        const show = window.DraftHouseMesh.GLASS_SHOW, keep = 1 - show;
         const x0 = Math.max(0, Math.floor(Math.min(A.x, B.x, C.x)));
         const x1 = Math.min(W - 1, Math.ceil(Math.max(A.x, B.x, C.x)));
         const y0 = Math.max(0, Math.floor(Math.min(A.y, B.y, C.y)));
@@ -168,12 +171,13 @@
                   depth[idx] = iz;
                   pix[idx] = ((255 << 24) | (Math.min(255, b * q) << 16) | (Math.min(255, g * q) << 8) | Math.min(255, r * q)) >>> 0;
                 } else if (!t.clear) { depth[idx] = iz; pix[idx] = word; } else {
-                  // SEE-THROUGH: a third glass over what is behind it, and
-                  // no depth kept, so the room beyond still shows.
+                  // SEE-THROUGH: half sky-blue glass over what is behind
+                  // it (GLASS_SHOW), and no depth kept, so the room beyond
+                  // still shows.
                   const v = pix[idx];
-                  const rr = Math.round((v & 255) * 0.65 + r * 0.35);
-                  const gg = Math.round(((v >>> 8) & 255) * 0.65 + g * 0.35);
-                  const bl = Math.round(((v >>> 16) & 255) * 0.65 + b * 0.35);
+                  const rr = Math.round((v & 255) * keep + r * show);
+                  const gg = Math.round(((v >>> 8) & 255) * keep + g * show);
+                  const bl = Math.round(((v >>> 16) & 255) * keep + b * show);
                   pix[idx] = ((255 << 24) | (bl << 16) | (gg << 8) | rr) >>> 0;
                 }
               }

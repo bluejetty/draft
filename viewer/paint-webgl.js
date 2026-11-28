@@ -99,8 +99,10 @@
       };
       mesh = new THREE.Mesh(geoOf(solid), lambert(THREE.FrontSide));
       thin = new THREE.Mesh(geoOf(sheet), lambert(THREE.DoubleSide));
-      glass = new THREE.Mesh(geoOf(clear), new THREE.MeshLambertMaterial({
-        vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.35, depthWrite: false,
+      // Glass shows the sky it catches, so it is not shaded like a wall: a
+      // window on the shady side stays blue instead of going grey.
+      glass = new THREE.Mesh(geoOf(clear), new THREE.MeshBasicMaterial({ color: 0xe0e0e0,
+        vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: window.DraftHouseMesh.GLASS_SHOW, depthWrite: false,
       }));
       glass.renderOrder = 2;
       back = new THREE.Mesh(mesh.geometry.clone(), backMat);
