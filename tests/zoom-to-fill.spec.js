@@ -25,12 +25,7 @@ const drawing = (walls = HOUSE, dimensions = []) => ({ version: 1, board: 'draft
   activeLevelIdx: 2, ...EMPTY, walls, dimensions, nextDrawingItemId: 40 });
 
 async function open(page, f = drawing()) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f });
-  await page.goto('/MODEL.html?level=3&right=1&left=1');
+  await h.openEditor(page, { drawing: f, bucket: BUCKET, url: '/MODEL.html?level=3&right=1&left=1', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('#strip-fill')).toBeVisible();
 }

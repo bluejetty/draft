@@ -29,12 +29,7 @@ const drawing = () => ({ version: 1, board: 'drafting', planTurn: 0, levels: LEV
   nextBoneyardShelfId: 3, activeBoneyardShelfId: 1, nextDrawingItemId: 60 });
 
 async function open(page, url = '/MODEL.html?level=3&right=1') {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto(url);
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: url, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   if (await page.locator('#shelf-previews').isHidden()) await page.locator('#shelf-tab').click();
   await expect(page.locator('.shelf-preview')).toHaveCount(2);

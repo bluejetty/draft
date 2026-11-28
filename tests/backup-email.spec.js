@@ -33,12 +33,7 @@ async function openModel(page) {
     window.showSaveFilePicker = async opts => ({ kind: 'file', name: opts.suggestedName,
       createWritable: async () => ({ write: async () => {}, close: async () => {} }) });
   });
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 const sent = [];
@@ -130,12 +125,7 @@ test('a big file goes zipped, in numbered parts each under the limit', async ({ 
 });
 
 test('after LAYOUT\'s SAVE AS too, and after PRINT the saved PDF is picked to send', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing() });
-  await page.goto('/LAYOUT.html');
+  await h.openEditor(page, { drawing: drawing(), bucket: BUCKET, url: '/LAYOUT.html', webgl: false });
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await standInWorker(page);
   await bones(page, 6);

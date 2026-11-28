@@ -19,12 +19,7 @@ const REPRO = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'repro-garage-house.draft'), 'utf8'));
 
 async function openPage(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO });
-  await page.goto('/MODEL.html?mode=night');
+  await h.openEditor(page, { drawing: REPRO, bucket: BUCKET, url: '/MODEL.html?mode=night', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

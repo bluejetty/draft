@@ -45,12 +45,7 @@ const drawing = (estimates = undefined) => ({
 async function open(page, d = drawing()) {
   page.__errors = [];
   page.on('pageerror', err => page.__errors.push(String(err)));
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: d });
-  await page.goto('/ESTIMATES.html');
+  await h.openEditor(page, { drawing: d, bucket: BUCKET, url: '/ESTIMATES.html', webgl: false });
   await expect(page.locator('[data-section="9-A"]')).toBeVisible();
 }
 test.afterEach(async ({ page }) => { expect(page.__errors || [], 'no page errors').toEqual([]); });

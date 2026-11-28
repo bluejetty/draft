@@ -8,7 +8,11 @@ const { expect } = require('@playwright/test');
 const HALF_HEIGHT_FT = 25;          // default ortho half-height in _init()
 const STORAGE_BUCKET = 'model-drawing';
 
-async function openModel(page, {
+// THE SETUP EVERY SPEC SHARES, whichever page it opens: storage wiped once per
+// test, the fat wallet, the lights and device answers, the parked features,
+// the pinned starter house. Init scripts only, so it runs on the NEXT
+// navigation -- openModel and openEditor below each make one.
+async function prepareTestPage(page, {
   webgl = true, rails = true, boneWallet = true, boneReveal = false, autoStairs = false,
   autoWindows = false, entryCoach = false, search = '',
   // PARKED FEATURES, opt IN (Movie, 2 Sep). The tour escort and the entry
@@ -184,14 +188,54 @@ async function openModel(page, {
       };
     });
   }
-  // `search` opens the page with a query string. TOY MODE's temporary door is
-  // a query flag until the real mode switch lands (turtle path step 5), so a
-  // spec that needs it asks for it here rather than navigating by hand and
-  // losing every init script above.
+}
+
+// THE OLD PAGE (MODEL.dc.html). Linked from nowhere since MODEL.html took
+// over; specs still on it are being moved to openEditor below.
+async function openModel(page, opts = {}) {
+  const { search = '', rails = true } = opts;
+  await prepareTestPage(page, opts);
+  // `search` opens the page with a query string, so a spec that needs one
+  // asks for it here rather than navigating by hand and losing every init
+  // script above.
   await page.goto(`/MODEL.dc.html${search}`);
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await waitForModelReady(page, { rails });
   return page.locator('[data-model-canvas]');
+}
+
+// THE STORE, FROM A PAGE THAT IS NOT AN APP. Saving a drawing needs
+// shared-file-store.js on this origin, and every app page boots (and may
+// save) the moment it loads. robots.txt is same-origin and runs nothing, so
+// the store is injected there, the drawing filed, and only then does the
+// app open -- reading exactly what the spec seeded. The first navigation is
+// also the one the wipe-once init script runs on, so the wipe lands before
+// the save, never after it.
+async function seedDrawing(page, drawing, bucket = STORAGE_BUCKET) {
+  await page.goto('/robots.txt');
+  await page.addScriptTag({ url: '/shared-file-store.js' });
+  await page.evaluate(async ({ b, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), b);
+  }, { b: bucket, f: drawing });
+}
+
+// MODEL.html, STRAIGHT IN. The same setup openModel gives (every option it
+// takes is honoured), then -- with `drawing` -- the file seeded before the
+// editor ever loads, then `url`. No trip through the old page.
+//
+// It waits for the readout's words, which MODEL.html writes once the drawing
+// is read (the readout itself can be hidden, so visibility is no signal); a
+// spec that needs more (a level, a pane) waits for that itself.
+async function openEditor(page, { drawing = null, url = '/MODEL.html', bucket = STORAGE_BUCKET, ...opts } = {}) {
+  await prepareTestPage(page, opts);
+  if (drawing) await seedDrawing(page, drawing, bucket);
+  await page.goto(url);
+  // Only MODEL.html has the readout; any other page (LAYOUT, BONEYARD) is
+  // left to the spec to wait for in its own way.
+  if (/^\/MODEL\.html(\?|$)/.test(url)) {
+    await expect(page.locator('#readout')).toContainText(/\S/, { timeout: 10000 });
+  }
 }
 
 // Pulls out any still-hidden side rail by its edge tab (TOOLS / LEVELS).
@@ -792,6 +836,9 @@ module.exports = {
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
   openModel,
+  openEditor,
+  prepareTestPage,
+  seedDrawing,
   openRails,
   openModelRail,
   pickModelLevel,

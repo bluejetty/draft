@@ -34,12 +34,7 @@ const HOUSE = [[0, 0], [-6, 0], [-6, -12], [0, -12], [-19, -12], [-19, -20], [-3
 const GARAGE = [[0, 0], [0, -1], [6, -1], [6, 21], [-20, 21], [-20, 0]];
 
 async function traceModBilevel(page) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
-  await page.goto('/MODEL.html');
+  await h.openEditor(page, { drawing: empty(), bucket: BUCKET, url: '/MODEL.html', webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bilevel"]').click();

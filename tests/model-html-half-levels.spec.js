@@ -21,12 +21,7 @@ const SPLIT = {
 };
 
 async function load(page, drawing, level) {
-  await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, f }) => {
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: drawing });
-  await page.goto(`/MODEL.html?level=${level}`);
+  await h.openEditor(page, { drawing: drawing, bucket: BUCKET, url: `/MODEL.html?level=${level}`, webgl: false });
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(400);
 }
