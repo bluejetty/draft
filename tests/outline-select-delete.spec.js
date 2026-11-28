@@ -1,83 +1,67 @@
-// Select can pick a whole outline by clicking one of its dashed edges (or a
-// bare corner). Delete then follows the red/blue scope language: deleting on
-// a level removes only that level's copy; deleting the BONEYARD master takes
-// every level copy with it. An outline carrying BUILD HOUSE geometry refuses.
+// Select picks a whole outline by clicking one of its dashed edges, and
+// Delete on a level takes off only that level's copy: the BONEYARD master
+// and the other floors' copies stay. Escape clears the pick first, so a
+// Delete after it removes nothing.
+//
+// Moved from the old page (MODEL.dc.html) to MODEL.html, 28 Nov 2026. The
+// old page's master delete and its "carries built geometry" refusal were
+// old-page only and went with it.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-async function drawOutline(page, points) {
-  await h.selectTool(page, 'Outline');
-  for (const [x, z] of points) await h.clickWorld(page, x, z);
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
+const MASTER = {
+  id: 'master-1', shelfId: 1,
+  points: [{ id: 'p1', x: -8, z: -6 }, { id: 'p2', x: 8, z: -6 },
+    { id: 'p3', x: 8, z: 6 }, { id: 'p4', x: -8, z: 6 }],
+};
+const copyOn = levelId => ({
+  id: `copy-${levelId}`, levelId, masterId: 'master-1', overriddenSrcIds: [],
+  points: MASTER.points.map(pt => ({ x: pt.x, z: pt.z, srcId: pt.id, offX: 0, offZ: 0 })),
+});
+const house = () => ({
+  version: 1,
+  levels: [{ id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 },
+    { id: 1, name: 'FOUNDATION', elev: -8 }],
+  activeLevelIdx: 1,
+  walls: [], lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
+  outlines: [copyOn(5), copyOn(3), copyOn(1)], shapes: [], surfaceOpenings: [],
+  stairs: [], notes: [], roomTags: [], columns: [], beams: [],
+  boneyardOutlines: [MASTER], boneyardShelves: [{ id: 1, name: 'SHELF 1' }],
+  groups: [], levelLocks: [], underlays: [], nextDrawingItemId: 50,
+});
+
+async function save(page) {
+  await page.locator('#save').click();
+  await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
+  return h.savedDrawing(page);
 }
 
 test('clicking an outline edge selects it and Delete removes the level copy locally', async ({ page }) => {
-  await h.openModel(page);
-  await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
+  await h.openEditor(page, { drawing: house(), webgl: false });
+  const { at } = await h.planFrame(page);
 
-  const saved = await h.savedDrawing(page);
-  const before = saved.outlines.length;
-
-  await h.selectTool(page, 'Select');
-  await h.clickWorld(page, 0, -6); // middle of the bottom edge
+  await page.mouse.click(...at(0, -6)); // middle of the bottom edge
+  await page.waitForTimeout(150);
   await page.keyboard.press('Delete');
-  await h.waitForSaved(page);
+  await page.waitForTimeout(150);
 
-  const after = await h.savedDrawing(page);
-  expect(after.outlines.length).toBe(before - 1);
+  const after = await save(page);
+  expect(after.outlines.map(o => o.levelId).sort()).toEqual([1, 5]);
   // The master and the other level copies survive a local delete.
   expect(after.boneyardOutlines).toHaveLength(1);
 });
 
-test('deleting the BONEYARD master takes every level copy with it', async ({ page }) => {
-  await h.openModel(page);
-  await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
-
-  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
-  await page.waitForTimeout(300);
-  await h.selectTool(page, 'Select');
-  await h.clickWorld(page, 0, -6);
-  await page.keyboard.press('Delete');
-  await h.waitForSaved(page);
-
-  const saved = await h.savedDrawing(page);
-  expect(saved.boneyardOutlines).toHaveLength(0);
-  expect(saved.outlines).toHaveLength(0);
-});
-
-test('an outline carrying BUILD HOUSE geometry refuses whole-outline delete', async ({ page }) => {
-  await h.openModel(page);
-  await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
-  await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: 'BUILD HOUSE' }).click();
-  await page.waitForTimeout(300);
-  await h.waitForSaved(page);
-
-  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
-  await page.waitForTimeout(300);
-  await h.selectTool(page, 'Select');
-  await h.clickWorld(page, 0, -6);
-  await page.keyboard.press('Delete');
-  await page.waitForTimeout(300);
-
-  await expect(page.locator('[data-model-drawing-message]')).toContainText('built geometry');
-  const saved = await h.savedDrawing(page);
-  expect(saved.boneyardOutlines).toHaveLength(1);
-});
-
 test('Escape clears an outline selection', async ({ page }) => {
-  await h.openModel(page);
-  await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
+  await h.openEditor(page, { drawing: house(), webgl: false });
+  const { at } = await h.planFrame(page);
 
-  await h.selectTool(page, 'Select');
-  await h.clickWorld(page, 0, -6);
+  await page.mouse.click(...at(0, -6));
+  await page.waitForTimeout(150);
   await page.keyboard.press('Escape');
   await page.keyboard.press('Delete');
-  await page.waitForTimeout(300);
-  await h.waitForSaved(page);
+  await page.waitForTimeout(150);
 
-  const saved = await h.savedDrawing(page);
-  expect(saved.outlines.length).toBeGreaterThan(0);
+  const saved = await save(page);
+  expect(saved.outlines).toHaveLength(3);
   expect(saved.boneyardOutlines).toHaveLength(1);
 });
