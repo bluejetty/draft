@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 12 of 17: a garage's grade beam, rooms over garages, windows over roofs, strings that follow, beams by stairs, storeys, AUTO STAIR, framing.
+// MODEL.html's page script, part 12 of 22: a garage's grade beam, rooms over garages, windows over roofs, strings that follow, beams by stairs, storeys, AUTO STAIR, framing.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut
@@ -4262,12 +4262,6 @@
     if (widen) st.legWiden = widen.map(e => e || null);
     else delete st.legWiden;
     return null;
-  };
-  // WRITES THE SWITCHES, unchecked, for a flight being made (no UNDO of its
-  // own): the basement flight's `extLegs` and every upper flight's widening.
-  const stairWriteExtLegs = (base, legs, uppers = stairUpperFlightsOf(base)) => {
-    base.extLegs = legs.map(e => ({ in: e.in, side: e.side }));
-    uppers.forEach(up => stairSetLegWiden(up, stairLegWidenFor(up, base)));
   };
   // THE PANEL'S DOOR: the stair picked may be any flight of the stack; the
   // switches belong to its basement flight. `want` is { leg, in?, side? }.

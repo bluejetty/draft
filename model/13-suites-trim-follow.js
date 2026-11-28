@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 13 of 17: suites on the boneyard, + CUT, TRIM / EXTEND, the sheet following the cursor, MOVE and DELETE, suite floors, turning the house, undo for a dust.
+// MODEL.html's page script, part 13 of 22: suites on the boneyard, + CUT, TRIM / EXTEND, the sheet following the cursor, MOVE and DELETE, suite floors, turning the house, undo for a dust.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

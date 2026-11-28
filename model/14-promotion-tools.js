@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 14 of 17: TOO BIG, the promotion, typed lengths, the switches, the tool column, SELECTION / OBJECT TYPE, ASSEMBLY / UNGROUP.
+// MODEL.html's page script, part 14 of 22: TOO BIG, the promotion, typed lengths, the switches, the tool column, SELECTION / OBJECT TYPE, ASSEMBLY / UNGROUP.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

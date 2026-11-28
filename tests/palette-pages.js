@@ -48,12 +48,6 @@ const EXEMPT = {
   // INTERNET LINKS (19 Oct): the second reference page off ENTRY's ring, in
   // CODES.html's own fixed look. No palette.js, no shell bars, no dashboard.
   'LINKS.html': 'reference page off ENTRY, carries ENTRY\'s look',
-  // Single-component preview pages: an <x-dc> block, react, support.js and
-  // nothing else. No app shell, no store, no drawing surface, and a
-  // transparent body — there is no dashboard here to skin. (MODEL.dc.html
-  // shares the suffix and is NOT one of these; see below.)
-  'Notepad.dc.html': 'component preview, not a dashboard',
-  'SaveBox.dc.html': 'component preview, not a dashboard',
   // NOT FOUND (28 Nov 2026): the page the host serves for an address that is
   // not a page, and the door that sends /viewer/NAME on to the 3D viewer.
   // One line of words and a link home, its own fixed look, no palette.js.

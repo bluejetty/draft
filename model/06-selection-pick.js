@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 6 of 17: selection, what a click can hit, the window drag, assemblies, anchor nodes, a stair's hole, dimensions.
+// MODEL.html's page script, part 6 of 22: selection, what a click can hit, the window drag, assemblies, anchor nodes, a stair's hole, dimensions.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut
@@ -210,7 +210,6 @@
   const loopRing = pts => (window.DraftGeometry2D?.flattenLoop ? window.DraftGeometry2D.flattenLoop(pts) : pts);
   // EVERY FLOOR THE POINT IS IN, the one painted last (on top) first.
   const floorsAt = worldPt => floors().filter(floor => pointInRing(loopRing(floor.points || []), worldPt)).reverse();
-  const floorAt = worldPt => floorsAt(worldPt)[0] || null;
   // A PHOTO'S FOOTPRINT, in feet: centred at x, z, widthFt by heightFt (a
   // turned one has its sides swapped already, by turnPhoto). Not a DXF,
   // whose lines are the drawing's own kind of thing.
@@ -1349,7 +1348,6 @@
   const roofsAt = worldPt => pickRoofs().slice().reverse()
     .filter(roof => (activeLevelId() === SITE_LEVEL_ID ? onRingOrEdge(roof.points, worldPt)
       : (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)));
-  const roofAt = worldPt => roofsAt(worldPt)[0] || null;
 
   // Returns { type, item } or null, in the old page's precedence.
   // ── DIMENSIONS: WHERE THEY ARE DRAWN, AND THEIR ROWS ───────────────────

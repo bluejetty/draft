@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 8 of 17: STRUCTURE, ROOF, one DELETE.
+// MODEL.html's page script, part 8 of 22: STRUCTURE, ROOF, one DELETE.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut

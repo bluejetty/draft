@@ -1,4 +1,4 @@
-// MODEL.html's page script, part 2 of 17: holograms, DEMO, super nodes, each window's size tag, the tag under the pointer.
+// MODEL.html's page script, part 2 of 22: holograms, DEMO, super nodes, each window's size tag, the tag under the pointer.
 //
 // Stage 2 of the split (Movie, 24 Oct: "how can we reduce the MODEL.html
 // size in a nice organized way"): the one script the page carried, cut
