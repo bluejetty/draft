@@ -178,14 +178,15 @@
           ftPx = mz / focal / Math.max(0.25, cos);
           shadeAt = window.DraftFinishTexture.shadeAt;
         }
-        // GLASS REFLECTS (glass-reflection.js): feet along the wall and up
-        // from grade at each corner, over z, like a texture.
+        // GLASS REFLECTS (glass-reflection.js): where in the picture each
+        // corner looks from this eye, over z, like a texture.
         const GR = t.clear && t.refl && look.textures !== false ? window.DraftGlassReflection : null;
         if (GR) {
-          const ax = t.refl.ax, gr = t.refl.grade;
-          const sOf = p => p.x * ax.x + p.z * ax.z;
-          sA = sOf(t.a) * A.iz; sB = sOf(t.b) * B.iz; sC = sOf(t.c) * C.iz;
-          yA = (t.a.y - gr) * A.iz; yB = (t.b.y - gr) * B.iz; yC = (t.c.y - gr) * C.iz;
+          // Where the pane looks into the picture from this eye (a mirror).
+          const where = GR.seenFrom(t.refl, t.n, t.a, eye);
+          const qa = where(t.a), qb = where(t.b), qc = where(t.c);
+          sA = qa[0] * A.iz; sB = qb[0] * B.iz; sC = qc[0] * C.iz;
+          yA = qa[1] * A.iz; yB = qb[1] * B.iz; yC = qc[1] * C.iz;
         }
         const rf = window.DraftHouseMesh.GLASS_REFLECT, rk = 1 - rf;
         // Barycentric weights from the edge functions, stepped a pixel at a time.
@@ -215,7 +216,7 @@
                   const v = pix[idx];
                   let gr = r, gg0 = g, gb = b;
                   if (GR) {
-                    const q = GR.at((w0 * sA + w1 * sB + w2 * sC) / iz, (w0 * yA + w1 * yB + w2 * yC) / iz);
+                    const q = GR.at((w0 * sA + w1 * sB + w2 * sC) / iz, GR.ease((w0 * yA + w1 * yB + w2 * yC) / iz));
                     gr = r * rk + Math.min(255, q[0] * k) * rf;
                     gg0 = g * rk + Math.min(255, q[1] * k) * rf;
                     gb = b * rk + Math.min(255, q[2] * k) * rf;

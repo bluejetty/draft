@@ -162,3 +162,60 @@ test('standing in a room, the walls beside you are drawn, cut at the eye rather 
   });
   expect(edges.bgCount).toBe(0);
 });
+
+// THE GLASS IS A MIRROR (jb, 28 Nov 2026): "when the guy is doing walkthrough
+// looking up he should mostly see sky and cloud reflection", and "make it so
+// when the user walks by the reflections will change based on his angle".
+// The front windows of the fixture are at z = 30.8: the main floor's centred
+// 4.9 ft up, the second floor's at 14.1.
+test('a window reflects what lies along your line of sight: it slides as you walk by, and is sky when you look up', async ({ page: p }) => {
+  await viewer(p);
+  const r = await p.evaluate(() => {
+    const G = DraftGlassReflection, M = DraftHouseMesh, st = DraftViewer.state;
+    const centre = f => f.pts.reduce((a, q) => ({ x: a.x + q.x / f.pts.length, y: a.y + q.y / f.pts.length, z: a.z + q.z / f.pts.length }), { x: 0, y: 0, z: 0 });
+    const pane = (group, y) => st.faces.find(f => f.kind === 'glass' && f.group === group
+      && Math.abs(centre(f).x + 3) < 0.5 && Math.abs(centre(f).z - 30.8) < 0.5 && Math.abs(centre(f).y - y) < 0.5);
+    const low = pane('L3', 4.9), high = pane('L5', 14.1);
+    const at = (f, eye) => G.seenFrom(f.refl, M.normalOf(f.pts), f.pts[0], eye)(centre(f));
+    // Standing on the ground in front of the house, eye 5'-6" up.
+    const eye = { x: -3, y: -2.34375 + 5.5, z: 40 };
+    const lowH = G.ease(at(low, eye)[1]), highH = G.ease(at(high, eye)[1]);
+    // Five feet along the front: the same spot on the glass shows another part of the picture.
+    const slid = at(low, { ...eye, x: 2 })[0] - at(low, eye)[0];
+    // The colour up there, averaged along the picture.
+    const sum = [0, 0, 0];
+    for (let s = 0; s < G.FT_W; s += 0.5) G.at(s, highH).forEach((v, i) => { sum[i] += v; });
+
+    // AND THE PAINTER USES IT: the upper pane alone on the stage, aimed at
+    // from two sides. With the reflection off the glass is one flat colour
+    // from both; with it on, the two views see different things in it.
+    const painter = st.painter;
+    painter.setFaces([high]);
+    const C = centre(high);
+    const px = (cam, look) => {
+      painter.render({ target: C, dist: 12, fov: 65, ...cam }, { ...DraftViewer.LOOK, ...look }, { W: 200, H: 200 });
+      const d = document.getElementById('plain').getContext('2d').getImageData(95, 95, 10, 10).data;
+      const m = [0, 0, 0];
+      for (let i = 0; i < d.length; i += 4) { m[0] += d[i] / 100; m[1] += d[i + 1] / 100; m[2] += d[i + 2] / 100; }
+      return m;
+    };
+    const left = px({ yaw: -25, pitch: -5 }), right = px({ yaw: 25, pitch: -5 });
+    const leftOff = px({ yaw: -25, pitch: -5 }, { textures: false }), rightOff = px({ yaw: 25, pitch: -5 }, { textures: false });
+    const lookUp = px({ yaw: 0, pitch: -45 });
+    painter.setFaces(st.faces);
+    DraftViewer.redraw();
+    return { lowH, highH, slid, sky: sum.map(v => v / (G.FT_W * 2)), left, right, leftOff, rightOff, lookUp };
+  });
+  // Looking straight across at the main-floor window: trees and shrubs.
+  expect(r.lowH).toBeLessThan(18);
+  // Looking up at the second-floor window from the ground: well up in the sky.
+  expect(r.highH).toBeGreaterThan(30);
+  expect(r.sky[2]).toBeGreaterThan(r.sky[1]);
+  // Walking 5 ft along shifts the picture in the glass by far more than 5 ft.
+  expect(Math.abs(r.slid)).toBeGreaterThan(10);
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  expect(dist(r.leftOff, r.rightOff)).toBeLessThan(2);
+  expect(dist(r.left, r.right)).toBeGreaterThan(4);
+  // From below, the pane is sky: blue leads green.
+  expect(r.lookUp[2]).toBeGreaterThan(r.lookUp[1]);
+});
