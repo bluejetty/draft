@@ -270,8 +270,9 @@ jobs:
   # writes, no child processes -- checked before this split), so they cannot
   # trip over each other even if two ever shared a machine.
   #
-  # Four, from the measured 18-30 minutes: about 5-8 minutes a shard, far
-  # inside the ceiling. When the engines grow to the point a shard nears 20,
+  # Four, from the measured 18-30 minutes: the two heaviest engines get a
+  # shard each and the other 110 share two (see the run step), so the slowest
+  # shard is elevation-harness alone, about 7 minutes locally. When the engines grow to the point a shard nears 20,
   # the fix is one more number in the matrix, not a higher ceiling.
   mutation-engines:
     runs-on: ubuntu-latest
@@ -396,15 +397,47 @@ jobs:
           echo "${#engines[@]} engines in all"
 
           # THIS SHARD'S SHARE. Every shard derives the same sorted list (C
-          # locale, so the order cannot differ between runners) and takes
-          # every Nth engine, N being the matrix length -- strategy.job-total,
-          # the same trick the playwright job uses, so the count lives in one
-          # place. Each engine lands in exactly one shard by construction: no
-          # list to keep, nothing that can fall between two shards.
-          mine=()
-          for i in "${!engines[@]}"; do
-            [ $(( i % TOTAL )) -eq $(( SHARD - 1 )) ] && mine+=("${engines[$i]}")
+          # locale, so the order cannot differ between runners) and picks its
+          # share from it by the rule below. TOTAL is strategy.job-total, the
+          # same trick the playwright job uses, so the count lives in one
+          # place. Each engine lands in exactly one shard by construction.
+          #
+          # TWO ENGINES GET A SHARD EACH, because they are most of the work.
+          # Measured 28 Nov, all 112 with --mutate, 21.4 min in total:
+          #
+          #   elevation-harness       430s   (every row repaints every elevation)
+          #   garage-bearing-harness  336s
+          #   cut-view-inks-harness   127s   next; everything else under 70s
+          #
+          # Plain every-Nth put both big ones on shard 1 (12.8 min against
+          # 26s on shard 4). So each named one, IF IT EXISTS in the derived
+          # list, gets a shard of its own, and every other engine is dealt
+          # every-Nth across the remaining shards. This list only steers
+          # BALANCE, never coverage: a name that is renamed or removed simply
+          # stops being pinned, and the engine (under whatever name) is dealt
+          # with the rest. It must stay shorter than the matrix.
+          heavy=(proto/elevation-harness.js proto/garage-bearing-harness.js)
+          pinned=()
+          for h in "${heavy[@]}"; do
+            printf '%s\n' "${engines[@]}" | grep -qxF "$h" && pinned+=("$h")
           done
+          if [ ${#pinned[@]} -ge "$TOTAL" ]; then
+            echo "${#pinned[@]} pinned engines need more than $TOTAL shards -- add a shard to the matrix"
+            exit 1
+          fi
+          mine=()
+          if [ "$SHARD" -le ${#pinned[@]} ]; then
+            mine=("${pinned[$((SHARD - 1))]}")
+          else
+            spread=$(( TOTAL - ${#pinned[@]} ))
+            slot=$(( SHARD - 1 - ${#pinned[@]} ))
+            n=0
+            for h in "${engines[@]}"; do
+              printf '%s\n' "${pinned[@]}" | grep -qxF "$h" && continue
+              [ $(( n % spread )) -eq "$slot" ] && mine+=("$h")
+              n=$((n + 1))
+            done
+          fi
           if [ ${#mine[@]} -eq 0 ]; then
             echo "shard $SHARD/$TOTAL was given no engines -- nothing ran"
             exit 1
